@@ -19,10 +19,23 @@
 import { supabase } from '@shared/lib/supabase-client';
 import { logger } from '@shared/lib/logger';
 import { DEFAULT_GOOGLE_FAST_MODEL } from '@shared/config/supported-models';
+import { getModelMetadataById } from '@agiworkforce/types';
+
+/**
+ * Resolve the wire-protocol apiModelId for veo-3 from models.json. Falls
+ * back to the legacy literal when the catalog is missing the entry. This
+ * centralizes the rule-models-json.md "never hardcode model IDs" rule.
+ */
+const VEO_API_MODEL_ID = getModelMetadataById('veo-3')?.apiModelId ?? 'veo-3.1-generate-preview';
 
 export interface VeoGenerationRequest {
   prompt: string;
-  model?: 'veo-3.1-generate-preview';
+  /**
+   * Wire-protocol model id. Defaults to whatever models.json maps `veo-3` to
+   * via apiModelId. Accepts any string so future Veo iterations don't require
+   * a type change here (rule-models-json.md).
+   */
+  model?: string;
   resolution?: '720p' | '1080p';
   duration?: number; // 5-8 seconds
   aspectRatio?: '16:9' | '9:16' | '1:1';
@@ -164,7 +177,7 @@ export class GoogleVeoService {
       );
     }
 
-    const model = request.model || 'veo-3.1-generate-preview';
+    const model = request.model || VEO_API_MODEL_ID;
     const generationId = `vid-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     // Create initial response
@@ -220,7 +233,7 @@ export class GoogleVeoService {
       );
     }
 
-    const model = request.model || 'veo-3.1-generate-preview';
+    const model = request.model || VEO_API_MODEL_ID;
 
     // Build request body for proxy
     const requestBody = {

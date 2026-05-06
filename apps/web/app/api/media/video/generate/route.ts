@@ -9,6 +9,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserClient } from '@/lib/supabase-server';
+import { getModelMetadataById } from '@agiworkforce/types';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { CreditService } from '@/lib/services/credit-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
@@ -227,7 +228,9 @@ async function generateWithGoogleVeo(
     veoResolution = '720p';
   }
 
-  const model = 'veo-3.1-generate-preview';
+  // Read the wire-protocol apiModelId from the catalog so the literal can
+  // shift in models.json without redeploying this route (rule-models-json.md).
+  const model = getModelMetadataById('veo-3')?.apiModelId ?? 'veo-3.1-generate-preview';
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predictLongRunning`;
 
   const response = await fetch(endpoint, {
