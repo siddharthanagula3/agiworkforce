@@ -29,7 +29,7 @@ const DEFAULTS = {
   agentMode: 'auto',
   agentEffort: 'medium',
   codeLensEnabled: true,
-  inlineCompletionsEnabled: false,
+  inlineCompletionsEnabled: true,
   inlineCompletionsDebounceMs: 300,
   inlineCompletionsMaxLength: 500,
   mcpEnabled: false,
