@@ -41,7 +41,7 @@ const skip = !liveEnabled;
 describe.skipIf(skip)('Ollama adapter live', () => {
   it('streams a tiny completion end-to-end (or skips if no daemon)', async () => {
     if (!daemonAvailable || !firstModel) {
-      console.log(`  Ollama daemon not reachable at ${baseUrl} — skipping stream test`);
+      console.debug(`  Ollama daemon not reachable at ${baseUrl} — skipping stream test`);
       return;
     }
     const adapter = createOllamaAdapter({ baseUrl });
@@ -84,7 +84,7 @@ describe.skipIf(skip)('Ollama adapter live', () => {
 
 afterAll(() => {
   if (liveEnabled && !daemonAvailable) {
-    console.log(
+    console.debug(
       `  note: Ollama daemon not reachable at ${baseUrl}. Stream test skipped; catalog test ran but returned [].`,
     );
   }
