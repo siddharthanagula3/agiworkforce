@@ -5,7 +5,7 @@ import { GET } from '@/app/auth/callback/route';
 // is present (the common case — user did not initiate an OAuth flow from this
 // tab, or the cookie was already cleared). Tests that need a specific cookie
 // value set mockCookieGet directly.
-const mockCookieGet = vi.fn(() => undefined);
+const mockCookieGet = vi.fn<() => { value: string } | undefined>(() => undefined);
 vi.mock('next/headers', () => ({
   cookies: vi.fn(async () => ({
     get: mockCookieGet,
