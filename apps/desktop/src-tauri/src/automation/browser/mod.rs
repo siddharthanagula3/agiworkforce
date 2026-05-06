@@ -27,11 +27,22 @@ pub struct BrowserState {
 }
 
 impl BrowserState {
-    pub async fn new() -> Result<Self> {
+    /// SEV-DESK-02: production constructor — threads the Tauri `AppHandle`
+    /// through to `ExtensionBridge` so dangerous browser-mutating actions
+    /// (`execute_script`, `navigate`, cookie ops, localStorage ops) can
+    /// surface a confirmation prompt before reaching the page.
+    ///
+    /// Tests / non-IPC callers may pass `None`; in that case any gated
+    /// `ExtensionBridge` method fails closed with an explicit error.
+    pub async fn new(app_handle: Option<tauri::AppHandle>) -> Result<Self> {
+        let extension = match app_handle {
+            Some(handle) => ExtensionBridge::with_app_handle(handle),
+            None => ExtensionBridge::new(),
+        };
         Ok(Self {
             playwright: Arc::new(Mutex::new(PlaywrightBridge::new().await?)),
             tab_manager: Arc::new(Mutex::new(TabManager::new())),
-            extension: Arc::new(Mutex::new(ExtensionBridge::new())),
+            extension: Arc::new(Mutex::new(extension)),
             cdp_clients: Arc::new(Mutex::new(std::collections::HashMap::new())),
         })
     }

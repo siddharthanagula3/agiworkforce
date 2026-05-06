@@ -4,15 +4,37 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@shared/ui/card';
-import { Palette, MessageSquare, Server, Shield, Activity, Database } from 'lucide-react';
+import {
+  Palette,
+  MessageSquare,
+  Server,
+  Shield,
+  Activity,
+  Database,
+  CreditCard,
+  Bell,
+  ExternalLink,
+  ArrowUpRight,
+  CheckCircle2,
+} from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { AppearanceSettings } from '@/components/settings/AppearanceSettings';
 import { ChatSettings } from '@/components/settings/ChatSettings';
 import { CustomModelsSettings } from '@/components/settings/CustomModelsSettings';
-import { useSettingsStore, type ChatFont, type ResponseStyle } from '@/stores/settingsStore';
+import {
+  useSettingsStore,
+  type ChatFont,
+  type ResponseStyle,
+  type NotificationPreferences,
+} from '@/stores/settingsStore';
 import { Button } from '@shared/ui/button';
+import { Badge } from '@shared/ui/badge';
+import { Progress } from '@shared/ui/progress';
+import { Switch } from '@shared/ui/switch';
+import { Separator } from '@shared/ui/separator';
 import { toast } from 'sonner';
 import { useAuthStore } from '@shared/stores/authentication-store';
+import { PLAN_LABEL, PLAN_DESCRIPTION, isFreePlan, type UIPlanTier } from '@agiworkforce/types';
 
 // ---------------------------------------------------------------------------
 // Appearance Tab
@@ -349,6 +371,276 @@ function PrivacyDataTab() {
 }
 
 // ---------------------------------------------------------------------------
+// Helper: map AuthUser.plan string to UIPlanTier
+// ---------------------------------------------------------------------------
+
+function toUIPlanTier(plan: string | undefined): UIPlanTier {
+  const normalized = (plan ?? 'byok').toLowerCase();
+  if (normalized === 'local' || normalized === 'local-only') return 'local';
+  if (normalized === 'byok') return 'byok';
+  if (normalized === 'hobby') return 'hobby';
+  if (normalized === 'pro') return 'pro';
+  if (normalized === 'max') return 'max';
+  return 'byok';
+}
+
+// ---------------------------------------------------------------------------
+// Billing Tab
+// ---------------------------------------------------------------------------
+
+function BillingTab() {
+  const { user } = useAuthStore();
+  const [isOpeningPortal, setIsOpeningPortal] = useState(false);
+
+  const tier = toUIPlanTier(user?.plan);
+  const planLabel = PLAN_LABEL[tier];
+  const planDescription = PLAN_DESCRIPTION[tier];
+  const isFree = isFreePlan(tier);
+
+  const openPortal = async () => {
+    setIsOpeningPortal(true);
+    try {
+      const res = await fetch('/api/portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) throw new Error('Portal unavailable');
+      const data = (await res.json()) as { url?: string };
+      if (data.url) {
+        window.open(data.url, '_blank', 'noopener,noreferrer');
+      }
+    } catch {
+      toast.error('Could not open billing portal. Please try again.');
+    } finally {
+      setIsOpeningPortal(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Current plan card */}
+      <Card className="border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg">Subscription</CardTitle>
+            <Badge
+              className={cn(
+                'text-xs font-semibold uppercase tracking-wide',
+                tier === 'hobby' && 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+                tier === 'pro' && 'bg-violet-500/20 text-violet-400 border-violet-500/30',
+                tier === 'max' && 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+                (tier === 'byok' || tier === 'local') &&
+                  'bg-white/10 text-muted-foreground border-white/10',
+              )}
+              variant="outline"
+            >
+              {planLabel}
+            </Badge>
+          </div>
+          <CardDescription>{planDescription}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {tier === 'hobby' && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Usage this period</span>
+                <span className="font-medium">Loading...</span>
+              </div>
+              <Progress value={0} className="h-2" aria-label="Usage meter" />
+              <p className="text-xs text-muted-foreground">
+                Usage details will appear here once your plan is active.
+              </p>
+            </div>
+          )}
+
+          {!isFree && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 border-border"
+              onClick={openPortal}
+              disabled={isOpeningPortal}
+            >
+              {isOpeningPortal ? (
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted border-t-foreground" />
+              ) : (
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+              Manage in Stripe portal
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Upgrade CTA for free/byok/local tiers */}
+      {isFree && (
+        <Card className="border-amber-500/20 bg-amber-500/[0.04] backdrop-blur-xl">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base text-amber-400 flex items-center gap-2">
+              <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+              Upgrade to Hobby
+            </CardTitle>
+            <CardDescription>Get managed cloud access without managing API keys.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <ul className="space-y-2">
+              {[
+                'Access to 10+ cloud providers in one UI',
+                'Managed token budget, no key juggling',
+                'Web search with lower token cap',
+                'Priority support',
+              ].map((feature) => (
+                <li key={feature} className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <CheckCircle2
+                    className="mt-0.5 h-4 w-4 shrink-0 text-amber-400"
+                    aria-hidden="true"
+                  />
+                  {feature}
+                </li>
+              ))}
+            </ul>
+            <Button
+              size="sm"
+              className="bg-amber-500 hover:bg-amber-400 text-zinc-900 font-semibold gap-2"
+              onClick={() => window.location.assign('/pricing')}
+            >
+              View Hobby pricing
+              <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Notifications Tab
+// ---------------------------------------------------------------------------
+
+const EMAIL_NOTIFICATION_ITEMS: {
+  key: keyof NotificationPreferences;
+  label: string;
+  description: string;
+}[] = [
+  {
+    key: 'emailWeeklySummary',
+    label: 'Weekly summary',
+    description: 'A digest of your usage, completed tasks, and highlights.',
+  },
+  {
+    key: 'emailAgentTaskComplete',
+    label: 'Agent task complete',
+    description: 'Email when a background agent task finishes.',
+  },
+  {
+    key: 'emailBillingAlerts',
+    label: 'Billing alerts',
+    description: 'Usage warnings and payment receipts.',
+  },
+];
+
+const PUSH_NOTIFICATION_ITEMS: {
+  key: keyof NotificationPreferences;
+  label: string;
+  description: string;
+}[] = [
+  {
+    key: 'pushTaskComplete',
+    label: 'Task complete',
+    description: 'Push notification when an agent task finishes.',
+  },
+  {
+    key: 'pushMention',
+    label: 'Mention',
+    description: 'Push notification when you are mentioned in a shared workspace.',
+  },
+];
+
+function NotificationsTab() {
+  const { notifications, setNotification } = useSettingsStore();
+
+  return (
+    <div className="space-y-4">
+      {/* Email notifications */}
+      <Card className="border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
+        <CardHeader>
+          <CardTitle className="text-lg">Email notifications</CardTitle>
+          <CardDescription>Choose which emails you receive from AGI Workforce.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {EMAIL_NOTIFICATION_ITEMS.map(({ key, label, description }, idx) => (
+            <div key={key}>
+              {idx > 0 && <Separator className="mb-4" />}
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium">{label}</p>
+                  <p className="text-xs text-muted-foreground">{description}</p>
+                </div>
+                <Switch
+                  checked={notifications[key]}
+                  onCheckedChange={(checked) => setNotification(key, checked)}
+                  aria-label={label}
+                />
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Web push notifications */}
+      <Card className="border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
+        <CardHeader>
+          <CardTitle className="text-lg">Web push notifications</CardTitle>
+          <CardDescription>
+            Browser push alerts. You will be prompted to allow notifications when you enable these.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {PUSH_NOTIFICATION_ITEMS.map(({ key, label, description }, idx) => (
+            <div key={key}>
+              {idx > 0 && <Separator className="mb-4" />}
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium">{label}</p>
+                  <p className="text-xs text-muted-foreground">{description}</p>
+                </div>
+                <Switch
+                  checked={notifications[key]}
+                  onCheckedChange={(checked) => setNotification(key, checked)}
+                  aria-label={label}
+                />
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Scheduled searches */}
+      <Card className="border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
+        <CardHeader>
+          <CardTitle className="text-lg">Scheduled searches</CardTitle>
+          <CardDescription>
+            Recurring web searches run on a schedule. Manage them from the dedicated page.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 border-border"
+            onClick={() => window.location.assign('/schedules')}
+          >
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+            Manage scheduled searches
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Tab config
 // ---------------------------------------------------------------------------
 
@@ -357,6 +649,8 @@ const TABS = [
   { value: 'chat', label: 'Chat', icon: MessageSquare },
   { value: 'models', label: 'Models', icon: Server },
   { value: 'privacy', label: 'Privacy & Data', icon: Shield },
+  { value: 'billing', label: 'Billing', icon: CreditCard },
+  { value: 'notifications', label: 'Notifications', icon: Bell },
 ] as const;
 
 type TabValue = (typeof TABS)[number]['value'];
@@ -390,15 +684,11 @@ export default function SettingsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)}>
-        <TabsList className="grid w-full grid-cols-4 text-xs sm:text-sm">
+        <TabsList className="grid w-full grid-cols-6 text-xs sm:text-sm">
           {TABS.map(({ value, label, icon: Icon }) => (
-            <TabsTrigger
-              key={value}
-              value={value}
-              className="flex items-center gap-1.5 text-xs sm:text-sm"
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              <span>{label}</span>
+            <TabsTrigger key={value} value={value} className="flex items-center gap-1 text-xs">
+              <Icon className="h-3.5 w-3.5 shrink-0" />
+              <span className="hidden sm:inline">{label}</span>
             </TabsTrigger>
           ))}
         </TabsList>
@@ -417,6 +707,14 @@ export default function SettingsPage() {
 
         <TabsContent value="privacy" className="mt-6">
           <PrivacyDataTab />
+        </TabsContent>
+
+        <TabsContent value="billing" className="mt-6">
+          <BillingTab />
+        </TabsContent>
+
+        <TabsContent value="notifications" className="mt-6">
+          <NotificationsTab />
         </TabsContent>
       </Tabs>
     </div>

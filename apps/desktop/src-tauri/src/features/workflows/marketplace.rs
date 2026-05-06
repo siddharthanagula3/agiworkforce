@@ -28,7 +28,7 @@ impl Default for WorkflowFilters {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SortOption {
     MostCloned,
@@ -38,15 +38,29 @@ pub enum SortOption {
     TimesSaved,
 }
 
+impl SortOption {
+    /// SEV-DESK-03 fix: explicit SQL fragment accessor returning a `&'static str`
+    /// from a closed match. The previous code interpolated `Display` output via
+    /// `format!(" ORDER BY {}", filters.sort_by)`, which made the *type system
+    /// alone* the SQL-injection guard. A future `SortOption::Custom(String)` or
+    /// `Display` regression would silently re-introduce SQLi. Centralising the
+    /// SQL fragments here makes it impossible to shoehorn user-controlled
+    /// strings into ORDER BY without a deliberate type change.
+    pub const fn as_sql(self) -> &'static str {
+        match self {
+            SortOption::MostCloned => "clone_count DESC",
+            SortOption::HighestRated => "avg_rating DESC, rating_count DESC",
+            SortOption::Newest => "created_at DESC",
+            SortOption::MostViewed => "view_count DESC",
+            SortOption::TimesSaved => "estimated_time_saved DESC",
+        }
+    }
+}
+
 impl std::fmt::Display for SortOption {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SortOption::MostCloned => write!(f, "clone_count DESC"),
-            SortOption::HighestRated => write!(f, "avg_rating DESC, rating_count DESC"),
-            SortOption::Newest => write!(f, "created_at DESC"),
-            SortOption::MostViewed => write!(f, "view_count DESC"),
-            SortOption::TimesSaved => write!(f, "estimated_time_saved DESC"),
-        }
+        // Display goes through `as_sql` so the two impls cannot drift.
+        write!(f, "{}", self.as_sql())
     }
 }
 
@@ -177,7 +191,12 @@ impl WorkflowMarketplace {
             params.push(Box::new(format!("%\"{}\"% ", tag)));
         }
 
-        query.push_str(&format!(" ORDER BY {}", filters.sort_by));
+        // SEV-DESK-03 fix: use `as_sql()` (returns `&'static str`) rather than
+        // interpolating Display output. The previous form was safe today
+        // because SortOption is a closed enum, but the structural pattern is
+        // brittle — see `SortOption::as_sql` doc comment.
+        query.push_str(" ORDER BY ");
+        query.push_str(filters.sort_by.as_sql());
 
         query.push_str(" LIMIT ? OFFSET ?");
         params.push(Box::new(limit as i64));

@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ArrowRight, Bot, Check, Clock, Eye, Smartphone, Terminal, Wrench } from 'lucide-react';
-import { Header } from '../../../components/layout/Header';
-import { CtaSection } from '../../../components/marketing/CtaSection';
-import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
+import { MARKETING } from '../../../lib/marketing-constants';
+import { EditorialPage } from '../../../components/marketing/editorial/EditorialPage';
+import { DispatchSection } from '../../../components/marketing/editorial/DispatchSection';
 
 export const metadata: Metadata = {
   title: 'AI Agents & Parallel Orchestration | AGI Workforce',
@@ -84,7 +84,7 @@ const webPageJsonLd = {
 
 export default function AgentsPage() {
   return (
-    <>
+    <EditorialPage tier="paper">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -94,9 +94,7 @@ export default function AgentsPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(webPageJsonLd) }}
       />
       <div className="flex min-h-screen flex-col bg-[#09090b] text-[#edebe8]">
-        <Header />
-
-        <main className="flex-1 pt-24">
+        <div className="flex-1 pt-24">
           {/* Hero */}
           <section className="relative py-20 md:py-32 lg:py-40">
             <div className="container relative mx-auto px-4">
@@ -293,7 +291,7 @@ export default function AgentsPage() {
                     },
                     {
                       icon: Wrench,
-                      name: '1,459+ IPC tools',
+                      name: `${MARKETING.tools.display} IPC tools`,
                       detail:
                         'File system, terminal, git, browser, databases, MCP servers, and every Tauri command.',
                     },
@@ -327,7 +325,8 @@ export default function AgentsPage() {
                       deny every tool call - all from your phone.
                     </p>
                     <p className="text-sm text-[#c8892a]">
-                      The only AI platform with a dedicated mobile companion for agent oversight.
+                      Cross-provider session continuity and real-time mobile oversight, in one
+                      unified platform.
                     </p>
 
                     <div className="space-y-3 pt-2">
@@ -390,15 +389,9 @@ export default function AgentsPage() {
             </div>
           </section>
 
-          <CtaSection
-            icon="Bot"
-            headline="Deploy Your AI Workforce"
-            body="Stop running one agent at a time. Launch a parallel workforce that decomposes, executes, and delivers - all from your desktop."
-          />
-        </main>
-
-        <MarketingFooter />
+          <DispatchSection slugIndex="04" slugKicker="DISPATCH" />
+        </div>
       </div>
-    </>
+    </EditorialPage>
   );
 }

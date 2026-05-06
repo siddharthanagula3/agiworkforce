@@ -5,6 +5,29 @@ function escapeAttrValue(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
+// SECURITY (chrome-MED-5, audit 2026-05-05): WebMCP `tool-name` and
+// `tool-description` are read directly off untrusted page DOM attributes and
+// flow into:
+//   1. Side-panel text rendering (safe via createTextNode on each insert).
+//   2. A textarea value pre-fill: `Use the ${tool.name} tool to ` — the
+//      attacker-controlled string is shown to the user as if it were
+//      legitimate copy and may social-engineer them into sending crafted
+//      prompts to the LLM.
+//   3. CSS-selector construction: `form[tool-name="${escapeAttrValue(name)}"]`
+//      — `escapeAttrValue` only escapes `\` and `"`, so other selector
+//      metacharacters could affect matching even without breaking out.
+// We restrict tool names to a conservative identifier class (alpha leading,
+// alphanumerics + `_`, `-`, `.`, space afterward, max 64 chars) and cap the
+// description at 500 chars. Names that fail the pattern are dropped with a
+// debug log; descriptions are silently truncated.
+const TOOL_NAME_MAX_CHARS = 64;
+const TOOL_DESCRIPTION_MAX_CHARS = 500;
+const TOOL_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_\-. ]{0,63}$/;
+
+function isValidToolName(name: string): boolean {
+  return name.length <= TOOL_NAME_MAX_CHARS && TOOL_NAME_PATTERN.test(name);
+}
+
 export interface WebMCPToolInfo {
   name: string;
   description: string;
@@ -43,9 +66,20 @@ export function discoverDeclarativeTools(): WebMCPToolInfo[] {
 
   const forms = document.querySelectorAll('form[tool-name]');
   for (const form of forms) {
-    const name = form.getAttribute('tool-name');
-    const description = form.getAttribute('tool-description') || '';
-    if (!name) continue;
+    const rawName = form.getAttribute('tool-name');
+    const rawDescription = form.getAttribute('tool-description') || '';
+    if (!rawName) continue;
+    // chrome-MED-5: drop tools with non-conforming names so a hostile page
+    // can't smuggle CSS metacharacters or visually-deceptive Unicode into
+    // the side-panel UI.
+    if (!isValidToolName(rawName)) {
+      logger.debug('WebMCP: tool-name rejected (length or character class)', {
+        nameSnippet: rawName.slice(0, 32),
+      });
+      continue;
+    }
+    const name = rawName;
+    const description = rawDescription.slice(0, TOOL_DESCRIPTION_MAX_CHARS);
 
     // Build input schema from form fields
     const properties: Record<string, Record<string, unknown>> = {};
@@ -55,8 +89,19 @@ export function discoverDeclarativeTools(): WebMCPToolInfo[] {
     for (const field of fields) {
       const fieldName = field.getAttribute('name');
       if (!fieldName) continue;
+      // Same character-class guard for parameter names — they also flow into
+      // selector strings (`[name="${escapeAttrValue(key)}"]`) at line 253.
+      if (!isValidToolName(fieldName)) {
+        logger.debug('WebMCP: param name rejected (length or character class)', {
+          nameSnippet: fieldName.slice(0, 32),
+        });
+        continue;
+      }
 
-      const paramDesc = field.getAttribute('tool-param-description') || '';
+      const paramDesc = (field.getAttribute('tool-param-description') || '').slice(
+        0,
+        TOOL_DESCRIPTION_MAX_CHARS,
+      );
       const fieldType = field.getAttribute('type') || 'text';
       const isRequired = field.hasAttribute('required');
 

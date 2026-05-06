@@ -7,6 +7,7 @@ import { requireEnv, getOptionalEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { getUserClient } from '@/lib/supabase-server';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { CreditService } from '@/lib/services/credit-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
@@ -438,7 +439,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  const token = bearerMatch[1];
+  const token = bearerMatch[1]!;
 
   // Verify user with Supabase
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
@@ -472,8 +473,11 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
+  // RLS-bound client for all downstream DB ops on behalf of this user.
+  const userClient = getUserClient(token);
+
   // Check subscription
-  const subscription = await SubscriptionService.getSubscription(user.id);
+  const subscription = await SubscriptionService.getSubscription(userClient, user.id);
 
   if (!subscription) {
     return NextResponse.json(
@@ -646,9 +650,9 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   const estimatedCostCents = maxProviderCost * n;
 
   // Check credits BEFORE invoking the provider (402 if insufficient)
-  const hasCredits = await CreditService.checkAvailable(user.id, estimatedCostCents);
+  const hasCredits = await CreditService.checkAvailable(userClient, user.id, estimatedCostCents);
   if (!hasCredits) {
-    const balance = await CreditService.getBalance(user.id);
+    const balance = await CreditService.getBalance(userClient, user.id);
     logger.warn(
       { userId: user.id, estimatedCostCents, balance },
       'Insufficient credits for image generation',
@@ -678,6 +682,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   const requestId = randomUUID();
   const reservationKey = CreditService.generateIdempotencyKey(user.id, 'reservation', requestId);
   const reserveResult = await CreditService.deductCredits(
+    userClient,
     user.id,
     estimatedCostCents,
     `Credit reservation: image generation (${provider})`,
@@ -748,6 +753,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     // Refund the reserved credits on generation failure
     const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
     await CreditService.deductCredits(
+      userClient,
       user.id,
       -estimatedCostCents,
       `Refund: image generation failed (${provider})`,
@@ -819,6 +825,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       requestId,
     );
     await CreditService.deductCredits(
+      userClient,
       user.id,
       costDifference,
       costDifference > 0

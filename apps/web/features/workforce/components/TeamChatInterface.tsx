@@ -18,6 +18,7 @@ import {
   AlertCircle,
   Clock,
 } from 'lucide-react';
+import { getCsrfToken } from '@/lib/client/csrf';
 // Workforce response type (local stub — no longer depends on workforce-orchestrator)
 interface WorkforceResponse {
   success: boolean;
@@ -57,13 +58,16 @@ async function executeWorkforce(userId: string, input: string): Promise<Workforc
       headers['Authorization'] = `Bearer ${authToken}`;
     }
 
-    // Retrieve CSRF token from cookie if present
-    const csrfToken = document.cookie
-      .split('; ')
-      .find((row) => row.startsWith('csrf-token='))
-      ?.split('=')[1];
-    if (csrfToken) {
-      headers['x-csrf-token'] = csrfToken;
+    // SECURITY (web-MED-1): the prior `csrf-token` cookie reader was dead
+    // code (server never sets that cookie). The canonical CSRF flow returns
+    // an HMAC token from `/api/csrf` bound to the `anon-session-id` cookie.
+    try {
+      const csrfToken = await getCsrfToken();
+      if (csrfToken) {
+        headers['x-csrf-token'] = csrfToken;
+      }
+    } catch {
+      // /api/csrf unreachable — proceed without; server will reject if required.
     }
 
     const response = await fetch('/api/mission', {

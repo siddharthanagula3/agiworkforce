@@ -9,7 +9,142 @@ use crate::sys::security::master_password::{
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use tauri::State;
+
+// ── RT-01 Brute-force rate limiter ──────────────────────────────────────────
+//
+// Tracks failed verification attempts per process lifetime.
+// Thresholds: 5 → 30-second lockout, 10 → 5-minute lockout, 20 → restart required.
+// Lockout is checked even on correct password during active lockout period
+// (mandatory minimum delay prevents timing-based enumeration).
+
+#[derive(Debug)]
+struct LockoutState {
+    failed_count: u32,
+    locked_until: Option<Instant>,
+    require_restart: bool,
+}
+
+impl LockoutState {
+    fn new() -> Self {
+        Self {
+            failed_count: 0,
+            locked_until: None,
+            require_restart: false,
+        }
+    }
+
+    /// Returns Some(remaining_secs) if currently locked out, None if allowed.
+    fn check_lockout(&self) -> Option<u64> {
+        if self.require_restart {
+            return Some(u64::MAX); // sentinel for restart-required
+        }
+        if let Some(until) = self.locked_until {
+            let now = Instant::now();
+            if now < until {
+                let remaining = until.duration_since(now).as_secs().max(1);
+                return Some(remaining);
+            }
+        }
+        None
+    }
+
+    /// Records a failed attempt and sets lockout if thresholds are crossed.
+    fn record_failure(&mut self) {
+        self.failed_count += 1;
+        match self.failed_count {
+            n if n >= 20 => {
+                self.require_restart = true;
+                self.locked_until = None;
+            }
+            n if n >= 10 => {
+                self.locked_until = Some(Instant::now() + Duration::from_secs(300));
+            }
+            n if n >= 5 => {
+                // Only extend the lockout if it isn't already set to a longer duration
+                let proposed = Instant::now() + Duration::from_secs(30);
+                if self.locked_until.map(|u| proposed > u).unwrap_or(true) {
+                    self.locked_until = Some(proposed);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Resets the failure counter and lockout on successful authentication.
+    fn record_success(&mut self) {
+        self.failed_count = 0;
+        self.locked_until = None;
+        // require_restart is NOT cleared on success — the app must restart.
+    }
+}
+
+// Process-lifetime singleton guarded by a Mutex.
+// Uses std::sync::OnceLock so the state is lazily initialised and never
+// re-created across hot-reloads in tests.
+//
+// I2 fix: parking_lot::Mutex (not std::sync::Mutex). With std::sync::Mutex,
+// a panic while holding the lock poisons it forever — every subsequent
+// vault verify/unlock call would hit `lock().map_err(...)` and return a
+// generic 500-style error. The user could not recover without restarting
+// the app; meanwhile the lockout counter is process-lifetime so the
+// attacker benefits from the DoS. parking_lot::Mutex does not poison.
+static LOCKOUT: std::sync::OnceLock<parking_lot::Mutex<LockoutState>> = std::sync::OnceLock::new();
+
+fn lockout() -> &'static parking_lot::Mutex<LockoutState> {
+    LOCKOUT.get_or_init(|| parking_lot::Mutex::new(LockoutState::new()))
+}
+
+/// Argon2 dummy verification used to pad responses when locked out so that
+/// timing is indistinguishable from a real verification attempt.
+fn argon2_dummy_verify() {
+    use argon2::{
+        password_hash::{rand_core::OsRng, PasswordHasher, SaltString},
+        Argon2, Params,
+    };
+    let salt = SaltString::generate(&mut OsRng);
+    let params = Params::new(19 * 1024, 2, 1, Some(32)).unwrap_or_default();
+    let argon2 = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
+    let _ = argon2.hash_password(b"dummy_lockout_pad", &salt);
+}
+
+/// Check the lockout gate before allowing a verification attempt.
+/// Returns Ok(()) if the attempt is allowed, Err(message) if locked out.
+/// Always performs a dummy Argon2 hash on lockout to prevent timing oracles.
+fn check_and_enforce_lockout() -> Result<(), String> {
+    let guard = lockout().lock();
+    if let Some(remaining) = guard.check_lockout() {
+        drop(guard); // release before the slow dummy hash
+        argon2_dummy_verify();
+        if remaining == u64::MAX {
+            return Err(
+                "Too many failed attempts. Please restart the application to try again.".to_string(),
+            );
+        }
+        return Err(format!(
+            "Too many failed attempts. Please wait {} seconds before trying again.",
+            remaining
+        ));
+    }
+    Ok(())
+}
+
+/// Record the outcome of an attempt.
+fn record_attempt_outcome(success: bool) {
+    let mut guard = lockout().lock();
+    if success {
+        guard.record_success();
+    } else {
+        guard.record_failure();
+        if guard.require_restart {
+            tracing::warn!(
+                "RT-01: vault brute-force threshold reached — restart required to unlock"
+            );
+        }
+    }
+}
+// ────────────────────────────────────────────────────────────────────────────
 
 /// State wrapper for the master password manager
 pub struct MasterPasswordState {
@@ -122,12 +257,17 @@ pub async fn master_password_verify(
     password: String,
     state: State<'_, MasterPasswordState>,
 ) -> Result<bool, String> {
+    // RT-01: enforce brute-force rate limit before every attempt.
+    check_and_enforce_lockout()?;
+
     let manager = state
         .manager
         .lock()
         .map_err(|e| format!("Failed to acquire lock: {}", e))?;
 
-    manager.verify(&password).map_err(|e| e.to_string())
+    let result = manager.verify(&password).map_err(|e| e.to_string())?;
+    record_attempt_outcome(result);
+    Ok(result)
 }
 
 /// Unlock the app with the master password
@@ -136,20 +276,29 @@ pub async fn master_password_unlock(
     password: String,
     state: State<'_, MasterPasswordState>,
 ) -> Result<MasterPasswordResponse, String> {
+    // RT-01: enforce brute-force rate limit before every attempt.
+    check_and_enforce_lockout()?;
+
     let manager = state
         .manager
         .lock()
         .map_err(|e| format!("Failed to acquire lock: {}", e))?;
 
     match manager.unlock(&password) {
-        Ok(()) => Ok(MasterPasswordResponse {
-            success: true,
-            message: "App unlocked successfully".to_string(),
-        }),
-        Err(MasterPasswordError::InvalidPassword) => Ok(MasterPasswordResponse {
-            success: false,
-            message: "Invalid password".to_string(),
-        }),
+        Ok(()) => {
+            record_attempt_outcome(true);
+            Ok(MasterPasswordResponse {
+                success: true,
+                message: "App unlocked successfully".to_string(),
+            })
+        }
+        Err(MasterPasswordError::InvalidPassword) => {
+            record_attempt_outcome(false);
+            Ok(MasterPasswordResponse {
+                success: false,
+                message: "Invalid password".to_string(),
+            })
+        }
         Err(MasterPasswordError::NotConfigured) => Ok(MasterPasswordResponse {
             success: false,
             message: "Master password has not been set up yet".to_string(),
@@ -424,10 +573,10 @@ mod tests {
     use super::*;
 
     fn valid_test_passphrase() -> &'static str {
-        "alpha-beta-unique-phrase"
+        "Alpha-Beta-Unique-1"
     } // gitleaks:allow
     fn invalid_test_passphrase() -> &'static str {
-        "nonmatching-phrase"
+        "Nonmatching-Phrase-9"
     } // gitleaks:allow
 
     fn create_test_state() -> MasterPasswordState {

@@ -10,9 +10,60 @@ import { Text } from '@/components/ui/text';
 import { AutoModeCards } from './AutoModeCard';
 import { ModelRow } from './ModelRow';
 import { useModelStore } from '@/stores/modelStore';
-import { AUTO_MODES, MODEL_LIST, isAutoMode, type ModelDef } from '@/lib/models';
+import { AUTO_MODES, MODEL_LIST, PROVIDERS, isAutoMode, type ModelDef } from '@/lib/models';
 import { fetchModelCatalog } from '@/services/modelCatalog';
 import { colors } from '@/lib/theme';
+import { PROVIDER_DISPLAY, type ProviderId } from '@agiworkforce/types';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Group an array of models by their provider, preserving PROVIDERS order. */
+function groupByProvider(
+  models: ModelDef[],
+  providerOrder: Array<{ id: string; name: string }>,
+): Array<{ providerId: string; providerLabel: string; models: ModelDef[] }> {
+  const byProvider = new Map<string, ModelDef[]>();
+  for (const model of models) {
+    const group = byProvider.get(model.provider);
+    if (group) {
+      group.push(model);
+    } else {
+      byProvider.set(model.provider, [model]);
+    }
+  }
+
+  const result: Array<{ providerId: string; providerLabel: string; models: ModelDef[] }> = [];
+
+  // First pass: providers in canonical order
+  for (const { id, name } of providerOrder) {
+    const group = byProvider.get(id);
+    if (group && group.length > 0) {
+      const display = PROVIDER_DISPLAY[id as ProviderId];
+      result.push({ providerId: id, providerLabel: display?.label ?? name, models: group });
+      byProvider.delete(id);
+    }
+  }
+
+  // Second pass: any providers not in PROVIDERS order (e.g., from remote catalog)
+  for (const [providerId, group] of byProvider) {
+    if (group.length > 0) {
+      const display = PROVIDER_DISPLAY[providerId as ProviderId];
+      result.push({
+        providerId,
+        providerLabel: display?.label ?? providerId,
+        models: group,
+      });
+    }
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Props
+// ---------------------------------------------------------------------------
 
 interface ModelPickerSheetProps {
   /** Ref forwarded so the parent can open/close the sheet. */
@@ -24,6 +75,10 @@ interface ModelPickerSheetProps {
    */
   onSelect?: (modelId: string) => void;
 }
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) {
   const snapPoints = useMemo(() => ['50%', '90%'], []);
@@ -83,6 +138,11 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
     const favSet = new Set(favorites);
     return filteredModels.filter((m) => !favSet.has(m.id));
   }, [filteredModels, favoriteModels, favorites]);
+
+  // Provider-grouped non-favorite models (used when NOT searching)
+  const groupedModels = useMemo(() => {
+    return groupByProvider(nonFavoriteModels, PROVIDERS);
+  }, [nonFavoriteModels]);
 
   const handleSelectModel = useCallback(
     (id: string) => {
@@ -241,9 +301,9 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
         {/* Separator between auto modes and model list */}
         {!query && <View className="mx-4 mb-2 mt-1 border-b border-white/8" />}
 
-        {/* Favorites section */}
+        {/* Favorites section — always shown flat (no sub-grouping) */}
         {favoriteModels.length > 0 && (
-          <View className="mb-1">
+          <View className="mb-2">
             <Text className="text-xs text-white/40 font-medium uppercase tracking-wider px-4 mb-1">
               Favorites
             </Text>
@@ -251,17 +311,28 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
           </View>
         )}
 
-        {/* Flat model list — no provider grouping */}
-        {favoriteModels.length > 0 && nonFavoriteModels.length > 0 && (
-          <Text className="text-xs text-white/40 font-medium uppercase tracking-wider px-4 mb-1 mt-1">
-            All Models
-          </Text>
+        {/* Provider-grouped model list */}
+        {query ? (
+          // While searching, render a flat list without section headers.
+          <View>
+            {favoriteModels.length > 0 && nonFavoriteModels.length > 0 && (
+              <Text className="text-xs text-white/40 font-medium uppercase tracking-wider px-4 mb-1 mt-1">
+                All Models
+              </Text>
+            )}
+            {nonFavoriteModels.map((model) => renderModelRow(model, 'all'))}
+          </View>
+        ) : (
+          // No active search → provider sections with headers.
+          groupedModels.map(({ providerId, providerLabel, models }) => (
+            <View key={providerId} className="mb-1">
+              <Text className="text-xs text-white/40 font-medium uppercase tracking-wider px-4 pt-2 pb-1">
+                {providerLabel}
+              </Text>
+              {models.map((model) => renderModelRow(model, `grp-${providerId}`))}
+            </View>
+          ))
         )}
-
-        {nonFavoriteModels.map((model) => renderModelRow(model, 'all'))}
-
-        {/* When showing all (no favorites section), label it */}
-        {favoriteModels.length === 0 && filteredModels.length > 0 && query && <View />}
 
         {/* Empty state */}
         {filteredModels.length === 0 && (

@@ -25,6 +25,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+import { getUserClient } from '@/lib/supabase-server';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subscription-service';
@@ -161,6 +162,7 @@ async function handleViaV1Fallback(
   chatRequest: V2ChatRequest,
   user: User,
   subscription: SubscriptionInfo,
+  userClient: import('@supabase/supabase-js').SupabaseClient,
 ): Promise<NextResponse> {
   logger.info(
     { model: chatRequest.model, userId: user.id },
@@ -196,7 +198,7 @@ async function handleViaV1Fallback(
   );
 
   // Ensure credits are allocated for the user's subscription period
-  const existingBalance = await CreditService.getBalance(user.id);
+  const existingBalance = await CreditService.getBalance(userClient, user.id);
   if (!existingBalance || !existingBalance.account_id) {
     logger.info(
       { userId: user.id, subscriptionId: subscription.id, planTier: subscription.plan_tier },
@@ -219,7 +221,7 @@ async function handleViaV1Fallback(
     }
   }
 
-  const hasCredits = await CreditService.checkAvailable(user.id, estimatedCostCents);
+  const hasCredits = await CreditService.checkAvailable(userClient, user.id, estimatedCostCents);
   if (!hasCredits) {
     logger.warn(
       { userId: user.id, estimatedCostCents, model: chatRequest.model },
@@ -243,6 +245,7 @@ async function handleViaV1Fallback(
   // Reserve credits with idempotency key
   const reservationKey = CreditService.generateIdempotencyKey(user.id, 'reservation', requestId);
   const reserveResult = await CreditService.deductCredits(
+    userClient,
     user.id,
     estimatedCostCents,
     `Credit reservation (v2 fallback): ${provider}/${chatRequest.model}`,
@@ -312,6 +315,7 @@ async function handleViaV1Fallback(
       // Refund credits on streaming failure
       const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
       await CreditService.deductCredits(
+        userClient,
         user.id,
         -estimatedCostCents,
         `Refund for failed v2 fallback streaming: ${provider}/${chatRequest.model}`,
@@ -341,6 +345,7 @@ async function handleViaV1Fallback(
       // Refund reserved credits for cached response (no LLM call made)
       const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
       await CreditService.deductCredits(
+        userClient,
         user.id,
         -estimatedCostCents,
         `Refund for cached response (v2 fallback): ${provider}/${chatRequest.model}`,
@@ -371,6 +376,7 @@ async function handleViaV1Fallback(
     // Refund credits on LLM failure
     const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
     await CreditService.deductCredits(
+      userClient,
       user.id,
       -estimatedCostCents,
       `Refund for failed v2 fallback request: ${provider}/${chatRequest.model}`,
@@ -401,6 +407,7 @@ async function handleViaV1Fallback(
         requestId,
       );
       await CreditService.deductCredits(
+        userClient,
         user.id,
         costDifference,
         `Credit adjustment (v2 fallback): ${provider}/${chatRequest.model}`,
@@ -535,10 +542,13 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
     );
   }
 
+  // RLS-bound client for all downstream DB ops on behalf of this user.
+  const userClient = getUserClient(token);
+
   // ---------------------------------------------------------------------------
   // SECURITY: Subscription validation (prevents credit & subscription bypass)
   // ---------------------------------------------------------------------------
-  const subscription = await SubscriptionService.getSubscription(user.id);
+  const subscription = await SubscriptionService.getSubscription(userClient, user.id);
 
   if (!subscription) {
     return NextResponse.json(
@@ -678,7 +688,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
   const aiSdkProvider = detectAiSdkProvider(chatRequest.model);
 
   if (!aiSdkProvider || !useAiSdk) {
-    return handleViaV1Fallback(request, chatRequest, user, subscription);
+    return handleViaV1Fallback(request, chatRequest, user, subscription, userClient);
   }
 
   // Map model id (same mapping as v1)
@@ -833,7 +843,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
   );
 
   // Ensure credits are allocated for the user's subscription period
-  const aiSdkExistingBalance = await CreditService.getBalance(user.id);
+  const aiSdkExistingBalance = await CreditService.getBalance(userClient, user.id);
   if (!aiSdkExistingBalance || !aiSdkExistingBalance.account_id) {
     logger.info(
       { userId: user.id, subscriptionId: subscription.id, planTier: subscription.plan_tier },
@@ -856,7 +866,11 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
     }
   }
 
-  const aiSdkHasCredits = await CreditService.checkAvailable(user.id, aiSdkEstimatedCostCents);
+  const aiSdkHasCredits = await CreditService.checkAvailable(
+    userClient,
+    user.id,
+    aiSdkEstimatedCostCents,
+  );
   if (!aiSdkHasCredits) {
     logger.warn(
       { userId: user.id, estimatedCostCents: aiSdkEstimatedCostCents, model: chatRequest.model },
@@ -884,6 +898,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
     aiSdkRequestId,
   );
   const aiSdkReserveResult = await CreditService.deductCredits(
+    userClient,
     user.id,
     aiSdkEstimatedCostCents,
     `Credit reservation (v2 ai-sdk): ${aiSdkProvider}/${chatRequest.model}`,
@@ -965,6 +980,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
               aiSdkRequestId,
             );
             CreditService.deductCredits(
+              userClient,
               user.id,
               costDifference,
               `Credit reconciliation refund (v2 ai-sdk): ${aiSdkProvider}/${chatRequest.model}`,
@@ -999,6 +1015,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
               aiSdkRequestId,
             );
             CreditService.deductCredits(
+              userClient,
               user.id,
               costDifference,
               `Credit reconciliation charge (v2 ai-sdk): ${aiSdkProvider}/${chatRequest.model}`,
@@ -1053,6 +1070,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
     // Refund full reservation on stream error
     const aiSdkRefundKey = CreditService.generateIdempotencyKey(user.id, 'refund', aiSdkRequestId);
     await CreditService.deductCredits(
+      userClient,
       user.id,
       -aiSdkEstimatedCostCents,
       `Refund for failed v2 ai-sdk stream: ${aiSdkProvider}/${chatRequest.model}`,

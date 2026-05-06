@@ -64,6 +64,9 @@ pub enum KeyPurpose {
     /// For encrypting Supabase auth tokens stored in the Tauri vault
     /// instead of localStorage (FIX-004).
     SupabaseAuth,
+    /// For encrypting per-tool connector permission records stored at
+    /// `~/.agiworkforce/connector-permissions.json` (Desktop P0, audit C-rank 1).
+    ConnectorPermissions,
 }
 
 impl KeyPurpose {
@@ -80,6 +83,7 @@ impl KeyPurpose {
             KeyPurpose::CloudEncryption => "cloud_encryption",
             KeyPurpose::Messaging => "messaging",
             KeyPurpose::SupabaseAuth => "supabase_auth",
+            KeyPurpose::ConnectorPermissions => "connector_permissions",
         }
     }
 }

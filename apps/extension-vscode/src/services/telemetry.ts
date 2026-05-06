@@ -10,6 +10,7 @@
 
 import * as vscode from 'vscode';
 import { normalizeConfiguredModelId } from './modelConstants';
+import { getExtensionVersion } from '../utils/version';
 
 // ─── Event names ─────────────────────────────────────────────────────────────
 
@@ -21,6 +22,47 @@ export const TelemetryEvents = {
 } as const;
 
 type TelemetryEventName = (typeof TelemetryEvents)[keyof typeof TelemetryEvents];
+
+// ─── Secret redaction (D3) ──────────────────────────────────────────────────
+
+/**
+ * Patterns that match common secret / credential formats. Anything matching
+ * is replaced with a fixed marker before being sent to the telemetry endpoint.
+ * Order matters: more specific patterns first so we don't double-redact.
+ */
+const SECRET_PATTERNS: ReadonlyArray<RegExp> = [
+  /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+/g, // JWT
+  /Bearer\s+[A-Za-z0-9._\-+/=]{8,}/gi, // Bearer tokens
+  /sk-ant-[A-Za-z0-9_-]{20,}/g, // Anthropic API key
+  /sk-proj-[A-Za-z0-9_-]{20,}/g, // OpenAI project key
+  /sk-[A-Za-z0-9]{20,}/g, // Generic OpenAI sk-
+  /sk_(live|test)_[A-Za-z0-9_]{16,}/g, // Stripe + AGI live/test keys
+  /xox[baprs]-[A-Za-z0-9-]{10,}/g, // Slack tokens
+  /ghp_[A-Za-z0-9]{30,}/g, // GitHub PAT
+  /AIza[A-Za-z0-9_-]{30,}/g, // Google API key
+  /AKIA[A-Z0-9]{16}/g, // AWS access key
+];
+
+/**
+ * Returns a copy of the input with any matched secret replaced by `[REDACTED]`.
+ * Exported for unit tests; safe to call on any string (never throws).
+ */
+export function redactSecrets(input: string): string {
+  if (typeof input !== 'string' || input.length === 0) return input;
+  let out = input;
+  for (const pattern of SECRET_PATTERNS) {
+    out = out.replace(pattern, '[REDACTED]');
+  }
+  return out;
+}
+
+function redactProperties(props: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(props)) {
+    out[k] = typeof v === 'string' ? redactSecrets(v) : v;
+  }
+  return out;
+}
 
 // ─── Telemetry endpoint allowlist ────────────────────────────────────────────
 
@@ -39,8 +81,70 @@ function isAllowedTelemetryEndpoint(url: string): boolean {
 
 // ─── Telemetry service ───────────────────────────────────────────────────────
 
+const TELEMETRY_FLUSH_INTERVAL_MS = 30_000;
+const TELEMETRY_BATCH_MAX = 50;
+
 let logger: vscode.TelemetryLogger | undefined;
 let sessionId: string | undefined;
+
+/**
+ * In-memory batch buffer. One POST per flush of N≤50 events instead of
+ * one POST per event. Flushes on 30s timer, on size threshold, and on
+ * extension dispose. If the network call fails, events are dropped (no
+ * persistent retry queue — telemetry must never grow unbounded).
+ */
+class TelemetryBatcher implements vscode.Disposable {
+  private buffer: Array<Record<string, unknown>> = [];
+  private timer: ReturnType<typeof setInterval> | undefined;
+  private disposed = false;
+
+  constructor(private readonly send: (payload: Record<string, unknown>) => void) {
+    this.timer = setInterval(() => this.flush(), TELEMETRY_FLUSH_INTERVAL_MS);
+  }
+
+  enqueue(event: Record<string, unknown>): void {
+    if (this.disposed) return;
+    this.buffer.push(event);
+    if (this.buffer.length >= TELEMETRY_BATCH_MAX) {
+      this.flush();
+    }
+  }
+
+  flush(): void {
+    if (this.buffer.length === 0) return;
+    const events = this.buffer;
+    this.buffer = [];
+    this.send({
+      batch: events,
+      batchSize: events.length,
+      flushedAt: new Date().toISOString(),
+    });
+  }
+
+  /** Test-only inspector. */
+  size(): number {
+    return this.buffer.length;
+  }
+
+  dispose(): void {
+    this.flush();
+    this.disposed = true;
+    if (this.timer !== undefined) {
+      clearInterval(this.timer);
+      this.timer = undefined;
+    }
+  }
+}
+
+let batcher: TelemetryBatcher | undefined;
+
+/** Test-only: reset module state between tests. */
+export function __resetTelemetryForTests(): void {
+  batcher?.dispose();
+  batcher = undefined;
+  logger = undefined;
+  sessionId = undefined;
+}
 
 function generateSessionId(): string {
   const bytes = new Uint8Array(16);
@@ -58,8 +162,7 @@ function isExtensionTelemetryEnabled(): boolean {
 function getCommonProperties(): Record<string, string> {
   return {
     sessionId: sessionId ?? 'unknown',
-    extensionVersion:
-      vscode.extensions.getExtension('agiworkforce.agi-workforce')?.packageJSON?.version ?? '0.1.0',
+    extensionVersion: getExtensionVersion(),
     vscodeVersion: vscode.version,
     platform: process.platform,
   };
@@ -87,14 +190,11 @@ export function activate(_context: vscode.ExtensionContext): vscode.Disposable {
   }
 
   /** Fire-and-forget HTTP POST. Never throws — telemetry must not affect the caller. */
-  function postEvent(payload: Record<string, unknown>): void {
-    // Guard: only post when VS Code global telemetry is enabled.
+  function postBatch(payload: Record<string, unknown>): void {
     if (!vscode.env.isTelemetryEnabled) return;
     if (!telemetryEndpoint) return;
-    // Guard: only post to allowed telemetry domains.
     if (!isAllowedTelemetryEndpoint(telemetryEndpoint)) return;
     try {
-      // Use fetch (available in VS Code's Node.js 18+ runtime via global).
       void fetch(telemetryEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -107,45 +207,52 @@ export function activate(_context: vscode.ExtensionContext): vscode.Disposable {
     }
   }
 
+  batcher = new TelemetryBatcher(postBatch);
+
   const sender: vscode.TelemetrySender = {
     sendEventData(eventName: string, data?: Record<string, unknown>): void {
-      // The TelemetryLogger gates on vscode.env.isTelemetryEnabled before calling here.
-      // We additionally guard inside postEvent() as a defense-in-depth measure.
-      postEvent({
+      batcher?.enqueue({
         type: 'event',
         eventName,
         data: data ?? {},
         timestamp: new Date().toISOString(),
-        extensionVersion:
-          vscode.extensions.getExtension('agiworkforce.agi-workforce')?.packageJSON?.version ??
-          '0.1.0',
+        extensionVersion: getExtensionVersion(),
         vscodeVersion: vscode.version,
         sessionId: sessionId ?? 'unknown',
       });
     },
     sendErrorData(error: Error, data?: Record<string, unknown>): void {
-      postEvent({
+      batcher?.enqueue({
         type: 'error',
         errorName: error.name,
         errorMessage: error.message,
         data: data ?? {},
         timestamp: new Date().toISOString(),
-        extensionVersion:
-          vscode.extensions.getExtension('agiworkforce.agi-workforce')?.packageJSON?.version ??
-          '0.1.0',
+        extensionVersion: getExtensionVersion(),
         vscodeVersion: vscode.version,
         sessionId: sessionId ?? 'unknown',
       });
     },
   };
 
-  logger = vscode.env.createTelemetryLogger(sender, {
+  const innerLogger = vscode.env.createTelemetryLogger(sender, {
     ignoreBuiltInCommonProperties: false,
     ignoreUnhandledErrors: true,
   });
 
+  // Wrap so the disposable returned to extension.ts also flushes the
+  // batch buffer + tears down the timer on extension deactivation.
+  const localBatcher = batcher;
+  logger = innerLogger;
+  const composite: vscode.Disposable = {
+    dispose() {
+      localBatcher?.dispose();
+      innerLogger.dispose();
+    },
+  };
+
   // Note: do NOT push to context.subscriptions here — extension.ts pushes the
-  // returned Disposable, which is this same logger. Pushing twice would cause
+  // returned Disposable, which is this composite. Pushing twice would cause
   // double-disposal on deactivation.
 
   // Log activation event
@@ -155,7 +262,7 @@ export function activate(_context: vscode.ExtensionContext): vscode.Disposable {
     ),
   });
 
-  return logger;
+  return composite;
 }
 
 /**
@@ -168,7 +275,7 @@ export function logEvent(eventName: TelemetryEventName, properties?: Record<stri
 
     const merged = {
       ...getCommonProperties(),
-      ...properties,
+      ...redactProperties(properties ?? {}),
     };
 
     logger.logUsage(eventName, merged);
@@ -185,11 +292,14 @@ export function logError(error: Error | string, properties?: Record<string, stri
     if (logger === undefined) return;
     if (!isExtensionTelemetryEnabled()) return;
 
-    const err = typeof error === 'string' ? new Error(error) : error;
+    const sourceMessage = typeof error === 'string' ? error : error.message;
+    const redactedMessage = redactSecrets(sourceMessage);
+    const err = new Error(redactedMessage);
+    if (typeof error !== 'string' && error.name) err.name = error.name;
 
     const merged = {
       ...getCommonProperties(),
-      ...properties,
+      ...redactProperties(properties ?? {}),
     };
 
     logger.logError(err, merged);

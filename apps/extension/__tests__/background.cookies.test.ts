@@ -7,18 +7,61 @@
 
 import { describe, expect, it } from 'vitest';
 
-/** Blocked domain patterns — mirrors BLOCKED_COOKIE_DOMAINS in background.ts */
+/** Blocked domain patterns — mirrors BLOCKED_COOKIE_DOMAINS in background.ts.
+ *  The source in `src/background.ts:1310-1366` is the authoritative list; if
+ *  these mirrors fall behind, the tests below will not catch a regression. */
 const BLOCKED_COOKIE_DOMAINS: RegExp[] = [
+  // Financial
   /bank/i,
   /paypal/i,
   /venmo/i,
   /chase/i,
   /wellsfargo/i,
   /citibank/i,
+  /fidelity/i,
+  /schwab/i,
+  /stripe\.com$/i,
+  /plaid\.com$/i,
+  /coinbase/i,
+  /binance/i,
+  /kraken/i,
+  // Government & healthcare
   /\.gov$/i,
+  /\.mil$/i,
   /healthcare/i,
   /medical/i,
   /health\.com/i,
+  // Cloud infrastructure & developer tools
+  /aws\.amazon\.com/i,
+  /console\.cloud\.google/i,
+  /portal\.azure/i,
+  /github\.com$/i,
+  /gitlab\.com$/i,
+  /bitbucket\.org$/i,
+  // Auth & identity providers
+  /accounts\.google/i,
+  /login\.microsoftonline/i,
+  /auth0\.com$/i,
+  /okta\.com$/i,
+  // Email & communication
+  /mail\.google/i,
+  /outlook\.(live|office)/i,
+  // Social media (auth tokens)
+  /facebook\.com$/i,
+  /twitter\.com$/i,
+  /x\.com$/i,
+  /instagram\.com$/i,
+  // CHROME-NEW-003: extension's own surfaces
+  /\.supabase\.(co|io)$/i,
+  /(^|\.)agiworkforce\.com$/i,
+  // CHROME-NEW-006 (2026-05-05): platforms the extension targets for autofill
+  /(^|\.)linkedin\.com$/i,
+  /(^|\.)slack\.com$/i,
+  /(^|\.)notion\.so$/i,
+  /(^|\.)figma\.com$/i,
+  /(^|\.)lever\.co$/i,
+  /(^|\.)greenhouse\.io$/i,
+  /(^|\.)workday\.com$/i,
 ];
 
 /** Mirrors isCookieDomainAllowed() in background.ts */
@@ -73,18 +116,52 @@ describe('isCookieDomainAllowed — cookie domain blocklist', () => {
     expect(isCookieDomainAllowed('https://health.com/wellness')).toBe(false);
   });
 
-  // ── Safe domains ───────────────────────────────────────────────────────────
+  // ── CHROME-NEW-006 (2026-05-05): autofill-target platforms ────────────────
 
-  it('allows github.com', () => {
-    expect(isCookieDomainAllowed('https://github.com/login')).toBe(true);
+  it('blocks linkedin.com (extension target — DOM access only, no cookies)', () => {
+    expect(isCookieDomainAllowed('https://linkedin.com/jobs')).toBe(false);
+    expect(isCookieDomainAllowed('https://www.linkedin.com/feed')).toBe(false);
   });
 
-  it('allows google.com', () => {
+  it('blocks slack.com', () => {
+    expect(isCookieDomainAllowed('https://app.slack.com/client')).toBe(false);
+  });
+
+  it('blocks notion.so', () => {
+    expect(isCookieDomainAllowed('https://www.notion.so/home')).toBe(false);
+  });
+
+  it('blocks figma.com', () => {
+    expect(isCookieDomainAllowed('https://www.figma.com/files')).toBe(false);
+  });
+
+  it('blocks lever.co', () => {
+    expect(isCookieDomainAllowed('https://hire.lever.co/applicant')).toBe(false);
+  });
+
+  it('blocks greenhouse.io', () => {
+    expect(isCookieDomainAllowed('https://boards.greenhouse.io/postings')).toBe(false);
+  });
+
+  it('blocks workday.com', () => {
+    expect(isCookieDomainAllowed('https://wd1.workday.com/login')).toBe(false);
+  });
+
+  it('does NOT block a domain that merely contains "linkedin" as a substring of a different host', () => {
+    // The /(^|\.)linkedin\.com$/ anchor prevents `linkedin.com.evil.com`
+    // from matching, which a naïve `/linkedin\.com/` would match.
+    expect(isCookieDomainAllowed('https://linkedin.com.evil.com/data')).toBe(true);
+  });
+
+  // ── Existing safe domains (still allowed) ─────────────────────────────────
+
+  it('blocks github.com (CHROME-NEW-002)', () => {
+    expect(isCookieDomainAllowed('https://github.com/login')).toBe(false);
+  });
+
+  it('allows google.com (search, not auth)', () => {
+    // accounts.google is blocked separately; google.com is fine.
     expect(isCookieDomainAllowed('https://google.com')).toBe(true);
-  });
-
-  it('allows linkedin.com', () => {
-    expect(isCookieDomainAllowed('https://linkedin.com/jobs')).toBe(true);
   });
 
   it('allows example.com', () => {

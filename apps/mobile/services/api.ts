@@ -2,6 +2,11 @@ import { Alert } from 'react-native';
 import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { combineAbortSignals } from '@/lib/abortSignal';
 import { supabase } from './supabase';
+// FIX-MOB-10: every outbound HTTPS call goes through secureFetch — the
+// chokepoint that the TLS-pinning gate hooks into. Today it's a
+// passthrough; flipping `PINNING_ENFORCED` in lib/pinning.ts (after ops
+// drops SPKI hashes) makes it enforce pin coverage at the JS layer.
+import { secureFetch } from './secureFetch';
 
 /**
  * Authenticated HTTP client.
@@ -94,7 +99,7 @@ async function request<T>(
   const timeoutId = setTimeout(() => controller.abort(), timeout);
 
   try {
-    const response = await fetch(`${API_URL}${path}`, {
+    const response = await secureFetch(`${API_URL}${path}`, {
       ...init,
       headers: { ...headers, ...(init.headers as Record<string, string>) },
       signal: options.signal
@@ -190,7 +195,7 @@ export const api = {
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {
-      const response = await fetch(`${API_URL}/api/upload`, {
+      const response = await secureFetch(`${API_URL}/api/upload`, {
         method: 'POST',
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),

@@ -34,10 +34,20 @@ async function secureGet(key: string): Promise<string | null> {
   }
 }
 
+// SECURITY: pin every Supabase token write to this-device-only. The default
+// `kSecAttrAccessibleWhenUnlocked` would back the JWTs into iCloud Keychain,
+// which then sync to any device sharing the iCloud account (or to an attacker
+// who restored an iCloud backup to a controlled device). The MMKV encryption
+// key (`lib/mmkv.ts:63`) and `lib/secureStorage.ts:52` already use this option;
+// supabase.ts was the lone holdout, leaving access/refresh tokens transferable.
+const SECURE_OPTS = {
+  keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+} as const;
+
 async function secureSet(key: string, value: string): Promise<void> {
   try {
     if (value.length <= CHUNK_SIZE) {
-      await SecureStore.setItemAsync(key, value);
+      await SecureStore.setItemAsync(key, value, SECURE_OPTS);
       // Clean up any stale chunked data from a previous larger write.
       await secureRemoveChunks(key);
     } else {
@@ -54,9 +64,10 @@ async function secureSet(key: string, value: string): Promise<void> {
         await SecureStore.setItemAsync(
           `${key}__chunk_${i}`,
           value.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE),
+          SECURE_OPTS,
         );
       }
-      await SecureStore.setItemAsync(key + CHUNK_COUNT_SUFFIX, String(count));
+      await SecureStore.setItemAsync(key + CHUNK_COUNT_SUFFIX, String(count), SECURE_OPTS);
       // Remove direct-key value from a previous single-chunk write.
       await SecureStore.deleteItemAsync(key).catch(() => {});
       // Remove orphan chunks from a previous write that had more chunks.

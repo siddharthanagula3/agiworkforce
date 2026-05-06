@@ -195,11 +195,13 @@ export async function getCurrentSession() {
  * (`PricingModel`).  `'free'` here is a legacy alias kept for backward compat;
  * new tiers (`'local-only'`, `'byok'`) are added there as the source of truth.
  */
-export type PlanTier = 'hobby' | 'free' | 'pro' | 'max' | 'enterprise';
+export type PlanTier = 'local-only' | 'byok' | 'free' | 'hobby' | 'pro' | 'max' | 'enterprise';
 
 const VALID_PLAN_TIERS: readonly PlanTier[] = [
-  'hobby',
+  'local-only',
+  'byok',
   'free',
+  'hobby',
   'pro',
   'max',
   'enterprise',
@@ -214,8 +216,10 @@ export function asPlanTier(value: string | null | undefined): PlanTier {
 }
 
 export const PLAN_DISPLAY_NAMES: Record<PlanTier, string> = {
-  hobby: 'Hobby',
+  'local-only': 'Local Only',
+  byok: 'BYOK',
   free: 'Free',
+  hobby: 'Hobby',
   pro: 'Pro',
   max: 'Max',
   enterprise: 'Enterprise',

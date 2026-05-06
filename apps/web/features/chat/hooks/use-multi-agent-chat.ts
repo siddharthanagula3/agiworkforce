@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { useMissionStore } from '@shared/stores/mission-control-store';
 import { systemPromptsService } from '@core/ai/employees/prompt-management';
 import type { AIEmployee } from '@core/types/ai-employee';
+import { getCsrfToken } from '@/lib/client/csrf';
 
 export interface MultiAgentChatOptions {
   mode?: 'mission' | 'chat';
@@ -162,13 +163,22 @@ export function useMultiAgentChat(options: MultiAgentChatOptions = {}): UseMulti
             // localStorage may be unavailable
           }
 
-          // Attach CSRF token from cookie
-          const csrfToken = document.cookie
-            .split('; ')
-            .find((row) => row.startsWith('csrf-token='))
-            ?.split('=')[1];
-          if (csrfToken) {
-            headers['x-csrf-token'] = csrfToken;
+          // SECURITY (web-MED-1): the previous implementation read a
+          // `csrf-token` cookie that the server never sets — the auth chain
+          // uses `anon-session-id` cookie + an HMAC token returned by
+          // `/api/csrf`. The cookie lookup therefore always returned
+          // `undefined`, leaving `x-csrf-token` unset and silently degrading
+          // CSRF coverage on `/api/mission` and `/api/llm/completion`. The
+          // server's Bearer-bypass branch hid the regression. Use the
+          // canonical helper instead, which handles fetch + caching +
+          // refresh-before-expiry.
+          try {
+            const csrfToken = await getCsrfToken();
+            if (csrfToken) {
+              headers['x-csrf-token'] = csrfToken;
+            }
+          } catch {
+            // /api/csrf unreachable — proceed without; server enforces.
           }
         }
 

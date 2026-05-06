@@ -381,9 +381,12 @@ pub fn run() {
             app.manage(llm_state);
 
             // Initialize browser automation with graceful degradation.
-            // If initialization fails, we still manage a degraded state so commands
-            // can return meaningful errors instead of panicking on state retrieval.
-            let browser_state = match tauri::async_runtime::block_on(BrowserStateWrapper::new()) {
+            // SEV-DESK-02: pass the Tauri AppHandle so ExtensionBridge can
+            // surface confirmation prompts before any execute_script, navigate,
+            // cookie, or localStorage operation reaches the active browser tab.
+            let browser_state = match tauri::async_runtime::block_on(
+                BrowserStateWrapper::new(Some(app.handle().clone())),
+            ) {
                 Ok(state) => {
                     tracing::info!("Browser automation initialized successfully");
                     state
@@ -909,9 +912,16 @@ pub fn run() {
                 }
             }
 
+            // B6 fix: share a single Arc<RwLock<String>> between the live
+            // RealtimeServer (which authenticates handshakes against it)
+            // and the RealtimeState that backs the bridge_rotate_token /
+            // bridge_get_token Tauri commands. Rotation now updates both
+            // sides through the same lock.
+            let realtime_token_shared =
+                std::sync::Arc::new(tokio::sync::RwLock::new(realtime_token));
             let realtime_server = Arc::new(crate::integrations::realtime::RealtimeServer::new(
                 presence_manager.clone(),
-                realtime_token.clone(),
+                realtime_token_shared.clone(),
                 Some(app.handle().clone()),
             ));
             {
@@ -925,7 +935,7 @@ pub fn run() {
             app.manage(crate::sys::commands::RealtimeState::new(
                 presence_manager.clone(),
                 websocket_port,
-                realtime_token,
+                realtime_token_shared,
             ));
             let metrics_db = Arc::new(Mutex::new(
                 crate::data::db::encryption::open_encrypted_connection(
@@ -1815,6 +1825,11 @@ pub fn run() {
             crate::sys::commands::get_connector_manifests,
             crate::sys::commands::save_api_key,
 
+            // Connector per-tool permissions (Desktop P0, audit C-rank 1)
+            crate::sys::commands::connector_permission_get,
+            crate::sys::commands::connector_permission_set,
+            crate::sys::commands::connector_permission_list,
+
             // MCPB (MCP Bundles)
             crate::sys::commands::mcpb_fetch_registry,
             crate::sys::commands::mcpb_search_bundles,
@@ -2184,6 +2199,9 @@ pub fn run() {
             crate::sys::commands::realtime::set_user_online,
             crate::sys::commands::realtime::set_user_offline,
             crate::sys::commands::realtime::update_user_activity,
+            // RT-04: Bridge token management
+            crate::sys::commands::realtime::bridge_get_token,
+            crate::sys::commands::realtime::bridge_rotate_token,
 
             // Privacy
             crate::sys::commands::privacy::privacy_delete_account,

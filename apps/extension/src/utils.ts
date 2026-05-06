@@ -314,7 +314,7 @@ export const validators = {
     try {
       const normalized = url.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://');
       const parsed = new URL(normalized);
-      const localHosts = new Set(['localhost', '127.0.0.1', '[::1]', '0.0.0.0']);
+      const localHosts = new Set(['localhost', '127.0.0.1', '[::1]']);
       return localHosts.has(parsed.hostname);
     } catch {
       return false;

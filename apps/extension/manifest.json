@@ -72,6 +72,12 @@
   "side_panel": {
     "default_path": "src/side_panel.html"
   },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/providers/*.svg"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "minimum_chrome_version": "132",
   "offline_enabled": false
 }

@@ -38,7 +38,9 @@ pub async fn run_repl(
     auto_approve_plan: bool,
 ) -> Result<()> {
     let provider_name = crate::models::detect_provider(model);
-    output::print_banner(model, &format!("{:?}", provider_name).to_lowercase());
+    let provider_str = format!("{:?}", provider_name).to_lowercase();
+    output::print_compact_header(&provider_str);
+    output::print_banner(model, &provider_str);
 
     let mut session = AgentSession::new(model, sys_context, custom_system_prompt);
     session.max_turns = max_turns;
@@ -504,7 +506,15 @@ fn handle_slash_command(
         }
         "/model" | "/m" => {
             if arg.is_empty() {
+                // In the REPL (non-TUI) path there is no ratatui terminal,
+                // so we print the current model and hint the user toward the
+                // interactive TUI picker (available via `agiworkforce` with no
+                // --no-tui flag, then `/model` with no argument).
                 output::print_info(&format!("Current model: {}", session.model));
+                output::print_info(
+                    "Tip: run without --no-tui and type /model to open the \
+                     interactive model picker (search + provider sections + effort selector).",
+                );
             } else {
                 session.switch_model(arg);
                 let provider = format!("{:?}", session.provider).to_lowercase();
@@ -746,6 +756,23 @@ fn handle_slash_command(
                 return SlashResult::Voice(lang.to_string());
             }
         }
+        "/theme" => {
+            if arg.is_empty() {
+                output::print_info(
+                    "Available themes: dark | light | ansi | solarized-dark | solarized-light | colorblind\n  \
+                     Use /theme <name> to set directly.\n  \
+                     In TUI mode, /theme (no arg) opens the interactive picker with live preview.",
+                );
+            } else {
+                use crate::tui::widgets::theme_picker::ThemeChoice;
+                match ThemeChoice::from_arg(arg) {
+                    Some(choice) => output::print_info(&format!("Theme set to {}", choice.label())),
+                    None => output::print_warn(&format!(
+                        "Unknown theme: '{arg}'. Available: dark | light | ansi | solarized-dark | solarized-light | colorblind"
+                    )),
+                }
+            }
+        }
         "/login" => {
             return SlashResult::Login;
         }
@@ -923,6 +950,10 @@ fn print_help() {
         "/fast [on|off]".bold()
     );
     eprintln!("  {} Manual context compaction", "/compact [focus]".bold());
+    eprintln!(
+        "  {}  Set syntax theme (dark/light/ansi/solarized-dark/…)",
+        "/theme [name]".bold()
+    );
     eprintln!(
         "  {}  Side query (not added to history)",
         "/btw <question>".bold()

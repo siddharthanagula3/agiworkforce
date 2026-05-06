@@ -39,14 +39,14 @@ This is what I built:
 - BYOK — bring your own API keys, no markup, your data goes to the
   provider directly
 - Local-first option — run Ollama or LM Studio on your machine, fully offline
-- Multi-provider fallback chain: `agiworkforce -m "claude-opus-4-6,gpt-5.4,llama3.1:8b" "..."`
+- Multi-provider fallback chain: `agiworkforce -m "claude-opus-4-7,gpt-5.4,llama3.1:8b" "..."`
   rotates on rate limit / failure / etc
 - Ratatui TUI with streaming markdown, slash commands, syntax highlighting
 - MCP support (both client and server modes)
 - Sandbox: Seatbelt (macOS), Bubblewrap/Landlock (Linux), Restricted Token
   (Windows)
 - Daemon mode with cron + webhook + file-watcher triggers
-- 22 subcommands, 19 hook events, 914 unit tests, single 5.7 MB Rust binary
+- 22 subcommands, 22 hook events, 2,161 unit tests, single 5.7 MB Rust binary
 
 Install:
 - npm: `npm install -g @agiworkforce/cli`
@@ -76,7 +76,7 @@ shipping today, Desktop ships in 4 weeks, the rest follow.
 
 1. **Show HN format** is the right tag (working software, not a pitch deck)
 2. **Direct comparison** to Claude Code / Codex CLI / Gemini CLI sets the frame
-3. **Concrete numbers** (10+ Providers, 914 tests, 5.7 MB, 155,029 LOC) are credible
+3. **Concrete numbers** (10+ Providers, 2,161 tests, 5.7 MB, 155,029 LOC) are credible
 4. **Architecture link** rewards engineers who want to dig
 5. **Honest pricing** (free for BYOK + local; waitlist for Pro/Max) is HN-friendly
 6. **No "AI changes everything" hyperbole** — just what it does

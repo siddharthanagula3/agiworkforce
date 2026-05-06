@@ -50,6 +50,7 @@ import rehypeRaw from 'rehype-raw';
 import type { Components } from 'react-markdown';
 import { toast } from 'sonner';
 import { ArtifactPreview } from '../artifacts/ArtifactPreview';
+import { InlineArtifactCards } from '../artifacts/InlineArtifactCards';
 import { extractArtifacts, removeArtifactBlocks } from '../../utils/artifact-detector';
 import { useArtifactStore } from '@shared/stores/artifact-store';
 import { employeeChatService } from '../../services/employee-chat-service';
@@ -449,7 +450,10 @@ const MessageBubbleComponent = function MessageBubble({
             </div>
           )}
 
-          {/* Artifacts */}
+          {/* Inline artifact thumbnail cards — quick visual summary, click to open panel */}
+          {!isUser && artifacts.length > 0 && <InlineArtifactCards artifacts={artifacts} />}
+
+          {/* Artifacts — full detail view (below inline cards) */}
           {!isUser && artifacts.length > 0 && (
             <div className="mt-4 space-y-3">
               {artifacts.map((artifact) => (

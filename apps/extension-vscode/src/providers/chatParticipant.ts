@@ -23,6 +23,8 @@ import { type ConversationStore } from '../storage/conversationStore';
 import { type ConversationTreeProvider } from './conversationTreeProvider';
 import { getContextBuilder } from '../services/contextBuilder';
 import { normalizeConfiguredModelId } from '../services/modelConstants';
+import { getWorkspaceDisplayName } from '../utils/workspaceFolders';
+import { Config } from '../utils/config';
 import { getContextPanelProvider } from './contextPanelProvider';
 
 // ─── Context gathering ────────────────────────────────────────────────────────
@@ -45,7 +47,7 @@ interface PromptOptions {
 
 function gatherEditorContext(): EditorContext {
   const editor = vscode.window.activeTextEditor;
-  const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name ?? 'unknown workspace';
+  const workspaceName = getWorkspaceDisplayName();
 
   if (editor === undefined) {
     return {
@@ -58,8 +60,7 @@ function gatherEditorContext(): EditorContext {
   }
 
   const { document, selection } = editor;
-  const config = vscode.workspace.getConfiguration('agiWorkforce');
-  const contextLines = config.get<number>('contextLines') ?? 50;
+  const contextLines = Config.contextLines();
 
   const selectedText = document.getText(selection);
 
@@ -195,10 +196,8 @@ async function streamVscodeLmFallback(
   token: vscode.CancellationToken,
 ): Promise<void> {
   try {
-    // Select the best available model — prefer GPT-5.4 family
     const [model] = await vscode.lm.selectChatModels({
       vendor: 'copilot',
-      family: 'gpt-5.4',
     });
 
     if (model === undefined) {
@@ -324,10 +323,9 @@ export function createChatHandler(
     }
 
     const editorCtx = gatherEditorContext();
-    const config = vscode.workspace.getConfiguration('agiWorkforce');
-    const planModeEnabled = config.get<boolean>('agent.planMode') ?? false;
-    const mcpEnabled = config.get<boolean>('mcp.enabled') ?? false;
-    const desktopBridgeEnabled = config.get<boolean>('desktopBridge.enabled') ?? false;
+    const planModeEnabled = Config.agentPlanMode();
+    const mcpEnabled = Config.mcpEnabled();
+    const desktopBridgeEnabled = Config.desktopBridgeEnabled();
     const planOnly = planModeEnabled && !isExecutionConfirmation(request.prompt);
 
     const systemPrompt = await buildSystemPrompt(editorCtx, {
@@ -346,7 +344,7 @@ export function createChatHandler(
       { role: 'user', content: userMessage },
     ];
 
-    const fallbackEnabled = config.get<boolean>('fallbackToVscodeLm') ?? true;
+    const fallbackEnabled = Config.fallbackToVscodeLm();
 
     let usedFallback = false;
     const responseTokens: string[] = [];
@@ -361,8 +359,7 @@ export function createChatHandler(
     // /api/v1/providers/:id/stream pipeline. Default off — existing path
     // is the safe default. Falls back to legacy on missing JWT or any
     // runtime error so users don't get stuck with a broken chat.
-    const useProviderStream =
-      vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('useProviderStream') ?? false;
+    const useProviderStream = Config.useProviderStream();
 
     const streamFn = useProviderStream ? streamChatCompletionViaProvider : streamChatCompletion;
 
@@ -376,9 +373,7 @@ export function createChatHandler(
         if (conversationStore !== undefined && conversationTreeProvider !== undefined) {
           const fullResponse = responseTokens.join('');
           const title = userMessage.slice(0, 60).replace(/\n/g, ' ');
-          const model = normalizeConfiguredModelId(
-            vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
-          );
+          const model = normalizeConfiguredModelId(Config.model());
           const conv = conversationStore.create(title, model);
           const now = Date.now();
           conv.messages = [
@@ -410,6 +405,9 @@ export function createChatHandler(
           stream.markdown(
             `\n\n_Provider-stream path unavailable (${err.code}); falling back to legacy._\n\n`,
           );
+          // Clear any partial tokens captured by the failed first attempt so the
+          // saved conversation contains only the fallback path's complete output.
+          responseTokens.length = 0;
           await streamChatCompletion(secrets, messages, streamCallbacks, token);
         } else {
           throw err;

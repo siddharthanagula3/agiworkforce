@@ -40,8 +40,6 @@ interface SettingsState {
   themeMode: ThemeMode;
   /** Font preference */
   fontPreference: FontPreference;
-  /** Require biometric auth on app launch */
-  biometricLockEnabled: boolean;
   /** Selected TTS voice identifier (null = system default) */
   selectedVoiceId: string | null;
   /** TTS speech rate: 0.5 = half speed, 1.0 = normal, 2.0 = double */
@@ -68,7 +66,10 @@ interface SettingsState {
   setBackgroundFetchEnabled: (enabled: boolean) => void;
   setThemeMode: (mode: ThemeMode) => void;
   setFontPreference: (pref: FontPreference) => void;
-  setBiometricLockEnabled: (enabled: boolean) => void;
+  // LOW-MOB-1 fix (red-team 2026-05): biometricLockEnabled / setBiometricLockEnabled
+  // moved out of this MMKV-backed store and into lib/biometricFlagStore.ts
+  // (SecureStore-backed). Use `useBiometricFlag(s => s.enabled)` and
+  // `useBiometricFlag(s => s.setEnabled)` instead.
   setSelectedVoiceId: (voiceId: string | null) => void;
   setSpeechRate: (rate: number) => void;
   setSpeechPitch: (pitch: number) => void;
@@ -90,7 +91,6 @@ export const useSettingsStore = create<SettingsState>()(
       backgroundFetchEnabled: true,
       themeMode: 'dark',
       fontPreference: 'default',
-      biometricLockEnabled: false,
       selectedVoiceId: null,
       speechRate: 1.0,
       speechPitch: 1.0,
@@ -122,7 +122,6 @@ export const useSettingsStore = create<SettingsState>()(
       setBackgroundFetchEnabled: (enabled) => set({ backgroundFetchEnabled: enabled }),
       setThemeMode: (mode) => set({ themeMode: mode }),
       setFontPreference: (pref) => set({ fontPreference: pref }),
-      setBiometricLockEnabled: (enabled) => set({ biometricLockEnabled: enabled }),
       setSelectedVoiceId: (voiceId) => set({ selectedVoiceId: voiceId }),
       setSpeechRate: (rate) => set({ speechRate: Math.min(Math.max(rate, 0.5), 2.0) }),
       setSpeechPitch: (pitch) => set({ speechPitch: Math.min(Math.max(pitch, 0.5), 2.0) }),

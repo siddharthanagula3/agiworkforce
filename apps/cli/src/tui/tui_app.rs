@@ -27,48 +27,62 @@ use crate::context::SystemContext;
 // ---------------------------------------------------------------------------
 
 const TICK_RATE_MS: u64 = 50;
+/// Duration the mode-cycle banner is shown after Shift+Tab.
+const MODE_BANNER_TTL: Duration = Duration::from_secs(2);
 
 // ---------------------------------------------------------------------------
 // Interaction mode (Shift+Tab cycling)
 // ---------------------------------------------------------------------------
 
+/// Permission modes available in the TUI, cycling with Shift+Tab.
+///
+/// Cycle order: Default → Plan → AcceptEdits → BypassPermissions → FullAuto → Default
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum InteractionMode {
+    /// Normal conversation mode (maps to `PermissionMode::Default`).
     Chat,
+    /// Plan mode — read-only tools, no file edits.
     Plan,
+    /// Auto-accept file edits; commands still prompt.
     AcceptEdits,
+    /// Bypass all tool permission prompts.
     BypassPermissions,
-    Debug,
+    /// Full-auto: no prompts, no confirmations. Equivalent to headless YOLO.
+    FullAuto,
 }
 
 impl InteractionMode {
+    /// Advance to next mode in the cycle.
     fn next(self) -> Self {
         match self {
             Self::Chat => Self::Plan,
             Self::Plan => Self::AcceptEdits,
             Self::AcceptEdits => Self::BypassPermissions,
-            Self::BypassPermissions => Self::Debug,
-            Self::Debug => Self::Chat,
+            Self::BypassPermissions => Self::FullAuto,
+            Self::FullAuto => Self::Chat,
         }
     }
 
     fn label(self) -> &'static str {
         match self {
-            Self::Chat => "CHAT",
-            Self::Plan => "PLAN",
-            Self::AcceptEdits => "ACCEPT EDITS",
-            Self::BypassPermissions => "BYPASS PERMS",
-            Self::Debug => "DEBUG",
+            Self::Chat => "Default",
+            Self::Plan => "Plan",
+            Self::AcceptEdits => "AcceptEdits",
+            Self::BypassPermissions => "Bypass",
+            Self::FullAuto => "FullAuto",
         }
     }
 
+    /// Status-bar color per the UI audit spec.
+    ///
+    /// Default=grey, Plan=blue, AcceptEdits=green, Bypass=yellow, FullAuto=red.
     fn color(self) -> Color {
         match self {
-            Self::Chat => Color::Cyan,
-            Self::Plan => Color::Yellow,
+            Self::Chat => Color::DarkGray,
+            Self::Plan => Color::Blue,
             Self::AcceptEdits => Color::Green,
-            Self::BypassPermissions => Color::Red,
-            Self::Debug => Color::Magenta,
+            Self::BypassPermissions => Color::Yellow,
+            Self::FullAuto => Color::Red,
         }
     }
 }
@@ -111,13 +125,26 @@ struct TuiApp {
     total_input_tokens: u32,
     total_output_tokens: u32,
     mode: InteractionMode,
+    /// Detected sandbox backend for the footer indicator.
+    /// `None` means sandboxing was explicitly disabled via `--no-sandbox`.
+    sandbox_type: Option<crate::sandbox::SandboxType>,
     // Slash command popup
     show_slash_popup: bool,
     slash_filter: String,
     slash_selected: usize,
-    // Model picker popup
-    show_model_picker: bool,
-    model_picker_selected: usize,
+    // Model picker popup (new widget-based state)
+    model_picker: super::widgets::model_picker::ModelPickerState,
+    // Effort picker popup
+    effort_picker: super::widgets::effort_picker::EffortPickerState,
+    // Currently active effort level (persisted across model switches)
+    effort: crate::design_system::Effort,
+    // Theme picker popup
+    theme_picker: super::widgets::theme_picker::ThemePickerState,
+    // Currently active theme choice
+    theme_choice: super::widgets::theme_picker::ThemeChoice,
+    // Mode-change banner: timestamp when the mode was last cycled via Shift+Tab.
+    // The banner self-clears after MODE_BANNER_TTL.
+    mode_banner_shown_at: Option<Instant>,
     // Streaming
     stream_buffer: String,
     stream_start: Option<Instant>,
@@ -143,7 +170,7 @@ struct FallbackBanner {
 const FALLBACK_BANNER_TTL: Duration = Duration::from_secs(5);
 
 impl TuiApp {
-    fn new(session: AgentSession, config: CliConfig) -> Self {
+    fn new(session: AgentSession, config: CliConfig, sandbox_disabled: bool) -> Self {
         let model_name = session.model.clone();
         let provider_name = format!("{:?}", session.provider).to_lowercase();
         let git_branch = std::process::Command::new("git")
@@ -159,6 +186,12 @@ impl TuiApp {
                     None
                 }
             });
+
+        let sandbox_type = if sandbox_disabled {
+            None
+        } else {
+            Some(crate::sandbox::SandboxType::detect())
+        };
 
         Self {
             session,
@@ -176,11 +209,16 @@ impl TuiApp {
             total_input_tokens: 0,
             total_output_tokens: 0,
             mode: InteractionMode::Chat,
+            sandbox_type,
             show_slash_popup: false,
             slash_filter: String::new(),
             slash_selected: 0,
-            show_model_picker: false,
-            model_picker_selected: 0,
+            model_picker: super::widgets::model_picker::ModelPickerState::default(),
+            effort_picker: super::widgets::effort_picker::EffortPickerState::default(),
+            effort: crate::design_system::Effort::Medium,
+            theme_picker: super::widgets::theme_picker::ThemePickerState::default(),
+            theme_choice: super::widgets::theme_picker::ThemeChoice::Dark,
+            mode_banner_shown_at: None,
             stream_buffer: String::new(),
             stream_start: None,
             git_branch,
@@ -312,9 +350,25 @@ fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &TuiApp) -> Re
         };
         super::cost_hud::render(frame, area, &hud, &app.model_name);
 
-        // Popups (only one visible at a time)
-        if app.show_model_picker {
-            render_model_picker(frame, chunks[1], app);
+        // Mode-change banner (self-clears after MODE_BANNER_TTL)
+        render_mode_banner(frame, chunks[1], app);
+
+        // Popups (only one visible at a time; effort picker takes lowest priority)
+        if app.effort_picker.visible {
+            super::widgets::effort_picker::render(frame, chunks[1], &app.effort_picker);
+        }
+
+        if app.theme_picker.visible {
+            super::widgets::theme_picker::render(frame, chunks[1], &app.theme_picker);
+        }
+
+        if app.model_picker.visible {
+            super::widgets::model_picker::render(
+                frame,
+                chunks[1],
+                &app.model_picker,
+                &app.model_name,
+            );
         } else if app.show_slash_popup {
             render_slash_popup(frame, chunks[1], app);
         }
@@ -579,7 +633,7 @@ fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
         InteractionMode::Plan => "P ",
         InteractionMode::AcceptEdits => "A ",
         InteractionMode::BypassPermissions => "! ",
-        InteractionMode::Debug => "D ",
+        InteractionMode::FullAuto => "F ",
     };
 
     let input_line = Line::from(vec![
@@ -636,9 +690,15 @@ fn render_fallback_banner(frame: &mut ratatui::Frame, chat_area: Rect, app: &Tui
 }
 
 fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
+    // For Default (grey) use white fg so text is legible on the dark badge.
+    let badge_fg = if app.mode == InteractionMode::Chat {
+        Color::White
+    } else {
+        Color::Black
+    };
     let mode_span = Span::styled(
         format!(" {} ", app.mode.label()),
-        Style::default().fg(Color::Black).bg(app.mode.color()),
+        Style::default().fg(badge_fg).bg(app.mode.color()),
     );
 
     let cost_str = crate::output::format_cost(
@@ -647,10 +707,28 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
         app.session.total_output_tokens,
     );
 
+    let effort_str = format!("effort:{}", app.effort.label());
+
+    // Sandbox indicator: green when a sandbox backend is active, red when
+    // disabled via --no-sandbox or when no supported backend is detected.
+    let (sandbox_label, sandbox_color) = match app.sandbox_type {
+        Some(crate::sandbox::SandboxType::MacosSeatbelt) => ("sandbox: seatbelt", Color::Green),
+        Some(crate::sandbox::SandboxType::LinuxBubblewrap) => ("sandbox: bwrap", Color::Green),
+        Some(crate::sandbox::SandboxType::LinuxLandlock) => ("sandbox: landlock", Color::Green),
+        Some(crate::sandbox::SandboxType::WindowsRestrictedToken) => {
+            ("sandbox: win", Color::Green)
+        }
+        Some(crate::sandbox::SandboxType::None) | None => ("no sandbox", Color::Red),
+    };
+
     let status = Line::from(vec![
         mode_span,
         Span::raw(" "),
         Span::styled(cost_str, Style::default().fg(Color::DarkGray)),
+        Span::raw("  "),
+        Span::styled(effort_str, Style::default().fg(Color::DarkGray)),
+        Span::raw("  "),
+        Span::styled(sandbox_label, Style::default().fg(sandbox_color)),
         Span::raw("  "),
         Span::styled("Shift+Tab: mode", Style::default().fg(Color::DarkGray)),
         Span::raw("  "),
@@ -661,6 +739,40 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
 
     let bar = Paragraph::new(status).style(Style::default().bg(Color::DarkGray).fg(Color::White));
     frame.render_widget(bar, area);
+}
+
+/// Render the 2-second mode-cycle banner across the top of the chat area.
+fn render_mode_banner(frame: &mut ratatui::Frame, chat_area: Rect, app: &TuiApp) {
+    let Some(shown_at) = app.mode_banner_shown_at else {
+        return;
+    };
+    if shown_at.elapsed() > MODE_BANNER_TTL {
+        return;
+    }
+    let text = format!(
+        "  Mode: {} (shift+tab to cycle)  ",
+        app.mode.label()
+    );
+    let width = (text.chars().count() as u16).min(chat_area.width.saturating_sub(2));
+    if width == 0 {
+        return;
+    }
+    let area = Rect {
+        x: chat_area.x + (chat_area.width.saturating_sub(width)) / 2,
+        y: chat_area.y,
+        width,
+        height: 1,
+    };
+    // Use the same color as the mode badge, white text for legibility on grey
+    let bg = app.mode.color();
+    let fg = if app.mode == InteractionMode::Chat { Color::White } else { Color::Black };
+    frame.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            text,
+            Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD),
+        ))),
+        area,
+    );
 }
 
 fn render_slash_popup(frame: &mut ratatui::Frame, chat_area: Rect, app: &TuiApp) {
@@ -706,81 +818,8 @@ fn render_slash_popup(frame: &mut ratatui::Frame, chat_area: Rect, app: &TuiApp)
     frame.render_widget(list, popup_area);
 }
 
-fn render_model_picker(frame: &mut ratatui::Frame, chat_area: Rect, app: &TuiApp) {
-    let models = crate::model_catalog::catalog().all();
-    if models.is_empty() {
-        return;
-    }
-
-    let max_visible = 12.min(models.len());
-    let popup_height = max_visible as u16 + 2;
-    let popup_width = 70.min(chat_area.width.saturating_sub(4));
-
-    let popup_area = Rect::new(
-        chat_area.x + 2,
-        chat_area.y + chat_area.height - popup_height - 1,
-        popup_width,
-        popup_height,
-    );
-
-    frame.render_widget(Clear, popup_area);
-
-    // Scroll the list if needed
-    let scroll_offset = if app.model_picker_selected >= max_visible {
-        app.model_picker_selected - max_visible + 1
-    } else {
-        0
-    };
-
-    let items: Vec<ListItem> = models
-        .iter()
-        .enumerate()
-        .skip(scroll_offset)
-        .take(max_visible)
-        .map(|(i, m)| {
-            let is_current = m.id == app.model_name;
-            let style = if i == app.model_picker_selected {
-                Style::default().fg(Color::Black).bg(Color::Cyan)
-            } else if is_current {
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(Color::White)
-            };
-
-            let flags = format!(
-                "{}{}{}",
-                if m.supports_tools { "T" } else { " " },
-                if m.supports_vision { "V" } else { " " },
-                if m.supports_reasoning { "R" } else { " " },
-            );
-            let current_marker = if is_current { " ●" } else { "  " };
-            let text = format!(
-                "{}{:<30} [{}] {:>6}K  ${:.2}/${:.2}  {}",
-                current_marker,
-                m.id,
-                flags,
-                m.context_window / 1000,
-                m.input_price_per_1m,
-                m.output_price_per_1m,
-                m.provider,
-            );
-            ListItem::new(text).style(style)
-        })
-        .collect();
-
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Green))
-        .title(format!(
-            " Select Model (↑↓ Enter Esc) — current: {} ",
-            app.model_name
-        ));
-
-    let list = List::new(items).block(block);
-    frame.render_widget(list, popup_area);
-}
+// render_model_picker was replaced by super::widgets::model_picker::render
+// (called directly from the render() fn above)
 
 // ---------------------------------------------------------------------------
 // Event handling
@@ -798,8 +837,18 @@ enum InputAction {
 
 fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     // Model picker mode
-    if app.show_model_picker {
+    if app.model_picker.visible {
         return handle_model_picker_key(app, key);
+    }
+
+    // Effort picker mode
+    if app.effort_picker.visible {
+        return handle_effort_picker_key(app, key);
+    }
+
+    // Theme picker mode
+    if app.theme_picker.visible {
+        return handle_theme_picker_key(app, key);
     }
 
     // Slash popup mode
@@ -931,8 +980,8 @@ fn handle_slash_popup_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
                     app.cursor = app.input.len();
                     // Show model picker for /model
                     if cmd_name == "/model" {
-                        app.show_model_picker = true;
-                        app.model_picker_selected = 0;
+                        let all = crate::model_catalog::catalog().all();
+                        app.model_picker.open(&all, &app.model_name.clone());
                     }
                     return InputAction::None;
                 }
@@ -976,54 +1025,92 @@ fn handle_slash_popup_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
 }
 
 fn handle_model_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
-    let models = crate::model_catalog::catalog().all();
-    let model_count = models.len();
+    use super::widgets::model_picker::{handle_key, PickerAction};
 
-    match key.code {
-        KeyCode::Esc => {
-            app.show_model_picker = false;
+    let all_models = crate::model_catalog::catalog().all();
+    let action = handle_key(&mut app.model_picker, key, &all_models);
+
+    match action {
+        PickerAction::Nothing => InputAction::None,
+
+        PickerAction::Close => {
             app.input.clear();
             app.cursor = 0;
             InputAction::None
         }
-        KeyCode::Up => {
-            if app.model_picker_selected > 0 {
-                app.model_picker_selected -= 1;
-            }
+
+        PickerAction::FocusSearch => InputAction::None,
+
+        PickerAction::Select {
+            model_id,
+            effort: _effort,
+            banner,
+        } => {
+            app.input.clear();
+            app.cursor = 0;
+            app.session.switch_model(&model_id);
+            app.sync_stats();
+            app.chat_messages.push(ChatMessage {
+                role: ChatRole::System,
+                text: banner,
+            });
             InputAction::None
         }
-        KeyCode::Down => {
-            if app.model_picker_selected < model_count.saturating_sub(1) {
-                app.model_picker_selected += 1;
-            }
+    }
+}
+
+fn handle_effort_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
+    use super::widgets::effort_picker::{handle_key, PickerAction};
+
+    let action = handle_key(&mut app.effort_picker, key);
+
+    match action {
+        PickerAction::Nothing => InputAction::None,
+        PickerAction::Close => {
+            app.input.clear();
+            app.cursor = 0;
             InputAction::None
         }
-        KeyCode::Enter => {
-            if let Some(model) = models.get(app.model_picker_selected) {
-                let model_id = model.id.clone();
-                app.show_model_picker = false;
-                app.input.clear();
-                app.cursor = 0;
-                // Switch the model
-                app.session.switch_model(&model_id);
-                app.sync_stats();
-                let provider = format!("{:?}", app.session.provider).to_lowercase();
-                app.chat_messages.push(ChatMessage {
-                    role: ChatRole::System,
-                    text: format!(
-                        "Switched to {} ({}) — {}K context, ${:.2}/${:.2} per 1M tokens",
-                        model_id,
-                        provider,
-                        model.context_window / 1000,
-                        model.input_price_per_1m,
-                        model.output_price_per_1m,
-                    ),
-                });
-            }
-            app.show_model_picker = false;
+        PickerAction::Select(effort) => {
+            app.effort = effort;
+            app.input.clear();
+            app.cursor = 0;
+            let budget = effort.anthropic_budget_tokens();
+            app.chat_messages.push(ChatMessage {
+                role: ChatRole::System,
+                text: format!(
+                    "Effort set to {} (anthropic budget: {} tokens)",
+                    effort.label(),
+                    budget,
+                ),
+            });
             InputAction::None
         }
-        _ => InputAction::None,
+    }
+}
+
+fn handle_theme_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
+    use super::widgets::theme_picker::{handle_key, PickerAction};
+
+    let action = handle_key(&mut app.theme_picker, key);
+
+    match action {
+        PickerAction::Nothing => InputAction::None,
+        PickerAction::Close => {
+            app.input.clear();
+            app.cursor = 0;
+            InputAction::None
+        }
+        PickerAction::Select(choice) => {
+            app.theme_choice = choice;
+            app.input.clear();
+            app.cursor = 0;
+            app.chat_messages.push(ChatMessage {
+                role: ChatRole::System,
+                text: format!("Theme set to {}", choice.label()),
+            });
+            InputAction::None
+        }
     }
 }
 
@@ -1050,16 +1137,6 @@ fn detect_mode_intent(text: &str) -> Option<InteractionMode> {
         return Some(InteractionMode::Plan);
     }
 
-    // Debug mode triggers — require "debug mode" or "debug this", not bare "debug"
-    if lower.contains("enter debug")
-        || lower.contains("debug mode")
-        || lower.contains("switch to debug")
-        || lower.contains("verbose mode")
-        || lower.contains("enable debug")
-    {
-        return Some(InteractionMode::Debug);
-    }
-
     // Accept edits mode triggers
     if lower.contains("accept edits")
         || lower.contains("auto accept")
@@ -1075,9 +1152,13 @@ fn detect_mode_intent(text: &str) -> Option<InteractionMode> {
         || lower.contains("skip permission")
         || lower.contains("dangerously skip")
         || lower.contains("no prompts")
-        || lower.contains("full auto")
     {
         return Some(InteractionMode::BypassPermissions);
+    }
+
+    // FullAuto mode
+    if lower.contains("full auto") || lower.contains("fullauto") || lower.contains("full-auto") {
+        return Some(InteractionMode::FullAuto);
     }
 
     // Back to chat mode
@@ -1085,7 +1166,6 @@ fn detect_mode_intent(text: &str) -> Option<InteractionMode> {
         || lower.contains("chat mode")
         || lower.contains("exit plan")
         || lower.contains("stop planning")
-        || lower.contains("exit debug")
     {
         return Some(InteractionMode::Chat);
     }
@@ -1097,12 +1177,14 @@ fn detect_mode_intent(text: &str) -> Option<InteractionMode> {
 fn apply_mode(app: &mut TuiApp, mode: InteractionMode) {
     app.mode = mode;
     app.session.plan_mode = mode == InteractionMode::Plan;
-    app.session.skip_permissions = mode == InteractionMode::BypassPermissions;
+    app.session.skip_permissions =
+        mode == InteractionMode::BypassPermissions || mode == InteractionMode::FullAuto;
     app.session.auto_approve_safe =
-        mode == InteractionMode::AcceptEdits || mode == InteractionMode::BypassPermissions;
-    // Debug mode: quiet=false so tool output is shown verbosely
-    // All other modes: quiet inherits from startup setting
-    if mode == InteractionMode::Debug {
+        mode == InteractionMode::AcceptEdits
+        || mode == InteractionMode::BypassPermissions
+        || mode == InteractionMode::FullAuto;
+    // FullAuto: verbose output so the user can see what is happening
+    if mode == InteractionMode::FullAuto {
         app.session.quiet = false;
     }
 }
@@ -1114,12 +1196,14 @@ fn mode_description(mode: InteractionMode) -> &'static str {
             "Plan mode — read-only tools only, no file edits. Model will plan before acting."
         }
         InteractionMode::AcceptEdits => {
-            "Auto-accept — file edits approved automatically, commands still prompt"
+            "AcceptEdits — file edits approved automatically, commands still prompt"
         }
         InteractionMode::BypassPermissions => {
-            "⚠ BYPASS — all tool prompts skipped. Use with caution!"
+            "Bypass — all tool prompts skipped. Use with caution!"
         }
-        InteractionMode::Debug => "Debug — verbose output enabled",
+        InteractionMode::FullAuto => {
+            "FullAuto — no prompts, no confirmations. Extreme caution required!"
+        }
     }
 }
 
@@ -1162,18 +1246,11 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/model" | "/m" => {
             if arg.is_empty() {
-                // Open model picker
-                app.show_model_picker = true;
-                app.model_picker_selected = 0;
-                // Pre-select current model
-                if let Some(pos) = crate::model_catalog::catalog()
-                    .all()
-                    .iter()
-                    .position(|m| m.id == app.model_name)
-                {
-                    app.model_picker_selected = pos;
-                }
-                SlashResult::SystemMessage(String::new()) // no message, picker handles it
+                // Open the interactive model picker overlay.
+                let all = crate::model_catalog::catalog().all();
+                let current = app.model_name.clone();
+                app.model_picker.open(&all, &current);
+                SlashResult::SystemMessage(String::new()) // picker UI handles confirmation
             } else {
                 app.session.switch_model(arg);
                 app.sync_stats();
@@ -1388,18 +1465,18 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 ));
             }
             help.push_str("\nKeyboard shortcuts:\n");
-            help.push_str("  Shift+Tab    Cycle mode: Chat → Plan → AcceptEdits → BypassPerms → Debug\n");
+            help.push_str("  Shift+Tab    Cycle mode: Default → Plan → AcceptEdits → Bypass → FullAuto\n");
             help.push_str("  /            Open command palette\n");
             help.push_str("  Esc          Quit\n");
             help.push_str("  Up/Down      Scroll chat history\n");
             help.push_str("  Ctrl-L       Clear screen\n");
             help.push_str("  Ctrl-C       Clear input\n");
             help.push_str("\nModes (cycle with Shift+Tab):\n");
-            help.push_str("  CHAT           Normal conversation\n");
-            help.push_str("  PLAN           Read-only planning (no edits)\n");
-            help.push_str("  ACCEPT EDITS   Auto-accept file edits\n");
-            help.push_str("  BYPASS PERMS   Skip all tool confirmation (dangerous)\n");
-            help.push_str("  DEBUG          Verbose debug output\n");
+            help.push_str("  Default        Normal conversation (grey)\n");
+            help.push_str("  Plan           Read-only planning, no edits (blue)\n");
+            help.push_str("  AcceptEdits    Auto-accept file edits (green)\n");
+            help.push_str("  Bypass         Skip all tool confirmation (yellow)\n");
+            help.push_str("  FullAuto       No prompts at all — extreme caution (red)\n");
             SlashResult::SystemMessage(help)
         }
 
@@ -1544,11 +1621,21 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         // ── Theme ──
         "/theme" => {
             if arg.is_empty() {
-                SlashResult::SystemMessage(
-                    "Available themes: base16-ocean.dark (default)\n  Use /theme <name> to switch.\n  Syntax highlighting uses syntect with 250+ language grammars.".to_string()
-                )
+                // Open the interactive theme picker overlay.
+                app.theme_picker.open(app.theme_choice);
+                SlashResult::SystemMessage(String::new()) // picker handles confirmation
             } else {
-                SlashResult::SystemMessage(format!("Theme set to: {arg}"))
+                // Direct-set: /theme dark|light|ansi|solarized-dark|solarized-light|colorblind
+                use super::widgets::theme_picker::ThemeChoice;
+                match ThemeChoice::from_arg(arg) {
+                    Some(choice) => {
+                        app.theme_choice = choice;
+                        SlashResult::SystemMessage(format!("Theme set to {}", choice.label()))
+                    }
+                    None => SlashResult::SystemMessage(format!(
+                        "Unknown theme: '{arg}'. Available: dark | light | ansi | solarized-dark | solarized-light | colorblind"
+                    )),
+                }
             }
         }
 
@@ -1585,6 +1672,37 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             SlashResult::SendAsPrompt
         }
 
+        "/effort" | "/e" => {
+            if arg.is_empty() {
+                // Open the interactive effort picker overlay.
+                app.effort_picker.open(app.effort);
+                SlashResult::SystemMessage(String::new()) // picker handles confirmation
+            } else {
+                // Direct-set: /effort low|medium|high|max
+                let new_effort = match arg.to_lowercase().as_str() {
+                    "low" | "l" => Some(crate::design_system::Effort::Low),
+                    "medium" | "med" | "m" => Some(crate::design_system::Effort::Medium),
+                    "high" | "h" => Some(crate::design_system::Effort::High),
+                    "max" => Some(crate::design_system::Effort::Max),
+                    _ => None,
+                };
+                match new_effort {
+                    Some(e) => {
+                        app.effort = e;
+                        let budget = e.anthropic_budget_tokens();
+                        SlashResult::SystemMessage(format!(
+                            "Effort set to {} (anthropic budget: {} tokens)",
+                            e.label(),
+                            budget,
+                        ))
+                    }
+                    None => SlashResult::SystemMessage(format!(
+                        "Unknown effort level '{arg}'. Use: low | medium | high | max"
+                    )),
+                }
+            }
+        }
+
         _ => SlashResult::SendAsPrompt,
     }
 }
@@ -1611,6 +1729,7 @@ pub async fn run(
     provider_override: Option<String>,
     permission_mode: crate::cli_options::PermissionMode,
     auto_approve_plan: bool,
+    sandbox_disabled: bool,
 ) -> Result<()> {
     let mut session = AgentSession::new(model, sys_context, custom_system_prompt);
     if let Some(ref provider) = provider_override {
@@ -1704,7 +1823,7 @@ pub async fn run(
     )
     .await;
 
-    let mut app = TuiApp::new(session, config.clone());
+    let mut app = TuiApp::new(session, config.clone(), sandbox_disabled);
     app.wire_fallback_banner();
     let mut terminal = setup_terminal()?;
 
@@ -1762,14 +1881,20 @@ async fn run_event_loop(
                     InputAction::CycleMode => {
                         let new_mode = app.mode.next();
                         apply_mode(app, new_mode);
+                        // Stamp the banner so it shows for MODE_BANNER_TTL seconds.
+                        app.mode_banner_shown_at = Some(Instant::now());
                         let mut msg =
                             format!("{} — {}", app.mode.label(), mode_description(app.mode));
                         if new_mode == InteractionMode::BypassPermissions {
-                            msg.push_str("\n\n  ⚠ WARNING: All tool confirmations are bypassed!");
+                            msg.push_str("\n\n  WARNING: All tool confirmations are bypassed!");
                             msg.push_str(
                                 "\n  This means commands will execute without asking you first.",
                             );
-                            msg.push_str("\n  Press Shift+Tab again to move to Debug mode, or twice more to return to Chat.");
+                            msg.push_str("\n  Press Shift+Tab again to advance to FullAuto, or cycle back to Default.");
+                        }
+                        if new_mode == InteractionMode::FullAuto {
+                            msg.push_str("\n\n  WARNING: Full-auto mode — no prompts, no confirmations.");
+                            msg.push_str("\n  Use with extreme caution in trusted environments only.");
                         }
                         app.chat_messages.push(ChatMessage {
                             role: ChatRole::System,

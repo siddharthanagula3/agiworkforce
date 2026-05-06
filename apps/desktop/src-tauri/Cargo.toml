@@ -1,6 +1,6 @@
 [package]
 name = "agiworkforce-desktop"
-version = "1.1.7"
+version = "1.2.0"
 edition = "2021"
 authors = ["AGI Automation LLC"]
 description = "AGI Workforce desktop shell"
@@ -118,6 +118,9 @@ machine-uid = "0.3"  # For getting machine-unique identifiers
 hostname = "0.4"     # For getting machine hostname as part of key derivation salt
 sha2 = "0.10"
 subtle = "2"
+# SEV-DESK-16: replaces the hand-rolled `secure_zeroize` (with its
+# `#[allow(unsafe_code)]` block) with the audited `zeroize` crate.
+zeroize = "1"
 aes-gcm = "0.10"
 base64 = "0.22"
 rand = "0.8"
@@ -138,10 +141,10 @@ sentry = { version = "0.33", optional = true }
 
 
 webrtc = { version = "0.14", optional = true }
-tokio-tungstenite = "0.21"
+tokio-tungstenite = { version = "0.21", features = ["handshake"] }
 
 
-tungstenite = "0.21"
+tungstenite = { version = "0.21", features = ["handshake"] }
 url = "2.5"
 
 

@@ -113,12 +113,32 @@ pub struct Cookie {
 
 pub struct ExtensionBridge {
     connected: Arc<Mutex<bool>>,
+    /// SEV-DESK-02: AppHandle used to display user-confirmation prompts before
+    /// any browser-mutating action (execute_script, navigate, cookie ops,
+    /// localStorage ops). Constructed via `with_app_handle` from the Tauri
+    /// `setup` callback. Tests / non-IPC contexts use `new()` and any gated
+    /// method will fail-closed with a clear error.
+    app_handle: Option<tauri::AppHandle>,
 }
 
 impl ExtensionBridge {
+    /// Test / internal-only constructor. Methods that gate on
+    /// `require_confirmation` will fail-closed when called on an instance
+    /// produced by `new()` — production code paths must use
+    /// `with_app_handle`.
     pub fn new() -> Self {
         Self {
             connected: Arc::new(Mutex::new(false)),
+            app_handle: None,
+        }
+    }
+
+    /// Production constructor. The app handle is required so dangerous
+    /// browser actions can prompt the user before reaching the page.
+    pub fn with_app_handle(app_handle: tauri::AppHandle) -> Self {
+        Self {
+            connected: Arc::new(Mutex::new(false)),
+            app_handle: Some(app_handle),
         }
     }
 
@@ -152,7 +172,59 @@ impl ExtensionBridge {
         })
     }
 
+    /// SEV-DESK-02 helper. Drives the same `tool_confirmation` dialog that
+    /// gates `computer_use_*` IPC commands. Truncates `args` to keep the
+    /// prompt readable when the action is `execute_script` with a long body.
+    ///
+    /// Without an `app_handle` (i.e. `ExtensionBridge::new()` from tests),
+    /// the method fails closed — refusing the action with an error rather
+    /// than silently bypassing the gate.
+    async fn require_confirmation(&self, action: &'static str, args: Value) -> Result<()> {
+        let app_handle = match self.app_handle.as_ref() {
+            Some(h) => h,
+            None => {
+                tracing::warn!(
+                    "SEV-DESK-02: refused {action} — ExtensionBridge constructed without app_handle"
+                );
+                return Err(Error::Generic(format!(
+                    "{action} requires user confirmation but the bridge is uninitialised"
+                )));
+            }
+        };
+
+        let approved = crate::sys::commands::tool_confirmation::request_confirmation_simple(
+            app_handle,
+            action,
+            &args,
+        )
+        .await
+        .map_err(Error::Generic)?;
+
+        if !approved {
+            return Err(Error::Generic(format!(
+                "{action} denied by user. Re-issue the request or grant approval to retry."
+            )));
+        }
+        Ok(())
+    }
+
     pub async fn execute_script(&self, script: &str) -> Result<Value> {
+        // SEV-DESK-02: zero-click prompt-injection chain (Chrome ext page-context
+        // auto-sync → desktop LLM → extension_bridge.execute_script → arbitrary
+        // JS in the active browser tab) is mitigated here. The gate prompts the
+        // user with a truncated preview of the script. Refusing the prompt
+        // returns an Err that propagates back to the LLM tool call so the model
+        // gets explicit "denied" feedback rather than hanging.
+        let preview: String = script.chars().take(200).collect();
+        self.require_confirmation(
+            "extension_bridge.execute_script",
+            json!({
+                "script_preview": preview,
+                "script_length": script.len(),
+            }),
+        )
+        .await?;
+
         let response = self
             .send_message(ExtensionMessage::ExecuteScript {
                 script: script.to_string(),
@@ -166,6 +238,12 @@ impl ExtensionBridge {
     }
 
     pub async fn get_cookies(&self) -> Result<Vec<Cookie>> {
+        // SEV-DESK-02: returning the entire cookie jar to the LLM is a primary
+        // exfiltration vector — banking, email, GitHub session cookies all
+        // become available to the model and any downstream provider. Gate it.
+        self.require_confirmation("extension_bridge.get_cookies", json!({}))
+            .await?;
+
         let response = self.send_message(ExtensionMessage::GetCookies).await?;
 
         match response {
@@ -180,6 +258,19 @@ impl ExtensionBridge {
     }
 
     pub async fn set_cookie(&self, name: &str, value: &str, domain: &str) -> Result<()> {
+        // SEV-DESK-02: writing a cookie can pin a session to attacker-controlled
+        // values, hijack auth, or inject CSRF tokens. Surface domain to the
+        // user so they see what site is being modified.
+        self.require_confirmation(
+            "extension_bridge.set_cookie",
+            json!({
+                "name": name,
+                "domain": domain,
+                "value_length": value.len(),
+            }),
+        )
+        .await?;
+
         let response = self
             .send_message(ExtensionMessage::SetCookie {
                 name: name.to_string(),
@@ -195,6 +286,10 @@ impl ExtensionBridge {
     }
 
     pub async fn clear_cookies(&self) -> Result<()> {
+        // SEV-DESK-02: destructive — clears all cookies for the active site.
+        self.require_confirmation("extension_bridge.clear_cookies", json!({}))
+            .await?;
+
         let response = self.send_message(ExtensionMessage::ClearCookies).await?;
 
         match response {
@@ -204,6 +299,14 @@ impl ExtensionBridge {
     }
 
     pub async fn get_local_storage(&self, key: Option<&str>) -> Result<Value> {
+        // SEV-DESK-02: reading localStorage can exfil JWTs, OAuth refresh
+        // tokens, and SPA-stored secrets. Many SPAs store auth tokens here.
+        self.require_confirmation(
+            "extension_bridge.get_local_storage",
+            json!({ "key": key }),
+        )
+        .await?;
+
         let response = self
             .send_message(ExtensionMessage::GetLocalStorage {
                 key: key.map(|value| value.to_string()),
@@ -217,6 +320,15 @@ impl ExtensionBridge {
     }
 
     pub async fn set_local_storage(&self, key: &str, value: &str) -> Result<()> {
+        // SEV-DESK-02: writing localStorage can plant attacker JWTs (auth
+        // hijack), poison feature-flag flags, or inject malicious config that
+        // the SPA reads on next load.
+        self.require_confirmation(
+            "extension_bridge.set_local_storage",
+            json!({ "key": key, "value_length": value.len() }),
+        )
+        .await?;
+
         let response = self
             .send_message(ExtensionMessage::SetLocalStorage {
                 key: key.to_string(),
@@ -231,6 +343,10 @@ impl ExtensionBridge {
     }
 
     pub async fn clear_local_storage(&self) -> Result<()> {
+        // SEV-DESK-02: destructive.
+        self.require_confirmation("extension_bridge.clear_local_storage", json!({}))
+            .await?;
+
         let response = self
             .send_message(ExtensionMessage::ClearLocalStorage)
             .await?;
@@ -243,6 +359,13 @@ impl ExtensionBridge {
 
     /// Navigate the active browser tab to a URL via the extension bridge.
     pub async fn navigate(&self, url: &str) -> Result<()> {
+        // SEV-DESK-02: navigation triggered by an LLM can land the user on
+        // a phishing page or trigger a drive-by download. Surface the full
+        // URL to the prompt so the user can see exactly where the agent
+        // wants to send the active tab.
+        self.require_confirmation("extension_bridge.navigate", json!({ "url": url }))
+            .await?;
+
         let response = self
             .send_message(ExtensionMessage::Navigate {
                 url: url.to_string(),

@@ -1409,6 +1409,9 @@ export function hasFeature(featureKey: string): boolean {
  */
 export function getPlanDescription(plan: PlanTier): string {
   const descriptions: Record<PlanTier, string> = {
+    'local-only':
+      'Run everything on your own machine with Ollama / LMStudio. No managed cloud, no sync.',
+    byok: 'Bring your own API keys. Optional managed-cloud sync if Cloud mode is enabled.',
     hobby: 'Perfect for getting started; 350 credits per billing cycle on the $10 Hobby plan.',
     free: 'Limited automations; Community support',
     pro: 'Unlimited automations; 1,050 credits per billing cycle; Priority support',

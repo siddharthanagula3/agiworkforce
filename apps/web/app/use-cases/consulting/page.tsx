@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import ConsultingBusinessesPageWithErrorBoundary from '@/features/pages/use-cases/ConsultingBusinesses';
+import { EditorialPage } from '../../../components/marketing/editorial/EditorialPage';
 
 export const metadata: Metadata = {
   title: 'AI for Consulting Firms | AGI Workforce',
@@ -14,5 +15,9 @@ export const metadata: Metadata = {
 };
 
 export default function ConsultingPage() {
-  return <ConsultingBusinessesPageWithErrorBoundary />;
+  return (
+    <EditorialPage tier="paper">
+      <ConsultingBusinessesPageWithErrorBoundary />
+    </EditorialPage>
+  );
 }
