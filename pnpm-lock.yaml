@@ -28708,10 +28708,13 @@ snapshots:
 
   metro-symbolicate@0.83.7:
     dependencies:
+      '@babel/traverse': 7.29.0
+      '@babel/types': 7.29.0
       flow-enums-runtime: 0.0.6
       invariant: 2.2.4
       metro-source-map: 0.83.7
       nullthrows: 1.1.1
+      ob1: 0.83.5
       source-map: 0.5.7
       vlq: 1.0.1
     transitivePeerDependencies:
@@ -30043,6 +30046,7 @@ snapshots:
       scheduler: 0.27.0
       semver: 7.7.4
       stacktrace-parser: 0.1.11
+      tinyglobby: 0.2.15
       whatwg-fetch: 3.6.20
       ws: 7.5.10
       yargs: 17.7.2
