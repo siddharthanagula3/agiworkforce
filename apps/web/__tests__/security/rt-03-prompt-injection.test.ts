@@ -26,7 +26,9 @@ vi.mock('@/utils/env', () => ({
   },
 }));
 
-const mockLogger = { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() };
+const { mockLogger } = vi.hoisted(() => ({
+  mockLogger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+}));
 vi.mock('@/lib/logger', () => ({ logger: mockLogger }));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
@@ -42,16 +44,34 @@ const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
 // ─── GitHub app mock ──────────────────────────────────────────────────────────
-const WEBHOOK_SECRET = 'test-webhook-secret';
-const mockGetPrDiff = vi.fn();
-const mockPostIssueComment = vi.fn().mockResolvedValue(undefined);
+// Hoisted bindings — `vi.mock` factories run before the module body, so values
+// they reference must be initialized via `vi.hoisted` (which is hoisted with
+// the mocks) rather than as plain `const`s further down in the file. We hoist
+// `createHmac` from node:crypto too so the factory can verify signatures
+// without resorting to a `require()` (forbidden by the @typescript-eslint
+// no-require-imports rule).
+const { WEBHOOK_SECRET, mockGetPrDiff, mockPostIssueComment, hoistedCreateHmac } = vi.hoisted(
+  () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const cryptoMod = require('node:crypto') as typeof import('node:crypto');
+    return {
+      WEBHOOK_SECRET: 'test-webhook-secret',
+      mockGetPrDiff: vi.fn(),
+      mockPostIssueComment: vi.fn().mockResolvedValue(undefined),
+      hoistedCreateHmac: cryptoMod.createHmac,
+    };
+  },
+);
 vi.mock('@/lib/github-app', () => ({
   GITHUB_WEBHOOK_SECRET: WEBHOOK_SECRET,
   verifyGitHubWebhookSignature: (body: string, sig: string, secret: string) => {
-    const expected = 'sha256=' + createHmac('sha256', secret).update(body).digest('hex');
+    const expected = 'sha256=' + hoistedCreateHmac('sha256', secret).update(body).digest('hex');
     return sig === expected;
   },
-  getInstallationAccessToken: vi.fn().mockResolvedValue('ghs_token'),
+  // Plain async function — vitest config `mockReset: true` clears vi.fn()
+  // implementations between tests, so a `vi.fn().mockResolvedValue(...)` here
+  // would return undefined for every test after the first.
+  getInstallationAccessToken: async () => 'ghs_token',
   getPrDiff: (...args: unknown[]) => mockGetPrDiff(...args),
   postIssueComment: (...args: unknown[]) => mockPostIssueComment(...args),
 }));

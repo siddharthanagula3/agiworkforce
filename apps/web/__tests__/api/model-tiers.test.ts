@@ -126,12 +126,15 @@ describe('canAccessModel — max tier', () => {
     }
   });
 
-  it('allows claude-opus-4.6 for max users', () => {
-    expect(canAccessModel('claude-opus-4.6', 'max')).toBe(true);
+  it('allows claude-opus-4.7 for max users', () => {
+    // Catalog flagship_additions now lists claude-opus-4.7 (4.6 retired).
+    expect(canAccessModel('claude-opus-4.7', 'max')).toBe(true);
   });
 
-  it('allows o3 for max users', () => {
-    expect(canAccessModel('o3', 'max')).toBe(true);
+  it('allows gpt-5.5 for max users', () => {
+    // Catalog flagship_additions: gpt-5.5 is the current top-tier OpenAI model
+    // (replaces o3 from the legacy roster).
+    expect(canAccessModel('gpt-5.5', 'max')).toBe(true);
   });
 });
 
@@ -198,7 +201,8 @@ describe('canAccessModel — case insensitivity', () => {
   it('handles uppercase tier names correctly', () => {
     expect(canAccessModel('gpt-5.4-mini', 'HOBBY')).toBe(true);
     expect(canAccessModel('claude-sonnet-4.6', 'PRO')).toBe(true);
-    expect(canAccessModel('claude-opus-4.6', 'MAX')).toBe(true);
+    // Use the current flagship; claude-opus-4.6 is no longer in any tier list.
+    expect(canAccessModel('claude-opus-4.7', 'MAX')).toBe(true);
   });
 });
 

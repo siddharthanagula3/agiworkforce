@@ -84,10 +84,10 @@ describe('modelStore', () => {
       const { useModelStore } = await import('../stores/modelStore');
       const store = useModelStore.getState();
 
-      await store.selectModel('claude-opus-4.6', 'anthropic');
+      await store.selectModel('claude-opus-4.7', 'anthropic');
 
       const state = useModelStore.getState();
-      expect(state.recentModels).toContain('claude-opus-4.6');
+      expect(state.recentModels).toContain('claude-opus-4.7');
     });
 
     it('should handle selection errors gracefully', async () => {

@@ -303,7 +303,12 @@ describe('Chat Messages API', () => {
         });
         await POST(request, mockContext);
 
-        expect(CreditService.checkAvailable).toHaveBeenCalledWith('user-123', 0.01);
+        // Signature: checkAvailable(userClient, userId, cents)
+        expect(CreditService.checkAvailable).toHaveBeenCalledWith(
+          expect.anything(),
+          'user-123',
+          0.01,
+        );
       });
     });
 

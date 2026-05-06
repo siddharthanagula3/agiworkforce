@@ -16,6 +16,14 @@ vi.mock('@/lib/api-auth', () => ({
   getAuthenticatedUser: (...args: unknown[]) => mockGetAuthenticatedUser(...args),
 }));
 
+// ─── Supabase server mock ────────────────────────────────────────────────────
+// The route calls `getUserClient(jwt)` to build an RLS-bound client. We don't
+// need a real Supabase client in tests — return an opaque sentinel that
+// CreditService mocks ignore.
+vi.mock('@/lib/supabase-server', () => ({
+  getUserClient: () => ({ __mockUserClient: true }),
+}));
+
 // ─── Rate limit mock ──────────────────────────────────────────────────────────
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
@@ -198,9 +206,10 @@ describe('RT-01: /api/v1/providers/[providerId]/stream authentication', () => {
     await POST(req, { params });
     // Should have called deductCredits twice: once to charge, once to refund
     expect(mockDeductCredits).toHaveBeenCalledTimes(2);
-    // Second call should be a negative amount (refund)
+    // Second call should be a negative amount (refund). Signature:
+    // deductCredits(client, userId, amountCents, description, metadata, ...)
     const secondCall = mockDeductCredits.mock.calls[1] as unknown[];
-    expect(secondCall[1] as number).toBeLessThan(0);
+    expect(secondCall[2] as number).toBeLessThan(0);
   });
 
   it('refunds credits when upstream fetch throws', async () => {

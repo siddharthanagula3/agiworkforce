@@ -157,10 +157,12 @@ describe('AnthropicProvider', () => {
     it('should return model aliases', () => {
       const aliases = AnthropicProvider.getModelAliases();
 
+      // Catalog redirects retired model ids to current canonical successors:
+      // claude-sonnet-4-5 / claude-sonnet-4.5 → claude-sonnet-4.6 (current generation).
       expect(aliases['claude-opus-4-6']).toBe('claude-opus-4.6');
       expect(aliases['claude-sonnet-4-6']).toBe('claude-sonnet-4.6');
       expect(aliases['claude-opus-4-5']).toBe('claude-opus-4-5');
-      expect(aliases['claude-sonnet-4-5']).toBe('claude-sonnet-4.5');
+      expect(aliases['claude-sonnet-4-5']).toBe('claude-sonnet-4.6');
       expect(aliases['claude-haiku-4-5']).toBe('claude-haiku-4.5');
     });
   });
