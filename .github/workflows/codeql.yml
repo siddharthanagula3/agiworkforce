@@ -57,4 +57,10 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run cargo clippy (lint as errors)
-        run: cargo clippy --workspace --all-targets -- -D warnings -D unsafe-code
+        # Scope clippy to the binaries we actually ship. The ported codex-rs
+        # crates under crates/* legitimately use unsafe (PTY, exec policy via
+        # starlark `ProvidesStaticType`, etc.) and would fail `-D unsafe-code`
+        # even though they are well-vetted upstream. This matches ci.yml's
+        # clippy step (.github/workflows/ci.yml) so the two security gates
+        # stay consistent — see that file for the long-form rationale.
+        run: cargo clippy -p agiworkforce-desktop -p agiworkforce-cli --lib -- -D warnings -D unsafe-code

@@ -197,9 +197,10 @@ describe('GET /api/usage', () => {
     const response = await GET(request);
 
     expect(response.status).toBe(200);
-    // CreditService and SubscriptionService should have been called with the cookie user's ID
-    expect(mockGetBalance).toHaveBeenCalledWith('cookie-user-456');
-    expect(mockGetSubscription).toHaveBeenCalledWith('cookie-user-456');
+    // CreditService and SubscriptionService should have been called with the cookie
+    // user's ID. Signature: (userClient, userId).
+    expect(mockGetBalance).toHaveBeenCalledWith(expect.anything(), 'cookie-user-456');
+    expect(mockGetSubscription).toHaveBeenCalledWith(expect.anything(), 'cookie-user-456');
   });
 
   it('should return usage data for an authenticated user', async () => {

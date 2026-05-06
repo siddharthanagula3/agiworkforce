@@ -7,14 +7,24 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Override the global @/lib/csrf mock from test/setup.ts so this file tests the
+// real implementation. setup.ts mocks `requireCsrfToken` to always return null
+// for ALL tests; combined with vitest config `mockReset: true`, the mock loses
+// its implementation between tests and returns undefined — which breaks every
+// real-impl test in this file.
+vi.mock('@/lib/csrf', async (importOriginal) => importOriginal());
+
 vi.mock('server-only', () => ({}));
 
 // ─── Supabase admin mock — controls whether JWT is "valid" ────────────────────
+// NOTE: `createClient` is a plain function (not vi.fn()) so that vitest's
+// `mockReset: true` config doesn't clear its implementation between tests.
+// Only `mockGetUser` is reset between tests via beforeEach.
 const mockGetUser = vi.fn();
 vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
+  createClient: () => ({
     auth: { getUser: (...args: unknown[]) => mockGetUser(...args) },
-  })),
+  }),
 }));
 
 vi.mock('@/utils/supabase/server', () => ({
@@ -73,7 +83,9 @@ describe('RT-04: CSRF Bearer bypass fix', () => {
         data: { user: { id: 'user-123' } },
         error: null,
       });
-      const result = await isBearerTokenValid('Bearer valid.jwt.token');
+      const result = await isBearerTokenValid(
+        'Bearer valid.jwt.token.with.sufficient.length.for.bearer.minimum',
+      );
       expect(result).toBe(true);
     });
 
@@ -87,7 +99,9 @@ describe('RT-04: CSRF Bearer bypass fix', () => {
   describe('requireCsrfToken', () => {
     it('POST with valid Bearer + no CSRF → 200 (null returned)', async () => {
       mockGetUser.mockResolvedValue({ data: { user: { id: 'user-123' } }, error: null });
-      const req = makeRequest('POST', { bearerToken: 'valid.jwt.token' });
+      const req = makeRequest('POST', {
+        bearerToken: 'valid.jwt.token.with.sufficient.length.for.bearer.minimum',
+      });
       const result = await requireCsrfToken(req);
       expect(result).toBeNull(); // CSRF passes (valid Bearer)
     });
@@ -155,7 +169,9 @@ describe('RT-04: CSRF Bearer bypass fix', () => {
   describe('validateCsrfFromRequest', () => {
     it('valid Bearer → returns true', async () => {
       mockGetUser.mockResolvedValue({ data: { user: { id: 'user-123' } }, error: null });
-      const req = makeRequest('POST', { bearerToken: 'valid.jwt.token' });
+      const req = makeRequest('POST', {
+        bearerToken: 'valid.jwt.token.with.sufficient.length.for.bearer.minimum',
+      });
       const result = await validateCsrfFromRequest(req);
       expect(result).toBe(true);
     });
