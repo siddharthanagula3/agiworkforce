@@ -8,6 +8,7 @@ import { useModelStore, AVAILABLE_MODELS, type AIModel } from '@shared/stores/mo
 import { BudgetTrackerDisplay } from '@/features/chat/components/Budget/BudgetTrackerDisplay';
 import { StyleSelector } from './StyleSelector';
 import { PROVIDER_DISPLAY, EFFORT_LABEL, type ProviderId, type Effort } from '@agiworkforce/types';
+import { MARKETING } from '@/lib/marketing-constants';
 
 /**
  * Map a model-store providerKey (from models.json) to a ProviderId
@@ -215,6 +216,12 @@ export function ComposerFooter({
               </PopoverTrigger>
               <PopoverContent align="end" sideOffset={6} className="w-72 p-0">
                 <Command>
+                  <div className="flex items-center gap-2 border-b border-border/40 px-3 py-2">
+                    <span className="text-xs font-medium text-foreground">Models</span>
+                    <span className="ml-auto text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
+                      {MARKETING.providers.display} providers
+                    </span>
+                  </div>
                   <CommandInput placeholder="Search models..." className="h-9" />
                   <CommandList className="max-h-[320px]">
                     {providerOrder.map((providerKey) => {
