@@ -532,6 +532,7 @@ export default function ChatScreen() {
           onCamera={handleSheetCamera}
           onPhotos={handleSheetPhotos}
           onFile={handleSheetFile}
+          conversationId={id}
         />
 
         {/* Model picker bottom sheet */}
