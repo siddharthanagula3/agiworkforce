@@ -219,6 +219,19 @@ let discoveredTools: WebMCPToolEntry[] = [];
 let isRecording = false;
 let recordingActionCount = 0;
 
+/**
+ * Pending image attachments added via the composer + menu.
+ * Each entry is a data-URL (base64 PNG/JPEG) to be prepended to the
+ * next outgoing message. Cleared after send.
+ */
+const pendingAttachments: string[] = [];
+
+/**
+ * Hostname of the active browser tab, shown in the persistent context chip.
+ * Updated whenever the side panel receives focus or a tab-changed message.
+ */
+let currentPageHostname = '';
+
 type SidePanelTab = 'chat' | 'workflows';
 
 const STORAGE_KEY = 'agi_side_panel_messages';
@@ -834,6 +847,143 @@ function injectStyles(): void {
     #sp-send-btn:hover:not(:disabled) { background: #3730a3; transform: scale(1.05); }
     #sp-send-btn:disabled { background: #1e1e2e; color: #334155; cursor: not-allowed; transform: none; }
 
+    /* ── Attachment + button and menu ── */
+    .sp-attach-wrapper { position: relative; flex-shrink: 0; }
+    .sp-attach-btn {
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #13131a;
+      border: 1px solid #1e1e2e;
+      border-radius: 8px;
+      color: #64748b;
+      font-size: 18px;
+      font-weight: 300;
+      line-height: 1;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .sp-attach-btn:hover { color: #a5b4fc; border-color: #4338ca; background: #1a1a2e; }
+    #sp-attach-menu {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 0;
+      min-width: 190px;
+      background: #13131a;
+      border: 1px solid #1e1e2e;
+      border-radius: 8px;
+      padding: 4px;
+      z-index: 150;
+      box-shadow: 0 -4px 16px rgba(0,0,0,0.5);
+    }
+    #sp-attach-menu.open { display: block; }
+    .sp-attach-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 12px;
+      color: #cbd5e1;
+      transition: background 0.12s, color 0.12s;
+      user-select: none;
+    }
+    .sp-attach-menu-item:hover { background: #1e1e2e; color: #e2e8f0; }
+    .sp-attach-icon { font-size: 14px; flex-shrink: 0; }
+    .sp-attach-file-input { display: none; }
+
+    /* ── Attachment preview bar ── */
+    #sp-attachment-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 4px 2px 6px;
+    }
+    .sp-attachment-chip {
+      position: relative;
+      display: inline-flex;
+      border-radius: 6px;
+      overflow: visible;
+      border: 1px solid #1e1e2e;
+    }
+    .sp-attachment-thumb {
+      width: 48px;
+      height: 48px;
+      object-fit: cover;
+      border-radius: 5px;
+      display: block;
+    }
+    .sp-attachment-remove {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      width: 16px;
+      height: 16px;
+      background: #1e1e2e;
+      border: 1px solid #334155;
+      border-radius: 50%;
+      color: #94a3b8;
+      font-size: 10px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      transition: background 0.12s, color 0.12s;
+    }
+    .sp-attachment-remove:hover { background: #7f1d1d; color: #fca5a5; border-color: #7f1d1d; }
+
+    /* ── Composer bottom bar: persistent page-context chip ── */
+    #sp-composer-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 2px 0;
+    }
+    .sp-context-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: #1a1a28;
+      border: 1px solid #2d2d40;
+      border-radius: 12px;
+      color: #64748b;
+      font-size: 10px;
+      font-weight: 500;
+      padding: 2px 9px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      white-space: nowrap;
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sp-context-chip::before {
+      content: '';
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #334155;
+      flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .sp-context-chip.has-context {
+      color: #86efac;
+      border-color: #166534;
+      background: #052e16;
+    }
+    .sp-context-chip.has-context::before { background: #22c55e; }
+    .sp-context-chip:hover { color: #a5b4fc; border-color: #4338ca; background: #1a1a2e; }
+    .sp-context-chip:hover::before { background: #6366f1; }
+    .sp-context-chip.loading { opacity: 0.6; cursor: wait; }
+
     /* ── Settings bar ── */
     #sp-settings-bar {
       display: none; /* shown when settings are open */
@@ -1111,6 +1261,34 @@ function injectStyles(): void {
       border-radius: 50%;
       background: linear-gradient(135deg, #6366f1, #8b5cf6);
       flex-shrink: 0;
+    }
+
+    /* Model picker header row with provider-count badge */
+    .sp-model-picker-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 9px 4px;
+      border-bottom: 1px solid #1e1e2e;
+      margin-bottom: 2px;
+    }
+    .sp-model-picker-title {
+      font-size: 9px;
+      font-weight: 600;
+      color: #334155;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .provider-count-badge {
+      font-size: 10px;
+      color: #64748b;
+      background: #1e1e2e;
+      border: 1px solid #2d2d40;
+      border-radius: 10px;
+      padding: 1px 7px;
+      font-weight: 500;
+      white-space: nowrap;
+      margin-left: auto;
     }
 
     /* Provider group header */
@@ -1618,7 +1796,9 @@ function sendMessage(text: string): void {
 
         const pageCtx = pendingPageContext;
         pendingPageContext = null;
+        pendingAttachments.length = 0;
         updateContextButton();
+        updateAttachmentPreview();
 
         const streamId = `a-${Date.now()}`;
         currentStreamId = streamId;
@@ -1677,7 +1857,9 @@ function sendMessage(text: string): void {
 
   const pageCtx = pendingPageContext;
   pendingPageContext = null;
+  pendingAttachments.length = 0;
   updateContextButton();
+  updateAttachmentPreview();
 
   const streamId = `a-${Date.now()}`;
   currentStreamId = streamId;
@@ -1769,15 +1951,17 @@ async function validateAndSaveApiKey(key: string): Promise<void> {
 let contextBtn: HTMLButtonElement | null = null;
 
 function updateContextButton(): void {
+  // contextBtn is now the persistent composer-bar chip (sp-context-chip)
   if (!contextBtn) return;
+  const hostname = currentPageHostname || 'page';
   if (pendingPageContext) {
     contextBtn.classList.add('has-context');
-    contextBtn.title = 'Page context attached — click to remove';
-    contextBtn.innerHTML = '✅ Page context';
+    contextBtn.title = 'Page context attached — click to detach';
+    contextBtn.textContent = hostname;
   } else {
     contextBtn.classList.remove('has-context');
-    contextBtn.title = 'Add page content to next message';
-    contextBtn.innerHTML = '📄 Add page context';
+    contextBtn.title = 'Attach page content to next message';
+    contextBtn.textContent = hostname;
   }
 }
 
@@ -1792,6 +1976,35 @@ function updateSendButton(): void {
   const btn = document.getElementById('sp-send-btn') as HTMLButtonElement | null;
   if (!btn) return;
   btn.disabled = isStreaming;
+}
+
+function updateAttachmentPreview(): void {
+  const bar = document.getElementById('sp-attachment-bar');
+  if (!bar) return;
+  bar.innerHTML = '';
+  if (pendingAttachments.length === 0) {
+    bar.style.display = 'none';
+    return;
+  }
+  bar.style.display = 'flex';
+  for (let i = 0; i < pendingAttachments.length; i++) {
+    const dataUrl = pendingAttachments[i]!;
+    const chip = el('div', { class: 'sp-attachment-chip' });
+    const thumb = el('img', {
+      class: 'sp-attachment-thumb',
+      src: dataUrl,
+      alt: 'attachment',
+    }) as HTMLImageElement;
+    const removeBtn = el('button', { class: 'sp-attachment-remove', title: 'Remove' }, '×');
+    const idx = i;
+    removeBtn.addEventListener('click', () => {
+      pendingAttachments.splice(idx, 1);
+      updateAttachmentPreview();
+    });
+    chip.appendChild(thumb);
+    chip.appendChild(removeBtn);
+    bar.appendChild(chip);
+  }
 }
 
 function updateToolsButton(): void {
@@ -1832,6 +2045,27 @@ function updateToolsButton(): void {
 function autoResizeInput(ta: HTMLTextAreaElement): void {
   ta.style.height = 'auto';
   ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`;
+}
+
+/**
+ * Queries the active tab URL and updates the persistent context chip label.
+ * Safe to call multiple times; falls back gracefully when tab API is unavailable.
+ */
+function refreshPageHostname(): void {
+  try {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (chrome.runtime.lastError) return;
+      const url = tabs[0]?.url ?? '';
+      try {
+        currentPageHostname = url ? new URL(url).hostname : '';
+      } catch {
+        currentPageHostname = '';
+      }
+      updateContextButton();
+    });
+  } catch {
+    // chrome.tabs unavailable in test/SSR environment — ignore
+  }
 }
 
 function buildUI(): void {
@@ -1935,6 +2169,12 @@ function buildUI(): void {
 
   function renderModelDropdown(): void {
     modelDropdownEl.innerHTML = '';
+
+    // 0. Provider count badge header
+    const pickerHeader = el('div', { class: 'sp-model-picker-header' });
+    pickerHeader.appendChild(el('span', { class: 'sp-model-picker-title' }, 'Select model'));
+    pickerHeader.appendChild(el('span', { class: 'provider-count-badge' }, '13+ providers'));
+    modelDropdownEl.appendChild(pickerHeader);
 
     // 1. "Best (auto)" as the first option, visually distinct
     const autoOpt = SIDE_PANEL_MODEL_OPTIONS.find((m) => m.value === 'auto');
@@ -2597,28 +2837,8 @@ function buildUI(): void {
 
   const toolbar = el('div', { id: 'sp-toolbar' });
 
-  contextBtn = el('button', {
-    class: 'sp-tool-btn',
-    id: 'sp-context-btn',
-    title: 'Add page content to next message',
-  });
-  contextBtn.innerHTML = '📄 Add page context';
-  contextBtn.addEventListener('click', async () => {
-    if (pendingPageContext) {
-      pendingPageContext = null;
-      updateContextButton();
-      return;
-    }
-    contextBtn!.innerHTML = '⏳ Capturing…';
-    contextBtn!.disabled = true;
-    const ctx = await capturePageContext();
-    contextBtn!.disabled = false;
-    if (ctx) {
-      pendingPageContext = ctx;
-    }
-    updateContextButton();
-  });
-  toolbar.appendChild(contextBtn);
+  // Context button is now rendered as a persistent chip in the composer bar (see below).
+  // The toolbar slot is intentionally empty for context; the chip is built inside inputArea.
 
   const micBtn = el('button', { class: 'sp-tool-btn', id: 'sp-mic-btn', title: 'Voice input' });
   micBtn.innerHTML = '🎤';
@@ -2727,9 +2947,116 @@ function buildUI(): void {
     sendMessage(text);
   });
 
+  // + attachment button and 2-item popup menu
+  const attachWrapper = el('div', { class: 'sp-attach-wrapper' });
+
+  const attachBtn = el('button', {
+    class: 'sp-attach-btn',
+    id: 'sp-attach-btn',
+    title: 'Add attachment',
+  });
+  attachBtn.innerHTML = '+';
+
+  const attachMenu = el('div', { id: 'sp-attach-menu' });
+
+  const screenshotItem = el('div', { class: 'sp-attach-menu-item' });
+  screenshotItem.innerHTML = '<span class="sp-attach-icon">&#128247;</span>Take a screenshot';
+  screenshotItem.addEventListener('click', () => {
+    attachMenu.classList.remove('open');
+    chrome.runtime.sendMessage(
+      { type: 'CAPTURE_SCREENSHOT', format: 'png', quality: 90 },
+      (resp: { success?: boolean; data?: string } | undefined) => {
+        if (chrome.runtime.lastError || !resp?.success || !resp.data) return;
+        pendingAttachments.push(resp.data);
+        updateAttachmentPreview();
+      },
+    );
+  });
+
+  const fileItem = el('div', { class: 'sp-attach-menu-item' });
+  fileItem.innerHTML = '<span class="sp-attach-icon">&#128444;</span>Add an image';
+  const fileInput = el('input', {
+    type: 'file',
+    accept: 'image/*',
+    class: 'sp-attach-file-input',
+    id: 'sp-attach-file-input',
+  }) as HTMLInputElement;
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === 'string') {
+        pendingAttachments.push(result);
+        updateAttachmentPreview();
+      }
+    };
+    reader.readAsDataURL(file);
+    fileInput.value = '';
+  });
+  fileItem.addEventListener('click', () => {
+    attachMenu.classList.remove('open');
+    fileInput.click();
+  });
+
+  attachMenu.appendChild(screenshotItem);
+  attachMenu.appendChild(fileItem);
+  attachWrapper.appendChild(attachMenu);
+  attachWrapper.appendChild(attachBtn);
+  attachWrapper.appendChild(fileInput);
+
+  attachBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    attachMenu.classList.toggle('open');
+  });
+  document.addEventListener('click', (e: MouseEvent) => {
+    if (!attachWrapper.contains(e.target as Node)) {
+      attachMenu.classList.remove('open');
+    }
+  });
+
+  // Attachment preview bar (hidden until an attachment is added)
+  const attachmentBar = el('div', { id: 'sp-attachment-bar' });
+  attachmentBar.style.display = 'none';
+
+  inputRow.appendChild(attachWrapper);
   inputRow.appendChild(inputEl);
   inputRow.appendChild(sendBtn);
+
+  // Persistent page-context chip in the composer bottom bar
+  const composerBar = el('div', { id: 'sp-composer-bar' });
+  contextBtn = el('button', {
+    class: 'sp-context-chip',
+    id: 'sp-context-chip',
+    title: 'Attach page content to next message',
+  });
+  contextBtn.textContent = currentPageHostname || 'page';
+  contextBtn.addEventListener('click', async () => {
+    if (pendingPageContext) {
+      pendingPageContext = null;
+      updateContextButton();
+      return;
+    }
+    const chip = contextBtn!;
+    const prevText = chip.textContent ?? '';
+    chip.textContent = 'capturing…';
+    chip.classList.add('loading');
+    chip.disabled = true;
+    const ctx = await capturePageContext();
+    chip.disabled = false;
+    chip.classList.remove('loading');
+    if (ctx) {
+      pendingPageContext = ctx;
+    } else {
+      chip.textContent = prevText;
+    }
+    updateContextButton();
+  });
+  composerBar.appendChild(contextBtn);
+  inputArea.appendChild(attachmentBar);
   inputArea.appendChild(inputRow);
+  inputArea.appendChild(composerBar);
   document.body.appendChild(inputArea);
 
   setupVoiceInput(micBtn, inputEl);
@@ -3046,6 +3373,8 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
 
 injectStyles();
 buildUI();
+// Populate hostname chip as soon as UI is available
+refreshPageHostname();
 
 Promise.all([
   loadApiKey().then((key) => {
