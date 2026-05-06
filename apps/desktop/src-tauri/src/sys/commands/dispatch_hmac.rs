@@ -124,9 +124,23 @@ pub fn dispatch_hmac_verify(
         .session_key
         .ok_or_else(|| "dispatch session not initialized — call dispatch_hmac_init first".to_string())?;
     let cache = &mut inner.cache;
-    dispatch_hmac::verify(&envelope_json, &key, cache)
+    let outcome = dispatch_hmac::verify(&envelope_json, &key, cache)
         .map(VerifyOutcome::from)
-        .map_err(verify_error_to_string)
+        .map_err(verify_error_to_string)?;
+
+    // DESK-DISPATCH-HMAC-SILENT (audit 2026-05-06): the security module
+    // documents that callers must warn on UnsignedTransitional, but no
+    // caller did. Emit the warning here at the Tauri command layer so it
+    // appears in every deployment log regardless of frontend behaviour.
+    if matches!(outcome, VerifyOutcome::UnsignedTransitional) {
+        tracing::warn!(
+            target: "dispatch_hmac",
+            "Accepting unsigned message in transitional window — sender did not provide HMAC. \
+             Mobile app may need update before 2026-06-05 cutoff.",
+        );
+    }
+
+    Ok(outcome)
 }
 
 /// Sign a payload + type with the stored session key, returning the wire
