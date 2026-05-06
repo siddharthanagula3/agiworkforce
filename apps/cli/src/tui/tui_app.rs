@@ -138,6 +138,10 @@ struct TuiApp {
     effort_picker: super::widgets::effort_picker::EffortPickerState,
     // Currently active effort level (persisted across model switches)
     effort: crate::design_system::Effort,
+    // Theme picker popup
+    theme_picker: super::widgets::theme_picker::ThemePickerState,
+    // Currently active theme choice
+    theme_choice: super::widgets::theme_picker::ThemeChoice,
     // Mode-change banner: timestamp when the mode was last cycled via Shift+Tab.
     // The banner self-clears after MODE_BANNER_TTL.
     mode_banner_shown_at: Option<Instant>,
@@ -212,6 +216,8 @@ impl TuiApp {
             model_picker: super::widgets::model_picker::ModelPickerState::default(),
             effort_picker: super::widgets::effort_picker::EffortPickerState::default(),
             effort: crate::design_system::Effort::Medium,
+            theme_picker: super::widgets::theme_picker::ThemePickerState::default(),
+            theme_choice: super::widgets::theme_picker::ThemeChoice::Dark,
             mode_banner_shown_at: None,
             stream_buffer: String::new(),
             stream_start: None,
@@ -350,6 +356,10 @@ fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &TuiApp) -> Re
         // Popups (only one visible at a time; effort picker takes lowest priority)
         if app.effort_picker.visible {
             super::widgets::effort_picker::render(frame, chunks[1], &app.effort_picker);
+        }
+
+        if app.theme_picker.visible {
+            super::widgets::theme_picker::render(frame, chunks[1], &app.theme_picker);
         }
 
         if app.model_picker.visible {
@@ -836,6 +846,11 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         return handle_effort_picker_key(app, key);
     }
 
+    // Theme picker mode
+    if app.theme_picker.visible {
+        return handle_theme_picker_key(app, key);
+    }
+
     // Slash popup mode
     if app.show_slash_popup {
         return handle_slash_popup_key(app, key);
@@ -1068,6 +1083,31 @@ fn handle_effort_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
                     effort.label(),
                     budget,
                 ),
+            });
+            InputAction::None
+        }
+    }
+}
+
+fn handle_theme_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
+    use super::widgets::theme_picker::{handle_key, PickerAction};
+
+    let action = handle_key(&mut app.theme_picker, key);
+
+    match action {
+        PickerAction::Nothing => InputAction::None,
+        PickerAction::Close => {
+            app.input.clear();
+            app.cursor = 0;
+            InputAction::None
+        }
+        PickerAction::Select(choice) => {
+            app.theme_choice = choice;
+            app.input.clear();
+            app.cursor = 0;
+            app.chat_messages.push(ChatMessage {
+                role: ChatRole::System,
+                text: format!("Theme set to {}", choice.label()),
             });
             InputAction::None
         }
@@ -1581,11 +1621,21 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         // ── Theme ──
         "/theme" => {
             if arg.is_empty() {
-                SlashResult::SystemMessage(
-                    "Available themes: base16-ocean.dark (default)\n  Use /theme <name> to switch.\n  Syntax highlighting uses syntect with 250+ language grammars.".to_string()
-                )
+                // Open the interactive theme picker overlay.
+                app.theme_picker.open(app.theme_choice);
+                SlashResult::SystemMessage(String::new()) // picker handles confirmation
             } else {
-                SlashResult::SystemMessage(format!("Theme set to: {arg}"))
+                // Direct-set: /theme dark|light|ansi|solarized-dark|solarized-light|colorblind
+                use super::widgets::theme_picker::ThemeChoice;
+                match ThemeChoice::from_arg(arg) {
+                    Some(choice) => {
+                        app.theme_choice = choice;
+                        SlashResult::SystemMessage(format!("Theme set to {}", choice.label()))
+                    }
+                    None => SlashResult::SystemMessage(format!(
+                        "Unknown theme: '{arg}'. Available: dark | light | ansi | solarized-dark | solarized-light | colorblind"
+                    )),
+                }
             }
         }
 
