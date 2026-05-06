@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import SalesTeamsPageWithErrorBoundary from '@/features/pages/use-cases/SalesTeams';
+import { EditorialPage } from '../../../components/marketing/editorial/EditorialPage';
 
 export const metadata: Metadata = {
   title: 'AI for Sales Teams | AGI Workforce',
@@ -14,5 +15,9 @@ export const metadata: Metadata = {
 };
 
 export default function SalesTeamsPage() {
-  return <SalesTeamsPageWithErrorBoundary />;
+  return (
+    <EditorialPage tier="paper">
+      <SalesTeamsPageWithErrorBoundary />
+    </EditorialPage>
+  );
 }

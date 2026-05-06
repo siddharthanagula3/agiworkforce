@@ -127,8 +127,22 @@ export const useDispatchStore = create<DispatchState>()(
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[dispatchStore] Hydration failed:', error);
       },
+      // MED-MOB-03 fix (red-team 2026-05): when dispatch messages are
+      // persisted to MMKV, strip any `taskResult.previewUrl` field. The
+      // desktop sends `previewUrl` as a pre-signed CDN URL (S3 / GCS) that
+      // grants read access to the artifact for the URL's TTL. Persisting
+      // it on-device means a forensic image of the device storage extracts
+      // long-lived authenticated URLs even after the user has signed out.
+      // Sanitised messages keep fileName / location / summary so the UI
+      // can still show a meaningful summary when scrolling history.
       partialize: (state) => ({
-        messages: state.messages.slice(-500),
+        messages: state.messages.slice(-500).map((m) => {
+          if (!m.taskResult || !m.taskResult.previewUrl) return m;
+          // Drop only the URL — keep the rest of the metadata.
+          const { previewUrl: _drop, ...rest } = m.taskResult;
+          void _drop;
+          return { ...m, taskResult: rest };
+        }),
       }),
     },
   ),

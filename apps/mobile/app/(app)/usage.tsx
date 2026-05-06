@@ -5,7 +5,7 @@
  * to subscription management and purchase restoration.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { View, ScrollView, Pressable, RefreshControl, Linking, Alert } from 'react-native';
+import { View, ScrollView, Pressable, RefreshControl, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -30,6 +30,7 @@ import {
   type DailyUsage,
 } from '@/services/usage';
 import { api } from '@/services/api';
+import { openExternalUrl } from '@/lib/safeOpenURL';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -386,16 +387,15 @@ export default function UsageScreen() {
   const handleManageSubscription = useCallback(async () => {
     try {
       const data = await api.post<{ url: string }>('/api/portal');
-      if (data.url) {
-        await Linking.openURL(data.url);
+      // HIGH-MOB-02 fix: validate `data.url` against the allowlist (see
+      // lib/safeOpenURL.ts).
+      if (data.url && (await openExternalUrl(data.url))) {
         return;
       }
     } catch {
       // Fall back to static URL
     }
-    try {
-      await Linking.openURL('https://agiworkforce.com/billing');
-    } catch {
+    if (!(await openExternalUrl('https://agiworkforce.com/billing'))) {
       Alert.alert(
         'Error',
         'Could not open subscription management. Please visit agiworkforce.com/billing.',

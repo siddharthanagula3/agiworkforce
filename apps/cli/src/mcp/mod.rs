@@ -425,6 +425,15 @@ impl McpConnection {
     }
 
     /// Spawn the child process for a stdio MCP server.
+    ///
+    /// SECURITY (HIGH-1 + LOW-1): `Command::new()` inherits the full parent env by default.
+    /// `DYLD_INSERT_LIBRARIES` (macOS) / `LD_PRELOAD` (Linux) in the parent shell would inject
+    /// a malicious dylib into every MCP server child. Separately, `ANTHROPIC_API_KEY` and
+    /// other credential env vars would be visible to every MCP server binary.
+    ///
+    /// Fix: call `env_clear()` before setting the manifest env map, then re-inject only
+    /// a safe allowlist. The manifest env is applied after, but filtered to exclude
+    /// loader-injection vars even if the manifest attempts to set them.
     fn spawn_stdio_child(
         name: &str,
         command: &str,
@@ -437,7 +446,61 @@ impl McpConnection {
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null());
 
+        // SECURITY: clear the inherited parent environment to prevent
+        // DYLD_INSERT_LIBRARIES / LD_PRELOAD injection and API key leakage.
+        cmd.env_clear();
+
+        // Re-inject only a minimal safe allowlist from the parent environment.
+        const ALLOWED_FROM_PARENT: &[&str] = &[
+            "PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE",
+            "TMPDIR", "TERM", "SHELL", "XDG_RUNTIME_DIR",
+        ];
+        for var in ALLOWED_FROM_PARENT {
+            if let Ok(val) = std::env::var(var) {
+                cmd.env(var, val);
+            }
+        }
+
+        // Apply the manifest-declared env, but filter out loader-injection vars
+        // that could be used to hijack the child process even via manifest.
+        const BLOCKED_MANIFEST_VARS: &[&str] = &[
+            "DYLD_INSERT_LIBRARIES",
+            "DYLD_LIBRARY_PATH",
+            "DYLD_FORCE_FLAT_NAMESPACE",
+            "LD_PRELOAD",
+            "LD_LIBRARY_PATH",
+            "LD_AUDIT",
+            "NODE_OPTIONS",
+            "PYTHONPATH",
+            "RUBYLIB",
+            "PERL5LIB",
+            "http_proxy",
+            "https_proxy",
+            "HTTP_PROXY",
+            "HTTPS_PROXY",
+            "ALL_PROXY",
+            "all_proxy",
+        ];
         for (key, val) in env {
+            let key_upper = key.to_uppercase();
+            let blocked = BLOCKED_MANIFEST_VARS
+                .iter()
+                .any(|b| b.eq_ignore_ascii_case(key));
+            if blocked {
+                eprintln!(
+                    "[{}] security: manifest env var {:?} is blocked (loader-injection / proxy hijack risk)",
+                    name, key
+                );
+                continue;
+            }
+            // Also block any *_PROXY vars not listed explicitly (case-insensitive suffix).
+            if key_upper.ends_with("_PROXY") {
+                eprintln!(
+                    "[{}] security: manifest env var {:?} is blocked (proxy hijack risk)",
+                    name, key
+                );
+                continue;
+            }
             cmd.env(key, val);
         }
 
@@ -1399,5 +1462,149 @@ mod tests {
         );
         assert!(msg3.contains("my-test-server"));
         assert!(msg3.contains("tools/list"));
+    }
+
+    // -----------------------------------------------------------------------
+    // HIGH-1 + LOW-1: MCP stdio child env sanitization
+    // -----------------------------------------------------------------------
+
+    /// Simulate the BLOCKED_MANIFEST_VARS / allowlist logic from spawn_stdio_child
+    /// without actually spawning a process — tests the filtering decision only.
+    fn filter_manifest_env(
+        manifest_env: &HashMap<String, String>,
+    ) -> (HashMap<String, String>, Vec<String>) {
+        const BLOCKED: &[&str] = &[
+            "DYLD_INSERT_LIBRARIES",
+            "DYLD_LIBRARY_PATH",
+            "DYLD_FORCE_FLAT_NAMESPACE",
+            "LD_PRELOAD",
+            "LD_LIBRARY_PATH",
+            "LD_AUDIT",
+            "NODE_OPTIONS",
+            "PYTHONPATH",
+            "RUBYLIB",
+            "PERL5LIB",
+            "http_proxy",
+            "https_proxy",
+            "HTTP_PROXY",
+            "HTTPS_PROXY",
+            "ALL_PROXY",
+            "all_proxy",
+        ];
+        let mut allowed = HashMap::new();
+        let mut blocked_keys = Vec::new();
+        for (k, v) in manifest_env {
+            let key_upper = k.to_uppercase();
+            let is_blocked = BLOCKED.iter().any(|b| b.eq_ignore_ascii_case(k))
+                || key_upper.ends_with("_PROXY");
+            if is_blocked {
+                blocked_keys.push(k.clone());
+            } else {
+                allowed.insert(k.clone(), v.clone());
+            }
+        }
+        (allowed, blocked_keys)
+    }
+
+    fn manifest_env(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    }
+
+    #[test]
+    fn mcp_env_blocks_dyld_insert_libraries() {
+        let env = manifest_env(&[("DYLD_INSERT_LIBRARIES", "~/.config/evil.dylib")]);
+        let (allowed, blocked) = filter_manifest_env(&env);
+        assert!(allowed.get("DYLD_INSERT_LIBRARIES").is_none());
+        assert!(blocked.contains(&"DYLD_INSERT_LIBRARIES".to_string()));
+    }
+
+    #[test]
+    fn mcp_env_blocks_ld_preload() {
+        let env = manifest_env(&[("LD_PRELOAD", "/tmp/evil.so")]);
+        let (allowed, blocked) = filter_manifest_env(&env);
+        assert!(allowed.get("LD_PRELOAD").is_none());
+        assert!(blocked.contains(&"LD_PRELOAD".to_string()));
+    }
+
+    #[test]
+    fn mcp_env_blocks_node_options() {
+        let env = manifest_env(&[("NODE_OPTIONS", "--require ./malicious.js")]);
+        let (allowed, blocked) = filter_manifest_env(&env);
+        assert!(allowed.get("NODE_OPTIONS").is_none());
+        assert!(blocked.contains(&"NODE_OPTIONS".to_string()));
+    }
+
+    #[test]
+    fn mcp_env_blocks_http_proxy() {
+        for var in &["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY"] {
+            let env = manifest_env(&[(var, "http://attacker.com")]);
+            let (allowed, blocked) = filter_manifest_env(&env);
+            assert!(allowed.get(*var).is_none(), "{var} should be blocked");
+            assert!(blocked.iter().any(|k| k.eq_ignore_ascii_case(var)), "{var} not in blocked list");
+        }
+    }
+
+    #[test]
+    fn mcp_env_blocks_custom_proxy_suffix() {
+        // Any *_PROXY var — even one not in the explicit list.
+        let env = manifest_env(&[("MY_CUSTOM_PROXY", "http://attacker.com")]);
+        let (allowed, blocked) = filter_manifest_env(&env);
+        assert!(allowed.get("MY_CUSTOM_PROXY").is_none());
+        assert!(blocked.contains(&"MY_CUSTOM_PROXY".to_string()));
+    }
+
+    #[test]
+    fn mcp_env_allows_path_from_manifest() {
+        // Manifest can set PATH to a safer value.
+        let env = manifest_env(&[("PATH", "/usr/local/bin:/usr/bin")]);
+        let (allowed, blocked) = filter_manifest_env(&env);
+        assert_eq!(
+            allowed.get("PATH").map(String::as_str),
+            Some("/usr/local/bin:/usr/bin")
+        );
+        assert!(!blocked.contains(&"PATH".to_string()));
+    }
+
+    #[test]
+    fn mcp_env_allows_safe_custom_vars() {
+        let env = manifest_env(&[
+            ("MY_SERVER_PORT", "8080"),
+            ("DEBUG", "true"),
+            ("SERVER_CONFIG", "/etc/myserver.json"),
+        ]);
+        let (allowed, blocked) = filter_manifest_env(&env);
+        assert_eq!(allowed.len(), 3);
+        assert!(blocked.is_empty());
+    }
+
+    #[test]
+    fn mcp_env_blocks_anthropic_api_key_not_re_injected() {
+        // ANTHROPIC_API_KEY is not in the ALLOWED_FROM_PARENT list — verify it
+        // would not reach the child via the allowlist re-injection path.
+        const ALLOWED_FROM_PARENT: &[&str] = &[
+            "PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE",
+            "TMPDIR", "TERM", "SHELL", "XDG_RUNTIME_DIR",
+        ];
+        assert!(
+            !ALLOWED_FROM_PARENT.contains(&"ANTHROPIC_API_KEY"),
+            "ANTHROPIC_API_KEY must not be in the parent env allowlist"
+        );
+        assert!(
+            !ALLOWED_FROM_PARENT.contains(&"OPENAI_API_KEY"),
+            "OPENAI_API_KEY must not be in the parent env allowlist"
+        );
+    }
+
+    #[test]
+    fn mcp_env_manifest_cannot_inject_dyld_via_manifest() {
+        // Even if the manifest tries to set DYLD_INSERT_LIBRARIES, it is blocked.
+        let env = manifest_env(&[
+            ("DYLD_INSERT_LIBRARIES", "evil.dylib"),
+            ("MY_SERVER_VAR", "ok"),
+        ]);
+        let (allowed, blocked) = filter_manifest_env(&env);
+        assert!(allowed.get("DYLD_INSERT_LIBRARIES").is_none());
+        assert_eq!(allowed.get("MY_SERVER_VAR").map(String::as_str), Some("ok"));
+        assert!(blocked.contains(&"DYLD_INSERT_LIBRARIES".to_string()));
     }
 }

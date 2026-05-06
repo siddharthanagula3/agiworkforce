@@ -1,21 +1,30 @@
+/**
+ * @file audit-service.ts
+ *
+ * # Client injection contract (WEB-RLS-BYPASS mitigation)
+ *
+ * `log()` - SERVICE-CONTEXT. System/admin writes that must succeed even when
+ *   the triggering request is unauthenticated (failed-auth logging). Uses
+ *   `getServiceClient()` internally.
+ *
+ * `getOrganizationLogs()` - USER-CONTEXT. Caller passes `getUserClient(jwt)`.
+ *   RT-09 fix: membership verified before any log rows are returned.
+ *
+ * Never add a private `getSupabaseClient()` here. See lib/services/README.md.
+ */
 import 'server-only';
 
-import { createClient } from '@supabase/supabase-js';
-import { requireEnv } from '@/utils/env';
+import { type SupabaseClient } from '@supabase/supabase-js';
+import { getServiceClient } from '@/lib/supabase-server';
 import { logger } from '@/lib/logger';
 import { AuditLog } from '@/types/saas';
 
-function getSupabaseClient() {
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  return createClient(supabaseUrl, supabaseServiceKey, {
-    auth: { persistSession: false },
-  });
-}
-
 export class AuditService {
   /**
-   * Log an action
+   * Log an action.
+   * SERVICE-CONTEXT: audit log writes are inherently admin/system operations.
+   * The write must succeed even when the triggering request is unauthenticated
+   * (e.g., logging a failed auth attempt). Service-role is appropriate here.
    */
   static async log(
     action: string,
@@ -29,7 +38,9 @@ export class AuditService {
       userAgent?: string;
     },
   ): Promise<void> {
-    const supabase = getSupabaseClient();
+    // SECURITY: service-role required because audit log writes run in system/admin context
+    // and must succeed regardless of whether a user JWT is available.
+    const supabase = getServiceClient();
 
     const { error } = await supabase.from('audit_logs').insert({
       action,
@@ -49,17 +60,52 @@ export class AuditService {
   }
 
   /**
-   * Fetch logs for an organization
+   * Fetch logs for an organization.
+   * USER-CONTEXT: caller passes an RLS-bound SupabaseClient so only rows
+   * visible to the authenticated user are returned.
+   *
+   * RT-09 fix: callerUserId is now required. Membership is verified against
+   * organization_members before any log rows are returned. Without this guard,
+   * any authenticated user could read any org's audit log by guessing org UUIDs.
+   *
+   * @param client - RLS-bound SupabaseClient from getUserClient(jwt)
+   * @param orgId - Organization UUID
+   * @param callerUserId - Authenticated user ID from JWT (required)
+   * @param limit - Max rows (default 50)
+   * @throws 403-shaped Error if callerUserId is not a member of orgId
    */
-  static async getOrganizationLogs(orgId: string, limit = 50): Promise<AuditLog[]> {
-    const supabase = getSupabaseClient();
+  static async getOrganizationLogs(
+    client: SupabaseClient,
+    orgId: string,
+    callerUserId: string,
+    limit = 50,
+  ): Promise<AuditLog[]> {
+    // RT-09: Verify caller is a member of the org before returning any logs.
+    const { data: membership, error: memberError } = await client
+      .from('organization_members')
+      .select('user_id')
+      .eq('organization_id', orgId)
+      .eq('user_id', callerUserId)
+      .maybeSingle();
 
-    const { data, error } = await supabase
+    if (memberError) {
+      logger.error({ memberError, orgId, callerUserId }, 'Failed to verify org membership');
+      throw memberError;
+    }
+
+    if (!membership) {
+      logger.warn({ orgId, callerUserId }, 'RT-09: Unauthorized org log access attempt');
+      const err = new Error('Forbidden: not a member of this organization');
+      (err as Error & { statusCode: number }).statusCode = 403;
+      throw err;
+    }
+
+    const { data, error } = await client
       .from('audit_logs')
       .select(
         `
         *,
-        actor:profiles(email) 
+        actor:profiles(email)
       `,
       )
       .eq('organization_id', orgId)

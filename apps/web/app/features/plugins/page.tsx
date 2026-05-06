@@ -14,9 +14,8 @@ import {
   Terminal,
   Wifi,
 } from 'lucide-react';
-import { Header } from '../../../components/layout/Header';
-import { CtaSection } from '../../../components/marketing/CtaSection';
-import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
+import { EditorialPage } from '../../../components/marketing/editorial/EditorialPage';
+import { DispatchSection } from '../../../components/marketing/editorial/DispatchSection';
 
 export const metadata: Metadata = {
   title: 'Plugins & MCP Tools | AGI Workforce',
@@ -161,7 +160,7 @@ const mcpConfigExample = `{
 
 export default function PluginsPage() {
   return (
-    <>
+    <EditorialPage tier="paper">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -171,9 +170,7 @@ export default function PluginsPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(webPageJsonLd) }}
       />
       <div className="flex min-h-screen flex-col bg-[#09090b] text-[#edebe8]">
-        <Header />
-
-        <main className="flex-1 pt-24">
+        <div className="flex-1 pt-24">
           {/* Hero */}
           <section className="py-20 md:py-28">
             <div className="mx-auto max-w-3xl px-6 text-center">
@@ -326,17 +323,9 @@ export default function PluginsPage() {
             </div>
           </section>
 
-          <CtaSection
-            icon="Plug"
-            headline="Connect Your First MCP Server"
-            body="Drop a .mcp.json in your project root. Every tool on every server, discovered automatically. No caps, no restrictions."
-            secondaryLabel="Read Docs"
-            secondaryHref="/docs"
-          />
-        </main>
-
-        <MarketingFooter />
+          <DispatchSection slugIndex="04" slugKicker="DISPATCH" />
+        </div>
       </div>
-    </>
+    </EditorialPage>
   );
 }

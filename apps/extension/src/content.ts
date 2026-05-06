@@ -40,31 +40,55 @@ const PAGE_EXTRACTION_TIMEOUT_MS = 5_000;
 const MAX_DOM_ELEMENTS_FOR_EXTRACTION = 50_000;
 
 /**
- * Safely extract the page HTML with two guards:
- * 1. **Heuristic**: skip if the DOM has more than MAX_DOM_ELEMENTS_FOR_EXTRACTION
- *    elements — calling outerHTML on such pages can block the JS thread for seconds.
- * 2. **Elapsed-time**: discard the result if outerHTML itself took longer than
- *    PAGE_EXTRACTION_TIMEOUT_MS (post-hoc, since DOM access is synchronous and
- *    cannot be interrupted by a true timeout).
+ * Safely extract page text content for the desktop LLM context.
  *
- * Returns the truncated HTML string, or empty string on failure.
+ * SECURITY (chrome-CRIT-1, audit 2026-05-04): the previous implementation
+ * extracted `document.documentElement.outerHTML` and forwarded up to
+ * MAX_CONTEXT_HTML_CHARS of raw markup to the desktop bridge. A hostile page
+ * could embed indirect prompt-injection payloads in:
+ *   - Hidden DOM nodes (`<div style="display:none">SYSTEM: …</div>`)
+ *   - HTML comments (`<!-- SYSTEM: … -->`)
+ *   - Inline `<script>` / `<style>` / `<noscript>` blocks
+ *   - `aria-hidden` / off-screen elements
+ *   - `meta`, `link`, `title` attributes
+ * All of those landed verbatim in the LLM's planning context.
+ *
+ * Switching to `innerText` eliminates that surface in one stroke: the browser
+ * computes layout-aware visible text, so script/style content, comments, and
+ * `display:none` / `visibility:hidden` nodes are excluded automatically. The
+ * function name and field name (`html`) are preserved to keep the wire format
+ * stable; the desktop side already treats this slot as opaque text-for-LLM.
+ *
+ * Two correctness guards remain:
+ * 1. Heuristic: skip when the DOM has more than MAX_DOM_ELEMENTS_FOR_EXTRACTION
+ *    elements — `innerText` triggers a layout pass that can stall on huge SPAs.
+ * 2. Elapsed-time: discard if extraction itself took longer than
+ *    PAGE_EXTRACTION_TIMEOUT_MS (DOM access is synchronous and uninterruptible).
  */
 function extractPageHtmlSafely(): string {
   try {
     const elementCount = document.querySelectorAll('*').length;
     if (elementCount > MAX_DOM_ELEMENTS_FOR_EXTRACTION) {
-      logger.debug('Skipping HTML extraction — DOM too large', { elementCount });
+      logger.debug('Skipping page-text extraction — DOM too large', { elementCount });
       return '';
     }
     const extractStart = Date.now();
-    const rawHtml = document.documentElement.outerHTML;
-    if (Date.now() - extractStart < PAGE_EXTRACTION_TIMEOUT_MS) {
-      return rawHtml.substring(0, MAX_CONTEXT_HTML_CHARS);
+    // `body.innerText` covers the visible content. Fall back to documentElement
+    // for edge cases (e.g. XML documents, very early DOMContentLoaded) where
+    // `body` may not yet be present.
+    const rawText = document.body?.innerText ?? document.documentElement?.innerText ?? '';
+    if (Date.now() - extractStart >= PAGE_EXTRACTION_TIMEOUT_MS) {
+      logger.warn('Page-text extraction timed out, using empty content');
+      return '';
     }
-    logger.warn('HTML extraction timed out, using empty content');
-    return '';
+    // Collapse runs of whitespace so the byte budget covers more semantic content.
+    const collapsed = rawText
+      .replace(/[\t \u00a0]+/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+    return collapsed.substring(0, MAX_CONTEXT_HTML_CHARS);
   } catch (e) {
-    logger.debug('Failed to extract page HTML (CSP or DOM error)', e);
+    logger.debug('Failed to extract page text (CSP or DOM error)', e);
     return '';
   }
 }
@@ -117,11 +141,17 @@ function initialize(): void {
   // so there is no need to call syncPageContext() separately here.
   void notifyTabReady();
 
-  try {
-    patchConsole();
-  } catch (err) {
-    logger.debug('patchConsole failed (non-fatal)', err);
-  }
+  // SECURITY (chrome-SUB-5, audit 2026-05-05): the previous implementation
+  // patched `console.*` on EVERY page the content script ran on (`<all_urls>`
+  // — which is every http(s) page the user visits). The buffered logs were
+  // exposed to the desktop bridge via `GET_CONSOLE_LOGS`. A user navigating
+  // a bank site, healthcare portal, or any page that logs partial session
+  // state would have those entries forwarded to the LLM.
+  // Mitigation: only patch console for origins the user explicitly allowlisted
+  // for automation. Non-allowlisted origins skip the patch entirely.
+  void patchConsoleIfAllowlisted().catch((err) => {
+    logger.debug('patchConsoleIfAllowlisted failed (non-fatal)', err);
+  });
 
   try {
     initWebMCP();
@@ -1057,23 +1087,13 @@ const ALLOWED_SCRIPT_OPERATIONS: Record<string, (...args: unknown[]) => unknown>
     el?.blur();
     return !!el;
   },
-  getLocalStorage: (...args: unknown[]) => {
-    const key = args[0] as string | null | undefined;
-    if (!key) {
-      return { ...window.localStorage };
-    }
-    return window.localStorage.getItem(key);
-  },
-  setLocalStorage: (...args: unknown[]) => {
-    const key = String(args[0] ?? '');
-    const value = String(args[1] ?? '');
-    window.localStorage.setItem(key, value);
-    return true;
-  },
-  clearLocalStorage: () => {
-    window.localStorage.clear();
-    return true;
-  },
+  // SECURITY (H-3): getLocalStorage, setLocalStorage, clearLocalStorage removed.
+  // Any allowlisted origin could invoke these via EXECUTE_SCRIPT, reading or
+  // destroying auth tokens and session data on any tab the user is viewing.
+  // Legitimate session-management operations (e.g. post-autofill cleanup on
+  // linkedin.com) must be implemented as a specific named operation that is
+  // authorized on a per-call basis via native messaging rather than being freely
+  // callable by any allowlisted origin. Do NOT re-add these three operations.
 };
 
 async function handleExecuteScript(message: ExecuteScriptMessage): Promise<ExtensionResponse> {
@@ -1693,6 +1713,29 @@ async function checkConnectionStatus(): Promise<void> {
 // Shadow host kept in module scope so updateIndicatorStatus() can reach the inner element.
 
 let _indicatorShadow: ShadowRoot | null = null;
+
+/**
+ * Wraps `patchConsole` with a same-origin allowlist gate. See chrome-SUB-5
+ * comment at the call site in initialize(). Failing the gate is silent — the
+ * extension simply doesn't buffer console output for this page.
+ */
+async function patchConsoleIfAllowlisted(): Promise<void> {
+  let allowlist: Set<string>;
+  try {
+    const res = await chrome.storage.local.get('agi_site_allowlist');
+    const list = (res as Record<string, unknown>)['agi_site_allowlist'];
+    allowlist = new Set(Array.isArray(list) ? (list as string[]) : []);
+  } catch (e) {
+    logger.debug('Could not read agi_site_allowlist for console gating', e);
+    return;
+  }
+  const origin = window.location.origin;
+  if (!allowlist.has(origin)) {
+    logger.debug('Console buffering skipped — origin not on user allowlist', { origin });
+    return;
+  }
+  patchConsole();
+}
 
 /** Monkey-patch console to capture page logs. Our own logger is excluded via prefix check. */
 function patchConsole(): void {

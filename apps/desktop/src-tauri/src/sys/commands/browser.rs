@@ -374,8 +374,11 @@ pub struct BrowserStateWrapper {
 
 impl BrowserStateWrapper {
     /// Creates a new browser state wrapper with full functionality.
-    pub async fn new() -> Result<Self, String> {
-        match BrowserState::new().await {
+    /// SEV-DESK-02: requires an `AppHandle` so the underlying `ExtensionBridge`
+    /// can prompt the user before executing arbitrary JS, navigating, or
+    /// reading/writing cookies and localStorage. Tests may pass `None`.
+    pub async fn new(app_handle: Option<tauri::AppHandle>) -> Result<Self, String> {
+        match BrowserState::new(app_handle).await {
             Ok(state) => {
                 tracing::info!("BrowserState initialized successfully");
                 Ok(Self {

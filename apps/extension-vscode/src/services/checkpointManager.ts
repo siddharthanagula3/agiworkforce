@@ -19,6 +19,7 @@
 import * as vscode from 'vscode';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { getActiveWorkspaceFolderSync } from '../utils/workspaceFolders';
 
 const execFileAsync = promisify(execFile);
 
@@ -64,11 +65,17 @@ function log(message: string): void {
 export class CheckpointManager {
   private _checkpoints: Checkpoint[] = [];
   private _gitAvailable: boolean | undefined;
-  private readonly _workspaceRoot: string | undefined;
   private readonly _globalState: vscode.Memento;
 
+  /**
+   * Resolved per-call so multi-root users can open a file in the target
+   * workspace and have checkpoint ops act on that root, not always [0].
+   */
+  private get _workspaceRoot(): string | undefined {
+    return getActiveWorkspaceFolderSync()?.uri.fsPath;
+  }
+
   constructor(context: vscode.ExtensionContext) {
-    this._workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     this._globalState = context.globalState;
 
     // Restore persisted checkpoint metadata

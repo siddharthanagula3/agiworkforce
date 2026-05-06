@@ -5,8 +5,28 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { PROVIDERS, type ModelDef } from '@/lib/models';
+import { type ModelDef } from '@/lib/models';
 import { colors } from '@/lib/theme';
+import {
+  PROVIDER_DISPLAY,
+  CAPABILITY_LABEL,
+  type ProviderId,
+  type CapabilityTier,
+} from '@agiworkforce/types';
+import { ProviderLogo } from './ProviderLogo';
+
+// ---------------------------------------------------------------------------
+// Map mobile model tier (PickerModelTier) → CapabilityTier for sub-label.
+// economy  → fastest
+// balanced → balanced
+// premium  → most-capable
+// ---------------------------------------------------------------------------
+
+const TIER_TO_CAPABILITY: Record<string, CapabilityTier> = {
+  economy: 'fastest',
+  balanced: 'balanced',
+  premium: 'most-capable',
+};
 
 interface ModelRowProps {
   model: ModelDef;
@@ -21,19 +41,6 @@ interface ModelRowProps {
   onToggleThinking: (id: string) => void;
 }
 
-/** Map provider id to a display character for the brand icon. */
-const PROVIDER_ICONS: Record<string, string> = {
-  anthropic: '\u2728', // sparkles
-  openai: '\u25CB', // circle
-  google: '\u25C6', // diamond
-  xai: '\u25C7', // diamond outline
-  deepseek: '\u25AA', // small square
-  moonshot: '\u263D', // crescent
-  qwen: '\u2601', // cloud
-  zhipu: '\u25A3', // square with fill
-  perplexity: '\u25C8', // target
-};
-
 export function ModelRow({
   model,
   isSelected,
@@ -46,9 +53,13 @@ export function ModelRow({
 }: ModelRowProps) {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
-  const provider = PROVIDERS.find((p) => p.id === model.provider);
-  const providerColor = provider?.color ?? colors.textMuted;
-  const providerIcon = PROVIDER_ICONS[model.provider] ?? '\u25CB';
+  const providerDisplay = PROVIDER_DISPLAY[model.provider as ProviderId];
+  // supportsEffort drives the thinking toggle (replaces the narrower supportsThinking).
+  // We still guard on model.supportsThinking so legacy local models remain safe.
+  const canToggleThinking = model.supportsThinking && (providerDisplay?.supportsEffort ?? false);
+
+  const capabilityTier = TIER_TO_CAPABILITY[model.tier] ?? 'balanced';
+  const capabilityLabel = CAPABILITY_LABEL[capabilityTier];
 
   const handlePress = () => {
     if (hapticsEnabled) {
@@ -85,23 +96,24 @@ export function ModelRow({
         accessibilityHint="Tap to select, long press to favorite"
         accessibilityState={{ selected: isSelected }}
       >
-        {/* Provider brand icon */}
+        {/* Provider logo — 24×24 SVG or brand-color circle */}
         <View
-          className="w-6 h-6 rounded-md items-center justify-center"
-          style={{ backgroundColor: `${providerColor}20` }}
+          className="w-6 h-6 rounded-md items-center justify-center overflow-hidden"
+          style={{ backgroundColor: `${providerDisplay?.brandColor ?? colors.textMuted}18` }}
         >
-          <Text className="text-xs font-bold" style={{ color: providerColor }}>
-            {providerIcon}
-          </Text>
+          <ProviderLogo providerId={model.provider} size={18} />
         </View>
 
-        {/* Model name */}
+        {/* Model name + capability sub-label */}
         <View className="flex-1">
           <Text
             className={`text-sm font-medium ${isSelected ? 'text-teal-400' : 'text-white'}`}
             numberOfLines={1}
           >
             {model.name}
+          </Text>
+          <Text className="text-[11px] text-white/40 mt-0.5" numberOfLines={1}>
+            {capabilityLabel}
           </Text>
         </View>
 
@@ -114,7 +126,7 @@ export function ModelRow({
       </Pressable>
 
       {/* Per-model thinking toggle — shown when model is selected + expanded */}
-      {isExpanded && model.supportsThinking && (
+      {isExpanded && canToggleThinking && (
         <Animated.View
           entering={FadeIn.duration(150)}
           exiting={FadeOut.duration(100)}

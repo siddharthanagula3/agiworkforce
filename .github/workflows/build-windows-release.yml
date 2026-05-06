@@ -55,7 +55,7 @@ jobs:
           echo "Release ID for ${TAG}: ${RELEASE_ID}"
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
         with:
           version: ${{ env.PNPM_VERSION }}
 
@@ -66,7 +66,7 @@ jobs:
           cache: 'pnpm'
 
       - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@1fbea72663f6d4c03efaab13560c8a24cfd2a7cc # v1.9.0
         with:
           toolchain: ${{ env.RUST_VERSION }}
 
@@ -95,7 +95,7 @@ jobs:
           echo "Resolved OPENSSL_DIR: ${OPENSSL_DIR}"
 
       - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
         with:
           workspaces: apps/desktop/src-tauri
           cache-on-failure: true

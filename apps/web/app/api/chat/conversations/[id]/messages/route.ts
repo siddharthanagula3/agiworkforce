@@ -13,6 +13,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { CreditService } from '@/lib/services/credit-service';
+import { getUserClient } from '@/lib/supabase-server';
 import { CreateMessageSchema } from '@/lib/validations/chat';
 import { getAuthenticatedUser } from '@/lib/api-auth';
 
@@ -34,6 +35,13 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
 
   const user = await getAuthenticatedUser(request);
   const { id: conversationId } = await context.params;
+
+  // Build an RLS-bound credit client when Bearer token is present.
+  // Cookie-path falls back to the string overload (service-role) since no raw JWT is accessible here.
+  const _authHeader = request.headers.get('authorization');
+  const creditClient = _authHeader?.startsWith('Bearer ')
+    ? getUserClient(_authHeader.substring(7))
+    : user.id;
 
   let rawBody: unknown;
   try {
@@ -105,7 +113,7 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
   // Normal flow: save user message, call LLM, save assistant message
 
   // Check credits
-  const hasCredits = await CreditService.checkAvailable(user.id, 0.01);
+  const hasCredits = await CreditService.checkAvailable(creditClient, user.id, 0.01);
   if (!hasCredits) {
     throw createError.paymentRequired('Insufficient credits');
   }

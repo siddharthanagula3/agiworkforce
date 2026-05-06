@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'crypto';
+import { createClient as createSupabaseAdminClient } from '@supabase/supabase-js';
 import { createClient as createSupabaseServerClient } from '@/utils/supabase/server';
 
 // Lazily get CSRF_SECRET to avoid errors during build/static generation
@@ -26,6 +27,31 @@ export function resetCsrfCache(): void {
 
 const CSRF_HEADER = 'x-csrf-token';
 // Cookie name reserved for future CSRF implementation: 'csrf-token'
+
+/**
+ * Read a single cookie value by name from a Cookie header string.
+ *
+ * SECURITY (web-HIGH-1, audit 2026-05-05): the previous implementation called
+ * `cookies.match(/<name>=([^;]+)/)` with no leading anchor. That regex matches
+ * any cookie whose name *ends with* the target — so `x-anon-session-id=evil;
+ * anon-session-id=real` returned `evil` (the leftmost match), and an attacker
+ * who could plant `crafted-anon-session-id=<known>` via subdomain cookie
+ * injection could forge any user's CSRF binding by pre-seeding the value.
+ * The fix anchors the match to a cookie-name boundary `(?:^|; )` so the
+ * pattern only matches a true cookie name. The cookie-name argument is
+ * regex-escaped before interpolation so a caller passing a name with `.`
+ * or `*` does not accidentally widen the match.
+ *
+ * Exported for unit-test access. Treat as internal — production code in this
+ * file should be the only consumer.
+ *
+ * @internal
+ */
+export function readCookie(cookieHeader: string, name: string): string | null {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = cookieHeader.match(new RegExp(`(?:^|; )${escaped}=([^;]+)`));
+  return match?.[1] ?? null;
+}
 
 /**
  * Generate a CSRF token
@@ -120,19 +146,28 @@ export async function getSessionIdFromRequest(_request: Request): Promise<string
     // Supabase client may fail in non-route-handler contexts; fall through
   }
 
-  // Option 2: Cookie-based fallback for anonymous users
+  // Option 2: Cookie-based fallback for anonymous users.
+  // All cookie reads below go through readCookie() which anchors to the
+  // cookie-name boundary — see web-HIGH-1 fix at the helper definition.
   const cookies = _request.headers.get('cookie') || '';
 
-  // Check for explicit session cookie
-  const sessionMatch = cookies.match(/session-id=([^;]+)/);
-  if (sessionMatch?.[1]) {
-    return sessionMatch[1];
+  const sessionId = readCookie(cookies, 'session-id');
+  if (sessionId) {
+    return sessionId;
   }
 
-  // Check for existing anonymous session ID cookie to preserve CSRF binding.
-  const anonMatch = cookies.match(/anon-session-id=([^;]+)/);
-  if (anonMatch?.[1]) {
-    return anonMatch[1];
+  // SEV-WEB-M-1 fix (2026-05-05): prefer the `__Host-` prefixed cookie which
+  // the browser refuses to set from JavaScript or from sibling subdomains.
+  // Fall back to the legacy `anon-session-id` for one Max-Age window (24h)
+  // so existing visitors don't lose their CSRF binding mid-session, then
+  // remove the fallback in a follow-up commit after 2026-05-06.
+  const hostPrefixed = readCookie(cookies, '__Host-anon-session-id');
+  if (hostPrefixed) {
+    return hostPrefixed;
+  }
+  const anonId = readCookie(cookies, 'anon-session-id');
+  if (anonId) {
+    return anonId;
   }
 
   // Option 3: Generate unique anonymous session ID
@@ -170,24 +205,72 @@ export async function getOrCreateAnonSession(
 
   const cookies = request.headers.get('cookie') || '';
 
-  // Option 2: Prefer authenticated session cookies (no new cookie needed)
-  const sessionMatch = cookies.match(/session-id=([^;]+)/);
-  if (sessionMatch?.[1]) {
-    return { id: sessionMatch[1] };
+  // Option 2: Prefer authenticated session cookies (no new cookie needed).
+  // All cookie reads use the anchored readCookie helper — see web-HIGH-1.
+  const sessionId = readCookie(cookies, 'session-id');
+  if (sessionId) {
+    return { id: sessionId };
   }
 
-  // Option 3: Existing anonymous session cookie
-  const anonMatch = cookies.match(/anon-session-id=([^;]+)/);
-  if (anonMatch?.[1]) {
-    return { id: anonMatch[1] };
+  // Option 3a: New `__Host-` prefixed cookie (SEV-WEB-M-1 fix, 2026-05-05).
+  // The `__Host-` prefix forces Path=/ + Secure + no Domain, and the browser
+  // refuses to set such a cookie from JavaScript or from a sibling subdomain
+  // — closing the cross-subdomain CSRF-binding hijack vector.
+  const hostPrefixed = readCookie(cookies, '__Host-anon-session-id');
+  if (hostPrefixed) {
+    return { id: hostPrefixed };
+  }
+  // Option 3b: Legacy cookie (transitional — accept for 24h Max-Age window
+  // so in-flight visitors don't lose CSRF binding; remove after 2026-05-06).
+  const legacyAnonId = readCookie(cookies, 'anon-session-id');
+  if (legacyAnonId) {
+    return { id: legacyAnonId };
   }
 
   // Option 4: Generate a new anonymous session ID and request it be stored in a cookie
   const anonId = `anon-${crypto.randomUUID()}`;
   return {
     id: anonId,
-    newCookie: `anon-session-id=${anonId}; Path=/; HttpOnly; SameSite=Strict; Secure; Max-Age=86400`,
+    // `__Host-` requires Path=/, Secure, and no Domain attribute — all set.
+    newCookie: `__Host-anon-session-id=${anonId}; Path=/; HttpOnly; SameSite=Strict; Secure; Max-Age=86400`,
   };
+}
+
+/**
+ * RT-04 fix: Validate a Bearer token cryptographically before granting CSRF bypass.
+ *
+ * The old code bypassed CSRF for ANY request with `Authorization: Bearer <anything>`,
+ * including invalid/garbage tokens. This created a bypass window: an attacker could
+ * add `Authorization: Bearer bogus` to a cross-origin request, skip CSRF, then let
+ * auth fail later — leaving any endpoint that checked CSRF before auth vulnerable.
+ *
+ * Fix: Only bypass CSRF when the Bearer JWT is verified as belonging to a real Supabase
+ * user. If verification fails, fall through to the CSRF token check as normal.
+ *
+ * Returns true if the token is valid (CSRF bypass is safe), false if invalid/missing.
+ */
+async function isBearerTokenValid(authHeader: string | null): Promise<boolean> {
+  if (!authHeader?.startsWith('Bearer ')) {
+    return false;
+  }
+  const token = authHeader.slice(7);
+  // Validate token length to avoid excessive work on garbage inputs
+  if (token.length < 20 || token.length > 4096) {
+    return false;
+  }
+  try {
+    const supabaseUrl = process.env['NEXT_PUBLIC_SUPABASE_URL'];
+    const serviceKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
+    if (!supabaseUrl || !serviceKey) return false;
+
+    const admin = createSupabaseAdminClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data, error } = await admin.auth.getUser(token);
+    return !error && !!data?.user;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -203,18 +286,19 @@ export async function validateCsrfFromRequest(
     return true; // GET requests don't need CSRF protection
   }
 
-  // CSRF does not apply to Bearer-token requests. Threat model:
-  //   - CSRF requires the browser to silently attach credentials (cookies).
-  //   - This SPA stores JWTs in memory / localStorage, not cookies.
-  //   - SOP prevents a cross-origin attacker from reading localStorage or
-  //     injecting a custom Authorization header via fetch/XHR.
-  //   - Therefore a cross-origin page cannot forge a valid Bearer request,
-  //     and the CSRF check would provide no additional protection here.
-  // If this app ever migrates to HttpOnly cookie auth, this bypass MUST be
-  // removed and SameSite=Strict set on the session cookie instead.
+  // RT-04 fix: Only bypass CSRF when the Bearer token is cryptographically valid.
+  // Previously ANY Bearer string (including `Bearer bogus`) bypassed CSRF — this
+  // created a bypass for any endpoint checking CSRF before auth.
+  // Threat model: a cross-origin page cannot forge a valid Bearer JWT (SOP blocks
+  // reading localStorage / injecting Authorization on third-party requests), so a
+  // valid JWT here means the request is from a legitimate client.
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
-    return true;
+    const validBearer = await isBearerTokenValid(authHeader);
+    if (validBearer) {
+      return true; // Legitimate Bearer auth — CSRF bypass is safe
+    }
+    // Invalid Bearer + possible session cookie — fall through to CSRF token check
   }
 
   const token = request.headers.get(CSRF_HEADER);
@@ -243,13 +327,15 @@ export async function requireCsrfToken(
     return null; // GET requests don't need CSRF protection
   }
 
-  // CSRF is a browser-session attack vector. Bearer token requests (e.g. from
-  // the native desktop app) are not vulnerable to CSRF because an attacker
-  // cannot read the token from a cross-origin context. Skip CSRF validation
-  // when the request is authenticated via Bearer token.
+  // RT-04 fix: Only bypass CSRF when the Bearer token is cryptographically valid.
+  // See isBearerTokenValid() for the threat model analysis.
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
-    return null;
+    const validBearer = await isBearerTokenValid(authHeader);
+    if (validBearer) {
+      return null; // Legitimate Bearer auth — CSRF bypass is safe
+    }
+    // Invalid Bearer falls through to CSRF token check
   }
 
   const token = request.headers.get(CSRF_HEADER);
@@ -273,3 +359,6 @@ export async function requireCsrfToken(
 
   return null;
 }
+
+// Export for tests
+export { isBearerTokenValid };

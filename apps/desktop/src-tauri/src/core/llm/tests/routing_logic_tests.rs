@@ -283,7 +283,7 @@ mod tests {
         assert_eq!(Provider::OpenAI.default_model(), "gpt-5.5");
         assert_eq!(Provider::Anthropic.default_model(), "claude-sonnet-4.6");
         assert_eq!(Provider::Google.default_model(), "gemini-3.1-pro-preview");
-        assert_eq!(Provider::DeepSeek.default_model(), "deepseek-chat");
+        assert_eq!(Provider::DeepSeek.default_model(), "deepseek-v4-flash");
         assert_eq!(Provider::Ollama.default_model(), "llama4-maverick");
     }
 
@@ -329,8 +329,8 @@ mod tests {
     fn test_get_model_for_task_deepseek_code_generation() {
         let model = Provider::DeepSeek.get_model_for_task(TaskType::CodeGeneration);
         assert!(!model.is_empty());
-        // DeepSeek uses the same model for all tasks
-        assert_eq!(model, "deepseek-chat");
+        // DeepSeek's code-generation task routes to V4 Flash (the new default after V4 launch).
+        assert_eq!(model, "deepseek-v4-flash");
     }
 
     #[test]
@@ -1001,7 +1001,8 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Anthropic);
-        assert_eq!(suggestion.model, "claude-sonnet-4.5");
+        // claude-sonnet-4.5 is deprecated; canonicalization forwards to current Sonnet.
+        assert_eq!(suggestion.model, "claude-sonnet-4.6");
     }
 
     #[test]

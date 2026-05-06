@@ -146,9 +146,14 @@ pub async fn computer_use_start_session(
     Ok(session_id)
 }
 
-#[tauri::command]
-pub async fn computer_use_capture_screen(
-    state: State<'_, Arc<Mutex<ComputerUseState>>>,
+/// Internal screen-capture worker — does the actual work without any
+/// confirmation gate. Used by both the gated IPC entry point
+/// (`computer_use_capture_screen`) and the dispatcher
+/// (`computer_use_execute_tool`), which has its own dispatch-level gate.
+/// Calling this from a non-IPC code path bypasses the user-confirmation
+/// gate, so any new caller MUST justify why bypass is acceptable.
+async fn capture_screen_inner(
+    state: &Arc<Mutex<ComputerUseState>>,
 ) -> Result<ScreenCapture, String> {
     tracing::info!("Capturing screen");
 
@@ -195,6 +200,27 @@ pub async fn computer_use_capture_screen(
     }
 
     Ok(capture)
+}
+
+/// SEV-DESK-09 fix: gate the IPC entry point on `require_confirmation`
+/// to match the click/move_mouse/type_text pattern at lines 296-343.
+/// The dispatcher path (`computer_use_execute_tool`) calls
+/// `capture_screen_inner` directly because it gates `screenshot` once
+/// at the dispatch level (line 403); double-prompting would be hostile.
+/// A direct frontend `invoke('computer_use_capture_screen', ...)` from
+/// a prompt-injected LLM no longer bypasses confirmation.
+#[tauri::command]
+pub async fn computer_use_capture_screen(
+    state: State<'_, Arc<Mutex<ComputerUseState>>>,
+    app_handle: tauri::AppHandle,
+) -> Result<ScreenCapture, String> {
+    require_confirmation(
+        &app_handle,
+        "computer_use_capture_screen",
+        serde_json::json!({}),
+    )
+    .await?;
+    capture_screen_inner(state.inner()).await
 }
 
 /// FIX-003 (Sprint 2): every `computer_use_*` IPC routes through
@@ -409,7 +435,9 @@ pub async fn computer_use_execute_tool(
 
     match tool_name.as_str() {
         "screenshot" => {
-            let capture = computer_use_capture_screen(state).await?;
+            // SEV-DESK-09: dispatcher already gated above (line 403); call the
+            // inner worker directly to avoid a second confirmation prompt.
+            let capture = capture_screen_inner(state.inner()).await?;
             serde_json::to_value(capture).map_err(|e| format!("Serialization error: {}", e))
         }
         "click" => {

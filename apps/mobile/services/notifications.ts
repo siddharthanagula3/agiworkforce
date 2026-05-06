@@ -2,8 +2,23 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { router } from 'expo-router';
+import type { Session } from '@supabase/supabase-js';
 import { api } from './api';
 import { getDeviceId } from '@/lib/deviceId';
+
+// LOW-MOB-3 fix (red-team 2026-05): the notification handler used to
+// `safeNavigate` to `/(app)/*` regardless of auth state — a notification
+// that fires before the auth gate has resolved would race the redirect-
+// to-login effect in `_layout.tsx` and the user could land in the
+// authenticated portion of the app for ~one frame, including reading
+// loading-state bound to a yet-unauthenticated context. We now require
+// the layout to push the current session into this module before any
+// notification can navigate. Notifications that fire while no session is
+// known route to /(auth)/login.
+let _currentSession: Session | null = null;
+export function setCurrentSession(session: Session | null): void {
+  _currentSession = session;
+}
 
 // --- Notification event types ---
 
@@ -319,6 +334,14 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
 
   // Store the notification in the in-app notification center
   notificationCenterStore.add(response.notification);
+
+  if (!_currentSession) {
+    // No active session — defer to login screen. We do not pass arbitrary
+    // notification data through to the login screen as a redirect target;
+    // the user will land on the default post-login route.
+    safeNavigate('/(auth)/login' as Parameters<typeof router.push>[0]);
+    return;
+  }
 
   switch (data.type) {
     case 'agent_failed':

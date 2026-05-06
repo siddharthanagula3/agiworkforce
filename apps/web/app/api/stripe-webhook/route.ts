@@ -1230,7 +1230,10 @@ export async function POST(request: NextRequest) {
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(body, signature, STRIPE_WEBHOOK_SECRET);
+    // SEV-WEB-HIGH-5 fix: shorten the replay window from the SDK default of
+    // 300 s to 60 s. Stripe recommends 60 s; the longer window only matters
+    // when retries take more than a minute, and we have idempotency on top.
+    event = stripe.webhooks.constructEvent(body, signature, STRIPE_WEBHOOK_SECRET, 60);
     logger.info({ eventType: event.type, eventId: event.id }, 'Webhook verified');
   } catch (err) {
     logger.error(

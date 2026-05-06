@@ -4,3 +4,6 @@
 
 expo-env.d.ts
 # @end expo-cli
+
+# Local Expo state — machine-specific, do not commit
+.expo/

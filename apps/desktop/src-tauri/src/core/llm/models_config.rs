@@ -91,6 +91,8 @@ pub struct TaskRouting {
     pub chat: Option<String>,
     pub vision: Option<String>,
     pub long_context: Option<String>,
+    #[serde(default)]
+    pub computer_use: Option<String>,
 }
 
 impl TaskRouting {
@@ -103,6 +105,7 @@ impl TaskRouting {
             "chat" => self.chat.as_deref(),
             "vision" => self.vision.as_deref(),
             "long_context" => self.long_context.as_deref(),
+            "computer_use" => self.computer_use.as_deref(),
             _ => None,
         }
     }
@@ -500,11 +503,13 @@ mod tests {
             get_canonicalized_id("gemini-3-pro-preview"),
             "gemini-3.1-pro-preview"
         );
+        // claude-sonnet-4.5 is deprecated; the dash form forwards to current Sonnet.
         assert_eq!(
             get_canonicalized_id("claude-sonnet-4-5"),
-            "claude-sonnet-4.5"
+            "claude-sonnet-4.6"
         );
-        assert_eq!(get_canonicalized_id("gpt-5.4-nano"), "gpt-5.4-mini");
+        // gpt-5.4-nano is its own SKU now (was previously aliased to mini).
+        assert_eq!(get_canonicalized_id("gpt-5.4-nano"), "gpt-5.4-nano");
     }
 
     #[test]

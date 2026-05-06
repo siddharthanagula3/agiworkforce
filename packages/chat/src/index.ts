@@ -5,6 +5,8 @@ export * from './lib/runtime';
 export * from './lib/hostBridge';
 export * from './lib/utils';
 export * from './lib/greetings';
+export { getConnectorPermissionStore } from './lib/connectorPermissionStore';
+export type { ConnectorPermissionStore } from './lib/connectorPermissionStore';
 
 // Stores — prefixed to avoid collisions with host-app store names
 export { useChatStore } from './stores/chatStore';
@@ -13,6 +15,7 @@ export { useUIStore as useChatUIStore } from './stores/uiStore';
 export { useProjectStore as useChatProjectStore } from './stores/projectStore';
 export { useSettingsStore as useChatSettingsStore } from './stores/settingsStore';
 export { useArtifactStore as useChatArtifactStore } from './stores/artifactStore';
+export { useAgentControlStore as useChatAgentControlStore } from './stores/agentControlStore';
 
 // Hooks
 export { useChat } from './hooks/useChat';
@@ -39,6 +42,8 @@ export { QuickChips } from './components/QuickChips';
 export type { ChipType } from './components/QuickChips';
 export { ChatInput } from './components/ChatInput';
 export type { ChatInputProps } from './components/ChatInput';
+export { AgentControl } from './components/AgentControl';
+export type { AgentControlProps } from './components/AgentControl';
 export { ModelSelector } from './components/ModelSelector';
 export type { ModelSelectorProps } from './components/ModelSelector';
 export { AttachmentMenu } from './components/AttachmentMenu';

@@ -145,7 +145,9 @@ mod tests {
     /// codeql[rust/hard-coded-cryptographic-value]: test fixture only,
     /// never reachable from production paths.
     #[allow(dead_code)]
-    const TEST_FIXTURE_PASSPHRASE: &str = "alpha-beta-unique-phrase"; // gitleaks:allow
+    // SEV-DESK-04: must satisfy `enforce_password_complexity` (>= 12 chars,
+    // 3-of-4 character classes).
+    const TEST_FIXTURE_PASSPHRASE: &str = "Alpha-Beta-Unique-Phrase-9"; // gitleaks:allow
 
     fn unlocked_helper() -> MasterPasswordEncryption {
         let conn = Connection::open_in_memory().unwrap();

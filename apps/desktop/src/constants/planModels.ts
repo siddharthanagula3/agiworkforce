@@ -6,15 +6,35 @@
  * The backend handles model routing and access control.
  */
 
-// All subscription tiers available in the system
-export const SUBSCRIPTION_TIERS = ['free', 'hobby', 'pro', 'max', 'enterprise'] as const;
+// All subscription tiers available in the system.
+// Mirrors the Rust `PlanTier` enum at apps/desktop/src-tauri/src/sys/billing/models.rs:8-24.
+export const SUBSCRIPTION_TIERS = [
+  'local-only',
+  'byok',
+  'free',
+  'hobby',
+  'pro',
+  'max',
+  'enterprise',
+] as const;
 export type SubscriptionTier = (typeof SUBSCRIPTION_TIERS)[number];
 
 /**
  * Feature access by subscription tier
- * -1 for maxMessagesPerDay means unlimited
+ * -1 for maxMessagesPerDay means unlimited.
+ *
+ * Note: 'local-only' and 'byok' have no managed-cloud message budget — usage is
+ * limited only by the user's own Ollama / API-key quotas, not by us.
  */
 export const TIER_FEATURES = {
+  'local-only': {
+    maxMessagesPerDay: -1,
+    hasOllama: true,
+  },
+  byok: {
+    maxMessagesPerDay: -1,
+    hasOllama: true,
+  },
   free: {
     maxMessagesPerDay: 10,
     hasOllama: true,

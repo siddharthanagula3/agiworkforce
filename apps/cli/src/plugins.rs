@@ -78,6 +78,14 @@ const MANIFEST_PATHS: &[(ManifestFormat, &str)] = &[
 pub struct LoadedPlugin {
     pub config_name: String,
     pub manifest_name: Option<String>,
+    /// True when this plugin was loaded from a project-local directory
+    /// (cwd/.agiworkforce/plugins/) rather than the user's global
+    /// (~/.agiworkforce/plugins/) directory.
+    ///
+    /// HIGH-2: project-local plugins can be introduced by cloning a malicious
+    /// repo. Only global plugins (user-installed) may contribute hooks without
+    /// explicit trust opt-in.
+    pub from_project_dir: bool,
     pub root: PathBuf,
     pub enabled: bool,
     pub skill_roots: Vec<PathBuf>,
@@ -204,17 +212,18 @@ impl PluginsManager {
     pub fn load_all(&mut self, project_dir: Option<&Path>) -> Result<&[LoadedPlugin]> {
         self.plugins.clear();
         if self.global_dir.exists() {
-            self.load_from_dir(&self.global_dir.clone())?;
+            self.load_from_dir(&self.global_dir.clone(), false)?;
         }
         if let Some(p) = project_dir {
             let pp = p.join(".agiworkforce").join("plugins");
             if pp.exists() {
-                self.load_from_dir(&pp)?;
+                // HIGH-2: project-local plugins are tagged as untrusted for hook execution.
+                self.load_from_dir(&pp, true)?;
             }
         }
         Ok(&self.plugins)
     }
-    fn load_from_dir(&mut self, dir: &Path) -> Result<()> {
+    fn load_from_dir(&mut self, dir: &Path, from_project_dir: bool) -> Result<()> {
         for entry in std::fs::read_dir(dir)? {
             let path = entry?.path();
             if !path.is_dir() {
@@ -275,6 +284,7 @@ impl PluginsManager {
                 manifest_name: manifest.as_ref().and_then(|m| m.name.clone()),
                 root: path,
                 enabled: true,
+                from_project_dir,
                 skill_roots: vec![],
                 mcp_servers: manifest
                     .as_ref()
@@ -452,9 +462,43 @@ impl PluginsManager {
     /// merges into the user's `~/.agiworkforce/hooks.json` config; plugin
     /// hooks append after user hooks (documented in `hooks.rs`
     /// `merge_plugin_hooks`).
+    /// Returns merged hook configs from plugins, including whether each plugin
+    /// was sourced from a project-local directory (untrusted by default).
+    /// Callers should skip hook execution for untrusted project-local plugins.
+    pub fn hook_configs_with_trust(
+        &self,
+    ) -> Vec<(String, Vec<serde_json::Value>, bool)> {
+        // Returns vec of (event_name, [hook_values], is_from_project_dir).
+        let mut result = Vec::new();
+        for p in &self.plugins {
+            let raw = match &p.manifest_hooks {
+                Some(v) => v,
+                None => continue,
+            };
+            let inner = raw.get("hooks").unwrap_or(raw);
+            let map = match inner.as_object() {
+                Some(m) => m,
+                None => continue,
+            };
+            for (event_name, hooks_val) in map {
+                let arr = match hooks_val.as_array() {
+                    Some(a) => a,
+                    None => continue,
+                };
+                result.push((event_name.clone(), arr.iter().cloned().collect(), p.from_project_dir));
+            }
+        }
+        result
+    }
+
     pub fn hook_configs(&self) -> HashMap<String, Vec<serde_json::Value>> {
         let mut merged: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
         for p in &self.plugins {
+            if p.from_project_dir {
+                // HIGH-2: project-local plugin hooks are blocked by default.
+                // Use hook_configs_with_trust() for granular control.
+                continue;
+            }
             let raw = match &p.manifest_hooks {
                 Some(v) => v,
                 None => continue,

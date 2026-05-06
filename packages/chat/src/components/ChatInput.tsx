@@ -10,12 +10,16 @@ import { Mic, Plus, Square } from 'lucide-react';
 import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils';
 import { cn } from '../lib/utils';
 import { useChatStore } from '../stores/chatStore';
+import { useModelStore } from '../stores/modelStore';
 import { AttachmentMenu } from './AttachmentMenu';
 import { ModelSelector } from './ModelSelector';
+import { AgentControl } from './AgentControl';
 import { useVoiceInput } from '../hooks/useVoiceInput';
+import { useAgentControlStore } from '../stores/agentControlStore';
+import { PROVIDER_DISPLAY, type ProviderId } from '@agiworkforce/types';
 
 export interface ChatInputProps {
-  onSend: (content: string) => void;
+  onSend: (content: string, agentMode?: string, effort?: string) => void;
   onStop: () => void;
   onPlusClick: () => void;
   onModelSelectorClick: () => void;
@@ -28,6 +32,16 @@ export interface ChatInputProps {
    */
   disabled?: boolean;
   disabledMessage?: string;
+  /**
+   * The active conversation ID — used to look up agent control state.
+   * If omitted the AgentControl row is not rendered.
+   */
+  conversationId?: string | null;
+  /**
+   * The project this conversation belongs to.
+   * Used by AgentControl to read/write project-level defaults.
+   */
+  projectId?: string | null;
 }
 
 export function ChatInput({
@@ -40,6 +54,8 @@ export function ChatInput({
   className,
   disabled = false,
   disabledMessage,
+  conversationId,
+  projectId,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isStreaming = useChatStore((s) => s.isStreaming);
@@ -52,6 +68,16 @@ export function ChatInput({
   const [activeStyle, setActiveStyle] = useState<
     'formal' | 'casual' | 'concise' | 'detailed' | null
   >(null);
+
+  // Read the currently selected model's provider to determine effort visibility
+  const selectedModelId = useModelStore((s) => s.selectedModelId);
+  const models = useModelStore((s) => s.models);
+  const selectedModel = models.find((m) => m.id === selectedModelId);
+  const modelProviderId = (selectedModel?.provider as string) ?? '';
+
+  // Resolve agent control state for the active conversation
+  const resolveAgentControl = useAgentControlStore((s) => s.resolve);
+  const showAgentControl = Boolean(conversationId);
   const { state: voiceState, start: startVoice } = useVoiceInput({
     onTranscript: (text) => {
       const el = textareaRef.current;
@@ -104,11 +130,33 @@ export function ChatInput({
     if (!el) return;
     const content = el.value.trim();
     if (!content || isStreaming) return;
-    onSend(content);
+
+    // Read current agent control state and forward to onSend
+    let agentMode: string | undefined;
+    let effort: string | undefined;
+    if (conversationId) {
+      const agentState = resolveAgentControl(conversationId, projectId ?? null);
+      agentMode = agentState.mode;
+      // Only pass effort when the model's provider supports it
+      const providerKey = modelProviderId as ProviderId;
+      if (PROVIDER_DISPLAY[providerKey]?.supportsEffort) {
+        effort = agentState.effort;
+      }
+    }
+
+    onSend(content, agentMode, effort);
     el.value = '';
     el.style.height = 'auto';
     setAttachedFiles([]);
-  }, [disabled, isStreaming, onSend]);
+  }, [
+    disabled,
+    isStreaming,
+    onSend,
+    conversationId,
+    projectId,
+    resolveAgentControl,
+    modelProviderId,
+  ]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -226,6 +274,15 @@ export function ChatInput({
               )}
             </button>
           </AttachmentMenu>
+
+          {/* Center: Agent control chips — only when a conversation is active */}
+          {showAgentControl && conversationId && (
+            <AgentControl
+              conversationId={conversationId}
+              projectId={projectId ?? null}
+              modelProviderId={modelProviderId}
+            />
+          )}
 
           {/* Right: Model selector + mic/stop */}
           <div className="flex items-center gap-2">

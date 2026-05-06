@@ -1,21 +1,30 @@
+/**
+ * @file notification-service.ts
+ *
+ * # Client injection contract (WEB-RLS-BYPASS mitigation)
+ *
+ * SERVICE-CONTEXT methods:
+ *   `send()` - System writes notifications (after Stripe events, etc.) where no
+ *   user JWT is available. Uses `getServiceClient()` internally.
+ *
+ * USER-CONTEXT methods (`getUserNotifications`, `markAsRead`, `markAllAsRead`)
+ *   accept a `client: SupabaseClient` parameter. Callers pass `getUserClient(jwt)`.
+ *
+ * Never add a private `getSupabaseClient()` here. See lib/services/README.md.
+ */
 import 'server-only';
 
-import { createClient } from '@supabase/supabase-js';
-import { requireEnv } from '@/utils/env';
+import { type SupabaseClient } from '@supabase/supabase-js';
+import { getServiceClient } from '@/lib/supabase-server';
 import { logger } from '@/lib/logger';
 import { AppNotification, NotificationType } from '@/types/saas';
 
-function getSupabaseClient() {
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  return createClient(supabaseUrl, supabaseServiceKey, {
-    auth: { persistSession: false },
-  });
-}
-
 export class NotificationService {
   /**
-   * Send a notification to a user
+   * Send a notification to a user.
+   * SERVICE-CONTEXT: the server sends notifications to users; the notification
+   * writer is the system, not the user themselves. No user JWT required for the
+   * write. Service-role is appropriate here.
    */
   static async send(
     userId: string,
@@ -24,7 +33,9 @@ export class NotificationService {
     type: NotificationType = 'info',
     link?: string,
   ): Promise<void> {
-    const supabase = getSupabaseClient();
+    // SECURITY: service-role required because notifications are written by the system
+    // (e.g., after a Stripe event) where no user JWT is available.
+    const supabase = getServiceClient();
 
     const { error } = await supabase.from('notifications').insert({
       user_id: userId,
@@ -40,15 +51,16 @@ export class NotificationService {
   }
 
   /**
-   * Get user's notifications
+   * Get user's notifications.
+   * USER-CONTEXT: caller passes an RLS-bound SupabaseClient so only the
+   * requesting user's notifications are returned.
    */
   static async getUserNotifications(
+    client: SupabaseClient,
     userId: string,
     unreadOnly = false,
   ): Promise<AppNotification[]> {
-    const supabase = getSupabaseClient();
-
-    let query = supabase
+    let query = client
       .from('notifications')
       .select('*')
       .eq('user_id', userId)
@@ -70,12 +82,16 @@ export class NotificationService {
   }
 
   /**
-   * Mark as read
+   * Mark as read.
+   * USER-CONTEXT: caller passes an RLS-bound SupabaseClient so only the
+   * requesting user can mark their own notifications as read.
    */
-  static async markAsRead(notificationId: string, userId: string): Promise<void> {
-    const supabase = getSupabaseClient();
-
-    const { error } = await supabase
+  static async markAsRead(
+    client: SupabaseClient,
+    notificationId: string,
+    userId: string,
+  ): Promise<void> {
+    const { error } = await client
       .from('notifications')
       .update({ is_read: true })
       .eq('id', notificationId)
@@ -88,12 +104,12 @@ export class NotificationService {
   }
 
   /**
-   * Mark all as read
+   * Mark all as read.
+   * USER-CONTEXT: caller passes an RLS-bound SupabaseClient so only the
+   * requesting user's notifications are updated.
    */
-  static async markAllAsRead(userId: string): Promise<void> {
-    const supabase = getSupabaseClient();
-
-    const { error } = await supabase
+  static async markAllAsRead(client: SupabaseClient, userId: string): Promise<void> {
+    const { error } = await client
       .from('notifications')
       .update({ is_read: true })
       .eq('user_id', userId);

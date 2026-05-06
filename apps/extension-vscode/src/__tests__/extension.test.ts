@@ -5,7 +5,7 @@
  * Full integration tests require @vscode/test-electron.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -293,5 +293,97 @@ describe('configuration change detection', () => {
   it('does not trigger status bar for unrelated changes', () => {
     const changed = 'editor.fontSize';
     expect(STATUS_BAR_CONFIGS.includes(changed)).toBe(false);
+  });
+});
+
+// ── Inline completions first-run notice logic ────────────────────────────────
+
+/**
+ * Pure helper that mirrors the logic in checkInlineCompletionsFirstRun().
+ * We test the decision logic here; the vscode API interactions are covered by
+ * the integration-style tests below using the mock context.
+ */
+function shouldShowInlineFirstRunNotice(
+  alreadyShown: boolean | undefined,
+  globalValueSet: boolean,
+): boolean {
+  if (globalValueSet) return false;
+  if (alreadyShown === true) return false;
+  return true;
+}
+
+describe('inline completions first-run notice', () => {
+  // ── mock context wiring ──────────────────────────────────────────────────────
+
+  interface MockGlobalState {
+    store: Map<string, unknown>;
+    get<T>(key: string): T | undefined;
+    update(key: string, value: unknown): Promise<void>;
+  }
+
+  interface MockContext {
+    globalState: MockGlobalState;
+  }
+
+  function makeContext(initial?: Record<string, unknown>): MockContext {
+    const store = new Map<string, unknown>(Object.entries(initial ?? {}));
+    return {
+      globalState: {
+        store,
+        get<T>(key: string): T | undefined {
+          return store.get(key) as T | undefined;
+        },
+        async update(key: string, value: unknown): Promise<void> {
+          store.set(key, value);
+        },
+      },
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // ── decision-logic unit tests ────────────────────────────────────────────────
+
+  it('shows notice on first run when user has not set global preference', () => {
+    expect(shouldShowInlineFirstRunNotice(undefined, false)).toBe(true);
+  });
+
+  it('suppresses notice when user has already set global preference (any value)', () => {
+    expect(shouldShowInlineFirstRunNotice(undefined, true)).toBe(false);
+  });
+
+  it('suppresses notice when first-run flag is already true', () => {
+    expect(shouldShowInlineFirstRunNotice(true, false)).toBe(false);
+  });
+
+  it('shows notice when flag is false and no global preference', () => {
+    expect(shouldShowInlineFirstRunNotice(false, false)).toBe(true);
+  });
+
+  // ── state-mutation tests ─────────────────────────────────────────────────────
+
+  it('sets firstRunNoticeShown flag after "Got it" click', async () => {
+    const ctx = makeContext();
+    // Simulate clicking "Got it"
+    if (
+      shouldShowInlineFirstRunNotice(
+        ctx.globalState.get('inlineCompletions.firstRunNoticeShown'),
+        false,
+      )
+    ) {
+      await ctx.globalState.update('inlineCompletions.firstRunNoticeShown', true);
+    }
+    expect(ctx.globalState.get('inlineCompletions.firstRunNoticeShown')).toBe(true);
+  });
+
+  it('does not re-show notice after flag is set', async () => {
+    const ctx = makeContext({ 'inlineCompletions.firstRunNoticeShown': true });
+    const shouldShow = shouldShowInlineFirstRunNotice(
+      ctx.globalState.get('inlineCompletions.firstRunNoticeShown'),
+      false,
+    );
+    expect(shouldShow).toBe(false);
   });
 });

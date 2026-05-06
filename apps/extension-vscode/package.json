@@ -1,7 +1,7 @@
 {
   "name": "agi-workforce",
   "displayName": "AGI Workforce",
-  "description": "Multi-model AI coding assistant — GPT, Claude, Gemini, and 10+ LLM providers in VS Code",
+  "description": "Multi-provider AI coding assistant — 10+ providers (GPT, Claude, Gemini, and more) in VS Code",
   "version": "0.3.0",
   "publisher": "agiworkforce",
   "license": "PROPRIETARY",
@@ -43,6 +43,20 @@
     "onChatParticipant:agiworkforce.agi",
     "onView:agi-workforce.sidebar"
   ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "API endpoint, gateway URL, CLI path, and system prompt settings cannot be overridden by workspace settings in untrusted workspaces. Agent mode file writes are disabled until the workspace is trusted.",
+      "restrictedConfigurations": [
+        "agiWorkforce.apiEndpoint",
+        "agiWorkforce.gatewayUrl",
+        "agiWorkforce.cliPath",
+        "agiWorkforce.systemPrompt",
+        "agiWorkforce.agent.autoApply",
+        "agiWorkforce.autoApplyFixes"
+      ]
+    }
+  },
   "main": "./out/extension.js",
   "icon": "media/icon.png",
   "contributes": {
@@ -311,6 +325,16 @@
         "command": "agi-workforce.refreshContext",
         "title": "AGI Workforce: Refresh Context",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "agi-workforce.openActionSheet",
+        "title": "AGI Workforce: Open Actions",
+        "icon": "$(menu)"
+      },
+      {
+        "command": "agi-workforce.rewindLast",
+        "title": "AGI Workforce: Rewind Last",
+        "icon": "$(history)"
       }
     ],
     "chatParticipants": [
@@ -510,7 +534,7 @@
         "agiWorkforce.model": {
           "type": "string",
           "default": "auto-balanced",
-          "description": "Default LLM model (e.g. auto-balanced, claude-sonnet-4.6, gpt-5.4, gemini-3.1-pro-preview)"
+          "description": "Default LLM model. Run 'AGI Workforce: Select Model' (cmd+shift+m) to pick from currently available providers."
         },
         "agiWorkforce.streamingEnabled": {
           "type": "boolean",
@@ -551,7 +575,7 @@
         },
         "agiWorkforce.inlineCompletions.enabled": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Enable ghost-text inline completions (requires API key)"
         },
         "agiWorkforce.inlineCompletions.debounceMs": {
@@ -571,7 +595,29 @@
         "agiWorkforce.agent.planMode": {
           "type": "boolean",
           "default": false,
-          "description": "Show a plan before executing agent tasks (requires confirmation)"
+          "description": "Deprecated — use agiWorkforce.agent.mode instead. When true, maps to agent.mode = 'plan'."
+        },
+        "agiWorkforce.agent.mode": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "auto",
+            "plan",
+            "bypass"
+          ],
+          "default": "auto",
+          "description": "Default agent mode for new conversations. 'ask' confirms every edit, 'auto' edits without confirmation, 'plan' proposes a plan before any edits, 'bypass' skips all approval prompts."
+        },
+        "agiWorkforce.agent.effort": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "max"
+          ],
+          "default": "medium",
+          "description": "Reasoning effort for providers that support it (Anthropic, OpenAI, Google). Ignored when provider does not support an explicit effort axis."
         },
         "agiWorkforce.agent.maxIterations": {
           "type": "number",
@@ -619,10 +665,19 @@
             "anthropic",
             "openai",
             "google",
-            "ollama"
+            "ollama",
+            "ollama-cloud",
+            "xai",
+            "deepseek",
+            "perplexity",
+            "qwen",
+            "moonshot",
+            "zhipu",
+            "lmstudio",
+            "custom"
           ],
           "default": "auto",
-          "description": "Provider to use on the provider-stream path. \"auto\" infers from the model id (claude-* → anthropic, gpt-* → openai, gemini-* → google, otherwise → ollama)."
+          "markdownDescription": "Provider used on the provider-stream path. `auto` infers from the model id prefix (claude-* → anthropic, gpt-* → openai, gemini-* → google, otherwise → ollama). For the full list of supported providers, see the [docs](https://agiworkforce.com/docs/providers)."
         }
       }
     },
@@ -709,6 +764,7 @@
     "package": "node esbuild.js --production && node scripts/vsce-package.js package --no-dependencies",
     "lint": "eslint src --ext ts --cache --cache-strategy content --cache-location .cache/eslint",
     "test": "vitest run",
+    "test:integration": "tsc -p tsconfig.test.json && node out/test/runTests.js",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf out",
     "prebuild": "pnpm run clean && pnpm run typecheck",

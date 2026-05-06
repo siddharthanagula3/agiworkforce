@@ -28,9 +28,8 @@ import {
   Globe,
   type LucideIcon,
 } from 'lucide-react';
-import { Header } from '../../../components/layout/Header';
-import { CtaSection } from '../../../components/marketing/CtaSection';
-import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
+import { EditorialPage } from '../../../components/marketing/editorial/EditorialPage';
+import { DispatchSection } from '../../../components/marketing/editorial/DispatchSection';
 import { MARKETING } from '../../../lib/marketing-constants';
 
 export const metadata: Metadata = {
@@ -288,7 +287,7 @@ function CategoryRow({ category }: { category: SkillCategory }) {
 
 export default function AISkillsPage() {
   return (
-    <>
+    <EditorialPage tier="paper">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -298,9 +297,7 @@ export default function AISkillsPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(webPageJsonLd) }}
       />
       <div className="flex min-h-screen flex-col bg-[#09090b] text-[#edebe8]">
-        <Header />
-
-        <main className="flex-1 pt-24">
+        <div className="flex-1 pt-24">
           {/* Hero */}
           <section className="py-20 md:py-28">
             <div className="mx-auto max-w-3xl px-6 text-center">
@@ -308,8 +305,9 @@ export default function AISkillsPage() {
                 AI Employees, Ready to Work
               </h1>
               <p className="mt-5 text-lg leading-relaxed text-[#888480]">
-                {MARKETING.skills.display} pre-built specialists across {MARKETING.categories.display} categories - engineering, finance, legal,
-                creative, and 19 more.
+                {MARKETING.skills.display} pre-built specialists across{' '}
+                {MARKETING.categories.display} categories - engineering, finance, legal, creative,
+                and 19 more.
               </p>
               <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
                 <Link
@@ -335,9 +333,7 @@ export default function AISkillsPage() {
                 </span>
                 <span aria-hidden="true">|</span>
                 <span>
-                  <span className="font-medium text-[#edebe8]">
-                    {MARKETING.categories.display}
-                  </span>{' '}
+                  <span className="font-medium text-[#edebe8]">{MARKETING.categories.display}</span>{' '}
                   Categories
                 </span>
                 <span aria-hidden="true">|</span>
@@ -411,15 +407,9 @@ export default function AISkillsPage() {
             </div>
           </section>
 
-          <CtaSection
-            icon="Layers"
-            headline="Start With Any Skill Today"
-            body="Download AGI Workforce and put AI employees to work - engineering, marketing, finance, creative, and beyond."
-          />
-        </main>
-
-        <MarketingFooter />
+          <DispatchSection slugIndex="04" slugKicker="DISPATCH" />
+        </div>
       </div>
-    </>
+    </EditorialPage>
   );
 }
