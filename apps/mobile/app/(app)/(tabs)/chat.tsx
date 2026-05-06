@@ -46,6 +46,7 @@ export default function ChatTabScreen() {
   const searchConversations = useChatStore((s) => s.searchConversations);
   const searchResults = useChatStore((s) => s.searchResults);
   const storeSearchQuery = useChatStore((s) => s.searchQuery);
+  const currentConversationId = useChatStore((s) => s.currentConversationId);
   const selectedModel = useModelStore((s) => s.selectedModel);
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
 
@@ -273,6 +274,7 @@ export default function ChatTabScreen() {
         onCamera={handleSheetCamera}
         onPhotos={handleSheetPhotos}
         onFile={handleSheetFile}
+        conversationId={currentConversationId}
       />
 
       {/* Model picker bottom sheet */}

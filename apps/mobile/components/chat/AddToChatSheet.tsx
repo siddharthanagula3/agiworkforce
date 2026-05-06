@@ -48,6 +48,8 @@ interface AddToChatSheetProps {
   onCamera: () => void;
   onPhotos: () => void;
   onFile: () => void;
+  /** Current conversation ID — used to resolve per-conversation agent control state. */
+  conversationId?: string | null;
 }
 
 const SNAP_POINTS = ['75%'];
@@ -100,7 +102,7 @@ const AUTO_APPROVE_CONFIG: Record<
  * 7. Config links (Project, Style, Tool access, Connectors)
  */
 export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(function AddToChatSheet(
-  { onCamera, onPhotos, onFile },
+  { onCamera, onPhotos, onFile, conversationId },
   ref,
 ) {
   const router = useRouter();
@@ -114,10 +116,20 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const setChatMode = useChatStore((s) => s.setChatMode);
   const setFeature = useChatStore((s) => s.setFeature);
 
-  const agentMode = useAgentControlStore((s) => s.agentMode);
-  const effort = useAgentControlStore((s) => s.effort);
-  const setAgentMode = useAgentControlStore((s) => s.setAgentMode);
-  const setEffort = useAgentControlStore((s) => s.setEffort);
+  const activeProjectId = useProjectStore((s) => s.activeProjectId);
+  const projects = useProjectStore((s) => s.projects);
+  const activeProject = activeProjectId ? projects.find((p) => p.id === activeProjectId) : null;
+
+  const resolveAgentControl = useAgentControlStore((s) => s.resolve);
+  const storeSetMode = useAgentControlStore((s) => s.setMode);
+  const storeSetEffort = useAgentControlStore((s) => s.setEffort);
+
+  // Resolve effective state for this conversation (falls back to project/global default)
+  const effectiveConversationId = conversationId ?? '__new__';
+  const resolved = resolveAgentControl(effectiveConversationId, activeProjectId);
+  const agentMode = resolved.mode;
+  const effort = resolved.effort;
+  const isOverridingProjectDefault = resolved.source === 'conversation-override';
 
   const autoApproveMode = useSettingsStore((s) => s.autoApproveMode);
   const setAutoApproveMode = useSettingsStore((s) => s.setAutoApproveMode);
@@ -135,10 +147,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
 
   const styleSelectorRef = useRef<BottomSheet>(null);
   const toolAccessSelectorRef = useRef<BottomSheet>(null);
-
-  const activeProjectId = useProjectStore((s) => s.activeProjectId);
-  const projects = useProjectStore((s) => s.projects);
-  const activeProject = activeProjectId ? projects.find((p) => p.id === activeProjectId) : null;
 
   const haptic = useCallback(() => {
     if (hapticsEnabled) {
@@ -187,17 +195,17 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const handleAgentModeChange = useCallback(
     (mode: AgentMode) => {
       haptic();
-      setAgentMode(mode);
+      storeSetMode(effectiveConversationId, mode);
     },
-    [haptic, setAgentMode],
+    [haptic, storeSetMode, effectiveConversationId],
   );
 
   const handleEffortChange = useCallback(
     (level: Effort) => {
       haptic();
-      setEffort(level);
+      storeSetEffort(effectiveConversationId, level);
     },
-    [haptic, setEffort],
+    [haptic, storeSetEffort, effectiveConversationId],
   );
 
   const autoApproveModes = ['ask', 'smart', 'full'] as const;
@@ -422,18 +430,39 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
 
           {/* Section 3: Agent mode */}
           <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
-            <Text
+            <View
               style={{
-                fontSize: 11,
-                fontWeight: '600',
-                color: themeColors.textMuted,
-                letterSpacing: 0.6,
-                textTransform: 'uppercase',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
                 marginBottom: 4,
               }}
             >
-              Agent mode
-            </Text>
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: '600',
+                  color: themeColors.textMuted,
+                  letterSpacing: 0.6,
+                  textTransform: 'uppercase',
+                }}
+              >
+                Agent mode
+              </Text>
+              {isOverridingProjectDefault && (
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: '500',
+                    color: colors.teal,
+                    letterSpacing: 0.2,
+                  }}
+                  accessibilityLabel="Overriding project default"
+                >
+                  Overriding project default
+                </Text>
+              )}
+            </View>
             {AGENT_MODES.map((mode) => {
               const isSelected = agentMode === mode;
               return (
