@@ -125,6 +125,9 @@ struct TuiApp {
     total_input_tokens: u32,
     total_output_tokens: u32,
     mode: InteractionMode,
+    /// Detected sandbox backend for the footer indicator.
+    /// `None` means sandboxing was explicitly disabled via `--no-sandbox`.
+    sandbox_type: Option<crate::sandbox::SandboxType>,
     // Slash command popup
     show_slash_popup: bool,
     slash_filter: String,
@@ -163,7 +166,7 @@ struct FallbackBanner {
 const FALLBACK_BANNER_TTL: Duration = Duration::from_secs(5);
 
 impl TuiApp {
-    fn new(session: AgentSession, config: CliConfig) -> Self {
+    fn new(session: AgentSession, config: CliConfig, sandbox_disabled: bool) -> Self {
         let model_name = session.model.clone();
         let provider_name = format!("{:?}", session.provider).to_lowercase();
         let git_branch = std::process::Command::new("git")
@@ -179,6 +182,12 @@ impl TuiApp {
                     None
                 }
             });
+
+        let sandbox_type = if sandbox_disabled {
+            None
+        } else {
+            Some(crate::sandbox::SandboxType::detect())
+        };
 
         Self {
             session,
@@ -196,6 +205,7 @@ impl TuiApp {
             total_input_tokens: 0,
             total_output_tokens: 0,
             mode: InteractionMode::Chat,
+            sandbox_type,
             show_slash_popup: false,
             slash_filter: String::new(),
             slash_selected: 0,
@@ -689,12 +699,26 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
 
     let effort_str = format!("effort:{}", app.effort.label());
 
+    // Sandbox indicator: green when a sandbox backend is active, red when
+    // disabled via --no-sandbox or when no supported backend is detected.
+    let (sandbox_label, sandbox_color) = match app.sandbox_type {
+        Some(crate::sandbox::SandboxType::MacosSeatbelt) => ("sandbox: seatbelt", Color::Green),
+        Some(crate::sandbox::SandboxType::LinuxBubblewrap) => ("sandbox: bwrap", Color::Green),
+        Some(crate::sandbox::SandboxType::LinuxLandlock) => ("sandbox: landlock", Color::Green),
+        Some(crate::sandbox::SandboxType::WindowsRestrictedToken) => {
+            ("sandbox: win", Color::Green)
+        }
+        Some(crate::sandbox::SandboxType::None) | None => ("no sandbox", Color::Red),
+    };
+
     let status = Line::from(vec![
         mode_span,
         Span::raw(" "),
         Span::styled(cost_str, Style::default().fg(Color::DarkGray)),
         Span::raw("  "),
         Span::styled(effort_str, Style::default().fg(Color::DarkGray)),
+        Span::raw("  "),
+        Span::styled(sandbox_label, Style::default().fg(sandbox_color)),
         Span::raw("  "),
         Span::styled("Shift+Tab: mode", Style::default().fg(Color::DarkGray)),
         Span::raw("  "),
@@ -1655,6 +1679,7 @@ pub async fn run(
     provider_override: Option<String>,
     permission_mode: crate::cli_options::PermissionMode,
     auto_approve_plan: bool,
+    sandbox_disabled: bool,
 ) -> Result<()> {
     let mut session = AgentSession::new(model, sys_context, custom_system_prompt);
     if let Some(ref provider) = provider_override {
@@ -1748,7 +1773,7 @@ pub async fn run(
     )
     .await;
 
-    let mut app = TuiApp::new(session, config.clone());
+    let mut app = TuiApp::new(session, config.clone(), sandbox_disabled);
     app.wire_fallback_banner();
     let mut terminal = setup_terminal()?;
 
