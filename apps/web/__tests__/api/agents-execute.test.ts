@@ -98,15 +98,11 @@ const mockGenerateIdempotencyKey = vi.fn(
 );
 vi.mock('@/lib/services/credit-service', () => ({
   CreditService: {
-    checkAvailable: (userId: string, cents: number) => mockCheckAvailable(userId, cents),
-    getBalance: (userId: string) => mockGetBalance(userId),
-    deductCredits: (
-      userId: string,
-      cents: number,
-      desc: string,
-      meta: Record<string, unknown>,
-      ikey: string,
-    ) => mockDeductCredits(userId, cents, desc, meta, ikey),
+    // Pass through all args — route signatures take an RLS-bound user client
+    // as the first argument (followed by userId, amount, …).
+    checkAvailable: (...args: unknown[]) => mockCheckAvailable(...args),
+    getBalance: (...args: unknown[]) => mockGetBalance(...args),
+    deductCredits: (...args: unknown[]) => mockDeductCredits(...args),
     generateIdempotencyKey: (userId: string, op: string, requestId: string) =>
       mockGenerateIdempotencyKey(userId, op, requestId),
   },
@@ -401,8 +397,10 @@ describe('POST /api/agents/execute', () => {
       }
     }
 
-    // Credit deduction should have been called after stream flush
+    // Credit deduction should have been called after stream flush. Signature:
+    // deductCredits(client, userId, amountCents, description, metadata, idempotencyKey)
     expect(mockDeductCredits).toHaveBeenCalledWith(
+      expect.anything(), // userClient
       'user-123',
       expect.any(Number),
       expect.stringContaining('agent execution'),

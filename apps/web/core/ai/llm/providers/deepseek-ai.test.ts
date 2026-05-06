@@ -370,7 +370,9 @@ describe('DeepSeekProvider', () => {
       );
 
       const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
-      expect(requestBody.model).toBe('deepseek-chat');
+      // Default model now resolves via getProviderDefaultModel('deepseek') from
+      // packages/types/src/models.json — currently 'deepseek-v4-flash'.
+      expect(requestBody.model).toBe('deepseek-v4-flash');
       expect(requestBody.max_tokens).toBe(4000);
       expect(requestBody.temperature).toBe(0.7);
       expect(requestBody.stream).toBe(false);

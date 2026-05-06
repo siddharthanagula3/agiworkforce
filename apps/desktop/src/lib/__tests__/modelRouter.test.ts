@@ -57,8 +57,8 @@ describe('MODEL_POOLS', () => {
   it('auto-premium pool includes flagship models', () => {
     const pool = MODEL_POOLS['auto-premium'];
     // Premium tier should include the top-tier Claude Opus and GPT-5 class models
-    expect(pool).toContain('claude-opus-4.6');
-    expect(pool).toContain('gpt-5.4');
+    expect(pool).toContain('claude-opus-4.7');
+    expect(pool).toContain('gpt-5.5');
   });
 
   it('all models in each pool are strings', () => {

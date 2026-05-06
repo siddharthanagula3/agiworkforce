@@ -101,7 +101,13 @@ function makeFormDataRequest(
   const formData = new FormData();
 
   if (includeFile) {
-    const audioBlob = new Blob(['fake-audio-bytes'], { type: 'audio/webm' });
+    // Route validates magic bytes (B4 fix) — must start with a real audio
+    // signature, not a placeholder string. Use the EBML/WebM signature
+    // (0x1A 0x45 0xDF 0xA3) followed by arbitrary padding so the upload
+    // passes both MIME-type and magic-byte sniff checks.
+    const ebmlMagic = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3]);
+    const padding = new Uint8Array(32).fill(0);
+    const audioBlob = new Blob([ebmlMagic, padding], { type: 'audio/webm' });
     formData.append('file', audioBlob, 'audio.webm');
   }
 

@@ -96,8 +96,11 @@ describe('web-HIGH-1 getSessionIdFromRequest — suffix attack resilience', () =
     });
   }
 
-  it('returns the legitimate anon-session-id when only the legitimate cookie is present', async () => {
-    const id = await getSessionIdFromRequest(makeRequest('anon-session-id=legit-1234'));
+  it('returns the legitimate __Host- session id when only the legitimate cookie is present', async () => {
+    // SEV-WEB-M-1 (2026-05-05): the legacy `anon-session-id` cookie was retired
+    // and only the `__Host-` prefixed cookie is honored. Any unprefixed
+    // `anon-session-id` cookie now falls through to a fresh anon UUID.
+    const id = await getSessionIdFromRequest(makeRequest('__Host-anon-session-id=legit-1234'));
     expect(id).toBe('legit-1234');
   });
 

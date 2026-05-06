@@ -24,7 +24,9 @@ vi.mock('@/utils/env', () => ({
   },
 }));
 
-const mockLogger = { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() };
+const { mockLogger } = vi.hoisted(() => ({
+  mockLogger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+}));
 vi.mock('@/lib/logger', () => ({ logger: mockLogger }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 vi.mock('@agiworkforce/types', () => ({
@@ -48,7 +50,9 @@ let mockInstallationData: unknown = {
   review_model: null,
 };
 
-const mockPostComment = vi.fn().mockResolvedValue(undefined);
+const { mockPostComment } = vi.hoisted(() => ({
+  mockPostComment: vi.fn().mockResolvedValue(undefined),
+}));
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
@@ -68,15 +72,24 @@ vi.mock('@supabase/supabase-js', () => ({
   }),
 }));
 
-const WEBHOOK_SECRET = 'test-webhook-secret';
+// Hoist `createHmac` alongside the secret so the mock factory can verify
+// signatures without a `require()` call (banned by no-require-imports).
+const { WEBHOOK_SECRET, hoistedCreateHmac } = vi.hoisted(() => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const cryptoMod = require('node:crypto') as typeof import('node:crypto');
+  return { WEBHOOK_SECRET: 'test-webhook-secret', hoistedCreateHmac: cryptoMod.createHmac };
+});
 vi.mock('@/lib/github-app', () => ({
   GITHUB_WEBHOOK_SECRET: WEBHOOK_SECRET,
   verifyGitHubWebhookSignature: (body: string, sig: string, secret: string) => {
-    const expected = 'sha256=' + createHmac('sha256', secret).update(body).digest('hex');
+    const expected = 'sha256=' + hoistedCreateHmac('sha256', secret).update(body).digest('hex');
     return sig === expected;
   },
-  getInstallationAccessToken: vi.fn().mockResolvedValue('ghs_token_abc'),
-  getPrDiff: vi.fn().mockResolvedValue('+ added line'),
+  // Plain functions — vitest config `mockReset: true` clears vi.fn()
+  // implementations between tests, returning undefined for everything after
+  // the first.
+  getInstallationAccessToken: async () => 'ghs_token_abc',
+  getPrDiff: async () => '+ added line',
   postIssueComment: (...args: unknown[]) => mockPostComment(...args),
 }));
 
