@@ -32,9 +32,10 @@ pub struct UserSubscription {
 }
 
 impl UserSubscription {
-    /// Cloud LLM access is denied only for tiers that don't include it
-    /// (LocalOnly = Ollama/LMStudio only; Hobby = limited cloud credits).
+    /// Cloud LLM access is denied only for `LocalOnly` (Ollama/LMStudio only, no managed cloud).
+    /// Hobby IS the first paid cloud tier — it must NOT be blocked here.
+    /// Byok and all higher tiers get cloud access (Byok: user's own key; Hobby+: managed credits).
     pub fn has_cloud_access(&self) -> bool {
-        !matches!(self.tier, PlanTier::Hobby | PlanTier::LocalOnly)
+        !matches!(self.tier, PlanTier::LocalOnly)
     }
 }

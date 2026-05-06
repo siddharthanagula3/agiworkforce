@@ -35,7 +35,31 @@ function isTextBlock(b: ContentBlock): b is TextBlock {
   return b.type === 'text';
 }
 
-function translatePart(block: ContentBlock): GeminiPart | null {
+/**
+ * Build a map of `toolUseId → functionName` from prior assistant
+ * `tool_use` blocks so that subsequent `tool_result` blocks can carry the
+ * original function name when translated to Gemini's `functionResponse`.
+ *
+ * Gemini requires `functionResponse.name` to match a
+ * `tools.functionDeclarations[].name`. Passing the opaque toolUseId
+ * (e.g. `toolu_01ABC...`) breaks the multi-turn round-trip — Gemini
+ * either errors or treats the response as an unrecognized function output.
+ */
+function buildToolUseNameMap(messages: ProviderMessage[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const msg of messages) {
+    if (msg.role !== 'assistant') continue;
+    if (typeof msg.content === 'string') continue;
+    for (const block of msg.content) {
+      if (block.type === 'tool_use') {
+        map.set(block.id, block.name);
+      }
+    }
+  }
+  return map;
+}
+
+function translatePart(block: ContentBlock, toolUseNames: Map<string, string>): GeminiPart | null {
   switch (block.type) {
     case 'text':
       return { text: block.text };
@@ -54,7 +78,11 @@ function translatePart(block: ContentBlock): GeminiPart | null {
         typeof block.content === 'string'
           ? block.content
           : block.content.map((b) => b.text).join('\n');
-      return { functionResponse: { name: block.toolUseId, response: { output: text } } };
+      // Look up the original function name from the prior assistant
+      // tool_use block. Fall back to the toolUseId only if we can't find
+      // it (defensive — a well-formed transcript will always have a match).
+      const name = toolUseNames.get(block.toolUseId) ?? block.toolUseId;
+      return { functionResponse: { name, response: { output: text } } };
     }
     case 'thinking':
       return {
@@ -65,13 +93,18 @@ function translatePart(block: ContentBlock): GeminiPart | null {
   }
 }
 
-function translateMessage(msg: ProviderMessage): GeminiContent | null {
+function translateMessage(
+  msg: ProviderMessage,
+  toolUseNames: Map<string, string>,
+): GeminiContent | null {
   if (msg.role === 'system') return null;
   const role: 'user' | 'model' = msg.role === 'assistant' ? 'model' : 'user';
   if (typeof msg.content === 'string') {
     return { role, parts: [{ text: msg.content }] };
   }
-  const parts = msg.content.map(translatePart).filter((p): p is GeminiPart => p !== null);
+  const parts = msg.content
+    .map((b) => translatePart(b, toolUseNames))
+    .filter((p): p is GeminiPart => p !== null);
   if (parts.length === 0) return null;
   return { role, parts };
 }
@@ -120,7 +153,10 @@ function translateToolChoice(choice: ToolChoice | undefined): GeminiToolConfig |
 }
 
 export function translateChatRequest(req: ChatRequest): GeminiGenerateContentRequest {
-  const contents = req.messages.map(translateMessage).filter((c): c is GeminiContent => c !== null);
+  const toolUseNames = buildToolUseNameMap(req.messages);
+  const contents = req.messages
+    .map((m) => translateMessage(m, toolUseNames))
+    .filter((c): c is GeminiContent => c !== null);
   const systemInstruction = extractSystemInstruction(req.messages, req.system);
 
   const declarations =

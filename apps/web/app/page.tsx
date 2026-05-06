@@ -15,10 +15,10 @@ import { DispatchSection } from '../components/marketing/editorial/DispatchSecti
 import { MARKETING } from '../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'AGI Workforce — Beyond one model. Beyond one surface.',
+  title: 'AGI Workforce: Beyond one model. Beyond one surface.',
   description:
     'Beyond one model. Beyond one surface. AGI in your hands. ' +
-    `${MARKETING.providers.display} AI providers in one thread — ` +
+    `${MARKETING.providers.display} AI providers in one thread, ` +
     'across desktop, web, mobile, CLI, VS Code, and Chrome. BYOK or run fully offline with Ollama and LM Studio.',
   keywords: [
     'AI agent',
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     'data privacy',
   ],
   openGraph: {
-    title: 'AGI Workforce — Beyond one model. Beyond one surface.',
+    title: 'AGI Workforce: Beyond one model. Beyond one surface.',
     description:
       'Beyond one model. Beyond one surface. AGI in your hands. ' +
       `${MARKETING.providers.display} AI providers in one thread.`,
@@ -48,7 +48,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AGI Workforce — Beyond one model. Beyond one surface.',
+    title: 'AGI Workforce: Beyond one model. Beyond one surface.',
     description:
       'Beyond one model. Beyond one surface. AGI in your hands. ' +
       `${MARKETING.providers.display} providers, ${MARKETING.surfaces.display} surfaces, one workforce.`,
@@ -61,14 +61,14 @@ const jsonLd = {
   '@type': 'SoftwareApplication',
   name: 'AGI Workforce',
   applicationCategory: 'BusinessApplication',
-  operatingSystem: 'macOS, Windows, Linux',
+  operatingSystem: 'macOS, Linux (Windows coming Q3 2026)',
   featureList: [
     `${MARKETING.providers.display} AI providers in one chat thread`,
     `${MARKETING.surfaces.display} surfaces: Desktop, Web, Mobile, CLI, VS Code, Chrome`,
     `${MARKETING.models.display} AI models`,
-    'BYOK — bring your own API keys',
+    'BYOK: bring your own API keys',
     'Run fully offline with Ollama or LM Studio',
-    'Cross-provider session continuity — switch models mid-conversation',
+    'Cross-provider session continuity: switch models mid-conversation',
     'AES-256-GCM encrypted key storage',
     'No training on your data',
   ],
@@ -117,14 +117,14 @@ export default function Home() {
               {/* Right: lede (40% width = 2/5 cols) */}
               <div className="md:col-span-2 flex flex-col justify-end pb-2">
                 <p className="font-mono text-[14px] leading-[22px] text-[var(--color-ink-2)]">
-                  Twelve providers. One thread. Zero lock-in.
+                  {MARKETING.providers.display} providers. One thread. Zero lock-in.
                 </p>
                 <p className="mt-4 font-mono text-[14px] leading-[22px] text-[var(--color-ink-2)]">
                   Bring your own keys, run fully offline, or use our managed cloud. The CLI is the
                   engine; the apps are surfaces over it.
                 </p>
                 <p className="mt-4 font-mono text-[14px] leading-[22px] text-[var(--color-fg-quiet)]">
-                  — THE EDITORS
+                  THE EDITORS
                 </p>
               </div>
             </div>
@@ -170,11 +170,11 @@ export default function Home() {
             <div className="border-t border-[var(--color-rule-soft)] pt-10 pb-12">
               <Slug index="01" kicker="MULTI-PROVIDER" />
               <h3 className="mt-4 mb-6 font-display font-bold leading-[1.04] tracking-[-0.018em] text-[var(--color-ink)] text-3xl md:text-5xl">
-                One thread. Twelve providers.
+                One thread. {MARKETING.providers.display} providers.
               </h3>
               <Specimen columns={3} dropCap>
                 <p>
-                  Switch between Claude, GPT, Gemini, Grok, and 8 more — all in one conversation.
+                  Switch between Claude, GPT, Gemini, Grok, and 8 more, all in one conversation.
                   Anthropic locks you to Claude only; we don&apos;t.
                 </p>
                 <p>
@@ -232,7 +232,7 @@ export default function Home() {
                 </p>
                 <p>
                   When you do use cloud mode, your keys are AES-256-GCM encrypted at rest with your
-                  master password — never on our servers in plaintext.
+                  master password; never stored on our servers in plaintext.
                 </p>
               </Specimen>
 
@@ -315,7 +315,7 @@ export default function Home() {
               <Specimen columns={3} dropCap>
                 <p>
                   Start a thread in Claude. Switch to GPT for the next turn. Finish in Gemini. The
-                  full conversation history travels with you — system prompt, tool calls,
+                  full conversation history travels with you: system prompt, tool calls,
                   intermediate reasoning.
                 </p>
                 <p>
@@ -323,8 +323,8 @@ export default function Home() {
                   sees what the sender saw.
                 </p>
                 <p>
-                  Continuity works across all 12 providers, including local Ollama. One thread,
-                  twelve brains.
+                  Continuity works across all {MARKETING.providers.display} providers, including
+                  local Ollama. One thread, many brains.
                 </p>
               </Specimen>
 
@@ -504,11 +504,11 @@ export default function Home() {
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-0 border border-[var(--color-rule-soft)]">
               {[
-                'Mobile detail. App Store and Play Store listings — Q3 2026.',
-                'Chrome extension. CWS submission once visual review clears — Q3 2026.',
-                'VS Code extension. Marketplace listing once private beta clears — Q3 2026.',
-                'Integrations marketplace. MCP server directory — Q4 2026.',
-                'Customer cohort. First case studies — Q4 2026.',
+                'Mobile detail. App Store and Play Store listings, Q3 2026.',
+                'Chrome extension. CWS submission once visual review clears, Q3 2026.',
+                'VS Code extension. Marketplace listing once private beta clears, Q3 2026.',
+                'Integrations marketplace. MCP server directory, Q4 2026.',
+                'Customer cohort. First case studies, Q4 2026.',
               ].map((text, i) => (
                 <div
                   key={i}

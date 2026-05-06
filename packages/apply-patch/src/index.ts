@@ -32,10 +32,47 @@
  * @packageDocumentation
  */
 
+import { isAbsolute, resolve, sep } from 'node:path';
+
 import { applyUpdateHunkToContents } from './apply-update';
 import { nodeFSBridge } from './node-fs-bridge';
 import { parsePatch } from './parse';
 import type { ApplyPatchOptions, ApplyPatchResult, FSBridge, Hunk } from './types';
+
+/**
+ * Error thrown when a patch attempts to write outside the workspace root.
+ * Code: `'workspace_escape'`.
+ */
+export class WorkspaceEscapeError extends Error {
+  override readonly name = 'WorkspaceEscapeError';
+  readonly code = 'workspace_escape' as const;
+  constructor(
+    /** The path the patch tried to access. */
+    readonly attemptedPath: string,
+    /** The resolved cwd we were anchoring against. */
+    readonly cwd: string,
+  ) {
+    super(
+      `Patch path "${attemptedPath}" escapes the workspace root (${cwd}). ` +
+        `apply-patch refuses to write outside the workspace when workspaceOnly is enabled.`,
+    );
+  }
+}
+
+/**
+ * Reject any path that resolves outside `cwd`. Throws `WorkspaceEscapeError`
+ * on violation. Absolute paths are rejected unless they already start with
+ * the workspace root.
+ */
+function assertInsideWorkspace(p: string, cwd: string): void {
+  const resolved = isAbsolute(p) ? resolve(p) : resolve(cwd, p);
+  // The workspace root itself counts as "inside".
+  if (resolved === cwd) return;
+  // Only allow paths strictly under `cwd` (path.sep guards against partial-name aliasing).
+  if (!resolved.startsWith(cwd + sep)) {
+    throw new WorkspaceEscapeError(p, cwd);
+  }
+}
 
 export type {
   ApplyPatchOptions,
@@ -67,6 +104,19 @@ export async function applyPatch(
   const hunks = parsePatch(patchText);
   if (hunks.length === 0) {
     throw new Error('No files were modified.');
+  }
+
+  // workspaceOnly defaults to true. The check anchors every hunk path
+  // (and movePath) at the resolved cwd and rejects anything that escapes.
+  const workspaceOnly = options.workspaceOnly !== false;
+  const cwd = resolve(options.cwd ?? process.cwd());
+  if (workspaceOnly) {
+    for (const hunk of hunks) {
+      assertInsideWorkspace(hunk.path, cwd);
+      if (hunk.kind === 'update' && hunk.movePath !== undefined) {
+        assertInsideWorkspace(hunk.movePath, cwd);
+      }
+    }
   }
 
   const summary = { added: [] as string[], modified: [] as string[], deleted: [] as string[] };

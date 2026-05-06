@@ -78,6 +78,10 @@ export interface ApplyPatchOptions {
    * Restrict patch paths to the workspace root (cwd). Default: true. Set
    * false to opt out — useful when the FS bridge already enforces its own
    * boundary.
+   *
+   * When true (the default), every hunk path and movePath is resolved
+   * against `cwd` and rejected if it escapes the workspace root. The check
+   * is enforced inside `applyPatch()` before any fs op runs.
    */
   workspaceOnly?: boolean;
   /** Optional cancellation. */

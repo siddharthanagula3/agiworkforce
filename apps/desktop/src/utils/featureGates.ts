@@ -68,7 +68,10 @@ export function checkFeatureAccess(
     case 'advanced_ui_automation':
     case 'email_support':
     case 'llm_cost_tracking':
-      return ['hobby', 'pro', 'max', 'team', 'enterprise'].includes(planName)
+      // 'team' is not a canonical PlanTier (per supabase.ts:198 and billing/models.rs).
+      // If a 'team' tier is ever added, update PlanTier in supabase.ts, subscriptionGate.ts,
+      // and Rust billing/models.rs simultaneously.
+      return ['hobby', 'pro', 'max', 'enterprise'].includes(planName)
         ? { allowed: true }
         : {
             allowed: false,
@@ -81,7 +84,7 @@ export function checkFeatureAccess(
     case 'custom_workflows':
     case 'webhook_integration':
     case 'analytics':
-      return ['max', 'team', 'enterprise'].includes(planName)
+      return ['max', 'enterprise'].includes(planName)
         ? { allowed: true }
         : {
             allowed: false,
@@ -92,13 +95,15 @@ export function checkFeatureAccess(
 
     case 'team_features':
     case 'sso':
-      return ['team', 'enterprise'].includes(planName)
+      // team_features and sso are enterprise-only until a 'team' tier is formally added
+      // to the canonical PlanTier taxonomy.
+      return ['enterprise'].includes(planName)
         ? { allowed: true }
         : {
             allowed: false,
-            reason: 'Upgrade to Team to access this feature',
+            reason: 'Upgrade to Enterprise to access this feature',
             upgradeRequired: true,
-            suggestedPlan: 'team',
+            suggestedPlan: 'enterprise',
           };
 
     default:
