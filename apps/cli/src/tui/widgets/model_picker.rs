@@ -266,10 +266,23 @@ pub fn render(
     frame.render_widget(Clear, popup_area);
 
     // ── outer border ──────────────────────────────────────────────────────────
+    // Build a two-part title: left = controls hint, right = "13+ providers" badge.
+    // We use ratatui's `Line`-based title so each segment can carry its own style.
+    let hint_span = Span::styled(
+        " Select Model  (/ search  ↑↓ navigate  Tab jump-provider  Enter select  Esc close)",
+        Style::default(),
+    );
+    let badge_span = Span::styled(
+        " 13+ providers ",
+        Style::default()
+            .fg(Color::DarkGray)
+            .add_modifier(Modifier::DIM),
+    );
+    let title_line = Line::from(vec![hint_span, badge_span]);
     let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Green))
-        .title(" Select Model  (/ search  ↑↓ navigate  Tab jump-provider  Enter select  Esc close) ");
+        .title(title_line);
     frame.render_widget(outer_block, popup_area);
 
     // ── inner layout: search bar | list | effort bar ─────────────────────────
