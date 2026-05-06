@@ -561,7 +561,7 @@
         },
         "agiWorkforce.inlineCompletions.enabled": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Enable ghost-text inline completions (requires API key)"
         },
         "agiWorkforce.inlineCompletions.debounceMs": {
