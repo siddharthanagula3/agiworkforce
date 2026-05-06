@@ -4,6 +4,10 @@ use crate::core::mcp::{
     McpToolExecutor, McpToolRegistry, ToolExecutionResult, ToolStats,
 };
 use crate::sys::commands::auth::{get_session_user_id, SessionState};
+use crate::sys::commands::connector_permissions::{
+    resolve_permission, PermissionLevel, encryption_from_state,
+};
+use crate::sys::commands::master_password::MasterPasswordState;
 use crate::sys::commands::tool_confirmation::{
     request_tool_confirmation, request_tool_confirmation_no_mode_gate, ToolConfirmationState,
 };
@@ -886,6 +890,7 @@ pub async fn mcp_call_tool(
     state: State<'_, McpState>,
     confirmation_state: State<'_, ToolConfirmationState>,
     rate_limit_state: State<'_, crate::sys::commands::llm::RateLimitState>,
+    mp_state: State<'_, MasterPasswordState>,
     app: tauri::AppHandle,
     tool_id: String,
     arguments: HashMap<String, Value>,
@@ -935,44 +940,90 @@ pub async fn mcp_call_tool(
         "MCP tool call started"
     );
 
-    // 1. Enforce Tool Confirmation
-    let confirmation = ToolConfirmationRequest {
-        request_id: correlation_id.clone(),
-        tool_name: tool_id.clone(),
-        tool_description: format!("Execute MCP tool '{}' on server '{}'", tool_id, server_name),
-        parameters: serde_json::to_value(&arguments).unwrap_or(serde_json::json!({})),
-        risk_level: RiskLevel::High, // Assume High risk for unknown MCP tools by default
-        safety_tier: ToolSafetyTier::RequiresExplicitApproval,
-        reason: "MCP tools can access system resources and external APIs.".to_string(),
-        reversible: false, // Assume irreversible by default for safety
-        undo_description: None,
-    };
+    // 1a. Per-tool connector permission gate (audit C-rank 1).
+    // Extract bare tool name from mcp__<server>__<tool>__ format.
+    let bare_tool_name = tool_id
+        .strip_prefix("mcp__")
+        .and_then(|s| s.splitn(3, "__").nth(1))
+        .map(|s| s.trim_end_matches('_').to_string())
+        .unwrap_or_else(|| tool_id.clone());
 
-    tracing::debug!(
-        target: "mcp",
-        correlation_id = %correlation_id,
-        "Requesting tool confirmation"
-    );
+    // connector_id is the server_name for MCP tools.
+    let enc = encryption_from_state(&mp_state);
+    // destructive: heuristically flag write/delete tools; conservative default is false
+    // (the stored value overrides this at read time when the user has set a permission).
+    let is_destructive = bare_tool_name.contains("delete")
+        || bare_tool_name.contains("write")
+        || bare_tool_name.contains("create")
+        || bare_tool_name.contains("update")
+        || bare_tool_name.contains("remove");
 
-    let approved = request_tool_confirmation(&app, &confirmation_state, confirmation, 120)
-        .await
-        .map_err(|e| {
+    let perm = resolve_permission(&enc, &server_name, &bare_tool_name, is_destructive);
+
+    match perm {
+        PermissionLevel::Blocked => {
             tracing::warn!(
                 target: "mcp",
                 correlation_id = %correlation_id,
-                error = %e,
-                "Tool confirmation failed"
+                tool = %tool_id,
+                "Tool blocked by connector permission policy"
             );
-            e.to_string()
-        })?;
+            return Err(format!(
+                "Tool '{}' is blocked by your connector permission settings. \
+                 Change the permission in Settings → Connectors to allow it.",
+                bare_tool_name
+            ));
+        }
+        PermissionLevel::AlwaysAllow => {
+            // Skip the approval dialog entirely.
+            tracing::debug!(
+                target: "mcp",
+                correlation_id = %correlation_id,
+                tool = %tool_id,
+                "Tool auto-approved by connector permission policy (always-allow)"
+            );
+        }
+        PermissionLevel::NeedsApproval => {
+            // 1b. Existing confirmation dialog flow.
+            let confirmation = ToolConfirmationRequest {
+                request_id: correlation_id.clone(),
+                tool_name: tool_id.clone(),
+                tool_description: format!("Execute MCP tool '{}' on server '{}'", tool_id, server_name),
+                parameters: serde_json::to_value(&arguments).unwrap_or(serde_json::json!({})),
+                risk_level: RiskLevel::High,
+                safety_tier: ToolSafetyTier::RequiresExplicitApproval,
+                reason: "MCP tools can access system resources and external APIs.".to_string(),
+                reversible: false,
+                undo_description: None,
+            };
 
-    if !approved {
-        tracing::info!(
-            target: "mcp",
-            correlation_id = %correlation_id,
-            "Tool execution cancelled by user"
-        );
-        return Err("Tool execution cancelled by user".to_string());
+            tracing::debug!(
+                target: "mcp",
+                correlation_id = %correlation_id,
+                "Requesting tool confirmation"
+            );
+
+            let approved = request_tool_confirmation(&app, &confirmation_state, confirmation, 120)
+                .await
+                .map_err(|e| {
+                    tracing::warn!(
+                        target: "mcp",
+                        correlation_id = %correlation_id,
+                        error = %e,
+                        "Tool confirmation failed"
+                    );
+                    e.to_string()
+                })?;
+
+            if !approved {
+                tracing::info!(
+                    target: "mcp",
+                    correlation_id = %correlation_id,
+                    "Tool execution cancelled by user"
+                );
+                return Err("Tool execution cancelled by user".to_string());
+            }
+        }
     }
 
     // Emit tool execution started event

@@ -1825,6 +1825,11 @@ pub fn run() {
             crate::sys::commands::get_connector_manifests,
             crate::sys::commands::save_api_key,
 
+            // Connector per-tool permissions (Desktop P0, audit C-rank 1)
+            crate::sys::commands::connector_permission_get,
+            crate::sys::commands::connector_permission_set,
+            crate::sys::commands::connector_permission_list,
+
             // MCPB (MCP Bundles)
             crate::sys::commands::mcpb_fetch_registry,
             crate::sys::commands::mcpb_search_bundles,
