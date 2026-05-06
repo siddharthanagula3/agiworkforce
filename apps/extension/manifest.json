@@ -75,7 +75,7 @@
   "web_accessible_resources": [
     {
       "resources": ["icons/providers/*.svg"],
-      "matches": ["<all_urls>"]
+      "matches": ["https://*.agiworkforce.com/*"]
     }
   ],
   "minimum_chrome_version": "132",

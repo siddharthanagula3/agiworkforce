@@ -80,7 +80,7 @@ describe('model catalog helpers', () => {
     expect(detectProviderFromModelId('claude-sonnet-4-6')).toBe('anthropic');
     expect(resolveAutoModeModel('auto-economy', 'hobby')).toBe('gemini-3.1-flash-lite');
     expect(resolveAutoModeModel('auto-balanced', 'pro')).toBe('gpt-5.4-mini');
-    expect(resolveAutoModeModel('auto-premium', 'max')).toBe('claude-opus-4.6');
+    expect(resolveAutoModeModel('auto-premium', 'max')).toBe('gemini-3.1-pro-preview');
     expect(resolveAutoModeModel('auto-premium', 'hobby')).toBe('gemini-3.1-flash-lite');
   });
 
@@ -150,7 +150,7 @@ describe('model catalog helpers', () => {
     expect(getRoutingSlotModel('coding_premium')).toBe('gpt-5.4-codex');
     expect(getRoutingSlotModel('search_fast')).toBe('sonar');
     expect(getRoutingSlotModel('search_premium')).toBe('sonar-deep-research');
-    expect(getRoutingSlotModel('computer_use')).toBe('gpt-5.4-mini');
+    expect(getRoutingSlotModel('computer_use')).toBe('claude-sonnet-4.6');
 
     expect(canAccessManualModelSelection('free')).toBe(false);
     expect(canAccessManualModelSelection('pro')).toBe(false);

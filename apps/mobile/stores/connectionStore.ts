@@ -535,149 +535,155 @@ export const useConnectionStore = create<ConnectionState>()(
         // (expo-crypto getRandomBytesAsync). Same 16-byte/32 hex-char pattern as
         // lib/mmkv.ts generateMmkvEncryptionKey(). Math.random() had ~36 bits of
         // entropy; this gives 128 bits.
-        const sessionMetadata: {
-          deviceType: string;
-          app: string;
-          version: string;
-          dispatchSalt: string;
-        } = {
-          deviceType: 'mobile',
-          app: 'agiworkforce-mobile',
-          version: '0.1.0',
-          dispatchSalt: '',
-        };
+        // MOB-DISPATCH-SALT-RACE (P0) + MOB-DISPATCH-VERSION-HARDCODED (P1):
+        // Await salt+HMAC derivation BEFORE constructing SignalingClient so
+        // dispatchSalt is never sent as ''. Version read from expo config
+        // (same pattern as apps/mobile/app/(app)/about.tsx).
+        void (async () => {
+          const { default: Constants } = await import('expo-constants');
+          const appVersion = Constants.expoConfig?.version ?? '0.0.0';
 
-        Crypto.getRandomBytesAsync(16)
-          .then((saltBytes) => {
+          const sessionMetadata: {
+            deviceType: string;
+            app: string;
+            version: string;
+            dispatchSalt: string;
+          } = {
+            deviceType: 'mobile',
+            app: 'agiworkforce-mobile',
+            version: appVersion,
+            dispatchSalt: '',
+          };
+
+          try {
+            const saltBytes = await Crypto.getRandomBytesAsync(16);
             let hex = '';
             for (let i = 0; i < saltBytes.length; i++) {
               hex += (saltBytes[i] as number).toString(16).padStart(2, '0');
             }
             sessionMetadata.dispatchSalt = hex;
-            return deriveDispatchSecret(code, hex);
-          })
-          .then((secret) => {
+            const secret = await deriveDispatchSecret(code, hex);
             hmacState = { secret, nonceCache: new Map() };
-          })
-          .catch((err) => {
+          } catch (err) {
             console.warn('[dispatch] HMAC secret derivation failed:', err);
             hmacState = null;
-          });
+          }
 
-        // Set up WebRTC
-        setupPeerConnection();
+          // Set up WebRTC
+          setupPeerConnection();
 
-        // Create signaling client (auto-connects on construction)
-        signalingClient = new SignalingClient({
-          wsUrl: WS_URL,
-          code,
-          role: 'mobile',
-          metadata: sessionMetadata,
-          heartbeatIntervalMs: 25000,
-          onEvent: (event: SignalingEvent) => {
-            switch (event.type) {
-              case 'open':
-                // WebSocket opened, waiting for registration confirmation
-                break;
+          // Create signaling client (auto-connects on construction)
+          signalingClient = new SignalingClient({
+            wsUrl: WS_URL,
+            code,
+            role: 'mobile',
+            metadata: sessionMetadata,
+            heartbeatIntervalMs: 25000,
+            onEvent: (event: SignalingEvent) => {
+              switch (event.type) {
+                case 'open':
+                  // WebSocket opened, waiting for registration confirmation
+                  break;
 
-              case 'registered':
-                set({ sessionExpiresAt: event.expiresAt });
-                if (event.peerConnected) {
-                  // Desktop is already connected — wait for peer_ready with metadata
-                  set({ status: 'connecting' });
+                case 'registered':
+                  set({ sessionExpiresAt: event.expiresAt });
+                  if (event.peerConnected) {
+                    // Desktop is already connected — wait for peer_ready with metadata
+                    set({ status: 'connecting' });
+                  }
+                  break;
+
+                case 'peer_ready': {
+                  const metadata = (event.metadata ?? {}) as DesktopMetadata;
+                  const wasReconnecting =
+                    get().status === 'reconnecting' ||
+                    get().status === 'stale' ||
+                    get().status === 'connecting';
+                  const reconnectStart = get().reconnectStartedAt;
+                  const reconnectDuration =
+                    wasReconnecting && reconnectStart != null
+                      ? Date.now() - reconnectStart
+                      : get().lastReconnectDurationMs;
+
+                  set((state) => ({
+                    status: 'connected',
+                    desktopName: (metadata.deviceName as string) ?? 'Desktop',
+                    desktopMetadata: metadata,
+                    error: null,
+                    lastHeartbeatAt: Date.now(),
+                    missedHeartbeats: 0,
+                    connectionQuality: 'weak', // will be updated on first pong with latency
+                    reconnectSuccesses: wasReconnecting
+                      ? state.reconnectSuccesses + 1
+                      : state.reconnectSuccesses,
+                    lastReconnectDurationMs: reconnectDuration,
+                    reconnectStartedAt: null,
+                  }));
+
+                  // Flush any queued control messages now that we're reconnected
+                  flushPendingControlQueue();
+                  // Request a fresh agent state from desktop (don't assume stale state is current)
+                  useAgentStore.getState().setAgents([]);
+                  break;
                 }
-                break;
 
-              case 'peer_ready': {
-                const metadata = (event.metadata ?? {}) as DesktopMetadata;
-                const wasReconnecting =
-                  get().status === 'reconnecting' ||
-                  get().status === 'stale' ||
-                  get().status === 'connecting';
-                const reconnectStart = get().reconnectStartedAt;
-                const reconnectDuration =
-                  wasReconnecting && reconnectStart != null
-                    ? Date.now() - reconnectStart
-                    : get().lastReconnectDurationMs;
+                case 'signal':
+                  if (event.kind === 'control') {
+                    // Control message via signaling relay
+                    handleControlMessage(event.payload);
+                  } else {
+                    // WebRTC signaling (offer/answer/ice)
+                    handleSignalingMessage(event.kind, event.payload).catch(() => {
+                      // Signaling message handling failed — ignore
+                    });
+                  }
+                  break;
 
-                set((state) => ({
-                  status: 'connected',
-                  desktopName: (metadata.deviceName as string) ?? 'Desktop',
-                  desktopMetadata: metadata,
-                  error: null,
-                  lastHeartbeatAt: Date.now(),
-                  missedHeartbeats: 0,
-                  connectionQuality: 'weak', // will be updated on first pong with latency
-                  reconnectSuccesses: wasReconnecting
-                    ? state.reconnectSuccesses + 1
-                    : state.reconnectSuccesses,
-                  lastReconnectDurationMs: reconnectDuration,
-                  reconnectStartedAt: null,
-                }));
-
-                // Flush any queued control messages now that we're reconnected
-                flushPendingControlQueue();
-                // Request a fresh agent state from desktop (don't assume stale state is current)
-                useAgentStore.getState().setAgents([]);
-                break;
-              }
-
-              case 'signal':
-                if (event.kind === 'control') {
-                  // Control message via signaling relay
-                  handleControlMessage(event.payload);
-                } else {
-                  // WebRTC signaling (offer/answer/ice)
-                  handleSignalingMessage(event.kind, event.payload).catch(() => {
-                    // Signaling message handling failed — ignore
+                case 'peer_left':
+                  set({
+                    status: 'disconnected',
+                    desktopName: null,
+                    desktopMetadata: null,
                   });
-                }
-                break;
+                  cleanupPeerConnection();
+                  // Clear agents when desktop disconnects
+                  useAgentStore.getState().setAgents([]);
+                  break;
 
-              case 'peer_left':
-                set({
-                  status: 'disconnected',
-                  desktopName: null,
-                  desktopMetadata: null,
-                });
-                cleanupPeerConnection();
-                // Clear agents when desktop disconnects
-                useAgentStore.getState().setAgents([]);
-                break;
+                case 'session_expired':
+                  get().markSessionExpired();
+                  break;
 
-              case 'session_expired':
-                get().markSessionExpired();
-                break;
+                case 'terminated':
+                  set({
+                    status: 'disconnected',
+                    pairingCode: null,
+                    desktopName: null,
+                    desktopMetadata: null,
+                  });
+                  cleanupPeerConnection();
+                  signalingClient = null;
+                  break;
 
-              case 'terminated':
-                set({
-                  status: 'disconnected',
-                  pairingCode: null,
-                  desktopName: null,
-                  desktopMetadata: null,
-                });
-                cleanupPeerConnection();
-                signalingClient = null;
-                break;
+                case 'error':
+                  set({
+                    status: 'error',
+                    error: friendlyErrorMessage(event.error),
+                  });
+                  break;
 
-              case 'error':
-                set({
-                  status: 'error',
-                  error: friendlyErrorMessage(event.error),
-                });
-                break;
-
-              case 'close':
-                // Only set disconnected if not already in error state
-                if (get().status !== 'error') {
-                  set({ status: 'disconnected' });
-                }
-                cleanupPeerConnection();
-                signalingClient = null;
-                break;
-            }
-          },
-        });
+                case 'close':
+                  // Only set disconnected if not already in error state
+                  if (get().status !== 'error') {
+                    set({ status: 'disconnected' });
+                  }
+                  cleanupPeerConnection();
+                  signalingClient = null;
+                  break;
+              }
+            },
+          });
+        })();
       },
 
       recordHeartbeat: (latencyMs?: number) => {

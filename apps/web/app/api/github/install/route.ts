@@ -4,8 +4,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { logger } from '@/lib/logger';
+import { withRateLimit } from '@/lib/rate-limit';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const rateLimitResponse = await withRateLimit(request, 'default');
+  if (rateLimitResponse) return rateLimitResponse;
+
   const { searchParams } = new URL(request.url);
   const installationId = searchParams.get('installation_id');
   const accountLogin = searchParams.get('account_login') ?? '';

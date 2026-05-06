@@ -232,6 +232,16 @@ const publicWsUrl =
 
 const app = express();
 
+// SIG-3 (audit 2026-05-05): only honour x-forwarded-for / x-real-ip when an
+// operator has explicitly opted in via TRUST_PROXY=true. Without this, the
+// X-Forwarded-For header is spoofable by any client and IP-based rate limits,
+// blacklists, and audit logs become trivially bypassable. Mirrors the pattern
+// in services/api-gateway/src/index.ts:58-60.
+const trustProxy = process.env['TRUST_PROXY'] === 'true' || process.env['TRUST_PROXY'] === '1';
+if (trustProxy) {
+  app.set('trust proxy', true);
+}
+
 // SECURITY: Disable X-Powered-By header to reduce information leakage
 disablePoweredBy(app);
 
@@ -878,8 +888,11 @@ wss.on('connection', (socket, request) => {
     return;
   }
 
-  // Extract client IP
-  const forwardedFor = request.headers['x-forwarded-for'];
+  // Extract client IP.
+  // SIG-3 (audit 2026-05-05): only consult x-forwarded-for when TRUST_PROXY is
+  // set — otherwise the header is attacker-controlled and any IP-keyed limit
+  // (rate-limit, blacklist) becomes spoofable. See trust-proxy block above.
+  const forwardedFor = trustProxy ? request.headers['x-forwarded-for'] : undefined;
   const ip =
     (typeof forwardedFor === 'string' ? forwardedFor.split(',')[0]?.trim() : undefined) ??
     request.socket.remoteAddress ??

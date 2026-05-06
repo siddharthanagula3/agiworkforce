@@ -22,6 +22,24 @@ function formatTime(dateStr: string): string {
   return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
+/**
+ * Validate a markdown link URL against an allowlist of safe schemes.
+ *
+ * Returns the trimmed URL if it is safe to render in `<a href>`, or `null`
+ * if the URL has a dangerous scheme (e.g., `javascript:`, `data:`, `vbscript:`).
+ *
+ * Allowlisted: http(s), mailto, tel, and relative paths starting with `/` or `#`.
+ * Anything else (including bare schemes like `javascript:exec` or `data:text/html,…`)
+ * is rejected and the caller should render the link text as plain text.
+ */
+export function safeHref(url: string): string | null {
+  const trimmed = url.trim();
+  // Allow: http(s):, mailto:, tel:, relative paths starting with / or #
+  if (/^(https?:|mailto:|tel:)/i.test(trimmed)) return trimmed;
+  if (/^[/#]/.test(trimmed)) return trimmed;
+  return null;
+}
+
 interface CodeBlockProps {
   code: string;
   language?: string;
@@ -280,18 +298,25 @@ function renderInline(text: string): React.ReactNode {
     }
     const token = match[0];
     if (token.startsWith('[') && match[2] && match[3]) {
-      // Link: [text](url)
-      parts.push(
-        <a
-          key={match.index}
-          href={match[3]}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-[var(--chat-accent-primary)] underline underline-offset-2 hover:opacity-80"
-        >
-          {match[2]}
-        </a>,
-      );
+      // Link: [text](url) — only render anchor for safe schemes (http(s), mailto,
+      // tel, relative). javascript:, data:, vbscript: etc. fall back to plain text
+      // to prevent XSS via model-generated markdown links.
+      const href = safeHref(match[3]);
+      if (href !== null) {
+        parts.push(
+          <a
+            key={match.index}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[var(--chat-accent-primary)] underline underline-offset-2 hover:opacity-80"
+          >
+            {match[2]}
+          </a>,
+        );
+      } else {
+        parts.push(<span key={match.index}>{match[2]}</span>);
+      }
     } else if (token.startsWith('~~')) {
       parts.push(
         <del key={match.index} className="text-[var(--chat-text-muted)]">

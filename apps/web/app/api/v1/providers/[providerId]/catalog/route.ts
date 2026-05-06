@@ -3,6 +3,7 @@ import 'server-only';
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { getEnv } from '@/utils/env';
+import { withRateLimit } from '@/lib/rate-limit';
 
 /**
  * GET /api/v1/providers/:providerId/catalog — proxy to api-gateway model catalog.
@@ -11,6 +12,9 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ providerId: string }> },
 ): Promise<NextResponse> {
+  const rateLimitResponse = await withRateLimit(request, 'default');
+  if (rateLimitResponse) return rateLimitResponse;
+
   const { providerId } = await params;
   const gatewayUrl = getEnv('API_GATEWAY_URL', 'http://localhost:3000').replace(/\/+$/, '');
   const authHeader = request.headers.get('authorization') ?? '';

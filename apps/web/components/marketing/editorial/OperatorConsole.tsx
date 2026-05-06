@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { MARKETING_MODEL_PILLS } from '../../../lib/marketing-constants';
 import { Caret } from './Caret';
 import { MonoButton } from './MonoButton';
 import { Slug } from './Slug';
@@ -16,17 +17,20 @@ interface DemoLine {
   annotation?: string;
 }
 
+/** Model IDs sourced from MARKETING_MODEL_PILLS — no hardcoded model strings. */
+const [PILL_GPT, PILL_CLAUDE, PILL_GEMINI] = MARKETING_MODEL_PILLS;
+
 const DEMO_LINES: DemoLine[] = [
   {
     kind: 'command',
     text: '$ agiworkforce exec "summarize the codebase"',
     annotation: '→ ENTERS WITH ANTHROPIC',
   },
-  { kind: 'output', text: '  → openai/gpt-4o      Reading 142 files...' },
-  { kind: 'output', text: '  → anthropic/claude-opus-4-7    Refining structure...' },
+  { kind: 'output', text: `  → openai/${PILL_GPT}      Reading 142 files...` },
+  { kind: 'output', text: `  → anthropic/${PILL_CLAUDE}    Refining structure...` },
   {
     kind: 'output',
-    text: '  → google/gemini-2.5-pro    Cross-checking citations...',
+    text: `  → google/${PILL_GEMINI}    Cross-checking citations...`,
     annotation: '↻ HANDOFF AT TOKEN 1042',
   },
   { kind: 'blank', text: '' },

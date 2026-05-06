@@ -285,6 +285,9 @@ struct ModelChoice {
     has_reasoning: bool,
 }
 
+// TODO(rule-models-json): derive from model_catalog::legacy_bundled_models() filtered
+// to active=true, top 3 per provider. Currently hardcoded to avoid runtime cost at
+// first-run onboarding; acceptable while catalog is stable. Sprint B target.
 const ONBOARDING_MODEL_SPECS: &[(&str, &str)] = &[
     ("claude-opus-4-6", "Most capable for complex work"),
     ("claude-sonnet-4-6", "Best for everyday tasks"),

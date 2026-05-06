@@ -33,6 +33,9 @@ use tracing::error;
 use tracing::info;
 use tracing::trace;
 
+// OpenAI Whisper-style transcription endpoint — not in models.json catalog because
+// it is an audio model (not a chat completion model) and has no provider-switcher
+// equivalents. This constant is intentionally exempt from rule-models-json.
 const AUDIO_MODEL: &str = "gpt-4o-mini-transcribe";
 const MODEL_AUDIO_SAMPLE_RATE: u32 = 24_000;
 const MODEL_AUDIO_CHANNELS: u16 = 1;

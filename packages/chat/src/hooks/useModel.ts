@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
-import { useModelStore } from '../stores/modelStore';
+import { useModelStore, selectLastRoutingDecision } from '../stores/modelStore';
+import { modelsById } from '@agiworkforce/types';
+import { TASK_LABEL } from '../lib/promptClassifier';
 
 export function useModel() {
   const models = useModelStore((s) => s.models);
@@ -10,13 +12,25 @@ export function useModel() {
   const toggleThinking = useModelStore((s) => s.toggleThinking);
   const getSelectedModel = useModelStore((s) => s.getSelectedModel);
   const getModelsByTier = useModelStore((s) => s.getModelsByTier);
+  const lastRoutingDecision = useModelStore(selectLastRoutingDecision);
 
   const selectedModel = getSelectedModel();
   const modelsByTier = getModelsByTier();
 
-  const displayName = selectedModel
-    ? `${selectedModel.name}${thinkingEnabled && selectedModel.supportsThinking ? ' Extended' : ''}`
-    : 'Select model';
+  const isAutoMode = selectedModelId.startsWith('auto');
+
+  // When auto-routed: show "ModelName · task" instead of "Auto Economy"
+  const displayName = useMemo(() => {
+    if (isAutoMode && lastRoutingDecision?.wasRouted) {
+      const routedMeta = modelsById[lastRoutingDecision.routedModelId];
+      const taskLabel = TASK_LABEL[lastRoutingDecision.taskType as keyof typeof TASK_LABEL];
+      if (routedMeta) {
+        return taskLabel ? `${routedMeta.name} · ${taskLabel}` : routedMeta.name;
+      }
+    }
+    if (!selectedModel) return 'Select model';
+    return `${selectedModel.name}${thinkingEnabled && selectedModel.supportsThinking ? ' Extended' : ''}`;
+  }, [isAutoMode, lastRoutingDecision, selectedModel, thinkingEnabled]);
 
   return useMemo(
     () => ({
@@ -29,6 +43,8 @@ export function useModel() {
       displayName,
       selectModel,
       toggleThinking,
+      lastRoutingDecision,
+      isAutoMode,
     }),
     [
       models,
@@ -40,6 +56,8 @@ export function useModel() {
       displayName,
       selectModel,
       toggleThinking,
+      lastRoutingDecision,
+      isAutoMode,
     ],
   );
 }

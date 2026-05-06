@@ -6,6 +6,7 @@ import type { ChatMessage } from '../lib/types';
 import { syncPackageStoreFromHost } from './useHostBridgeSync';
 import { useChatStore, getSystemPromptForMode } from '../stores/chatStore';
 import { useModelStore } from '../stores/modelStore';
+import { buildRoutingDecision } from '../lib/promptClassifier';
 
 interface UseChatOptions {
   hostBridge?: ChatHostBridge | null;
@@ -359,6 +360,19 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       const thinkingEnabled = modelState.thinkingEnabled;
       const webSearchEnabled = store.webSearchEnabled;
 
+      // Auto-routing: when an auto-mode is selected, classify the prompt and
+      // resolve to a concrete model ID before sending to the runtime. This is
+      // a zero-latency heuristic pass (no LLM call) inspired by LiteLLM's
+      // Complexity Router and NVIDIA's prompt-task-and-complexity-classifier.
+      let resolvedModelId = selectedModelId;
+      if (selectedModelId.startsWith('auto')) {
+        const decision = buildRoutingDecision(content, {
+          autoModeId: selectedModelId,
+        });
+        resolvedModelId = decision.routedModelId;
+        useModelStore.getState().setRoutingDecision(decision);
+      }
+
       // Reset assistant message ref for new response
       assistantMessageIdRef.current = null;
 
@@ -372,7 +386,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       void runtime
         .sendMessage(convId, content, {
           ...(systemPrompt ? { systemPrompt } : {}),
-          model: selectedModelId,
+          model: resolvedModelId,
           webSearch: webSearchEnabled,
           thinkingEnabled,
           messageHistory,

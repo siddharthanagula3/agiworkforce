@@ -97,8 +97,6 @@ const MODEL_CAPABILITY: Record<string, CapabilityTier> = {
   'sonar-pro': 'most-capable',
   // Mistral
   'mistral-large-3': 'balanced',
-  // Local / custom
-  'ollama-local': 'balanced',
 };
 
 /**
@@ -138,8 +136,6 @@ const MODEL_PROVIDER: Record<string, ProviderId> = {
   'sonar-pro': 'perplexity',
   // Mistral
   'mistral-large-3': 'mistral' as ProviderId,
-  // Local / custom
-  'ollama-local': 'ollama',
 };
 
 // Provider display order in the grouped picker.
@@ -174,18 +170,6 @@ const SIDE_PANEL_MODEL_OPTIONS: SidePanelModelOption[] = [
     provider: MODEL_PROVIDER[option.id] as ProviderId | undefined,
     capability: MODEL_CAPABILITY[option.id] as CapabilityTier | undefined,
   })),
-  {
-    value: 'mistral-large-3',
-    label: 'Mistral Large 3',
-    provider: 'mistral' as ProviderId,
-    capability: 'balanced' as CapabilityTier,
-  },
-  {
-    value: 'ollama-local',
-    label: 'Ollama (Local)',
-    provider: 'ollama' as ProviderId,
-    capability: 'balanced' as CapabilityTier,
-  },
 ];
 
 const SIDE_PANEL_MODEL_BADGES: Record<string, string> = {
@@ -207,7 +191,6 @@ const SIDE_PANEL_MODEL_BADGES: Record<string, string> = {
   'sonar-pro': 'Sonar Pro',
   'grok-4': 'Grok 4',
   'mistral-large-3': 'Mistral',
-  'ollama-local': 'Local',
 };
 
 interface WebMCPToolEntry {

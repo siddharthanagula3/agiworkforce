@@ -7204,7 +7204,7 @@ guardian_approval = true
             &all_model_presets()
         ));
         assert!(should_show_model_migration_prompt(
-            "claude-opus-4-6-mini",
+            "claude-haiku-4-5-20251001",
             "claude-opus-4-6",
             &seen,
             &all_model_presets()

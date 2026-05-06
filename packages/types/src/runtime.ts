@@ -78,7 +78,11 @@ export type RoutingTaskType =
   | 'agentic'
   | 'multimodal'
   | 'research'
-  | 'computer-use';
+  | 'computer-use'
+  | 'image_generation'
+  | 'creative_writing'
+  | 'long_context'
+  | 'simple_chat';
 
 /** Shared model-routing decision emitted by auto mode selectors across surfaces. */
 export interface RoutingDecision {
