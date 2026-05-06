@@ -131,14 +131,14 @@ export default function ProfileScreen() {
     // the upgrade URL for free-plan users when no subscription exists.
     try {
       const portalUrl = await fetchPortalSessionUrl();
-      if (isAllowedExternalUrl(portalUrl)) {
+      if (portalUrl) {
         await WebBrowser.openBrowserAsync(portalUrl);
         return;
       }
     } catch {
       // Fall through
     }
-    await openExternalUrl('https://agiworkforce.com/pricing');
+    await WebBrowser.openBrowserAsync('https://agiworkforce.com/pricing');
   }, []);
 
   const email = user?.email ?? 'Not signed in';
@@ -149,7 +149,10 @@ export default function ProfileScreen() {
   // decide whether to show the upsell. normalizeBillingPlanTier falls back to
   // 'free' for null / unrecognised values — correct for new / unsubscribed users.
   const planTier = normalizeBillingPlanTier(stats.subscriptionPlan);
-  const showUpsell = planTier === 'free' || planTier === 'byok' || planTier === 'local-only';
+  // BillingPlanTier 'free' covers null subscription, BYOK, and Local-only users
+  // (they're all "free" in billing terms). The narrower @agiworkforce/types
+  // UIPlanTier separates byok/local but BillingPlanTier collapses them to 'free'.
+  const showUpsell = planTier === 'free';
 
   return (
     <SafeAreaView className="flex-1 bg-surface-base">
