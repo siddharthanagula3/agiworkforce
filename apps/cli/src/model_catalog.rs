@@ -39,6 +39,9 @@ const SUPPORTED_SHARED_PROVIDERS: &[&str] = &[
     "deepseek",
 ];
 
+// Intentional fallback when models.json is unloadable (e.g. first-run before
+// the catalog is fetched). Not a violation of rule-models-json: this is the
+// last-resort default, not a user-visible hardcoded selection.
 const FALLBACK_DEFAULT_MODEL: &str = "claude-opus-4-7";
 const FALLBACK_DEFAULT_PROVIDER: &str = "anthropic";
 
@@ -274,7 +277,7 @@ fn legacy_bundled_models() -> Vec<Model> {
         m(
             "claude-opus-4-7",
             "anthropic",
-            "Claude Opus 4.6",
+            "Claude Opus 4.7",
             200_000,
             32_000,
             15.0,

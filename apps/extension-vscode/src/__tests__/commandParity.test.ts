@@ -16,6 +16,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { activate } from '../extension';
+import { __resetSubsystemHealthForTests } from '../services/subsystemHealth';
 
 interface DeclaredCommand {
   command: string;
@@ -88,6 +89,7 @@ describe('package.json ↔ runtime command parity', () => {
       vscode.commands as { registerCommand: typeof vscode.commands.registerCommand }
     ).registerCommand = originalRegisterCommand;
     vi.restoreAllMocks();
+    __resetSubsystemHealthForTests();
   });
 
   it('every command declared in package.json is registered at runtime', () => {

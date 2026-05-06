@@ -50,7 +50,7 @@ export function EditorialPage({
   return (
     <>
       {chrome && <Header />}
-      <div className={`relative min-h-screen ${pageBg}`}>
+      <div className={`editorial-shell relative min-h-screen ${pageBg}`}>
         {/* Noise overlay — subtle grain for paper texture */}
         <NoiseOverlay />
 

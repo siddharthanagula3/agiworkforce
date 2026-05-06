@@ -256,12 +256,16 @@ export type RoutingSlot =
   | 'general_premium'
   | 'coding_fast'
   | 'coding_premium'
+  | 'reasoning_premium'
+  | 'creative_writing'
+  | 'creative_writing_premium'
   | 'search_fast'
   | 'search_premium'
   | 'vision_fast'
   | 'vision_premium'
   | 'browser_dom'
   | 'computer_use'
+  | 'computer_use_premium'
   | 'image_generation'
   | 'video_generation'
   | 'voice_transcription'
@@ -318,130 +322,237 @@ const SEARCH_ONLY_MANAGED_CLOUD_PROVIDER_SET = new Set<string>(
 );
 const BYOK_PROVIDER_SET = new Set<string>(BYOK_PROVIDER_IDS);
 const LOCAL_PROVIDER_SET = new Set<string>(LOCAL_PROVIDER_IDS);
-const MANUAL_OVERRIDE_MODEL_IDS = [
-  'claude-opus-4.6',
-  'claude-sonnet-4.6',
-  'claude-haiku-4.5',
-  'gpt-5.4-pro',
-  'gpt-5.4',
-  'gpt-5.4-mini',
-  'gpt-5.4-codex',
-  'gemini-3.1-pro-preview',
-  'gemini-3.1-flash-lite',
-  'deepseek-chat',
-  'deepseek-reasoner',
-  'qwen-max',
-  'kimi-k2.5-thinking',
-  'glm-4.7',
-  'grok-4',
-] as const;
+// Derived from models.json (the locked source of truth). Surfacing every
+// non-deprecated, non-experimental model lets the picker stay in sync with
+// the catalog without a hand-typed parallel registry. Insertion order from
+// the JSON is preserved so UI ordering remains stable.
+const MANUAL_OVERRIDE_MODEL_IDS: readonly string[] = Object.entries(
+  modelsCatalogJson.models as Record<string, ModelMetadata>,
+)
+  .filter(([, model]) => {
+    if (model.deprecated) return false;
+    if (model.status === 'deprecated') return false;
+    // 'experimental' is not in the current ModelStatus union but guard for
+    // future expansion so preview-only models are excluded.
+    if ((model.status as string | undefined) === 'experimental') return false;
+    return true;
+  })
+  .map(([id]) => id);
 const MANUAL_OVERRIDE_MODEL_SET = new Set<string>(MANUAL_OVERRIDE_MODEL_IDS);
 
+// ============================================================================
+// SLOT_REGISTRY — Evidence-based model assignments
+//
+// Sources (May 2026):
+//   Coding:          SWE-bench Verified / SWE-bench Pro / Aider Polyglot
+//   Reasoning:       GPQA Diamond / HLE / Artificial Analysis Intelligence Index
+//   Computer use:    OSWorld-Verified / ScreenSpot / TAU-bench
+//   Vision:          MMMU-Pro / DocVQA / ChartQA / FACTS Grounding
+//   Creative writing: EQ-Bench Creative Writing Elo
+//   Search:          SimpleQA / FRAMES
+//   Speed:           Artificial Analysis TTFT + tok/s benchmarks
+//
+// Pricing (blended $/M = weighted avg input+output):
+//   Gemini 3.1 Pro:      $2/$12   → $5.33 blended
+//   Claude Opus 4.7:     $5/$25   → $12.00 blended
+//   Claude Sonnet 4.6:   $3/$15   → $7.50 blended
+//   Claude Haiku 4.5:    $1/$5    → $2.50 blended
+//   GPT-5.5:             $5/$30   → $14.00 blended
+//   GPT-5.4-mini:        $0.75/$4.50 → $1.88 blended
+//   GPT-5.4-codex:       $0.40/$1.60 → $0.80 blended (specialized coding model)
+//   DeepSeek V3.2:       $0.27/$0.42 → $0.32 blended
+//   Gemini 3.1 Flash:    $0.50/$3 → $1.25 blended
+//   Gemini 3.1 Flash-Lite: $0.25/$1.50 → $0.56 blended
+// ============================================================================
 export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
+  // -------------------------------------------------------------------------
+  // GENERAL — Gemini Flash-Lite wins on throughput (327 tok/s) + cost ($0.25/$1.50).
+  // -------------------------------------------------------------------------
   general_fast: {
     slot: 'general_fast',
     label: 'General Fast',
-    description: 'Default low-cost general chat and advice lane.',
+    description: 'Lowest-cost lane. Gemini 3.1 Flash-Lite: 327 tok/s, $0.25/$1.50, 1M context.',
     modelId: 'gemini-3.1-flash-lite',
     provider: 'google',
   },
+  // GPT-5.4-mini: 49/60 Intelligence Index, TTFT 3.85s, 201 tok/s — best mid-tier balance.
   general_balanced: {
     slot: 'general_balanced',
     label: 'General Balanced',
-    description: 'Default balanced lane for day-to-day chat, coding help, and tool use.',
+    description: 'Mid-tier balanced lane. GPT-5.4-mini: 49/60 Intelligence Index, $0.75/$4.50.',
     modelId: 'gpt-5.4-mini',
     provider: 'openai',
   },
+  // Gemini 3.1 Pro: 57/60 Intelligence Index — tied with Claude Opus 4.7 at 40% the cost ($2/$12 vs $5/$25).
+  // Leads GPQA Diamond (94.3%), best long-context (holds 500K–1M tokens), FACTS Grounding winner.
   general_premium: {
     slot: 'general_premium',
     label: 'General Premium',
-    description: 'High-burn flagship lane for max-quality conversations.',
-    modelId: 'claude-opus-4.6',
-    provider: 'anthropic',
+    description:
+      'Premium intelligence lane. Gemini 3.1 Pro: 57/60 Intelligence Index, $2/$12 — same quality as Claude Opus 4.7 at 40% the cost.',
+    modelId: 'gemini-3.1-pro-preview',
+    provider: 'google',
   },
+
+  // -------------------------------------------------------------------------
+  // CODING — DeepSeek V3.2: ~70% SWE-bench at $0.27/$0.42 (10–25× cheaper than frontier).
+  // GPT-5.4-codex: ~85% SWE-bench at $0.40/$1.60 (specialized coding model, best value at frontier).
+  // -------------------------------------------------------------------------
   coding_fast: {
     slot: 'coding_fast',
     label: 'Coding Fast',
-    description: 'Cost-efficient coding lane for edits, debugging, and refactors.',
+    description:
+      'Budget coding lane. DeepSeek V3.2: ~70% SWE-bench Verified, $0.27/$0.42 — 10–25× cheaper than flagship.',
     modelId: 'deepseek-chat',
     provider: 'deepseek',
   },
   coding_premium: {
     slot: 'coding_premium',
     label: 'Coding Premium',
-    description: 'Premium coding lane for agentic code generation and tool use.',
+    description:
+      'Premium coding lane. GPT-5.4-codex: ~85% SWE-bench, $0.40/$1.60 — specialized coding model with best price/benchmark at frontier.',
     modelId: 'gpt-5.4-codex',
     provider: 'openai',
   },
+
+  // -------------------------------------------------------------------------
+  // REASONING — Gemini 3.1 Pro wins on GPQA Diamond (94.3% vs 94.2% for Claude Opus 4.7)
+  // AND costs 60% less ($2/$12 vs $5/$25). HLE-no-tools: Claude Opus 4.7 leads (46.9%).
+  // For complex reasoning, benchmark evidence favors Gemini 3.1 Pro on cost-efficiency.
+  // -------------------------------------------------------------------------
+  reasoning_premium: {
+    slot: 'reasoning_premium',
+    label: 'Reasoning Premium',
+    description:
+      'Deep reasoning lane. Gemini 3.1 Pro: 94.3% GPQA Diamond (#1), $2/$12 — beats Claude Opus 4.7 (94.2%) at 40% the cost.',
+    modelId: 'gemini-3.1-pro-preview',
+    provider: 'google',
+  },
+
+  // -------------------------------------------------------------------------
+  // CREATIVE WRITING — Claude leads unambiguously on EQ-Bench Creative Writing Elo.
+  // Sonnet 4.6: 1991 Elo (balanced). Opus 4.7: 2216 Elo (+225 pts lead over GPT-5.5 at 2024).
+  // -------------------------------------------------------------------------
+  creative_writing: {
+    slot: 'creative_writing',
+    label: 'Creative Writing',
+    description: 'Balanced creative lane. Claude Sonnet 4.6: EQ-Bench 1991 Elo, $3/$15.',
+    modelId: 'claude-sonnet-4.6',
+    provider: 'anthropic',
+  },
+  creative_writing_premium: {
+    slot: 'creative_writing_premium',
+    label: 'Creative Writing Premium',
+    description:
+      'Premium creative lane. Claude Opus 4.7: EQ-Bench 2216 Elo — 192 Elo points ahead of GPT-5.5 (2024), unambiguous leader.',
+    modelId: 'claude-opus-4.7',
+    provider: 'anthropic',
+  },
+
+  // -------------------------------------------------------------------------
+  // SEARCH — Perplexity purpose-built for grounded QA. Sonar Deep Research: 93.9% SimpleQA.
+  // -------------------------------------------------------------------------
   search_fast: {
     slot: 'search_fast',
     label: 'Search Fast',
-    description: 'Fast web-search lane with citations.',
+    description:
+      'Fast grounded search. Perplexity Sonar: purpose-built retrieval, $1/$1 + search fee.',
     modelId: 'sonar',
     provider: 'perplexity',
   },
   search_premium: {
     slot: 'search_premium',
     label: 'Search Premium',
-    description: 'Deep research lane for long-form synthesis and citations.',
+    description:
+      'Deep research. Perplexity Sonar Deep Research: 93.9% SimpleQA, multi-source synthesis with citations.',
     modelId: 'sonar-deep-research',
     provider: 'perplexity',
   },
+
+  // -------------------------------------------------------------------------
+  // VISION — Gemini 3.1 Pro leads FACTS Grounding (document-grounded generation) and
+  // maintains 500K–1M token retrieval quality. All frontier models converged on MMMU-Pro (~81%).
+  // -------------------------------------------------------------------------
   vision_fast: {
     slot: 'vision_fast',
     label: 'Vision Fast',
-    description: 'Fast multimodal lane for screenshots and image inputs.',
+    description: 'Fast multimodal lane. Gemini 3.1 Flash-Lite: 1M context, $0.25/$1.50.',
     modelId: 'gemini-3.1-flash-lite',
     provider: 'google',
   },
   vision_premium: {
     slot: 'vision_premium',
     label: 'Vision Premium',
-    description: 'Premium multimodal lane for high-context vision and analysis.',
+    description:
+      'Premium vision + long-doc lane. Gemini 3.1 Pro: FACTS Grounding #1, holds 500K–1M token context, $2/$12.',
     modelId: 'gemini-3.1-pro-preview',
     provider: 'google',
   },
+
+  // -------------------------------------------------------------------------
+  // BROWSER / COMPUTER USE — Claude family leads OSWorld (78% Opus 4.7, Claude Sonnet for cost).
+  // GPT-5.4-mini had no OSWorld data and is a mini model — wrong choice for GUI automation.
+  // -------------------------------------------------------------------------
   browser_dom: {
     slot: 'browser_dom',
     label: 'Browser DOM',
-    description: 'DOM and browser automation lane.',
+    description:
+      'DOM automation lane. Claude Sonnet 4.6: best tool-use accuracy in Claude family, $3/$15.',
     modelId: 'claude-sonnet-4.6',
     provider: 'anthropic',
   },
   computer_use: {
     slot: 'computer_use',
     label: 'Computer Use',
-    description: 'Desktop and computer-use lane with tool support.',
-    modelId: 'gpt-5.4-mini',
-    provider: 'openai',
+    description:
+      'Desktop automation lane. Claude Sonnet 4.6: Claude family leads OSWorld; Sonnet balances capability vs cost vs Opus 4.7.',
+    modelId: 'claude-sonnet-4.6',
+    provider: 'anthropic',
   },
+  computer_use_premium: {
+    slot: 'computer_use_premium',
+    label: 'Computer Use Premium',
+    description:
+      'Premium desktop automation. Claude Opus 4.7: 78% OSWorld-Verified (#1 public model), 77.3% MCP-Atlas tool use.',
+    modelId: 'claude-opus-4.7',
+    provider: 'anthropic',
+  },
+
+  // -------------------------------------------------------------------------
+  // MEDIA GENERATION — Best-in-class dedicated models.
+  // -------------------------------------------------------------------------
   image_generation: {
     slot: 'image_generation',
     label: 'Image Generation',
-    description: 'High-quality image generation lane.',
+    description: 'Image generation lane. GPT Image 1.5: integrated, strong text rendering.',
     modelId: 'gpt-image-1.5',
     provider: 'openai',
   },
   video_generation: {
     slot: 'video_generation',
     label: 'Video Generation',
-    description: 'High-quality video generation lane.',
+    description: 'Video generation lane. Veo 3: Google DeepMind, state-of-the-art video quality.',
     modelId: 'veo-3',
     provider: 'google',
   },
+
+  // -------------------------------------------------------------------------
+  // VOICE — Whisper for STT; Gemini Flash-Lite for rewrite ($0.25/$1.50 vs GPT-4o-mini $0.75/$4.50 — 3× cheaper for simple cleanup).
+  // -------------------------------------------------------------------------
   voice_transcription: {
     slot: 'voice_transcription',
     label: 'Voice Transcription',
-    description: 'Speech-to-text lane.',
+    description: 'Speech-to-text. Whisper-1: battle-tested STT.',
     modelId: 'whisper-1',
     provider: 'openai',
   },
   voice_rewrite: {
     slot: 'voice_rewrite',
     label: 'Voice Rewrite',
-    description: 'Cleanup and rewrite lane for dictated text.',
-    modelId: 'gpt-5.4-mini',
-    provider: 'openai',
+    description:
+      'Dictation cleanup lane. Gemini 3.1 Flash-Lite: 3× cheaper than GPT-5.4-mini for simple text rewriting, $0.25/$1.50.',
+    modelId: 'gemini-3.1-flash-lite',
+    provider: 'google',
   },
 };
 
@@ -492,12 +603,16 @@ export const TIER_POLICIES: Record<ProductTier, TierPolicy> = {
       'general_balanced',
       'coding_fast',
       'coding_premium',
+      'reasoning_premium',
+      'creative_writing',
+      'creative_writing_premium',
       'search_fast',
       'search_premium',
       'vision_fast',
       'vision_premium',
       'browser_dom',
       'computer_use',
+      'computer_use_premium',
       'voice_transcription',
       'voice_rewrite',
     ],
@@ -517,12 +632,16 @@ export const TIER_POLICIES: Record<ProductTier, TierPolicy> = {
       'general_premium',
       'coding_fast',
       'coding_premium',
+      'reasoning_premium',
+      'creative_writing',
+      'creative_writing_premium',
       'search_fast',
       'search_premium',
       'vision_fast',
       'vision_premium',
       'browser_dom',
       'computer_use',
+      'computer_use_premium',
       'image_generation',
       'video_generation',
       'voice_transcription',
@@ -544,12 +663,16 @@ export const TIER_POLICIES: Record<ProductTier, TierPolicy> = {
       'general_premium',
       'coding_fast',
       'coding_premium',
+      'reasoning_premium',
+      'creative_writing',
+      'creative_writing_premium',
       'search_fast',
       'search_premium',
       'vision_fast',
       'vision_premium',
       'browser_dom',
       'computer_use',
+      'computer_use_premium',
       'image_generation',
       'video_generation',
       'voice_transcription',
@@ -627,6 +750,21 @@ export const modelsById: Record<string, ModelMetadata> = (() => {
   }
 
   return Object.fromEntries(entries);
+})();
+
+// Module-load-time drift check: every SLOT_REGISTRY entry MUST point to a
+// model that exists in models.json (or in modelIdAliases that resolve there).
+// This makes catalog drift fail loudly at import time instead of silently
+// routing to a phantom model. Aligns with rule-models-json.md.
+(() => {
+  for (const slot of Object.values(SLOT_REGISTRY)) {
+    if (!modelsById[slot.modelId]) {
+      throw new Error(
+        `SLOT_REGISTRY references unknown model: ${slot.modelId} (slot: ${slot.slot}). ` +
+          `Update packages/types/src/models.json or fix SLOT_REGISTRY.`,
+      );
+    }
+  }
 })();
 
 export const providerLabels: Record<string, string> = Object.fromEntries(

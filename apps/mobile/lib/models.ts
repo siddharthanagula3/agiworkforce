@@ -81,6 +81,10 @@ export const PROVIDERS: ProviderDef[] = MOBILE_PROVIDER_IDS.map((providerId) => 
   color: PROVIDER_META[providerId]?.color ?? '#888',
 }));
 
+// TODO(rule-models-json): derive from released-after threshold once models.json
+// has consistent `released` dates. Until then this set must be updated manually
+// when a new era model ships — hardcoded IDs violate the no-hardcode rule but
+// there is no machine-readable field to derive from yet.
 const NEW_MODEL_IDS = new Set<string>(['gpt-5.4', 'grok-4']);
 
 export const MODEL_LIST: ModelDef[] = getPickerModels({
@@ -150,9 +154,13 @@ export function getShortDisplayName(id: string): string {
     return id;
   }
 
+  // MOB-HARDCODED-MODELS fix: strip well-known provider name prefixes generically
+  // so this survives era changes without manual updates.
+  // Pattern: "Claude X.Y ", "GPT-X.Y ", "Gemini X.Y ", "Grok X ", "OpenAI " etc.
   return model.name
-    .replace('Claude 4.6 ', '')
-    .replace('Claude 4.5 ', '')
-    .replace('GPT-5.4 ', 'GPT-')
-    .replace('OpenAI ', '');
+    .replace(/^Claude\s+[\d.]+\s+/i, '')
+    .replace(/^GPT-[\d.]+\s+/, 'GPT-')
+    .replace(/^Gemini\s+[\d.]+\s+/i, '')
+    .replace(/^Grok\s+\d+\s+/i, '')
+    .replace(/^OpenAI\s+/i, '');
 }

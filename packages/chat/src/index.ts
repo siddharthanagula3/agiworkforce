@@ -7,6 +7,8 @@ export * from './lib/utils';
 export * from './lib/greetings';
 export { getConnectorPermissionStore } from './lib/connectorPermissionStore';
 export type { ConnectorPermissionStore } from './lib/connectorPermissionStore';
+export { classifyPrompt, buildRoutingDecision, TASK_LABEL } from './lib/promptClassifier';
+export type { ClassifiedTask, ClassificationResult, ClassifyOptions } from './lib/promptClassifier';
 
 // Stores — prefixed to avoid collisions with host-app store names
 export { useChatStore } from './stores/chatStore';

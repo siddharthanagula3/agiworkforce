@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeIn, SlideInDown } from 'react-native-reanimated';
 import {
   ArrowLeft,
@@ -47,6 +47,9 @@ import { colors } from '@/lib/theme';
 
 export default function CompanionScreen() {
   const router = useRouter();
+  // MOB-PAIRINGCODE-ORPHAN fix: read pairingCode pushed by deep-link handler
+  // in _layout.tsx (`router.push('/(app)/companion?pairingCode=...')`).
+  const { pairingCode: deepLinkCode } = useLocalSearchParams<{ pairingCode?: string }>();
   const [showScanner, setShowScanner] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
   const hasSeenDemo = useDemoStore((s) => s.hasSeenDemo);
@@ -82,6 +85,14 @@ export default function CompanionScreen() {
     disconnect,
     clearError,
   } = useConnectionStore();
+
+  // MOB-PAIRINGCODE-ORPHAN fix: auto-connect when a pairingCode param is
+  // present (deep-link flow). Status guard prevents double-connect on re-render.
+  useEffect(() => {
+    if (deepLinkCode && status === 'disconnected') {
+      connect(deepLinkCode);
+    }
+  }, [deepLinkCode, status, connect]);
 
   // Wire companion events to push notifications (runs for the lifetime of this screen)
   useEffect(() => {

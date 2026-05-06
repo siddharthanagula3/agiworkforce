@@ -803,7 +803,9 @@ async fn run_execution_loop(
                 let log_dir = log_dir.clone();
                 let semaphore = semaphore.clone();
 
-                tokio::spawn(async move {
+                // Spawn the trigger and log any panic via the JoinHandle so that
+                // task failures are not silently swallowed (Bug 5 fix).
+                let handle = tokio::spawn(async move {
                     // Acquire semaphore permit (blocks until a slot is available)
                     let _permit = match semaphore.acquire().await {
                         Ok(p) => p,
@@ -811,6 +813,15 @@ async fn run_execution_loop(
                     };
 
                     execute_trigger(event, &config, &hooks_config, &log_dir).await;
+                });
+                // Detach but log panic: spawn a watcher that awaits the handle.
+                tokio::spawn(async move {
+                    if let Err(e) = handle.await {
+                        tracing::error!(
+                            error = ?e,
+                            "daemon trigger task panicked or was cancelled"
+                        );
+                    }
                 });
             }
         }
@@ -905,6 +916,21 @@ async fn execute_trigger(
             log_path.display(),
             e
         );
+    }
+    // Restrict log file to owner-only (0o600) — log entries may contain
+    // prompt text or partial API responses. Mirrors auth.rs set_file_permissions.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o600);
+        if let Err(e) = std::fs::set_permissions(&log_path, perms) {
+            eprintln!(
+                "{} Failed to set log file permissions {}: {}",
+                "daemon:".bright_red(),
+                log_path.display(),
+                e
+            );
+        }
     }
 
     eprintln!(

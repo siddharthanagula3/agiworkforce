@@ -12,7 +12,7 @@ import { SurfaceIndex } from '../components/marketing/editorial/SurfaceIndex';
 import { OperatorConsole } from '../components/marketing/editorial/OperatorConsole';
 import { StampComingSoon } from '../components/marketing/editorial/StampComingSoon';
 import { DispatchSection } from '../components/marketing/editorial/DispatchSection';
-import { MARKETING } from '../lib/marketing-constants';
+import { MARKETING, MARKETING_MODEL_PILLS } from '../lib/marketing-constants';
 
 export const metadata: Metadata = {
   title: 'AGI Workforce: Beyond one model. Beyond one surface.',
@@ -83,14 +83,45 @@ export default function Home() {
       />
 
       <EditorialPage tier="mixed">
-        {/* ── S1 — MASTHEAD HERO (paper, full-bleed) ── */}
+        {/* ── S1 — MASTHEAD HERO (terminal cover) ── */}
         <RuledSection tier="paper" id="hero" fullBleed>
-          <div className="container mx-auto px-4 pt-20 pb-12 md:pt-28 md:pb-16">
+          <div className="container mx-auto px-4 pt-12 pb-12 md:pt-16 md:pb-16">
+            {/* Terminal prompt strip — deck-cover chrome */}
+            <div className="mb-12 md:mb-16 flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3 font-mono text-[12px] md:text-[13px]">
+                <span
+                  aria-hidden="true"
+                  className="inline-flex h-6 w-6 items-center justify-center border border-[var(--color-rule)]/50 text-[var(--color-rule)]"
+                >
+                  <span className="block h-2 w-[2px] bg-[var(--color-rule)] mx-[1px]" />
+                  <span className="block h-3 w-[2px] bg-[var(--color-rule)] mx-[1px]" />
+                  <span className="block h-1.5 w-[2px] bg-[var(--color-rule)] mx-[1px]" />
+                </span>
+                <span className="text-[var(--color-rule)]">$</span>
+                <span className="text-[var(--color-ink-2)]">
+                  ./agiworkforce <span className="text-[var(--color-rule)]">--start</span>
+                </span>
+              </div>
+              <div className="hidden sm:flex items-center gap-3 font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--color-fg-quiet)]">
+                <span>agiworkforce :: 01 cover</span>
+                <span aria-hidden="true">·</span>
+                <a
+                  href="https://agiworkforce.com"
+                  className="text-[var(--color-rule)] hover:underline"
+                >
+                  agiworkforce.com
+                </a>
+              </div>
+            </div>
+
             {/* Two-column grid */}
             <div className="grid grid-cols-1 gap-10 md:grid-cols-5 md:gap-16">
               {/* Left: headline (60% width = 3/5 cols) */}
               <div className="md:col-span-3">
-                <h1 className="font-display text-left leading-[0.95] tracking-[-0.022em]">
+                <p className="mb-6 font-mono text-[11px] tracking-[0.22em] uppercase text-[var(--color-rule)]">
+                  boot · may 2026
+                </p>
+                <h1 className="font-display text-left leading-[0.95] tracking-[-0.024em]">
                   <span
                     className="block font-light text-[var(--color-ink)]"
                     style={{ fontSize: 'clamp(2.75rem,7vw,5.5rem)' }}
@@ -98,17 +129,15 @@ export default function Home() {
                     Beyond one model.
                   </span>
                   <span
-                    className="block font-light text-[var(--color-ink)]"
+                    className="block font-light text-[var(--color-ink-2)]"
                     style={{ fontSize: 'clamp(2.75rem,7vw,5.5rem)' }}
                   >
                     Beyond one surface.
                   </span>
                   <span className="block" style={{ fontSize: 'clamp(2.75rem,7vw,5.5rem)' }}>
-                    <span className="border-b-[3px] border-[var(--color-rule)] pb-1">
-                      <em className="font-display italic font-extrabold text-[var(--color-ink)]">
-                        AGI in your hands.
-                      </em>
-                    </span>
+                    <em className="font-display italic font-extrabold text-[var(--color-rule)] text-glow-rule">
+                      AGI in your hands.
+                    </em>
                     <Caret />
                   </span>
                 </h1>
@@ -117,20 +146,21 @@ export default function Home() {
               {/* Right: lede (40% width = 2/5 cols) */}
               <div className="md:col-span-2 flex flex-col justify-end pb-2">
                 <p className="font-mono text-[14px] leading-[22px] text-[var(--color-ink-2)]">
+                  <span className="text-[var(--color-rule)]">&gt; </span>
                   {MARKETING.providers.display} providers. One thread. Zero lock-in.
                 </p>
                 <p className="mt-4 font-mono text-[14px] leading-[22px] text-[var(--color-ink-2)]">
                   Bring your own keys, run fully offline, or use our managed cloud. The CLI is the
                   engine; the apps are surfaces over it.
                 </p>
-                <p className="mt-4 font-mono text-[14px] leading-[22px] text-[var(--color-fg-quiet)]">
-                  THE EDITORS
+                <p className="mt-4 font-mono text-[11px] tracking-[0.18em] uppercase text-[var(--color-fg-quiet)]">
+                  // editors
                 </p>
               </div>
             </div>
 
             {/* Trust strip */}
-            <div className="mt-10 border-t border-[var(--color-rule)]" />
+            <div className="mt-12 border-t border-[var(--color-rule)]" />
             <p className="mt-4 font-mono text-[11px] tracking-[0.18em] uppercase text-[var(--color-fg-quiet)]">
               NO TRAINING ON YOUR DATA · MULTI-PROVIDER · BYOK + LOCAL · CROSS-PLATFORM
             </p>
@@ -189,20 +219,18 @@ export default function Home() {
 
               {/* Model pill chain */}
               <div className="mt-8 flex flex-wrap items-center gap-2 font-mono text-sm tracking-tight">
-                {['gpt-4o', 'claude-opus-4-7', 'gemini-2.5-pro', 'llama-3.3-70b'].map(
-                  (model, i, arr) => (
-                    <span key={model} className="flex items-center gap-2">
-                      <span className="inline-flex items-center px-2 py-0.5 border border-[var(--color-rule-soft)] text-[var(--color-ink)]">
-                        {model}
-                      </span>
-                      {i < arr.length - 1 && (
-                        <span className="text-[var(--color-rule)]" aria-hidden="true">
-                          →
-                        </span>
-                      )}
+                {MARKETING_MODEL_PILLS.map((model, i, arr) => (
+                  <span key={model} className="flex items-center gap-2">
+                    <span className="inline-flex items-center px-2 py-0.5 border border-[var(--color-rule-soft)] text-[var(--color-ink)]">
+                      {model}
                     </span>
-                  ),
-                )}
+                    {i < arr.length - 1 && (
+                      <span className="text-[var(--color-rule)]" aria-hidden="true">
+                        →
+                      </span>
+                    )}
+                  </span>
+                ))}
               </div>
 
               <div className="mt-6">
@@ -328,33 +356,40 @@ export default function Home() {
                 </p>
               </Specimen>
 
-              {/* Inline transcript */}
-              <div className="mt-8 bg-[var(--color-graphite)] border-l-[3px] border-[var(--color-rule)] p-6">
-                <pre className="font-mono text-[12px] leading-[1.8] text-[var(--color-fg-muted)] whitespace-pre-wrap">
-                  <span className="text-[var(--color-fg-quiet)]">
-                    14:02 · CLAUDE OPUS 4-7{'\n'}
-                  </span>
-                  <span>{'  > sketch the architecture for the new feature\n'}</span>
-                  <span>{'  → reading 142 files...\n'}</span>
-                  <span className="text-[var(--color-fg-quiet)]">
-                    {'  → claude-opus-4-7: returned 1042 tokens\n'}
-                  </span>
-                  <span>{'\n'}</span>
-                  <span className="text-[var(--color-cream-on-graphite)] font-semibold">
-                    {'14:04 · ↻ HANDOFF\n'}
-                  </span>
-                  <span className="text-[var(--color-rule)]">{'  ┃ '}</span>
-                  <span className="text-[var(--color-fg-quiet)]">
-                    {'context preserved · 1 thread · 142 files\n'}
-                  </span>
-                  <span>{'\n'}</span>
-                  <span className="text-[var(--color-fg-quiet)]">14:04 · GPT-4O{'\n'}</span>
-                  <span>{'  > now implement it\n'}</span>
-                  <span className="text-[var(--color-fg-quiet)]">
-                    {"  → continuing from claude's outline..."}
-                  </span>
-                </pre>
-              </div>
+              {/* Inline transcript — model IDs sourced from MARKETING_MODEL_PILLS (no hardcodes) */}
+              {(() => {
+                const [pillGpt, pillClaude] = MARKETING_MODEL_PILLS;
+                const labelClaude = pillClaude.toUpperCase().replace(/-/g, ' ');
+                const labelGpt = pillGpt.toUpperCase();
+                return (
+                  <div className="mt-8 bg-[var(--color-graphite)] border-l-[3px] border-[var(--color-rule)] p-6">
+                    <pre className="font-mono text-[12px] leading-[1.8] text-[var(--color-fg-muted)] whitespace-pre-wrap">
+                      <span className="text-[var(--color-fg-quiet)]">
+                        {`14:02 · ${labelClaude}\n`}
+                      </span>
+                      <span>{'  > sketch the architecture for the new feature\n'}</span>
+                      <span>{'  → reading 142 files...\n'}</span>
+                      <span className="text-[var(--color-fg-quiet)]">
+                        {`  → ${pillClaude}: returned 1042 tokens\n`}
+                      </span>
+                      <span>{'\n'}</span>
+                      <span className="text-[var(--color-cream-on-graphite)] font-semibold">
+                        {'14:04 · ↻ HANDOFF\n'}
+                      </span>
+                      <span className="text-[var(--color-rule)]">{'  ┃ '}</span>
+                      <span className="text-[var(--color-fg-quiet)]">
+                        {'context preserved · 1 thread · 142 files\n'}
+                      </span>
+                      <span>{'\n'}</span>
+                      <span className="text-[var(--color-fg-quiet)]">{`14:04 · ${labelGpt}\n`}</span>
+                      <span>{'  > now implement it\n'}</span>
+                      <span className="text-[var(--color-fg-quiet)]">
+                        {'  → continuing from the previous outline...'}
+                      </span>
+                    </pre>
+                  </div>
+                );
+              })()}
 
               <div className="mt-6">
                 <a

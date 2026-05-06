@@ -947,6 +947,15 @@ export function activate(context: vscode.ExtensionContext): void {
 
       // Fallback: shell-quoted via cross-platform helper. Used when the Git
       // extension is unavailable or the workspace folder isn't a known repo.
+      // EXTV-GIT-COMMIT (audit 2026-05-06): refuse in untrusted workspaces —
+      // the commit message is user input but the shell quote helper relies on
+      // workspace config; an untrusted repo could influence the command path.
+      if (!vscode.workspace.isTrusted) {
+        vscode.window.showWarningMessage(
+          'AGI: git commit fallback is disabled in untrusted workspaces.',
+        );
+        return;
+      }
       const terminal = vscode.window.createTerminal({ name: 'AGI Git', cwd: folder.uri });
       terminal.show();
       terminal.sendText(`git add -u && git commit -m ${shellQuoteForCurrentPlatform(msg)}`);

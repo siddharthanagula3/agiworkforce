@@ -27,7 +27,15 @@ import { logger } from '../lib/logger';
 
 const router: Router = Router();
 
+// GW-1 (audit 2026-05-03): authenticate FIRST, then rate-limit. The
+// previous order (rate-limit before authenticateToken) was inconsistent
+// with mobile.ts and meant any future route inserted between them
+// would silently bypass auth. Putting auth at the top of the chain
+// makes it impossible to forget.
+router.use(authenticateToken);
+
 // SECURITY: Baseline rate limit for all desktop endpoints (100/min fallback)
+// — applied AFTER auth so the per-IP bucket reflects authenticated traffic.
 router.use(createRateLimiter('default'));
 
 // UUID validation regex (RFC 4122)
@@ -40,8 +48,6 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-
 function isValidUUID(id: string | undefined): boolean {
   return typeof id === 'string' && UUID_REGEX.test(id);
 }
-
-router.use(authenticateToken);
 
 // =============================================================================
 // DATABASE TYPES

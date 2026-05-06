@@ -7,12 +7,15 @@ import {
   getTaskModelForProvider,
   type Provider,
 } from '@agiworkforce/types';
+import type { RoutingDecision } from '@agiworkforce/types';
 
 interface ModelState {
   models: ModelInfo[];
   selectedModelId: string;
   thinkingEnabled: boolean;
   recentModelIds: string[];
+  /** Last auto-routing decision — shown as a badge in the model selector. */
+  lastRoutingDecision: RoutingDecision | null;
 
   setModels: (models: ModelInfo[]) => void;
   selectModel: (id: string) => void;
@@ -20,7 +23,11 @@ interface ModelState {
   setThinking: (enabled: boolean) => void;
   getSelectedModel: () => ModelInfo | undefined;
   getModelsByTier: () => Record<string, ModelInfo[]>;
+  setRoutingDecision: (decision: RoutingDecision) => void;
+  clearRoutingDecision: () => void;
 }
+
+export const selectLastRoutingDecision = (s: ModelState) => s.lastRoutingDecision;
 
 const DEFAULT_MODEL_ID = 'auto-economy';
 
@@ -117,18 +124,24 @@ export const useModelStore = create<ModelState>()(
       selectedModelId: DEFAULT_MODEL_ID,
       thinkingEnabled: false,
       recentModelIds: [],
+      lastRoutingDecision: null,
 
       setModels: (models) => set({ models }),
 
       selectModel: (id) =>
         set((state) => {
           const recentIds = [id, ...state.recentModelIds.filter((r) => r !== id)].slice(0, 5);
-          return { selectedModelId: id, recentModelIds: recentIds };
+          // Clear routing decision when user manually picks a model
+          return { selectedModelId: id, recentModelIds: recentIds, lastRoutingDecision: null };
         }),
 
       toggleThinking: () => set((state) => ({ thinkingEnabled: !state.thinkingEnabled })),
 
       setThinking: (enabled) => set({ thinkingEnabled: enabled }),
+
+      setRoutingDecision: (decision) => set({ lastRoutingDecision: decision }),
+
+      clearRoutingDecision: () => set({ lastRoutingDecision: null }),
 
       getSelectedModel: () => {
         const { models, selectedModelId } = get();
