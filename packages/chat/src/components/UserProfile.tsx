@@ -11,7 +11,7 @@ import {
   Home,
   Info,
 } from 'lucide-react';
-import { PLAN_LABEL, isFreePlan, type UIPlanTier, type UsageMeter } from '@agiworkforce/types';
+import { PLAN_LABEL, type UIPlanTier, type UsageMeter } from '@agiworkforce/types';
 import { cn } from '../lib/utils';
 import { useSettingsStore } from '../stores/settingsStore';
 import { Tooltip } from './ui/Tooltip';
@@ -144,7 +144,7 @@ function UsageMeterRow({ meter, tier, onUpgradeClick }: UsageMeterRowProps) {
           {used} / {total} tokens
           {resetLabel ? ` · resets ${resetLabel}` : ''}
         </span>
-        {isLow && isFreePlan(tier) && (
+        {isLow && tier === 'hobby' && (
           <button
             type="button"
             onClick={onUpgradeClick}
@@ -353,7 +353,7 @@ export function UserProfile({ collapsed }: UserProfileProps) {
 
             <div className="my-1 h-px bg-[var(--chat-border)]" />
 
-            {/* View all plans (always visible) */}
+            {/* View all plans (always visible — neutral discovery, no upsell language for byok/local) */}
             <MenuButton
               icon={<CreditCard size={13} />}
               label="View all plans"
@@ -361,17 +361,6 @@ export function UserProfile({ collapsed }: UserProfileProps) {
                 handleUpgradePlan();
               }}
             />
-
-            {/* Upgrade CTA — only for free-plan users (local / byok) */}
-            {isFreePlan(tier) && (
-              <MenuButton
-                icon={<ArrowUpRight size={13} />}
-                label="Try Hobby for managed cloud"
-                onClick={() => {
-                  handleUpgradePlan();
-                }}
-              />
-            )}
 
             {/* Get apps */}
             <MenuButton
