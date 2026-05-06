@@ -41,36 +41,50 @@ function collectImageBase64s(blocks: ContentBlock[]): string[] {
     .filter((s): s is string => s !== null);
 }
 
-function translateMessage(msg: ProviderMessage): OllamaChatMessage {
+function translateMessage(msg: ProviderMessage): OllamaChatMessage[] {
   const role = msg.role === 'system' ? 'system' : msg.role;
   if (typeof msg.content === 'string') {
-    return { role, content: msg.content };
+    return [{ role, content: msg.content }];
   }
+  const out: OllamaChatMessage[] = [];
+
+  // Split tool_result blocks first: each becomes its own `role: "tool"`
+  // message. Ollama's wire shape supports a flat list of tool messages
+  // (one per result), and earlier versions of this translator silently
+  // dropped every tool_result past the first plus any co-occurring text.
+  const toolResults = msg.content.filter(
+    (b): b is Extract<ContentBlock, { type: 'tool_result' }> => b.type === 'tool_result',
+  );
+
+  // The remaining (non-tool_result) blocks become the main message.
   const text = collapseTextBlocks(msg.content);
   const images = collectImageBase64s(msg.content);
   const toolCalls = msg.content
-    .filter((b) => b.type === 'tool_use')
-    .map((b) => {
-      // tool_use is narrowed by the filter
-      const tu = b as Extract<ContentBlock, { type: 'tool_use' }>;
-      return { function: { name: tu.name, arguments: tu.input } };
+    .filter((b): b is Extract<ContentBlock, { type: 'tool_use' }> => b.type === 'tool_use')
+    .map((tu) => ({ function: { name: tu.name, arguments: tu.input } }));
+
+  // Emit the assistant/user/system body if it has any content. We DO emit
+  // when only tool_calls are present (text is empty in that case). We
+  // skip emitting an empty placeholder when the message contains *only*
+  // tool_results.
+  const hasNonToolResultContent = text.length > 0 || images.length > 0 || toolCalls.length > 0;
+  if (hasNonToolResultContent) {
+    out.push({
+      role,
+      content: text,
+      ...(images.length > 0 ? { images } : {}),
+      ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
     });
-  // tool_result blocks become tool-role messages in Ollama
-  const toolResults = msg.content.filter((b) => b.type === 'tool_result');
-  if (toolResults.length > 0) {
-    // Ollama expects each tool result as a separate `role: "tool"` message;
-    // caller should split before reaching here. For safety, we collapse.
-    const tr = toolResults[0] as Extract<ContentBlock, { type: 'tool_result' }>;
+  }
+
+  // Now append one `role: "tool"` message per tool_result, preserving order.
+  for (const tr of toolResults) {
     const content =
       typeof tr.content === 'string' ? tr.content : tr.content.map((b) => b.text).join('\n');
-    return { role: 'tool', content };
+    out.push({ role: 'tool', content });
   }
-  return {
-    role,
-    content: text,
-    ...(images.length > 0 ? { images } : {}),
-    ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
-  };
+
+  return out;
 }
 
 function translateTool(tool: ToolDef): OllamaTool {
@@ -97,7 +111,11 @@ export function translateChatRequest(req: ChatRequest): OllamaChatRequest {
   }
 
   for (const msg of req.messages) {
-    messages.push(translateMessage(msg));
+    // translateMessage returns 1+ Ollama messages (1 per tool_result split,
+    // plus optionally the message body). Flat-merge so the wire stays a
+    // single OllamaChatMessage[] with each tool_result as its own entry.
+    const translated = translateMessage(msg);
+    for (const t of translated) messages.push(t);
   }
 
   const tools = req.tools && req.tools.length > 0 ? req.tools.map(translateTool) : undefined;

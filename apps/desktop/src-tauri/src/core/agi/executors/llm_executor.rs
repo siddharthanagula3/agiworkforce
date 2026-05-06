@@ -184,7 +184,14 @@ impl LlmExecutor {
             (Some(p), Some(m)) => (*p, m.clone()),
             (Some(p), None) => (*p, self.default_model_for_provider(*p)),
             (None, Some(m)) => (self.infer_provider_from_model(m), m.clone()),
-            (None, None) => (Provider::ManagedCloud, "gpt-5.4-mini".to_string()),
+            (None, None) => (
+                Provider::ManagedCloud,
+                crate::core::llm::models_config::get_task_model(
+                    &Provider::ManagedCloud,
+                    "fast_completion",
+                )
+                .to_string(),
+            ),
         };
 
         // Build router preferences
@@ -376,12 +383,9 @@ impl LlmExecutor {
         }
     }
 
-    /// Get the default model for a given provider.
+    /// Get the default model for a given provider (reads from models.json via models_config).
     fn default_model_for_provider(&self, provider: Provider) -> String {
-        match provider {
-            Provider::Ollama => "llama4-maverick".to_string(),
-            _ => "gpt-5.4-mini".to_string(),
-        }
+        crate::core::llm::models_config::get_default_model(&provider).to_string()
     }
 
     /// Infer provider from model name.

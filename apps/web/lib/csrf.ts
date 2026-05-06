@@ -156,18 +156,12 @@ export async function getSessionIdFromRequest(_request: Request): Promise<string
     return sessionId;
   }
 
-  // SEV-WEB-M-1 fix (2026-05-05): prefer the `__Host-` prefixed cookie which
-  // the browser refuses to set from JavaScript or from sibling subdomains.
-  // Fall back to the legacy `anon-session-id` for one Max-Age window (24h)
-  // so existing visitors don't lose their CSRF binding mid-session, then
-  // remove the fallback in a follow-up commit after 2026-05-06.
+  // SEV-WEB-M-1 fix (2026-05-05): use `__Host-` prefixed cookie only.
+  // The browser refuses to set this from JavaScript or from sibling subdomains.
+  // Legacy `anon-session-id` fallback removed 2026-05-05 per the deadline.
   const hostPrefixed = readCookie(cookies, '__Host-anon-session-id');
   if (hostPrefixed) {
     return hostPrefixed;
-  }
-  const anonId = readCookie(cookies, 'anon-session-id');
-  if (anonId) {
-    return anonId;
   }
 
   // Option 3: Generate unique anonymous session ID
@@ -212,19 +206,13 @@ export async function getOrCreateAnonSession(
     return { id: sessionId };
   }
 
-  // Option 3a: New `__Host-` prefixed cookie (SEV-WEB-M-1 fix, 2026-05-05).
-  // The `__Host-` prefix forces Path=/ + Secure + no Domain, and the browser
-  // refuses to set such a cookie from JavaScript or from a sibling subdomain
-  // — closing the cross-subdomain CSRF-binding hijack vector.
+  // Option 3: `__Host-` prefixed cookie (SEV-WEB-M-1 fix, 2026-05-05).
+  // The `__Host-` prefix forces Path=/ + Secure + no Domain; browser refuses
+  // to set it from JS or sibling subdomains. Legacy `anon-session-id` fallback
+  // removed 2026-05-05 per the deadline. Only the __Host- path is accepted.
   const hostPrefixed = readCookie(cookies, '__Host-anon-session-id');
   if (hostPrefixed) {
     return { id: hostPrefixed };
-  }
-  // Option 3b: Legacy cookie (transitional — accept for 24h Max-Age window
-  // so in-flight visitors don't lose CSRF binding; remove after 2026-05-06).
-  const legacyAnonId = readCookie(cookies, 'anon-session-id');
-  if (legacyAnonId) {
-    return { id: legacyAnonId };
   }
 
   // Option 4: Generate a new anonymous session ID and request it be stored in a cookie

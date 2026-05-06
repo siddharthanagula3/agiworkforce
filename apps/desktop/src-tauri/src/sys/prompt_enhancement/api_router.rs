@@ -10,6 +10,40 @@ fn openai_model_for_task(task: &str) -> String {
     models_config::get_task_model(&Provider::OpenAI, task).to_string()
 }
 
+/// Look up Anthropic's task-routed model for the given snake_case task.
+fn claude_model_for_task(task: &str) -> String {
+    models_config::get_task_model(&Provider::Anthropic, task).to_string()
+}
+
+/// Look up Perplexity's default model.
+/// TODO(rule-models-json): add Perplexity task-routing entries to models.json.
+fn perplexity_default_model() -> String {
+    // Falls back to "pplx-70b-online" if models.json has no Perplexity default_model set.
+    // Replace this constant once Perplexity task_routing is wired in models.json.
+    let from_catalog = models_config::get_default_model(&Provider::Perplexity);
+    if from_catalog.is_empty() || from_catalog == "gpt-5.4-mini" {
+        // Catalog fallback returned the generic default — use the Perplexity-specific pin.
+        "pplx-70b-online".to_string()
+    } else {
+        from_catalog.to_string()
+    }
+}
+
+/// Image / video generation models are not in the standard chat catalog;
+/// centralize them here so changes require only one edit.
+/// TODO(rule-models-json): add image/video provider entries to models.json.
+mod gen_model_consts {
+    pub const DALLE_3: &str = "dall-e-3";
+    pub const STABLE_DIFFUSION_XL: &str = "stable-diffusion-xl";
+    pub const VEO_3: &str = "veo-3";
+}
+
+/// Ollama fallback model for local inference.
+/// TODO(rule-models-json): add Ollama task_routing to models.json.
+fn ollama_default_model() -> String {
+    models_config::get_default_model(&Provider::Ollama).to_string()
+}
+
 pub struct APIRouter {
     routing_rules: HashMap<UseCase, Vec<APIProvider>>,
 }
@@ -134,17 +168,17 @@ impl APIRouter {
         match (use_case, provider) {
             (UseCase::Automation, APIProvider::Claude) => (
                 "Claude excels at understanding complex automation workflows and providing detailed step-by-step instructions.".to_string(),
-                "claude-sonnet-4-5".to_string(),
+                claude_model_for_task("chat"),
             ),
             (UseCase::Coding, APIProvider::Claude) => {
                 let model = if matches!(context.complexity, Some(super::Complexity::Complex)) {
-                    "claude-opus-4-1"
+                    claude_model_for_task("complex_reasoning")
                 } else {
-                    "claude-sonnet-4-5"
+                    claude_model_for_task("code_generation")
                 };
                 (
-                    format!("Claude {} is optimal for code generation with strong reasoning capabilities.", model),
-                    model.to_string(),
+                    format!("Claude is optimal for code generation with strong reasoning capabilities."),
+                    model,
                 )
             },
             (UseCase::Coding, APIProvider::GPT) => (
@@ -157,19 +191,22 @@ impl APIRouter {
             ),
             (UseCase::Search, APIProvider::Perplexity) => (
                 "Perplexity is specifically designed for search queries with up-to-date web information.".to_string(),
-                "pplx-70b-online".to_string(),
+                perplexity_default_model(),
             ),
             (UseCase::ImageGen, APIProvider::DALLE) => (
                 "DALL-E 3 provides high-quality image generation with excellent prompt understanding.".to_string(),
-                "dall-e-3".to_string(),
+                // TODO(rule-models-json): wire dall-e entries into models.json image-gen catalog.
+                gen_model_consts::DALLE_3.to_string(),
             ),
             (UseCase::ImageGen, APIProvider::StableDiffusion) => (
                 "Stable Diffusion offers flexible, cost-effective image generation.".to_string(),
-                "stable-diffusion-xl".to_string(),
+                // TODO(rule-models-json): wire StableDiffusion entries into models.json image-gen catalog.
+                gen_model_consts::STABLE_DIFFUSION_XL.to_string(),
             ),
             (UseCase::VideoGen, APIProvider::Veo3) => (
                 "Veo3 is Google's advanced video generation model with high-quality output.".to_string(),
-                "veo-3".to_string(),
+                // TODO(rule-models-json): wire Veo entries into models.json video-gen catalog.
+                gen_model_consts::VEO_3.to_string(),
             ),
             (UseCase::GeneralQA, APIProvider::GPT) => (
                 "GPT provides versatile, accurate responses for general questions.".to_string(),
@@ -177,7 +214,8 @@ impl APIRouter {
             ),
             (UseCase::GeneralQA, APIProvider::Ollama) => (
                 "Ollama provides free local inference for general questions.".to_string(),
-                "llama3.1".to_string(),
+                // TODO(rule-models-json): wire Ollama task_routing into models.json.
+                ollama_default_model(),
             ),
             _ => (
                 format!("Using {} for {} task", provider.as_str(), use_case.as_str()),

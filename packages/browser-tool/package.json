@@ -8,10 +8,14 @@
   "types": "./src/index.ts",
   "scripts": {
     "build": "tsc --project tsconfig.json",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@agiworkforce/types": "workspace:*",
     "playwright-core": "^1.58.2"
+  },
+  "devDependencies": {
+    "vitest": "^4.0.18"
   }
 }
