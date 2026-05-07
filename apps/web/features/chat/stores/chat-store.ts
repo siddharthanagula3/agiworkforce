@@ -83,6 +83,25 @@ export interface ChatMessage {
     };
     /** Persisted user reaction (loaded from Supabase messages.metadata on conversation load) */
     reaction?: 'thumbsUp' | 'thumbsDown' | null;
+    /**
+     * Paywall gate payload — set when the API returns { kind: 'paywall', ... }
+     * with HTTP 402. When present, the message slot renders InlinePaywallCard
+     * instead of MessageBubble.
+     */
+    paywall?: {
+      feature:
+        | 'video_generation'
+        | 'opus_4_7'
+        | 'gpt_5_5'
+        | 'computer_use'
+        | 'deep_research'
+        | 'image_quota'
+        | 'token_cap'
+        | 'mcp'
+        | 'web_search';
+      requiredTier: 'hobby' | 'pro' | 'pro_plus' | 'max';
+      reason?: string;
+    };
   };
 }
 
