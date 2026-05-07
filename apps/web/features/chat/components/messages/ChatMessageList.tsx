@@ -18,6 +18,7 @@ import { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ChatMessage } from '../../stores/chat-store';
 import { MessageBubble } from './MessageBubble';
+import { InlinePaywallCard } from '../InlinePaywallCard';
 import { TypingIndicator } from './TypingIndicator';
 import { FollowUpSuggestions } from '../FollowUpSuggestions';
 import { ChevronDown } from 'lucide-react';
@@ -42,6 +43,17 @@ export interface ChatMessageListProps {
   /** When true, follow-up suggestion pills fade out (user is typing in the composer) */
   isUserTyping?: boolean;
   className?: string;
+  /**
+   * Called when the user clicks the Upgrade CTA on an inline paywall card.
+   * Receives the message ID of the paywall slot. The handler should route to
+   * /pricing with the appropriate params (already embedded in the card's href).
+   */
+  onPaywallUpgrade?: (messageId: string) => void;
+  /**
+   * Called when the user clicks "Try later" on an inline paywall card.
+   * Receives the message ID so the parent can remove or hide the slot.
+   */
+  onPaywallDismiss?: (messageId: string) => void;
 }
 
 /** A group of consecutive messages sharing the same role. */
@@ -107,10 +119,21 @@ interface MessageGroupRowProps {
   isLastGroup: boolean;
   onRegenerate?: (id: string) => void;
   onDelete?: (id: string) => void;
+  /** Called when a paywall Upgrade button is clicked. */
+  onPaywallUpgrade?: (messageId: string) => void;
+  /** Called when a paywall Try-later button is clicked. */
+  onPaywallDismiss?: (messageId: string) => void;
 }
 
 const MessageGroupRow = memo(
-  ({ group, isLastGroup: _isLastGroup, onRegenerate, onDelete }: MessageGroupRowProps) => {
+  ({
+    group,
+    isLastGroup: _isLastGroup,
+    onRegenerate,
+    onDelete,
+    onPaywallUpgrade,
+    onPaywallDismiss,
+  }: MessageGroupRowProps) => {
     return (
       <div
         className={cn('message-group', group.role === 'user' ? 'user-group' : 'assistant-group')}
@@ -118,8 +141,22 @@ const MessageGroupRow = memo(
         {group.messages.map((message, idx) => {
           const isFirst = idx === 0;
           const isLast = idx === group.messages.length - 1;
+          const paywall = message.metadata?.paywall;
 
-          return (
+          // When the API returns { kind: 'paywall', ... } (HTTP 402), the message
+          // metadata carries a `paywall` field. Render InlinePaywallCard instead of
+          // the normal bubble. rendering-conditional-render: ternary, not &&.
+          return paywall ? (
+            <InlinePaywallCard
+              key={message.id}
+              feature={paywall.feature}
+              currentTier="free"
+              requiredTier={paywall.requiredTier}
+              reason={paywall.reason}
+              onUpgrade={onPaywallUpgrade ? () => onPaywallUpgrade(message.id) : () => {}}
+              onDismiss={onPaywallDismiss ? () => onPaywallDismiss(message.id) : () => {}}
+            />
+          ) : (
             <MessageBubble
               key={message.id}
               message={{
@@ -159,8 +196,12 @@ const MessageGroupRow = memo(
       // Re-render when thinking content or its streaming state changes
       prevLast?.metadata?.thinkingContent === nextLast?.metadata?.thinkingContent &&
       prevLast?.metadata?.isThinkingStreaming === nextLast?.metadata?.isThinkingStreaming &&
+      // Re-render when paywall state changes
+      prevLast?.metadata?.paywall === nextLast?.metadata?.paywall &&
       prev.onRegenerate === next.onRegenerate &&
-      prev.onDelete === next.onDelete
+      prev.onDelete === next.onDelete &&
+      prev.onPaywallUpgrade === next.onPaywallUpgrade &&
+      prev.onPaywallDismiss === next.onPaywallDismiss
     );
   },
 );
@@ -180,6 +221,8 @@ const ChatMessageListComponent = ({
   onSendMessage,
   isUserTyping = false,
   className,
+  onPaywallUpgrade,
+  onPaywallDismiss,
 }: ChatMessageListProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -245,6 +288,16 @@ const ChatMessageListComponent = ({
 
   const handleDelete = useCallback((id: string) => onDelete?.(id), [onDelete]);
 
+  const handlePaywallUpgrade = useCallback(
+    (id: string) => onPaywallUpgrade?.(id),
+    [onPaywallUpgrade],
+  );
+
+  const handlePaywallDismiss = useCallback(
+    (id: string) => onPaywallDismiss?.(id),
+    [onPaywallDismiss],
+  );
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -271,6 +324,8 @@ const ChatMessageListComponent = ({
               isLastGroup={groupIdx === groups.length - 1}
               onRegenerate={handleRegenerate}
               onDelete={handleDelete}
+              onPaywallUpgrade={handlePaywallUpgrade}
+              onPaywallDismiss={handlePaywallDismiss}
             />
           ))}
 
@@ -339,6 +394,8 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     prev.onDelete === next.onDelete &&
     prev.onSendMessage === next.onSendMessage &&
     prev.className === next.className &&
+    prev.onPaywallUpgrade === next.onPaywallUpgrade &&
+    prev.onPaywallDismiss === next.onPaywallDismiss &&
     // Detect streaming content changes in the last message
     lastPrev?.content === lastNext?.content &&
     lastPrev?.isStreaming === lastNext?.isStreaming &&
