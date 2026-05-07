@@ -36,7 +36,7 @@ const faqs: FAQItem[] = [
     category: 'Pricing',
     question: 'Is there a free tier available?',
     answer:
-      'Yes. Local-only mode (Desktop app with Ollama or LM Studio) is free forever - no account required. BYOK (Bring Your Own Keys) is also free forever; you supply your own API keys for Anthropic, OpenAI, Google, and others. Hobby is the entry-level paid plan for managed cloud access. Pro and Max are on the waitlist and not yet available.',
+      'Yes. Local-only mode (Desktop app with Ollama or LM Studio) is free forever — no account required. BYOK (Bring Your Own Keys) is also free forever; you supply your own API keys for Anthropic, OpenAI, Google, and others. Hobby ($10/mo) is the entry-level paid plan for managed cloud access with auto-routing. Pro ($29.99/mo), Pro+ ($49.99/mo with daily flagship caps + Runway video), and Max ($299.99/mo) are on the waitlist.',
   },
   {
     category: 'Pricing',
