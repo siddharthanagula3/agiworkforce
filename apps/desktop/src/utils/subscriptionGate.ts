@@ -17,6 +17,7 @@ const PLAN_TIER_HIERARCHY: PlanTier[] = [
   'free',
   'hobby',
   'pro',
+  'pro_plus',
   'max',
   'enterprise',
 ];

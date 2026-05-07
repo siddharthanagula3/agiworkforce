@@ -40,6 +40,14 @@ function buildPriceIdMapping(): Record<string, PriceMappingEntry> {
   if (proMonthly) mapping[proMonthly.toLowerCase()] = { tier: 'pro', interval: 'monthly' };
   if (proYearly) mapping[proYearly.toLowerCase()] = { tier: 'pro', interval: 'yearly' };
 
+  // Pro+ tier
+  const proPlusMonthly = process.env['STRIPE_PRICE_PRO_PLUS_MONTHLY'];
+  const proPlusYearly = process.env['STRIPE_PRICE_PRO_PLUS_YEARLY'];
+  if (proPlusMonthly)
+    mapping[proPlusMonthly.toLowerCase()] = { tier: 'pro_plus', interval: 'monthly' };
+  if (proPlusYearly)
+    mapping[proPlusYearly.toLowerCase()] = { tier: 'pro_plus', interval: 'yearly' };
+
   // Max tier
   const maxMonthly = process.env['STRIPE_PRICE_MAX_MONTHLY'];
   const maxYearly = process.env['STRIPE_PRICE_MAX_YEARLY'];
@@ -154,7 +162,7 @@ export function resolvePlanTier(
  */
 export function isValidPlanTier(tier: string | null | undefined): tier is string {
   if (!tier) return false;
-  return ['free', 'hobby', 'pro', 'max', 'enterprise'].includes(tier.toLowerCase());
+  return ['free', 'hobby', 'pro', 'pro_plus', 'max', 'enterprise'].includes(tier.toLowerCase());
 }
 
 export function getBillingDetailsFromPriceId(priceId: string | null | undefined): {
@@ -206,6 +214,7 @@ export function getMappingStatus(): {
   const tiers: Record<string, string[]> = {
     hobby: [],
     pro: [],
+    pro_plus: [],
     max: [],
     enterprise: [],
   };

@@ -86,6 +86,8 @@ export interface ModelMetadata {
   qualityTier: 'fast' | 'balanced' | 'best';
   bestFor: string[];
   released?: string;
+  /** Mirrors the optional `deprecated` flag in models.json. */
+  deprecated?: boolean;
 }
 
 // ---- Derived data from JSON ----

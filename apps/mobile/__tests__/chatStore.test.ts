@@ -20,14 +20,33 @@ jest.mock('../services/supabase', () => ({
   },
 }));
 
-jest.mock('../services/api', () => ({
-  api: {
-    get: jest.fn(),
-    post: jest.fn(),
-    put: jest.fn(),
-    delete: jest.fn(),
-  },
-}));
+jest.mock('../services/api', () => {
+  // ApiPaywallError must be provided here so chatStore's `instanceof ApiPaywallError`
+  // check doesn't throw "Right-hand side of instanceof is not an object".
+  function MockApiPaywallError(
+    this: { feature: string; requiredTier: string; reason: string; name: string; message: string },
+    feat: string,
+    reqTier: string,
+    rsn: string,
+  ) {
+    this.feature = feat;
+    this.requiredTier = reqTier;
+    this.reason = rsn;
+    this.name = 'ApiPaywallError';
+    this.message = `Paywall: ${feat}`;
+  }
+  MockApiPaywallError.prototype = Object.create(Error.prototype);
+
+  return {
+    api: {
+      get: jest.fn(),
+      post: jest.fn(),
+      put: jest.fn(),
+      delete: jest.fn(),
+    },
+    ApiPaywallError: MockApiPaywallError,
+  };
+});
 
 jest.mock('../services/streaming', () => ({
   streamChat: jest.fn(),

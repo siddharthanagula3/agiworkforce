@@ -82,6 +82,26 @@ export class AgiWorkforceApiError extends Error {
   }
 }
 
+/**
+ * Thrown when the API returns HTTP 429 with a structured paywall payload:
+ * `{ kind: 'paywall', feature, requiredTier, reason }`.
+ *
+ * This is distinct from a generic rate-limit 429 — it indicates the user has
+ * consumed 150% of their tier cap and must upgrade to continue.
+ */
+export class AgiWorkforcePaywallError extends Error {
+  public readonly kind = 'paywall' as const;
+
+  constructor(
+    public readonly feature: string,
+    public readonly requiredTier: string,
+    public readonly reason: string,
+  ) {
+    super(`Upgrade to ${requiredTier} required for ${feature}: ${reason}`);
+    this.name = 'AgiWorkforcePaywallError';
+  }
+}
+
 // ─── Retry helper ─────────────────────────────────────────────────────────────
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 1000): Promise<T> {
@@ -345,6 +365,29 @@ function httpsPostStream(
         res.on('end', () => {
           cancelListener.dispose();
           const errBody = Buffer.concat(errorChunks).toString('utf8');
+          // Detect structured paywall payload: 429 + { kind: 'paywall', ... }
+          if (res.statusCode === 429) {
+            try {
+              const parsed = JSON.parse(errBody) as Record<string, unknown>;
+              if (
+                parsed['kind'] === 'paywall' &&
+                typeof parsed['feature'] === 'string' &&
+                typeof parsed['requiredTier'] === 'string' &&
+                typeof parsed['reason'] === 'string'
+              ) {
+                reject(
+                  new AgiWorkforcePaywallError(
+                    parsed['feature'],
+                    parsed['requiredTier'],
+                    parsed['reason'],
+                  ),
+                );
+                return;
+              }
+            } catch {
+              // Not JSON — fall through to generic error
+            }
+          }
           reject(
             new AgiWorkforceApiError(
               `API error ${res.statusCode}: ${errBody}`,
@@ -512,6 +555,27 @@ export async function streamChatCompletion(
     );
 
     if (response.statusCode >= 400) {
+      // Detect structured paywall payload: 429 + { kind: 'paywall', ... }
+      if (response.statusCode === 429) {
+        try {
+          const parsed = JSON.parse(response.body) as Record<string, unknown>;
+          if (
+            parsed['kind'] === 'paywall' &&
+            typeof parsed['feature'] === 'string' &&
+            typeof parsed['requiredTier'] === 'string' &&
+            typeof parsed['reason'] === 'string'
+          ) {
+            throw new AgiWorkforcePaywallError(
+              parsed['feature'],
+              parsed['requiredTier'],
+              parsed['reason'],
+            );
+          }
+        } catch (parseErr) {
+          if (parseErr instanceof AgiWorkforcePaywallError) throw parseErr;
+          // Not JSON — fall through to generic error
+        }
+      }
       throw new AgiWorkforceApiError(
         `API error ${response.statusCode}: ${response.body}`,
         response.statusCode,
@@ -573,6 +637,86 @@ export async function chatCompletion(
       cancellationToken,
       overrideModel,
     ).catch(safeReject);
+  });
+}
+
+// ─── Tier info ────────────────────────────────────────────────────────────────
+
+export interface TierInfo {
+  tier: string;
+  /** Tokens used in the current billing period (may be undefined if not returned). */
+  tokensUsed?: number;
+  /** Total token cap for the current billing period (may be undefined). */
+  tokenCap?: number;
+}
+
+/**
+ * Fetch the current user's tier and usage from /api/auth/me.
+ * Returns undefined if the request fails (e.g. no key, network error) — callers
+ * should treat undefined as "unknown tier".
+ */
+export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<TierInfo | undefined> {
+  const apiKey = await getApiKey(secrets);
+  if (apiKey === undefined || apiKey === '') {
+    return undefined;
+  }
+
+  const endpoint = getCloudApiEndpoint();
+  // Strip the /api/llm/v1 suffix to get the root origin, then append /api/auth/me
+  const rootOrigin = endpoint.replace(/\/api\/llm\/v1$/, '').replace(/\/api\/llm$/, '');
+  const url = `${rootOrigin}/api/auth/me`;
+
+  return new Promise((resolve) => {
+    const parsed = new URL(url);
+    const isHttps = parsed.protocol === 'https:';
+    const lib = isHttps ? https : http;
+
+    const options: https.RequestOptions = {
+      hostname: parsed.hostname,
+      port: parsed.port !== '' ? parseInt(parsed.port, 10) : isHttps ? 443 : 80,
+      path: parsed.pathname + parsed.search,
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'User-Agent': 'agi-workforce-vscode/0.1.0',
+        'X-Client': 'vscode-extension',
+      },
+    };
+
+    const req = lib.request(options, (res) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (chunk: Buffer) => chunks.push(chunk));
+      res.on('end', () => {
+        if ((res.statusCode ?? 0) >= 400) {
+          resolve(undefined);
+          return;
+        }
+        try {
+          const body = Buffer.concat(chunks).toString('utf8');
+          const json = JSON.parse(body) as Record<string, unknown>;
+          const tier =
+            typeof json['tier'] === 'string'
+              ? json['tier']
+              : typeof json['plan_tier'] === 'string'
+                ? json['plan_tier']
+                : 'unknown';
+          const tierInfo: TierInfo = { tier };
+          if (typeof json['tokens_used'] === 'number') {
+            tierInfo.tokensUsed = json['tokens_used'];
+          }
+          if (typeof json['token_cap'] === 'number') {
+            tierInfo.tokenCap = json['token_cap'];
+          }
+          resolve(tierInfo);
+        } catch {
+          resolve(undefined);
+        }
+      });
+      res.on('error', () => resolve(undefined));
+    });
+
+    req.on('error', () => resolve(undefined));
+    req.end();
   });
 }
 

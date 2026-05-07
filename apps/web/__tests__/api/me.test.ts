@@ -172,7 +172,9 @@ describe('Me API', () => {
 
         expect(data.feature_flags).toBeDefined();
         expect(data.feature_flags.beta_features).toBe(true);
-        expect(data.feature_flags.advanced_model_access).toBe(false); // pro tier stays auto-only
+        // Pro tier exposes the Advanced-mode manual picker per
+        // parallel-spinning-hedgehog §6 (Round 13 — Task #26 consolidation).
+        expect(data.feature_flags.advanced_model_access).toBe(true);
       });
 
       it('should include credit balance', async () => {

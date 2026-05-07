@@ -52,7 +52,18 @@ describe('MODEL_METADATA — apiModelId uniqueness (audit regression)', () => {
   it('all model aliases resolve to canonical metadata entries', () => {
     for (const [alias, canonicalId] of Object.entries(MODEL_ID_ALIASES)) {
       expect(normalizeModelId(alias)).toBe(canonicalId);
-      expect(MODEL_METADATA[alias]?.id).toBe(canonicalId);
+
+      // When the alias also exists as a live (non-deprecated) catalog
+      // entry, the entry takes precedence in MODEL_METADATA so callers
+      // looking up the literal ID get the entry's canonical metadata.
+      // (deepseek-chat is the canonical example: V3 entry is still
+      // accessible alongside the v4-flash alias used by clients that
+      // want the latest deepseek chat.)
+      const meta = MODEL_METADATA[alias];
+      const aliasIsLiveEntry = meta && meta.id === alias && !meta.deprecated;
+      if (aliasIsLiveEntry) continue;
+
+      expect(meta?.id).toBe(canonicalId);
     }
   });
 
@@ -72,6 +83,7 @@ describe('MODEL_METADATA — apiModelId uniqueness (audit regression)', () => {
       'deepseek',
       'qwen',
       'ollama',
+      'ollama_cloud',
       'moonshot',
       'perplexity',
       'zhipu',
@@ -88,6 +100,8 @@ describe('MODEL_METADATA — apiModelId uniqueness (audit regression)', () => {
       'sambanova',
       'azure',
       'bedrock',
+      'minimax',
+      'runway',
     ];
 
     for (const [modelId, metadata] of Object.entries(MODEL_METADATA)) {

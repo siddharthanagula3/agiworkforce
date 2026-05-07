@@ -445,6 +445,17 @@ pub fn print_banner(model: &str, provider: &str) {
     eprintln!();
 }
 
+/// Print the user's tier and token usage to stderr if available from the
+/// on-disk cache.  This is a best-effort display — it is silently skipped when
+/// no cache entry exists (e.g. first-run, BYOK, or local mode).
+///
+/// Example output: `  Hobby · 1.3M/2.0M tokens`
+pub fn print_tier_status() {
+    if let Some(cached) = crate::tier_cache::read_tier_cache() {
+        eprintln!("{}", format!("  {}", cached.status_label()).dimmed());
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Markdown-formatted streaming output
 // ---------------------------------------------------------------------------

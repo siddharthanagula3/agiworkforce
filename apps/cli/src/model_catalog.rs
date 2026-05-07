@@ -202,6 +202,51 @@ pub fn default_provider() -> &'static str {
         .as_str()
 }
 
+/// Return the API model ID for the economy tier's first allowed model, as read
+/// from `models.json`'s `tierAllowedModels.economy` list.
+///
+/// This is the tier-appropriate default when the user has no explicit `--model`
+/// flag and their tier is free/hobby.  It is NOT the workhorse routing slot
+/// (that lives in `packages/types/src/model-catalog.ts` SLOT_REGISTRY) — it is
+/// simply the first entry of the economy bucket so CLI users get a cheap,
+/// capable model by default without touching the TS type catalog.
+///
+/// Falls back to `"gemini-3.1-flash-lite"` if the catalog is unavailable.
+pub fn economy_default_model() -> &'static str {
+    static ECONOMY_MODEL_ID: OnceLock<String> = OnceLock::new();
+    ECONOMY_MODEL_ID
+        .get_or_init(|| {
+            let Some(catalog) = shared_catalog() else {
+                return "gemini-3.1-flash-lite".to_string();
+            };
+            let first = catalog.tier_allowed_models.economy.first().cloned();
+            // Resolve the canonical id to an apiModelId if one is specified.
+            first
+                .as_deref()
+                .and_then(|canonical_id| api_model_id_for(catalog, canonical_id))
+                .or(first)
+                .unwrap_or_else(|| "gemini-3.1-flash-lite".to_string())
+        })
+        .as_str()
+}
+
+/// Return the list of model IDs allowed for the given named tier slot.
+///
+/// Slot names: `"economy"`, `"pro_additions"`, `"flagship_additions"`.
+/// Returns an empty slice for unknown slot names — callers treat that as
+/// "allow all" so existing behavior is preserved.
+pub fn tier_allowed_models(tier_slot: &str) -> Vec<String> {
+    let Some(catalog) = shared_catalog() else {
+        return Vec::new();
+    };
+    match tier_slot {
+        "economy" => catalog.tier_allowed_models.economy.clone(),
+        "pro_additions" => catalog.tier_allowed_models.pro_additions.clone(),
+        "flagship_additions" => catalog.tier_allowed_models.flagship_additions.clone(),
+        _ => Vec::new(),
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Tier 1 — BUNDLED DEFAULTS (compiled into binary, works offline)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1204,7 +1249,9 @@ mod tests {
         assert_eq!(cat.context_window("claude-opus-4-7"), 1_000_000);
         assert_eq!(cat.context_window("gpt-5.4"), 1_000_000);
         assert_eq!(cat.context_window("gemini-3.1-pro-preview"), 2_000_000);
-        assert_eq!(cat.context_window("grok-4-0709"), 256_000);
+        // grok-4-0709 deprecated in Phase 3; grok-4.3 is the live xAI flagship
+        // and ships with a larger 1M context window per models.json.
+        assert_eq!(cat.context_window("grok-4.3"), 1_000_000);
     }
 
     #[test]

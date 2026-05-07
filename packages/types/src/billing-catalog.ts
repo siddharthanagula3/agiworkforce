@@ -4,6 +4,7 @@ export type BillingPlanTier =
   | 'free'
   | 'hobby'
   | 'pro'
+  | 'pro_plus'
   | 'max'
   | 'enterprise';
 export type BillingInterval = 'monthly' | 'yearly';
@@ -47,6 +48,12 @@ export const BILLING_PLAN_PRICING: Record<BillingPlanTier, BillingPlanPricing> =
     label: 'Pro',
     monthlyPriceUsd: 29.99,
     yearlyPriceUsd: 299.88,
+  },
+  pro_plus: {
+    id: 'pro_plus',
+    label: 'Pro+',
+    monthlyPriceUsd: 49.99,
+    yearlyPriceUsd: 499.88,
   },
   max: {
     id: 'max',

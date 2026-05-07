@@ -43,6 +43,16 @@ export const STRIPE_PRICE_IDS = {
     monthly: validatePriceId(process.env['STRIPE_PRICE_PRO_MONTHLY'], 'STRIPE_PRICE_PRO_MONTHLY'),
     annual: validatePriceId(process.env['STRIPE_PRICE_PRO_YEARLY'], 'STRIPE_PRICE_PRO_YEARLY'),
   },
+  pro_plus: {
+    monthly: validatePriceId(
+      process.env['STRIPE_PRICE_PRO_PLUS_MONTHLY'],
+      'STRIPE_PRICE_PRO_PLUS_MONTHLY',
+    ),
+    annual: validatePriceId(
+      process.env['STRIPE_PRICE_PRO_PLUS_YEARLY'],
+      'STRIPE_PRICE_PRO_PLUS_YEARLY',
+    ),
+  },
   max: {
     monthly: validatePriceId(process.env['STRIPE_PRICE_MAX_MONTHLY'], 'STRIPE_PRICE_MAX_MONTHLY'),
     annual: validatePriceId(process.env['STRIPE_PRICE_MAX_YEARLY'], 'STRIPE_PRICE_MAX_YEARLY'),
@@ -54,7 +64,7 @@ export const STRIPE_PRICE_IDS = {
  * Returns true if at least one plan has both monthly and annual prices configured
  */
 export function arePriceIdsConfigured(): boolean {
-  const plans = ['hobby', 'pro', 'max'] as const;
+  const plans = ['hobby', 'pro', 'pro_plus', 'max'] as const;
   return plans.some(
     (plan) =>
       STRIPE_PRICE_IDS[plan].monthly !== undefined || STRIPE_PRICE_IDS[plan].annual !== undefined,
@@ -82,6 +92,15 @@ export const PRICING_CONFIG = {
       stripe_price_ids: STRIPE_PRICE_IDS.pro,
     },
     {
+      id: 'pro_plus',
+      name: 'Pro+',
+      price: {
+        monthly: getPlanPriceUsd('pro_plus', 'monthly'),
+        annual: getPlanPriceUsd('pro_plus', 'yearly'),
+      },
+      stripe_price_ids: STRIPE_PRICE_IDS.pro_plus,
+    },
+    {
       id: 'max',
       name: 'Max',
       price: {
@@ -93,7 +112,7 @@ export const PRICING_CONFIG = {
   ],
   getPlanFromPriceId: (priceId: string): string | null => {
     // Check all plans
-    const allPlans = ['hobby', 'pro', 'max'] as const;
+    const allPlans = ['hobby', 'pro', 'pro_plus', 'max'] as const;
     for (const plan of allPlans) {
       const prices = STRIPE_PRICE_IDS[plan];
       if (prices.monthly === priceId || prices.annual === priceId) {

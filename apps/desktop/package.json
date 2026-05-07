@@ -26,6 +26,7 @@
   "dependencies": {
     "@agiworkforce/api": "workspace:*",
     "@agiworkforce/chat": "workspace:*",
+    "@agiworkforce/routing": "workspace:*",
     "@agiworkforce/runtime": "workspace:*",
     "@agiworkforce/stores": "workspace:*",
     "@agiworkforce/types": "workspace:*",

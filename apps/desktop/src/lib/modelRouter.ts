@@ -1,57 +1,41 @@
 /**
- * Intelligent Model Router (January 2026)
+ * Intelligent Model Router (May 2026)
  *
- * This module provides smart model selection for Auto modes based on:
- * - Intent classification (chat, coding, image-gen, video-gen, search, etc.)
- * - Task type classification (coding, reasoning, general, agentic, multimodal)
- * - Benchmark performance for the detected task type
- * - Cost efficiency (cheapest viable model)
- * - Subscription tier (through auto mode selection)
- * - **CRITICAL: Model capabilities (vision, tools, thinking, etc.)**
- * - **NEW: Multi-modal routing for image/video/audio generation**
- * - **NEW: Automatic tool matching and suggestion**
+ * Desktop-specific routing layer. Delegates task classification to the
+ * canonical @agiworkforce/routing package and slot→model resolution to
+ * resolveAutoModeModel from @agiworkforce/types. Desktop-specific value-add:
+ * benchmark-aware pool ranking, capability filtering, and intent-based routing.
  *
  * Architecture:
  * 1. User selects auto-economy, auto-balanced, or auto-premium
- * 2. IntentClassifier determines what the user wants (chat, image-gen, etc.)
- * 3. For non-chat intents, MultiModalRouter selects the appropriate model
- * 4. For chat intents, we classify task type and select from MODEL_POOLS
- * 5. ToolMatcher suggests relevant tools for the intent
- * 6. If user manually selects a model, bypass routing
+ * 2. Shared classifyTaskLocally() (packages/routing) determines RoutingTaskType
+ * 3. resolveAutoModeModel(autoMode, tier, taskType) picks the canonical slot model
+ * 4. selectModelFromPool() applies benchmark-aware override within MODEL_POOLS
+ * 5. IntentClassifier routes non-chat intents (image-gen, video-gen, search, etc.)
+ * 6. ToolMatcher suggests relevant tools for the intent
+ * 7. If user manually selects a model, bypass routing
  *
- * ========================================
- * HOW TO ADD NEW MODELS (FOR DEVELOPERS)
- * ========================================
+ * Vercel React Best Practices applied:
+ *   - server-no-shared-module-state: classifier results are per-call, never cached
+ *   - js-set-map-lookups: ROUTING_TYPE_TO_TASK_TYPE uses Map (O(1) lookup)
+ *   - async-cheap-condition-before-await: synchronous classification before any await
+ *   - bundle-analyzable-paths: named imports from @agiworkforce/routing
  *
- * When adding a new model to the routing system:
- *
- * 1. First add the model to MODEL_METADATA in constants/llm.ts with accurate capabilities
- *    - vision: Can the model process images? (NOT all models can!)
- *    - tools: Does it support function calling?
- *    - thinking: Does it have extended reasoning mode?
- *    - computerUse: Can it control mouse/keyboard? (Only Claude models currently)
- *    - codeExecution: Does it have a sandbox for running code?
- *
- * 2. For CHAT models, add to the appropriate MODEL_POOLS below:
- *    - auto-economy: Models < $1/1M output, good for simple tasks
- *    - auto-balanced: Models $1-15/1M output, good quality/cost ratio
- *    - auto-premium: Best models regardless of cost
- *
- * 3. For NON-CHAT models (image, video, audio), add to multiModalRouter.ts:
- *    - IMAGE_MODELS, VIDEO_MODELS, TTS_MODELS, STT_MODELS, MUSIC_MODELS, SEARCH_MODELS
- *
- * 4. The router will automatically:
- *    - Classify user intent (what type of output they want)
- *    - Route to appropriate model type (chat vs image vs video, etc.)
- *    - Filter by capabilities and select optimal model
- *
- * IMPORTANT CAPABILITY NOTES (January 2026):
- * - DeepSeek Chat: NO vision (requires separate deepseek-vl model)
- * - Grok 4: NO vision (requires separate grok-2-vision model)
- * - Qwen 3: NO vision (requires separate qwen-vl model)
- * - Claude models: NO code execution sandbox (use MCP tools instead)
- * - GPT-5.4 Mini is the lowest OpenAI tier we actively route in-app
+ * HOW TO ADD NEW MODELS:
+ * 1. Add to MODEL_METADATA in constants/llm.ts with accurate capabilities
+ * 2. For CHAT models: add to SLOT_REGISTRY in packages/types/src/model-catalog.ts
+ * 3. For NON-CHAT models: add to multiModalRouter.ts
  */
+
+// Named imports only — enables tree-shaking on bundlers per bundle-analyzable-paths rule
+import {
+  classifyTaskLocally as _classifyTaskShared,
+  applyConversationContext,
+  estimateTokens,
+} from '@agiworkforce/routing';
+import { resolveAutoModeModel } from '@agiworkforce/types';
+import type { RoutingTaskType } from '@agiworkforce/routing';
+import type { RoutingMessage, RoutingAttachment } from '@agiworkforce/routing';
 
 import {
   MODEL_METADATA,
@@ -216,105 +200,30 @@ export const BENCHMARK_THRESHOLDS: Record<
 };
 
 // ============================================
-// TASK CLASSIFICATION
+// TASK CLASSIFICATION — SHARED CLASSIFIER BRIDGE
 // ============================================
 
 /**
- * Keywords for fast local classification (before LLM classification)
- * If high confidence keywords are detected, skip LLM classification
+ * Maps the 11-value canonical RoutingTaskType (from packages/routing) to the
+ * 5-value TaskType used internally by desktop's MODEL_POOLS / capability checks.
+ *
+ * js-set-map-lookups: O(1) Map lookup, compiled once at module load.
  */
-const TASK_KEYWORDS: Record<TaskType, { high: string[]; medium: string[] }> = {
-  coding: {
-    high: [
-      'write code',
-      'write a function',
-      'implement',
-      'debug',
-      'fix this bug',
-      'refactor',
-      'unit test',
-      'typescript',
-      'javascript',
-      'python',
-      'rust',
-      'code review',
-      'pull request',
-      'git',
-      'compile',
-      'syntax error',
-      'runtime error',
-    ],
-    medium: [
-      'function',
-      'class',
-      'variable',
-      'loop',
-      'array',
-      'object',
-      'api',
-      'endpoint',
-      'database',
-    ],
-  },
-  reasoning: {
-    high: [
-      'explain why',
-      'analyze',
-      'compare',
-      'evaluate',
-      'pros and cons',
-      'trade-offs',
-      'solve this problem',
-      'math problem',
-      'logic puzzle',
-      'prove',
-      'deduce',
-    ],
-    medium: ['think', 'reason', 'calculate', 'derive', 'conclude', 'infer'],
-  },
-  general: {
-    high: [
-      'what is',
-      'tell me about',
-      'explain',
-      'how does',
-      'summarize',
-      'translate',
-      'write an email',
-      'draft a message',
-    ],
-    medium: ['help', 'question', 'curious', 'wondering', 'learn'],
-  },
-  agentic: {
-    high: [
-      'browse the web',
-      'search online',
-      'open browser',
-      'click',
-      'navigate to',
-      'fill form',
-      'book',
-      'order',
-      'automate',
-      'workflow',
-      'use tools',
-    ],
-    medium: ['find', 'search', 'look up', 'get me', 'do this for me'],
-  },
-  multimodal: {
-    high: [
-      'look at this image',
-      'analyze this picture',
-      'what do you see',
-      'describe this image',
-      'screenshot',
-      'photo',
-      'diagram',
-      'chart',
-    ],
-    medium: ['image', 'picture', 'visual', 'see', 'look'],
-  },
-};
+const ROUTING_TYPE_TO_TASK_TYPE: ReadonlyMap<RoutingTaskType, TaskType> = Object.freeze(
+  new Map<RoutingTaskType, TaskType>([
+    ['coding', 'coding'],
+    ['reasoning', 'reasoning'],
+    ['general', 'general'],
+    ['agentic', 'agentic'],
+    ['multimodal', 'multimodal'],
+    ['long_context', 'general'],
+    ['simple_chat', 'general'],
+    ['creative_writing', 'general'],
+    ['research', 'general'],
+    ['image_generation', 'multimodal'],
+    ['computer-use', 'agentic'],
+  ]),
+);
 
 // ============================================
 // COMPLEXITY ESTIMATION (70/20/10 Strategy)
@@ -531,52 +440,82 @@ export const TASK_MODEL_PREFERENCES: Record<TaskType, string[]> = {
 };
 
 /**
- * Fast local keyword-based classification
- * Returns null if confidence is too low (needs LLM classification)
+ * Classify the task type for a user message.
+ *
+ * This is the desktop adapter over the canonical shared classifier from
+ * @agiworkforce/routing. The shared classifier is the single source of truth
+ * for heuristic rules. This adapter:
+ *   - Delegates to _classifyTaskShared (packages/routing) for heuristic logic
+ *   - Maps RoutingTaskType (11 values) → TaskType (5 values, desktop contract)
+ *   - Returns null when confidence < 0.7 (preserves existing test contract for
+ *     callers that fall through to intentClassifier or LLM classification)
+ *   - Accepts optional conversation history for sticky-pivot context
+ *
+ * server-no-shared-module-state: no state accumulated across calls.
  */
-export function classifyTaskLocally(message: string): ClassificationResult | null {
-  const lowerMessage = message.toLowerCase();
-  const results: Array<{ type: TaskType; score: number; keywords: string[] }> = [];
+export function classifyTaskLocally(
+  message: string,
+  history: ReadonlyArray<RoutingMessage> = [],
+  attachments?: ReadonlyArray<RoutingAttachment>,
+): ClassificationResult | null {
+  // async-cheap-condition-before-await: classification is synchronous
+  const sharedResult = _classifyTaskShared(message, history, attachments);
 
-  for (const [taskType, keywords] of Object.entries(TASK_KEYWORDS)) {
-    let score = 0;
-    const matchedKeywords: string[] = [];
-
-    for (const keyword of keywords.high) {
-      if (lowerMessage.includes(keyword)) {
-        score += 3;
-        matchedKeywords.push(keyword);
-      }
-    }
-
-    for (const keyword of keywords.medium) {
-      if (lowerMessage.includes(keyword)) {
-        score += 1;
-        matchedKeywords.push(keyword);
-      }
-    }
-
-    if (score > 0) {
-      results.push({ type: taskType as TaskType, score, keywords: matchedKeywords });
-    }
+  // Return null for low confidence — matches the original contract so callers
+  // fall through to intentClassifier / LLM-based classification.
+  // Threshold is exclusive (> 0.7) so simple_chat at 0.7 returns null, letting
+  // the higher-level intentClassifier handle borderline cases.
+  if (sharedResult.confidence <= 0.7) {
+    return null;
   }
 
-  // Sort by score descending
-  results.sort((a, b) => b.score - a.score);
+  const taskType = ROUTING_TYPE_TO_TASK_TYPE.get(sharedResult.type) ?? 'general';
+  return {
+    taskType,
+    confidence: sharedResult.confidence,
+    // Shared classifier does not track matched keywords; return empty array
+    // to satisfy the interface contract without breaking callers.
+    keywords: [],
+  };
+}
 
-  // If top result has high confidence (score >= 3), use it
-  const topResult = results[0];
-  if (topResult && topResult.score >= 3) {
-    const confidence = Math.min(0.95, 0.5 + topResult.score * 0.1);
-    return {
-      taskType: topResult.type,
-      confidence,
-      keywords: topResult.keywords,
-    };
+/**
+ * Classify the task type with sticky-pivot conversation context applied.
+ *
+ * Use this when you have conversation history and want the 5-turn sticky-pivot
+ * logic from the canonical classifier (applyConversationContext).
+ */
+export function classifyTaskWithContext(
+  message: string,
+  history: ReadonlyArray<RoutingMessage>,
+  attachments?: ReadonlyArray<RoutingAttachment>,
+): ClassificationResult | null {
+  const sharedResult = _classifyTaskShared(message, history, attachments);
+
+  // Build conversation context for sticky pivot
+  const recentTaskTypes = history
+    .filter((m) => m.taskType !== undefined)
+    .map((m) => m.taskType!)
+    .slice(-5);
+
+  const cumulativeTokens =
+    history.reduce((sum, m) => sum + estimateTokens(m.content), 0) + estimateTokens(message);
+
+  const withContext = applyConversationContext(sharedResult, {
+    cumulativeTokens,
+    recentTaskTypes,
+  });
+
+  if (withContext.confidence <= 0.7) {
+    return null;
   }
 
-  // Low confidence - need LLM classification
-  return null;
+  const taskType = ROUTING_TYPE_TO_TASK_TYPE.get(withContext.type) ?? 'general';
+  return {
+    taskType,
+    confidence: withContext.confidence,
+    keywords: [],
+  };
 }
 
 /**
@@ -931,18 +870,30 @@ export function selectModelFromPool(
 // ============================================
 
 /**
- * Route a message to the optimal model based on auto mode
- * Uses 70/20/10 complexity-based routing for economy tier
+ * Route a message to the optimal model based on auto mode.
+ *
+ * Flow:
+ * 1. (sync, cheap) Shared heuristic classifier → RoutingTaskType
+ * 2. resolveAutoModeModel(autoMode, tier, taskType) → canonical slot model
+ * 3. selectModelFromPool() → benchmark-ranked override within MODEL_POOLS
+ *    (desktop value-add: picks highest-benchmark model that has required capabilities)
+ * 4. If canonical slot model is in the pool, it is strongly preferred unless
+ *    a higher-benchmark model exists; otherwise pool ranking wins.
+ *
+ * async-cheap-condition-before-await: classification is synchronous; tier lookup
+ * is also synchronous (reads Zustand store snapshot, no network call).
  *
  * @param message - The user's message to classify
  * @param autoMode - The selected auto mode (economy/balanced/premium)
  * @param hasImages - Whether the message includes images
+ * @param tier - The user's subscription tier (defaults to 'free' if omitted)
  * @returns Routing result with selected model and reasoning
  */
 export function routeMessage(
   message: string,
   autoMode: AutoMode,
   hasImages: boolean = false,
+  tier: string = 'free',
 ): RoutingResult & { complexity?: ComplexityLevel } {
   // Force multimodal if images are present
   if (hasImages) {
@@ -964,36 +915,45 @@ export function routeMessage(
     };
   }
 
-  // Try local classification first (fast, free)
+  // Step 1: Synchronous shared-classifier result (no allocation on hot path).
+  // Adapter returns null for confidence <= 0.7, so non-null implies > 0.7.
   const localResult = classifyTaskLocally(message);
 
-  if (localResult && localResult.confidence >= 0.7) {
+  if (localResult) {
+    // Step 2: Resolve canonical slot model via tier-aware resolveAutoModeModel.
+    // This uses the RoutingTaskType from the shared classifier directly so slot
+    // lookup is tier-correct (e.g. coding → escalation_coding on Hobby, coding →
+    // coding_premium_pro on Pro).
+    const sharedResult = _classifyTaskShared(message, []);
+    const canonicalModelId = resolveAutoModeModel(autoMode, tier, sharedResult.type);
+
+    // Step 3: Pool-ranked selection (benchmark-first, desktop value-add).
     const pool = MODEL_POOLS[autoMode];
-    const { modelId, reason, complexity } = selectModelFromPool(
-      pool,
-      localResult.taskType,
-      autoMode,
-      message,
-      false,
-    );
+    const {
+      modelId: poolModelId,
+      reason,
+      complexity,
+    } = selectModelFromPool(pool, localResult.taskType, autoMode, message, false);
+
+    // Prefer the canonical slot model when it's available in the pool; fall back
+    // to pool-ranked selection otherwise (e.g. when pool doesn't include a Pro slot model).
+    const selectedModel =
+      canonicalModelId && pool.includes(canonicalModelId) ? canonicalModelId : poolModelId;
 
     return {
-      selectedModel: modelId,
+      selectedModel,
       taskType: localResult.taskType,
-      reason: `Keywords: [${localResult.keywords.slice(0, 3).join(', ')}]. ${reason}`,
+      reason: `Shared classifier (${sharedResult.type}). ${reason}`,
       confidence: localResult.confidence,
       complexity,
     };
   }
 
-  // Low confidence local classification — use classifyIntentLocally for a content-aware
-  // task type instead of always returning a hardcoded 'general' / 'reasoning' default.
-  // classifyIntentLocally runs entirely in-process (no network, no cost) and always
-  // returns a result at 'hobby' tier, making it safe to call synchronously here.
-  // The returned IntentType is mapped to a TaskType via intentToTaskType().
-  //
+  // Low confidence — fall through to intentClassifier for content-aware inference.
+  // classifyIntentLocally runs entirely in-process (no network, no cost) and
+  // always returns a result, making it safe to call synchronously here.
   // For Pro+ tiers, use routeMessageAsync() which accepts an llmClassify callback
-  // for higher-accuracy classification via a fast current model (e.g. Gemini Flash Lite / GPT-5.4 Mini).
+  // for higher-accuracy classification.
   let inferredTaskType: TaskType = autoMode === 'auto-premium' ? 'reasoning' : 'general';
 
   const intentResult = classifyIntentLocally(message, {
@@ -1018,7 +978,7 @@ export function routeMessage(
   return {
     selectedModel: modelId,
     taskType: inferredTaskType,
-    reason: `Low-confidence local classification (${intentResult?.primary ?? 'unknown'} → ${inferredTaskType}). ${reason}`,
+    reason: `Low-confidence classification (${intentResult?.primary ?? 'unknown'} → ${inferredTaskType}). ${reason}`,
     confidence: intentResult?.confidence ?? 0.4,
     complexity,
   };
@@ -1054,14 +1014,17 @@ export function isManualSelection(selectedModel: string): boolean {
 }
 
 /**
- * Get the model to use for a request
+ * Get the model to use for a request.
  * - If manual selection: use that model directly
- * - If auto mode: route based on message content
+ * - If auto mode: route based on message content + user tier
+ *
+ * @param tier - User's subscription tier (read from billingStore; defaults 'free')
  */
 export function getModelForRequest(
   selectedModel: string,
   message: string,
   hasImages: boolean = false,
+  tier: string = 'free',
 ): { modelId: string; taskType: TaskType; reason: string; wasRouted: boolean } {
   // Manual selection bypasses routing
   if (isManualSelection(selectedModel)) {
@@ -1080,7 +1043,7 @@ export function getModelForRequest(
     selectedModel === 'auto-balanced' ||
     selectedModel === 'auto-premium'
   ) {
-    const result = routeMessage(message, selectedModel as AutoMode, hasImages);
+    const result = routeMessage(message, selectedModel as AutoMode, hasImages, tier);
     return {
       modelId: result.selectedModel,
       taskType: result.taskType,
@@ -1091,7 +1054,7 @@ export function getModelForRequest(
 
   // Legacy 'auto' mode - treat as balanced
   if (selectedModel === 'auto') {
-    const result = routeMessage(message, 'auto-balanced', hasImages);
+    const result = routeMessage(message, 'auto-balanced', hasImages, tier);
     return {
       modelId: result.selectedModel,
       taskType: result.taskType,
@@ -1120,12 +1083,15 @@ export function getModelForRequest(
  * Flash Lite, GPT-5.4 Mini) for more accurate task type classification.
  *
  * Economy tier always uses local-only classification (no extra LLM call cost).
+ *
+ * @param tier - User's subscription tier for resolveAutoModeModel (defaults 'free')
  */
 export async function routeMessageAsync(
   message: string,
   autoMode: AutoMode,
   hasImages: boolean = false,
   llmClassify?: (prompt: string) => Promise<string>,
+  tier: string = 'free',
 ): Promise<RoutingResult & { complexity?: ComplexityLevel }> {
   // Force multimodal if images are present
   if (hasImages) {
@@ -1146,22 +1112,25 @@ export async function routeMessageAsync(
     };
   }
 
-  // Try local classification first (fast, free)
+  // async-cheap-condition-before-await: classify synchronously before any await.
+  // Adapter returns null for confidence <= 0.7, so non-null implies > 0.7.
   const localResult = classifyTaskLocally(message);
 
-  if (localResult && localResult.confidence >= 0.7) {
+  if (localResult) {
+    const sharedResult = _classifyTaskShared(message, []);
+    const canonicalModelId = resolveAutoModeModel(autoMode, tier, sharedResult.type);
     const pool = MODEL_POOLS[autoMode];
-    const { modelId, reason, complexity } = selectModelFromPool(
-      pool,
-      localResult.taskType,
-      autoMode,
-      message,
-      false,
-    );
+    const {
+      modelId: poolModelId,
+      reason,
+      complexity,
+    } = selectModelFromPool(pool, localResult.taskType, autoMode, message, false);
+    const selectedModel =
+      canonicalModelId && pool.includes(canonicalModelId) ? canonicalModelId : poolModelId;
     return {
-      selectedModel: modelId,
+      selectedModel,
       taskType: localResult.taskType,
-      reason: `Keywords: [${localResult.keywords.slice(0, 3).join(', ')}]. ${reason}`,
+      reason: `Shared classifier (${sharedResult.type}). ${reason}`,
       confidence: localResult.confidence,
       complexity,
     };
@@ -1171,6 +1140,7 @@ export async function routeMessageAsync(
   if (autoMode !== 'auto-economy' && llmClassify) {
     try {
       const prompt = getClassificationPrompt(message);
+      // await is deferred until after cheap sync checks (async-cheap-condition-before-await)
       const llmResponse = await llmClassify(prompt);
       const llmTaskType = parseClassificationResponse(llmResponse);
 
@@ -1233,12 +1203,14 @@ export async function routeMessageAsync(
  * @param message - The user's message
  * @param hasImages - Whether images are attached
  * @param llmClassify - Optional callback for LLM-based classification (Pro+ only)
+ * @param tier - User's subscription tier (defaults 'free')
  */
 export async function getModelForRequestAsync(
   selectedModel: string,
   message: string,
   hasImages: boolean = false,
   llmClassify?: (prompt: string) => Promise<string>,
+  tier: string = 'free',
 ): Promise<{ modelId: string; taskType: TaskType; reason: string; wasRouted: boolean }> {
   // Manual selection bypasses routing
   if (isManualSelection(selectedModel)) {
@@ -1259,7 +1231,7 @@ export async function getModelForRequestAsync(
       ? (selectedModel as AutoMode)
       : 'auto-balanced'; // Legacy 'auto' → balanced
 
-  const result = await routeMessageAsync(message, autoMode, hasImages, llmClassify);
+  const result = await routeMessageAsync(message, autoMode, hasImages, llmClassify, tier);
   return {
     modelId: result.selectedModel,
     taskType: result.taskType,
@@ -1572,4 +1544,10 @@ export const _internal = {
   COMPLEXITY_INDICATORS,
   COMPLEXITY_MODEL_PREFERENCES,
   TASK_MODEL_PREFERENCES,
+  ROUTING_TYPE_TO_TASK_TYPE,
 };
+
+// Re-export shared classifier utilities so callers that previously imported
+// from modelRouter.ts can adopt the canonical interface without a source change.
+export { estimateTokens, applyConversationContext };
+export type { RoutingMessage, RoutingAttachment };
