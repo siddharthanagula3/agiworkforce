@@ -898,6 +898,11 @@ fn classify_http_error(
     match code {
         401 | 403 => CliError::auth(provider, body),
         429 => {
+            // AGI Workforce managed-cloud paywall: 429 + {"kind":"paywall", ...}
+            // Takes precedence over generic rate-limit handling.
+            if let Some(pw) = parse_paywall_body(body) {
+                return pw;
+            }
             let secs = retry_after
                 .and_then(|v| v.to_str().ok())
                 .and_then(|s| s.parse::<u64>().ok());
@@ -905,6 +910,36 @@ fn classify_http_error(
         }
         _ => CliError::api(provider, code, body),
     }
+}
+
+/// Attempt to parse a paywall JSON body returned by the AGI Workforce managed-cloud
+/// API (`/api/llm/v1/chat/completions`) when a user exceeds 150 % of their tier quota.
+///
+/// Expected shape: `{"kind":"paywall","feature":"chat","requiredTier":"hobby","reason":"..."}`
+///
+/// Returns `Some(CliError::Paywall {...})` when the body matches, `None` otherwise so
+/// callers can fall back to the regular rate-limit error.
+pub fn parse_paywall_body(body: &str) -> Option<CliError> {
+    let v: serde_json::Value = serde_json::from_str(body).ok()?;
+    if v.get("kind").and_then(|k| k.as_str()) != Some("paywall") {
+        return None;
+    }
+    let feature = v
+        .get("feature")
+        .and_then(|f| f.as_str())
+        .unwrap_or("chat")
+        .to_string();
+    let required_tier = v
+        .get("requiredTier")
+        .and_then(|t| t.as_str())
+        .unwrap_or("hobby")
+        .to_string();
+    let reason = v
+        .get("reason")
+        .and_then(|r| r.as_str())
+        .unwrap_or("Monthly token quota exceeded")
+        .to_string();
+    Some(CliError::paywall(feature, required_tier, reason))
 }
 
 // ---------------------------------------------------------------------------
@@ -2447,5 +2482,99 @@ mod tests {
             err.to_string().contains("API error"),
             "500 should be api error"
         );
+    }
+
+    // -- Paywall detection --
+
+    #[test]
+    fn parse_paywall_body_detects_paywall_json() {
+        let body = r#"{"kind":"paywall","feature":"chat","requiredTier":"hobby","reason":"Monthly token quota exceeded (150%)"}"#;
+        let result = parse_paywall_body(body);
+        assert!(result.is_some(), "Should parse paywall body");
+        let err = result.unwrap();
+        assert!(
+            err.is_paywall(),
+            "Should return a Paywall error variant"
+        );
+        // Verify the formatted message contains required tier and upgrade URL
+        let msg = err.to_string();
+        assert!(
+            msg.contains("hobby"),
+            "Message should contain required tier: {msg}"
+        );
+        assert!(
+            msg.contains("agiworkforce.com/pricing"),
+            "Message should contain pricing URL: {msg}"
+        );
+        assert!(
+            msg.contains("Monthly token quota exceeded"),
+            "Message should contain reason: {msg}"
+        );
+    }
+
+    #[test]
+    fn parse_paywall_body_returns_none_for_non_paywall_429() {
+        // Generic rate-limit body from Anthropic
+        let body = r#"{"error":{"type":"rate_limit_error","message":"Rate limit exceeded"}}"#;
+        let result = parse_paywall_body(body);
+        assert!(result.is_none(), "Non-paywall 429 should not parse as paywall");
+    }
+
+    #[test]
+    fn parse_paywall_body_returns_none_for_empty_body() {
+        assert!(parse_paywall_body("").is_none());
+        assert!(parse_paywall_body("null").is_none());
+    }
+
+    #[test]
+    fn classify_http_error_returns_paywall_for_managed_cloud_429() {
+        let paywall_body = r#"{"kind":"paywall","feature":"chat","requiredTier":"pro","reason":"Pro features require upgrade"}"#;
+        let err = classify_http_error(
+            "agiworkforce",
+            reqwest::StatusCode::TOO_MANY_REQUESTS,
+            None,
+            paywall_body,
+        );
+        assert!(
+            err.is_paywall(),
+            "classify_http_error should return Paywall for 429 + paywall body"
+        );
+        assert_eq!(
+            err.exit_code(),
+            78,
+            "Paywall errors should exit with code 78 (EX_CONFIG)"
+        );
+    }
+
+    #[test]
+    fn classify_http_error_returns_rate_limited_for_plain_429() {
+        let plain_body = r#"{"error":"rate limited"}"#;
+        let err = classify_http_error(
+            "agiworkforce",
+            reqwest::StatusCode::TOO_MANY_REQUESTS,
+            None,
+            plain_body,
+        );
+        // Plain 429 without kind:paywall should still be RateLimited
+        assert!(
+            !err.is_paywall(),
+            "Plain 429 should NOT be Paywall, got: {:?}", err
+        );
+        assert!(
+            err.to_string().contains("Rate limited"),
+            "Plain 429 should be rate-limited: {}", err
+        );
+    }
+
+    #[test]
+    fn paywall_exit_code_is_78() {
+        let err = crate::errors::CliError::paywall("chat", "hobby", "quota exceeded");
+        assert_eq!(err.exit_code(), 78);
+    }
+
+    #[test]
+    fn non_paywall_exit_code_is_1() {
+        let err = crate::errors::CliError::rate_limited("anthropic", None);
+        assert_eq!(err.exit_code(), 1);
     }
 }

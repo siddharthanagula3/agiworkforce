@@ -749,10 +749,13 @@ export const UnifiedAgenticChat: React.FC<{
     // 2. No explicit model override was provided
     const isExplicitModelSelection = !isAutoModel(currentModel);
 
-    // Only perform routing if user selected an auto mode
+    // Only perform routing if user selected an auto mode.
+    // Pass user's plan tier so Pro/Max users get *_pro slot routing
+    // (e.g. coding -> coding_premium_pro -> claude-sonnet-4.6).
+    const currentTier = useBillingStore.getState().plan ?? 'free';
     const routingResult = isExplicitModelSelection
       ? { modelId: currentModel, reason: `User selected: ${currentModel}`, wasRouted: false }
-      : getModelForRequest(currentModel, content, hasImages);
+      : getModelForRequest(currentModel, content, hasImages, currentTier);
 
     // Risk detection runs in ALL modes - dangerous patterns should always be flagged
     // The undo-based safety philosophy handles reversibility AFTER actions, but we still

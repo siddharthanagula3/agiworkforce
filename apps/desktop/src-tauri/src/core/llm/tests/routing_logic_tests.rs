@@ -1031,11 +1031,13 @@ mod tests {
     #[test]
     fn test_intelligent_routing_infer_deepseek_provider() {
         let router = router_with_all_providers();
+        // models.json canonicalization maps deepseek-chat → deepseek-v4-flash
+        // (deepseek-chat deprecates 2026-07-24).
         let context =
             intelligent_context("hobby", Some("coding"), Some("chat"), Some("deepseek-chat"));
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::DeepSeek);
-        assert_eq!(suggestion.model, "deepseek-chat");
+        assert_eq!(suggestion.model, "deepseek-v4-flash");
     }
 
     #[test]
@@ -1050,6 +1052,8 @@ mod tests {
     #[test]
     fn test_intelligent_routing_infer_xai_provider() {
         let router = router_with_all_providers();
+        // models.json canonicalization maps grok-4-fast-reasoning + siblings
+        // → grok-4.3 (the deprecated families all sunset 2026-05-15).
         let context = intelligent_context(
             "hobby",
             Some("reasoning"),
@@ -1058,7 +1062,7 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::XAI);
-        assert_eq!(suggestion.model, "grok-4-1-fast-reasoning");
+        assert_eq!(suggestion.model, "grok-4.3");
     }
 
     // --- Intelligent routing: intent_type-based (no selected_model) ---

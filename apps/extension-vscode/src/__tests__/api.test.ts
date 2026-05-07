@@ -7,7 +7,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { AgiWorkforceApiError, getApiKey, setApiKey, clearApiKey } from '../utils/api';
+import {
+  AgiWorkforceApiError,
+  AgiWorkforcePaywallError,
+  getApiKey,
+  setApiKey,
+  clearApiKey,
+} from '../utils/api';
 import { ExtensionContext } from './__mocks__/vscode';
 
 describe('AgiWorkforceApiError', () => {
@@ -184,6 +190,109 @@ describe('ChatCompletionRequest structure', () => {
     expect(request.stream).toBe(true);
     expect(request.messages).toHaveLength(2);
     expect(request.metadata.mcp_enabled).toBe(false);
+  });
+});
+
+describe('AgiWorkforcePaywallError', () => {
+  it('creates a paywall error with feature, requiredTier, reason', () => {
+    const err = new AgiWorkforcePaywallError('chat', 'hobby', 'Monthly token cap exceeded');
+    expect(err.feature).toBe('chat');
+    expect(err.requiredTier).toBe('hobby');
+    expect(err.reason).toBe('Monthly token cap exceeded');
+    expect(err.kind).toBe('paywall');
+    expect(err.name).toBe('AgiWorkforcePaywallError');
+    expect(err).toBeInstanceOf(Error);
+    expect(err).toBeInstanceOf(AgiWorkforcePaywallError);
+  });
+
+  it('generates a descriptive error message', () => {
+    const err = new AgiWorkforcePaywallError('image', 'pro', 'Image generation requires Pro');
+    expect(err.message).toContain('pro');
+    expect(err.message).toContain('image');
+  });
+
+  it('is NOT an instance of AgiWorkforceApiError', () => {
+    const err = new AgiWorkforcePaywallError('chat', 'hobby', 'reason');
+    expect(err).not.toBeInstanceOf(AgiWorkforceApiError);
+  });
+});
+
+describe('paywall 429 JSON parsing — pattern test', () => {
+  /**
+   * Mirror the paywall-detection logic from httpsPostStream / httpsPost.
+   * We test the parsing pattern in isolation since the full HTTP stack
+   * requires a live server.
+   */
+  function parsePaywallBody(statusCode: number, body: string): AgiWorkforcePaywallError | null {
+    if (statusCode !== 429) return null;
+    try {
+      const parsed = JSON.parse(body) as Record<string, unknown>;
+      if (
+        parsed['kind'] === 'paywall' &&
+        typeof parsed['feature'] === 'string' &&
+        typeof parsed['requiredTier'] === 'string' &&
+        typeof parsed['reason'] === 'string'
+      ) {
+        return new AgiWorkforcePaywallError(
+          parsed['feature'],
+          parsed['requiredTier'],
+          parsed['reason'],
+        );
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+
+  it('parses a well-formed paywall payload from 429', () => {
+    const body = JSON.stringify({
+      kind: 'paywall',
+      feature: 'chat',
+      requiredTier: 'hobby',
+      reason: 'You have used 150% of your monthly token cap.',
+    });
+
+    const err = parsePaywallBody(429, body);
+    expect(err).not.toBeNull();
+    expect(err).toBeInstanceOf(AgiWorkforcePaywallError);
+    expect(err?.feature).toBe('chat');
+    expect(err?.requiredTier).toBe('hobby');
+    expect(err?.reason).toBe('You have used 150% of your monthly token cap.');
+  });
+
+  it('returns null for 429 with non-paywall JSON', () => {
+    const body = JSON.stringify({ error: 'rate_limit_exceeded' });
+    expect(parsePaywallBody(429, body)).toBeNull();
+  });
+
+  it('returns null for 429 with non-JSON body', () => {
+    expect(parsePaywallBody(429, 'Too Many Requests')).toBeNull();
+  });
+
+  it('returns null for 200 with paywall-shaped JSON', () => {
+    const body = JSON.stringify({
+      kind: 'paywall',
+      feature: 'chat',
+      requiredTier: 'hobby',
+      reason: 'x',
+    });
+    expect(parsePaywallBody(200, body)).toBeNull();
+  });
+
+  it('returns null for 429 with partially-formed paywall JSON (missing requiredTier)', () => {
+    const body = JSON.stringify({ kind: 'paywall', feature: 'chat', reason: 'x' });
+    expect(parsePaywallBody(429, body)).toBeNull();
+  });
+
+  it('returns null for 429 with kind !== paywall', () => {
+    const body = JSON.stringify({
+      kind: 'downgrade',
+      feature: 'chat',
+      requiredTier: 'hobby',
+      reason: 'x',
+    });
+    expect(parsePaywallBody(429, body)).toBeNull();
   });
 });
 

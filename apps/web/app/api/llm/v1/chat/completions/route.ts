@@ -20,9 +20,20 @@ import { MODEL_TIER_REQUIREMENTS, canAccessModel } from '@/lib/model-tiers';
 import { validateEgressUrl, validateUserImageUrl, EgressPolicyError } from '@/lib/egress-policy';
 import {
   getEconomyFallbackModels,
+  getSlotForModel,
   normalizeModelId,
   resolveAutoModeModel,
 } from '@agiworkforce/types';
+import type { RoutingSlot } from '@agiworkforce/types';
+import {
+  applyConversationContext,
+  classifyTaskLocally,
+  detectIndicScript,
+  estimateTokens,
+} from '@agiworkforce/routing';
+import type { RoutingTaskType } from '@agiworkforce/routing';
+import { assertQuota, reconcileUsage } from '@/lib/assert-quota';
+import type { QuotaFeature, QuotaOutcome } from '@/lib/assert-quota';
 
 const TTFT_SLO_TARGET_MS = Number(process.env['LLM_TTFT_SLO_TARGET_MS'] ?? 2500);
 const TTFT_SLO_BREACH_MS = Number(process.env['LLM_TTFT_SLO_BREACH_MS'] ?? 5000);
@@ -111,10 +122,20 @@ const ChatCompletionRequestSchema = z.object({
 /**
  * Resolve auto model names to actual LLM model names.
  * Handles 'auto-economy', 'auto-balanced', 'auto-premium' mappings.
- * Tier-aware: hobby users get downgraded to economy-tier models for balanced/premium.
+ * Tier-aware AND task-aware: Pro/Max users get *_pro slot routing
+ * (e.g. coding -> coding_premium_pro -> claude-sonnet-4.6).
+ *
+ * The taskType comes from the heuristic classifier (packages/routing
+ * classifyTaskLocally + applyConversationContext) earlier in the route handler.
+ * resolveAutoModeModel from @agiworkforce/types now accepts the 3rd arg
+ * directly; callers who pass undefined fall back to the legacy auto-mode path.
  */
-function resolveAutoModel(model: string, subscriptionTier?: string): string {
-  return resolveAutoModeModel(model, subscriptionTier) ?? model;
+function resolveAutoModel(
+  model: string,
+  subscriptionTier?: string,
+  taskType?: RoutingTaskType,
+): string {
+  return resolveAutoModeModel(model, subscriptionTier, taskType) ?? model;
 }
 
 /**
@@ -403,15 +424,96 @@ async function handleChatCompletions(request: NextRequest) {
     }
   }
 
-  // Resolve auto model names (auto-economy, auto-balanced, auto-premium) to actual models
-  // Tier-aware: hobby users get economy models even for balanced/premium
+  // ----- Task-aware classifier (sync - Vercel async-cheap-condition-before-await) -----
+  // Run the heuristic classifier NOW, before any downstream await, so we never
+  // pay async overhead for a pure-CPU operation. classifyTaskLocally is
+  // synchronous and reads only frozen module-scope state (no DB, no network).
+  //
+  // Classifier input: the last user message in the conversation (most recent
+  // turn is the highest-signal input for routing). History is passed for
+  // token estimation and the 5-turn sticky-pivot conversation context.
+  const lastUserMsg = chatRequest.messages
+    .slice()
+    .reverse()
+    .find((m) => m.role === 'user');
+  const lastUserText = lastUserMsg ? extractTextContent(lastUserMsg.content) : '';
+
+  // Build RoutingMessage history for token estimation and sticky-pivot context.
+  // js-early-exit: only build history when there is more than one message.
+  const routingHistory = chatRequest.messages
+    .filter(
+      (
+        m,
+      ): m is (typeof chatRequest.messages)[number] & {
+        role: 'user' | 'assistant' | 'system' | 'tool';
+      } => ['user', 'assistant', 'system', 'tool'].includes(m.role),
+    )
+    .map((m) => ({
+      role: m.role as 'user' | 'assistant' | 'system' | 'tool',
+      content: extractTextContent(m.content),
+    }));
+
+  // Run the local heuristic classifier. The result includes `type` and `confidence`.
+  let classifierResult = classifyTaskLocally(lastUserText, routingHistory);
+
+  // Apply conversation context (sticky-pivot + long-context guard) only when
+  // the conversation has prior turns worth inspecting.
+  if (routingHistory.length > 1) {
+    const cumulativeTokens = routingHistory.reduce(
+      (sum, m) => sum + estimateTokens(m.content),
+      estimateTokens(lastUserText),
+    );
+    // Prior turns have no saved taskType in this path; pass current type as
+    // placeholder so sticky-pivot boost fires for consistent conversations.
+    const recentTaskTypes = routingHistory
+      .filter((m) => m.role === 'user')
+      .map(() => classifierResult.type);
+    classifierResult = applyConversationContext(classifierResult, {
+      cumulativeTokens,
+      recentTaskTypes,
+    });
+  }
+
+  const resolvedTaskType: RoutingTaskType = classifierResult.type;
+
+  // Indic script detection (Pool C overlay gate). Sarvam-M integration is
+  // pending an API key (spec §13 cross-phase India launch); for now we
+  // detect + log so analytics + future routing decisions have the signal.
+  // The detection runs on the latest user message only — sticky pivot is
+  // handled at the model level once Sarvam-M is wired.
+  const indicResult = detectIndicScript(lastUserText);
+  if (indicResult.isIndic && indicResult.dominantScript) {
+    logger.info(
+      {
+        userId: user.id,
+        requestId,
+        indicRatio: indicResult.indicRatio,
+        dominantScript: indicResult.dominantScript,
+        // model: chatRequest.model — at this point still pre-resolution.
+      },
+      '[indic-detect] non-Latin Indic script detected — Pool C candidate',
+    );
+  }
+  // ---- end classifier ----
+
+  // Resolve auto model names (auto-economy, auto-balanced, auto-premium) to actual models.
+  // Task-aware (Phase 2): Pro/Max/Enterprise tiers route to *_pro slots via
+  // resolvedTaskType (e.g. Pro + coding -> coding_premium_pro -> claude-sonnet-4.6).
+  // Legacy callers using non-auto model IDs pass through unchanged.
   const requestedModel = chatRequest.model;
-  chatRequest.model = resolveAutoModel(chatRequest.model, subscription.plan_tier);
+  chatRequest.model = resolveAutoModel(chatRequest.model, subscription.plan_tier, resolvedTaskType);
 
   // Log if auto model was resolved
   if (requestedModel !== chatRequest.model) {
     logger.info(
-      { userId: user.id, requestedModel, resolvedModel: chatRequest.model },
+      {
+        userId: user.id,
+        requestedModel,
+        resolvedModel: chatRequest.model,
+        taskType: resolvedTaskType,
+        taskConfidence: classifierResult.confidence,
+        tier: subscription.plan_tier,
+      },
       'Auto model resolved to actual model',
     );
   }
@@ -444,6 +546,95 @@ async function handleChatCompletions(request: NextRequest) {
 
   // Determine provider
   let provider = LLMProviderFactory.getProviderFromModel(chatRequest.model);
+
+  // ── Tier-aware quota gate ─────────────────────────────────────────────
+  // assertQuota enforces tier paywalls + Pro+ flagship daily caps + video
+  // and computer-use sub-quotas. Runs alongside the legacy CreditService
+  // flow below: if assertQuota returns paywall, we short-circuit; if it
+  // returns downgrade, we swap chatRequest.model to the equivalent
+  // non-flagship slot model and let CreditService re-cost the request.
+  // The slot is reverse-derived from the resolved model so flagship_*
+  // requests are recognised even when the caller passed an explicit model
+  // ID rather than auto-* mode.
+  const resolvedSlot: RoutingSlot | null = getSlotForModel(chatRequest.model);
+  const isFlagshipRequest =
+    resolvedSlot === 'flagship_coding_pro_plus' || resolvedSlot === 'flagship_general_pro_plus';
+
+  // Heuristic: estimate tokens for the quota gate. Re-estimated below for
+  // the cost calculator; keeping a single number here for the gate is fine
+  // because monthly caps are coarse-grained and daily flagship cap is in
+  // tokens (15K), not cents.
+  const quotaEstimateTokens = chatRequest.messages.reduce((sum, msg) => {
+    return sum + estimateTokens(extractTextContent(msg.content));
+  }, 0);
+
+  // Map our internal slot/feature back to QuotaFeature so sub-quota checks
+  // (image/video/computer_use) fire when relevant.
+  let quotaFeature: QuotaFeature = 'chat';
+  if (resolvedSlot === 'image_generation') {
+    quotaFeature = 'image';
+  } else if (resolvedSlot === 'video_generation' || resolvedSlot === 'video_generation_pro_plus') {
+    quotaFeature = 'video';
+  } else if (resolvedSlot === 'computer_use' || resolvedSlot === 'computer_use_premium') {
+    quotaFeature = 'computer_use';
+  }
+
+  let quotaOutcome: QuotaOutcome = { kind: 'ok' };
+  let quotaWarningHeader: string | null = null;
+  try {
+    quotaOutcome = await assertQuota({
+      userId: user.id,
+      token,
+      tier: subscription.plan_tier,
+      requestedTokens: quotaEstimateTokens,
+      feature: quotaFeature,
+      slot: resolvedSlot ?? undefined,
+    });
+  } catch (gateError) {
+    // Fail-open: if the gate errors, fall back to the legacy CreditService
+    // path so we don't take the route down on a transient DB hiccup.
+    logger.warn(
+      { userId: user.id, error: gateError instanceof Error ? gateError.message : gateError },
+      '[assertQuota] gate errored, falling back to credit-only flow',
+    );
+  }
+
+  if (quotaOutcome.kind === 'paywall') {
+    return NextResponse.json(
+      {
+        error: {
+          message: quotaOutcome.reason,
+          type: 'paywall',
+          code: 'tier_quota_exceeded',
+          paywall: {
+            feature: quotaOutcome.feature,
+            requiredTier: quotaOutcome.requiredTier,
+            reason: quotaOutcome.reason,
+          },
+        },
+      },
+      { status: 429 },
+    );
+  }
+
+  if (quotaOutcome.kind === 'downgrade') {
+    logger.info(
+      {
+        userId: user.id,
+        from: chatRequest.model,
+        to: quotaOutcome.modelOverride,
+        reason: quotaOutcome.reason,
+      },
+      '[assertQuota] downgrade applied',
+    );
+    chatRequest.model = quotaOutcome.modelOverride;
+    provider = LLMProviderFactory.getProviderFromModel(chatRequest.model);
+    usedFallback = true;
+    fallbackReason = quotaOutcome.reason;
+  } else if (quotaOutcome.kind === 'warn') {
+    quotaWarningHeader = quotaOutcome.warning;
+  }
+  // ───────────────────────────────────────────────────────────────────────
 
   // Egress policy: validate custom base URLs from env vars before making external requests.
   // Standard provider URLs (api.openai.com, api.anthropic.com, etc.) are already in the
@@ -1193,19 +1384,44 @@ async function handleChatCompletions(request: NextRequest) {
             );
             // Stream continues - user already received response
           }
+
+          // Tier-quota counter update — fire-and-forget. Mirrors the credit
+          // reconciliation but feeds token_credits.flagship_daily_tokens so
+          // the next request's assertQuota can enforce the Pro+ daily cap.
+          // Recompute here because `totalTokens` is scoped to the try block above.
+          const finalTotalTokens = inputTokens + outputTokens;
+          if (finalTotalTokens > 0) {
+            void reconcileUsage({
+              userId,
+              token,
+              actualTokens: finalTotalTokens,
+              feature: quotaFeature,
+              isFlagship: isFlagshipRequest,
+            }).catch((err) => {
+              logger.warn(
+                { userId, requestId, error: err instanceof Error ? err.message : err },
+                '[reconcileUsage] streaming counter update failed',
+              );
+            });
+          }
         },
       });
 
       const reconciledStream = stream.pipeThrough(transformStream);
 
+      const streamHeaders: Record<string, string> = {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        ...getCorsHeaders(request),
+        ...getSecurityHeaders(),
+      };
+      if (quotaWarningHeader) {
+        streamHeaders['X-Quota-Warning'] = quotaWarningHeader;
+      }
+
       return new NextResponse(reconciledStream, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          Connection: 'keep-alive',
-          ...getCorsHeaders(request),
-          ...getSecurityHeaders(),
-        },
+        headers: streamHeaders,
       });
     } catch (error) {
       // Refund on failure with idempotency key to prevent duplicate refunds
@@ -1411,6 +1627,30 @@ async function handleChatCompletions(request: NextRequest) {
   // This preserves compatibility when older aliases are normalized internally.
   const responseModel = usedFallback ? chatRequest.model : requestedModel;
 
+  // Tier-quota counter update for non-stream path (mirrors stream path).
+  if (llmResponse.totalTokens > 0) {
+    void reconcileUsage({
+      userId: user.id,
+      token,
+      actualTokens: llmResponse.totalTokens,
+      feature: quotaFeature,
+      isFlagship: isFlagshipRequest,
+    }).catch((err) => {
+      logger.warn(
+        { userId: user.id, requestId, error: err instanceof Error ? err.message : err },
+        '[reconcileUsage] non-stream counter update failed',
+      );
+    });
+  }
+
+  const responseHeaders: Record<string, string> = {
+    ...getCorsHeaders(request),
+    ...getSecurityHeaders(),
+  };
+  if (quotaWarningHeader) {
+    responseHeaders['X-Quota-Warning'] = quotaWarningHeader;
+  }
+
   return NextResponse.json(
     {
       id: responseId,
@@ -1444,6 +1684,19 @@ async function handleChatCompletions(request: NextRequest) {
       x_agi_workforce: {
         provider,
         cost_cents: actualCostCents,
+        routing: {
+          task_type: resolvedTaskType,
+          task_confidence: classifierResult.confidence,
+          resolved_model: chatRequest.model,
+          slot: resolvedSlot,
+          quota_warning: quotaWarningHeader,
+          ...(indicResult.isIndic && indicResult.dominantScript
+            ? {
+                indic_dominant_script: indicResult.dominantScript,
+                indic_ratio: indicResult.indicRatio,
+              }
+            : {}),
+        },
         ...(usedFallback && {
           fallback: {
             original_model: originalModel,
@@ -1457,10 +1710,7 @@ async function handleChatCompletions(request: NextRequest) {
       },
     },
     {
-      headers: {
-        ...getCorsHeaders(request),
-        ...getSecurityHeaders(),
-      },
+      headers: responseHeaders,
     },
   );
 }

@@ -17,6 +17,7 @@ import {
   streamChatCompletion,
   streamChatCompletionViaProvider,
   AgiWorkforceApiError,
+  AgiWorkforcePaywallError,
   type LlmChatMessage,
 } from '../utils/api';
 import { type ConversationStore } from '../storage/conversationStore';
@@ -417,9 +418,48 @@ export function createChatHandler(
     } catch (err) {
       const isNoKey = err instanceof AgiWorkforceApiError && err.code === 'NO_API_KEY';
       const isCancelled = err instanceof AgiWorkforceApiError && err.code === 'CANCELLED';
+      const isPaywall = err instanceof AgiWorkforcePaywallError;
 
       if (isCancelled) {
         return {};
+      }
+
+      if (isPaywall) {
+        // Render inline paywall card — trusted MarkdownString enables the https: link.
+        const paywallMd = new vscode.MarkdownString(
+          `\n\n> **Upgrade required** — ` +
+            `[Upgrade to ${err.requiredTier}](https://agiworkforce.com/pricing?from=paywall` +
+            `&tier=${encodeURIComponent(err.requiredTier)}` +
+            `&feature=${encodeURIComponent(err.feature)})` +
+            ` for ${err.feature}.\n>\n> ${err.reason}\n\n`,
+        );
+        paywallMd.isTrusted = true;
+        stream.markdown(paywallMd);
+
+        // Also show an information message with an "Upgrade" button.
+        vscode.window
+          .showInformationMessage(
+            `AGI Workforce: Upgrade to ${err.requiredTier} to continue. ${err.reason}`,
+            'Upgrade',
+          )
+          .then((choice) => {
+            if (choice === 'Upgrade') {
+              vscode.env.openExternal(
+                vscode.Uri.parse(
+                  `https://agiworkforce.com/pricing?from=paywall` +
+                    `&tier=${encodeURIComponent(err.requiredTier)}` +
+                    `&feature=${encodeURIComponent(err.feature)}`,
+                ),
+              );
+            }
+          });
+
+        return {
+          metadata: {
+            command: request.command ?? 'chat',
+            usedFallback: false,
+          },
+        };
       }
 
       if (isNoKey && fallbackEnabled) {

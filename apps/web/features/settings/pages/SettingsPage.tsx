@@ -35,6 +35,7 @@ import { Separator } from '@shared/ui/separator';
 import { toast } from 'sonner';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { PLAN_LABEL, PLAN_DESCRIPTION, isFreePlan, type UIPlanTier } from '@agiworkforce/types';
+import { AdvancedModeToggle } from '@features/settings/components/AdvancedModeToggle';
 
 // ---------------------------------------------------------------------------
 // Appearance Tab
@@ -103,6 +104,8 @@ const RESPONSE_STYLE_META: Record<ResponseStyle, string> = {
 
 function ChatTab() {
   const { responseStyle, setResponseStyle } = useSettingsStore();
+  const user = useAuthStore((s) => s.user);
+  const userTier = user?.plan ?? null;
 
   return (
     <Card className="border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
@@ -112,6 +115,10 @@ function ChatTab() {
       </CardHeader>
       <CardContent className="space-y-6">
         <ChatSettings />
+
+        {/* Advanced mode — Pro/Max only. AdvancedModeToggle returns null for
+            Hobby/Free so no wrapper conditional is needed here. */}
+        <AdvancedModeToggle tier={userTier} />
 
         {/* Response Style */}
         <div>

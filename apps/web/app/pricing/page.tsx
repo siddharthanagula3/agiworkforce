@@ -73,7 +73,7 @@ function RateCard() {
     <RuledSection tier="paper" id="rate-card" slug={<Slug index="01" kicker="RATES" />}>
       <div className="py-16 md:py-24">
         <OpsizMorph as="h2" className="text-[var(--color-ink)] text-3xl md:text-5xl mb-10">
-          Six tiers. <em>Two are free.</em>
+          Seven tiers. <em>Two are free.</em>
         </OpsizMorph>
 
         <div className="overflow-x-auto -mx-4 px-4">
@@ -83,7 +83,7 @@ function RateCard() {
                 <th className="text-left py-3 pr-4 text-[11px] tracking-[0.18em] uppercase text-[var(--color-fg-quiet)] font-normal w-32">
                   &nbsp;
                 </th>
-                {['LOCAL', 'BYOK', 'HOBBY', 'PRO', 'MAX', 'ENTERPRISE'].map((tier) => (
+                {['LOCAL', 'BYOK', 'HOBBY', 'PRO', 'PRO+', 'MAX', 'ENTERPRISE'].map((tier) => (
                   <th
                     key={tier}
                     className="text-left py-3 px-3 text-[11px] tracking-[0.18em] uppercase text-[var(--color-fg-quiet)] font-normal border-l border-[var(--color-rule-soft)]"
@@ -96,7 +96,15 @@ function RateCard() {
             <tbody className="divide-y divide-[var(--color-rule-soft)]">
               <RateRow
                 label="Price"
-                values={['Free', 'Free', 'TBD ~$5/mo', 'TBD', 'TBD', 'Contact sales']}
+                values={[
+                  'Free',
+                  'Free',
+                  '$10/mo',
+                  '$29.99/mo',
+                  '$49.99/mo',
+                  '$299.99/mo',
+                  'Contact sales',
+                ]}
               />
               <RateRow
                 label="At launch"
@@ -105,6 +113,9 @@ function RateCard() {
                   <ShippedMark key="b" />,
                   <ShippedMark key="h" />,
                   <span key="p" className="text-[var(--color-fg-muted)]">
+                    ✗ waitlist
+                  </span>,
+                  <span key="pp" className="text-[var(--color-fg-muted)]">
                     ✗ waitlist
                   </span>,
                   <span key="m" className="text-[var(--color-fg-muted)]">
@@ -121,6 +132,7 @@ function RateCard() {
                   'Supabase us-east-2',
                   'Supabase us-east-2',
                   'Supabase us-east-2',
+                  'Supabase us-east-2',
                   'Supabase + custom region',
                 ]}
               />
@@ -131,7 +143,8 @@ function RateCard() {
                   'Provider directly (BYOK)',
                   'Managed cloud',
                   'Managed cloud',
-                  'Managed cloud',
+                  'Managed + flagship 15K/day',
+                  'Managed + flagship 1M/mo',
                   'BYOK or managed',
                 ]}
               />
@@ -140,6 +153,7 @@ function RateCard() {
                 values={[
                   'None',
                   'Cross-device (cloud mode)',
+                  'Cross-device',
                   'Cross-device',
                   'Cross-device',
                   'Cross-device',
@@ -154,12 +168,13 @@ function RateCard() {
                   'Supabase OAuth',
                   'Supabase OAuth',
                   'Supabase OAuth',
+                  'Supabase OAuth',
                   'SSO (SAML/OIDC), SCIM',
                 ]}
               />
               <RateRow
                 label="Dispatch"
-                values={['✗', '✓ (cloud mode)', '✓', '✓', '✓', '✓ + audit log']}
+                values={['✗', '✓ (cloud mode)', '✓', '✓', '✓', '✓', '✓ + audit log']}
               />
               <RateRow
                 label="Support"
@@ -168,6 +183,7 @@ function RateCard() {
                   'Community',
                   'Email 48h',
                   'Priority email 24h',
+                  'Priority email 12h',
                   'Priority email 8h',
                   'Dedicated 4h SLA',
                 ]}
@@ -181,6 +197,7 @@ function RateCard() {
                   <StampComingSoon key="b" variant="shipped" />,
                   <StampComingSoon key="h" variant="shipped" />,
                   <StampComingSoon key="p" variant="waitlist" />,
+                  <StampComingSoon key="pp" variant="waitlist" />,
                   <StampComingSoon key="m" variant="waitlist" />,
                   <span key="e" className="font-mono text-[10px] text-[var(--color-fg-muted)]">
                     Contact sales
@@ -199,7 +216,7 @@ function RateCard() {
         </div>
 
         <p className="mt-8 font-display italic text-lg text-[var(--color-ink)] max-w-prose">
-          Pro and Max are not yet open. Hobby is. Enterprise is bespoke.
+          Pro, Pro+ and Max are on waitlist. Hobby is open. Enterprise is bespoke.
         </p>
       </div>
     </RuledSection>

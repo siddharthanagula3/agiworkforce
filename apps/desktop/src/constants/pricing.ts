@@ -6,6 +6,8 @@ export const STRIPE_PRICE_IDS = {
   free: null,
   pro_monthly: 'price_1Sgwx20zEfO6BZMh3ix7hivi',
   pro_yearly: 'price_1Sgwx30zEfO6BZMhJXsduOyl',
+  pro_plus_monthly: 'price_1TUWdM0zEfO6BZMhUc2KikXi',
+  pro_plus_yearly: 'price_1TUWdN0zEfO6BZMhSMdLudHs',
   max_monthly: 'price_1Sgwx30zEfO6BZMhJqItFYKF',
   max_yearly: 'price_1Sgwx40zEfO6BZMhYS63EnfW',
 } as const;
@@ -17,7 +19,15 @@ export const STRIPE_PRICE_IDS = {
  * `free` is retained as an alias for `local-only` to keep legacy persisted
  * subscriptions and feature-gate code working until they are migrated.
  */
-export type PlanId = 'local-only' | 'byok' | 'hobby' | 'pro' | 'max' | 'enterprise' | 'free';
+export type PlanId =
+  | 'local-only'
+  | 'byok'
+  | 'hobby'
+  | 'pro'
+  | 'pro_plus'
+  | 'max'
+  | 'enterprise'
+  | 'free';
 
 export interface PricingPlan {
   id: PlanId;
@@ -139,6 +149,33 @@ export const PRICING_PLANS: PricingPlan[] = [
       storage: 10240,
       teamMembers: 1,
       tokenCredits: getPlanUsageBudgetCents('pro', 'monthly'),
+    },
+    waitlist: true,
+  },
+  {
+    id: 'pro_plus',
+    name: 'Pro+',
+    description: 'Flagship models with daily 15K-token caps + Runway video.',
+    monthlyPrice: getPlanPriceUsd('pro_plus', 'monthly'),
+    yearlyPrice: getPlanPriceUsd('pro_plus', 'yearly'),
+    stripePriceId: {
+      monthly: STRIPE_PRICE_IDS.pro_plus_monthly,
+      yearly: STRIPE_PRICE_IDS.pro_plus_yearly,
+    },
+    features: [
+      'All Pro features',
+      'Flagship models (Opus 4.7, GPT-5.5) — 15K tokens/day',
+      '60s/month video generation (Runway Gen-4 720p)',
+      'US-only routing toggle',
+      'Advanced computer use & deep research preview',
+      'Priority email support',
+    ],
+    limits: {
+      automations: null,
+      apiCalls: 30000,
+      storage: 20480,
+      teamMembers: 1,
+      tokenCredits: getPlanUsageBudgetCents('pro_plus', 'monthly'),
     },
     waitlist: true,
   },

@@ -1266,8 +1266,9 @@ class SupabaseAuthService {
       free: 0,
       hobby: 1,
       pro: 2,
-      max: 3,
-      enterprise: 4,
+      pro_plus: 3,
+      max: 4,
+      enterprise: 5,
     };
     const currentLevel = tierHierarchy[currentTier] ?? 0;
     const requiredLevel = tierHierarchy[tier] ?? 0;

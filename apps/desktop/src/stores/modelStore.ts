@@ -923,8 +923,10 @@ export const useModelStore = create<ModelState>()(
           // If no model is selected yet, use the best auto mode the current plan allows.
           const effectiveModel = resolveEffectiveModelForTier(selectedModel, currentPlan);
 
-          // Use the model router to determine the actual model
-          const routingResult = getModelForRequest(effectiveModel, message, hasImages);
+          // Use the model router to determine the actual model.
+          // Pass currentPlan as tier so Pro/Max users get *_pro slot routing
+          // (e.g. coding -> coding_premium_pro -> claude-sonnet-4.6).
+          const routingResult = getModelForRequest(effectiveModel, message, hasImages, currentPlan);
 
           const decision: RoutingDecision = {
             routedModelId: routingResult.modelId,
@@ -958,6 +960,7 @@ export const useModelStore = create<ModelState>()(
             message,
             hasImages,
             llmClassify,
+            currentPlan,
           );
 
           const decision: RoutingDecision = {
