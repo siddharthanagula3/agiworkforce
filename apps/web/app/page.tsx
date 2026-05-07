@@ -204,12 +204,14 @@ export default function Home() {
               </h3>
               <Specimen columns={3} dropCap>
                 <p>
-                  Switch between Claude, GPT, Gemini, Grok, and 8 more, all in one conversation.
-                  Anthropic locks you to Claude only; we don&apos;t.
+                  Switch between Claude, GPT, Gemini, Grok, and {MARKETING.providers.display} more,
+                  all in one conversation. Anthropic locks you to Claude only; we don&apos;t.
                 </p>
                 <p>
-                  The CLI ships with 13 named provider registrations. Pick one per turn or let the
-                  router choose by cost, latency, or capability.
+                  The CLI ships with 12 named provider registrations plus unlimited custom
+                  OpenAI-compatible BYO endpoints. Pick one per turn or let the router choose by
+                  cost, latency, or capability — task-aware routing classifies your message into
+                  coding, reasoning, vision, long-context, or general and routes accordingly.
                 </p>
                 <p>
                   Your conversation history follows you across model swaps. Token-level continuity,
@@ -430,10 +432,18 @@ export default function Home() {
             </OpsizMorph>
 
             <div className="overflow-x-auto">
-              <table className="w-full font-mono text-sm border-collapse text-[var(--color-ink)]">
+              <table className="w-full font-mono text-sm border-collapse text-[var(--color-ink)] min-w-[920px]">
                 <thead>
                   <tr className="border-b-2 border-[var(--color-rule)]">
-                    {['LOCAL FREE', 'BYOK FREE', `HOBBY $5/MO`, 'PRO', 'ENTERPRISE'].map((col) => (
+                    {[
+                      'LOCAL FREE',
+                      'BYOK FREE',
+                      'HOBBY $10/MO',
+                      'PRO $29.99/MO',
+                      'PRO+ $49.99/MO',
+                      'MAX $299.99/MO',
+                      'ENTERPRISE',
+                    ].map((col) => (
                       <th
                         key={col}
                         className="text-left py-3 pr-6 last:pr-0 font-semibold tracking-[0.1em] uppercase text-[var(--color-ink)] text-xs"
@@ -450,8 +460,50 @@ export default function Home() {
                       local: 'Local LLMs only',
                       byok: 'Bring your own keys',
                       hobby: 'Managed cloud, basic models',
-                      pro: 'Full models, advanced features',
+                      pro: 'Sonnet 4.6, GPT-5.4, Gemini 3.1 Pro',
+                      proPlus: '+ Opus 4.7 & GPT-5.5 (15K/day)',
+                      max: '+ unlimited flagships, deep research',
                       enterprise: 'Custom contracts, SSO, SCIM',
+                    },
+                    {
+                      label: 'Auto-routing',
+                      local: 'Manual',
+                      byok: 'Manual',
+                      hobby: 'Yes (Pool B workhorse)',
+                      pro: 'Task-aware (Pro pool)',
+                      proPlus: 'Task-aware + flagship',
+                      max: 'Task-aware + flagship + DR',
+                      enterprise: 'Task-aware + custom pools',
+                    },
+                    {
+                      label: 'Media',
+                      local: '–',
+                      byok: '–',
+                      hobby: '10 images/mo',
+                      pro: 'Unlimited image gen',
+                      proPlus: '+ 60s/mo Runway video',
+                      max: '+ 5min/mo video',
+                      enterprise: 'Per-contract',
+                    },
+                    {
+                      label: 'Computer use',
+                      local: 'Per provider',
+                      byok: 'Per provider',
+                      hobby: '–',
+                      pro: 'Light',
+                      proPlus: 'Advanced',
+                      max: '1K soft / 2.5K hard',
+                      enterprise: 'Custom',
+                    },
+                    {
+                      label: 'US-only routing',
+                      local: 'n/a',
+                      byok: 'You choose',
+                      hobby: '–',
+                      pro: '–',
+                      proPlus: 'Toggle',
+                      max: 'Toggle',
+                      enterprise: 'Default',
                     },
                     {
                       label: 'Encryption',
@@ -459,6 +511,8 @@ export default function Home() {
                       byok: 'At rest',
                       hobby: 'At rest + transit',
                       pro: 'At rest + transit',
+                      proPlus: 'At rest + transit',
+                      max: 'At rest + transit',
                       enterprise: 'At rest + transit + custom',
                     },
                     {
@@ -467,15 +521,9 @@ export default function Home() {
                       byok: 'Community',
                       hobby: 'Email, 48h',
                       pro: 'Priority email, 24h',
+                      proPlus: 'Priority email, 12h',
+                      max: 'Priority email, 8h',
                       enterprise: 'Dedicated, 4h SLA',
-                    },
-                    {
-                      label: 'Price',
-                      local: '$0',
-                      byok: '$0',
-                      hobby: '$5/mo',
-                      pro: 'TBD',
-                      enterprise: 'Custom',
                     },
                   ].map((row) => (
                     <tr
@@ -489,6 +537,8 @@ export default function Home() {
                       <td className="py-3 pr-6 text-[var(--color-ink-2)]">{row.byok}</td>
                       <td className="py-3 pr-6 text-[var(--color-ink-2)]">{row.hobby}</td>
                       <td className="py-3 pr-6 text-[var(--color-ink-2)]">{row.pro}</td>
+                      <td className="py-3 pr-6 text-[var(--color-ink-2)]">{row.proPlus}</td>
+                      <td className="py-3 pr-6 text-[var(--color-ink-2)]">{row.max}</td>
                       <td className="py-3 text-[var(--color-ink-2)]">{row.enterprise}</td>
                     </tr>
                   ))}
@@ -509,6 +559,12 @@ export default function Home() {
                     <td className="py-3 pr-6">
                       <StampComingSoon variant="waitlist" />
                     </td>
+                    <td className="py-3 pr-6">
+                      <StampComingSoon variant="waitlist" />
+                    </td>
+                    <td className="py-3 pr-6">
+                      <StampComingSoon variant="waitlist" />
+                    </td>
                     <td className="py-3">
                       <a
                         href="/enterprise"
@@ -523,7 +579,7 @@ export default function Home() {
             </div>
 
             <p className="mt-8 font-display italic text-lg text-[var(--color-ink-2)] max-w-prose">
-              <em>Pro and Max are not yet open. Hobby is. Enterprise is bespoke.</em>
+              <em>Hobby is open. Pro, Pro+, and Max are on waitlist. Enterprise is bespoke.</em>
             </p>
           </div>
         </RuledSection>

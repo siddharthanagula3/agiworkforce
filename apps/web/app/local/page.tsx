@@ -284,7 +284,7 @@ export default function LocalPage() {
                     feature: 'Cost',
                     local: '$0',
                     byok: "Provider's rate",
-                    hobby: '~$5/mo',
+                    hobby: '$10/mo',
                   },
                   {
                     feature: 'Privacy',

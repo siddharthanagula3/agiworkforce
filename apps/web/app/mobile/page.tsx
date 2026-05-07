@@ -65,7 +65,7 @@ const features = [
   {
     icon: Eye,
     title: MARKETING.providers.display + ' Providers',
-    desc: 'Same provider lineup as desktop and web. Switch models per conversation. Economy models on Hobby, all models on Pro/Max.',
+    desc: 'Same provider lineup as desktop and web. Switch models per conversation. Economy models on Hobby, balanced on Pro, flagship (Opus 4.7 / GPT-5.5) on Pro+/Max with daily caps.',
   },
   {
     icon: Bell,

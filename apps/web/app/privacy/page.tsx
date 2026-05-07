@@ -178,8 +178,8 @@ export default function PrivacyPage() {
                   When you select a hosted model, your prompts go{' '}
                   <strong className="text-[#edebe8]">directly to that provider&apos;s API</strong>{' '}
                   over TLS. In BYOK mode (you supply your own API key), we never store the response
-                  on our servers. In Hobby, Pro, or Max managed-cloud mode, we hold a copy in your
-                  Supabase row to enable cross-device sync; you can delete it at any time. Each
+                  on our servers. In Hobby, Pro, Pro+, or Max managed-cloud mode, we hold a copy in
+                  your Supabase row to enable cross-device sync; you can delete it at any time. Each
                   provider has its own privacy policy that governs how they handle your prompts and
                   completions.
                 </p>
