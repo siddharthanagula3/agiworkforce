@@ -9,94 +9,137 @@ import {
   UnifiedLLMError,
   UnifiedMessage,
   LLMProvider,
+  LLMClientFactory,
 } from './unified-language-model';
+import type { RequestContext } from './unified-language-model';
 
-// Mock all provider dependencies
-vi.mock('./providers/anthropic-claude', () => ({
-  anthropicProvider: {
-    sendMessage: vi.fn(),
-    streamMessage: vi.fn(),
-    updateConfig: vi.fn(),
-    isConfigured: vi.fn().mockReturnValue(true),
-  },
-  AnthropicProvider: {
-    getAvailableModels: vi
-      .fn()
-      .mockReturnValue(['claude-opus-4-5-20251101', 'claude-sonnet-4-5-20250929']),
-  },
-}));
+// ---------------------------------------------------------------------------
+// Provider class mocks
+// ---------------------------------------------------------------------------
+// Each provider mock exports:
+//   - A class constructor so `new AnthropicProvider()` works in the service
+//   - A singleton instance for legacy test assertions
+//   - Shared mock functions so every constructed instance uses the SAME vi.fn()
+//     references — allowing tests to set return values before service calls.
+//
+// Pattern: the mock factory is inline (vi.mock hoists factories). The
+// shared mock fns are stored on the constructor as a static property so
+// the module-level `await import(...)` retrieval lines below can access them.
+// ---------------------------------------------------------------------------
 
-vi.mock('./providers/openai-gpt', () => ({
-  openaiProvider: {
-    sendMessage: vi.fn(),
-    streamMessage: vi.fn(),
-    updateConfig: vi.fn(),
-    isConfigured: vi.fn().mockReturnValue(true),
-  },
-  OpenAIProvider: {
-    getAvailableModels: vi.fn().mockReturnValue(['gpt-5.4', 'gpt-5.4', 'o3']),
-  },
-}));
+vi.mock('./providers/anthropic-claude', () => {
+  const send = vi.fn();
+  const stream = vi.fn();
+  const update = vi.fn();
+  const configured = vi.fn().mockReturnValue(true);
+  const getModels = vi
+    .fn()
+    .mockReturnValue(['claude-opus-4-5-20251101', 'claude-sonnet-4-5-20250929']);
+  class AnthropicProvider {
+    sendMessage = send;
+    streamMessage = stream;
+    updateConfig = update;
+    isConfigured = configured;
+    static getAvailableModels = getModels;
+  }
+  return { AnthropicProvider, anthropicProvider: new AnthropicProvider() };
+});
 
-vi.mock('./providers/google-gemini', () => ({
-  googleProvider: {
-    sendMessage: vi.fn(),
-    streamMessage: vi.fn(),
-    updateConfig: vi.fn(),
-    isConfigured: vi.fn().mockReturnValue(true),
-  },
-  GoogleProvider: {
-    getAvailableModels: vi.fn().mockReturnValue(['gemini-2.0-flash', 'gemini-3-pro-preview']),
-  },
-}));
+vi.mock('./providers/openai-gpt', () => {
+  const send = vi.fn();
+  const stream = vi.fn();
+  const update = vi.fn();
+  const configured = vi.fn().mockReturnValue(true);
+  const getModels = vi.fn().mockReturnValue(['gpt-5.4', 'gpt-5.4', 'o3']);
+  class OpenAIProvider {
+    sendMessage = send;
+    streamMessage = stream;
+    updateConfig = update;
+    isConfigured = configured;
+    static getAvailableModels = getModels;
+  }
+  return { OpenAIProvider, openaiProvider: new OpenAIProvider() };
+});
 
-vi.mock('./providers/perplexity-ai', () => ({
-  perplexityProvider: {
-    sendMessage: vi.fn(),
-    streamMessage: vi.fn(),
-    updateConfig: vi.fn(),
-    isConfigured: vi.fn().mockReturnValue(true),
-  },
-  PerplexityProvider: {
-    getAvailableModels: vi.fn().mockReturnValue(['sonar', 'sonar-pro']),
-  },
-}));
+vi.mock('./providers/google-gemini', () => {
+  const send = vi.fn();
+  const stream = vi.fn();
+  const update = vi.fn();
+  const configured = vi.fn().mockReturnValue(true);
+  const getModels = vi.fn().mockReturnValue(['gemini-2.0-flash', 'gemini-3-pro-preview']);
+  class GoogleProvider {
+    sendMessage = send;
+    streamMessage = stream;
+    updateConfig = update;
+    isConfigured = configured;
+    static getAvailableModels = getModels;
+  }
+  return { GoogleProvider, googleProvider: new GoogleProvider() };
+});
 
-vi.mock('./providers/grok-ai', () => ({
-  grokProvider: {
-    sendMessage: vi.fn(),
-    streamMessage: vi.fn(),
-    updateConfig: vi.fn(),
-    isConfigured: vi.fn().mockReturnValue(true),
-  },
-  GrokProvider: {
-    getAvailableModels: vi.fn().mockReturnValue(['grok-4', 'grok-3']),
-  },
-}));
+vi.mock('./providers/perplexity-ai', () => {
+  const send = vi.fn();
+  const stream = vi.fn();
+  const update = vi.fn();
+  const configured = vi.fn().mockReturnValue(true);
+  const getModels = vi.fn().mockReturnValue(['sonar', 'sonar-pro']);
+  class PerplexityProvider {
+    sendMessage = send;
+    streamMessage = stream;
+    updateConfig = update;
+    isConfigured = configured;
+    static getAvailableModels = getModels;
+  }
+  return { PerplexityProvider, perplexityProvider: new PerplexityProvider() };
+});
 
-vi.mock('./providers/deepseek-ai', () => ({
-  deepseekProvider: {
-    sendMessage: vi.fn(),
-    streamMessage: vi.fn(),
-    updateConfig: vi.fn(),
-    isConfigured: vi.fn().mockReturnValue(true),
-  },
-  DeepSeekProvider: {
-    getAvailableModels: vi.fn().mockReturnValue(['deepseek-chat', 'deepseek-reasoner']),
-  },
-}));
+vi.mock('./providers/grok-ai', () => {
+  const send = vi.fn();
+  const stream = vi.fn();
+  const update = vi.fn();
+  const configured = vi.fn().mockReturnValue(true);
+  const getModels = vi.fn().mockReturnValue(['grok-4', 'grok-3']);
+  class GrokProvider {
+    sendMessage = send;
+    streamMessage = stream;
+    updateConfig = update;
+    isConfigured = configured;
+    static getAvailableModels = getModels;
+  }
+  return { GrokProvider, grokProvider: new GrokProvider() };
+});
 
-vi.mock('./providers/qwen-ai', () => ({
-  qwenProvider: {
-    sendMessage: vi.fn(),
-    streamMessage: vi.fn(),
-    updateConfig: vi.fn(),
-    isConfigured: vi.fn().mockReturnValue(true),
-  },
-  QwenProvider: {
-    getAvailableModels: vi.fn().mockReturnValue(['qwen-plus', 'qwen3-max']),
-  },
-}));
+vi.mock('./providers/deepseek-ai', () => {
+  const send = vi.fn();
+  const stream = vi.fn();
+  const update = vi.fn();
+  const configured = vi.fn().mockReturnValue(true);
+  const getModels = vi.fn().mockReturnValue(['deepseek-chat', 'deepseek-reasoner']);
+  class DeepSeekProvider {
+    sendMessage = send;
+    streamMessage = stream;
+    updateConfig = update;
+    isConfigured = configured;
+    static getAvailableModels = getModels;
+  }
+  return { DeepSeekProvider, deepseekProvider: new DeepSeekProvider() };
+});
+
+vi.mock('./providers/qwen-ai', () => {
+  const send = vi.fn();
+  const stream = vi.fn();
+  const update = vi.fn();
+  const configured = vi.fn().mockReturnValue(true);
+  const getModels = vi.fn().mockReturnValue(['qwen-plus', 'qwen3-max']);
+  class QwenProvider {
+    sendMessage = send;
+    streamMessage = stream;
+    updateConfig = update;
+    isConfigured = configured;
+    static getAvailableModels = getModels;
+  }
+  return { QwenProvider, qwenProvider: new QwenProvider() };
+});
 
 vi.mock('@core/billing/token-enforcement-service', () => ({
   canUserMakeRequest: vi.fn().mockResolvedValue({ allowed: true }),
@@ -223,13 +266,13 @@ describe('UnifiedLLMService', () => {
       expect(config.maxTokens).toBe(8000);
     });
 
-    it('should update configuration', () => {
-      service.updateConfig({
+    it('should create service with provider config via factory', () => {
+      const ctx: RequestContext = {
         provider: 'google',
         model: 'gemini-2.0-flash',
-      });
-
-      const config = service.getConfig();
+      };
+      const client = LLMClientFactory.create(ctx);
+      const config = client.getConfig();
 
       expect(config.provider).toBe('google');
       expect(config.model).toBe('gemini-2.0-flash');
@@ -264,9 +307,13 @@ describe('UnifiedLLMService', () => {
       expect(anthropicModels).toContain('claude-opus-4-5-20251101');
     });
 
-    it('should get provider instance', () => {
+    it('should get provider instance (fresh instance per service)', () => {
+      // With the factory pattern each UnifiedLLMService creates its own
+      // provider instances. The returned instance is not the module singleton
+      // but it has the same interface (shares mock fns via class definition).
       const provider = service.getProvider('openai');
-      expect(provider).toBe(openaiProvider);
+      expect(provider).toBeDefined();
+      expect(typeof provider?.sendMessage).toBe('function');
     });
 
     it('should return undefined for unknown provider', () => {
@@ -365,25 +412,24 @@ describe('UnifiedLLMService', () => {
       expect(response.content).toBe('Object API response');
     });
 
-    it('should update config from object API params', async () => {
-      vi.mocked(openaiProvider.sendMessage).mockResolvedValueOnce({
-        content: 'Response',
-        model: 'gpt-5.4',
-      });
-
-      await service.sendMessage({
-        messages: [{ role: 'user', content: 'Test' }],
+    it('should reflect model/temperature/maxTokens from object API params in config', async () => {
+      // factory-created service with custom params
+      const client = LLMClientFactory.create({
+        provider: 'openai',
         model: 'gpt-5.4',
         temperature: 0.3,
         maxTokens: 2000,
       });
 
-      expect(openaiProvider.updateConfig).toHaveBeenCalledWith(
-        expect.objectContaining({
-          maxTokens: 2000,
-          temperature: 0.3,
-        }),
-      );
+      vi.mocked(openaiProvider.sendMessage).mockResolvedValueOnce({
+        content: 'Response',
+        model: 'gpt-5.4',
+      });
+
+      const config = client.getConfig();
+      expect(config.model).toBe('gpt-5.4');
+      expect(config.temperature).toBe(0.3);
+      expect(config.maxTokens).toBe(2000);
     });
   });
 
@@ -652,6 +698,84 @@ describe('UnifiedLLMService', () => {
       const error = new UnifiedLLMError('Rate limited', 'PROVIDER_ERROR', 'anthropic', true);
 
       expect(error.retryable).toBe(true);
+    });
+  });
+
+  describe('LLMClientFactory — concurrency safety', () => {
+    it('two concurrent requests with different configs do not bleed state', () => {
+      // Create two factory clients with different configs simultaneously.
+      const ctxA: RequestContext = {
+        provider: 'anthropic',
+        model: 'claude-opus-4-5-20251101',
+        temperature: 0.2,
+        maxTokens: 1000,
+      };
+      const ctxB: RequestContext = {
+        provider: 'openai',
+        model: 'gpt-5.4',
+        temperature: 0.9,
+        maxTokens: 8000,
+      };
+
+      const clientA = LLMClientFactory.create(ctxA);
+      const clientB = LLMClientFactory.create(ctxB);
+
+      const configA = clientA.getConfig();
+      const configB = clientB.getConfig();
+
+      // Each client must have only its own config — no cross-contamination.
+      expect(configA.provider).toBe('anthropic');
+      expect(configA.model).toBe('claude-opus-4-5-20251101');
+      expect(configA.temperature).toBe(0.2);
+      expect(configA.maxTokens).toBe(1000);
+
+      expect(configB.provider).toBe('openai');
+      expect(configB.model).toBe('gpt-5.4');
+      expect(configB.temperature).toBe(0.9);
+      expect(configB.maxTokens).toBe(8000);
+
+      // Configs must be independent objects.
+      expect(configA).not.toBe(configB);
+    });
+
+    it('frozen instance throws on mutation attempt in strict mode', () => {
+      const ctx: RequestContext = { provider: 'openai', model: 'gpt-5.4' };
+      const client = LLMClientFactory.create(ctx);
+
+      // Attempting to set a property on a frozen object throws TypeError.
+      expect(() => {
+        (client as unknown as Record<string, unknown>)['config'] = {};
+      }).toThrow(TypeError);
+    });
+
+    it('construction is idempotent — two creates with same ctx yield equivalent configs', () => {
+      const ctx: RequestContext = {
+        provider: 'google',
+        model: 'gemini-2.0-flash',
+        maxTokens: 2048,
+        temperature: 0.5,
+      };
+
+      const clientA = LLMClientFactory.create(ctx);
+      const clientB = LLMClientFactory.create(ctx);
+
+      const configA = clientA.getConfig();
+      const configB = clientB.getConfig();
+
+      expect(configA.provider).toBe(configB.provider);
+      expect(configA.model).toBe(configB.model);
+      expect(configA.maxTokens).toBe(configB.maxTokens);
+      expect(configA.temperature).toBe(configB.temperature);
+
+      // They are separate frozen instances, not the same reference.
+      expect(clientA).not.toBe(clientB);
+    });
+
+    it('factory-created instance is frozen', () => {
+      const ctx: RequestContext = { provider: 'openai', model: 'gpt-5.4' };
+      const client = LLMClientFactory.create(ctx);
+
+      expect(Object.isFrozen(client)).toBe(true);
     });
   });
 
