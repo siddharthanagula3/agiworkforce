@@ -1,5 +1,10 @@
 import * as vscode from 'vscode';
-import { AgiWorkforceApiError, chatCompletion, type LlmChatMessage } from '../utils/api';
+import {
+  AgiWorkforceApiError,
+  AgiWorkforcePaywallError,
+  chatCompletion,
+  type LlmChatMessage,
+} from '../utils/api';
 import { Config } from '../utils/config';
 
 const MIN_PREFIX_CHARS = 3;
@@ -77,6 +82,12 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
   private readonly cache = new CompletionLruCache();
   private debounceTimer: ReturnType<typeof setTimeout> | undefined;
   private pendingResolve: (() => void) | undefined;
+  /**
+   * When true, inline completions are silently suppressed for the remainder of
+   * the VS Code session.  Set on the first paywall hit so we don't spam the
+   * user with a toast on every keystroke.
+   */
+  private paywallSuppressed = false;
 
   constructor(private readonly secrets: vscode.SecretStorage) {}
 
@@ -86,7 +97,7 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
     _context: vscode.InlineCompletionContext,
     token: vscode.CancellationToken,
   ): Promise<vscode.InlineCompletionList | vscode.InlineCompletionItem[] | undefined> {
-    if (!Config.inlineCompletionsEnabled()) {
+    if (!Config.inlineCompletionsEnabled() || this.paywallSuppressed) {
       return [];
     }
 
@@ -204,6 +215,31 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
       return [new vscode.InlineCompletionItem(completion, new vscode.Range(position, position))];
     } catch (error) {
       // Keep inline completions silent; chat/commands surface explicit errors.
+      if (error instanceof AgiWorkforcePaywallError) {
+        // Suppress all future inline completion requests for this session to
+        // avoid a toast+request loop on every keystroke.
+        if (!this.paywallSuppressed) {
+          this.paywallSuppressed = true;
+          // Show a single one-time notification — never repeated.
+          vscode.window
+            .showInformationMessage(
+              `AGI Workforce: Inline completions paused — upgrade to ${error.requiredTier} to continue.`,
+              'Upgrade',
+            )
+            .then((choice) => {
+              if (choice === 'Upgrade') {
+                vscode.env.openExternal(
+                  vscode.Uri.parse(
+                    `https://agiworkforce.com/pricing?from=paywall` +
+                      `&tier=${encodeURIComponent(error.requiredTier)}` +
+                      `&feature=${encodeURIComponent(error.feature)}`,
+                  ),
+                );
+              }
+            });
+        }
+        return [];
+      }
       if (error instanceof AgiWorkforceApiError && error.code === 'NO_API_KEY') {
         return [];
       }

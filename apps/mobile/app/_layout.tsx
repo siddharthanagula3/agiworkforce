@@ -13,9 +13,12 @@ import {
   ToastAndroid,
   Pressable,
   Text,
+  AppState,
+  type AppStateStatus,
 } from 'react-native';
 import { Fingerprint } from 'lucide-react-native';
 import { useAuthStore } from '@/stores/authStore';
+import { useTierStore } from '@/stores/tierStore';
 import { supabase } from '@/services/supabase';
 import { storage, initMmkvEncryption } from '@/lib/mmkv';
 import { hydrateBiometricFlag } from '@/lib/biometricFlagStore';
@@ -38,6 +41,7 @@ import '../global.css';
 
 export default function RootLayout() {
   const { session, isLoading, isInitialized, initialize } = useAuthStore();
+  const refreshTier = useTierStore((s) => s.refreshTier);
   const segments = useSegments();
   const router = useRouter();
   const url = useURL();
@@ -81,6 +85,35 @@ export default function RootLayout() {
   useEffect(() => {
     setCurrentSession(session ?? null);
   }, [session]);
+
+  // Tier refresh — fetch /api/auth/me once after the session is available and
+  // persist the result to MMKV-backed tierStore. The persisted value is used
+  // immediately on the next cold start so the UI shows the correct tier without
+  // waiting for the network call.
+  useEffect(() => {
+    if (!session || !isInitialized) return;
+    refreshTier().catch((err) => {
+      console.warn('[RootLayout] Tier refresh failed:', err);
+    });
+  }, [session, isInitialized, refreshTier]);
+
+  // Tier refresh on app foreground — invalidate cached tier when the user
+  // returns to the app (e.g. after completing a subscription upgrade in the
+  // browser). Mirrors the model-catalog TTL invalidation pattern.
+  useEffect(() => {
+    if (!session) return;
+
+    const handleAppStateChange = (nextState: AppStateStatus) => {
+      if (nextState === 'active') {
+        refreshTier().catch((err) => {
+          console.warn('[RootLayout] Foreground tier refresh failed:', err);
+        });
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
+  }, [session, refreshTier]);
 
   // LOW-MOB-3 fix: tell notifications.ts the navigator is mounted. Slot is
   // rendered on every render of this component, so on the first render we

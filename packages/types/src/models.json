@@ -145,7 +145,7 @@
       "aliases": ["xai", "grok"],
       "defaultModel": "grok-4.3",
       "taskRouting": {
-        "fast_completion": "grok-4-1-fast-reasoning",
+        "fast_completion": "grok-4.3",
         "code_generation": "grok-4.3",
         "complex_reasoning": "grok-4.3",
         "chat": "grok-4.3",
@@ -153,11 +153,19 @@
         "long_context": "grok-4.3"
       },
       "canonicalization": {
-        "grok-4": "grok-4-0709",
+        "grok-4": "grok-4.3",
         "grok-4-latest": "grok-4.3",
         "grok-4.3-latest": "grok-4.3",
-        "grok-4-fast-reasoning": "grok-4-1-fast-reasoning",
-        "grok-4-fast-non-reasoning": "grok-4-1-fast-reasoning"
+        "grok-4-0709": "grok-4.3",
+        "grok-4-fast": "grok-4.3",
+        "grok-4-fast-reasoning": "grok-4.3",
+        "grok-4-fast-non-reasoning": "grok-4.3",
+        "grok-4-1-fast": "grok-4.3",
+        "grok-4-1-fast-reasoning": "grok-4.3",
+        "grok-4-1-fast-non-reasoning": "grok-4.3",
+        "grok-4-mini": "grok-4.3",
+        "grok-3": "grok-4.3",
+        "grok-code-fast-1": "grok-4.3"
       }
     },
     "deepseek": {
@@ -183,10 +191,12 @@
         "long_context": "deepseek-v4-flash"
       },
       "canonicalization": {
-        "deepseek-r1": "deepseek-reasoner",
-        "deepseek-r1-zero": "deepseek-reasoner",
-        "deepseek-v3": "deepseek-chat",
-        "deepseek-v4": "deepseek-v4-flash"
+        "deepseek-r1": "deepseek-v4-flash",
+        "deepseek-r1-zero": "deepseek-v4-flash",
+        "deepseek-v3": "deepseek-v4-flash",
+        "deepseek-v4": "deepseek-v4-flash",
+        "deepseek-chat": "deepseek-v4-flash",
+        "deepseek-reasoner": "deepseek-v4-flash"
       }
     },
     "qwen": {
@@ -290,7 +300,6 @@
         "long_context": "glm-5.1"
       },
       "canonicalization": {
-        "glm-4.7": "glm-5.1",
         "glm-4.6v": "glm-5.1",
         "glm-4.6v-flash": "glm-5.1",
         "glm-4.5": "glm-5.1",
@@ -623,6 +632,30 @@
       "modelPrefixes": [],
       "aliases": [],
       "defaultModel": "",
+      "taskRouting": {
+        "fast_completion": "",
+        "code_generation": "",
+        "complex_reasoning": "",
+        "chat": "",
+        "vision": "",
+        "long_context": ""
+      },
+      "canonicalization": {}
+    },
+    "runway": {
+      "label": "Runway",
+      "sseDelimiter": "\n\n",
+      "tokenMultiplier": {
+        "prompt": 1.0,
+        "completion": 1.0
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.0,
+        "outputPerMillion": 0.0
+      },
+      "modelPrefixes": ["runway", "gen4_"],
+      "aliases": ["runway-ml", "runwayml"],
+      "defaultModel": "runway-gen-4",
       "taskRouting": {
         "fast_completion": "",
         "code_generation": "",
@@ -1306,7 +1339,8 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Real-time Info", "Reasoning", "X/Twitter Data"],
-      "released": "January 2026"
+      "released": "January 2026",
+      "deprecated": true
     },
     "grok-4-fast": {
       "id": "grok-4-fast",
@@ -1446,7 +1480,8 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Agentic Tasks", "Reasoning", "Real-time Data", "Long Context", "Vision"],
-      "released": "March 2026"
+      "released": "March 2026",
+      "deprecated": true
     },
     "grok-4-mini": {
       "id": "grok-4-mini",
@@ -2565,6 +2600,68 @@
       "bestFor": ["Photorealistic Images", "Creative Content"],
       "released": "January 2026"
     },
+    "imagen-4-fast": {
+      "id": "imagen-4-fast",
+      "apiModelId": "imagen-4.0-fast-generate-001",
+      "name": "Imagen 4 Fast",
+      "provider": "google",
+      "modelType": "image",
+      "contextWindow": 4000,
+      "inputCost": 0.0,
+      "outputCost": 20.0,
+      "imagePerImageCost": 0.02,
+      "capabilities": {
+        "streaming": false,
+        "tools": false,
+        "vision": false,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": true,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false
+      },
+      "speed": "fast",
+      "quality": "good",
+      "qualityTier": "economy",
+      "bestFor": ["Quick Images", "High Volume"],
+      "released": "2026",
+      "pricingNote": "Fast variant of Imagen 4 — $0.02/image at 1024x1024 (vs $0.04 for Imagen 4 standard, $0.06 for Ultra). Per auto-routing-spec.md §4 Pool B image slot."
+    },
+    "runway-gen-4": {
+      "id": "runway-gen-4",
+      "apiModelId": "gen4_turbo",
+      "name": "Runway Gen-4",
+      "provider": "runway",
+      "modelType": "video",
+      "contextWindow": 4000,
+      "inputCost": 0.0,
+      "outputCost": 0.0,
+      "videoPerSecondCost": 0.05,
+      "capabilities": {
+        "streaming": false,
+        "tools": false,
+        "vision": false,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": true,
+        "search": false,
+        "research": false,
+        "codeExecution": false
+      },
+      "speed": "medium",
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": ["AI Video Generation", "Pro+ / Max tiers"],
+      "released": "2025",
+      "pricingNote": "Per auto-routing-spec.md §4 Pool B video slot. ~$0.05/second at 720p. Pro+ caps at 60 sec/mo (~$3 COGS); Max caps at 5 min/mo. Sora-2 unavailable as of April 2026 — Runway Gen-4 is the chosen replacement."
+    },
     "imagen-4-ultra": {
       "id": "imagen-4-ultra",
       "apiModelId": "imagen-4.0-ultra-generate-001",
@@ -3369,10 +3466,10 @@
       "gpt-5.4-nano",
       "gpt-5.4-mini",
       "deepseek-v4-flash",
-      "grok-4-1-fast-reasoning",
       "claude-haiku-4.5",
       "qwen-3.6-plus",
       "kimi-k2.6",
+      "glm-4.7",
       "sonar"
     ],
     "pro_additions": [

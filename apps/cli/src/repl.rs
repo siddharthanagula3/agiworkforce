@@ -41,6 +41,8 @@ pub async fn run_repl(
     let provider_str = format!("{:?}", provider_name).to_lowercase();
     output::print_compact_header(&provider_str);
     output::print_banner(model, &provider_str);
+    // Show tier + token balance from cache (non-blocking — reads disk only).
+    output::print_tier_status();
 
     let mut session = AgentSession::new(model, sys_context, custom_system_prompt);
     session.max_turns = max_turns;

@@ -1838,15 +1838,19 @@ impl LLMRouter {
             }
             Provider::Ollama => super::models_config::get_default_model(&Provider::Ollama).to_string(),
             Provider::XAI => match task {
-                // grok-4-1-fast-reasoning is the current latest (March 2026): $0.20/$0.50 per 1M, 2M context
-                TaskCategory::Simple => "grok-4-1-fast-reasoning".to_string(),
-                TaskCategory::Complex => "grok-4-1-fast-reasoning".to_string(),
-                TaskCategory::Creative => "grok-4-1-fast-reasoning".to_string(),
+                // grok-4.3 is the current xAI flagship as of May 2026: $1.25/$2.50 per 1M, 1M context,
+                // always-on chain-of-thought. Replaces grok-4-1-fast-reasoning + siblings, all of
+                // which deprecate 2026-05-15.
+                TaskCategory::Simple => "grok-4.3".to_string(),
+                TaskCategory::Complex => "grok-4.3".to_string(),
+                TaskCategory::Creative => "grok-4.3".to_string(),
             },
             Provider::DeepSeek => match task {
-                TaskCategory::Simple => "deepseek-chat".to_string(), // DeepSeek Chat.2
-                TaskCategory::Complex => "deepseek-chat".to_string(), // DeepSeek Chat.2
-                TaskCategory::Creative => "deepseek-chat".to_string(), // DeepSeek Chat.2
+                // deepseek-v4-flash is current: $0.14/$0.28, 1M context, $0.0028 cache hit, thinking
+                // mode toggle. Replaces deepseek-chat which deprecates 2026-07-24.
+                TaskCategory::Simple => "deepseek-v4-flash".to_string(),
+                TaskCategory::Complex => "deepseek-v4-flash".to_string(),
+                TaskCategory::Creative => "deepseek-v4-flash".to_string(),
             },
             Provider::Qwen => match task {
                 TaskCategory::Simple => "qwen-max".to_string(),

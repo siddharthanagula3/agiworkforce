@@ -153,7 +153,10 @@ describe('model catalog helpers', () => {
     expect(getRoutingSlotModel('computer_use')).toBe('claude-sonnet-4.6');
 
     expect(canAccessManualModelSelection('free')).toBe(false);
-    expect(canAccessManualModelSelection('pro')).toBe(false);
+    // Pro now exposes the manual picker behind the Advanced-mode toggle per
+    // parallel-spinning-hedgehog §6 (Round 13). Free + Hobby remain Auto-only.
+    expect(canAccessManualModelSelection('hobby')).toBe(false);
+    expect(canAccessManualModelSelection('pro')).toBe(true);
     expect(canAccessManualModelSelection('max')).toBe(true);
     expect(canAccessManualModelSelection('enterprise')).toBe(true);
 
@@ -161,11 +164,13 @@ describe('model catalog helpers', () => {
       surfacedUx: 'auto_only',
       manualModelSelection: false,
       allowSearch: true,
-      allowMediaGeneration: false,
+      // Hobby permits image generation (10/mo) per auto-routing-spec §1.
+      allowMediaGeneration: true,
     });
     expect(getTierPolicy('pro')).toMatchObject({
-      surfacedUx: 'auto_only',
-      manualModelSelection: false,
+      // Round 13 — Advanced-mode toggle surfaces the manual picker for Pro.
+      surfacedUx: 'auto_plus_manual',
+      manualModelSelection: true,
       allowComputerUse: true,
       allowBrowserDom: true,
     });
@@ -173,6 +178,160 @@ describe('model catalog helpers', () => {
       surfacedUx: 'auto_plus_manual',
       manualModelSelection: true,
       allowMediaGeneration: true,
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pro-tier task-aware routing (resolveAutoModeModel 3-arg signature)
+// ---------------------------------------------------------------------------
+describe('resolveAutoModeModel — task-aware routing', () => {
+  describe('backward compat (no taskType)', () => {
+    it('legacy 2-arg call still resolves to general slot for hobby auto-balanced', () => {
+      const result = resolveAutoModeModel('auto-balanced', 'hobby');
+      expect(result).not.toBeNull();
+    });
+    it('legacy 2-arg call still resolves to general slot for pro auto-balanced', () => {
+      const result = resolveAutoModeModel('auto-balanced', 'pro');
+      expect(result).not.toBeNull();
+    });
+    it('undefined taskType uses legacy auto-mode path', () => {
+      expect(resolveAutoModeModel('auto-economy', 'hobby', undefined)).toBe(
+        resolveAutoModeModel('auto-economy', 'hobby'),
+      );
+    });
+  });
+
+  describe('Pro tier task-aware routing', () => {
+    it('coding task → coding_premium_pro slot (Sonnet 4.6)', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'pro', 'coding')).toBe('claude-sonnet-4.6');
+    });
+    it('reasoning task → reasoning_premium_pro slot (Kimi K2.6)', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'pro', 'reasoning')).toBe('kimi-k2.6');
+    });
+    it('multimodal task → multimodal_pro slot (Gemini 3.1 Pro)', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'pro', 'multimodal')).toBe(
+        'gemini-3.1-pro-preview',
+      );
+    });
+    it('long_context task → long_context_pro slot (Gemini 3.1 Pro)', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'pro', 'long_context')).toBe(
+        'gemini-3.1-pro-preview',
+      );
+    });
+    it('general task → general_balanced_pro slot (GPT-5.4 mini)', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'pro', 'general')).toBe('gpt-5.4-mini');
+    });
+    it('simple_chat task → general_balanced_pro slot', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'pro', 'simple_chat')).toBe('gpt-5.4-mini');
+    });
+    it('creative_writing → general_balanced_pro slot', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'pro', 'creative_writing')).toBe('gpt-5.4-mini');
+    });
+    it('research → general_balanced_pro slot', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'pro', 'research')).toBe('gpt-5.4-mini');
+    });
+    it('agentic → general_balanced_pro slot', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'pro', 'agentic')).toBe('gpt-5.4-mini');
+    });
+    it('image_generation → shared image_generation slot', () => {
+      const result = resolveAutoModeModel('auto-balanced', 'pro', 'image_generation');
+      expect(result).not.toBeNull();
+    });
+    it('computer-use → computer_use slot', () => {
+      const result = resolveAutoModeModel('auto-balanced', 'pro', 'computer-use');
+      expect(result).not.toBeNull();
+    });
+  });
+
+  describe('Hobby tier task-aware routing (separate from Pro map)', () => {
+    it('coding → escalation_coding slot (GLM-4.7), NOT coding_premium_pro', () => {
+      const result = resolveAutoModeModel('auto-balanced', 'hobby', 'coding');
+      expect(result).toBe('glm-4.7');
+      expect(result).not.toBe('claude-sonnet-4.6');
+    });
+    it('reasoning → reasoning_premium slot (DeepSeek V4 Flash), NOT reasoning_premium_pro', () => {
+      const result = resolveAutoModeModel('auto-balanced', 'hobby', 'reasoning');
+      expect(result).toBe('deepseek-v4-flash');
+      expect(result).not.toBe('kimi-k2.6');
+    });
+    it('multimodal → workhorse_general slot (Flash-Lite handles vision)', () => {
+      const result = resolveAutoModeModel('auto-balanced', 'hobby', 'multimodal');
+      expect(result).toBe('gemini-3.1-flash-lite');
+    });
+  });
+
+  describe('Free tier task-aware routing (allowedSlots restricted to workhorse_general)', () => {
+    it('coding → falls back to workhorse_general (escalation_coding not allowed)', () => {
+      const result = resolveAutoModeModel('auto-balanced', 'free', 'coding');
+      expect(result).toBe('gemini-3.1-flash-lite');
+    });
+    it('reasoning → falls back to workhorse_general', () => {
+      const result = resolveAutoModeModel('auto-balanced', 'free', 'reasoning');
+      expect(result).toBe('gemini-3.1-flash-lite');
+    });
+    it('image_generation → falls back to workhorse_general (no media on free)', () => {
+      const result = resolveAutoModeModel('auto-balanced', 'free', 'image_generation');
+      expect(result).toBe('gemini-3.1-flash-lite');
+    });
+  });
+
+  describe('Max + Enterprise tier task-aware routing (shares Pro+ map with flagship access)', () => {
+    it('Max coding → flagship_coding_pro_plus → claude-opus-4.7', () => {
+      // Max shares the Pro+ map, which routes coding → flagship_coding_pro_plus.
+      // Max's allowedSlots include the flagship slots (with monthly cap of 1M
+      // tokens enforced by assertQuota; no daily cap like Pro+).
+      expect(resolveAutoModeModel('auto-balanced', 'max', 'coding')).toBe('claude-opus-4.7');
+    });
+    it('Enterprise coding → flagship_coding_pro_plus → claude-opus-4.7', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'enterprise', 'coding')).toBe('claude-opus-4.7');
+    });
+    it('Pro+ coding → flagship_coding_pro_plus → claude-opus-4.7 (gated by 15K daily cap)', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'pro_plus', 'coding')).toBe('claude-opus-4.7');
+    });
+    it('Pro+ general → flagship_general_pro_plus → gpt-5.5', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'pro_plus', 'general')).toBe('gpt-5.5');
+    });
+  });
+
+  describe('US-only routing toggle (Pro+/Max only)', () => {
+    it('Pro+ reasoning + usOnly=true skips kimi-k2.6 (Moonshot)', () => {
+      // Default: reasoning -> reasoning_premium_pro -> kimi-k2.6
+      expect(resolveAutoModeModel('auto-balanced', 'pro_plus', 'reasoning')).toBe('kimi-k2.6');
+      // With usOnly: skips Moonshot/DeepSeek/Zhipu/MiniMax/Qwen.
+      const result = resolveAutoModeModel('auto-balanced', 'pro_plus', 'reasoning', {
+        usOnly: true,
+      });
+      expect(result).not.toBe('kimi-k2.6');
+      expect(result).not.toBe('deepseek-v4-flash');
+      expect(result).not.toBe('glm-4.7');
+    });
+
+    it('Max reasoning + usOnly=true also skips kimi-k2.6', () => {
+      const result = resolveAutoModeModel('auto-balanced', 'max', 'reasoning', { usOnly: true });
+      expect(result).not.toBe('kimi-k2.6');
+    });
+
+    it('Pro tier ignores usOnly flag (toggle gated by usOnlyRoutingAvailable)', () => {
+      // Pro tier policy does not set usOnlyRoutingAvailable, so the flag is
+      // ignored and reasoning still routes to kimi-k2.6.
+      const result = resolveAutoModeModel('auto-balanced', 'pro', 'reasoning', { usOnly: true });
+      expect(result).toBe('kimi-k2.6');
+    });
+
+    it('Hobby reasoning with usOnly=true is ignored (toggle not available)', () => {
+      const result = resolveAutoModeModel('auto-balanced', 'hobby', 'reasoning', { usOnly: true });
+      expect(result).toBe('deepseek-v4-flash');
+    });
+
+    it('Pro+ coding with usOnly=true keeps Opus 4.7 (Anthropic is US)', () => {
+      const result = resolveAutoModeModel('auto-balanced', 'pro_plus', 'coding', { usOnly: true });
+      expect(result).toBe('claude-opus-4.7');
+    });
+
+    it('Pro+ general with usOnly=true keeps gpt-5.5 (OpenAI is US)', () => {
+      const result = resolveAutoModeModel('auto-balanced', 'pro_plus', 'general', { usOnly: true });
+      expect(result).toBe('gpt-5.5');
     });
   });
 });

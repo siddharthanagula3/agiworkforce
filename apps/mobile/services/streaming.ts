@@ -8,6 +8,7 @@ import {
 } from '@/lib/providerStreamClient';
 import { supabase } from './supabase';
 import { secureFetch } from './secureFetch';
+import { ApiPaywallError } from './api';
 
 export interface StreamDelta {
   content?: string;
@@ -92,6 +93,27 @@ async function attemptStream(
 
   if (!response.ok) {
     const text = await response.text();
+
+    // Detect structured paywall response: HTTP 429 + { kind: 'paywall', ... }.
+    // Throw ApiPaywallError so the caller can distinguish paywall from other
+    // stream errors and show the PaywallBottomSheet instead of a generic toast.
+    if (response.status === 429) {
+      try {
+        const parsed = JSON.parse(text) as Record<string, unknown>;
+        if (parsed && parsed.kind === 'paywall') {
+          throw new ApiPaywallError(
+            typeof parsed.feature === 'string' ? parsed.feature : 'token_cap',
+            typeof parsed.requiredTier === 'string' ? parsed.requiredTier : 'hobby',
+            typeof parsed.reason === 'string' ? parsed.reason : '',
+          );
+        }
+      } catch (jsonErr) {
+        // If jsonErr is our ApiPaywallError, re-throw it
+        if (jsonErr instanceof ApiPaywallError) throw jsonErr;
+        // Otherwise fall through to generic error below
+      }
+    }
+
     callbacks.onError(new Error(`HTTP ${response.status}: ${text}`));
     return false;
   }

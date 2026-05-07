@@ -98,19 +98,42 @@ async function handleGetMe(request: NextRequest) {
       throw createError.unauthorized();
     }
 
-    // Fetch subscription using SubscriptionService (RLS-bound client, enforces row security)
-    let subscription = null;
-    try {
-      subscription = await SubscriptionService.getSubscription(userClient, user.id);
-    } catch (subscriptionError) {
-      logger.warn(
-        {
-          userId: user.id,
-          error: subscriptionError,
+    // Three independent reads — fan out in parallel (Vercel rule
+    // `async-parallel`). Each promise has its own try/catch so a transient
+    // failure on one (e.g. credit balance) doesn't take down the whole
+    // /api/me response. Routing preferences default to `{}` on any error.
+    const [subscription, credits, routing_preferences] = await Promise.all([
+      SubscriptionService.getSubscription(userClient, user.id).catch(
+        (subscriptionError: unknown) => {
+          logger.warn({ userId: user.id, error: subscriptionError }, 'Error fetching subscription');
+          return null;
         },
-        'Error fetching subscription',
-      );
-    }
+      ),
+      CreditService.getBalance(userClient, user.id).catch((creditError: unknown) => {
+        logger.warn({ error: creditError, userId: user.id }, 'Failed to get credit balance');
+        return null;
+      }),
+      (async (): Promise<{ us_only?: boolean; geo_overlay?: string }> => {
+        try {
+          const { data: profileRow } = await userClient
+            .from('profiles')
+            .select('routing_preferences')
+            .eq('id', user.id)
+            .maybeSingle();
+          const raw = (profileRow as { routing_preferences?: unknown } | null)?.routing_preferences;
+          if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+            return raw as { us_only?: boolean; geo_overlay?: string };
+          }
+          return {};
+        } catch (prefsError) {
+          logger.warn(
+            { userId: user.id, error: prefsError },
+            'Failed to fetch routing_preferences — defaulting to {}',
+          );
+          return {};
+        }
+      })(),
+    ]);
 
     const feature_flags = {
       beta_features: true,
@@ -128,21 +151,6 @@ async function handleGetMe(request: NextRequest) {
         : null,
     };
 
-    // Get credit balance
-    let credits = null;
-    try {
-      credits = await CreditService.getBalance(userClient, user.id);
-    } catch (creditError) {
-      logger.warn(
-        {
-          error: creditError,
-          userId: user.id,
-        },
-        'Failed to get credit balance',
-      );
-      // Don't fail the request if credit balance fetch fails
-    }
-
     return NextResponse.json({
       id: user.id,
       email: user.email,
@@ -153,6 +161,7 @@ async function handleGetMe(request: NextRequest) {
       plan,
       feature_flags,
       credits,
+      routing_preferences,
     });
   } catch (error) {
     logger.error(

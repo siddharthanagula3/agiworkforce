@@ -22,6 +22,7 @@ import { QuotedReplyBar } from '@/components/chat/QuotedReplyBar';
 import { AddToChatSheet } from '@/components/chat/AddToChatSheet';
 import { ConversationExportSheet } from '@/components/chat/ConversationExportSheet';
 import { ThinkingBottomSheet } from '@/components/chat/ThinkingBottomSheet';
+import { PaywallBottomSheet } from '@/components/chat/PaywallBottomSheet';
 import { ModelPickerSheet } from '@/components/model-picker/ModelPickerSheet';
 import { VoiceConversationScreen } from '@/components/voice/VoiceConversationScreen';
 import { Text } from '@/components/ui/text';
@@ -52,6 +53,7 @@ export default function ChatScreen() {
   const [quotedMessage, setQuotedMessage] = useState<ChatMessage | null>(null);
   const [thinkingSheetIndex, setThinkingSheetIndex] = useState(-1);
   const [thinkingContent, setThinkingContent] = useState('');
+  const paywallSheetRef = useRef<import('@gorhom/bottom-sheet').default>(null);
   const { isOnline } = useNetworkStatus();
 
   const conversationMessages = useChatStore((s) => (id ? (s.messages[id] ?? []) : []));
@@ -67,6 +69,8 @@ export default function ChatScreen() {
   const editMessage = useChatStore((s) => s.editMessage);
   const renameConversation = useChatStore((s) => s.renameConversation);
   const deleteConversation = useChatStore((s) => s.deleteConversation);
+  const paywallError = useChatStore((s) => s.paywallError);
+  const clearPaywallError = useChatStore((s) => s.clearPaywallError);
 
   const selectedModel = useModelStore((s) => s.selectedModel);
   const approveRequest = useAgentStore((s) => s.approveRequest);
@@ -121,6 +125,13 @@ export default function ChatScreen() {
       stopSpeaking();
     };
   }, [stopSpeaking]);
+
+  // Open the paywall bottom sheet whenever the chat store captures a paywall error.
+  useEffect(() => {
+    if (paywallError) {
+      paywallSheetRef.current?.expand();
+    }
+  }, [paywallError]);
 
   const handleSend = useCallback(
     (text: string, attachments?: import('@/components/chat/AttachmentPreview').Attachment[]) => {
@@ -557,6 +568,15 @@ export default function ChatScreen() {
           thinkingText={thinkingContent}
           sheetIndex={thinkingSheetIndex}
           onClose={handleCloseThinking}
+        />
+
+        {/* Paywall bottom sheet — shown when the API returns a tier-cap 429. */}
+        <PaywallBottomSheet
+          ref={paywallSheetRef}
+          feature={paywallError?.feature ?? 'token_cap'}
+          requiredTier={paywallError?.requiredTier ?? 'hobby'}
+          reason={paywallError?.reason}
+          onDismiss={clearPaywallError}
         />
 
         {/* Rename modal (Android — Alert.prompt is iOS-only) */}

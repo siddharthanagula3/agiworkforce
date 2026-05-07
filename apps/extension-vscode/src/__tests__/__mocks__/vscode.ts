@@ -343,6 +343,30 @@ class MockWebview {
   }
 }
 
+// ─── MarkdownString ───────────────────────────────────────────────────────────
+
+class MarkdownString {
+  isTrusted?: boolean;
+  supportThemeIcons?: boolean;
+
+  constructor(public value: string = '') {}
+
+  appendMarkdown(text: string): this {
+    this.value += text;
+    return this;
+  }
+
+  appendText(text: string): this {
+    this.value += text;
+    return this;
+  }
+
+  appendCodeblock(code: string, language?: string): this {
+    this.value += `\`\`\`${language ?? ''}\n${code}\n\`\`\``;
+    return this;
+  }
+}
+
 // ─── ChatRequestTurn / ChatResponseTurn ───────────────────────────────────────
 
 class ChatRequestTurn {
@@ -498,6 +522,7 @@ export const extensions = {
 export const env = {
   isTelemetryEnabled: true,
   createTelemetryLogger: vi.fn((_sender: unknown, _options?: unknown) => new MockTelemetryLogger()),
+  openExternal: vi.fn().mockResolvedValue(true),
 };
 
 export const lm = {
@@ -583,6 +608,11 @@ export const ExtensionMode = {
   Test: 3,
 } as const;
 
+export const QuickPickItemKind = {
+  Separator: -1,
+  Default: 0,
+} as const;
+
 export const version = '1.95.0';
 
 // ─── Class exports ────────────────────────────────────────────────────────────
@@ -591,6 +621,7 @@ export {
   CancellationTokenSource,
   Disposable,
   EventEmitter,
+  MarkdownString,
   Position,
   Range,
   Selection,

@@ -26,6 +26,37 @@ export interface ProviderStreamRequest {
   topP?: number;
 }
 
+/**
+ * Paywall feature identifiers — mirrors InlinePaywallCard.tsx PaywallFeature type.
+ * Kept in sync manually; if the web surface adds new features, add them here too.
+ */
+export type PaywallFeature =
+  | 'video_generation'
+  | 'opus_4_7'
+  | 'gpt_5_5'
+  | 'computer_use'
+  | 'deep_research'
+  | 'image_quota'
+  | 'token_cap'
+  | 'mcp'
+  | 'web_search';
+
+/**
+ * Tier labels a paywall can require — mirrors InlinePaywallCard.tsx RequiredTier.
+ */
+export type PaywallRequiredTier = 'hobby' | 'pro' | 'pro_plus' | 'max';
+
+/**
+ * Structured paywall payload returned by the API at HTTP 429 when the user has
+ * consumed 150% of their tier cap.  Shape: { kind:'paywall', feature, requiredTier, reason }.
+ */
+export interface PaywallPayload {
+  kind: 'paywall';
+  feature: PaywallFeature;
+  requiredTier: PaywallRequiredTier;
+  reason?: string;
+}
+
 export type StreamChunk =
   | { type: 'text-delta'; delta: string }
   | { type: 'thinking-delta'; delta: string; signature?: string }
@@ -44,6 +75,12 @@ export type StreamChunk =
   | {
       type: 'stop';
       reason: 'end_turn' | 'max_tokens' | 'tool_use' | 'stop_sequence' | 'error' | 'cancel';
+    }
+  | {
+      type: 'paywall';
+      feature: PaywallFeature;
+      requiredTier: PaywallRequiredTier;
+      reason?: string;
     };
 
 export interface StreamFromProviderParams {
@@ -77,6 +114,32 @@ export async function* streamFromProvider(
 
   if (!res.ok || !res.body) {
     const text = await res.text().catch(() => '');
+
+    // 429 with a structured paywall body — yield as a first-class paywall chunk
+    // rather than an error so callers can present upgrade UI instead of an error
+    // message.  Shape check: {kind:'paywall', feature, requiredTier}.
+    if (res.status === 429 && text) {
+      try {
+        const parsed = JSON.parse(text) as Partial<PaywallPayload>;
+        if (
+          parsed.kind === 'paywall' &&
+          typeof parsed.feature === 'string' &&
+          typeof parsed.requiredTier === 'string'
+        ) {
+          yield {
+            type: 'paywall',
+            feature: parsed.feature as PaywallFeature,
+            requiredTier: parsed.requiredTier as PaywallRequiredTier,
+            ...(parsed.reason ? { reason: parsed.reason } : {}),
+          };
+          yield { type: 'stop', reason: 'error' };
+          return;
+        }
+      } catch {
+        // Not JSON — fall through to generic error
+      }
+    }
+
     yield {
       type: 'error',
       message: text || `Upstream error ${res.status}`,

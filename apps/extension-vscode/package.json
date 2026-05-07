@@ -340,6 +340,11 @@
         "command": "agi-workforce.showSubsystemHealth",
         "title": "AGI: Show Subsystem Health",
         "category": "AGI"
+      },
+      {
+        "command": "agi-workforce.showTierStatus",
+        "title": "AGI Workforce: Show Tier Status",
+        "icon": "$(account)"
       }
     ],
     "chatParticipants": [
@@ -683,6 +688,12 @@
           ],
           "default": "auto",
           "markdownDescription": "Provider used on the provider-stream path. `auto` infers from the model id prefix (claude-* → anthropic, gpt-* → openai, gemini-* → google, otherwise → ollama). For the full list of supported providers, see the [docs](https://agiworkforce.com/docs/providers)."
+        },
+        "agiWorkforce.currentTier": {
+          "type": "string",
+          "default": "unknown",
+          "readOnly": true,
+          "description": "Current subscription tier (read-only, populated on activation). Run 'AGI Workforce: Show Tier Status' to see full usage details or visit agiworkforce.com/pricing to upgrade."
         }
       }
     },

@@ -2256,6 +2256,113 @@ async function getSupabaseJwtFromStorage(): Promise<string | null> {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Tier cache — fetched from /api/me, stored in chrome.storage.local under
+// 'agi_user_tier'. Refreshed on demand and on a 30-minute alarm (Phase 3 #41).
+//
+// Bearer-token auth side-steps the BLOCKED_COOKIE_DOMAINS guard: cookies
+// would leak across origins, but a JWT pulled from session storage and sent
+// in the Authorization header is fine.
+// ---------------------------------------------------------------------------
+
+const TIER_CACHE_KEY = 'agi_user_tier';
+const TIER_CACHE_TIMESTAMP_KEY = 'agi_user_tier_fetched_at';
+const TIER_REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * Allowlist of /api/me hosts the extension may call. Mirrors the gateway
+ * allowlist but uses the marketing domain (agiworkforce.com) where /api/me
+ * lives in the Next.js app — the api.agiworkforce.com gateway proxies
+ * different routes.
+ */
+const ME_ENDPOINT_ALLOWLIST = new Set<string>([
+  'https://agiworkforce.com',
+  'https://www.agiworkforce.com',
+  'http://localhost:3000',
+  'http://localhost:3001',
+]);
+
+function deriveMeEndpoint(gatewayUrl: string): string | null {
+  // Default to agiworkforce.com unless the gateway is explicitly localhost
+  // (developer dev-stack pointing at next-dev directly).
+  try {
+    const u = new URL(gatewayUrl);
+    if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') {
+      const candidate = `${u.protocol}//${u.host}`;
+      if (ME_ENDPOINT_ALLOWLIST.has(candidate)) {
+        return `${candidate}/api/me`;
+      }
+    }
+  } catch {
+    /* fall through */
+  }
+  return 'https://agiworkforce.com/api/me';
+}
+
+interface ApiMeResponse {
+  plan?: { tier?: string };
+  routing_preferences?: { us_only?: boolean };
+  feature_flags?: Record<string, unknown>;
+}
+
+/**
+ * Fetch /api/me with Bearer auth and cache the tier locally. Silent on
+ * failure — the popup falls back to whatever was cached previously, or
+ * hides the tier badge if no cache exists yet.
+ */
+async function refreshUserTierFromApi(): Promise<void> {
+  try {
+    const jwt = await getSupabaseJwtFromStorage();
+    if (!jwt) return;
+
+    const settings = await getProviderStreamSettings();
+    const meUrl = deriveMeEndpoint(settings.gatewayUrl);
+    if (!meUrl) return;
+
+    const response = await fetch(meUrl, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        Accept: 'application/json',
+      },
+      credentials: 'omit',
+    });
+
+    if (!response.ok) {
+      return;
+    }
+
+    const body = (await response.json()) as ApiMeResponse;
+    const tier = body.plan?.tier;
+    if (typeof tier !== 'string' || tier.length === 0) {
+      return;
+    }
+
+    await chrome.storage.local.set({
+      [TIER_CACHE_KEY]: tier,
+      [TIER_CACHE_TIMESTAMP_KEY]: Date.now(),
+    });
+  } catch {
+    // Network errors, malformed JSON, storage failures — all silent.
+  }
+}
+
+// Schedule a periodic refresh while the service worker is alive. The
+// alarm survives SW restarts (Chrome restores alarms on startup).
+const TIER_REFRESH_ALARM_NAME = 'agi-user-tier-refresh';
+chrome.alarms.create(TIER_REFRESH_ALARM_NAME, {
+  periodInMinutes: TIER_REFRESH_INTERVAL_MS / 60_000,
+});
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === TIER_REFRESH_ALARM_NAME) {
+    void refreshUserTierFromApi();
+  }
+});
+
+// Also refresh on extension activation so a fresh install sees the tier
+// without waiting 30 minutes.
+void refreshUserTierFromApi();
+
 function inferProviderFromModel(modelId: string | undefined): ProviderStreamProvider {
   if (!modelId) return 'anthropic';
   const m = modelId.toLowerCase();
@@ -2287,9 +2394,30 @@ async function getSelectedModel(): Promise<string> {
 }
 
 /**
+ * Broadcast a PAYWALL_HIT message to all open extension views (popup, side panel).
+ * Views that are not open will silently ignore the rejected sendMessage.
+ */
+function broadcastPaywallHit(feature: string, requiredTier: string, reason?: string): void {
+  const msg: import('./types').PaywallHitMessage = {
+    type: 'PAYWALL_HIT',
+    feature,
+    requiredTier,
+    ...(reason ? { reason } : {}),
+  };
+  chrome.runtime.sendMessage(msg).catch(() => {
+    // No listeners open (popup / side panel closed) — silently ignore.
+  });
+}
+
+/**
  * Stream a chat reply via the api-gateway's `/api/v1/providers/:id/stream`
  * endpoint. Throws if the upstream returns an error chunk so the caller can
  * fall back to the legacy bridge path.
+ *
+ * When a paywall chunk is received the function broadcasts PAYWALL_HIT to all
+ * extension views and returns normally (does NOT throw) — the caller must not
+ * fall back to the bridge in that case, as the cap is enforced server-side and
+ * retrying against the bridge won't help.
  */
 async function streamChatViaProvider(params: {
   gatewayUrl: string;
@@ -2298,7 +2426,7 @@ async function streamChatViaProvider(params: {
   model: string;
   messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
   broadcast: (text: string, done: boolean, error?: string) => void;
-}): Promise<void> {
+}): Promise<{ paywalled: boolean }> {
   const { gatewayUrl, providerId, jwt, model, messages, broadcast } = params;
   const stream = streamFromProvider({
     gatewayUrl,
@@ -2310,6 +2438,12 @@ async function streamChatViaProvider(params: {
   for await (const chunk of stream as AsyncIterable<ProviderStreamChunk>) {
     if (chunk.type === 'text-delta') {
       if (chunk.delta) broadcast(chunk.delta, false);
+    } else if (chunk.type === 'paywall') {
+      // Tier cap hit — surface the paywall UI and stop streaming without
+      // triggering the legacy-bridge fallback.
+      broadcastPaywallHit(chunk.feature, chunk.requiredTier, chunk.reason);
+      broadcast('', true);
+      return { paywalled: true };
     } else if (chunk.type === 'error') {
       sawError = { ...(chunk.code ? { code: chunk.code } : {}), message: chunk.message };
     } else if (chunk.type === 'stop') {
@@ -2317,13 +2451,14 @@ async function streamChatViaProvider(params: {
         throw new Error(`provider-stream:${sawError.code ?? 'STREAM_ERROR'}:${sawError.message}`);
       }
       broadcast('', true);
-      return;
+      return { paywalled: false };
     }
   }
   if (sawError) {
     throw new Error(`provider-stream:${sawError.code ?? 'STREAM_ERROR'}:${sawError.message}`);
   }
   broadcast('', true);
+  return { paywalled: false };
 }
 
 async function handleChatMessage(
@@ -2404,7 +2539,7 @@ async function handleChatMessage(
           providerStreamSettings.providerOverride === 'auto'
             ? inferProviderFromModel(model)
             : providerStreamSettings.providerOverride;
-        await streamChatViaProvider({
+        const streamResult = await streamChatViaProvider({
           gatewayUrl: providerStreamSettings.gatewayUrl,
           providerId,
           jwt,
@@ -2415,6 +2550,10 @@ async function handleChatMessage(
           }>,
           broadcast: broadcastChunk,
         });
+        // If the API returned a paywall response, do not fall through to the
+        // legacy bridge — the cap is enforced server-side and the PAYWALL_HIT
+        // broadcast has already been sent to the popup/side-panel.
+        if (streamResult.paywalled) return;
         return;
       } catch (err) {
         logger.warn('Provider-stream path failed, falling back to legacy bridge', err);

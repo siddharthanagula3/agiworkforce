@@ -22,7 +22,14 @@ import {
   ConversationTreeProvider,
   ConversationTreeItem,
 } from './providers/conversationTreeProvider';
-import { getApiKey, setApiKey, clearApiKey, setSupabaseJwt, clearSupabaseJwt } from './utils/api';
+import {
+  getApiKey,
+  setApiKey,
+  clearApiKey,
+  setSupabaseJwt,
+  clearSupabaseJwt,
+  fetchTierInfo,
+} from './utils/api';
 import { getExtensionVersion } from './utils/version';
 import { getActiveWorkspaceFolder, shellQuoteForCurrentPlatform } from './utils/workspaceFolders';
 import { Config } from './utils/config';
@@ -1172,8 +1179,75 @@ export function activate(context: vscode.ExtensionContext): void {
           break;
         }
         case 'account':
-          await vscode.commands.executeCommand('agi-workforce.modelDashboard');
+          await vscode.commands.executeCommand('agi-workforce.showTierStatus');
           break;
+      }
+    }),
+
+    // ── agi-workforce.showTierStatus ─────────────────────────────────────────
+    vscode.commands.registerCommand('agi-workforce.showTierStatus', async () => {
+      const tierInfo = await fetchTierInfo(context.secrets);
+
+      const tier =
+        tierInfo?.tier ?? context.globalState.get<string>('tierStatus.cachedTier') ?? 'unknown';
+
+      const items: vscode.QuickPickItem[] = [];
+
+      items.push({
+        label: `$(account) Current tier: ${tier}`,
+        description: 'Your AGI Workforce subscription tier',
+        kind: vscode.QuickPickItemKind.Default,
+      });
+
+      if (tierInfo?.tokensUsed !== undefined && tierInfo.tokenCap !== undefined) {
+        const pct = Math.round((tierInfo.tokensUsed / tierInfo.tokenCap) * 100);
+        const usedFmt = (tierInfo.tokensUsed / 1_000).toFixed(1);
+        const capFmt = (tierInfo.tokenCap / 1_000).toFixed(1);
+        items.push({
+          label: `$(pulse) Token usage: ${usedFmt}K / ${capFmt}K (${pct}%)`,
+          description: 'Tokens used this billing period',
+        });
+      } else if (tierInfo?.tokensUsed !== undefined) {
+        const usedFmt = (tierInfo.tokensUsed / 1_000).toFixed(1);
+        items.push({
+          label: `$(pulse) Token usage: ${usedFmt}K used`,
+          description: 'Tokens used this billing period',
+        });
+      }
+
+      items.push(
+        {
+          label: '',
+          kind: vscode.QuickPickItemKind.Separator,
+        },
+        {
+          label: '$(link-external) View pricing & upgrade',
+          description: 'agiworkforce.com/pricing',
+          detail: 'open-pricing',
+        },
+        {
+          label: '$(graph) Model dashboard',
+          description: 'View request history and token breakdown',
+          detail: 'open-dashboard',
+        },
+      );
+
+      const pick = await vscode.window.showQuickPick(items, {
+        title: `AGI Workforce — Tier Status (${tier})`,
+        placeHolder: 'Your subscription & usage',
+        matchOnDescription: true,
+      });
+
+      if (pick === undefined) return;
+
+      if (pick.detail === 'open-pricing') {
+        void vscode.env.openExternal(
+          vscode.Uri.parse(
+            `https://agiworkforce.com/pricing?from=tier-status&tier=${encodeURIComponent(tier)}`,
+          ),
+        );
+      } else if (pick.detail === 'open-dashboard') {
+        await vscode.commands.executeCommand('agi-workforce.modelDashboard');
       }
     }),
   );
@@ -1274,6 +1348,20 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // ── 6. Inline completions first-run notice ───────────────────────────────────
   void checkInlineCompletionsFirstRun(context);
+
+  // ── 7. Fetch tier info on activation (fire-and-forget, cached to globalState)
+  // Populates `agiWorkforce.currentTier` setting display + powers showTierStatus.
+  void fetchTierInfo(context.secrets).then(async (tierInfo) => {
+    if (tierInfo === undefined) return;
+    try {
+      await context.globalState.update('tierStatus.cachedTier', tierInfo.tier);
+      await vscode.workspace
+        .getConfiguration('agiWorkforce')
+        .update('currentTier', tierInfo.tier, vscode.ConfigurationTarget.Global);
+    } catch {
+      // Non-critical — silently ignore update failures (e.g. no workspace)
+    }
+  });
 }
 
 // ─── Deactivation ─────────────────────────────────────────────────────────────

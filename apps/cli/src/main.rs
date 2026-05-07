@@ -52,6 +52,7 @@ mod runtime;
 mod sandbox;
 mod shell_snapshot;
 mod sync;
+mod tier_cache;
 mod tool_search;
 
 // Phase-2 candidates — implementations exist but the user-facing surface is
@@ -339,6 +340,17 @@ struct Cli {
     /// integration tests where you don't want to wait for a real 429.
     #[arg(long)]
     demo: bool,
+
+    /// Use automatic model routing (mutually exclusive with --model).
+    ///
+    /// Sends `model: "auto-economy"` to the AGI Workforce managed-cloud API,
+    /// which delegates routing to the server-side classifier.  The CLI never
+    /// discloses which model was actually used (silent routing).
+    ///
+    /// Only applies to managed-cloud sessions; BYOK and local (Ollama / LMStudio)
+    /// providers always require an explicit --model.
+    #[arg(long, conflicts_with = "model")]
+    auto: bool,
 
     /// Read the system prompt from a file. Mutually composes with
     /// `--system-prompt`: file contents win when both are supplied.
@@ -1003,7 +1015,7 @@ async fn main() -> Result<()> {
                         } else {
                             eprintln!("{}", e);
                         }
-                        std::process::exit(1);
+                        exit_with_error(&e);
                     }
                 }
             }
@@ -1728,12 +1740,49 @@ async fn main() -> Result<()> {
         app_config.default.temperature = Some(temp);
     }
 
-    // Resolve model
-    let model = cli
-        .model
-        .as_deref()
-        .unwrap_or(&app_config.default.model)
-        .to_string();
+    // Resolve model.
+    //
+    // Priority (highest first):
+    //   1. `--auto` flag → use "auto-economy" sentinel (server-side routing).
+    //   2. Explicit `--model` CLI flag.
+    //   3. Tier-aware default: if no model specified AND user has a managed-cloud
+    //      JWT, resolve the tier (cache-first, 1 h TTL) and use the economy-tier
+    //      default model from `models.json`.  Falls back to config default on any
+    //      error so startup is never blocked.
+    //   4. `config.toml` default.model.
+    let model: String = if cli.auto {
+        // --auto: delegate routing entirely to the managed-cloud API classifier.
+        "auto-economy".to_string()
+    } else if let Some(ref explicit_model) = cli.model {
+        explicit_model.clone()
+    } else {
+        // No explicit model — attempt tier-aware selection.
+        let jwt = tier_cache::load_jwt();
+        let cached_tier =
+            tokio::time::timeout(
+                std::time::Duration::from_secs(3),
+                tier_cache::resolve_user_tier(jwt.as_deref()),
+            )
+            .await
+            .unwrap_or(None);
+
+        if let Some(ct) = cached_tier {
+            // Use the tier's economy default if no model is pinned in config.
+            // Managed-cloud Byok tier falls through to config default so users
+            // who added BYOK keys don't accidentally hit the managed API.
+            if !matches!(ct.tier, tier_cache::UserTier::Byok) {
+                if let Some(economy_model) = ct.tier.default_model_id() {
+                    economy_model.to_string()
+                } else {
+                    app_config.default.model.clone()
+                }
+            } else {
+                app_config.default.model.clone()
+            }
+        } else {
+            app_config.default.model.clone()
+        }
+    };
 
     // Read file contents for -f flag
     let file_context = read_file_contexts(&cli.files)?;
@@ -2097,6 +2146,21 @@ mod tests {
     }
 }
 
+/// Exit with the appropriate status code for the given error.
+///
+/// Paywall errors use EX_CONFIG (78, sysexits.h) so callers can distinguish
+/// "user needs to upgrade" from a generic execution failure.  All other errors
+/// use exit code 1.
+fn exit_with_error(e: &anyhow::Error) -> ! {
+    // Walk the error chain looking for a CliError::Paywall.
+    let exit_code = e
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<errors::CliError>())
+        .map(|cli_err| cli_err.exit_code())
+        .unwrap_or(1);
+    std::process::exit(exit_code)
+}
+
 /// Execute a single prompt and exit.
 #[allow(clippy::too_many_arguments)]
 async fn run_oneshot(
@@ -2202,7 +2266,7 @@ async fn run_oneshot(
                     }))
                     .await
                     .ok();
-                std::process::exit(1);
+                exit_with_error(&e);
             }
         }
     } else if output_mode == OneShotOutputMode::JsonPretty {
@@ -2242,7 +2306,7 @@ async fn run_oneshot(
                     "duration_ms": duration_ms,
                 });
                 eprintln!("{}", serde_json::to_string_pretty(&json_out)?);
-                std::process::exit(1);
+                exit_with_error(&e);
             }
         }
     } else if output_mode == OneShotOutputMode::RawText {
@@ -2263,7 +2327,7 @@ async fn run_oneshot(
             }
             Err(e) => {
                 eprintln!("{}", e);
-                std::process::exit(1);
+                exit_with_error(&e);
             }
         }
     } else {
@@ -2302,7 +2366,7 @@ async fn run_oneshot(
             }
             Err(e) => {
                 output::print_error(&format!("{:#}", e));
-                std::process::exit(1);
+                exit_with_error(&e);
             }
         }
     }

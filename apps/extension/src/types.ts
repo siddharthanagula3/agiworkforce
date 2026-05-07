@@ -66,9 +66,9 @@ export type NativeMessageType =
   | 'DELETE_SCHEDULED_TASK';
 
 /** Internal-only messages between extension contexts — NOT sent to native host. */
-export type InternalMessageType = 'CHAT_CHUNK';
+export type InternalMessageType = 'CHAT_CHUNK' | 'PAYWALL_HIT';
 
-export type InternalMessage = ChatChunkMessage;
+export type InternalMessage = ChatChunkMessage | PaywallHitMessage;
 
 // Base message structure
 export interface BaseMessage {
@@ -458,6 +458,18 @@ export interface ChatChunkMessage {
   text: string;
   done: boolean;
   error?: string;
+}
+
+/**
+ * Paywall hit — sent from background to all extension views (popup, side panel)
+ * when the API returns 429 + { kind:'paywall', feature, requiredTier, reason }.
+ * Mirrors PaywallFeature / PaywallRequiredTier from providerStreamClient.ts.
+ */
+export interface PaywallHitMessage {
+  type: 'PAYWALL_HIT';
+  feature: string;
+  requiredTier: string;
+  reason?: string;
 }
 
 export interface ChatMessageResponse {

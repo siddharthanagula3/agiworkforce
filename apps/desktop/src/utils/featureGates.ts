@@ -71,7 +71,7 @@ export function checkFeatureAccess(
       // 'team' is not a canonical PlanTier (per supabase.ts:198 and billing/models.rs).
       // If a 'team' tier is ever added, update PlanTier in supabase.ts, subscriptionGate.ts,
       // and Rust billing/models.rs simultaneously.
-      return ['hobby', 'pro', 'max', 'enterprise'].includes(planName)
+      return ['hobby', 'pro', 'pro_plus', 'max', 'enterprise'].includes(planName)
         ? { allowed: true }
         : {
             allowed: false,

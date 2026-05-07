@@ -53,7 +53,7 @@ import { cn } from '@shared/lib/utils';
 import { getPlanPriceUsd, getPlanUsageBudgetCents } from '@agiworkforce/types';
 
 // Known valid plan tiers — used to validate API responses before rendering
-const VALID_PLANS = ['free', 'hobby', 'pro', 'max', 'enterprise'] as const;
+const VALID_PLANS = ['free', 'hobby', 'pro', 'pro_plus', 'max', 'enterprise'] as const;
 type PlanTier = (typeof VALID_PLANS)[number];
 
 const VALID_STATUSES = ['active', 'cancelled', 'past_due', 'unpaid'] as const;
@@ -88,7 +88,7 @@ interface LLMUsage {
 }
 
 interface BillingInfo {
-  plan: 'free' | 'hobby' | 'pro' | 'max' | 'enterprise';
+  plan: 'free' | 'hobby' | 'pro' | 'pro_plus' | 'max' | 'enterprise';
   status: 'active' | 'cancelled' | 'past_due' | 'unpaid';
   current_period_start: string;
   current_period_end: string;
@@ -150,7 +150,10 @@ const CREDIT_PACKS: CreditPack[] = [
   },
 ];
 
-function formatPlanPrice(plan: 'hobby' | 'pro' | 'max', billingPeriod: 'monthly' | 'yearly') {
+function formatPlanPrice(
+  plan: 'hobby' | 'pro' | 'pro_plus' | 'max',
+  billingPeriod: 'monthly' | 'yearly',
+) {
   if (billingPeriod === 'monthly') {
     return `$${getPlanPriceUsd(plan, 'monthly')}`;
   }
@@ -158,14 +161,17 @@ function formatPlanPrice(plan: 'hobby' | 'pro' | 'max', billingPeriod: 'monthly'
 }
 
 function formatPlanBilledAmount(
-  plan: 'hobby' | 'pro' | 'max',
+  plan: 'hobby' | 'pro' | 'pro_plus' | 'max',
   billingPeriod: 'monthly' | 'yearly',
 ) {
   const interval = billingPeriod === 'yearly' ? 'yearly' : 'monthly';
   return `$${getPlanPriceUsd(plan, interval).toFixed(2).replace(/\.00$/, '')}`;
 }
 
-function formatUsageBudgetLine(plan: 'hobby' | 'pro' | 'max', billingPeriod: 'monthly' | 'yearly') {
+function formatUsageBudgetLine(
+  plan: 'hobby' | 'pro' | 'pro_plus' | 'max',
+  billingPeriod: 'monthly' | 'yearly',
+) {
   const interval = billingPeriod === 'yearly' ? 'yearly' : 'monthly';
   const budgetCents = getPlanUsageBudgetCents(plan, interval);
   return `${budgetCents.toLocaleString()} credits/${billingPeriod === 'yearly' ? 'year' : 'month'} ($${(budgetCents / 100).toFixed(2)} in AI usage)`;
@@ -310,7 +316,7 @@ const BillingPage: React.FC = () => {
   }, [searchParams, user, invalidateBillingQueries]);
 
   const handleUpgrade = async (
-    plan: 'hobby' | 'pro' | 'max' | 'enterprise',
+    plan: 'hobby' | 'pro' | 'pro_plus' | 'max' | 'enterprise',
     billingPeriod: 'monthly' | 'yearly' = 'monthly',
   ) => {
     if (!user) {
@@ -446,10 +452,14 @@ const BillingPage: React.FC = () => {
         return <Star className="h-5 w-5" />;
       case 'pro':
         return <Crown className="h-5 w-5" />;
+      case 'pro_plus':
+        return <Crown className="h-5 w-5 text-violet-500" />;
       case 'max':
         return <Crown className="h-5 w-5 text-amber-500" />;
       case 'enterprise':
         return <Building className="h-5 w-5" />;
+      default:
+        return <Zap className="h-5 w-5" />;
     }
   };
 
@@ -566,7 +576,14 @@ const BillingPage: React.FC = () => {
                 <Button
                   onClick={() => {
                     const current = normalizePlan(billing?.plan);
-                    const next = current === 'free' ? 'hobby' : current === 'hobby' ? 'pro' : 'max';
+                    const next =
+                      current === 'free'
+                        ? 'hobby'
+                        : current === 'hobby'
+                          ? 'pro'
+                          : current === 'pro'
+                            ? 'pro_plus'
+                            : 'max';
                     handleUpgrade(next);
                   }}
                   size="sm"

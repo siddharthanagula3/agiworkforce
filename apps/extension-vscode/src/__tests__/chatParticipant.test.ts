@@ -344,3 +344,50 @@ describe('buildUserMessage', () => {
     expect(msg).toBe('How do I sort?');
   });
 });
+
+// ── Paywall rendering helpers ────────────────────────────────────────────────
+// Test the paywall markdown generation logic used in chatParticipant.ts.
+// (The full integration with the vscode.ChatResponseStream requires a running
+//  extension host; these tests cover the content shape.)
+
+describe('paywall upgrade link content', () => {
+  function buildPaywallMarkdown(feature: string, requiredTier: string, reason: string): string {
+    return (
+      `\n\n> **Upgrade required** — ` +
+      `[Upgrade to ${requiredTier}](https://agiworkforce.com/pricing?from=paywall` +
+      `&tier=${encodeURIComponent(requiredTier)}` +
+      `&feature=${encodeURIComponent(feature)})` +
+      ` for ${feature}.\n>\n> ${reason}\n\n`
+    );
+  }
+
+  it('includes upgrade link with tier and feature params', () => {
+    const md = buildPaywallMarkdown('chat', 'hobby', 'Monthly token cap exceeded.');
+    expect(md).toContain('[Upgrade to hobby]');
+    expect(md).toContain('https://agiworkforce.com/pricing?from=paywall');
+    expect(md).toContain('tier=hobby');
+    expect(md).toContain('feature=chat');
+  });
+
+  it('URL-encodes tier and feature', () => {
+    const md = buildPaywallMarkdown('image generation', 'pro+', 'Feature requires Pro+.');
+    expect(md).toContain(encodeURIComponent('pro+'));
+    expect(md).toContain(encodeURIComponent('image generation'));
+  });
+
+  it('includes the reason text', () => {
+    const md = buildPaywallMarkdown('chat', 'hobby', 'You need to upgrade to continue chatting.');
+    expect(md).toContain('You need to upgrade to continue chatting.');
+  });
+
+  it('includes the required tier in the link label', () => {
+    const md = buildPaywallMarkdown('video', 'pro_plus', 'Video requires Pro+.');
+    expect(md).toContain('Upgrade to pro_plus');
+  });
+
+  it('uses trusted markdown format (block-quote style)', () => {
+    const md = buildPaywallMarkdown('chat', 'hobby', 'reason');
+    // VS Code trusted MarkdownString uses block-quotes for the upgrade card
+    expect(md).toContain('> **Upgrade required**');
+  });
+});

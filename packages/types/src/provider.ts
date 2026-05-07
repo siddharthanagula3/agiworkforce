@@ -95,4 +95,6 @@ export type Provider =
   | 'sambanova'
   | 'azure'
   | 'bedrock'
-  | 'ollama_cloud';
+  | 'ollama_cloud'
+  | 'minimax'
+  | 'runway';
