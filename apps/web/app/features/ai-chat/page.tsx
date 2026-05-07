@@ -6,7 +6,6 @@ import {
   MessageSquare,
   Zap,
   Brain,
-  Mic,
   Layers,
   History,
   Shield,
@@ -20,7 +19,7 @@ import { DispatchSection } from '../../../components/marketing/editorial/Dispatc
 export const metadata: Metadata = {
   title: 'Agentic AI Chat | AGI Workforce',
   description:
-    'Multi-model AI chat with real-time tool execution, streaming responses, reasoning traces, and voice input - all in a native desktop interface.',
+    'Multi-model AI chat with real-time tool execution, streaming responses, and reasoning traces — all in a native desktop interface.',
   keywords: [
     'AI chat',
     'agentic chat',
@@ -29,7 +28,6 @@ export const metadata: Metadata = {
     'tool execution',
     'Claude chat',
     'GPT chat',
-    'voice AI',
     'AGI Workforce',
   ],
   alternates: { canonical: 'https://agiworkforce.com/features/ai-chat' },
@@ -47,8 +45,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Agentic AI Chat | AGI Workforce',
-    description:
-      'Multi-model chat with streaming, tool execution, reasoning traces, and voice input.',
+    description: 'Multi-model chat with streaming, tool execution, and reasoning traces.',
     images: ['/app-preview.png'],
     creator: '@agiworkforce',
   },
@@ -241,14 +238,7 @@ export default function AIChatFeaturePage() {
               </div>
 
               {/* Smaller feature row */}
-              <div className="mt-8 grid gap-8 md:grid-cols-3">
-                <div className="rounded-lg border border-[#555150]/40 p-6">
-                  <Mic className="h-5 w-5 text-[#888480]" />
-                  <h3 className="mt-3 text-base font-semibold">Voice input</h3>
-                  <p className="mt-2 text-sm text-[#888480]">
-                    Hold-to-record with Whisper transcription. Local or cloud.
-                  </p>
-                </div>
+              <div className="mt-8 grid gap-8 md:grid-cols-2">
                 <div className="rounded-lg border border-[#555150]/40 p-6">
                   <History className="h-5 w-5 text-[#888480]" />
                   <h3 className="mt-3 text-base font-semibold">Session history</h3>
@@ -260,7 +250,7 @@ export default function AIChatFeaturePage() {
                   <Search className="h-5 w-5 text-[#888480]" />
                   <h3 className="mt-3 text-base font-semibold">{MARKETING.tools.display} tools</h3>
                   <p className="mt-2 text-sm text-[#888480]">
-                    File I/O, shell, web search, code analysis, and more - all sandboxed.
+                    File I/O, shell, web search, code analysis, and more — all sandboxed.
                   </p>
                 </div>
               </div>

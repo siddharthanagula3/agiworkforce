@@ -1,21 +1,21 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'AI Agent Marketplace',
+  title: 'AI Agent Marketplace — Coming Q4 2026',
   description:
-    'Browse and deploy pre-built AI agents and skills for your AGI Workforce desktop app. Hundreds of ready-to-use automations for business, code, research, and more.',
+    'AI agent and MCP server directory for AGI Workforce. Coming Q4 2026. Join the waitlist to be notified when the marketplace opens for browsing and one-click install.',
   keywords: [
     'AI agent marketplace',
     'pre-built AI agents',
     'AI skills store',
-    'automation templates',
+    'MCP server directory',
     'AGI Workforce marketplace',
-    'no-code AI agents',
+    'AGI Workforce roadmap',
   ],
   openGraph: {
-    title: 'AI Agent Marketplace | AGI Workforce',
+    title: 'AI Agent Marketplace — Coming Q4 2026 | AGI Workforce',
     description:
-      'Browse hundreds of ready-to-deploy AI agents and skills. One click to install, instant automation.',
+      'AI agent and MCP server directory. Coming Q4 2026. Join the waitlist to be notified.',
     type: 'website',
     url: 'https://agiworkforce.com/marketplace',
     images: [
@@ -23,15 +23,14 @@ export const metadata: Metadata = {
         url: '/app-preview.png',
         width: 1200,
         height: 630,
-        alt: 'AGI Workforce AI Agent Marketplace',
+        alt: 'AGI Workforce AI Agent Marketplace — Coming Q4 2026',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AI Agent Marketplace | AGI Workforce',
-    description:
-      'Browse hundreds of ready-to-deploy AI agents and skills. One click to install, instant automation.',
+    title: 'AI Agent Marketplace — Coming Q4 2026 | AGI Workforce',
+    description: 'AI agent and MCP server directory. Coming Q4 2026.',
     images: ['/app-preview.png'],
     creator: '@agiworkforce',
   },
@@ -49,9 +48,9 @@ export default function MarketplaceLayout({ children }: { children: React.ReactN
           __html: JSON.stringify({
             '@context': 'https://schema.org',
             '@type': 'CollectionPage',
-            name: 'AI Agent Marketplace',
+            name: 'AI Agent Marketplace — Coming Q4 2026',
             description:
-              'Browse and deploy pre-built AI agents and skills for your AGI Workforce desktop app. Hundreds of ready-to-use automations.',
+              'AI agent and MCP server directory for AGI Workforce. Coming Q4 2026. Join the waitlist to be notified when the marketplace opens.',
             url: 'https://agiworkforce.com/marketplace',
           }),
         }}

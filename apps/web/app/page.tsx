@@ -61,7 +61,7 @@ const jsonLd = {
   '@type': 'SoftwareApplication',
   name: 'AGI Workforce',
   applicationCategory: 'BusinessApplication',
-  operatingSystem: 'macOS, Linux (Windows coming Q3 2026)',
+  operatingSystem: 'macOS, Windows, Linux',
   featureList: [
     `${MARKETING.providers.display} AI providers in one chat thread`,
     `${MARKETING.surfaces.display} surfaces: Desktop, Web, Mobile, CLI, VS Code, Chrome`,
