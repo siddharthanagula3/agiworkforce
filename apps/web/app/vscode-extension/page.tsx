@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'VS Code Extension | AGI Workforce',
     description:
-      'Multi-provider AI coding assistant. v0.3.0, 53 commands, 314 tests, inline completions, @agi chat participant.',
+      'Multi-provider AI coding assistant. v0.3.0, 56 commands, 386 tests, inline completions, @agi chat participant.',
     url: 'https://agiworkforce.com/vscode-extension',
     type: 'website',
     images: [
@@ -37,9 +37,9 @@ export const metadata: Metadata = {
 
 const extStats = [
   { label: 'Version', value: 'v0.3.0', sub: 'stable' },
-  { label: 'Commands', value: '53', sub: 'unique' },
-  { label: 'Tests', value: '314', sub: '17 suites' },
-  { label: 'Settings', value: '21', sub: 'configurable' },
+  { label: 'Commands', value: '56', sub: 'unique' },
+  { label: 'Tests', value: '386', sub: '21 suites' },
+  { label: 'Settings', value: '23', sub: 'configurable' },
 ];
 
 const features = [
