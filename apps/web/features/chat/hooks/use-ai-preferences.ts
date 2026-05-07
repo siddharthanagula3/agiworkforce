@@ -39,7 +39,10 @@ export function useAIPreferences() {
 
         if (isMounted) {
           setPreferences({
-            ...prefs,
+            provider: prefs.provider,
+            model: prefs.model,
+            temperature: prefs.temperature ?? 0.7,
+            maxTokens: prefs.maxTokens ?? 4000,
             isLoading: false,
             error: null,
           });

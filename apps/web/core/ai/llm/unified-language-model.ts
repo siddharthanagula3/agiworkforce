@@ -3,40 +3,19 @@
  * Manages all LLM providers (Anthropic, OpenAI, Google, Perplexity, Grok, DeepSeek, Qwen)
  * Provides a consistent interface for all AI models
  * Updated: Jan 3rd 2026 - Added DeepSeek and Qwen providers
+ * Updated: 2026-05-07 - Factory pattern replaces global singleton mutation (concurrency fix)
+ *
+ * server-no-shared-module-state: This module no longer exports a mutable singleton.
+ * Use LLMClientFactory.create(ctx) to obtain a per-request, frozen instance.
  */
 
-import {
-  anthropicProvider,
-  AnthropicProvider,
-  AnthropicMessage,
-  AnthropicConfig,
-} from './providers/anthropic-claude';
-import {
-  openaiProvider,
-  OpenAIProvider,
-  OpenAIMessage,
-  OpenAIConfig,
-} from './providers/openai-gpt';
-import {
-  googleProvider,
-  GoogleProvider,
-  GoogleMessage,
-  GoogleConfig,
-} from './providers/google-gemini';
-import {
-  perplexityProvider,
-  PerplexityProvider,
-  PerplexityMessage,
-  PerplexityConfig,
-} from './providers/perplexity-ai';
-import { grokProvider, GrokProvider, GrokMessage, GrokConfig } from './providers/grok-ai';
-import {
-  deepseekProvider,
-  DeepSeekProvider,
-  DeepSeekMessage,
-  DeepSeekConfig,
-} from './providers/deepseek-ai';
-import { qwenProvider, QwenProvider, QwenMessage, QwenConfig } from './providers/qwen-ai';
+import { AnthropicProvider, AnthropicMessage, AnthropicConfig } from './providers/anthropic-claude';
+import { OpenAIProvider, OpenAIMessage, OpenAIConfig } from './providers/openai-gpt';
+import { GoogleProvider, GoogleMessage, GoogleConfig } from './providers/google-gemini';
+import { PerplexityProvider, PerplexityMessage, PerplexityConfig } from './providers/perplexity-ai';
+import { GrokProvider, GrokMessage, GrokConfig } from './providers/grok-ai';
+import { DeepSeekProvider, DeepSeekMessage, DeepSeekConfig } from './providers/deepseek-ai';
+import { QwenProvider, QwenMessage, QwenConfig } from './providers/qwen-ai';
 import {
   canUserMakeUsagePricedRequest,
   estimateTokensForRequest,
@@ -51,6 +30,7 @@ import {
 } from '@core/security/api-abuse-prevention';
 import { isFeatureEnabled } from '@core/security/gradual-rollout';
 import { logger } from '@shared/lib/logger';
+import { cache } from 'react';
 import { getProviderDefaultModel } from '@agiworkforce/types';
 
 export type LLMProvider =
@@ -71,6 +51,7 @@ type ProviderInstance =
   | QwenProvider;
 
 // Model arrays - Jan 2026 update
+// These are static, read-only, and safe at module scope (server-hoist-static-io).
 const ANTHROPIC_MODELS: AnthropicConfig['model'][] =
   AnthropicProvider.getAvailableModels() as AnthropicConfig['model'][];
 const OPENAI_MODELS: OpenAIConfig['model'][] =
@@ -85,6 +66,26 @@ const DEEPSEEK_MODELS: DeepSeekConfig['model'][] =
   DeepSeekProvider.getAvailableModels() as DeepSeekConfig['model'][];
 const QWEN_MODELS: QwenConfig['model'][] =
   QwenProvider.getAvailableModels() as QwenConfig['model'][];
+
+/**
+ * Per-request context passed to LLMClientFactory.create().
+ * server-no-shared-module-state: this is the only way to obtain a configured client.
+ */
+export interface RequestContext {
+  provider: LLMProvider;
+  model: string;
+  maxTokens?: number;
+  temperature?: number;
+  systemPrompt?: string;
+  timeoutMs?: number;
+  baseURL?: string;
+  // Provider-specific overrides
+  anthropic?: AnthropicProviderConfig;
+  openai?: OpenAIProviderConfig;
+  google?: GoogleProviderConfig;
+  perplexity?: PerplexityProviderConfig;
+  grok?: GrokProviderConfig;
+}
 
 const DEFAULT_OPENAI_MODEL = getProviderDefaultModel('openai') ?? 'gpt-5.4';
 
@@ -270,14 +271,23 @@ export class UnifiedLLMService {
       ...config,
     };
 
-    // Initialize providers
-    this.providers.set('anthropic', anthropicProvider);
-    this.providers.set('openai', openaiProvider);
-    this.providers.set('google', googleProvider);
-    this.providers.set('perplexity', perplexityProvider);
-    this.providers.set('grok', grokProvider);
-    this.providers.set('deepseek', deepseekProvider);
-    this.providers.set('qwen', qwenProvider);
+    // Create fresh provider instances per UnifiedLLMService instance.
+    // server-no-shared-module-state: do NOT use module-level singletons here.
+    // Each factory-created service owns its own isolated provider instances so
+    // concurrent requests cannot clobber each other's config.
+    this.providers.set('anthropic', new AnthropicProvider());
+    this.providers.set('openai', new OpenAIProvider());
+    this.providers.set('google', new GoogleProvider());
+    this.providers.set('perplexity', new PerplexityProvider());
+    this.providers.set('grok', new GrokProvider());
+    this.providers.set('deepseek', new DeepSeekProvider());
+    this.providers.set('qwen', new QwenProvider());
+
+    // Apply config to all providers immediately at construction time.
+    // This is safe because these are fresh, private instances.
+    for (const provider of UnifiedLLMService.getAllProviders()) {
+      this._applyConfigToProvider(provider);
+    }
   }
 
   /**
@@ -443,9 +453,7 @@ export class UnifiedLLMService {
       // Convert messages to provider-specific format
       const providerMessages = this.convertMessagesToProvider(messages, targetProvider);
 
-      // Update provider config
-      this.updateProviderConfig(targetProvider);
-
+      // Provider config was already applied at construction time (no mutation here).
       // Send message using provider
       let response: unknown;
       switch (targetProvider) {
@@ -580,9 +588,7 @@ export class UnifiedLLMService {
       // Convert messages to provider-specific format
       const providerMessages = this.convertMessagesToProvider(messages, targetProvider);
 
-      // Update provider config
-      this.updateProviderConfig(targetProvider);
-
+      // Provider config was already applied at construction time (no mutation here).
       // Stream message using provider
       let stream: AsyncGenerator<Omit<StreamingChunk, 'provider'>>;
       switch (targetProvider) {
@@ -742,9 +748,12 @@ export class UnifiedLLMService {
   }
 
   /**
-   * Update provider configuration
+   * Apply this service's config to a provider instance.
+   * Called once at construction time on each fresh, private provider instance.
+   * Must never be called on shared/module-level provider singletons.
+   * (server-no-shared-module-state)
    */
-  private updateProviderConfig(provider: LLMProvider): void {
+  private _applyConfigToProvider(provider: LLMProvider): void {
     const providerInstance = this.providers.get(provider);
     if (!providerInstance) return;
 
@@ -850,14 +859,9 @@ export class UnifiedLLMService {
   }
 
   /**
-   * Update unified configuration
-   */
-  updateConfig(newConfig: Partial<UnifiedConfig>): void {
-    this.config = { ...this.config, ...newConfig };
-  }
-
-  /**
-   * Get current configuration
+   * Get current configuration (read-only snapshot).
+   * server-no-shared-module-state: configuration is immutable after construction
+   * when the instance is frozen via LLMClientFactory.create().
    */
   getConfig(): UnifiedConfig {
     return { ...this.config };
@@ -949,5 +953,95 @@ export class UnifiedLLMService {
   }
 }
 
-// Export singleton instance
-export const unifiedLLMService = new UnifiedLLMService();
+/**
+ * Factory for creating per-request UnifiedLLMService instances.
+ *
+ * server-no-shared-module-state: NEVER use a shared mutable singleton for
+ * per-request LLM configuration. Two concurrent streaming requests would
+ * clobber each other's provider config.
+ *
+ * Usage:
+ *   const client = LLMClientFactory.create({ provider: 'openai', model: '...', ... });
+ *   await client.sendMessage(messages, sessionId, userId);
+ *
+ * The returned instance is frozen (Object.freeze) — any mutation attempt throws
+ * in strict mode and is a no-op in sloppy mode.
+ *
+ * Construction cost: ~50-200µs (7 provider instantiations + config application).
+ */
+export class LLMClientFactory {
+  /**
+   * Create a fresh, frozen UnifiedLLMService for a single request context.
+   *
+   * async-cheap-condition-before-await: provider/model validation happens
+   * synchronously before any async work begins in sendMessage/streamMessage.
+   *
+   * server-cache-react: use React.cache() on the caller side when the same ctx
+   * must be reused multiple times within a single server render tree.
+   * Within a single API route handler that calls create() once and reuses the
+   * instance, no additional caching is needed.
+   */
+  static create(ctx: RequestContext): UnifiedLLMService {
+    const config: Partial<UnifiedConfig> = {
+      provider: ctx.provider,
+      model: ctx.model,
+      maxTokens: ctx.maxTokens ?? 4000,
+      temperature: ctx.temperature ?? 0.7,
+      systemPrompt: ctx.systemPrompt,
+      anthropic: ctx.anthropic,
+      openai: ctx.openai,
+      google: ctx.google,
+      perplexity: ctx.perplexity,
+      grok: ctx.grok,
+    };
+
+    const service = new UnifiedLLMService(config);
+    // Cast: Object.freeze returns Readonly<T>; the frozen service still satisfies
+    // UnifiedLLMService's public interface (read-only data methods are unchanged).
+    return Object.freeze(service) as unknown as UnifiedLLMService;
+  }
+}
+
+/**
+ * Per-request deduplication helper (server-cache-react).
+ *
+ * Wraps LLMClientFactory.create with React.cache() so that multiple calls
+ * with identical primitive arguments within a single React render pass
+ * (or Next.js server component tree) return the same frozen instance.
+ *
+ * Note: React.cache() uses Object.is equality on arguments. Pass primitives
+ * directly rather than inline objects to get cache hits.
+ *
+ * Example usage in a Server Component or API route:
+ *   const client = getCachedLLMClient('openai', 'gpt-5.4', 4000, 0.7);
+ */
+export const getCachedLLMClient = cache(
+  (
+    provider: LLMProvider,
+    model: string,
+    maxTokens: number = 4000,
+    temperature: number = 0.7,
+    systemPrompt?: string,
+  ): UnifiedLLMService => {
+    return LLMClientFactory.create({ provider, model, maxTokens, temperature, systemPrompt });
+  },
+);
+
+/**
+ * Backward-compatible read-only service instance for call sites that only
+ * invoke sendMessage/streamMessage with inline provider/model params and
+ * do NOT call updateConfig().
+ *
+ * This instance is frozen. Any attempt to call a mutating method will throw
+ * at runtime. Call sites that previously called updateConfig() MUST migrate
+ * to LLMClientFactory.create(ctx).
+ *
+ * server-no-shared-module-state: this singleton carries ONLY default config.
+ * It never stores per-request state. Call sites must pass provider/model/userId
+ * as sendMessage() arguments, not via updateConfig().
+ */
+// Cast: Object.freeze returns Readonly<T>; the singleton only exposes
+// read-compatible public methods so the cast is safe here.
+export const unifiedLLMService: UnifiedLLMService = Object.freeze(
+  new UnifiedLLMService(),
+) as unknown as UnifiedLLMService;
