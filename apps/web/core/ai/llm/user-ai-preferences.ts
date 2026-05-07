@@ -1,10 +1,14 @@
 /**
  * User AI Preferences Service
- * Loads user AI preferences from settings and applies them to the LLM service
+ * Loads user AI preferences from settings and returns them as a context object.
+ *
+ * server-no-shared-module-state: this module no longer mutates the global
+ * unifiedLLMService singleton. Callers receive a config object and should
+ * pass it to LLMClientFactory.create(ctx) to obtain a per-request client.
  */
 
 import { settingsService } from '@features/settings/services/user-preferences';
-import { unifiedLLMService, type LLMProvider } from './unified-language-model';
+import { type LLMProvider, type RequestContext } from './unified-language-model';
 import { logger } from '@shared/lib/logger';
 import {
   getProviderDefaultModel,
@@ -38,20 +42,17 @@ function resolveDefaultModelForProvider(provider: LLMProvider): string {
 }
 
 /**
- * Load user AI preferences and apply them to the unified LLM service
- * Returns the configured provider and model
+ * Load user AI preferences from settings.
+ * Returns a RequestContext that callers should pass to LLMClientFactory.create().
+ *
+ * server-no-shared-module-state: this function no longer mutates any global
+ * state. Each caller gets an isolated config snapshot for its own request.
  */
-export async function loadUserAIPreferences(): Promise<{
-  provider: LLMProvider;
-  model: string;
-  temperature: number;
-  maxTokens: number;
-}> {
+export async function loadUserAIPreferences(): Promise<RequestContext> {
   try {
     const { data, error } = await settingsService.getSettings();
 
     if (error || !data) {
-      // Return defaults if settings can't be loaded
       return {
         provider: 'openai',
         model: DEFAULT_OPENAI_MODEL,
@@ -60,20 +61,11 @@ export async function loadUserAIPreferences(): Promise<{
       };
     }
 
-    // Extract AI preferences with fallbacks
     const provider = (data.default_ai_provider || 'openai') as LLMProvider;
     const model =
       normalizeModelId(data.default_ai_model) ?? resolveDefaultModelForProvider(provider);
     const temperature = data.ai_temperature ?? 0.7;
     const maxTokens = data.ai_max_tokens ?? 4000;
-
-    // Update the unified LLM service config
-    unifiedLLMService.updateConfig({
-      provider,
-      model,
-      temperature,
-      maxTokens,
-    });
 
     return {
       provider,
@@ -84,7 +76,6 @@ export async function loadUserAIPreferences(): Promise<{
   } catch (error) {
     logger.error('Error loading user AI preferences:', error);
 
-    // Return defaults on error
     return {
       provider: 'openai',
       model: DEFAULT_OPENAI_MODEL,
@@ -136,18 +127,18 @@ export function getProviderForTaskType(
 }
 
 /**
- * Apply task-specific configuration to the LLM service
+ * Resolve the RequestContext for a given task type.
+ * Callers should pass the returned context to LLMClientFactory.create().
+ *
+ * server-no-shared-module-state: no global state is mutated.
  */
-export async function applyTaskConfiguration(
+export async function resolveTaskContext(
   taskType: 'chat' | 'document' | 'image' | 'video' | 'code',
   overrideUserPreferences = false,
-): Promise<void> {
+): Promise<RequestContext> {
   if (overrideUserPreferences) {
-    // Use task-specific configuration
-    const config = getProviderForTaskType(taskType);
-    unifiedLLMService.updateConfig(config);
-  } else {
-    // Load and apply user preferences
-    await loadUserAIPreferences();
+    const { provider, model } = getProviderForTaskType(taskType);
+    return { provider, model, temperature: 0.7, maxTokens: 4000 };
   }
+  return loadUserAIPreferences();
 }
