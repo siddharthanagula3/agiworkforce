@@ -7,7 +7,7 @@ import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 export const metadata: Metadata = {
   title: 'Service Level Agreement | AGI Workforce',
   description:
-    'AGI Workforce uptime targets and credit schedules per tier. SLA applies to Hobby, Pro, Max, and Enterprise.',
+    'AGI Workforce uptime targets and credit schedules per tier. SLA applies to Hobby, Pro, Pro+, Max, and Enterprise.',
   alternates: { canonical: 'https://agiworkforce.com/sla' },
 };
 
@@ -41,6 +41,13 @@ const tierSla = [
     note: 'Waitlist only. SLA activates when tier ships.',
   },
   {
+    tier: 'Pro+',
+    scope: 'Managed cloud + flagship daily caps',
+    uptime: '99.5% monthly',
+    credits: 'See schedule below',
+    note: 'Waitlist only. SLA activates when tier ships.',
+  },
+  {
     tier: 'Max',
     scope: 'Managed cloud',
     uptime: '99.5% monthly',
@@ -57,7 +64,7 @@ const tierSla = [
 ];
 
 const creditsSchedule = [
-  { availability: '< 99.0% (Hobby) / < 99.5% (Pro/Max)', credit: '10% of monthly fee' },
+  { availability: '< 99.0% (Hobby) / < 99.5% (Pro / Pro+ / Max)', credit: '10% of monthly fee' },
   { availability: '< 95.0%', credit: '25% of monthly fee' },
   { availability: '< 90.0%', credit: '50% of monthly fee' },
 ];

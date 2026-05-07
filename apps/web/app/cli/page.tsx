@@ -58,9 +58,9 @@ const ENGINEERING_SPECS: { label: string; value: string }[] = [
   { label: 'TUI', value: 'Ratatui -- 125 files' },
   { label: 'Subcommands', value: '22' },
   { label: 'Hook events', value: '22' },
-  { label: 'Wired providers', value: '13 named registrations' },
-  { label: 'MCP transports', value: 'stdio · SSE · streamable HTTP' },
-  { label: 'Plan mode', value: 'dual-shipped (P0 legacy + new update_plan)' },
+  { label: 'Wired providers', value: '12 named + Custom BYO (OpenAI-compatible)' },
+  { label: 'MCP transports', value: 'stdio (SSE + streamable HTTP coming)' },
+  { label: 'Plan mode', value: 'update_plan tool (legacy plan_mode removed)' },
   {
     label: 'Sandbox',
     value: 'macOS Seatbelt · Linux bwrap (Windows/Landlock = stubs)',

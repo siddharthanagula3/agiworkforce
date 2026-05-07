@@ -7,7 +7,7 @@ import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 export const metadata: Metadata = {
   title: 'Refund Policy | AGI Workforce',
   description:
-    'AGI Workforce refund policy. Hobby 7-day prorated refund. Pro/Max/Enterprise: contact billing.',
+    'AGI Workforce refund policy. Hobby 7-day prorated refund. Pro / Pro+ / Max / Enterprise: contact billing.',
   alternates: { canonical: 'https://agiworkforce.com/refund-policy' },
 };
 
@@ -35,14 +35,21 @@ const tiers = [
     tier: 'Pro (waitlist)',
     policy: 'Contact billing at billing@agiworkforce.com.',
     detail:
-      'Pro is currently waitlist-only. Billing terms will be published when Pro ships. Existing charges: contact billing.',
+      'Pro ($29.99/mo) is currently waitlist-only. Billing terms will be published when Pro ships. Existing charges: contact billing.',
+    color: 'text-[#888480]',
+  },
+  {
+    tier: 'Pro+ (waitlist)',
+    policy: 'Contact billing at billing@agiworkforce.com.',
+    detail:
+      'Pro+ ($49.99/mo, daily Opus 4.7 + GPT-5.5 caps + 60s/mo Runway video) is waitlist-only. Billing terms will be published when Pro+ ships. Existing charges: contact billing.',
     color: 'text-[#888480]',
   },
   {
     tier: 'Max (waitlist)',
     policy: 'Contact billing at billing@agiworkforce.com.',
     detail:
-      'Max is currently waitlist-only. Billing terms will be published when Max ships. Existing charges: contact billing.',
+      'Max ($299.99/mo, unlimited Opus 4.7 + GPT-5.5, 5min/mo Runway video, 1K-soft / 2.5K-hard computer-use cap, deep research) is currently waitlist-only. Billing terms will be published when Max ships. Existing charges: contact billing.',
     color: 'text-[#888480]',
   },
   {

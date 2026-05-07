@@ -77,7 +77,7 @@ const jsonLd = {
       name: 'Is there a free tier available?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'Yes, we offer a free Hobby tier that includes essential features to get you started. You can explore the core functionality and upgrade to Pro or Max plans when you need more advanced features and higher usage limits.',
+        text: 'Yes — Local-only mode and BYOK are free forever. Hobby ($10/mo) is the entry paid tier with managed-cloud auto-routing. Pro ($29.99/mo), Pro+ ($49.99/mo with daily flagship caps + Runway Gen-4 video), and Max ($299.99/mo with unlimited flagships + computer use + deep research) are on the waitlist.',
       },
     },
     {

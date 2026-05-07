@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: `${MARKETING.providers.display} Providers. One Conversation. | AGI Workforce`,
     description:
-      'The only AI platform that lets you switch providers mid-thread. 13 named registrations, zero lock-in.',
+      'The only AI platform that lets you switch providers mid-thread. 12 named registrations + unlimited custom OpenAI-compatible BYO endpoints, zero lock-in.',
     type: 'website',
     url: 'https://agiworkforce.com/providers',
   },
@@ -205,7 +205,8 @@ export default function ProvidersPage() {
               Every major model family, in one place
             </h2>
             <p className="mt-4 max-w-xl text-[#888480]">
-              13 named registrations in our open Rust CLI at{' '}
+              12 named provider registrations plus unlimited custom OpenAI-compatible BYO endpoints
+              in our open Rust CLI at{' '}
               <code className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-xs text-[#c8892a]">
                 apps/cli/src/models.rs
               </code>
