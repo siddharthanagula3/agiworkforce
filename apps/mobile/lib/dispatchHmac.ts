@@ -81,78 +81,61 @@
  */
 
 import * as Crypto from 'expo-crypto';
+import {
+  DISPATCH_HMAC_REQUIRED_AFTER as CANONICAL_DISPATCH_HMAC_REQUIRED_AFTER,
+  DISPATCH_MAX_MESSAGE_AGE_MS,
+  DISPATCH_NONCE_CACHE_TTL_MS,
+  type DispatchEnvelope,
+  type DispatchSessionState,
+  type DispatchVerifyResult,
+} from '@agiworkforce/types';
 
 // ---------------------------------------------------------------------------
-// Constants
+// Constants — re-exported from the canonical contract in @agiworkforce/types
 // ---------------------------------------------------------------------------
 
 /** Maximum age (ms) we accept for incoming messages to prevent replay. */
-const MAX_MESSAGE_AGE_MS = 30_000;
+const MAX_MESSAGE_AGE_MS = DISPATCH_MAX_MESSAGE_AGE_MS;
 
 /**
  * Nonce-cache TTL (ms). Nonces older than this are evicted from the cache.
  * Must be at least 2× MAX_MESSAGE_AGE_MS so that a nonce seen at the edge of
  * the acceptance window is still in the cache when a replay attempt arrives.
  */
-const NONCE_CACHE_TTL_MS = 60_000;
+const NONCE_CACHE_TTL_MS = DISPATCH_NONCE_CACHE_TTL_MS;
 
 /**
  * ISO 8601 date after which unsigned (transitional) messages should be
  * rejected. Desktop surface must ship HMAC signing before this date.
  *
  * CUTOFF: 2026-06-05
+ *
+ * Re-exported from the canonical contract for backwards compatibility.
  */
-export const DISPATCH_HMAC_REQUIRED_AFTER = '2026-06-05T00:00:00.000Z';
+export const DISPATCH_HMAC_REQUIRED_AFTER = CANONICAL_DISPATCH_HMAC_REQUIRED_AFTER;
 
 // ---------------------------------------------------------------------------
-// Types
+// Types — re-exported aliases of the canonical types in @agiworkforce/types
 // ---------------------------------------------------------------------------
 
 /**
  * The signed envelope that travels over the data channel / signaling relay.
  * Keys are always in alphabetical order when the HMAC is computed.
+ *
+ * @deprecated Import {@link DispatchEnvelope} from `@agiworkforce/types` directly.
+ * This alias is preserved for backwards compatibility with existing mobile code.
  */
-export interface SignedEnvelope {
-  /** HMAC-SHA-256 over the canonical signing input (hex, 64 chars) */
-  hmac: string;
-  /** 16 random bytes, base64-encoded */
-  nonce: string;
-  /** Original control-message object */
-  payload: unknown;
-  /** Unix timestamp ms */
-  ts: number;
-  /** Control message action string (mirrors payload.action) */
-  type: string;
-}
+export type SignedEnvelope = DispatchEnvelope;
 
 /**
  * Session state threaded through the session by the caller.
- * Replaces the old seq-based HmacSessionState.
+ *
+ * @deprecated Import {@link DispatchSessionState} from `@agiworkforce/types`.
  */
-export interface HmacSessionState {
-  /**
-   * hex-encoded 32-byte derived key (HKDF-SHA-256 output).
-   * Stored as hex to allow simple string operations in tests.
-   */
-  secret: string;
-  /**
-   * Sliding-window nonce cache: maps base64-nonce → received-ts.
-   * Pruned on each verification call.
-   */
-  nonceCache: Map<string, number>;
-}
+export type HmacSessionState = DispatchSessionState;
 
-export type VerifyResult =
-  | { ok: true }
-  | {
-      ok: false;
-      reason:
-        | 'hmac_mismatch'
-        | 'timestamp_expired'
-        | 'nonce_replay'
-        | 'malformed'
-        | 'unsigned_transitional';
-    };
+/** Verification result — alias of canonical {@link DispatchVerifyResult}. */
+export type VerifyResult = DispatchVerifyResult;
 
 // ---------------------------------------------------------------------------
 // Low-level HMAC-SHA-256 (RFC 2104) via expo-crypto
