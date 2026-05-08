@@ -56,45 +56,59 @@ export async function* translateOllamaStream(
   chunks: AsyncIterable<OllamaChatStreamChunk>,
 ): AsyncIterable<StreamChunk> {
   let toolUseCounter = 0;
+  let stopEmitted = false;
 
-  for await (const chunk of chunks) {
-    const message = chunk.message;
-    if (message?.thinking) {
-      yield { type: 'thinking-delta', delta: message.thinking };
-    }
-    if (message?.content) {
-      yield { type: 'text-delta', delta: message.content };
-    }
-    if (message?.tool_calls && message.tool_calls.length > 0) {
-      // Ollama emits complete tool_calls in one shot; synthesize start/delta/end.
-      for (const call of message.tool_calls) {
-        const id = `ollama-tool-${++toolUseCounter}`;
-        yield { type: 'tool-use-start', toolUseId: id, name: call.function.name };
-        yield {
-          type: 'tool-use-delta',
-          toolUseId: id,
-          deltaJson: JSON.stringify(call.function.arguments),
+  try {
+    for await (const chunk of chunks) {
+      const message = chunk.message;
+      if (message?.thinking) {
+        yield { type: 'thinking-delta', delta: message.thinking };
+      }
+      if (message?.content) {
+        yield { type: 'text-delta', delta: message.content };
+      }
+      if (message?.tool_calls && message.tool_calls.length > 0) {
+        // Ollama emits complete tool_calls in one shot; synthesize start/delta/end.
+        for (const call of message.tool_calls) {
+          const id = `ollama-tool-${++toolUseCounter}`;
+          yield { type: 'tool-use-start', toolUseId: id, name: call.function.name };
+          yield {
+            type: 'tool-use-delta',
+            toolUseId: id,
+            deltaJson: JSON.stringify(call.function.arguments),
+          };
+          yield { type: 'tool-use-end', toolUseId: id };
+        }
+      }
+
+      if (chunk.done) {
+        const usage: StreamChunk = {
+          type: 'usage',
+          ...(chunk.prompt_eval_count !== undefined
+            ? { inputTokens: chunk.prompt_eval_count }
+            : {}),
+          ...(chunk.eval_count !== undefined ? { outputTokens: chunk.eval_count } : {}),
         };
-        yield { type: 'tool-use-end', toolUseId: id };
+        yield usage;
+        yield {
+          type: 'stop',
+          reason:
+            chunk.done_reason === 'length'
+              ? 'max_tokens'
+              : chunk.done_reason === 'stop'
+                ? 'end_turn'
+                : 'end_turn',
+        };
+        stopEmitted = true;
       }
     }
-
-    if (chunk.done) {
-      const usage: StreamChunk = {
-        type: 'usage',
-        ...(chunk.prompt_eval_count !== undefined ? { inputTokens: chunk.prompt_eval_count } : {}),
-        ...(chunk.eval_count !== undefined ? { outputTokens: chunk.eval_count } : {}),
-      };
-      yield usage;
-      yield {
-        type: 'stop',
-        reason:
-          chunk.done_reason === 'length'
-            ? 'max_tokens'
-            : chunk.done_reason === 'stop'
-              ? 'end_turn'
-              : 'end_turn',
-      };
+  } finally {
+    // Ollama emits `done: true` on the trailing record. If the underlying
+    // NDJSON stream truncates (network drop, server crash, parser bail)
+    // we still need to surface a `stop` chunk so consumers terminate.
+    // Mirrors the openai/anthropic stream-translator tail.
+    if (!stopEmitted) {
+      yield { type: 'stop', reason: 'end_turn' };
     }
   }
 }

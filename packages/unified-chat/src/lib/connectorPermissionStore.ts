@@ -134,6 +134,24 @@ class SupabaseStore implements ConnectorPermissionStore {
     return null;
   }
 
+  /**
+   * Resolve the current user's id from the Supabase client. Returns null
+   * when unauthenticated (or when the client doesn't expose `auth.getUser`,
+   * as in older test stubs); the caller treats that as a no-op upsert
+   * rather than an INSERT under the wrong user_id.
+   */
+  private async getUserId(client: SupabaseClient): Promise<string | null> {
+    const auth = client.auth;
+    if (!auth || typeof auth.getUser !== 'function') return null;
+    try {
+      const { data, error } = await auth.getUser();
+      if (error || !data?.user?.id) return null;
+      return data.user.id;
+    } catch {
+      return null;
+    }
+  }
+
   async get(connectorId: string, toolName: string): Promise<ConnectorPermissionLevel | null> {
     const client = await this.getClient();
     if (!client) return null;
@@ -155,8 +173,16 @@ class SupabaseStore implements ConnectorPermissionStore {
   ): Promise<void> {
     const client = await this.getClient();
     if (!client) return;
+    // The table's UNIQUE constraint is (user_id, connector_id, tool_name)
+    // so the upsert payload MUST include user_id — without it the second
+    // call inserts a duplicate row instead of updating the prior one. The
+    // RLS policy `WITH CHECK (auth.uid() = user_id)` independently
+    // requires that user_id matches the authed user.
+    const userId = await this.getUserId(client);
+    if (!userId) return;
     const { error } = await client.from('connector_tool_permissions').upsert(
       {
+        user_id: userId,
         connector_id: connectorId,
         tool_name: toolName,
         level,
@@ -207,8 +233,18 @@ interface SupabaseQueryBuilder {
   upsert(values: Record<string, unknown>, opts?: { onConflict?: string }): Promise<SupabaseResult>;
 }
 
+interface SupabaseAuthGetUserResult {
+  data: { user: { id: string } | null } | null;
+  error: { message: string } | null;
+}
+
+interface SupabaseAuthClient {
+  getUser(): Promise<SupabaseAuthGetUserResult>;
+}
+
 interface SupabaseClient {
   from(table: string): SupabaseQueryBuilder;
+  auth?: SupabaseAuthClient;
 }
 
 // Re-export the defaultPermissionForTool helper so callers can import from one place.
