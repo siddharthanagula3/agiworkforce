@@ -192,6 +192,88 @@ export type { SpreadsheetArtifactProps } from './components/artifact-components/
 // Store selectors for the conversation-keyed artifact map
 export { selectArtifacts, selectActiveArtifact, selectArtifactById } from './stores/artifactStore';
 
+// Phase A Slice 5 — Chat UX shell (ported from UAC)
+export { BrandedGreeting } from './components/BrandedGreeting';
+export type { BrandedGreetingProps } from './components/BrandedGreeting';
+export { AdvancedEmptyState } from './components/AdvancedEmptyState';
+export type { AdvancedEmptyStateProps } from './components/AdvancedEmptyState';
+export {
+  BriefStatus,
+  FloatingBriefStatus,
+  useBriefStatus,
+  actionMessages,
+} from './components/BriefStatus';
+export type {
+  BriefStatusState,
+  BriefStatusProps,
+  FloatingBriefStatusProps,
+} from './components/BriefStatus';
+export { ChatNotificationBadge } from './components/ChatNotificationBadge';
+export type {
+  ChatNotificationBadgeProps,
+  BadgeNotificationType,
+} from './components/ChatNotificationBadge';
+export { BrowserActivityBadge } from './components/BrowserActivityBadge';
+export type {
+  BrowserActivityBadgeProps,
+  BrowserAgentStatus,
+} from './components/BrowserActivityBadge';
+export { AgentModeSwitcher, useIsPlanAgentMode } from './components/AgentModeSwitcher';
+export type { AgentModeSwitcherProps } from './components/AgentModeSwitcher';
+export { KeyboardShortcutsDialog } from './components/KeyboardShortcutsDialog';
+export type { KeyboardShortcutsDialogProps } from './components/KeyboardShortcutsDialog';
+export { KeyboardShortcutsOverlay } from './components/KeyboardShortcutsOverlay';
+export type {
+  KeyboardShortcutsOverlayProps,
+  ShortcutItem,
+  ShortcutSection,
+} from './components/KeyboardShortcutsOverlay';
+export { ChatStream } from './components/ChatStream';
+export type { ChatStreamProps } from './components/ChatStream';
+export { ChatInputToolbar } from './components/ChatInputToolbar';
+export type { ChatInputToolbarProps } from './components/ChatInputToolbar';
+export { SlashCommandMenu } from './components/SlashCommandMenu';
+export type { SlashCommandMenuProps, CommandSuggestion } from './components/SlashCommandMenu';
+export { SkillMentionPicker } from './components/SkillMentionPicker';
+export type { SkillMentionPickerProps, MentionSkill } from './components/SkillMentionPicker';
+export { FileMentionPicker } from './components/FileMentionPicker';
+export type { FileMentionPickerProps, MentionFile } from './components/FileMentionPicker';
+export { PromptStash } from './components/PromptStash';
+export type { PromptStashProps } from './components/PromptStash';
+export { PromptSuggestionsDropdown } from './components/PromptSuggestionsDropdown';
+export type {
+  PromptSuggestionsDropdownProps,
+  PromptSuggestion,
+  PromptSuggestionType,
+} from './components/PromptSuggestionsDropdown';
+// New stores
+export {
+  useAgentModeStore,
+  selectAgentMode,
+  selectIsPlanMode as selectIsAgentPlanMode,
+  selectIsAutopilotMode,
+} from './stores/agentModeStore';
+export type { AgentMode } from './stores/agentModeStore';
+export {
+  useMentionStore,
+  selectActiveMentionTrigger,
+  selectMentionQuery,
+  selectMentionCursorIndex,
+} from './stores/mentionStore';
+export type { MentionTrigger } from './stores/mentionStore';
+export {
+  usePromptStashStore,
+  selectPromptStashEntries,
+  selectPromptStashCount,
+} from './stores/promptStashStore';
+export type { PromptStashEntry } from './stores/promptStashStore';
+// Re-export plan-mode store selectors (added in Slice 3, referenced by Task #18)
+export {
+  selectPlanMode,
+  selectPendingPlan,
+  selectHasPendingApproval,
+} from './stores/planModeStore';
+
 // Pro+ tier gating (Task #17 — multi-provider in-thread switch)
 export { ProPlusUpgradePrompt } from './components/ProPlusUpgradePrompt';
 export type { ProPlusUpgradePromptProps } from './components/ProPlusUpgradePrompt';
