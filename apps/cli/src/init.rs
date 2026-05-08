@@ -59,7 +59,7 @@ fn write_default_config(home: &Path) -> Result<()> {
 # Optional settings (uncomment to enable):
 # [default]
 # temperature = 0.7
-# fallback_chain = ["gpt-5.4-mini", "gemini-3.1-pro-preview"]
+# fallback_chain = ["gpt-5.5", "gemini-3.1-flash-lite"]
 # fast_model = "claude-haiku-4-5-20251001"
 # sandbox_mode = "read-only"
 # review_model = "claude-sonnet-4-6"
