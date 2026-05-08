@@ -26,22 +26,15 @@ The `packages/data-layer/` package is the seam that makes Supabase → Neon (or 
 
 ## Per-domain references
 
-| Folder                   | Purpose                                                                                        |
-| ------------------------ | ---------------------------------------------------------------------------------------------- |
-| `applications/`          | Per-surface deep-dives (CLI, Desktop, Web, Mobile, Chrome ext, VS Code ext).                   |
-| `architecture/`          | Architecture decision records (ADRs) and design notes that complement `ARCHITECTURE.md`.       |
-| `audit/`                 | Cross-surface audits — see `audit/FINAL_AUDIT.md` for ground-truth state of P0/P1 issues.      |
-| `competitive/`           | Competitor research (Claude / ChatGPT / Gemini / Perplexity / Comet) — UI patterns + features. |
-| `contracts/`             | Cross-surface protocol contracts (Agent SDK, Anthropic Dispatch parity, etc.).                 |
-| `decisions/`             | Locked product/architecture decisions with rationale.                                          |
-| `integrations/`          | Third-party integration guides (Stripe, Supabase, Vercel, Fly.io).                             |
-| `launch/`                | Launch runbooks for each tier (Hobby, Pro+, Max).                                              |
-| `outreach/`              | Marketing + partner-facing material.                                                           |
-| `planning/` and `plans/` | Sprint-level plans and active workstreams.                                                     |
-| `research/`              | Research notes (LLM provider behavior, infra benchmarks).                                      |
-| `security/`              | Security policies + threat models + audit trails.                                              |
-| `specs/`                 | Technical specs for cross-surface features.                                                    |
-| `archive/`               | Historical / superseded material.                                                              |
+| Folder                   | Purpose                                                                                                               |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `api/`                   | API reference material.                                                                                               |
+| `audit/`                 | Cross-surface audits — see `audit/AUDIT_2026-05-03.md`, `audit/AUDIT_REPORT_2026-05-01.md`, and `audit/FIX_QUEUE.md`. |
+| `launch/`                | Launch runbooks for each tier (Hobby, Pro+, Max).                                                                     |
+| `planning/` and `plans/` | Sprint-level plans and active workstreams.                                                                            |
+| `security/`              | Security policies + threat models + audit trails.                                                                     |
+| `superpowers/`           | Skill packs + extended capability references.                                                                         |
+| `archive/`               | Historical / superseded material.                                                                                     |
 
 ## Quickstart for new contributors
 

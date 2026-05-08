@@ -83,7 +83,7 @@ export const MIGRATION_GUIDE = `
    (Dashboard -> Connection Details -> "Pooled connection"); it looks like
    "postgresql://user:pwd@ep-xxx.us-east-2.aws.neon.tech/db?sslmode=require".
 
-2. Port the schema. The 27 canonical migrations under supabase/migrations/
+2. Port the schema. The 32 canonical migrations under supabase/migrations/
    are vanilla Postgres — apply them with the Neon CLI or psql:
      for f in supabase/migrations/*.sql; do
        psql "$AGI_DATABASE_URL" -f "$f"
