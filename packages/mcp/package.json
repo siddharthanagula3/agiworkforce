@@ -8,9 +8,13 @@
   "types": "./src/index.ts",
   "scripts": {
     "build": "tsc --project tsconfig.json",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4"
+  },
+  "devDependencies": {
+    "vitest": "^4.0.18"
   }
 }
