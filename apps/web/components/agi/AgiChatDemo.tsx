@@ -46,7 +46,7 @@ function reducer(state: { i: number }, action: 'tick' | 'reset'): { i: number } 
   return { i: state.i + 1 };
 }
 
-export function RouterVisualization() {
+export function AgiChatDemo() {
   const [{ i }, dispatch] = useReducer(reducer, { i: 0 });
   const [reduced, setReduced] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -91,32 +91,35 @@ export function RouterVisualization() {
     !reduced && visible.length > 0 && visible[visible.length - 1]?.kind === 'switch';
 
   return (
-    <div className="pv-chat" aria-label="cross-provider chat demo">
-      <div className="pv-chat-header">
+    <div className="agi-chat" aria-label="cross-provider chat demo">
+      <div className="agi-chat-header">
         <AgiMark size={16} spinning={isSwitching} />
-        <span className="pv-chat-model" key={currentModel}>
+        <span className="agi-chat-model" key={currentModel}>
           {currentModel}
         </span>
-        <span className="pv-chat-meta">live · just now</span>
+        <span className="agi-chat-meta">live · just now</span>
       </div>
 
-      <div className="pv-chat-body" aria-live="polite">
+      <div className="agi-chat-body" aria-live="polite">
         {visible.map((step, idx) => {
           if (step.kind === 'switch') {
             return (
-              <div key={idx} className="pv-switch">
-                <span className="pv-switch-label">switching to {step.to}</span>
+              <div key={idx} className="agi-switch">
+                <span className="agi-switch-label">switching to {step.to}</span>
               </div>
             );
           }
           const isLast = idx === visible.length - 1;
           return (
-            <div key={idx} className={step.kind === 'assistant' ? 'pv-msg pv-msg-quiet' : 'pv-msg'}>
-              <div className="pv-msg-role">{step.kind === 'user' ? 'you' : step.model}</div>
-              <div className="pv-msg-text">
+            <div
+              key={idx}
+              className={step.kind === 'assistant' ? 'agi-msg agi-msg-quiet' : 'agi-msg'}
+            >
+              <div className="agi-msg-role">{step.kind === 'user' ? 'you' : step.model}</div>
+              <div className="agi-msg-text">
                 {step.text}
                 {!reduced && isLast && step.kind === 'assistant' && (
-                  <span className="pv-cursor" aria-hidden />
+                  <span className="agi-cursor" aria-hidden />
                 )}
               </div>
             </div>
@@ -124,10 +127,10 @@ export function RouterVisualization() {
         })}
 
         {visible.length === 0 && !reduced && (
-          <div className="pv-msg">
-            <div className="pv-msg-role">you</div>
-            <div className="pv-msg-text">
-              <span className="pv-cursor" aria-hidden />
+          <div className="agi-msg">
+            <div className="agi-msg-role">you</div>
+            <div className="agi-msg-text">
+              <span className="agi-cursor" aria-hidden />
             </div>
           </div>
         )}

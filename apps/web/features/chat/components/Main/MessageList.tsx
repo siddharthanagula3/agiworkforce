@@ -7,7 +7,7 @@ import type { SearchResponse } from '@core/integrations/web-search-handler';
 import type { MediaGenerationResult } from '@core/integrations/media-generation-handler';
 import type { GeneratedDocument } from '../../services/document-generation-service';
 import { MessageBubble, messageListVariants } from '../messages/MessageBubble';
-import { EmployeeThinkingIndicator } from '../agents/EmployeeThinkingIndicator';
+import { TypingIndicator } from '../messages/TypingIndicator';
 import { useChatStore } from '@shared/stores/chat-store';
 import ErrorBoundary from '@shared/components/ErrorBoundary';
 import { Button } from '@shared/ui/button';
@@ -349,14 +349,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
               // Check if this is a thinking/processing indicator message
               if (meta.isThinking || meta.isSearching || meta.isToolProcessing) {
-                return (
-                  <EmployeeThinkingIndicator
-                    key={message.id}
-                    employeeName={meta.employeeName}
-                    employeeAvatar={meta.employeeAvatar}
-                    message={message.content}
-                  />
-                );
+                return <TypingIndicator key={message.id} agentName={meta.employeeName} />;
               }
 
               return (
@@ -418,7 +411,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
           {/* Loading indicator - fallback if not using thinking indicator */}
           {isLoading && messages.every((m) => !getValidatedMetadata(m.metadata).isThinking) && (
-            <EmployeeThinkingIndicator message="Processing your request..." />
+            <TypingIndicator />
           )}
         </motion.div>
       </ScrollArea>
