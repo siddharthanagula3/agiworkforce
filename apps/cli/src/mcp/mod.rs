@@ -15,6 +15,7 @@
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
@@ -342,6 +343,9 @@ pub struct McpConnection {
     pub(super) inner: McpTransportConn,
     pub(super) request_id: u64,
     pub(super) timeouts: McpTimeouts,
+    /// Buffered lines from the child's stderr (stdio transport only).
+    /// Empty for SSE/HTTP transports.
+    pub(super) stderr_buf: Arc<Mutex<Vec<String>>>,
 }
 
 /// Transport-specific connection state. Per-variant data is held inline
@@ -402,7 +406,39 @@ impl McpConnection {
     ) -> Result<Self> {
         match config.as_transport() {
             McpTransport::Stdio { command, args, env } => {
-                let child = Self::spawn_stdio_child(name, &command, &args, &env)?;
+                let mut child = Self::spawn_stdio_child(name, &command, &args, &env)?;
+
+                // Drain child stderr on a background task so the pipe never blocks.
+                // Under AGIWORKFORCE_MCP_DEBUG, lines are printed immediately.
+                // Otherwise they are buffered and appended to any connection error.
+                let stderr_debug = std::env::var("AGIWORKFORCE_MCP_DEBUG").is_ok();
+                let stderr_buf: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+                if let Some(raw_stderr) = child.stderr.take() {
+                    let buf = Arc::clone(&stderr_buf);
+                    let server = name.to_string();
+                    tokio::spawn(async move {
+                        let mut reader = BufReader::new(raw_stderr);
+                        let mut line = String::new();
+                        loop {
+                            line.clear();
+                            match reader.read_line(&mut line).await {
+                                Ok(0) | Err(_) => break,
+                                Ok(_) => {
+                                    let trimmed =
+                                        line.trim_end_matches('\n').trim_end_matches('\r');
+                                    if !trimmed.is_empty() {
+                                        if stderr_debug {
+                                            eprintln!("[{server}] stderr: {trimmed}");
+                                        }
+                                        if let Ok(mut locked) = buf.lock() {
+                                            locked.push(trimmed.to_string());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
 
                 let mut conn = Self {
                     server_name: name.to_string(),
@@ -410,9 +446,24 @@ impl McpConnection {
                     inner: McpTransportConn::Stdio { child },
                     request_id: 0,
                     timeouts,
+                    stderr_buf,
                 };
 
-                conn.initialize().await?;
+                conn.initialize().await.map_err(|e| {
+                    let lines = conn
+                        .stderr_buf
+                        .lock()
+                        .map(|l| l.join("\n"))
+                        .unwrap_or_default();
+                    if lines.is_empty() {
+                        e
+                    } else {
+                        e.context(format!(
+                            "[{}] server stderr:\n{}",
+                            conn.server_name, lines
+                        ))
+                    }
+                })?;
                 Ok(conn)
             }
             McpTransport::Sse { url, headers } => {
@@ -444,7 +495,7 @@ impl McpConnection {
         cmd.args(args)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null());
+            .stderr(std::process::Stdio::piped());
 
         // SECURITY: clear the inherited parent environment to prevent
         // DYLD_INSERT_LIBRARIES / LD_PRELOAD injection and API key leakage.
@@ -673,7 +724,38 @@ impl McpConnection {
 
         match self.config.as_transport() {
             McpTransport::Stdio { command, args, env } => {
-                let child = Self::spawn_stdio_child(&self.server_name, &command, &args, &env)?;
+                let mut child =
+                    Self::spawn_stdio_child(&self.server_name, &command, &args, &env)?;
+                if let Ok(mut locked) = self.stderr_buf.lock() {
+                    locked.clear();
+                }
+                if let Some(raw_stderr) = child.stderr.take() {
+                    let buf = Arc::clone(&self.stderr_buf);
+                    let server = self.server_name.clone();
+                    let stderr_debug = std::env::var("AGIWORKFORCE_MCP_DEBUG").is_ok();
+                    tokio::spawn(async move {
+                        let mut reader = BufReader::new(raw_stderr);
+                        let mut line = String::new();
+                        loop {
+                            line.clear();
+                            match reader.read_line(&mut line).await {
+                                Ok(0) | Err(_) => break,
+                                Ok(_) => {
+                                    let trimmed =
+                                        line.trim_end_matches('\n').trim_end_matches('\r');
+                                    if !trimmed.is_empty() {
+                                        if stderr_debug {
+                                            eprintln!("[{server}] stderr: {trimmed}");
+                                        }
+                                        if let Ok(mut l) = buf.lock() {
+                                            l.push(trimmed.to_string());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
                 self.inner = McpTransportConn::Stdio { child };
                 self.request_id = 0;
                 self.initialize().await.context(format!(

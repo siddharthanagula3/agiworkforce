@@ -53,84 +53,97 @@ export async function* translateAnthropicStream(
   let inputTokens: number | undefined;
   let cacheReadTokens: number | undefined;
   let cacheWriteTokens: number | undefined;
+  let stopEmitted = false;
 
-  for await (const event of stream) {
-    switch (event.type) {
-      case 'message_start': {
-        // Anthropic emits initial usage on message_start
-        const usage = event.message.usage;
-        if (usage) {
-          inputTokens = usage.input_tokens;
-          cacheReadTokens = usage.cache_read_input_tokens ?? undefined;
-          cacheWriteTokens = usage.cache_creation_input_tokens ?? undefined;
+  try {
+    for await (const event of stream) {
+      switch (event.type) {
+        case 'message_start': {
+          // Anthropic emits initial usage on message_start
+          const usage = event.message.usage;
+          if (usage) {
+            inputTokens = usage.input_tokens;
+            cacheReadTokens = usage.cache_read_input_tokens ?? undefined;
+            cacheWriteTokens = usage.cache_creation_input_tokens ?? undefined;
+          }
+          break;
         }
-        break;
-      }
-      case 'content_block_start': {
-        const idx = event.index;
-        const block = event.content_block;
-        if (block.type === 'tool_use') {
-          blocksByIndex.set(idx, { type: 'tool_use', toolUseId: block.id });
-          yield {
-            type: 'tool-use-start',
-            toolUseId: block.id,
-            name: block.name,
+        case 'content_block_start': {
+          const idx = event.index;
+          const block = event.content_block;
+          if (block.type === 'tool_use') {
+            blocksByIndex.set(idx, { type: 'tool_use', toolUseId: block.id });
+            yield {
+              type: 'tool-use-start',
+              toolUseId: block.id,
+              name: block.name,
+            };
+          } else if (block.type === 'text') {
+            blocksByIndex.set(idx, { type: 'text' });
+          } else if (block.type === 'thinking') {
+            blocksByIndex.set(idx, { type: 'thinking' });
+          }
+          break;
+        }
+        case 'content_block_delta': {
+          const idx = event.index;
+          const state = blocksByIndex.get(idx);
+          const delta = event.delta;
+          if (delta.type === 'text_delta') {
+            yield { type: 'text-delta', delta: delta.text };
+          } else if (delta.type === 'input_json_delta' && state?.toolUseId) {
+            yield {
+              type: 'tool-use-delta',
+              toolUseId: state.toolUseId,
+              deltaJson: delta.partial_json,
+            };
+          } else if (delta.type === 'thinking_delta') {
+            yield { type: 'thinking-delta', delta: delta.thinking };
+          } else if (delta.type === 'signature_delta') {
+            // Signature_delta carries the verifier signature for thinking blocks.
+            // We surface it on the next thinking-delta with empty content; callers
+            // that care about round-tripping signatures should observe both.
+            yield { type: 'thinking-delta', delta: '', signature: delta.signature };
+          }
+          break;
+        }
+        case 'content_block_stop': {
+          const idx = event.index;
+          const state = blocksByIndex.get(idx);
+          if (state?.type === 'tool_use' && state.toolUseId) {
+            yield { type: 'tool-use-end', toolUseId: state.toolUseId };
+          }
+          blocksByIndex.delete(idx);
+          break;
+        }
+        case 'message_delta': {
+          const usage = event.usage;
+          const outputTokens = usage?.output_tokens;
+          const usageChunk: StreamChunk = {
+            type: 'usage',
+            ...(inputTokens !== undefined ? { inputTokens } : {}),
+            ...(outputTokens !== undefined ? { outputTokens } : {}),
+            ...(cacheReadTokens !== undefined ? { cacheReadTokens } : {}),
+            ...(cacheWriteTokens !== undefined ? { cacheWriteTokens } : {}),
           };
-        } else if (block.type === 'text') {
-          blocksByIndex.set(idx, { type: 'text' });
-        } else if (block.type === 'thinking') {
-          blocksByIndex.set(idx, { type: 'thinking' });
+          yield usageChunk;
+          yield { type: 'stop', reason: mapStopReason(event.delta.stop_reason) };
+          stopEmitted = true;
+          break;
         }
-        break;
+        case 'message_stop':
+          // No-op — already emitted stop in message_delta.
+          break;
       }
-      case 'content_block_delta': {
-        const idx = event.index;
-        const state = blocksByIndex.get(idx);
-        const delta = event.delta;
-        if (delta.type === 'text_delta') {
-          yield { type: 'text-delta', delta: delta.text };
-        } else if (delta.type === 'input_json_delta' && state?.toolUseId) {
-          yield {
-            type: 'tool-use-delta',
-            toolUseId: state.toolUseId,
-            deltaJson: delta.partial_json,
-          };
-        } else if (delta.type === 'thinking_delta') {
-          yield { type: 'thinking-delta', delta: delta.thinking };
-        } else if (delta.type === 'signature_delta') {
-          // Signature_delta carries the verifier signature for thinking blocks.
-          // We surface it on the next thinking-delta with empty content; callers
-          // that care about round-tripping signatures should observe both.
-          yield { type: 'thinking-delta', delta: '', signature: delta.signature };
-        }
-        break;
-      }
-      case 'content_block_stop': {
-        const idx = event.index;
-        const state = blocksByIndex.get(idx);
-        if (state?.type === 'tool_use' && state.toolUseId) {
-          yield { type: 'tool-use-end', toolUseId: state.toolUseId };
-        }
-        blocksByIndex.delete(idx);
-        break;
-      }
-      case 'message_delta': {
-        const usage = event.usage;
-        const outputTokens = usage?.output_tokens;
-        const usageChunk: StreamChunk = {
-          type: 'usage',
-          ...(inputTokens !== undefined ? { inputTokens } : {}),
-          ...(outputTokens !== undefined ? { outputTokens } : {}),
-          ...(cacheReadTokens !== undefined ? { cacheReadTokens } : {}),
-          ...(cacheWriteTokens !== undefined ? { cacheWriteTokens } : {}),
-        };
-        yield usageChunk;
-        yield { type: 'stop', reason: mapStopReason(event.delta.stop_reason) };
-        break;
-      }
-      case 'message_stop':
-        // No-op — already emitted stop in message_delta.
-        break;
+    }
+  } finally {
+    // Anthropic streams normally emit `message_delta` (-> stop) before the
+    // SDK iterator drains. If the upstream stream is truncated (network
+    // drop, abort, server-side cutoff) we still need to surface a `stop`
+    // chunk so the caller's consumer loop terminates with a known reason.
+    // Mirrors the OpenAI stream's `if (!stopEmitted)` tail in stream.ts.
+    if (!stopEmitted) {
+      yield { type: 'stop', reason: 'end_turn' };
     }
   }
 }
