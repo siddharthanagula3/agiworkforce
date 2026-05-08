@@ -11,10 +11,6 @@
   },
   "rewrites": [
     {
-      "source": "/chat/:path*",
-      "destination": "/chat/index.html"
-    },
-    {
       "source": "/v1/chat/completions",
       "destination": "/api/llm/v1/chat/completions",
       "has": [{ "type": "host", "value": "api.agiworkforce.com" }]

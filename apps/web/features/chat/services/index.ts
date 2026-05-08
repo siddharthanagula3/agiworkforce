@@ -8,7 +8,6 @@ export type {
   ConversationTree,
   BranchHistoryEntry,
 } from './conversation-branching';
-export { employeeChatService } from './employee-chat-service';
 export { folderManagementService } from './folder-management-service';
 export { messageBookmarksService } from './message-bookmarks-service';
 export { globalSearchService } from './global-search-service';

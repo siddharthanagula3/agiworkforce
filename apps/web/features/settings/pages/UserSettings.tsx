@@ -57,7 +57,6 @@ import {
   EyeOff,
   Key,
   Bot,
-  Play,
   Download,
   UserX,
 } from 'lucide-react';
@@ -65,7 +64,6 @@ import { toast } from 'sonner';
 import { cn } from '@shared/lib/utils';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { useAgentMetricsStore } from '@shared/stores/agent-metrics-store';
-import { backgroundChatService } from '@features/mission-control/services/background-conversation-handler';
 import {
   useAllSettingsData,
   useUpdateProfile,
@@ -1396,31 +1394,6 @@ const SettingsPageContent: React.FC = () => {
                       >
                         <Trash2 className="mr-2 h-4 w-4" />
                         Reset Metrics
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          if (metricsStore.isBackgroundServiceRunning) {
-                            backgroundChatService.stop();
-                            toast.info('Background service stopped');
-                          } else {
-                            backgroundChatService.start();
-                            toast.success('Background service started');
-                          }
-                        }}
-                        className="flex-1"
-                      >
-                        {metricsStore.isBackgroundServiceRunning ? (
-                          <>
-                            <AlertTriangle className="mr-2 h-4 w-4" />
-                            Stop Service
-                          </>
-                        ) : (
-                          <>
-                            <Play className="mr-2 h-4 w-4" />
-                            Start Service
-                          </>
-                        )}
                       </Button>
                     </div>
                   </CardContent>
