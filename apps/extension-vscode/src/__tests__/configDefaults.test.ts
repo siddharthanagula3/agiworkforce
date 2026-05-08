@@ -34,6 +34,7 @@ const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
   agentMode: 'agiWorkforce.agent.mode',
   agentEffort: 'agiWorkforce.agent.effort',
   codeLensEnabled: 'agiWorkforce.codeLensEnabled',
+  hoverEnabled: 'agiWorkforce.hoverEnabled',
   inlineCompletionsEnabled: 'agiWorkforce.inlineCompletions.enabled',
   inlineCompletionsDebounceMs: 'agiWorkforce.inlineCompletions.debounceMs',
   inlineCompletionsMaxLength: 'agiWorkforce.inlineCompletions.maxLength',
@@ -49,6 +50,7 @@ const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
   desktopBridgeEnabled: 'agiWorkforce.desktopBridge.enabled',
   desktopBridgePort: 'agiWorkforce.desktopBridge.port',
   tier: 'agiWorkforce.tier',
+  currentTier: 'agiWorkforce.currentTier',
 };
 
 describe('Config DEFAULTS ↔ package.json parity', () => {
