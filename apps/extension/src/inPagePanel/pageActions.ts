@@ -162,8 +162,22 @@ export function getPageActions(url: string): PageAction[] {
  */
 export function truncatePageText(raw: string, maxChars = 30_000): string {
   const collapsed = raw
-    .replace(/[\t  ]+/g, ' ')
+    .replace(/[\t\u00A0 ]+/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
   return collapsed.length <= maxChars ? collapsed : collapsed.slice(0, maxChars);
+}
+
+// P1-14: credit-card pattern — 13–19 digit sequences with optional separators
+const CC_PATTERN = /\b(?:\d[ \t-]?){13,19}\b/g;
+
+// P1-14: password-field-like context — "password" or "passwd" label
+const PASSWORD_LINE_PATTERN = /^.*\bpassw(?:or)?d\b.*$/gim;
+
+/**
+ * Redact credit-card numbers and password-field lines from page text before
+ * embedding it in a prompt.
+ */
+export function redactSensitiveText(text: string): string {
+  return text.replace(CC_PATTERN, '[REDACTED]').replace(PASSWORD_LINE_PATTERN, '[REDACTED LINE]');
 }
