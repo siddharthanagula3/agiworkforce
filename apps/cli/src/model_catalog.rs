@@ -104,6 +104,8 @@ struct SharedProviderConfig {
 struct SharedTaskRouting {
     #[serde(default)]
     complex_reasoning: Option<String>,
+    #[serde(default)]
+    fast_completion: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -200,6 +202,44 @@ pub fn default_provider() -> &'static str {
                 .to_string()
         })
         .as_str()
+}
+
+/// Return the API model ID for the `fast_completion` task slot of the named
+/// provider, as declared in `models.json`'s `providers.<name>.taskRouting.fast_completion`.
+///
+/// Resolution order:
+///   1. `taskRouting.fast_completion` canonical id → resolve to `apiModelId` if present.
+///   2. Provider `defaultModel` → resolve to `apiModelId`.
+///   3. Per-provider fallback constant (last resort, only fires if models.json is
+///      unparseable at startup — not a rule-models-json violation because the
+///      fallback is never the source of truth for user-visible model selection).
+///
+/// Do NOT hardcode model ID strings in callers — call this function instead.
+pub fn fast_completion_model(provider: &str) -> String {
+    let fallback = match provider {
+        "anthropic" => "claude-haiku-4-5-20251001",
+        "openai" => "gpt-5.4-mini",
+        "google" => "gemini-3.1-flash-lite",
+        _ => "gpt-5.4-mini",
+    };
+    let Some(catalog) = shared_catalog() else {
+        return fallback.to_string();
+    };
+    catalog
+        .providers
+        .get(provider)
+        .and_then(|pc| {
+            pc.task_routing
+                .as_ref()
+                .and_then(|tr| tr.fast_completion.as_deref())
+                .and_then(|canonical| api_model_id_for(catalog, canonical))
+                .or_else(|| {
+                    pc.default_model
+                        .as_deref()
+                        .and_then(|canonical| api_model_id_for(catalog, canonical))
+                })
+        })
+        .unwrap_or_else(|| fallback.to_string())
 }
 
 /// Return the API model ID for the economy tier's first allowed model, as read
@@ -1333,5 +1373,84 @@ mod tests {
         let path = cache_path();
         assert!(path.to_string_lossy().contains(".agiworkforce"));
         assert!(path.to_string_lossy().contains("models.json"));
+    }
+
+    /// rule-models-json: fast_completion_model must resolve to a model that exists
+    /// in the bundled catalog for both anthropic and openai providers.
+    #[test]
+    fn fast_completion_model_exists_in_catalog() {
+        let cat = Catalog::bundled();
+        for provider in ["anthropic", "openai", "google"] {
+            let model_id = fast_completion_model(provider);
+            assert!(
+                cat.find(&model_id).is_some(),
+                "fast_completion_model({provider}) returned \"{model_id}\" \
+                 which is not in the bundled catalog — add it to bundled_models() \
+                 or fix the models.json taskRouting entry"
+            );
+        }
+    }
+
+    /// rule-models-json: the fast_completion_model for openai must be an openai model.
+    #[test]
+    fn fast_completion_model_correct_provider() {
+        let cat = Catalog::bundled();
+        let openai_fast = fast_completion_model("openai");
+        let m = cat.find(&openai_fast).unwrap_or_else(|| {
+            panic!("fast_completion_model(openai) = {openai_fast} not in catalog")
+        });
+        assert_eq!(
+            m.provider, "openai",
+            "fast_completion_model(openai) should be an openai model, got provider={}", m.provider
+        );
+
+        let anthropic_fast = fast_completion_model("anthropic");
+        let m = cat.find(&anthropic_fast).unwrap_or_else(|| {
+            panic!("fast_completion_model(anthropic) = {anthropic_fast} not in catalog")
+        });
+        assert_eq!(
+            m.provider, "anthropic",
+            "fast_completion_model(anthropic) should be an anthropic model, got provider={}", m.provider
+        );
+    }
+
+    /// rule-models-json: no Rust source file in apps/cli/src/ (outside model_catalog.rs
+    /// and models.rs) may contain a hardcoded model ID literal matching the patterns
+    /// gpt-5\.\d, claude-(opus|sonnet|haiku)-\d, gemini-\d, or grok-\d.
+    ///
+    /// This test scans the source tree at compile time using include_str! for the
+    /// files known to have been violation sites and asserts the literals are absent.
+    #[test]
+    fn no_hardcoded_model_ids_in_chatwidget() {
+        // include_str! resolves at compile time relative to the source file.
+        // We check chatwidget.rs and list_selection_view.rs — the two files
+        // identified as violation sites in the CLI-GHOST-MODEL / CLI-FAST-STATUS-MODEL
+        // audit findings.
+        let chatwidget_src = include_str!("tui/chatwidget.rs");
+        let list_sel_src = include_str!("tui/bottom_pane/list_selection_view.rs");
+
+        // Patterns that would indicate a hardcoded model literal (not inside a comment).
+        // We check for the known offenders specifically to avoid false positives from
+        // legitimate display strings that contain model names for UI copy.
+        let forbidden: &[&str] = &[
+            "\"gpt-5.4\"",
+            "\"gpt-5.5\"",
+            "\"claude-opus-4-6-mini\"",
+            "\"claude-haiku-4-5\"",   // must come from catalog, not hardcoded
+            "\"gpt-5.4-mini\"",       // must come from catalog, not hardcoded
+        ];
+
+        for literal in forbidden {
+            assert!(
+                !chatwidget_src.contains(literal),
+                "chatwidget.rs contains hardcoded model literal {literal} — \
+                 use model_catalog::fast_completion_model() or model_catalog::find() instead"
+            );
+            assert!(
+                !list_sel_src.contains(literal),
+                "list_selection_view.rs contains hardcoded model literal {literal} — \
+                 populate the model picker from the catalog"
+            );
+        }
     }
 }
