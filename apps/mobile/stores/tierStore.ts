@@ -50,11 +50,24 @@ interface TierState {
   isRefreshing: boolean;
   /** ISO timestamp of the last successful refresh, or null if never refreshed. */
   lastRefreshedAt: string | null;
+  /**
+   * Provider id of the first model used in the current conversation (e.g.
+   * 'anthropic', 'openai').  Set to null when no conversation is active or
+   * when a new conversation begins.  Used by the provider-switch guard to
+   * detect cross-provider switches mid-thread and enforce the Pro+ gate.
+   */
+  currentConversationProvider: string | null;
 
   /** Fetch `/api/me`, normalise the plan tier, and persist to MMKV. */
   refreshTier: () => Promise<void>;
   /** Override tier locally (e.g. optimistic post-upgrade update). */
   setTier: (tier: BillingPlanTier) => void;
+  /**
+   * Record the provider of the current conversation's first message.
+   * Call this when the user sends the first message in a thread.
+   * Pass null to clear (e.g. when navigating away from a conversation).
+   */
+  setCurrentConversationProvider: (provider: string | null) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -67,6 +80,7 @@ export const useTierStore = create<TierState>()(
       tier: 'free',
       isRefreshing: false,
       lastRefreshedAt: null,
+      currentConversationProvider: null,
 
       refreshTier: async () => {
         // js-early-exit: skip if already refreshing
@@ -89,11 +103,17 @@ export const useTierStore = create<TierState>()(
       setTier: (tier) => {
         set({ tier });
       },
+
+      setCurrentConversationProvider: (provider) => {
+        set({ currentConversationProvider: provider });
+      },
     }),
     {
       name: 'tier-store',
       storage: createJSONStorage(() => mmkvStorage),
       // Persist only the cached tier value, not the in-flight flag.
+      // currentConversationProvider is intentionally excluded — it is session-
+      // scoped and must reset on cold start rather than rehydrate from disk.
       partialize: (state) => ({
         tier: state.tier,
         lastRefreshedAt: state.lastRefreshedAt,

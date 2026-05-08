@@ -10,10 +10,13 @@ import { Text } from '@/components/ui/text';
 import { AutoModeCards } from './AutoModeCard';
 import { ModelRow } from './ModelRow';
 import { useModelStore } from '@/stores/modelStore';
+import { useTierStore } from '@/stores/tierStore';
 import { AUTO_MODES, MODEL_LIST, PROVIDERS, isAutoMode, type ModelDef } from '@/lib/models';
 import { fetchModelCatalog } from '@/services/modelCatalog';
 import { colors } from '@/lib/theme';
 import { PROVIDER_DISPLAY, type ProviderId } from '@agiworkforce/types';
+import { guardProviderSwitch } from '@/services/tierGuard';
+import { ProPlusPaywall } from '@/components/Paywall/ProPlusPaywall';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -90,6 +93,12 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
   const toggleFavorite = useModelStore((s) => s.toggleFavorite);
   const toggleThinkingForModel = useModelStore((s) => s.toggleThinkingForModel);
 
+  const tier = useTierStore((s) => s.tier);
+  const currentConversationProvider = useTierStore((s) => s.currentConversationProvider);
+
+  /** Ref for the Pro+ paywall bottom sheet rendered inside this component. */
+  const proPlusPaywallRef = useRef<BottomSheet>(null);
+
   const [search, setSearch] = useState('');
   const searchInputRef = useRef<TextInput>(null);
   const [remoteModels, setRemoteModels] = useState<ModelDef[]>([]);
@@ -152,6 +161,20 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
         return;
       }
 
+      // Determine the provider for the chosen model (auto-modes have no provider).
+      const chosenModel = MODEL_LIST.find((m) => m.id === id);
+      const nextProvider = chosenModel?.provider ?? null;
+
+      // Pro+ guard: block mid-thread cross-provider switches for sub-Pro+ tiers.
+      if (nextProvider !== null) {
+        const decision = guardProviderSwitch(currentConversationProvider, nextProvider, tier);
+        if (decision === 'upgrade-required') {
+          // Keep the sheet open but show the Pro+ paywall on top.
+          proPlusPaywallRef.current?.expand();
+          return;
+        }
+      }
+
       // Select the model.
       setExpandedModelId(null);
       if (onSelect) {
@@ -161,7 +184,7 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
       }
       sheetRef.current?.close();
     },
-    [onSelect, setModel, sheetRef, selectedModel],
+    [onSelect, setModel, sheetRef, selectedModel, currentConversationProvider, tier],
   );
 
   const handleSelectAutoMode = useCallback(
@@ -231,118 +254,128 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
     ],
   );
 
+  const handleProPlusPaywallDismiss = useCallback(() => {
+    proPlusPaywallRef.current?.close();
+  }, []);
+
   return (
-    <BottomSheet
-      ref={sheetRef as React.RefObject<BottomSheet>}
-      index={-1}
-      snapPoints={snapPoints}
-      enablePanDownToClose
-      enableDynamicSizing={false}
-      backdropComponent={renderBackdrop}
-      backgroundStyle={{ backgroundColor: colors.background }}
-      handleIndicatorStyle={{ backgroundColor: 'rgba(255,255,255,0.3)', width: 36 }}
-    >
-      {/* ---- Header ---- */}
-      <View className="px-4 pb-3 pt-1 flex-row items-center justify-between">
-        <Text variant="subheading">Models</Text>
+    <>
+      <BottomSheet
+        ref={sheetRef as React.RefObject<BottomSheet>}
+        index={-1}
+        snapPoints={snapPoints}
+        enablePanDownToClose
+        enableDynamicSizing={false}
+        backdropComponent={renderBackdrop}
+        backgroundStyle={{ backgroundColor: colors.background }}
+        handleIndicatorStyle={{ backgroundColor: 'rgba(255,255,255,0.3)', width: 36 }}
+      >
+        {/* ---- Header ---- */}
+        <View className="px-4 pb-3 pt-1 flex-row items-center justify-between">
+          <Text variant="subheading">Models</Text>
 
-        <Pressable
-          onPress={handleClose}
-          className="p-1.5 rounded-full bg-white/5 active:bg-white/10"
-          accessibilityLabel="Close model picker"
-          accessibilityRole="button"
-        >
-          <XIcon size={16} color={colors.textMuted} />
-        </Pressable>
-      </View>
-
-      {/* ---- Search bar ---- */}
-      <View className="mx-4 mb-3 flex-row items-center gap-2 bg-surface-elevated rounded-xl border border-white/8 px-3 py-2">
-        <Search size={16} color={colors.textMuted} />
-        <TextInput
-          ref={searchInputRef}
-          className="flex-1 text-white text-sm py-0"
-          placeholder="Search models..."
-          placeholderTextColor="rgba(255,255,255,0.3)"
-          value={search}
-          onChangeText={setSearch}
-          selectionColor={colors.teal}
-          autoCorrect={false}
-          autoCapitalize="none"
-          returnKeyType="search"
-          accessibilityLabel="Search models"
-        />
-        {search.length > 0 && (
           <Pressable
-            onPress={clearSearch}
-            className="p-0.5"
-            accessibilityLabel="Clear search"
+            onPress={handleClose}
+            className="p-1.5 rounded-full bg-white/5 active:bg-white/10"
+            accessibilityLabel="Close model picker"
             accessibilityRole="button"
           >
-            <XIcon size={14} color={colors.textMuted} />
+            <XIcon size={16} color={colors.textMuted} />
           </Pressable>
-        )}
-      </View>
+        </View>
 
-      {/* ---- Scrollable content ---- */}
-      <BottomSheetScrollView
-        contentContainerStyle={{ paddingBottom: 40 }}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Auto modes (hidden when searching) */}
-        {!query && (
-          <AutoModeCards
-            modes={AUTO_MODES}
-            selectedId={selectedModel}
-            onSelect={handleSelectAutoMode}
+        {/* ---- Search bar ---- */}
+        <View className="mx-4 mb-3 flex-row items-center gap-2 bg-surface-elevated rounded-xl border border-white/8 px-3 py-2">
+          <Search size={16} color={colors.textMuted} />
+          <TextInput
+            ref={searchInputRef}
+            className="flex-1 text-white text-sm py-0"
+            placeholder="Search models..."
+            placeholderTextColor="rgba(255,255,255,0.3)"
+            value={search}
+            onChangeText={setSearch}
+            selectionColor={colors.teal}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            accessibilityLabel="Search models"
           />
-        )}
+          {search.length > 0 && (
+            <Pressable
+              onPress={clearSearch}
+              className="p-0.5"
+              accessibilityLabel="Clear search"
+              accessibilityRole="button"
+            >
+              <XIcon size={14} color={colors.textMuted} />
+            </Pressable>
+          )}
+        </View>
 
-        {/* Separator between auto modes and model list */}
-        {!query && <View className="mx-4 mb-2 mt-1 border-b border-white/8" />}
+        {/* ---- Scrollable content ---- */}
+        <BottomSheetScrollView
+          contentContainerStyle={{ paddingBottom: 40 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Auto modes (hidden when searching) */}
+          {!query && (
+            <AutoModeCards
+              modes={AUTO_MODES}
+              selectedId={selectedModel}
+              onSelect={handleSelectAutoMode}
+            />
+          )}
 
-        {/* Favorites section — always shown flat (no sub-grouping) */}
-        {favoriteModels.length > 0 && (
-          <View className="mb-2">
-            <Text className="text-xs text-white/40 font-medium uppercase tracking-wider px-4 mb-1">
-              Favorites
-            </Text>
-            {favoriteModels.map((model) => renderModelRow(model, 'fav'))}
-          </View>
-        )}
+          {/* Separator between auto modes and model list */}
+          {!query && <View className="mx-4 mb-2 mt-1 border-b border-white/8" />}
 
-        {/* Provider-grouped model list */}
-        {query ? (
-          // While searching, render a flat list without section headers.
-          <View>
-            {favoriteModels.length > 0 && nonFavoriteModels.length > 0 && (
-              <Text className="text-xs text-white/40 font-medium uppercase tracking-wider px-4 mb-1 mt-1">
-                All Models
+          {/* Favorites section — always shown flat (no sub-grouping) */}
+          {favoriteModels.length > 0 && (
+            <View className="mb-2">
+              <Text className="text-xs text-white/40 font-medium uppercase tracking-wider px-4 mb-1">
+                Favorites
               </Text>
-            )}
-            {nonFavoriteModels.map((model) => renderModelRow(model, 'all'))}
-          </View>
-        ) : (
-          // No active search → provider sections with headers.
-          groupedModels.map(({ providerId, providerLabel, models }) => (
-            <View key={providerId} className="mb-1">
-              <Text className="text-xs text-white/40 font-medium uppercase tracking-wider px-4 pt-2 pb-1">
-                {providerLabel}
-              </Text>
-              {models.map((model) => renderModelRow(model, `grp-${providerId}`))}
+              {favoriteModels.map((model) => renderModelRow(model, 'fav'))}
             </View>
-          ))
-        )}
+          )}
 
-        {/* Empty state */}
-        {filteredModels.length === 0 && (
-          <View className="items-center justify-center py-12 px-8">
-            <Text className="text-white/40 text-sm text-center">
-              No models matching &quot;{search}&quot;
-            </Text>
-          </View>
-        )}
-      </BottomSheetScrollView>
-    </BottomSheet>
+          {/* Provider-grouped model list */}
+          {query ? (
+            // While searching, render a flat list without section headers.
+            <View>
+              {favoriteModels.length > 0 && nonFavoriteModels.length > 0 && (
+                <Text className="text-xs text-white/40 font-medium uppercase tracking-wider px-4 mb-1 mt-1">
+                  All Models
+                </Text>
+              )}
+              {nonFavoriteModels.map((model) => renderModelRow(model, 'all'))}
+            </View>
+          ) : (
+            // No active search → provider sections with headers.
+            groupedModels.map(({ providerId, providerLabel, models }) => (
+              <View key={providerId} className="mb-1">
+                <Text className="text-xs text-white/40 font-medium uppercase tracking-wider px-4 pt-2 pb-1">
+                  {providerLabel}
+                </Text>
+                {models.map((model) => renderModelRow(model, `grp-${providerId}`))}
+              </View>
+            ))
+          )}
+
+          {/* Empty state */}
+          {filteredModels.length === 0 && (
+            <View className="items-center justify-center py-12 px-8">
+              <Text className="text-white/40 text-sm text-center">
+                No models matching &quot;{search}&quot;
+              </Text>
+            </View>
+          )}
+        </BottomSheetScrollView>
+      </BottomSheet>
+
+      {/* Pro+ paywall — rendered as a sibling sheet, shown when the tier guard
+        blocks a cross-provider switch. */}
+      <ProPlusPaywall ref={proPlusPaywallRef} onDismiss={handleProPlusPaywallDismiss} />
+    </>
   );
 }
