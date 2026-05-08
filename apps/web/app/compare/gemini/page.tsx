@@ -1,318 +1,102 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-
-import { MARKETING } from '@/lib/marketing-constants';
-import { EditorialPage } from '@/components/marketing/editorial/EditorialPage';
-import { RuledSection } from '@/components/marketing/editorial/RuledSection';
-import { Slug } from '@/components/marketing/editorial/Slug';
-import { Specimen } from '@/components/marketing/editorial/Specimen';
-import { MonoButton } from '@/components/marketing/editorial/MonoButton';
-import { DispatchSection } from '@/components/marketing/editorial/DispatchSection';
+import { Header } from '../../../components/layout/Header';
+import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'AGI Workforce vs Gemini | Honest Comparison',
+  title: 'AGI Workforce vs Google Gemini | AGI Workforce',
   description:
-    'AGI Workforce vs Google Gemini: multi-provider support, BYOK, local LLM, cross-provider thread, CLI, desktop, and pricing compared honestly.',
-  alternates: { canonical: '/compare/gemini' },
-  openGraph: {
-    title: 'AGI Workforce vs Gemini | Honest Comparison',
-    description:
-      'Gemini has the longest context window in production and deep Google Workspace integration. Our lane is running Gemini alongside eleven other providers.',
-    type: 'website',
-    url: 'https://agiworkforce.com/compare/gemini',
-  },
+    'Honest review of Google Gemini. Where Gemini wins, where AGI Workforce wins, and how the two products differ.',
+  alternates: { canonical: 'https://agiworkforce.com/compare/gemini' },
 };
-
-interface ScorecardRow {
-  capability: string;
-  us: string;
-  them: string;
-}
-
-const scorecard: ScorecardRow[] = [
-  {
-    capability: 'Models available',
-    us: `${MARKETING.providers.display} providers (Gemini, Claude, GPT, Grok, DeepSeek, and more)`,
-    them: 'Gemini family only',
-  },
-  {
-    capability: 'BYOK support',
-    us: `All ${MARKETING.providers.display} cloud providers`,
-    them: 'Subscription-only; no API key passthrough',
-  },
-  {
-    capability: 'Local LLM',
-    us: 'Yes — Ollama + LM Studio (Desktop, free forever)',
-    them: 'Not supported',
-  },
-  {
-    capability: 'Cross-provider thread',
-    us: 'Yes — mid-conversation, context preserved',
-    them: 'Gemini models only',
-  },
-  {
-    capability: 'CLI',
-    us: 'Yes — Rust, 22 subcommands, TUI',
-    them: 'Yes — Gemini CLI (Node.js)',
-  },
-  {
-    capability: 'Desktop app',
-    us: 'Yes — Tauri, macOS / Windows / Linux',
-    them: 'No — web app only',
-  },
-  {
-    capability: 'Mobile app',
-    us: 'Partial — iOS + Android (Expo, in progress)',
-    them: 'Yes — Google Gemini iOS + Android',
-  },
-  {
-    capability: 'Computer use',
-    us: 'Partial — browser, terminal, file I/O',
-    them: 'Partial — Project Astra features, limited GA',
-  },
-  {
-    capability: 'Browser extension',
-    us: 'Yes — Chrome MV3 v1.2.0',
-    them: 'Partial — Gemini in Chrome sidebar',
-  },
-  {
-    capability: 'VS Code extension',
-    us: 'Yes — v0.3.0, multi-provider',
-    them: 'Yes — Gemini Code Assist for VS Code',
-  },
-  {
-    capability: 'Google Workspace integration',
-    us: 'Not built-in (route via BYOK)',
-    them: 'Yes — deep Docs/Sheets/Gmail/Calendar',
-  },
-  {
-    capability: 'Free tier',
-    us: 'Local mode: free forever. BYOK: free forever.',
-    them: 'Gemini free tier exists',
-  },
-];
 
 export default function CompareGeminiPage() {
   return (
-    <EditorialPage tier="mixed">
-      {/* S1 — Review masthead */}
-      <RuledSection tier="paper" id="compare-gemini-hero">
-        <div className="py-4 pb-2">
-          <Link
-            href="/compare"
-            className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-quiet)] hover:text-[var(--color-ink)] transition-colors"
-          >
-            ← All comparisons
-          </Link>
-        </div>
-        <div className="pt-4 pb-16 md:pb-24 max-w-3xl">
-          <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-quiet)] mb-6">
-            REVIEW · 2026-05-05
-          </div>
-
-          <h1 className="font-display leading-[0.95] tracking-tight">
-            <span
-              className="block text-[clamp(2rem,6vw,4rem)]"
-              style={{ fontVariationSettings: '"wght" 400' }}
-            >
-              AGI Workforce
-            </span>
-            <span
-              className="block italic text-[clamp(2rem,6vw,4rem)] border-b-[3px] border-[var(--color-rule)] pb-1 mt-1"
-              style={{ fontVariationSettings: '"wght" 700' }}
-            >
-              vs Gemini.
-            </span>
-          </h1>
-
-          <div className="mt-10">
-            <Specimen dropCap columns={2}>
-              <p>
-                Gemini has the longest context window in production and Google integration is
-                unmatched. Drive, Gmail, Calendar, Docs, and Sheets all connect natively. Gemini
-                Code Assist is solid in JetBrains and VS Code. The multimodal capabilities across
-                image, audio, and video are genuinely ahead of most alternatives. None of that is in
-                dispute.
-              </p>
-              <p>
-                The case for AGI Workforce is multi-provider routing. Gemini becomes one of twelve
-                providers in one thread. When context fits in 200K and you would rather route to
-                Claude or GPT for a specific turn, the interface handles it. When Google account is
-                not the auth boundary you want, AGI Workforce does not require it.
-              </p>
-            </Specimen>
-          </div>
-        </div>
-      </RuledSection>
-
-      {/* S2 — When Gemini wins */}
-      <RuledSection tier="paper" slug={<Slug index="01" kicker="WHEN GEMINI WINS" />}>
-        <div className="py-14 md:py-20">
-          <h2
-            className="font-display text-2xl md:text-3xl mb-8"
-            style={{ fontVariationSettings: '"wght" 600' }}
-          >
-            When to use Gemini instead.
-          </h2>
-
-          <Specimen columns={2}>
-            <p>
-              The 2M-token context window is Gemini's most defensible edge. If your task genuinely
-              requires scanning a full codebase or a long document collection in one context,
-              Gemini's native infrastructure handles that at scale in a way that has no equivalent
-              elsewhere.
-            </p>
-            <p>
-              Deep Google Workspace integration is the other unambiguous win. If your entire
-              workflow lives in Docs, Sheets, Gmail, and Calendar and you want AI natively in those
-              surfaces, Gemini Advanced is the right choice. Cheapest frontier-tier inference via
-              Google AI API is also worth noting for cost-sensitive workloads.
-            </p>
-          </Specimen>
-
-          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-0">
-            {[
-              'You live in Google Workspace and want deep Docs/Sheets/Gmail integration.',
-              'Your task requires the 2M-token context window at scale.',
-              'You rely on Gemini Code Assist and it covers your IDE needs.',
-              "You need Google's native multimodal features (image, audio, video) natively.",
-              'Google-managed privacy and compliance are required for your enterprise data.',
-            ].map((item) => (
-              <div
-                key={item}
-                className="border-b border-[var(--color-rule-soft)] py-4 pr-8 flex items-start gap-3"
-              >
-                <span className="font-mono text-[var(--color-fg-quiet)] mt-0.5 shrink-0">—</span>
-                <span className="text-sm leading-relaxed text-[var(--color-fg-muted)]">{item}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </RuledSection>
-
-      {/* S3 — When AGI Workforce wins */}
-      <RuledSection tier="paper" slug={<Slug index="02" kicker="WHEN AGI WORKFORCE WINS" />}>
-        <div className="py-14 md:py-20">
-          <h2
-            className="font-display text-2xl md:text-3xl mb-8"
-            style={{ fontVariationSettings: '"wght" 600' }}
-          >
-            When the multi-provider lane wins.
-          </h2>
-
-          <Specimen columns={2}>
-            <p>
-              When context fits in 200K and you would rather route to Claude for reasoning or GPT
-              for code on that specific turn, AGI Workforce handles the routing. Use Gemini for
-              long-document analysis, Claude for planning, GPT for code review. One thread, no
-              context loss.
-            </p>
-            <p>
-              BYOK means your Google API key stays your key. You pay Google directly at published
-              rates. No Gemini Advanced subscription needed for API access. And when Google account
-              is not the auth boundary you want, local mode on Desktop requires no account at all.
-            </p>
-          </Specimen>
-
-          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[
-              {
-                title: 'Gemini alongside every other provider',
-                desc: 'Gemini for long-document analysis, Claude for reasoning, GPT for code review. One thread, no context loss.',
-              },
-              {
-                title: 'BYOK: your Google key, your cost',
-                desc: 'Bring your Google AI API key. Pay Google directly at published rates. No Gemini Advanced subscription required.',
-              },
-              {
-                title: 'Native desktop app',
-                desc: 'Gemini has no native desktop app. AGI Workforce Desktop runs natively on macOS, Windows, and Linux with local storage.',
-              },
-              {
-                title: 'Local fallback when offline',
-                desc: 'No internet? Ollama or LM Studio runs on your machine. Same AGI Workforce interface, zero cloud dependency.',
-              },
-            ].map(({ title, desc }) => (
-              <div key={title} className="border border-[var(--color-rule-soft)] p-6">
-                <div
-                  className="font-display text-base mb-2"
-                  style={{ fontVariationSettings: '"wght" 600' }}
-                >
-                  {title}
-                </div>
-                <p className="text-sm leading-relaxed text-[var(--color-fg-muted)]">{desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </RuledSection>
-
-      {/* S4 — Scorecard */}
-      <RuledSection tier="graphite" slug={<Slug index="03" kicker="SCORECARD" />}>
-        <div className="py-14 md:py-20">
-          <h2
-            className="font-display text-2xl md:text-3xl mb-6 text-[var(--color-cream-on-graphite)]"
-            style={{ fontVariationSettings: '"wght" 600' }}
-          >
-            Side by side.
-          </h2>
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-quiet)] mb-8">
-            Accurate as of May 2026. Google ships Gemini mobile, VS Code ext (Code Assist), Chrome
-            sidebar, Gemini CLI. We acknowledge all of these.
+    <div data-design="agi">
+      <main className="agi-shell">
+        <Header />
+        <section className="agi-page-hero">
+          <h1 className="agi-page-h1">Google Gemini.</h1>
+          <p className="agi-page-lede">
+            Longest production context window. Multimodal-native. Tightly integrated with Workspace.{' '}
+            <strong>
+              Gemini is the right model when the context is enormous or the data lives in your
+              Google account. We bring you a Gemini key in the same place you bring Claude.
+            </strong>
           </p>
-
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b border-[var(--color-rule-soft)]">
-                  <th className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-quiet)] text-left py-3 pr-6 w-[30%]">
-                    Capability
-                  </th>
-                  <th className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-amber-text)] text-left py-3 px-4 w-[35%]">
-                    AGI Workforce
-                  </th>
-                  <th className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-quiet)] text-left py-3 px-4 w-[35%]">
-                    Gemini
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {scorecard.map((row, i) => (
-                  <tr
-                    key={row.capability}
-                    className={[
-                      'border-b border-[var(--color-rule-soft)]',
-                      i % 2 === 0 ? 'bg-white/[0.02]' : '',
-                    ].join(' ')}
-                  >
-                    <td className="font-mono text-[11px] text-[var(--color-fg-muted)] py-3 pr-6 align-top">
-                      {row.capability}
-                    </td>
-                    <td className="text-[13px] text-[var(--color-amber-text)] py-3 px-4 align-top leading-snug">
-                      {row.us}
-                    </td>
-                    <td className="text-[13px] text-[var(--color-fg-muted)] py-3 px-4 align-top leading-snug">
-                      {row.them}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        </section>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">Where Gemini wins</p>
+          <ul className="agi-reasons">
+            <li className="agi-reason">
+              <h3 className="agi-reason-h">Context window</h3>
+              <p className="agi-reason-p">
+                The largest production context window in the field. If you have a million tokens of
+                source code or transcript to reason over, Gemini is the right call.
+              </p>
+            </li>
+            <li className="agi-reason">
+              <h3 className="agi-reason-h">Multimodal-native</h3>
+              <p className="agi-reason-p">
+                Native video, audio, and image understanding without the round-trip to a separate
+                vision model.
+              </p>
+            </li>
+            <li className="agi-reason">
+              <h3 className="agi-reason-h">Workspace integration</h3>
+              <p className="agi-reason-p">
+                Drive, Docs, Sheets, Calendar — Gemini reads them natively because it&rsquo;s a
+                Google product.
+              </p>
+            </li>
+          </ul>
+        </section>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">Where AGI Workforce wins</p>
+          <table className="agi-ledger">
+            <tbody>
+              <tr>
+                <td>Multi-provider</td>
+                <td>Gemini chat is Google only. We run 10+ providers in one thread.</td>
+              </tr>
+              <tr>
+                <td>BYOK against Google</td>
+                <td>Bring your Gemini API key. Pay Google directly. Zero markup.</td>
+              </tr>
+              <tr>
+                <td>Local LLM</td>
+                <td>No local Gemini. Ollama and LM Studio for offline work.</td>
+              </tr>
+              <tr>
+                <td>Cross-provider memory</td>
+                <td>Use Gemini for long context, hand off to Claude or GPT for the next turn.</td>
+              </tr>
+              <tr>
+                <td>Pricing posture</td>
+                <td>Local + BYOK free forever. Pay Google&rsquo;s API price, not a markup.</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">Honest take</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            For Workspace-heavy teams, Gemini in the Workspace UI is hard to beat. We don&rsquo;t
+            have that tight Google integration. What we do have: Gemini key support next to every
+            other provider, in one chat. If you want to compare Claude&rsquo;s answer to
+            Gemini&rsquo;s answer on the same prompt, that takes one model switch in our app.
+          </p>
+          <div className="agi-cta-row">
+            <Link href="/download" className="agi-cta-primary">
+              Try AGI Workforce
+            </Link>
+            <Link href="/compare" className="agi-cta-ghost">
+              Read the other reviews →
+            </Link>
           </div>
-
-          <div className="mt-10 flex flex-col sm:flex-row gap-4">
-            <MonoButton href="/byok" variant="primary" prefix="./">
-              Learn about BYOK
-            </MonoButton>
-            <MonoButton href="/download" variant="ghost" prefix="./">
-              Download free
-            </MonoButton>
-          </div>
-        </div>
-      </RuledSection>
-
-      {/* S5 — Dispatch */}
-      <DispatchSection slugIndex="04" slugKicker="DISPATCH" />
-    </EditorialPage>
+        </section>
+        <MarketingFooter />
+      </main>
+    </div>
   );
 }

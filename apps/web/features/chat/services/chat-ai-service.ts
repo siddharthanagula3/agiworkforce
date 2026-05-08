@@ -2,19 +2,12 @@ import { logger } from '@shared/lib/logger';
 /**
  * Chat AI Service
  * Bridges the chat UI to the /api/llm/v1/chat/completions backend with SSE streaming.
- * Provides methods for sending messages, listing skills, and auto-detecting skills.
  */
 
 import { createClient } from '@/utils/supabase/client';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useModelStore } from '@shared/stores/model-store';
-import { systemPromptsService } from '@core/ai/employees/prompt-management';
-import {
-  IntelligentAgentRouter,
-  RoleExpertiseMapping,
-  SkillCategories,
-} from '@core/ai/orchestration/intelligent-agent-router';
-import type { AIEmployee } from '@core/types/ai-employee';
+import { SkillCategories } from '@core/ai/orchestration/intelligent-agent-router';
 
 export interface SkillInfo {
   id: string;
@@ -30,47 +23,6 @@ export interface SkillInfo {
  */
 let activeAbortController: AbortController | null = null;
 
-/**
- * Singleton router instance used for skill detection
- */
-let routerInstance: IntelligentAgentRouter | null = null;
-
-function getRouter(): IntelligentAgentRouter {
-  if (!routerInstance) {
-    routerInstance = new IntelligentAgentRouter();
-  }
-  return routerInstance;
-}
-
-/**
- * Cache for loaded employees
- */
-let cachedEmployees: AIEmployee[] | null = null;
-let employeesLoading: Promise<AIEmployee[]> | null = null;
-
-async function loadEmployees(): Promise<AIEmployee[]> {
-  if (cachedEmployees) return cachedEmployees;
-  if (employeesLoading) return employeesLoading;
-
-  employeesLoading = systemPromptsService
-    .getAvailableEmployees()
-    .then((employees) => {
-      cachedEmployees = employees;
-      employeesLoading = null;
-      return employees;
-    })
-    .catch((err) => {
-      logger.error('[ChatAIService] Failed to load employees:', err);
-      employeesLoading = null;
-      return [];
-    });
-
-  return employeesLoading;
-}
-
-/**
- * Find which category a skill belongs to
- */
 function getCategoryForSkill(skillId: string): string {
   for (const cat of SkillCategories) {
     if (cat.skills.includes(skillId)) {
@@ -360,72 +312,24 @@ export class ChatAIService {
 
   /**
    * Get available skills for @mention autocomplete.
-   * Returns a simplified list with id, name, description, and category.
    */
   static async getAvailableSkills(): Promise<SkillInfo[]> {
-    const employees = await loadEmployees();
-
-    return employees.map((emp) => ({
-      id: emp.name,
-      name: formatSkillName(emp.name),
-      description: emp.description,
-      category: getCategoryForSkill(emp.name),
-      avatar: emp.avatar,
-    }));
+    return getDefaultSkills();
   }
 
   /**
-   * Synchronous version that returns whatever is cached (may be empty on first call).
-   * Triggers a background load if not yet loaded.
+   * Synchronous version returning the default skill list.
    */
   static getAvailableSkillsSync(): SkillInfo[] {
-    // Trigger load in background if not cached yet
-    if (!cachedEmployees) {
-      loadEmployees();
-      // Return a small default set based on RoleExpertiseMapping keys
-      return getDefaultSkills();
-    }
-
-    return cachedEmployees.map((emp) => ({
-      id: emp.name,
-      name: formatSkillName(emp.name),
-      description: emp.description,
-      category: getCategoryForSkill(emp.name),
-      avatar: emp.avatar,
-    }));
+    return getDefaultSkills();
   }
 
   /**
-   * Auto-detect the best skill for a given message using the intelligent agent router.
-   * Returns the skill ID or null if no strong match is found.
+   * Auto-detect the best skill for a given message.
+   * Returns null until a server-backed skill registry is reintroduced.
    */
-  static async detectSkill(message: string): Promise<string | null> {
-    const employees = await loadEmployees();
-    if (employees.length === 0) return null;
-
-    const router = getRouter();
-
-    // Register agents if not already registered
-    const agentCapabilities = employees.map((emp) => ({
-      agentId: emp.name,
-      name: formatSkillName(emp.name),
-      expertise: emp.expertise || RoleExpertiseMapping[emp.name] || [],
-      tools: emp.tools,
-      systemPrompt: emp.systemPrompt || '',
-      model: (emp.model as string) || 'gpt-5.4',
-      temperature: 0.7,
-    }));
-
-    router.registerAgents(agentCapabilities);
-
-    // Route the query
-    const results = router.routeQuery(message, {
-      maxAgents: 1,
-      minConfidence: 'medium',
-      allowMultiple: false,
-    });
-
-    return results.length > 0 ? (results[0] ?? null) : null;
+  static async detectSkill(_message: string): Promise<string | null> {
+    return null;
   }
 
   /**

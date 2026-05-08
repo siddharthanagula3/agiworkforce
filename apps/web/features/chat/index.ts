@@ -6,9 +6,6 @@ export * from './components';
 // Hooks
 export * from './hooks';
 
-// Pages
-export { default as ChatInterface } from './pages/ChatInterface';
-
 // Types — exclude ToolCall/ToolCallStatus since they are already exported by ./components
 export type {
   ChatMode,

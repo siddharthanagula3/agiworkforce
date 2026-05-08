@@ -15,7 +15,16 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import type { ToolType } from '../../services/chat-tool-router';
+
+export type ToolType =
+  | 'image-generation'
+  | 'video-generation'
+  | 'document-creation'
+  | 'web-search'
+  | 'multi-agent'
+  | 'social-media-analysis'
+  | 'code-generation'
+  | 'general-chat';
 
 interface ToolProgressIndicatorProps {
   activeTools: ToolType[];

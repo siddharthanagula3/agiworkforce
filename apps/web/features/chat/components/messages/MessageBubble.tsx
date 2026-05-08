@@ -53,7 +53,6 @@ import { ArtifactPreview } from '../artifacts/ArtifactPreview';
 import { InlineArtifactCards } from '../artifacts/InlineArtifactCards';
 import { extractArtifacts, removeArtifactBlocks } from '../../utils/artifact-detector';
 import { useArtifactStore } from '@shared/stores/artifact-store';
-import { employeeChatService } from '../../services/employee-chat-service';
 import { SearchResults } from '../search/SearchResults';
 import type { SearchResponse } from '@core/integrations/web-search-handler';
 import type { MediaGenerationResult } from '@core/integrations/media-generation-handler';
@@ -326,12 +325,16 @@ const MessageBubbleComponent = function MessageBubble({
     return removeArtifactBlocks(message.content, artifacts);
   }, [message.content, artifacts]);
 
-  // Employee info
+  // Avatar info derived from message metadata only (no external service)
   const employeeInitials = message.employeeName
-    ? employeeChatService.getEmployeeInitials(message.employeeName)
+    ? message.employeeName
+        .split(/\s+/)
+        .map((w) => w.charAt(0))
+        .slice(0, 2)
+        .join('')
+        .toUpperCase()
     : 'AI';
-  const employeeColor =
-    message.employeeColor || employeeChatService.getEmployeeAvatar(message.employeeName || '');
+  const employeeColor = message.employeeColor || '';
 
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(message.content);
