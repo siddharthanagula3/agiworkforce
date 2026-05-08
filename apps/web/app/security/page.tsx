@@ -16,7 +16,6 @@ import {
   Search,
 } from 'lucide-react';
 import { Header } from '../../components/layout/Header';
-import { CtaSection } from '../../components/marketing/CtaSection';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
@@ -451,11 +450,22 @@ export default function SecurityPage() {
             </div>
           </section>
 
-          <CtaSection
-            icon="Shield"
-            headline="Secure AI, From Day One"
-            body="Download the desktop app and run AI with full local encryption, sandboxed tool execution, and zero data brokering - your keys, your data, your control."
-          />
+          <div data-design="agi" style={{ marginTop: 64 }}>
+            <section
+              className="agi-section"
+              style={{ padding: '48px 28px', maxWidth: 1180, margin: '0 auto' }}
+            >
+              <p className="agi-section-eyebrow">Secure AI, from day one</p>
+              <h2 className="agi-section-h2">Your keys. Your data. Your control.</h2>
+              <p className="agi-page-lede" style={{ marginTop: 0, marginBottom: 24 }}>
+                Download the desktop app and run AI with full local encryption, sandboxed tool
+                execution, and zero data brokering.
+              </p>
+              <a href="/download" className="agi-cta-primary">
+                Install
+              </a>
+            </section>
+          </div>
         </main>
 
         <MarketingFooter />
