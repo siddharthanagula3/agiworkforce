@@ -1,5 +1,33 @@
 name: Release Desktop
 
+# ============================================================================
+# LINUX-ONLY RELEASE (per Wave 1 task #10 P1-25, 2026-05-08)
+#
+# This workflow ships Linux .AppImage / .deb bundles only. macOS and Windows
+# build jobs were previously present but disabled with `if: false` because:
+#
+#   - macOS: the six APPLE_* signing secrets (APPLE_CERTIFICATE,
+#     APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY, APPLE_ID,
+#     APPLE_PASSWORD, APPLE_TEAM_ID) are not configured in repo settings.
+#     The Developer ID cert itself still exists locally (last shipped
+#     v1.1.6 on 2026-03-07); it just needs to be re-exported and uploaded.
+#   - Windows: the SSL.com EV cert ($249/yr) is not paid for v1.x. The
+#     libsqlite3-sys 0.30.1 + windows-latest OpenSSL pathing also needs
+#     fixing — but there's no point until the EV cert lands.
+#
+# Rather than ship runtime-skipped placeholders that confused readers,
+# the gated jobs were deleted in this commit. To re-enable a target:
+#
+#   - macOS: add the APPLE_* secrets, then restore the `build-macos` and
+#     `windows-smoke`-equivalent jobs and append `build-macos` to the
+#     `needs:` list of `update-database` and `publish-release`.
+#   - Windows: ship the EV cert, fix OpenSSL_DIR on windows-latest, then
+#     restore `windows-smoke` + `build-windows` and append to the same
+#     `needs:` lists.
+#
+# /download advertises web + CLI as macOS/Windows alternatives until then.
+# ============================================================================
+
 on:
   push:
     tags:
@@ -214,303 +242,6 @@ jobs:
         run: pnpm typecheck:all
       - name: Test
         run: pnpm test
-
-  # FIX-009 (Sprint 4): Windows-only smoke gate. release-desktop's
-  # build-windows job runs the actual bundling — but if Windows-specific
-  # code paths (path separators, native APIs, cfg(target_os = "windows"))
-  # are broken, the bundle ships broken. This job reproduces the
-  # ci.yml::windows-smoke check inline so the release workflow can `needs:
-  # [windows-smoke]` directly without depending on a sibling workflow's
-  # status.
-  #
-  # DEFERRED to v1.3+ (Q3 2026): Windows installer ship is gated on the
-  # SSL.com EV cert ($249/yr) which we are not paying for v1.x. The smoke
-  # check itself also fails today because libsqlite3-sys 0.30.1 needs
-  # OPENSSL_DIR set on windows-latest runners — and there is no point
-  # fixing that until the actual Windows build ships. Re-enable by
-  # changing `if: false` to `if: true` (or removing the gate entirely)
-  # once the EV cert lands.
-  windows-smoke:
-    name: Windows Rust smoke
-    if: false
-    needs: [prepare-release]
-    runs-on: windows-latest
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions-rust-lang/setup-rust-toolchain@1fbea72663f6d4c03efaab13560c8a24cfd2a7cc # v1.9.0
-        with:
-          toolchain: '1.94.0'
-          components: clippy
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
-        with:
-          workspaces: 'apps/desktop/src-tauri -> target'
-          cache-on-failure: true
-          key: release-windows-smoke
-      - name: cargo check (default features, Windows)
-        working-directory: apps/desktop/src-tauri
-        run: cargo check --workspace
-      - name: cargo test --workspace --lib (default features, Windows)
-        working-directory: apps/desktop/src-tauri
-        run: cargo test --workspace --lib -- --skip landlock --skip seccomp --skip linux_sandbox
-
-  # ==========================================================================
-  # Build macOS - Universal binary (aarch64 + x86_64)
-  # ==========================================================================
-  # DEFERRED to v1.2.1: the six APPLE_* signing secrets
-  # (APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
-  # APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID) are not configured in repo
-  # settings, and the FIX-011 verify step (correctly) refuses to ship an
-  # unsigned bundle that Gatekeeper would block. The Developer ID cert
-  # itself still exists locally (last shipped v1.1.6 on 2026-03-07);
-  # secrets just need to be re-exported and uploaded. Re-enable by
-  # flipping `if: false` to `if: true` (or removing the gate) once
-  # the six secrets are configured.
-  build-macos:
-    name: Build macOS
-    if: false
-    needs: [prepare-release, validate]
-    runs-on: macos-latest
-    permissions:
-      contents: write
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: universal-apple-darwin
-            arch: universal
-          - target: aarch64-apple-darwin
-            arch: aarch64
-          - target: x86_64-apple-darwin
-            arch: x86_64
-    steps:
-      # FIX-011 (Sprint 4): refuse to start a macOS build job when any
-      # of the signing secrets is missing. Without these the bundle ships
-      # unsigned (gatekeeper-rejected on user machines) but the workflow
-      # still uploads it as "release" — exactly the failure mode that
-      # produced an unsigned v0.1.0 release-desktop run on 2026-05-02.
-      - name: Verify macOS signing secrets are configured
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          missing=()
-          for var in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
-            value="${!var}"
-            if [ -z "$value" ]; then
-              missing+=("$var")
-            fi
-          done
-          if [ ${#missing[@]} -gt 0 ]; then
-            echo "::error::macOS signing secrets missing: ${missing[*]}"
-            echo "::error::Refusing to ship an unsigned bundle. Configure all six APPLE_* secrets in repo settings or skip this job."
-            exit 1
-          fi
-
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-
-      - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@1fbea72663f6d4c03efaab13560c8a24cfd2a7cc # v1.9.0
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-
-      - name: Install Rust targets
-        run: |
-          rustup target add aarch64-apple-darwin
-          rustup target add x86_64-apple-darwin
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
-        with:
-          workspaces: apps/desktop/src-tauri
-          cache-on-failure: true
-
-      - name: Install JavaScript dependencies
-        run: pnpm install --frozen-lockfile
-
-      # C1: Mask signing secrets in logs before they reach the build step
-      - name: Mask Tauri signing secrets
-        run: |
-          echo "::add-mask::${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}"
-          echo "::add-mask::${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}"
-
-      - name: Build web frontend
-        # H27: --max-old-space-size=8192 is intentional; macos-latest runners have 14 GB RAM
-        run: NODE_OPTIONS="--max-old-space-size=8192" pnpm --filter @agiworkforce/desktop run build:web
-
-      - name: Import signing certificate
-        if: env.APPLE_CERTIFICATE != ''
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-        run: |
-          # Create keychain
-          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
-
-          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-
-          # Import certificate
-          echo "$APPLE_CERTIFICATE" | base64 --decode > $RUNNER_TEMP/certificate.p12
-          security import $RUNNER_TEMP/certificate.p12 -P "$APPLE_CERTIFICATE_PASSWORD" \
-            -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
-
-          security list-keychain -d user -s $KEYCHAIN_PATH
-
-          # Allow codesign to access keychain
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s \
-            -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-
-      - name: Build Tauri app
-        # H28: Pinned to @v0 major-version tag (commit 73fb865 = v0.6.1); avoids floating SHA
-        # C1: Signing keys are masked above; passed via env: (tauri-action reads TAURI_SIGNING_* from env)
-        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          CI: 'true'
-        with:
-          releaseId: ${{ needs.prepare-release.outputs.release_id }}
-          args: --target ${{ matrix.target }}
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: macos-${{ matrix.arch }}-artifacts
-          path: |
-            apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
-            apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
-            apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz.sig
-          retention-days: 7
-
-  # ==========================================================================
-  # Build Windows - x86_64 with code signing
-  # ==========================================================================
-  # DEFERRED to v1.3+ (Q3 2026): see windows-smoke comment above. The
-  # Windows installer needs the SSL.com EV cert before it can ship; until
-  # then this job is skipped and the /download page advertises the web
-  # app + CLI as Windows alternatives.
-  build-windows:
-    name: Build Windows
-    if: false
-    needs: [prepare-release, validate]
-    runs-on: windows-latest
-    permissions:
-      contents: write
-    timeout-minutes: 60
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-
-      - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@1fbea72663f6d4c03efaab13560c8a24cfd2a7cc # v1.9.0
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-
-      # LLVM/Clang pre-installed on windows-latest; required by rusqlite bundled-sqlcipher (bindgen)
-      - name: Set LIBCLANG_PATH for SQLCipher
-        shell: bash
-        run: echo "LIBCLANG_PATH=C:/Program Files/LLVM/bin" >> $GITHUB_ENV
-
-      # OpenSSL is required by rusqlite bundled-sqlcipher on Windows.
-      # windows-latest has OpenSSL pre-installed via Chocolatey.
-      - name: Set OpenSSL environment for SQLCipher
-        shell: bash
-        run: |
-          OPENSSL_DIR="C:/Program Files/OpenSSL-Win64"
-          if [ ! -d "$OPENSSL_DIR" ]; then
-            OPENSSL_DIR="C:/Program Files/OpenSSL"
-          fi
-          if [ ! -d "$OPENSSL_DIR" ]; then
-            OPENSSL_DIR="C:/vcpkg/installed/x64-windows"
-          fi
-          echo "OPENSSL_DIR=${OPENSSL_DIR}" >> $GITHUB_ENV
-          echo "OPENSSL_STATIC=1" >> $GITHUB_ENV
-          echo "OPENSSL_LIB_DIR=${OPENSSL_DIR}/lib" >> $GITHUB_ENV
-          echo "OPENSSL_INCLUDE_DIR=${OPENSSL_DIR}/include" >> $GITHUB_ENV
-          echo "Resolved OPENSSL_DIR: ${OPENSSL_DIR}"
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
-        with:
-          workspaces: apps/desktop/src-tauri
-          cache-on-failure: true
-
-      - name: Install JavaScript dependencies
-        run: pnpm install --frozen-lockfile
-
-      # C1: Mask signing secrets in logs before they reach the build step
-      - name: Mask Tauri signing secrets
-        run: |
-          echo "::add-mask::${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}"
-          echo "::add-mask::${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}"
-
-      - name: Build web frontend
-        # H27: --max-old-space-size=8192 is intentional; windows-latest runners have 7 GB RAM
-        run: echo "NODE_OPTIONS=--max-old-space-size=8192" >> $GITHUB_ENV && pnpm --filter @agiworkforce/desktop run build:web
-
-      - name: Build Tauri app
-        # H28: Pinned to @v0 major-version tag (commit 73fb865 = v0.6.1); avoids floating SHA
-        # C1: Signing keys are masked above; passed via env: (tauri-action reads TAURI_SIGNING_* from env)
-        # OCR excluded on Windows: Tesseract native lib not available on windows-latest runner
-        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          LIBCLANG_PATH: C:\Program Files\LLVM\bin
-          CI: 'true'
-        with:
-          releaseId: ${{ needs.prepare-release.outputs.release_id }}
-          args: -- --no-default-features --features shell,updater,billing,devtools,vad,remote-databases
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: windows-x64-artifacts
-          path: |
-            apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
-            apps/desktop/src-tauri/target/release/bundle/nsis/*.nsis.zip
-            apps/desktop/src-tauri/target/release/bundle/nsis/*.nsis.zip.sig
-          retention-days: 7
 
   # ==========================================================================
   # Build Linux - x86_64 AppImage
