@@ -710,9 +710,9 @@ export default [
 
       // Services — api-gateway routes.
       // FIXME: P1-MODEL-CATALOG-MIGRATION (Wave 1 P0-G/I)
+      // llm.ts migrated in Wave 1 task #10 (P0-I) — entry removed.
       'services/api-gateway/src/routes/cloudChat.ts',
       'services/api-gateway/src/routes/dotfile.ts',
-      'services/api-gateway/src/routes/llm.ts',
       'services/api-gateway/src/routes/models.ts',
     ],
     rules: {

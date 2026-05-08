@@ -14,6 +14,11 @@
 
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
+import {
+  getAllowedModelsForTier,
+  getModelMetadataById,
+  type Provider as CatalogProvider,
+} from '@agiworkforce/types';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
 import { supabase } from '../lib/supabase';
@@ -34,16 +39,20 @@ const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 const GOOGLE_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
-/** Models allowed on the hobby tier (small/cheap models only). */
-const HOBBY_ALLOWED_MODELS = new Set([
-  'claude-haiku-4-5-20251001',
-  'claude-haiku-4-5',
-  'gpt-4o-mini',
-  'gpt-4o-mini-2024-07-18',
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-lite',
-  'gemini-1.5-flash',
-]);
+/**
+ * Models allowed on the Hobby tier — derived from `models.json` (P0-I).
+ *
+ * The catalog SSOT keeps `tierAllowedModels.economy` as the canonical
+ * Hobby + Free model list (per `tasks/auto-routing-spec.md` §1: Hobby
+ * pool = economy tier with workhorse / escalation / reasoning slots).
+ * Reading the set here keeps the gateway in sync with picker UI, web
+ * surface, and CLI without a separately-curated allow-list that drifts.
+ *
+ * Exported for unit tests; not part of the route API.
+ */
+export const HOBBY_ALLOWED_MODELS: ReadonlySet<string> = new Set(
+  getAllowedModelsForTier('economy'),
+);
 
 // =============================================================================
 // VALIDATION SCHEMAS
@@ -73,19 +82,44 @@ const chatCompletionSchema = z
 // HELPERS
 // =============================================================================
 
+// Providers this proxy actually has upstream code for. The shared catalog
+// (`@agiworkforce/types` -> models.json) knows about ~12 providers, but this
+// gateway only proxies the 3 first-party ones. All other providers reach
+// users via the desktop's BYOK path or the providerStream route — not here.
 type Provider = 'anthropic' | 'openai' | 'google';
 
-function resolveProvider(model: string): Provider {
-  if (model.startsWith('claude-')) return 'anthropic';
-  if (
-    model.startsWith('gpt-') ||
-    model.startsWith('o1-') ||
-    model.startsWith('o3-') ||
-    model.startsWith('o4-')
-  )
-    return 'openai';
-  if (model.startsWith('gemini-')) return 'google';
-  throw new AppError(`Unsupported model: ${model}`, 400);
+const PROXIED_PROVIDERS: ReadonlySet<CatalogProvider> = new Set<CatalogProvider>([
+  'anthropic',
+  'openai',
+  'google',
+]);
+
+/**
+ * Resolve which upstream provider to call for a given model ID.
+ *
+ * Catalog-driven (P0-I): the lookup reads `models.json` via
+ * `getModelMetadataById()` so a model rename or provider re-attribution
+ * lands here without code edits. Fails closed with a 400 if (a) the
+ * model is not in the catalog at all or (b) the model belongs to a
+ * provider this gateway cannot proxy yet (BYOK-only providers like xAI,
+ * DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, LM Studio, Ollama).
+ *
+ * Exported for unit tests; not part of the route API.
+ */
+export function resolveProvider(model: string): Provider {
+  const metadata = getModelMetadataById(model);
+  if (!metadata) {
+    throw new AppError(`Unsupported model: ${model}`, 400);
+  }
+
+  if (!PROXIED_PROVIDERS.has(metadata.provider)) {
+    throw new AppError(
+      `Model "${model}" belongs to provider "${metadata.provider}" which the api-gateway does not proxy. Use the desktop BYOK path for this provider.`,
+      400,
+    );
+  }
+
+  return metadata.provider as Provider;
 }
 
 function getProviderKey(provider: Provider): string {
