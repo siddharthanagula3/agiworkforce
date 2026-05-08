@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { authenticatedUserSchema } from './authenticated-user';
 import { requireEnv } from './env';
 import { logger } from './lib/logger';
-import { supabase } from './lib/supabase';
+import { getUserScopedClient } from './lib/supabaseClients';
 
 const JWT_SECRET = requireEnv('JWT_SECRET');
 
@@ -443,9 +443,11 @@ async function handleAuthMessage(ws: AuthenticatedWebSocket, message: AuthMessag
     const { userId } = parseResult.data;
     ws.userId = userId;
 
-    // SECURITY: Verify deviceId ownership before accepting it
+    // SECURITY: Verify deviceId ownership before accepting it.
+    // Wave 1.5+ singleton sweep: post-JWT-verification user-scoped query.
     if (typeof message.deviceId === 'string' && message.deviceId.length > 0) {
-      const { data: pairing } = await supabase
+      const wsUserDb = getUserScopedClient(userId);
+      const { data: pairing } = await wsUserDb
         .from('device_pairings')
         .select('id')
         .eq('user_id', userId)

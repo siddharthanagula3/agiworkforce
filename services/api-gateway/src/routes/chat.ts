@@ -16,7 +16,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { supabase } from '../lib/supabase';
+import { getUserScopedClient } from '../lib/supabaseClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { sendCommandToDesktop } from '../websocket';
 import { logger } from '../lib/logger';
@@ -73,6 +73,8 @@ async function verifyDesktopOwnership(desktopId: string, userId: string): Promis
     throw new AppError('Invalid desktop ID format', 400);
   }
 
+  // Wave 1.5+ singleton sweep: user-scoped client for ownership lookup.
+  const supabase = getUserScopedClient(userId);
   const { data: desktop, error } = await supabase
     .from('desktop_devices')
     .select('id, user_id')
@@ -120,6 +122,7 @@ router.post(
     const messageId = randomUUID();
     const timestamp = Date.now();
 
+    const supabase = getUserScopedClient(user.userId);
     // Persist the message to Supabase for history (best-effort)
     const { error: insertError } = await supabase.from('chat_messages').insert({
       id: messageId,
@@ -195,6 +198,7 @@ router.get('/history', createRateLimiter('device-status'), async (req: Request, 
     await verifyDesktopOwnership(query.desktopId, user.userId);
   }
 
+  const supabase = getUserScopedClient(user.userId);
   // Build Supabase query
   let dbQuery = supabase
     .from('chat_messages')
@@ -265,6 +269,7 @@ router.get(
       await verifyDesktopOwnership(desktopId, user.userId);
     }
 
+    const supabase = getUserScopedClient(user.userId);
     // Fetch distinct conversations with their latest message
     let dbQuery = supabase
       .from('chat_messages')
