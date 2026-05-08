@@ -10,8 +10,7 @@ import { AgiMark } from './AgiMark';
 const NAV = [
   { href: '/redesign-preview/providers', label: 'Providers' },
   { href: '/redesign-preview/pricing', label: 'Pricing' },
-  { href: '/redesign-preview/byok', label: 'BYOK' },
-  { href: '/redesign-preview/local', label: 'Local' },
+  { href: '/redesign-preview/compare', label: 'Compare' },
   { href: '/redesign-preview/about', label: 'About' },
 ];
 
