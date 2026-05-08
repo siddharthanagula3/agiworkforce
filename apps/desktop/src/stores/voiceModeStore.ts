@@ -32,6 +32,7 @@ import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import { storageFallback } from '../lib/storageFallback';
 import { invoke, listen, isTauri, type UnlistenFn } from '../lib/tauri-mock';
 import { getProviderDefaultModel, getTaskModelForProvider } from '../constants/llm';
+import { getDefaultModelFor } from '@agiworkforce/types';
 import { useModelStore } from './modelStore';
 import {
   voiceGetCapabilities,
@@ -573,7 +574,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
               selectedModel ??
               getTaskModelForProvider(fallbackProvider, 'fast_completion') ??
               getProviderDefaultModel(fallbackProvider) ??
-              'claude-haiku-4.5';
+              getDefaultModelFor(null, 'voice');
 
             // Build conversation context from recent turns
             const { turns } = get();
