@@ -114,6 +114,9 @@ export * from './a2a';
 // Cross-device orchestration types (desktop↔mobile threads)
 export * from './cross-device';
 
+// Anthropic Dispatch HMAC envelope contract (canonical wire format)
+export * from './dispatch';
+
 // Workspace analytics types (enterprise usage tracking)
 export * from './workspace-analytics';
 

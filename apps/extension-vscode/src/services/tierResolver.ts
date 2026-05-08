@@ -12,13 +12,18 @@
  */
 
 import * as vscode from 'vscode';
+import { type UIPlanTier, tierAtLeast } from '@agiworkforce/types';
 import { getDesktopBridge } from './desktopBridge';
 
 // ─── Tier type ────────────────────────────────────────────────────────────────
 
-export type Tier = 'local' | 'byok' | 'hobby' | 'pro' | 'pro_plus' | 'max';
+/**
+ * Local alias for the canonical {@link UIPlanTier} from `@agiworkforce/types`.
+ * Re-exported so existing call sites can keep `import type { Tier }` working.
+ */
+export type Tier = UIPlanTier;
 
-const VALID_TIERS: ReadonlySet<string> = new Set([
+const VALID_TIERS: ReadonlySet<string> = new Set<UIPlanTier>([
   'local',
   'byok',
   'hobby',
@@ -30,15 +35,14 @@ const VALID_TIERS: ReadonlySet<string> = new Set([
 /**
  * Tier ordering — lower index = lower tier.
  * Used to compare tiers (e.g. is 'hobby' < 'pro_plus'?).
+ *
+ * Kept here as a local convenience for tests that introspect order; the
+ * canonical comparator is {@link tierAtLeast} from `@agiworkforce/types`.
  */
 export const TIER_ORDER: readonly Tier[] = ['local', 'byok', 'hobby', 'pro', 'pro_plus', 'max'];
 
-/**
- * Returns true if `tier` is at least as high as `minimum`.
- */
-export function tierAtLeast(tier: Tier, minimum: Tier): boolean {
-  return TIER_ORDER.indexOf(tier) >= TIER_ORDER.indexOf(minimum);
-}
+/** Re-export of the canonical {@link tierAtLeast} comparator. */
+export { tierAtLeast };
 
 // ─── Validation ───────────────────────────────────────────────────────────────
 
