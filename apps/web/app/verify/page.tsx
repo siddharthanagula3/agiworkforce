@@ -1,57 +1,64 @@
-import { redirect } from 'next/navigation';
+'use client';
 
-import { createSupabaseServerClient } from '@/services/supabase-server';
-import { VerifyDeviceClient } from './verify-client';
+import { Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { Header } from '../../components/layout/Header';
+import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
-export const dynamic = 'force-dynamic';
-
-export default async function VerifyPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ code?: string }>;
-}) {
-  const resolvedParams = await searchParams;
-  const code = (resolvedParams.code || '').trim();
-
-  if (!code) {
-    return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 p-6">
-          <h1 className="text-xl font-semibold">Device verification</h1>
-          <p className="mt-2 text-sm text-zinc-400">Missing device code.</p>
-        </div>
-      </div>
-    );
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session) {
-    redirect(`/login?redirectTo=${encodeURIComponent(`/verify?code=${code}`)}`);
-  }
+function VerifyBody() {
+  const searchParams = useSearchParams();
+  const email = searchParams.get('email');
 
   return (
-    <div className="min-h-screen bg-black text-white flex items-center justify-center px-6 py-12">
-      <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 p-6">
-        <h1 className="text-xl font-semibold">Link your device</h1>
-        <p className="mt-2 text-sm text-zinc-400">
-          Approve this request to link your device to your AGI Workforce account.
-        </p>
-
-        <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-3">
-          <div className="text-xs text-zinc-400">Code</div>
-          <div className="mt-1 font-mono text-lg tracking-widest">{code.toUpperCase()}</div>
-        </div>
-
-        <VerifyDeviceClient code={code} />
-
-        <p className="mt-6 text-xs text-zinc-500">
-          Only approve if you initiated this from a device you control.
+    <section
+      className="agi-section"
+      style={{ borderBottom: 'none', maxWidth: 440, margin: '0 auto' }}
+    >
+      <p className="agi-section-eyebrow">Verify your email</p>
+      <h1 className="agi-page-h1" style={{ marginBottom: 16 }}>
+        Check your inbox.
+      </h1>
+      <p className="agi-page-lede" style={{ marginBottom: 24 }}>
+        We sent a verification link{' '}
+        {email ? (
+          <>
+            to <strong>{email}</strong>
+          </>
+        ) : (
+          'to your email'
+        )}
+        . Click it to finish creating your account.
+      </p>
+      <div className="agi-callout">
+        <h2 className="agi-callout-h">Didn&rsquo;t arrive?</h2>
+        <p className="agi-callout-p">
+          Check spam, then{' '}
+          <Link href="/forgot-password" style={{ color: 'var(--agi-amber)' }}>
+            request a fresh link
+          </Link>
+          . Or email contact@agiworkforce.com — we can verify manually.
         </p>
       </div>
+      <p style={{ marginTop: 24, fontSize: 14, color: 'var(--agi-ink-2)', textAlign: 'center' }}>
+        <Link href="/login" style={{ color: 'var(--agi-ink)' }}>
+          Back to sign in
+        </Link>
+      </p>
+    </section>
+  );
+}
+
+export default function VerifyPage() {
+  return (
+    <div data-design="agi">
+      <main className="agi-shell">
+        <Header />
+        <Suspense fallback={null}>
+          <VerifyBody />
+        </Suspense>
+        <MarketingFooter />
+      </main>
     </div>
   );
 }

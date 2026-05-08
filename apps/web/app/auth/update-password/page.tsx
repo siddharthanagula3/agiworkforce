@@ -1,260 +1,140 @@
 'use client';
 
-import { Button, Input } from '@/components/ui';
-import { AlertCircle, Bot, CheckCircle2, Loader2 } from 'lucide-react';
+import { useState } from 'react';
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
 import { getSupabaseClient } from '../../../services/supabase';
-import { validatePassword, PASSWORD_REQUIREMENTS } from '@/lib/password-validator';
+import { Header } from '../../../components/layout/Header';
+import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
+
+const inputStyle: React.CSSProperties = {
+  background: 'var(--agi-bg-2)',
+  border: '1px solid var(--agi-rule)',
+  color: 'var(--agi-ink)',
+  padding: '10px 14px',
+  borderRadius: 6,
+  fontSize: 14,
+  fontFamily: 'inherit',
+  width: '100%',
+};
 
 export default function UpdatePasswordPage() {
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-  const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
-  const [isInitializing, setIsInitializing] = useState(true);
-  const [, setIsRecoveryMode] = useState(false);
+  const [message, setMessage] = useState<{ text: string; type: 'error' | 'info' } | null>(null);
 
-  useEffect(() => {
-    let mounted = true;
-    const supabase = getSupabaseClient();
-
-    // Listen for auth state changes - Supabase will automatically process
-    // the recovery token from the URL hash fragment
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
-
-      if (event === 'PASSWORD_RECOVERY') {
-        // User clicked password reset link - session is now established
-        setIsRecoveryMode(true);
-        setIsInitializing(false);
-      } else if (event === 'SIGNED_IN' && session) {
-        // Check if this is a recovery flow by checking URL hash
-        const hash = window.location.hash;
-        if (hash.includes('type=recovery')) {
-          setIsRecoveryMode(true);
-        }
-        setIsInitializing(false);
-      } else if (event === 'INITIAL_SESSION') {
-        // Initial session check complete
-        if (!session) {
-          // Check if we have recovery params in the hash
-          const hash = window.location.hash;
-          if (hash.includes('type=recovery') || hash.includes('access_token')) {
-            // Wait a bit for Supabase to process the recovery token
-            setTimeout(async () => {
-              if (!mounted) return;
-              // Use getUser() for server-side verification
-              const {
-                data: { user: retryUser },
-              } = await supabase.auth.getUser();
-              if (retryUser) {
-                setIsRecoveryMode(true);
-                setIsInitializing(false);
-              } else {
-                // Still no session, redirect to login
-                setError('Invalid or expired password reset link. Please request a new one.');
-                setIsInitializing(false);
-              }
-            }, 1000);
-          } else {
-            // No recovery params, redirect to login
-            window.location.href = '/login';
-          }
-        } else {
-          setIsInitializing(false);
-        }
-      }
-    });
-
-    // Also check immediately for existing session
-    // Use getUser() to force server-side JWT re-verification
-    // instead of getSession() which only reads the cookie without validating.
-    const checkSession = async () => {
-      const {
-        data: { user: existingUser },
-      } = await supabase.auth.getUser();
-      if (existingUser && mounted) {
-        setIsInitializing(false);
-      }
-    };
-    checkSession();
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  // Validate password on change
-  const handlePasswordChange = (value: string) => {
-    setPassword(value);
-    if (value) {
-      const validation = validatePassword(value);
-      setPasswordErrors(validation.errors);
-    } else {
-      setPasswordErrors([]);
-    }
-  };
-
-  const handleUpdatePassword = async (e: React.FormEvent) => {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-
-    // Validate password strength
-    const validation = validatePassword(password);
-    if (!validation.valid) {
-      setError(`Password requirements not met: ${validation.errors.join(', ')}`);
+    if (password !== confirm) {
+      setMessage({ text: 'Passwords do not match.', type: 'error' });
       return;
     }
-
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-
     setLoading(true);
-    setError(null);
-
-    const supabase = getSupabaseClient();
-
-    const { error: updateError } = await supabase.auth.updateUser({
-      password: password,
-    });
-
-    if (updateError) {
-      setError(updateError.message);
-    } else {
-      setSuccess(true);
+    setMessage(null);
+    try {
+      const supabase = getSupabaseClient();
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      setMessage({ text: 'Password updated. Sign in with the new password.', type: 'info' });
+    } catch (err) {
+      setMessage({ text: err instanceof Error ? err.message : 'Update failed', type: 'error' });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  };
-
-  // Show loading state while initializing
-  if (isInitializing) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-black px-4 py-12 text-white">
-        <div className="w-full max-w-md space-y-8 text-center">
-          <Loader2 className="h-12 w-12 animate-spin mx-auto text-blue-500" />
-          <p className="text-zinc-400">Verifying your reset link...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Show error state for invalid/expired links
-  if (error && !password && !confirmPassword) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-black px-4 py-12 text-white">
-        <div className="w-full max-w-md space-y-8 text-center">
-          <div className="mx-auto w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center">
-            <AlertCircle className="h-8 w-8 text-red-500" />
-          </div>
-
-          <div className="space-y-2">
-            <h2 className="text-3xl font-bold">Link expired</h2>
-            <p className="text-zinc-400">{error}</p>
-          </div>
-
-          <div className="space-y-3 pt-4">
-            <Link href="/forgot-password">
-              <Button className="w-full h-12">Request New Reset Link</Button>
-            </Link>
-            <Link href="/login">
-              <Button variant="outline" className="w-full h-12">
-                Back to Sign In
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (success) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-black px-4 py-12 text-white">
-        <div className="w-full max-w-md space-y-8 text-center">
-          <div className="mx-auto w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center">
-            <CheckCircle2 className="h-8 w-8 text-green-500" />
-          </div>
-
-          <div className="space-y-2">
-            <h2 className="text-3xl font-bold">Password updated</h2>
-            <p className="text-zinc-400">Your password has been changed successfully.</p>
-          </div>
-
-          <div className="space-y-3 pt-4">
-            <Link href="/login">
-              <Button className="w-full h-12">Sign In with new Password</Button>
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-black px-4 py-12 text-white">
-      <div className="w-full max-w-md space-y-8">
-        <div className="flex flex-col items-center text-center">
-          <Link
-            href="/"
-            className="flex items-center gap-2 font-bold text-2xl tracking-tighter mb-6"
-          >
-            <Bot className="h-8 w-8 text-blue-500" />
-            <span>AGI Workforce</span>
-          </Link>
-          <h2 className="text-3xl font-bold">Set new password</h2>
-          <p className="mt-2 text-zinc-400">Please enter your new password below.</p>
-        </div>
-
-        <form onSubmit={handleUpdatePassword} className="mt-8 space-y-4">
-          <div>
-            <Input
-              type="password"
-              placeholder={`New password (min ${PASSWORD_REQUIREMENTS.minLength} characters)`}
-              value={password}
-              onChange={(e) => handlePasswordChange(e.target.value)}
-              minLength={PASSWORD_REQUIREMENTS.minLength}
-              required
-            />
-            {passwordErrors.length > 0 && password && (
-              <ul className="mt-2 text-xs text-zinc-400 space-y-1">
-                {passwordErrors.map((err, i) => (
-                  <li key={i} className="flex items-center gap-1">
-                    <span className="text-red-400">•</span> {err}
-                  </li>
-                ))}
-              </ul>
+    <div data-design="agi">
+      <main className="agi-shell">
+        <Header />
+        <section
+          className="agi-section"
+          style={{ borderBottom: 'none', maxWidth: 440, margin: '0 auto' }}
+        >
+          <p className="agi-section-eyebrow">Update password</p>
+          <h1 className="agi-page-h1" style={{ marginBottom: 16 }}>
+            New password.
+          </h1>
+          <p className="agi-page-lede" style={{ marginBottom: 24 }}>
+            Set a new account password.{' '}
+            <strong>
+              This does not change your local key-vault master password — that one is unrecoverable
+              by design.
+            </strong>
+          </p>
+          <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span
+                style={{
+                  fontSize: 12,
+                  color: 'var(--agi-ink-quiet)',
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                New password
+              </span>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="new-password"
+                minLength={8}
+                style={inputStyle}
+              />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span
+                style={{
+                  fontSize: 12,
+                  color: 'var(--agi-ink-quiet)',
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                Confirm password
+              </span>
+              <input
+                type="password"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                required
+                autoComplete="new-password"
+                minLength={8}
+                style={inputStyle}
+              />
+            </label>
+            {message && (
+              <p
+                style={{
+                  color: message.type === 'error' ? '#ff6b6b' : 'var(--agi-amber)',
+                  fontSize: 13,
+                  margin: 0,
+                }}
+              >
+                {message.text}
+              </p>
             )}
-          </div>
-          <div>
-            <Input
-              type="password"
-              placeholder="Confirm new password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              minLength={PASSWORD_REQUIREMENTS.minLength}
-              required
-            />
-          </div>
-
-          {error && (
-            <div className="flex items-start gap-3 text-sm p-3 rounded border text-red-500 bg-red-500/10 border-red-500/20">
-              <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
-              <p>{error}</p>
-            </div>
-          )}
-
-          <Button type="submit" className="w-full h-12" disabled={loading}>
-            {loading ? 'Updating...' : 'Update Password'}
-          </Button>
-        </form>
-      </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="agi-cta-primary"
+              style={{ border: 'none', cursor: 'pointer', textAlign: 'center' }}
+            >
+              {loading ? 'Updating...' : 'Update password'}
+            </button>
+          </form>
+          <p
+            style={{ marginTop: 24, fontSize: 14, color: 'var(--agi-ink-2)', textAlign: 'center' }}
+          >
+            <Link href="/login" style={{ color: 'var(--agi-ink)' }}>
+              Back to sign in
+            </Link>
+          </p>
+        </section>
+        <MarketingFooter />
+      </main>
     </div>
   );
 }
