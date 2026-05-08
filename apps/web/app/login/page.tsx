@@ -1,417 +1,236 @@
 'use client';
 
-import { Button, Input } from '@/components/ui';
-import { getSafeRedirectUrl } from '@/lib/safe-redirect';
-import { Bot, Building2, GitBranch, Mail } from 'lucide-react';
+import { Suspense, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useState, useMemo, useRef, useEffect } from 'react';
+import { getSafeRedirectUrl } from '@/lib/safe-redirect';
 import { getSupabaseClient } from '../../services/supabase';
+import { Header } from '../../components/layout/Header';
+import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
-// Get the app URL for redirects - use env var for production, fallback to window for dev
-const getAppUrl = () => {
-  return (
-    process.env['NEXT_PUBLIC_APP_URL'] ||
-    (typeof window !== 'undefined' ? window.location.origin : '')
-  );
+const getAppUrl = () =>
+  process.env['NEXT_PUBLIC_APP_URL'] ||
+  (typeof window !== 'undefined' ? window.location.origin : '');
+
+const inputStyle: React.CSSProperties = {
+  background: 'var(--agi-bg-2)',
+  border: '1px solid var(--agi-rule)',
+  color: 'var(--agi-ink)',
+  padding: '10px 14px',
+  borderRadius: 6,
+  fontSize: 14,
+  fontFamily: 'inherit',
+  width: '100%',
+};
+
+const labelStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: 'var(--agi-ink-quiet)',
+  letterSpacing: '0.04em',
+  textTransform: 'uppercase',
 };
 
 function LoginForm() {
   const searchParams = useSearchParams();
   const appUrl = useMemo(() => getAppUrl(), []);
-
-  // Validate and sanitize the redirect URL to prevent open redirect attacks
-  const redirectTo = useMemo(() => {
-    const rawRedirect = searchParams.get('redirectTo');
-    return getSafeRedirectUrl(rawRedirect, appUrl, '/chat');
-  }, [searchParams, appUrl]);
+  const redirectTo = useMemo(
+    () => getSafeRedirectUrl(searchParams.get('redirectTo'), appUrl, '/chat'),
+    [searchParams, appUrl],
+  );
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [magicLinkLoading, setMagicLinkLoading] = useState(false);
-  const [ssoMode, setSsoMode] = useState(false);
-  const [ssoLoading, setSsoLoading] = useState(false);
+  const [magicLoading, setMagicLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ text: string; type: 'error' | 'info' } | null>(null);
 
-  // Show branded splash during any auth transition: session check on arrival,
-  // post-login redirect, or SSO handoff. Covers Supabase response latency.
-  const hasRedirect = searchParams.get('redirectTo') !== null;
-  const [showSplash, setShowSplash] = useState(hasRedirect);
-
-  // Check for account suspension errors passed from middleware
-  const initialMessage = useMemo(() => {
-    const error = searchParams.get('error');
-    const errorDescription = searchParams.get('error_description');
-    if (error === 'account_suspended' && errorDescription) {
-      return { text: errorDescription, type: 'error' as const };
-    }
-    return null;
-  }, [searchParams]);
-
-  const [message, setMessage] = useState<{ text: string; type: 'error' | 'success' } | null>(
-    initialMessage,
-  );
-
-  // Auto-redirect if already authenticated (e.g. user has SSR cookies)
-  // Passes session tokens via hash so the Vite SPA at /chat can use them
-  useEffect(() => {
-    const supabase = getSupabaseClient();
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.access_token && redirectTo.includes('/chat')) {
-        const hashParams = new URLSearchParams({
-          access_token: session.access_token,
-          refresh_token: session.refresh_token,
-          type: 'bearer',
-        });
-        window.location.href = `${redirectTo}#${hashParams.toString()}`;
-      } else if (session?.access_token) {
-        window.location.href = redirectTo;
-      } else {
-        // No valid session - show the login form
-        setShowSplash(false);
-      }
-    });
-  }, [redirectTo]);
-
-  // Debounce SSO domain check - only fire after user stops typing
-  const ssoCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  /**
-   * Check whether the email's domain has SSO configured.
-   * Called with a debounce delay on every email change so we avoid
-   * flooding the API while the user is still typing.
-   */
-  const checkSsoDomain = (emailValue: string) => {
-    if (ssoCheckTimerRef.current) {
-      clearTimeout(ssoCheckTimerRef.current);
-    }
-
-    const domain = emailValue.split('@')[1];
-    if (!domain || !domain.includes('.')) {
-      setSsoMode(false);
-      return;
-    }
-
-    ssoCheckTimerRef.current = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/auth/sso-check?domain=${encodeURIComponent(domain)}`, {
-          method: 'GET',
-        });
-        if (res.ok) {
-          const data = (await res.json()) as { ssoEnabled: boolean };
-          setSsoMode(data.ssoEnabled);
-        }
-      } catch {
-        // Ignore network errors - fall back to standard login
-        setSsoMode(false);
-      }
-    }, 400);
-  };
-
-  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setEmail(value);
-    // Reset SSO mode whenever email changes so stale state doesn't linger
-    setSsoMode(false);
-    checkSsoDomain(value);
-  };
-
-  /** Initiate SSO login via Supabase - redirects the browser to the IdP. */
-  const handleSsoLogin = async () => {
-    const domain = email.split('@')[1];
-    if (!domain) {
-      setMessage({ type: 'error', text: 'Please enter your work email address.' });
-      return;
-    }
-
-    setSsoLoading(true);
-    setMessage(null);
-
-    try {
-      const supabase = getSupabaseClient();
-
-      const { error } = await supabase.auth.signInWithSSO({
-        domain,
-        options: {
-          redirectTo: `${appUrl}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
-        },
-      });
-
-      if (error) {
-        setMessage({ type: 'error', text: error.message });
-        setSsoLoading(false);
-      }
-      // On success the browser is redirected to the IdP - no further action needed here.
-    } catch {
-      setMessage({ type: 'error', text: 'Something went wrong. Please try again.' });
-      setSsoLoading(false);
-    }
-  };
-
-  const handleLogin = async (e: React.FormEvent) => {
+  async function onPasswordSignIn(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setMessage(null);
-
-    const supabase = getSupabaseClient();
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      if (error.message.includes('Email not confirmed')) {
-        setMessage({
-          type: 'error',
-          text: 'Please confirm your email address before signing in. Check your inbox for the confirmation link.',
-        });
-      } else if (error.message.includes('Invalid login credentials')) {
-        setMessage({
-          type: 'error',
-          text: 'Invalid email or password. Please try again.',
-        });
-      } else {
-        setMessage({ type: 'error', text: error.message });
-      }
-    } else {
-      // Login succeeded - show splash while redirect happens
-      setShowSplash(true);
-      // If redirecting to /chat (Vite SPA), pass session tokens via hash
-      // so the SPA can pick them up (it can't read Next.js SSR cookies)
-      if (redirectTo.includes('/chat')) {
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (sessionData?.session) {
-          const hashParams = new URLSearchParams({
-            access_token: sessionData.session.access_token,
-            refresh_token: sessionData.session.refresh_token,
-            type: 'bearer',
-          });
-          window.location.href = `${redirectTo}#${hashParams.toString()}`;
-          return;
-        }
-      }
+    try {
+      const supabase = getSupabaseClient();
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
       window.location.href = redirectTo;
+    } catch (err) {
+      setMessage({ text: err instanceof Error ? err.message : 'Sign-in failed', type: 'error' });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  };
+  }
 
-  const handleMagicLink = async () => {
-    if (!email) {
-      setMessage({
-        type: 'error',
-        text: 'Please enter your email address to receive a magic link.',
-      });
-      return;
-    }
-    setMagicLinkLoading(true);
+  async function onMagicLink() {
+    setMagicLoading(true);
     setMessage(null);
-
-    const supabase = getSupabaseClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${appUrl}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
-      },
-    });
-
-    if (error) {
-      setMessage({ type: 'error', text: error.message });
-    } else {
-      setMessage({
-        type: 'success',
-        text: 'Magic link sent! Check your email to sign in.',
+    try {
+      const supabase = getSupabaseClient();
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${appUrl}/auth/callback?redirectTo=${encodeURIComponent(redirectTo)}`,
+        },
       });
+      if (error) throw error;
+      setMessage({ text: 'Check your email for a sign-in link.', type: 'info' });
+    } catch (err) {
+      setMessage({ text: err instanceof Error ? err.message : 'Magic link failed', type: 'error' });
+    } finally {
+      setMagicLoading(false);
     }
-    setMagicLinkLoading(false);
-  };
+  }
 
-  const handleOAuth = async (provider: 'github' | 'google') => {
-    const supabase = getSupabaseClient();
-    await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: `${appUrl}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
-      },
-    });
-  };
-
-  // Branded splash during any auth transition (session check, post-login, SSO)
-  if (showSplash) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-black text-white">
-        <div className="animate-pulse flex flex-col items-center gap-4">
-          <Bot className="h-12 w-12 text-blue-500" />
-          <span className="text-2xl font-bold tracking-tighter">AGI Workforce</span>
-          <span className="text-sm text-zinc-500">
-            {loading ? 'Signing you in...' : 'Loading your workspace...'}
-          </span>
-        </div>
-      </div>
-    );
+  async function onOAuth(provider: 'google' | 'github') {
+    setOauthLoading(provider);
+    try {
+      const supabase = getSupabaseClient();
+      await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${appUrl}/auth/callback?redirectTo=${encodeURIComponent(redirectTo)}`,
+        },
+      });
+    } catch (err) {
+      setMessage({ text: err instanceof Error ? err.message : 'OAuth failed', type: 'error' });
+      setOauthLoading(null);
+    }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-black px-4 py-12 text-white">
-      <div className="w-full max-w-md space-y-8">
-        <div className="flex flex-col items-center text-center">
-          <Link
-            href="/"
-            className="flex items-center gap-2 font-bold text-2xl tracking-tighter mb-6"
+    <section
+      className="agi-section"
+      style={{ borderBottom: 'none', maxWidth: 440, margin: '0 auto' }}
+    >
+      <p className="agi-section-eyebrow">Sign in</p>
+      <h1 className="agi-page-h1" style={{ marginBottom: 32 }}>
+        Welcome back.
+      </h1>
+
+      <form
+        onSubmit={onPasswordSignIn}
+        style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
+      >
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={labelStyle}>Email</span>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+            style={inputStyle}
+          />
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={labelStyle}>Password</span>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+            style={inputStyle}
+          />
+        </label>
+        {message && (
+          <p
+            style={{
+              color: message.type === 'error' ? '#ff6b6b' : 'var(--agi-amber)',
+              fontSize: 13,
+              margin: 0,
+            }}
           >
-            <Bot className="h-8 w-8 text-blue-500" />
-            <span>AGI Workforce</span>
-          </Link>
-          <h2 className="text-3xl font-bold">Welcome back</h2>
-          <p className="mt-2 text-zinc-400">Sign in to your account to continue</p>
-        </div>
-
-        <div className="mt-8 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <Button variant="outline" className="h-12" onClick={() => handleOAuth('github')}>
-              <GitBranch className="mr-2 h-5 w-5" />
-              GitHub
-            </Button>
-            <Button variant="outline" className="h-12" onClick={() => handleOAuth('google')}>
-              <Mail className="mr-2 h-5 w-5" />
-              Google
-            </Button>
-          </div>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-zinc-800" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-black px-2 text-zinc-500">Or continue with email</span>
-            </div>
-          </div>
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label htmlFor="email" className="sr-only">
-                Email address
-              </label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="Email address"
-                value={email}
-                onChange={handleEmailChange}
-                required
-                autoComplete="email"
-                aria-label="Email address"
-              />
-            </div>
-
-            {/* SSO prompt: shown when the typed email domain has SSO configured */}
-            {ssoMode && (
-              <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-4 space-y-3">
-                <div className="flex items-center gap-2 text-sm text-blue-400">
-                  <Building2 className="h-4 w-4 shrink-0" />
-                  <span>Your organization uses single sign-on (SSO).</span>
-                </div>
-                <Button
-                  type="button"
-                  className="w-full h-10 bg-blue-600 hover:bg-blue-500 text-white"
-                  onClick={handleSsoLogin}
-                  disabled={ssoLoading}
-                >
-                  {ssoLoading ? 'Redirecting to your identity provider...' : 'Continue with SSO'}
-                </Button>
-                <p className="text-xs text-zinc-500 text-center">
-                  You will be redirected to your organization&apos;s login page.
-                </p>
-              </div>
-            )}
-
-            {/* Standard password + magic link fields - hidden when SSO is active */}
-            {!ssoMode && (
-              <>
-                <div>
-                  <label htmlFor="password" className="sr-only">
-                    Password
-                  </label>
-                  <Input
-                    id="password"
-                    name="password"
-                    type="password"
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    autoComplete="current-password"
-                    aria-label="Password"
-                  />
-                </div>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full h-12 border-dashed border-zinc-700 hover:border-zinc-500"
-                  onClick={handleMagicLink}
-                  disabled={magicLinkLoading || loading}
-                >
-                  {magicLinkLoading ? 'Sending...' : 'Sign in with Magic Link'}
-                </Button>
-              </>
-            )}
-
-            {message && (
-              <p
-                className={`text-sm p-3 rounded border ${
-                  message.type === 'error'
-                    ? 'text-red-500 bg-red-500/10 border-red-500/20'
-                    : 'text-green-500 bg-green-500/10 border-green-500/20'
-                }`}
-              >
-                {message.text}
-              </p>
-            )}
-
-            {!ssoMode && (
-              <>
-                <div className="flex justify-end">
-                  <Link
-                    href="/forgot-password"
-                    className="text-sm text-zinc-400 hover:text-white transition-colors"
-                  >
-                    Forgot your password?
-                  </Link>
-                </div>
-
-                <Button type="submit" className="w-full h-12" disabled={loading}>
-                  {loading ? 'Signing in...' : 'Sign In'}
-                </Button>
-              </>
-            )}
-          </form>
-        </div>
-
-        <div className="text-center text-sm">
-          <p className="text-zinc-400">
-            Don&apos;t have an account?{' '}
-            <Link href="/signup" className="text-white hover:underline">
-              Sign up
-            </Link>
+            {message.text}
           </p>
-        </div>
+        )}
+        <button
+          type="submit"
+          disabled={loading}
+          className="agi-cta-primary"
+          style={{ border: 'none', cursor: 'pointer', textAlign: 'center' }}
+        >
+          {loading ? 'Signing in...' : 'Sign in'}
+        </button>
+      </form>
+
+      <button
+        type="button"
+        onClick={onMagicLink}
+        disabled={magicLoading || !email}
+        className="agi-cta-ghost"
+        style={{
+          marginTop: 12,
+          border: 'none',
+          background: 'transparent',
+          cursor: 'pointer',
+          textAlign: 'left',
+          padding: 0,
+        }}
+      >
+        {magicLoading ? 'Sending magic link...' : 'Email me a sign-in link →'}
+      </button>
+
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          margin: '28px 0',
+          color: 'var(--agi-ink-quiet)',
+          fontSize: 12,
+        }}
+      >
+        <span style={{ flex: 1, height: 1, background: 'var(--agi-rule)' }} />
+        OR
+        <span style={{ flex: 1, height: 1, background: 'var(--agi-rule)' }} />
       </div>
-    </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <button
+          type="button"
+          onClick={() => onOAuth('google')}
+          disabled={oauthLoading !== null}
+          className="agi-tier-cta agi-tier-cta--ghost"
+          style={{ border: '1px solid var(--agi-rule-strong)', cursor: 'pointer' }}
+        >
+          {oauthLoading === 'google' ? 'Redirecting...' : 'Continue with Google'}
+        </button>
+        <button
+          type="button"
+          onClick={() => onOAuth('github')}
+          disabled={oauthLoading !== null}
+          className="agi-tier-cta agi-tier-cta--ghost"
+          style={{ border: '1px solid var(--agi-rule-strong)', cursor: 'pointer' }}
+        >
+          {oauthLoading === 'github' ? 'Redirecting...' : 'Continue with GitHub'}
+        </button>
+      </div>
+
+      <p style={{ marginTop: 32, fontSize: 14, color: 'var(--agi-ink-2)', textAlign: 'center' }}>
+        New here?{' '}
+        <Link href="/signup" style={{ color: 'var(--agi-ink)' }}>
+          Create an account
+        </Link>
+        {' · '}
+        <Link href="/forgot-password" style={{ color: 'var(--agi-ink-2)' }}>
+          Forgot password?
+        </Link>
+      </p>
+    </section>
   );
 }
 
 export default function LoginPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center bg-black">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
-        </div>
-      }
-    >
-      <LoginForm />
-    </Suspense>
+    <div data-design="agi">
+      <main className="agi-shell">
+        <Header />
+        <Suspense fallback={null}>
+          <LoginForm />
+        </Suspense>
+        <MarketingFooter />
+      </main>
+    </div>
   );
 }
