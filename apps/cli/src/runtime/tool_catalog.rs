@@ -13,6 +13,7 @@ fn def(name: &str, description: &str, input_schema: serde_json::Value) -> ToolDe
         is_read_only: false,
         is_concurrency_safe: false,
         max_result_size_chars: None,
+        should_defer: false,
     }
 }
 
@@ -29,6 +30,15 @@ impl ToolDefinition {
     /// back to the global `MAX_OUTPUT_BYTES`.
     fn with_size_cap(mut self, max_chars: usize) -> Self {
         self.max_result_size_chars = Some(max_chars);
+        self
+    }
+
+    /// Phase E (W2-W6): mark this tool as deferred — excluded from the
+    /// model's initial schema list. The model loads it on demand via
+    /// `tool_search`. Always read-only too (deferred tools are niche and
+    /// never need mutation permissions before they're loaded).
+    fn deferred(mut self) -> Self {
+        self.should_defer = true;
         self
     }
 }
@@ -150,24 +160,33 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
         ),
         // --- Extended tool set ---
         def(
-            "apply_patch",
-            "Apply a unified diff/patch to the working directory.",
-            serde_json::json!({"type":"object","properties":{"patch":{"type":"string","description":"Unified diff content"}},"required":["patch"]}),
-        ).with_size_cap(5_000),
-        def(
             "grep_files",
             "Search for a regex pattern across files using ripgrep. Supports glob filtering.",
             serde_json::json!({"type":"object","properties":{"pattern":{"type":"string","description":"Regex pattern"},"path":{"type":"string","description":"Directory (default .)"},"include":{"type":"string","description":"Glob filter e.g. *.rs"}},"required":["pattern"]}),
         ).read_only().with_size_cap(50_000),
+        // Phase E: tool_search is always-loaded — it is the on-demand schema
+        // loader. The model calls this to get the JSON schema for any deferred
+        // tool before using it.
         def(
             "tool_search",
-            "Search available tools by keyword.",
-            serde_json::json!({"type":"object","properties":{"query":{"type":"string","description":"Search query"},"max_results":{"type":"integer","description":"Max results (default 10)"}},"required":["query"]}),
+            "Search available tools by keyword or load specific tool schemas on demand. \
+             Use query `select:tool1,tool2` to fetch exact schemas, or a keyword like \
+             `\"patch\"` to fuzzy-search. Returns JSON schemas the model can call immediately.",
+            serde_json::json!({"type":"object","properties":{"query":{"type":"string","description":"Search query or `select:tool1,tool2` to load specific schemas"},"max_results":{"type":"integer","description":"Max results (default 10)"}},"required":["query"]}),
         ).read_only().with_size_cap(20_000),
+        // -----------------------------------------------------------------------
+        // Deferred tools (Phase E, W2-W6): excluded from initial schema list.
+        // The model must call tool_search to load these schemas on demand.
+        // -----------------------------------------------------------------------
+        def(
+            "apply_patch",
+            "Apply a unified diff/patch to the working directory.",
+            serde_json::json!({"type":"object","properties":{"patch":{"type":"string","description":"Unified diff content"}},"required":["patch"]}),
+        ).with_size_cap(5_000).deferred(),
         // Sprint B4: real plan mode -- model writes plan via this tool, user
-        // approves via /plan accept, then mutating tools unlock. The tool
-        // is registered always (cheap and useful for general planning) but
-        // only gated when permission_mode=Plan.
+        // approves via /plan accept, then mutating tools unlock. Deferred
+        // because it is plan-mode-only; normal sessions don't need it in the
+        // initial schema list.
         def(
             "update_plan",
             "Write or revise the execution plan. REQUIRED in plan mode before any mutating tool call (bash, edit_file, write_file, apply_patch, MCP tools). Each step is one discrete action. After calling, await user approval -- do NOT call mutating tools yet. The user reviews the plan and types `/plan accept`.",
@@ -190,7 +209,42 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["steps"]
             }),
-        ).with_size_cap(2_000),
+        ).with_size_cap(2_000).deferred(),
+        def(
+            "glob",
+            "Find files by glob pattern (e.g. `**/*.rs`). Returns matching file paths.",
+            serde_json::json!({"type":"object","properties":{"pattern":{"type":"string","description":"Glob pattern"},"path":{"type":"string","description":"Base directory (default .)"}},"required":["pattern"]}),
+        ).read_only().with_size_cap(20_000).deferred(),
+        def(
+            "batch",
+            "Execute multiple tool calls in parallel. Pass an array of tool call objects.",
+            serde_json::json!({"type":"object","properties":{"calls":{"type":"array","description":"Array of tool call objects with `name` and `args` fields","items":{"type":"object"}}},"required":["calls"]}),
+        ).with_size_cap(50_000).deferred(),
+        def(
+            "multiedit",
+            "Apply multiple targeted edits to a single file atomically.",
+            serde_json::json!({"type":"object","properties":{"path":{"type":"string","description":"Absolute path to the file"},"edits":{"type":"array","description":"Array of {old_string, new_string} objects","items":{"type":"object","properties":{"old_string":{"type":"string"},"new_string":{"type":"string"}},"required":["old_string","new_string"]}}},"required":["path","edits"]}),
+        ).with_size_cap(5_000).deferred(),
+        def(
+            "todo_read",
+            "Read the current TODO list for this session.",
+            serde_json::json!({"type":"object","properties":{},"required":[]}),
+        ).read_only().with_size_cap(10_000).deferred(),
+        def(
+            "todo_write",
+            "Write or update the TODO list for this session.",
+            serde_json::json!({"type":"object","properties":{"todos":{"type":"array","description":"Array of todo item strings","items":{"type":"string"}}},"required":["todos"]}),
+        ).with_size_cap(2_000).deferred(),
+        def(
+            "ask_user",
+            "Ask the user a clarifying question and wait for their response.",
+            serde_json::json!({"type":"object","properties":{"question":{"type":"string","description":"The question to ask the user"}},"required":["question"]}),
+        ).with_size_cap(2_000).deferred(),
+        def(
+            "read_many_files",
+            "Read multiple files at once. Returns concatenated contents with file boundaries.",
+            serde_json::json!({"type":"object","properties":{"paths":{"type":"array","description":"Array of absolute file paths to read","items":{"type":"string"}}},"required":["paths"]}),
+        ).read_only().with_size_cap(200_000).deferred(),
     ]
 }
 
@@ -249,14 +303,40 @@ pub fn team_tool_definitions() -> Vec<ToolDefinition> {
     ]
 }
 
+/// Return all built-in tool definitions whose schema the model sees in the
+/// initial system-prompt tool list (i.e. `should_defer == false`). These are
+/// the ~11 core tools. Niche tools (apply_patch, update_plan, glob, batch,
+/// multiedit, todo_*, ask_user, read_many_files) are deferred and loaded on
+/// demand via the `tool_search` tool.
+///
+/// Phase E (W2-W6): deferred-tool pattern translated from Claude Code's
+/// `ToolSearchTool.ts` / `shouldDefer` mechanism.
+pub fn always_loaded_tool_definitions() -> Vec<ToolDefinition> {
+    built_in_tool_definitions()
+        .into_iter()
+        .filter(|t| !t.should_defer)
+        .collect()
+}
+
+/// Return all built-in tool definitions regardless of `should_defer`. Used by
+/// `tool_search` to answer on-demand schema requests, and by the plan-mode
+/// filter which needs to inspect the full set.
+pub fn all_builtin_tool_definitions() -> Vec<ToolDefinition> {
+    built_in_tool_definitions()
+}
+
 /// Assemble the effective tool definitions for a session.
 ///
-/// Behavior matches the current session assembly:
-/// - built-in tools are always present
-/// - plan mode keeps only read-only built-in tools
+/// Behavior:
+/// - built-in tools: always-loaded set (should_defer=false). In plan mode,
+///   filtered to read-only only; `update_plan` is force-included even though
+///   it is normally deferred.
 /// - team tools are appended when team mode is enabled
 /// - MCP tools are appended last when present
 /// - `allowed_tools`, when provided, filters the final tool list by name
+///
+/// Phase E: deferred tools are excluded from the initial schema list here.
+/// They remain executable; the model loads their schema via `tool_search`.
 pub fn effective_tool_definitions(
     plan_mode: bool,
     team_mode: bool,
@@ -266,7 +346,9 @@ pub fn effective_tool_definitions(
     let mut tool_definitions = if plan_mode {
         filter_read_only_builtin_tool_definitions()
     } else {
-        built_in_tool_definitions()
+        // Phase E: only send non-deferred tools in the initial schema list.
+        // The model calls tool_search to load deferred schemas on demand.
+        always_loaded_tool_definitions()
     };
 
     if team_mode {
@@ -296,12 +378,14 @@ fn filter_read_only_builtin_tool_definitions() -> Vec<ToolDefinition> {
         "list_directory",
         "web_search",
         "web_fetch",
-        // Sprint B4: `update_plan` mutates only the in-memory plan + the
-        // markdown file under ~/.agiworkforce/plans/. It must be visible
-        // in plan mode -- that's the whole point of the tool.
+        // Sprint B4: `update_plan` is the plan tool. Even though it is
+        // normally deferred (plan-mode-only), it MUST appear in the initial
+        // schema list when plan mode is active — that's the whole point.
         "update_plan",
     ];
-    built_in_tool_definitions()
+    // Use all_builtin_tool_definitions (includes deferred) so update_plan
+    // is visible here despite its should_defer=true flag.
+    all_builtin_tool_definitions()
         .into_iter()
         .filter(|tool_definition| read_only_tool_names.contains(&tool_definition.name.as_str()))
         .collect()
@@ -326,6 +410,7 @@ mod tests {
             is_read_only: false,
             is_concurrency_safe: false,
             max_result_size_chars: None,
+            should_defer: false,
         }
     }
 
@@ -398,15 +483,20 @@ mod tests {
             .collect();
 
         // Sorted alphabetically to make the assertion stable.
+        // Phase E: glob, read_many_files, todo_read are deferred but also
+        // read-only (they never mutate state).
         let mut got = read_only.clone();
         got.sort();
         assert_eq!(
             got,
             vec![
+                "glob",
                 "grep_files",
                 "list_directory",
                 "read_file",
+                "read_many_files",
                 "search_files",
+                "todo_read",
                 "tool_search",
                 "web_fetch",
                 "web_search",
