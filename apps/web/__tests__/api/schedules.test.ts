@@ -21,16 +21,6 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-// Mock environment variables
-vi.mock('@/utils/env', () => ({
-  requireEnv: vi.fn((key: string) => {
-    if (key === 'NEXT_PUBLIC_SUPABASE_URL') return 'https://test.supabase.co';
-    if (key === 'NEXT_PUBLIC_SUPABASE_ANON_KEY') return 'test-anon-key';
-    if (key === 'SUPABASE_SERVICE_ROLE_KEY') return 'test-service-role-key';
-    return 'test-value';
-  }),
-}));
-
 // Mock cookies
 vi.mock('next/headers', () => ({
   cookies: vi.fn().mockResolvedValue({
@@ -69,19 +59,7 @@ const mockScheduleRow = {
   updated_at: '2024-08-15T00:00:00Z',
 };
 
-// Mock Supabase SSR client (cookie-based auth)
-vi.mock('@supabase/ssr', () => ({
-  createServerClient: vi.fn(() => ({
-    auth: {
-      getUser: vi.fn().mockResolvedValue({
-        data: { user: mockUser },
-        error: null,
-      }),
-    },
-  })),
-}));
-
-// Chainable mock for service-role Supabase client
+// Chainable mock for the RLS-bound Supabase client (userDb).
 const mockSingle = vi.fn();
 const mockSelectAfterInsert = vi.fn();
 const mockInsert = vi.fn();
@@ -91,16 +69,14 @@ const mockEqUserId = vi.fn();
 const mockSelectAll = vi.fn();
 const mockFrom = vi.fn();
 
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    auth: {
-      getUser: vi.fn().mockResolvedValue({
-        data: { user: mockUser },
-        error: null,
-      }),
-    },
-    from: mockFrom,
-  })),
+const mockUserDb = { from: mockFrom };
+
+// Mock api-auth so routes receive {user, userDb: mockUserDb} directly,
+// bypassing the real getServiceClient/getUserClient singleton calls.
+const mockGetAuthenticatedUserWithClient = vi.fn();
+vi.mock('@/lib/api-auth', () => ({
+  getAuthenticatedUserWithClient: (...args: unknown[]) =>
+    mockGetAuthenticatedUserWithClient(...args),
 }));
 
 // Import after all mocks are registered
@@ -109,6 +85,12 @@ import { GET, POST } from '@/app/api/schedules/route';
 describe('Schedules API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // Default: authenticated user — routes receive {user, userDb} via mocked helper.
+    mockGetAuthenticatedUserWithClient.mockResolvedValue({
+      user: mockUser,
+      userDb: mockUserDb,
+    });
 
     // Default GET chain: .select('*').eq('user_id').order().limit()
     mockLimit.mockResolvedValue({ data: [mockScheduleRow], error: null });
@@ -208,15 +190,8 @@ describe('Schedules API', () => {
     });
 
     it('should return 401 when user is not authenticated via cookie', async () => {
-      const { createServerClient } = await import('@supabase/ssr');
-      vi.mocked(createServerClient).mockReturnValueOnce({
-        auth: {
-          getUser: vi.fn().mockResolvedValue({
-            data: { user: null },
-            error: { message: 'No session' },
-          }),
-        },
-      } as never);
+      const { createError } = await import('@/lib/errors');
+      mockGetAuthenticatedUserWithClient.mockRejectedValueOnce(createError.unauthorized());
 
       const request = new NextRequest('http://localhost/api/schedules', {
         method: 'GET',
@@ -227,16 +202,10 @@ describe('Schedules API', () => {
     });
 
     it('should return 401 when Bearer token is invalid', async () => {
-      const { createClient } = await import('@supabase/supabase-js');
-      vi.mocked(createClient).mockReturnValueOnce({
-        auth: {
-          getUser: vi.fn().mockResolvedValue({
-            data: { user: null },
-            error: { message: 'Invalid token' },
-          }),
-        },
-        from: mockFrom,
-      } as never);
+      const { createError } = await import('@/lib/errors');
+      mockGetAuthenticatedUserWithClient.mockRejectedValueOnce(
+        createError.unauthorized('Invalid token'),
+      );
 
       const request = new NextRequest('http://localhost/api/schedules', {
         method: 'GET',
@@ -427,15 +396,8 @@ describe('Schedules API', () => {
     });
 
     it('should return 401 for unauthenticated request', async () => {
-      const { createServerClient } = await import('@supabase/ssr');
-      vi.mocked(createServerClient).mockReturnValueOnce({
-        auth: {
-          getUser: vi.fn().mockResolvedValue({
-            data: { user: null },
-            error: { message: 'No session' },
-          }),
-        },
-      } as never);
+      const { createError } = await import('@/lib/errors');
+      mockGetAuthenticatedUserWithClient.mockRejectedValueOnce(createError.unauthorized());
 
       const request = new NextRequest('http://localhost/api/schedules', {
         method: 'POST',
@@ -465,6 +427,10 @@ describe('Schedules API', () => {
       for (const recurrence of ['once', 'daily', 'weekly', 'monthly', 'custom']) {
         vi.clearAllMocks();
         // Re-wire mocks after clearAllMocks
+        mockGetAuthenticatedUserWithClient.mockResolvedValue({
+          user: mockUser,
+          userDb: mockUserDb,
+        });
         mockSingle.mockResolvedValue({ data: mockScheduleRow, error: null });
         mockSelectAfterInsert.mockReturnValue({ single: mockSingle });
         mockInsert.mockReturnValue({ select: mockSelectAfterInsert });
@@ -515,6 +481,10 @@ describe('Schedules API', () => {
     it('should accept valid HH:MM time formats', async () => {
       for (const timeOfDay of ['00:00', '09:30', '23:59']) {
         vi.clearAllMocks();
+        mockGetAuthenticatedUserWithClient.mockResolvedValue({
+          user: mockUser,
+          userDb: mockUserDb,
+        });
         mockSingle.mockResolvedValue({ data: mockScheduleRow, error: null });
         mockSelectAfterInsert.mockReturnValue({ single: mockSingle });
         mockInsert.mockReturnValue({ select: mockSelectAfterInsert });
