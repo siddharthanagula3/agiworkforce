@@ -41,6 +41,7 @@ import {
   type StoragePutResult,
   type VerifiedJwt,
   DataLayerConfigError,
+  NotImplementedError,
 } from '../types';
 
 /**
@@ -86,6 +87,13 @@ export class SupabaseDatabaseAdapter implements DatabaseAdapter {
   private clientPromise: Promise<SupabaseClient>;
   private boundJwt: string | null = null;
   private disposed = false;
+  /**
+   * Cached JWT-bound client. Built lazily on first JWT-bound query and
+   * reused for subsequent calls in the same request scope, so we don't
+   * spin up a fresh `createClient()` per query (which previously meant a
+   * new auth GoTrueClient + headers object per call).
+   */
+  private boundClientPromise: Promise<SupabaseClient> | null = null;
 
   constructor(private config: SupabaseDatabaseConfig) {
     if (config.client) {
@@ -106,11 +114,17 @@ export class SupabaseDatabaseAdapter implements DatabaseAdapter {
     }
     const base = await this.clientPromise;
     if (!this.boundJwt) return base;
-    const create = await loadSupabase();
-    return create(this.config.supabaseUrl, this.config.supabaseKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-      global: { headers: { Authorization: `Bearer ${this.boundJwt}` } },
-    });
+    if (!this.boundClientPromise) {
+      const jwt = this.boundJwt;
+      this.boundClientPromise = (async () => {
+        const create = await loadSupabase();
+        return create(this.config.supabaseUrl, this.config.supabaseKey, {
+          auth: { persistSession: false, autoRefreshToken: false },
+          global: { headers: { Authorization: `Bearer ${jwt}` } },
+        });
+      })();
+    }
+    return this.boundClientPromise;
   }
 
   async query<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
@@ -133,16 +147,23 @@ export class SupabaseDatabaseAdapter implements DatabaseAdapter {
     return typeof data === 'number' ? data : 0;
   }
 
-  async transaction<T>(fn: (tx: DatabaseAdapter) => Promise<T>): Promise<T> {
+  async transaction<T>(_fn: (tx: DatabaseAdapter) => Promise<T>): Promise<T> {
     // Supabase / PostgREST cannot multiplex statements over a single
     // connection from the JS client, so true transactions require an
-    // RPC that wraps the whole unit of work. For now we run the
-    // callback directly and rely on individual statement atomicity.
+    // RPC that wraps the whole unit of work. Earlier this method was a
+    // silent passthrough that ran each statement independently — that
+    // gave the FALSE impression of a transaction (no BEGIN/COMMIT, no
+    // rollback on partial failure). We now refuse to lie.
     //
-    // If you need true transaction support today, drop down to the
-    // raw `postgres` adapter for the relevant codepath. See
-    // docs/SCALING.md §"Transactions across providers".
-    return fn(this);
+    // For real transactions today, switch to the Neon or postgres
+    // adapter. See docs/SCALING.md §"Transactions across providers".
+    throw new NotImplementedError(
+      'Supabase',
+      'transaction',
+      'Supabase JS cannot multiplex statements over a single connection. ' +
+        'For real transactions use the Neon adapter (NeonDatabaseAdapter.transaction) ' +
+        'or move the unit of work into a Postgres function called via .rpc().',
+    );
   }
 
   withUser(jwt: string): DatabaseAdapter {
@@ -303,6 +324,15 @@ export interface SupabaseRealtimeConfig {
 
 export class SupabaseRealtimeAdapter implements RealtimeAdapter {
   private clientPromise: Promise<SupabaseClient>;
+  /**
+   * Reusable publish channels keyed by channel name. Building + subscribing
+   * + tearing down a fresh channel on every `publish()` call is a hot-path
+   * footgun (round-trip + GoTrueClient setup per publish). We keep one
+   * subscribed channel per name and reuse it for the lifetime of this
+   * adapter; `dispose()`-style cleanup is the host app's responsibility
+   * since RealtimeAdapter has no `dispose` method.
+   */
+  private publishChannels = new Map<string, Promise<SupabaseRealtimeChannel>>();
 
   constructor(config: SupabaseRealtimeConfig) {
     if (config.client) {
@@ -322,12 +352,23 @@ export class SupabaseRealtimeAdapter implements RealtimeAdapter {
     let cancelled = false;
     void (async () => {
       const client = await this.clientPromise;
+      // Re-check `cancelled` AFTER each await — the unsubscribe callback may
+      // have fired before we made it past the client promise.
       if (cancelled) return;
       const channel = client.channel(channelName);
       channel.on('broadcast', { event: '*' }, (payload) => {
         onMessage(payload);
       });
       await channel.subscribe();
+      // Re-check again now that subscribe() has resolved — if the caller
+      // unsubscribed during the round-trip, tear down immediately. Without
+      // this check we'd leak the open subscription forever (cleanup would
+      // be assigned but never called because the returned function already
+      // ran with `cleanup === null`).
+      if (cancelled) {
+        void channel.unsubscribe();
+        return;
+      }
       cleanup = () => {
         void channel.unsubscribe();
       };
@@ -340,9 +381,27 @@ export class SupabaseRealtimeAdapter implements RealtimeAdapter {
 
   async publish(channelName: string, payload: unknown): Promise<void> {
     const client = await this.clientPromise;
-    const channel = client.channel(channelName);
-    await channel.subscribe();
+    let entry = this.publishChannels.get(channelName);
+    if (!entry) {
+      entry = (async () => {
+        const ch = client.channel(channelName) as SupabaseRealtimeChannel;
+        await ch.subscribe();
+        return ch;
+      })();
+      this.publishChannels.set(channelName, entry);
+    }
+    const channel = await entry;
     await channel.send({ type: 'broadcast', event: 'message', payload });
-    await channel.unsubscribe();
   }
+}
+
+/**
+ * Minimal duck-typed shape of a Supabase realtime channel — the public
+ * surface we need from `client.channel(name)`. Avoids leaking the full
+ * realtime-js types into our DatabaseAdapter contract.
+ */
+interface SupabaseRealtimeChannel {
+  subscribe(): Promise<unknown>;
+  unsubscribe(): Promise<unknown>;
+  send(payload: { type: string; event: string; payload: unknown }): Promise<unknown>;
 }
