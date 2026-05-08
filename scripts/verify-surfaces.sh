@@ -12,13 +12,13 @@
 #
 # Exits non-zero if any required step fails.
 
-set -uo pipefail
+set -o pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 MODE="${1:-all}"
-declare -A RESULTS
+RESULTS=()
 
 # Helper: run a step, record pass/fail in RESULTS, never abort the script.
 step() {
@@ -26,9 +26,9 @@ step() {
   echo ""
   echo "── $name ─────────────────────────────────────────────────"
   if "$@"; then
-    RESULTS["$name"]="PASS"
+    RESULTS+=("$name|PASS")
   else
-    RESULTS["$name"]="FAIL"
+    RESULTS+=("$name|FAIL")
   fi
 }
 
@@ -111,8 +111,9 @@ echo "════════════════════════�
 echo "  Surface verification summary"
 echo "═══════════════════════════════════════════════════════════════"
 fail_count=0
-for name in "${!RESULTS[@]}"; do
-  status="${RESULTS[$name]}"
+for entry in "${RESULTS[@]}"; do
+  name="${entry%|*}"
+  status="${entry##*|}"
   if [[ "$status" == "PASS" ]]; then
     printf "  \033[32m✓\033[0m  %s\n" "$name"
   else
