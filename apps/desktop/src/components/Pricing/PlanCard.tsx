@@ -38,10 +38,9 @@ const TIER_CONTENT: Record<UIPlanTier, TierContent> = {
     ctaVariant: 'current',
   },
   hobby: {
-    price: '$5 / mo',
-    priceNote: 'target — final price TBD',
+    price: '$10 / mo',
     bullets: [
-      '50k managed cloud tokens / month',
+      'Managed cloud entry tier',
       'Access to flagship models',
       'Cross-device sync (desktop + mobile + web)',
       'Priority bug reports',
@@ -60,16 +59,28 @@ const TIER_CONTENT: Record<UIPlanTier, TierContent> = {
     ctaLabel: 'Join waitlist',
     ctaVariant: 'waitlist',
   },
+  pro_plus: {
+    price: '$49.99 / mo',
+    bullets: [
+      'Multi-provider in-thread switch (Claude → GPT → Llama)',
+      'Cross-provider session continuity',
+      'Every flagship model included',
+      'Higher monthly quotas',
+      'Priority support',
+    ],
+    ctaLabel: 'Upgrade to Pro+',
+    ctaVariant: 'primary',
+  },
   max: {
-    price: 'Coming soon',
+    price: '$299.99 / mo',
     bullets: [
       'Unlimited managed tokens',
-      'All Pro features',
+      'All Pro+ features',
       'Enterprise-grade audit logging',
       'Dedicated Slack channel',
     ],
-    ctaLabel: 'Join waitlist',
-    ctaVariant: 'waitlist',
+    ctaLabel: 'Upgrade to Max',
+    ctaVariant: 'primary',
   },
 };
 

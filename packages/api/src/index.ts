@@ -24,6 +24,7 @@ export * as customInstructions from './customInstructions';
 export * as chat from './chat';
 export * as mcp from './mcp';
 export * as memory from './memory';
+export * as memoryImport from './memoryImport';
 export * as knowledge from './knowledge';
 export * as embeddings from './embeddings';
 export * as fileOps from './fileOps';
