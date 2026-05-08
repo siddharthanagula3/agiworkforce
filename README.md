@@ -20,7 +20,7 @@ Multi-provider, local-first AI agent platform. One Tauri desktop app, one Next.j
 | ----------------------------------------- | ---------------- | -------------- | -------------------------- |
 | One model family                          | ✅ Claude only   | ✅ GPT only    | ✅ Pick from 10+ Providers |
 | Bring your own API key                    | ❌               | ❌             | ✅                         |
-| Run local LLMs (Ollama / LMStudio)        | ❌               | ❌             | ✅                         |
+| Run local LLMs (Ollama / LM Studio)       | ❌               | ❌             | ✅                         |
 | Switch model mid-conversation             | ❌               | Limited        | ✅ Across providers        |
 | Desktop + Web + Mobile + CLI + extensions | ✅               | Partial        | ✅ All six                 |
 | Computer use, MCP, browser automation     | ✅ Cowork        | Limited        | ✅                         |
@@ -30,14 +30,14 @@ The unique slice: **multi-provider + BYOK + local LLM all in one app, on every s
 
 ## Pricing
 
-| Tier                                        | Price          | Available now |
-| ------------------------------------------- | -------------- | ------------- |
-| Local-only (run Ollama / LMStudio yourself) | Free forever   | ✅            |
-| BYOK (bring your own API keys)              | Free forever   | ✅            |
-| Hobby (managed cloud, limited credits)      | $5/mo (target) | ✅            |
-| Pro (full models, higher caps)              | TBD            | Waitlist      |
-| Max (highest caps, computer use)            | TBD            | Waitlist      |
-| Enterprise (SSO, SCIM, custom retention)    | Contact sales  | Contact sales |
+| Tier                                         | Price                          | Available now |
+| -------------------------------------------- | ------------------------------ | ------------- |
+| Local-only (run Ollama / LM Studio yourself) | Free forever                   | ✅            |
+| BYOK (bring your own API keys)               | Free forever                   | ✅            |
+| Hobby (managed cloud, limited credits)       | $10/mo · $5/mo billed annually | ✅            |
+| Pro (full models, higher caps)               | TBD                            | Waitlist      |
+| Max (highest caps, computer use)             | TBD                            | Waitlist      |
+| Enterprise (SSO, SCIM, custom retention)     | Contact sales                  | Contact sales |
 
 See [docs/PRICING.md](docs/PRICING.md) for details.
 
@@ -46,14 +46,17 @@ See [docs/PRICING.md](docs/PRICING.md) for details.
 ### Install the CLI
 
 ```bash
-# npm
-npm install -g @agiworkforce/cli
+# Homebrew (macOS, Linux)
+brew install siddharthanagula3/tap/agiworkforce
 
-# Homebrew
-brew install agiworkforce/tap/agiworkforce
+# cargo (any platform)
+cargo install agiworkforce-cli
 
-# Or universal installer
+# Universal installer (macOS, Linux, WSL)
 curl -fsSL https://agiworkforce.com/install.sh | bash
+
+# npm — coming soon (pending NPM_TOKEN)
+# npm install -g @agiworkforce/cli
 ```
 
 Then:
