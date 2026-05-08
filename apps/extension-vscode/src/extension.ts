@@ -115,6 +115,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const sidebarProvider = new SidebarProvider(
     context.extensionUri,
     context.secrets,
+    context,
     conversationStore,
     conversationTreeProvider,
     context.workspaceState,
