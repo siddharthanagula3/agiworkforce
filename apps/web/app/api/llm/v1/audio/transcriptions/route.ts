@@ -1,10 +1,8 @@
 import 'server-only';
 
-export const runtime = 'nodejs';
-
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { requireEnv } from '@/utils/env';
-import { getUserClient } from '@/lib/supabase-server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
@@ -91,7 +89,8 @@ async function handleTranscriptions(request: NextRequest) {
   }
 
   const token = authHeader.substring(7);
-  const supabase = getUserClient(token);
+  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
+  const supabase = createClient(supabaseUrl, requireEnv('SUPABASE_SERVICE_ROLE_KEY'));
 
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data?.user) {

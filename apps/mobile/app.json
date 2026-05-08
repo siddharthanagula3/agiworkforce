@@ -60,10 +60,7 @@
         "RECORD_AUDIO",
         "READ_EXTERNAL_STORAGE",
         "USE_BIOMETRIC",
-        "USE_FINGERPRINT",
-        "READ_CALENDAR",
-        "READ_CONTACTS",
-        "POST_NOTIFICATIONS"
+        "USE_FINGERPRINT"
       ],
       "intentFilters": [
         {
@@ -127,11 +124,6 @@
     },
     "experiments": {
       "typedRoutes": true
-    },
-    "extra": {
-      "eas": {
-        "projectId": "agi-workforce"
-      }
     }
   }
 }

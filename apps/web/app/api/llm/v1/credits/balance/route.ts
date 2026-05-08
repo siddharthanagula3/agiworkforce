@@ -1,6 +1,8 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+import { requireEnv } from '@/utils/env';
 import { getUserClient } from '@/lib/supabase-server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -51,8 +53,10 @@ async function handleGetBalance(request: NextRequest) {
 
   const token = authHeader.substring(7);
 
-  // Verify user with Supabase (RLS-bound client, not service-role)
-  const supabase = getUserClient(token);
+  // Verify user with Supabase
+  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
+
+  const supabase = createClient(supabaseUrl, requireEnv('SUPABASE_SERVICE_ROLE_KEY'));
 
   const {
     data: { user },
