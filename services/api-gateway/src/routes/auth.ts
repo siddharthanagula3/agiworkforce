@@ -63,6 +63,36 @@ const loginSchema = z.object({
   password: z.string(),
 });
 
+// =============================================================================
+// FIXME(P1-services-dead-routes, Wave 1 task #10 cleanup, 2026-05-08):
+//
+// The /register and /login routes below target a `public.users` table
+// that DOES NOT exist in production (verified via mcp__supabase
+// introspection). The canonical user table is `public.profiles` and
+// password hashing lives in `auth.users` via Supabase Auth. The
+// columns these handlers reference (`password_hash`, `desktop_id`)
+// don't exist on `profiles` either, so renaming `from('users')` to
+// `from('profiles')` would only mask the bug.
+//
+// Live auth path is the device-auth flow in routes/deviceAuth.ts. The
+// `/register` and `/login` endpoints are effectively dead; any client
+// that calls them gets a 500 from a missing-table error and falls
+// back to the device-auth flow.
+//
+// Remediation owner: separate Wave 1.5+ ticket. Options are (a) delete
+// these routes entirely and have clients use Supabase Auth directly,
+// (b) re-implement on top of Supabase Auth Admin API, or (c) replace
+// with 501-Not-Implemented stubs that point clients at /auth/device.
+// The decision is product-shaped, not infra, so it's out of scope for
+// task #10 (services RLS + model-id work).
+//
+// The from('users') calls in this file are LEFT IN PLACE on purpose:
+// they fail loudly today (table-missing 500), which is the diagnostic
+// signal we want until the route is properly retired. Renaming them
+// to from('profiles') would silently flip the error to "column
+// password_hash does not exist", obscuring the underlying issue.
+// =============================================================================
+
 router.post('/register', authRateLimiter, async (req: Request, res: Response) => {
   const { email, password } = registerSchema.parse(req.body);
 

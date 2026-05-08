@@ -119,9 +119,14 @@ router.post('/token', createRateLimiter('device-register'), async (req: Request,
     return;
   }
 
-  // Approved — fetch user email for JWT payload
+  // Approved — fetch user email for JWT payload.
+  // Wave 1 task #10 cleanup (2026-05-08): `public.users` does not exist
+  // in production; the canonical user table is `public.profiles` per the
+  // billing-layer foundation migration (20260506120001). Both columns
+  // referenced here (`id`, `email`) live on profiles; the rename is a
+  // straight column-set match. Verified via mcp__supabase introspection.
   const { data: user, error: userError } = await supabase
-    .from('users')
+    .from('profiles')
     .select('id, email')
     .eq('id', record.user_id)
     .single();
