@@ -20,11 +20,15 @@ const popupState: PopupState = {
   isConnected: false,
 };
 
+/** Storage key matching inPagePanel/setup.ts IN_PAGE_PANEL_ENABLED_KEY */
+const IN_PAGE_PANEL_ENABLED_KEY = 'in_page_panel_enabled';
+
 async function initializePopup(): Promise<void> {
   try {
     await Promise.all([updateStatus(), updateTabInfo(), updateStats(), updateTierDisplay()]);
     setupEventListeners();
     startSessionTimer();
+    await initInPagePanelToggle();
   } catch (error) {
     logger.error('Failed to initialize popup', error);
   }
@@ -536,6 +540,31 @@ function showPaywallCard(feature: string, requiredTier: string, reason?: string)
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// In-page panel toggle
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Sync the toggle UI with the stored flag and wire the change listener.
+ * Default is enabled (checked) on first run.
+ */
+async function initInPagePanelToggle(): Promise<void> {
+  const toggle = document.getElementById('inPagePanelToggle') as HTMLInputElement | null;
+  if (!toggle) return;
+
+  try {
+    const result = await storageUtils.getItem<boolean>(IN_PAGE_PANEL_ENABLED_KEY);
+    // Default true when not set
+    toggle.checked = result !== false;
+  } catch {
+    toggle.checked = true;
+  }
+
+  toggle.addEventListener('change', () => {
+    storageUtils.setItem(IN_PAGE_PANEL_ENABLED_KEY, toggle.checked).catch(() => {});
+  });
+}
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initializePopup);
 } else {
@@ -551,7 +580,9 @@ export {
   updateStats,
   updateTierDisplay,
   showPaywallCard,
+  initInPagePanelToggle,
   TIER_LABELS,
   PAYWALL_FEATURE_LABELS,
   REQUIRED_TIER_LABELS,
+  IN_PAGE_PANEL_ENABLED_KEY,
 };

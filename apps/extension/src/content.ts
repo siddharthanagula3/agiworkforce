@@ -28,6 +28,7 @@ import { discoverAllTools, callTool, watchForToolChanges } from './webmcp';
 import { extractPageMetadata } from './page-metadata';
 import type { PageMetadata } from './page-metadata';
 import { detectNLWeb } from './nlweb';
+import { setupInPagePanel } from './inPagePanel/setup';
 
 import type { ConsoleLogEntry } from './types';
 
@@ -124,11 +125,7 @@ function initialize(): void {
   } catch (err) {
     logger.debug('addAutomationIndicator failed (non-fatal)', err);
   }
-  try {
-    injectFloatingOverlay();
-  } catch (err) {
-    logger.debug('injectFloatingOverlay failed (non-fatal)', err);
-  }
+  void setupInPagePanel(logger);
 
   chrome.runtime.onMessage.addListener(handleMessage);
   document.addEventListener('mousemove', (event) => {
@@ -1858,65 +1855,6 @@ function updateIndicatorStatus(): void {
       ? 'radial-gradient(circle, #28a745 0%, #20c997 100%)'
       : 'radial-gradient(circle, #dc3545 0%, #fd7e14 100%)';
   }
-}
-
-function injectFloatingOverlay(): void {
-  // Only inject on regular http/https pages
-  if (!/^https?:/.test(location.protocol)) return;
-  if (document.querySelector('[data-agi-workforce-overlay]')) return;
-
-  const host = document.createElement('div');
-  host.setAttribute('data-agi-workforce-overlay', 'true');
-  host.style.cssText =
-    'position:fixed;bottom:24px;right:24px;z-index:2147483647;pointer-events:none;';
-
-  const shadow = host.attachShadow({ mode: 'closed' });
-
-  const style = document.createElement('style');
-  style.textContent = `
-    .agi-fab {
-      width: 48px; height: 48px;
-      background: linear-gradient(135deg, #6366f1, #8b5cf6);
-      border-radius: 50%;
-      border: none;
-      cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 4px 16px rgba(99,102,241,0.5);
-      pointer-events: all;
-      transition: transform 0.2s, box-shadow 0.2s;
-      color: white; font-size: 20px;
-    }
-    .agi-fab:hover { transform: scale(1.1); box-shadow: 0 6px 24px rgba(99,102,241,0.7); }
-    .agi-tooltip {
-      position: absolute; right: 56px; bottom: 8px;
-      background: #1f2937; color: #f9fafb;
-      font-size: 12px; font-family: -apple-system, sans-serif;
-      padding: 6px 10px; border-radius: 6px;
-      white-space: nowrap; pointer-events: none;
-      opacity: 0; transition: opacity 0.2s;
-    }
-    .agi-fab:hover + .agi-tooltip { opacity: 1; }
-  `;
-
-  const btn = document.createElement('button');
-  btn.className = 'agi-fab';
-  btn.setAttribute('aria-label', 'Open AGI Workforce');
-  btn.textContent = '\u26a1';
-
-  const tooltip = document.createElement('div');
-  tooltip.className = 'agi-tooltip';
-  tooltip.textContent = 'Ask AGI Workforce';
-
-  btn.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL' }).catch((err: unknown) => {
-      logger.warn('Failed to open side panel', err);
-    });
-  });
-
-  shadow.appendChild(style);
-  shadow.appendChild(btn);
-  shadow.appendChild(tooltip);
-  document.body?.appendChild(host);
 }
 
 function initWebMCP(): void {
