@@ -63,10 +63,7 @@ async function handleDevicePoll(request: NextRequest) {
       .single();
 
     if (error || !data) {
-      return NextResponse.json(
-        { error: 'Not found' },
-        { status: 404, headers: { 'Cache-Control': 'no-store' } },
-      );
+      return NextResponse.json({ status: 'pending' }, { headers: { 'Cache-Control': 'no-store' } });
     }
 
     // Expiry check first (also treat already-consumed codes as expired)
@@ -78,10 +75,7 @@ async function handleDevicePoll(request: NextRequest) {
           .update({ status: 'expired', updated_at: new Date().toISOString() })
           .eq('device_id', device_id);
       }
-      return NextResponse.json(
-        { error: 'Not found' },
-        { status: 404, headers: { 'Cache-Control': 'no-store' } },
-      );
+      return NextResponse.json({ status: 'expired' }, { headers: { 'Cache-Control': 'no-store' } });
     }
 
     // Device ownership verification with backfill for legacy sessions.

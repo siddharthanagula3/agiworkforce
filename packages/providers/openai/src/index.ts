@@ -38,7 +38,6 @@ import { translateChatRequest } from './translate';
 import { translateOpenAIStream } from './stream';
 import { translateChatRequestToResponses } from './translate-responses';
 import { translateOpenAIResponsesStream } from './stream-responses';
-import { parseRetryAfterFromError } from './retry-after';
 import type { OpenAIChatCompletionChunk } from './types';
 import type { ResponsesStreamEvent } from './responses-types';
 
@@ -155,13 +154,11 @@ export function createOpenAIAdapter(config: OpenAIAdapterConfig = {}): ProviderA
           const error = err as Error & { status?: number };
           const retryable =
             typeof error.status === 'number' && (error.status === 429 || error.status >= 500);
-          const retryAfterSeconds = retryable ? parseRetryAfterFromError(err) : undefined;
           yield {
             type: 'error',
             message: error.message ?? 'OpenAI Responses request failed',
             ...(typeof error.status === 'number' ? { code: String(error.status) } : {}),
             retryable,
-            ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
           };
           yield { type: 'stop', reason: 'error' };
           return;
@@ -214,13 +211,11 @@ export function createOpenAIAdapter(config: OpenAIAdapterConfig = {}): ProviderA
         const error = err as Error & { status?: number };
         const retryable =
           typeof error.status === 'number' && (error.status === 429 || error.status >= 500);
-        const retryAfterSeconds = retryable ? parseRetryAfterFromError(err) : undefined;
         yield {
           type: 'error',
           message: error.message ?? 'OpenAI request failed',
           ...(typeof error.status === 'number' ? { code: String(error.status) } : {}),
           retryable,
-          ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
         };
         yield { type: 'stop', reason: 'error' };
       }
@@ -236,6 +231,5 @@ export { translateChatRequest } from './translate';
 export { translateOpenAIStream } from './stream';
 export { translateChatRequestToResponses } from './translate-responses';
 export { translateOpenAIResponsesStream } from './stream-responses';
-export { parseRetryAfter, parseRetryAfterFromError } from './retry-after';
 export type * from './types';
 export type * from './responses-types';

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter, useSegments, Slot } from 'expo-router';
 import { useURL } from 'expo-linking';
 import * as Linking from 'expo-linking';
@@ -40,7 +40,6 @@ import { useChatStore } from '@/stores/chatStore';
 import '../global.css';
 
 export default function RootLayout() {
-  const [isMmkvReady, setIsMmkvReady] = useState(false);
   const { session, isLoading, isInitialized, initialize } = useAuthStore();
   const refreshTier = useTierStore((s) => s.refreshTier);
   const segments = useSegments();
@@ -61,12 +60,9 @@ export default function RootLayout() {
   // accept that ~1-frame window because the alternative is a forced lock
   // screen on every cold start regardless of user preference.
   useEffect(() => {
-    initMmkvEncryption()
-      .then(() => setIsMmkvReady(true))
-      .catch((err) => {
-        console.warn('[RootLayout] MMKV encryption init failed:', err);
-        setIsMmkvReady(true);
-      });
+    initMmkvEncryption().catch((err) => {
+      console.warn('[RootLayout] MMKV encryption init failed:', err);
+    });
     hydrateBiometricFlag().catch((err) => {
       console.warn('[RootLayout] biometric flag hydrate failed:', err);
     });
@@ -245,30 +241,33 @@ export default function RootLayout() {
   }, [session]);
 
   // Auth guard + onboarding check
-  // P1-8: gate on isMmkvReady so cold start never redirects to /onboarding
-  // before the onboarding-done flag has been loaded from encrypted storage.
   useEffect(() => {
-    if (!isInitialized || !isMmkvReady) return;
+    if (!isInitialized) return;
 
     const inAuthGroup = segments[0] === '(auth)';
-    const inOnboarding = (segments[0] as string) === '(public)';
+    // segments[0] is typed based on known routes; cast to string for onboarding comparison
+    const inOnboarding = (segments[0] as string) === 'onboarding';
 
     if (!session && !inAuthGroup) {
       router.replace('/(auth)/login');
     } else if (session && inAuthGroup) {
+      // Check if user has completed onboarding
       const onboardingDone = storage.getString('onboarding-done');
       if (!onboardingDone && !inOnboarding) {
-        router.replace('/(public)/onboarding');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        router.replace('/onboarding' as any);
       } else {
         router.replace('/(app)');
       }
     } else if (session && !inAuthGroup && !inOnboarding) {
+      // Already in app — ensure onboarding is done
       const onboardingDone = storage.getString('onboarding-done');
       if (!onboardingDone) {
-        router.replace('/(public)/onboarding');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        router.replace('/onboarding' as any);
       }
     }
-  }, [session, isInitialized, isMmkvReady, segments, router]);
+  }, [session, isInitialized, segments, router]);
 
   // C1: Deep linking — handles agiworkforce://pair/CODE and agiworkforce://pair?code=CODE
   // Required for QR desktop pairing when app is backgrounded or closed
@@ -449,7 +448,7 @@ export default function RootLayout() {
     return () => subscription.remove();
   }, [router]);
 
-  if (!isMmkvReady || !isInitialized || isLoading) {
+  if (!isInitialized || isLoading) {
     return (
       <View
         style={{

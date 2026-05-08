@@ -10,8 +10,6 @@
  * `Response.body` should fall back to a polyfill (`react-native-sse`).
  */
 
-import { secureFetch } from '@/services/secureFetch';
-
 export type ProviderStreamProvider = 'anthropic' | 'openai' | 'ollama' | 'google';
 
 export interface ProviderStreamMessage {
@@ -62,7 +60,7 @@ export async function* streamFromProvider(
   const url = `${params.gatewayUrl.replace(/\/+$/, '')}/api/v1/providers/${encodeURIComponent(
     params.providerId,
   )}/stream`;
-  const res = await secureFetch(url, {
+  const res = await fetch(url, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
