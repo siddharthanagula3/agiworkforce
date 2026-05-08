@@ -285,6 +285,65 @@ describe('NeonDatabaseAdapter.dispose', () => {
   });
 });
 
+describe('NeonDatabaseAdapter pool sharing (P0-J)', () => {
+  it('100x withUser shares a single Pool — does not reconstruct per request', async () => {
+    state.poolQueryHandler = async () => ({ rows: [{ id: 1 }], rowCount: 1 });
+    state.clientQueryHandler = async (sql) =>
+      sql.toLowerCase().startsWith('select')
+        ? { rows: [{ id: 1 }], rowCount: 1 }
+        : { rows: [], rowCount: 0 };
+
+    const root = new NeonDatabaseAdapter({
+      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+    });
+
+    // Prime the root pool by running one unscoped query so the lazy
+    // construction promise resolves.
+    await root.query('select 1');
+    expect(state.poolConstructions).toBe(1);
+
+    // Now create 100 per-request scoped adapters via withUser and run a
+    // query through each. None of them should construct a new Pool.
+    for (let i = 0; i < 100; i++) {
+      const scoped = root.withUser(makeJwt({ sub: `u-${i}` }));
+      const rows = await scoped.query<{ id: number }>('select id from x');
+      expect(rows).toEqual([{ id: 1 }]);
+    }
+
+    // Pool count is still 1 — every withUser child re-used the parent's pool.
+    expect(state.poolConstructions).toBe(1);
+  });
+
+  it('disposing a child (withUser) does NOT end the shared pool', async () => {
+    state.clientQueryHandler = async (sql) =>
+      sql.toLowerCase().startsWith('select')
+        ? { rows: [{ id: 1 }], rowCount: 1 }
+        : { rows: [], rowCount: 0 };
+    const root = new NeonDatabaseAdapter({
+      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+    });
+    await root.query('select 1'); // prime
+    const child = root.withUser(makeJwt({ sub: 'c1' }));
+    await child.dispose();
+    expect(state.ended).toBe(0); // child dispose did NOT call pool.end()
+    // Root still works.
+    const rows = await root.query('select 1');
+    expect(rows).toBeDefined();
+    // Disposing the root DOES end the shared pool.
+    await root.dispose();
+    expect(state.ended).toBe(1);
+  });
+
+  it('child created from withUser rejects on its own query after child dispose', async () => {
+    const root = new NeonDatabaseAdapter({
+      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+    });
+    const child = root.withUser(makeJwt({ sub: 'c1' }));
+    await child.dispose();
+    await expect(child.query('select 1')).rejects.toThrow(/disposed/);
+  });
+});
+
 describe('NeonDatabaseAdapter constructor / raw', () => {
   it('does NOT open the pool at construction time', () => {
     new NeonDatabaseAdapter({ connectionString: 'postgresql://u:p@ep.neon.tech/db' });
