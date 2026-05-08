@@ -15,6 +15,8 @@ import 'server-only';
  * Authentication & rate-limiting reuse the same middleware as v1.
  */
 
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
