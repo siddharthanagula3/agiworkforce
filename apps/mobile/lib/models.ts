@@ -81,12 +81,6 @@ export const PROVIDERS: ProviderDef[] = MOBILE_PROVIDER_IDS.map((providerId) => 
   color: PROVIDER_META[providerId]?.color ?? '#888',
 }));
 
-// TODO(rule-models-json): derive from released-after threshold once models.json
-// has consistent `released` dates. Until then this set must be updated manually
-// when a new era model ships — hardcoded IDs violate the no-hardcode rule but
-// there is no machine-readable field to derive from yet.
-const NEW_MODEL_IDS = new Set<string>(['gpt-5.4', 'grok-4']);
-
 export const MODEL_LIST: ModelDef[] = getPickerModels({
   allowedProviders: MOBILE_PROVIDER_IDS,
   modelTypes: ['chat', 'reasoning', 'multimodal', 'search'],
@@ -99,7 +93,6 @@ export const MODEL_LIST: ModelDef[] = getPickerModels({
   supportsVision: model.supportsVision,
   supportsThinking: model.supportsThinking,
   tier: model.tier,
-  isNew: NEW_MODEL_IDS.has(model.id) || undefined,
 }));
 
 const modelMap = new Map<string, ModelDef>(MODEL_LIST.map((model) => [model.id, model]));
