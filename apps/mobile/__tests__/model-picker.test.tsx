@@ -73,6 +73,8 @@ jest.mock('lucide-react-native', () => ({
   Check: jest.fn().mockReturnValue(null),
   Star: jest.fn().mockReturnValue(null),
   Brain: jest.fn().mockReturnValue(null),
+  ArrowUpCircle: jest.fn().mockReturnValue(null),
+  Shuffle: jest.fn().mockReturnValue(null),
 }));
 
 // Mock react-native-reanimated for ModelRow's Animated.View
@@ -84,6 +86,33 @@ jest.mock('react-native-reanimated', () => ({
   },
   FadeIn: { duration: jest.fn().mockReturnValue({}) },
   FadeOut: { duration: jest.fn().mockReturnValue({}) },
+}));
+
+// Mock tierStore — default to 'free' tier with no conversation provider set.
+// Tests that exercise the guard set these explicitly via useTierStore.setState.
+jest.mock('../stores/tierStore', () => ({
+  useTierStore: jest.fn((selector: (s: unknown) => unknown) =>
+    selector({
+      tier: 'free',
+      isRefreshing: false,
+      lastRefreshedAt: null,
+      currentConversationProvider: null,
+      refreshTier: jest.fn(),
+      setTier: jest.fn(),
+      setCurrentConversationProvider: jest.fn(),
+    }),
+  ),
+}));
+
+// Mock tierGuard — default to 'allow' so existing tests are unaffected.
+jest.mock('../services/tierGuard', () => ({
+  guardProviderSwitch: jest.fn().mockReturnValue('allow'),
+}));
+
+// Mock ProPlusPaywall so it does not try to render BottomSheet inside a test.
+// Use jest.fn() rather than require('react').forwardRef to avoid the no-require-imports rule.
+jest.mock('../components/Paywall/ProPlusPaywall', () => ({
+  ProPlusPaywall: jest.fn().mockReturnValue(null),
 }));
 
 // ---------------------------------------------------------------------------

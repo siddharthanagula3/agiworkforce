@@ -81,6 +81,7 @@ function resetStore() {
     tier: 'free',
     isRefreshing: false,
     lastRefreshedAt: null,
+    currentConversationProvider: null,
   });
 }
 
@@ -239,5 +240,39 @@ describe('setTier', () => {
 
     expect(getState().isRefreshing).toBe(false);
     expect(getState().lastRefreshedAt).toBeNull();
+  });
+});
+
+describe('currentConversationProvider', () => {
+  it('starts as null', () => {
+    expect(getState().currentConversationProvider).toBeNull();
+  });
+
+  it('setCurrentConversationProvider sets a provider id', () => {
+    getState().setCurrentConversationProvider('anthropic');
+    expect(getState().currentConversationProvider).toBe('anthropic');
+  });
+
+  it('setCurrentConversationProvider can be called with any string', () => {
+    getState().setCurrentConversationProvider('openai');
+    expect(getState().currentConversationProvider).toBe('openai');
+  });
+
+  it('setCurrentConversationProvider can be cleared back to null', () => {
+    getState().setCurrentConversationProvider('google');
+    expect(getState().currentConversationProvider).toBe('google');
+
+    getState().setCurrentConversationProvider(null);
+    expect(getState().currentConversationProvider).toBeNull();
+  });
+
+  it('setCurrentConversationProvider does not affect tier or refresh state', () => {
+    useTierStore.setState({ tier: 'pro', isRefreshing: false, lastRefreshedAt: '2026-01-01' });
+
+    getState().setCurrentConversationProvider('xai');
+
+    expect(getState().tier).toBe('pro');
+    expect(getState().isRefreshing).toBe(false);
+    expect(getState().lastRefreshedAt).toBe('2026-01-01');
   });
 });
