@@ -28,6 +28,7 @@ import {
   selectHideAppsOnTask,
 } from '@/stores/computerUseStore';
 import { ComputerUseConsentDialog } from './ComputerUseConsentDialog';
+import { getAllModels } from '@/constants/llm';
 
 // Backend types — mirror Rust definitions.
 type PermissionStatus = 'allowed' | 'denied' | 'ask_every_time';
@@ -46,58 +47,31 @@ interface ActiveWindowInfo {
   bundle_id?: string | null;
 }
 
-// Stream 2: curated computer-use vision model picks. IDs come from
-// packages/types/src/models.json — we only display labels and route the
-// raw catalog id back to Rust. The Rust router resolves provider from
-// the id when `provider` is `null`.
+// Stream 2: computer-use model picker — derived from models.json at module load
+// so it stays in sync when the catalog is updated.
+const AUTO_OPTION = {
+  id: '',
+  label: 'Auto (router default)',
+  provider: '',
+  description:
+    "Let the router pick — typically your default vision model. Best for users who haven't customized their setup.",
+};
+
 const COMPUTER_USE_MODEL_OPTIONS: Array<{
   id: string;
   label: string;
   provider: string;
   description: string;
 }> = [
-  {
-    id: '',
-    label: 'Auto (router default)',
-    provider: '',
-    description:
-      "Let the router pick — typically your default vision model. Best for users who haven't customized their setup.",
-  },
-  {
-    id: 'claude-opus-4.7',
-    label: 'Claude Opus 4.7',
-    provider: 'anthropic',
-    description:
-      "Anthropic's flagship — has native computer-use beta support. Best per-action accuracy on macOS / Windows.",
-  },
-  {
-    id: 'claude-sonnet-4.6',
-    label: 'Claude Sonnet 4.6',
-    provider: 'anthropic',
-    description:
-      'Faster Claude tier with computer-use beta. Lower latency than Opus, similar quality on simple tasks.',
-  },
-  {
-    id: 'gpt-5.5',
-    label: 'GPT-5.5',
-    provider: 'openai',
-    description:
-      "OpenAI's vision-capable flagship. Uses generic JSON action protocol (no native computer-use API yet).",
-  },
-  {
-    id: 'gemini-3.1-pro-preview',
-    label: 'Gemini 3.1 Pro',
-    provider: 'google',
-    description:
-      "Google's strongest multimodal model. Strong UI element detection; cheaper than Claude / GPT for screenshot-heavy loops.",
-  },
-  {
-    id: 'grok-4.3-vision',
-    label: 'Grok 4.3 Vision',
-    provider: 'xai',
-    description:
-      "xAI's multimodal tier — newest of the four. Use when you want diversity from the OpenAI/Anthropic/Google trio.",
-  },
+  AUTO_OPTION,
+  ...getAllModels()
+    .filter((m) => m.capabilities.computerUse && !m.deprecated && m.provider !== 'managed_cloud')
+    .map((m) => ({
+      id: m.id,
+      label: m.name,
+      provider: m.provider,
+      description: m.bestFor.join(', ') || m.name,
+    })),
 ];
 
 export function ComputerUseSettings() {

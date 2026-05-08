@@ -31,6 +31,7 @@ import {
   type CloudMessage,
 } from '../api/cloudApi';
 import { getProviderDefaultModel, normalizeModelId } from '../constants/llm';
+import { getDefaultModelFor } from '@agiworkforce/types';
 
 // ---------------------------------------------------------------------------
 // Mapping helpers — cloud API uses snake_case, ChatRuntime uses camelCase
@@ -141,7 +142,7 @@ export class WebRuntime implements ChatRuntime {
     const model =
       normalizeModelId(options?.model ?? '') ??
       getProviderDefaultModel('anthropic') ??
-      'claude-sonnet-4.6';
+      getDefaultModelFor(null, 'chat');
     const controller = new AbortController();
     this._abortControllers.set(conversationId, controller);
     const toolCallBuffer = new Map<
@@ -318,7 +319,7 @@ export class WebRuntime implements ChatRuntime {
   async createConversation(title?: string): Promise<Conversation> {
     const cloud = await createCloudConversation(
       title ?? 'New Conversation',
-      getProviderDefaultModel('anthropic') ?? 'claude-sonnet-4.6',
+      getProviderDefaultModel('anthropic') ?? getDefaultModelFor(null, 'chat'),
     );
     return mapConversation(cloud);
   }
