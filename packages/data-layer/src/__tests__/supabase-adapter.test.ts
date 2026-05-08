@@ -94,19 +94,23 @@ describe('SupabaseDatabaseAdapter', () => {
     expect(scoped).toBeInstanceOf(SupabaseDatabaseAdapter);
   });
 
-  it('transaction runs the callback with the same adapter', async () => {
+  it('transaction throws NotImplementedError (Supabase JS cannot multiplex over a single connection)', async () => {
     const rpc = vi.fn((_n: string, _a: unknown): RpcResp => ({ data: [], error: null }));
     const adapter = new SupabaseDatabaseAdapter({
       supabaseUrl: 'https://example.supabase.co',
       supabaseKey: 'k',
       client: makeDbStub(rpc),
     });
-    const captured: DatabaseAdapter[] = [];
-    await adapter.transaction(async (tx) => {
-      captured.push(tx);
-      return 42;
-    });
-    expect(captured).toHaveLength(1);
+    let captured: DatabaseAdapter | null = null;
+    await expect(
+      adapter.transaction(async (tx) => {
+        captured = tx;
+        return 42;
+      }),
+    ).rejects.toThrow(/transaction/i);
+    // Callback was NOT invoked — transaction throws before running fn
+    // because there's no real BEGIN/COMMIT to wrap it in.
+    expect(captured).toBeNull();
   });
 
   it('dispose() makes subsequent queries reject', async () => {

@@ -196,7 +196,11 @@ export const useChatStore = create<ChatState>()(
     })),
     {
       name: 'agi-web-chat',
-      version: 1,
+      // v2: rename `messages` -> `messagesByConversation` and
+      // `currentConversationId` -> `activeConversationId` to match desktop.
+      // The migrate() function below transforms v1-shaped persisted state
+      // on load; new persists go out as v2.
+      version: 2,
       storage: createJSONStorage(() =>
         typeof window === 'undefined' ? noopStorage : window.localStorage,
       ),
