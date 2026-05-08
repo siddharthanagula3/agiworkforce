@@ -52,7 +52,10 @@ GHOST_PATTERN='claude-opus-4-6-mini'
 # catalog-mirror file (model_catalog.rs) carries a `forbidden` array of
 # ghost-model literals as part of its `no_hardcoded_model_ids_in_*`
 # regression tests — those are EXPECTED to mention the literal.
-GHOST_BASELINE_REGEX='(__tests__|/(test|tests)/|/tests\.rs|\.test\.|\.spec\.|model_catalog\.rs|model_catalog\.test\.ts)'
+# Path-anchored exclusions so future-named "xxx_model_catalog.rs" can't
+# bypass the gate. Each legitimate baseline file lives at exactly one
+# path in the workspace.
+GHOST_BASELINE_REGEX='(__tests__|/(test|tests)/|/tests\.rs|\.test\.|\.spec\.|^\./apps/cli/src/model_catalog\.rs:|^\./packages/types/src/__tests__/model-catalog\.test\.ts:)'
 if grep -REn --include='*.rs' --include='*.ts' --include='*.tsx' \
     --exclude-dir=node_modules --exclude-dir=target \
     --exclude-dir=.git --exclude-dir=crates \
