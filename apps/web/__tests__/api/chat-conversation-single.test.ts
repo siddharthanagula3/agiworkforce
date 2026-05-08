@@ -28,33 +28,18 @@ vi.mock('next/headers', () => ({
   })),
 }));
 
-// Mock Supabase clients
-const mockSupabaseAuth = {
-  auth: {
-    getUser: vi.fn(),
-    getSession: vi.fn(),
-  },
-};
-
+// RLS-bound Supabase client returned by getAuthenticatedUserWithClient.
+// Tests set up .from() chains on this object to simulate DB responses.
 const mockSupabaseData = {
-  auth: {
-    getUser: vi.fn(),
-    getSession: vi.fn(),
-  },
   from: vi.fn(),
 };
 
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn((_url: string, key: string) => {
-    if (key.includes('service')) {
-      return mockSupabaseData;
-    }
-    return mockSupabaseAuth;
-  }),
-}));
-
-vi.mock('@supabase/ssr', () => ({
-  createServerClient: vi.fn(() => mockSupabaseAuth),
+// Mock api-auth so routes receive {user, userDb: mockSupabaseData} directly,
+// bypassing the real getServiceClient/getUserClient singleton calls.
+const mockGetAuthenticatedUserWithClient = vi.fn();
+vi.mock('@/lib/api-auth', () => ({
+  getAuthenticatedUserWithClient: (...args: unknown[]) =>
+    mockGetAuthenticatedUserWithClient(...args),
 }));
 
 // Import after mocks
@@ -104,28 +89,18 @@ describe('Single Conversation API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Default: authenticated user (both auth and service-role clients)
-    mockSupabaseAuth.auth.getUser.mockResolvedValue({
-      data: { user: mockUser },
-      error: null,
-    });
-    // Service-role client is used by getAuthenticatedUser for Bearer token auth
-    mockSupabaseData.auth.getUser.mockResolvedValue({
-      data: { user: mockUser },
-      error: null,
+    // Default: authenticated user — routes receive {user, userDb} via mocked helper.
+    mockGetAuthenticatedUserWithClient.mockResolvedValue({
+      user: mockUser,
+      userDb: mockSupabaseData,
     });
   });
 
   describe('GET /api/chat/conversations/[id]', () => {
     describe('Authentication', () => {
       it('should return 401 if not authenticated', async () => {
-        mockSupabaseAuth.auth.getUser.mockResolvedValue({
-          data: { user: null },
-          error: { message: 'Invalid token' },
-        });
-        mockSupabaseAuth.auth.getSession.mockResolvedValue({
-          data: { session: null },
-        });
+        const { createError } = await import('@/lib/errors');
+        mockGetAuthenticatedUserWithClient.mockRejectedValueOnce(createError.unauthorized());
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1');
         const response = await GET(request, mockContext);
@@ -387,13 +362,8 @@ describe('Single Conversation API', () => {
       });
 
       it('should return 401 if not authenticated', async () => {
-        mockSupabaseAuth.auth.getUser.mockResolvedValue({
-          data: { user: null },
-          error: { message: 'Invalid token' },
-        });
-        mockSupabaseAuth.auth.getSession.mockResolvedValue({
-          data: { session: null },
-        });
+        const { createError } = await import('@/lib/errors');
+        mockGetAuthenticatedUserWithClient.mockRejectedValueOnce(createError.unauthorized());
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
           method: 'PUT',
@@ -459,13 +429,8 @@ describe('Single Conversation API', () => {
       });
 
       it('should return 401 if not authenticated', async () => {
-        mockSupabaseAuth.auth.getUser.mockResolvedValue({
-          data: { user: null },
-          error: { message: 'Invalid token' },
-        });
-        mockSupabaseAuth.auth.getSession.mockResolvedValue({
-          data: { session: null },
-        });
+        const { createError } = await import('@/lib/errors');
+        mockGetAuthenticatedUserWithClient.mockRejectedValueOnce(createError.unauthorized());
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
           method: 'DELETE',
