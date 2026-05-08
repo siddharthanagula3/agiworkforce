@@ -219,6 +219,13 @@ export interface StreamChunkError {
   message: string;
   /** Whether the error is retryable (rate limit, transient network). */
   retryable?: boolean;
+  /**
+   * Suggested wait before retry, in seconds. Surfaced from the upstream
+   * `Retry-After` HTTP response header on 429 / 503 — adapters parse the
+   * header (which can be either an integer-second count or an HTTP-date)
+   * into a positive integer here. Callers SHOULD respect this hint.
+   */
+  retryAfterSeconds?: number;
 }
 
 export interface StreamChunkStop {

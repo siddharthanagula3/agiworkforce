@@ -191,6 +191,15 @@ function decodeJwtSub(jwt: string): string {
 export interface NeonDatabaseAdapterConfig extends DatabaseConnectionConfig {
   /** Optional pre-built pool. Skips construction (used in tests). */
   pool?: Pool;
+  /**
+   * Optional pre-built pool promise. When set, the adapter shares the pool
+   * with whatever upstream owns it; `dispose()` will NOT end the pool — only
+   * unbind any per-instance state (`boundSub`).
+   *
+   * `withUser()` uses this to hand the parent's pool to the child instance
+   * so a per-request adapter doesn't open a new TCP-WebSocket per call.
+   */
+  poolPromise?: Promise<Pool>;
 }
 
 /**
@@ -202,10 +211,21 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
   private poolPromise: Promise<Pool>;
   private boundSub: string | null = null;
   private disposed = false;
+  /**
+   * `true` when this instance owns the pool and should `pool.end()` on
+   * dispose. Child instances created by `withUser()` set this to `false`
+   * — the root adapter owns the pool lifetime.
+   */
+  private ownsPool: boolean;
 
   constructor(private config: NeonDatabaseAdapterConfig) {
     if (config.pool) {
       this.poolPromise = Promise.resolve(config.pool);
+      this.ownsPool = true;
+    } else if (config.poolPromise) {
+      // Inherited pool from the parent adapter — do NOT end it on dispose.
+      this.poolPromise = config.poolPromise;
+      this.ownsPool = false;
     } else {
       // Defer pool construction until first use so misconfigured boots
       // don't crash on import.
@@ -216,6 +236,7 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
           ...(config.poolSize !== undefined ? { max: config.poolSize } : {}),
         });
       })();
+      this.ownsPool = true;
     }
   }
 
@@ -331,21 +352,39 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
    *
    * The JWT signature is NOT verified here — that's the AuthAdapter's job.
    * This method only decodes the `sub` claim.
+   *
+   * The returned adapter shares the parent's pool — calling `dispose()` on
+   * it only unbinds the per-instance state. The pool lifetime is owned by
+   * the root adapter that constructed it.
    */
   withUser(jwt: string): DatabaseAdapter {
     const sub = decodeJwtSub(jwt);
-    const next = new NeonDatabaseAdapter(this.config);
+    // Hand the parent's pool promise down so the child re-uses the same
+    // pool instead of constructing a new TCP/WebSocket connection.
+    const next = new NeonDatabaseAdapter({
+      ...this.config,
+      poolPromise: this.poolPromise,
+    });
     next.boundSub = sub;
     return next;
   }
 
   /**
-   * Close the underlying pool. Safe to call repeatedly; subsequent
-   * `query()` / `execute()` / `transaction()` calls reject.
+   * Close the underlying pool when this adapter owns it. For child instances
+   * created by `withUser()` this only marks the instance disposed — the
+   * pool lifetime belongs to the root adapter.
+   *
+   * Safe to call repeatedly; subsequent `query()` / `execute()` /
+   * `transaction()` calls reject.
    */
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
+    if (!this.ownsPool) {
+      // Child adapter (from withUser) — boundSub is per-instance, so just
+      // marking disposed is enough. The shared pool keeps running.
+      return;
+    }
     try {
       const pool = await this.poolPromise;
       await pool.end();
