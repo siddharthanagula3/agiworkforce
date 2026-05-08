@@ -32,7 +32,8 @@
  * @packageDocumentation
  */
 
-import { isAbsolute, resolve, sep } from 'node:path';
+import { realpath } from 'node:fs/promises';
+import { dirname, isAbsolute, resolve, sep } from 'node:path';
 
 import { applyUpdateHunkToContents } from './apply-update';
 import { nodeFSBridge } from './node-fs-bridge';
@@ -41,7 +42,9 @@ import type { ApplyPatchOptions, ApplyPatchResult, FSBridge, Hunk } from './type
 
 /**
  * Error thrown when a patch attempts to write outside the workspace root.
- * Code: `'workspace_escape'`.
+ * Code: `'workspace_escape'`. This is the typed patch-policy error callers
+ * should `instanceof`-check to distinguish patch-rejection from raw
+ * filesystem errors (ENOENT, EACCES, etc.) bubbling up from the FS bridge.
  */
 export class WorkspaceEscapeError extends Error {
   override readonly name = 'WorkspaceEscapeError';
@@ -63,15 +66,53 @@ export class WorkspaceEscapeError extends Error {
  * Reject any path that resolves outside `cwd`. Throws `WorkspaceEscapeError`
  * on violation. Absolute paths are rejected unless they already start with
  * the workspace root.
+ *
+ * Both the lexical resolution AND the canonical (symlink-followed) resolution
+ * must stay inside the workspace. The symlink check protects against
+ * "trojan symlink" attacks where a directory inside the workspace points
+ * outside (e.g. `workspace/foo -> /etc`); without it, a patch targeting
+ * `foo/passwd` would lexically resolve cleanly but actually write to /etc.
  */
-function assertInsideWorkspace(p: string, cwd: string): void {
+async function assertInsideWorkspace(p: string, cwd: string): Promise<void> {
+  // Reject path-level escape first (lexical check, no fs call).
   const resolved = isAbsolute(p) ? resolve(p) : resolve(cwd, p);
-  // The workspace root itself counts as "inside".
-  if (resolved === cwd) return;
-  // Only allow paths strictly under `cwd` (path.sep guards against partial-name aliasing).
-  if (!resolved.startsWith(cwd + sep)) {
+  if (resolved !== cwd && !resolved.startsWith(cwd + sep)) {
     throw new WorkspaceEscapeError(p, cwd);
   }
+  // Then canonicalize via realpath to reject symlink escapes. We canonicalize
+  // the longest-existing ancestor of the target — `realpath` throws ENOENT
+  // for paths that don't exist yet, which is the common case when adding new
+  // files. The cwd itself is canonicalized so we compare apples-to-apples.
+  let canonCwd: string;
+  try {
+    canonCwd = await realpath(cwd);
+  } catch {
+    canonCwd = cwd;
+  }
+  const canonTarget = await realpathOfExistingAncestor(resolved);
+  if (canonTarget !== canonCwd && !canonTarget.startsWith(canonCwd + sep)) {
+    throw new WorkspaceEscapeError(p, canonCwd);
+  }
+}
+
+async function realpathOfExistingAncestor(target: string): Promise<string> {
+  let current = target;
+  // Walk up until we find an existing ancestor we can resolve. Bounded by
+  // path-segment count so a malformed path can't loop forever.
+  for (let depth = 0; depth < 4096; depth += 1) {
+    try {
+      const real = await realpath(current);
+      // Append any unresolved suffix lexically (the suffix can't reintroduce
+      // a symlink — by construction it doesn't exist on disk yet).
+      const suffix = target.slice(current.length);
+      return suffix.length > 0 ? real + suffix : real;
+    } catch {
+      const parent = dirname(current);
+      if (parent === current) return target; // hit fs root with nothing existing
+      current = parent;
+    }
+  }
+  return target;
 }
 
 export type {
@@ -112,9 +153,9 @@ export async function applyPatch(
   const cwd = resolve(options.cwd ?? process.cwd());
   if (workspaceOnly) {
     for (const hunk of hunks) {
-      assertInsideWorkspace(hunk.path, cwd);
+      await assertInsideWorkspace(hunk.path, cwd);
       if (hunk.kind === 'update' && hunk.movePath !== undefined) {
-        assertInsideWorkspace(hunk.movePath, cwd);
+        await assertInsideWorkspace(hunk.movePath, cwd);
       }
     }
   }
