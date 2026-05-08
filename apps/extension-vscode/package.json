@@ -53,7 +53,8 @@
         "agiWorkforce.cliPath",
         "agiWorkforce.systemPrompt",
         "agiWorkforce.agent.autoApply",
-        "agiWorkforce.autoApplyFixes"
+        "agiWorkforce.autoApplyFixes",
+        "agiWorkforce.telemetryEndpoint"
       ]
     }
   },
