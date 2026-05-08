@@ -354,12 +354,27 @@ pub fn get_sse_delimiter(provider: &Provider) -> &'static [u8] {
 pub fn model_uses_responses_api(model_id: &str) -> bool {
     let id = get_canonicalized_id(model_id).to_lowercase();
 
-    // O-series reasoning models and codex always use Responses API
-    if id.starts_with("o3")
-        || id.starts_with("o4")
-        || id.starts_with("gpt-oss")
-        || id.starts_with("codex-")
-    {
+    // Catalog-first: any OpenAI reasoning-tier model uses Responses API.
+    // No hardcoded SPECIFIC model IDs per the locked rule — capability
+    // info flows through models.json.
+    if let Some(entry) = CONFIG.models.get(&id) {
+        if entry.provider == "openai" && entry.model_type == "reasoning" {
+            return true;
+        }
+    }
+
+    // O-series (oN) reasoning family — parse a single digit after the
+    // leading 'o' to future-proof for o5/o6/o7/etc. without code edits.
+    // Variants like "o3-mini" / "o4-mini" / "o3-pro" are also covered.
+    if let Some(rest) = id.strip_prefix('o') {
+        if rest.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+            return true;
+        }
+    }
+
+    // OpenAI reasoning-adjacent families (gpt-oss open-weight, codex-).
+    // These are non-versioned product names so prefix is the only signal.
+    if id.starts_with("gpt-oss") || id.starts_with("codex-") {
         return true;
     }
 
