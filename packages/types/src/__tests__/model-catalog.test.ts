@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canAccessManualModelSelection,
   getCoreManualModelOptions,
+  getDefaultModelFor,
   getManagedCloudProviderIds,
   detectProviderFromModelId,
   getModelCostRates,
@@ -333,5 +334,92 @@ describe('resolveAutoModeModel — task-aware routing', () => {
       const result = resolveAutoModeModel('auto-balanced', 'pro_plus', 'general', { usOnly: true });
       expect(result).toBe('gpt-5.5');
     });
+  });
+});
+
+describe('getDefaultModelFor — tier-aware default model resolution', () => {
+  it('returns workhorse_general for free tier on every kind (Free only allows that slot)', () => {
+    const workhorse = getRoutingSlotModel('workhorse_general');
+    expect(getDefaultModelFor('free', 'chat')).toBe(workhorse);
+    expect(getDefaultModelFor('free', 'fast-status')).toBe(workhorse);
+    expect(getDefaultModelFor('free', 'computer-use')).toBe(workhorse);
+    expect(getDefaultModelFor('free', 'reasoning')).toBe(workhorse);
+  });
+
+  it('routes free tier voice through workhorse fallback (voice_transcription not allowed)', () => {
+    expect(getDefaultModelFor('free', 'voice')).toBe(getRoutingSlotModel('workhorse_general'));
+  });
+
+  it('hobby chat falls back through preference list to workhorse_general (no general_balanced* allowed)', () => {
+    expect(getDefaultModelFor('hobby', 'chat')).toBe(getRoutingSlotModel('workhorse_general'));
+  });
+
+  it('hobby fast-status uses workhorse fallback (general_fast slot not in hobby allowedSlots)', () => {
+    expect(getDefaultModelFor('hobby', 'fast-status')).toBe(
+      getRoutingSlotModel('workhorse_general'),
+    );
+  });
+
+  it('hobby reasoning resolves to reasoning_premium (Pool B reasoning lane)', () => {
+    expect(getDefaultModelFor('hobby', 'reasoning')).toBe(getRoutingSlotModel('reasoning_premium'));
+  });
+
+  it('pro chat resolves to general_balanced_pro (preferred Pro slot)', () => {
+    expect(getDefaultModelFor('pro', 'chat')).toBe(getRoutingSlotModel('general_balanced_pro'));
+  });
+
+  it('pro reasoning resolves to reasoning_premium_pro (Kimi K2.6)', () => {
+    expect(getDefaultModelFor('pro', 'reasoning')).toBe(
+      getRoutingSlotModel('reasoning_premium_pro'),
+    );
+  });
+
+  it('pro computer-use resolves to computer_use slot (Sonnet 4.6) — premium slot is Pro+ only', () => {
+    expect(getDefaultModelFor('pro', 'computer-use')).toBe(getRoutingSlotModel('computer_use'));
+  });
+
+  it('max computer-use resolves to computer_use_premium (Opus 4.7)', () => {
+    expect(getDefaultModelFor('max', 'computer-use')).toBe(
+      getRoutingSlotModel('computer_use_premium'),
+    );
+  });
+
+  it('max reasoning resolves to reasoning_premium_pro (preferred Pro+ slot)', () => {
+    expect(getDefaultModelFor('max', 'reasoning')).toBe(
+      getRoutingSlotModel('reasoning_premium_pro'),
+    );
+  });
+
+  it('enterprise chat resolves to general_balanced_pro (same as Pro)', () => {
+    expect(getDefaultModelFor('enterprise', 'chat')).toBe(
+      getRoutingSlotModel('general_balanced_pro'),
+    );
+  });
+
+  it('returns the catalog model for the resolved slot — never a hardcoded literal', () => {
+    // The whole point of this helper is to read models.json via SLOT_REGISTRY.
+    // Spot-check that the returned IDs are present in the catalog by round-
+    // tripping through getRoutingSlotModel and matching exactly.
+    const proChat = getDefaultModelFor('pro', 'chat');
+    expect(proChat).toBe(getRoutingSlotModel('general_balanced_pro'));
+    expect(proChat.length).toBeGreaterThan(0);
+  });
+
+  it('treats unknown / null tier as free and returns workhorse_general', () => {
+    const workhorse = getRoutingSlotModel('workhorse_general');
+    expect(getDefaultModelFor(null, 'chat')).toBe(workhorse);
+    expect(getDefaultModelFor(undefined, 'chat')).toBe(workhorse);
+    expect(getDefaultModelFor('totally-bogus-tier', 'chat')).toBe(workhorse);
+  });
+
+  it('accepts pro_plus (ProductTier extension) and resolves to flagship-adjacent slots', () => {
+    // pro_plus is in ProductTier but not in SubscriptionTier — the helper
+    // accepts both and resolves through normalizeProductTier.
+    expect(getDefaultModelFor('pro_plus', 'chat')).toBe(
+      getRoutingSlotModel('general_balanced_pro'),
+    );
+    expect(getDefaultModelFor('pro_plus', 'computer-use')).toBe(
+      getRoutingSlotModel('computer_use_premium'),
+    );
   });
 });
