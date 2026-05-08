@@ -43,6 +43,7 @@ const DEFAULTS = {
   providerStreamProvider: 'auto',
   desktopBridgeEnabled: true,
   desktopBridgePort: 8787,
+  tier: 'byok',
 } as const;
 
 function get<T>(key: string, fallback: T): T {
@@ -127,6 +128,16 @@ export const Config = {
   },
   telemetryEndpoint(): string {
     return get<string>('telemetryEndpoint', DEFAULTS.telemetryEndpoint);
+  },
+
+  // ── Tier override ────────────────────────────────────────────────────────
+  /**
+   * Read the explicit tier override from settings.
+   * Returns 'byok' (the default) when not set by the user.
+   * The tierResolver uses this as priority-1 in its resolution chain.
+   */
+  tier(): string {
+    return get<string>('tier', DEFAULTS.tier);
   },
 } as const;
 
