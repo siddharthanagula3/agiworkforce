@@ -97,4 +97,5 @@ export type Provider =
   | 'bedrock'
   | 'ollama_cloud'
   | 'minimax'
-  | 'runway';
+  | 'runway'
+  | 'lmstudio';
