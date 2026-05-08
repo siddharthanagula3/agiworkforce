@@ -240,11 +240,11 @@ impl CliError {
             CliError::RateLimited { provider, retry_after } => match retry_after {
                 Some(secs) => format!(
                     "{provider} is rate-limiting. Wait {secs}s, or use a fallback model: \
-                     `--model claude-sonnet-4-6,gpt-5.4`."
+                     `--model claude-sonnet-4-6,gpt-5.5`."
                 ),
                 None => format!(
                     "{provider} is rate-limiting. Switch to a fallback model with \
-                     `--model claude-sonnet-4-6,gpt-5.4`."
+                     `--model claude-sonnet-4-6,gpt-5.5`."
                 ),
             },
             CliError::StreamError { is_retryable, .. } => if *is_retryable {
