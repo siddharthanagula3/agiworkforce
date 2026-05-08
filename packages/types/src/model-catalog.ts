@@ -24,6 +24,7 @@
 import modelsCatalogJson from './models.json';
 import type { Provider } from './provider';
 import type { RoutingTaskType } from './runtime';
+import type { SubscriptionTier } from './user';
 export type { Provider };
 
 /** Boolean capability flags for a model. */
@@ -1654,6 +1655,83 @@ export function resolveAutoModeModel(
     default:
       return getRoutingSlotModel('general_fast');
   }
+}
+
+/**
+ * Kinds of "default model" requests `getDefaultModelFor` understands.
+ *
+ * Each kind maps to a tier-aware `RoutingSlot` lookup using the same
+ * `TIER_POLICIES` registry the auto-router consults. Use this helper instead
+ * of hardcoding model IDs (`'gpt-5.4-mini'`, `'claude-haiku-4.5'`, etc.) at
+ * call sites — those literals trip the no-hardcoded-model-ids ESLint rule.
+ *
+ * @see resolveAutoModeModel for the legacy auto-mode picker.
+ */
+export type DefaultModelKind = 'chat' | 'fast-status' | 'voice' | 'computer-use' | 'reasoning';
+
+/**
+ * Ordered slot preference per `DefaultModelKind`. The helper walks this list
+ * in order, picking the first slot the tier's policy actually exposes; a
+ * final `workhorse_general` fallback ensures every tier (including Free)
+ * resolves to a real model.
+ *
+ * Tied to `SLOT_REGISTRY` + `TIER_POLICIES` in this file — both are the SSOT.
+ */
+const DEFAULT_KIND_SLOT_PREFERENCE: Record<DefaultModelKind, readonly RoutingSlot[]> =
+  Object.freeze({
+    chat: Object.freeze(['general_balanced_pro', 'general_balanced', 'workhorse_general'] as const),
+    'fast-status': Object.freeze(['general_fast', 'workhorse_general'] as const),
+    voice: Object.freeze(['voice_transcription'] as const),
+    'computer-use': Object.freeze([
+      'computer_use_premium',
+      'computer_use',
+      'workhorse_general',
+    ] as const),
+    reasoning: Object.freeze([
+      'reasoning_premium_pro',
+      'reasoning_premium',
+      'workhorse_general',
+    ] as const),
+  });
+
+/**
+ * Returns the canonical default model ID for a given subscription tier and
+ * "kind" of usage (chat, fast-status, voice, computer-use, reasoning).
+ *
+ * Lookup walks `DEFAULT_KIND_SLOT_PREFERENCE[kind]` and returns the first
+ * slot present in the tier's `allowedSlots`. If no preferred slot is
+ * allowed, falls back to `workhorse_general` (which every tier exposes,
+ * including Free). The final `getRoutingSlotModel` call dereferences the
+ * slot to a model ID via `SLOT_REGISTRY`, so the returned string always
+ * reflects the catalog (`models.json`) — never a hardcoded literal.
+ *
+ * Use this from any surface (route handler, CLI fast-status header, voice
+ * pipeline, computer-use orchestrator) that needs a tier-appropriate
+ * default WITHOUT calling the full task-aware auto-router.
+ *
+ * Complementary to `resolveAutoModeModel` (line 1593+), which serves the
+ * legacy `auto-economy/balanced/premium` picker plus the task-classified
+ * routing path.
+ */
+export function getDefaultModelFor(
+  tier: SubscriptionTier | ProductTier | string | null | undefined,
+  kind: DefaultModelKind,
+): string {
+  const normalizedTier = normalizeProductTier(tier);
+  const policy = getTierPolicy(normalizedTier);
+  const preference = DEFAULT_KIND_SLOT_PREFERENCE[kind];
+  const allowed = policy.allowedSlots;
+
+  for (const candidate of preference) {
+    if (allowed.includes(candidate)) {
+      return getRoutingSlotModel(candidate);
+    }
+  }
+
+  // Final safety net — every tier in TIER_POLICIES allows workhorse_general,
+  // so this branch is dead code today. Kept defensive in case a future tier
+  // policy elides the slot; better to return a real model than throw.
+  return getRoutingSlotModel('workhorse_general');
 }
 
 export function getPickerModelTier(modelId: string | null | undefined): PickerModelTier {

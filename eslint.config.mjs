@@ -336,6 +336,94 @@ export default [
     },
   },
 
+  // ---------------------------------------------------------------------------
+  // PREVENTION LAYER — Wave 1.5 (per docs/plans/UNIFIED_LAUNCH_PLAN.md §1.5).
+  //
+  // Two recurring bug classes earned dedicated AST gates after the
+  // 2026-05-05 audit (CLI ghost-model `claude-opus-4-6-mini`, the
+  // `FAST_STATUS_MODEL = "gpt-5.4"` const, and 56 web routes reusing the
+  // service-role key for downstream DB ops on user-scoped data):
+  //
+  //   1. Hardcoded model IDs anywhere except `models.json`, the catalog
+  //      itself, tests, and explicitly-marked marketing copy. The locked
+  //      rule (CLAUDE.md §"Critical rules") is "never hardcode model IDs;
+  //      read from models.json" — this rule keeps regressions out at lint
+  //      time instead of catching them in QA.
+  //   2. `createClient(url, SUPABASE_SERVICE_ROLE_KEY, …)` outside the
+  //      sanctioned `lib/supabase*.ts` helpers. Service-role clients
+  //      bypass RLS and must only flow through `getServiceClient()` /
+  //      `getUserClient(jwt)` so reviewers can see every privileged
+  //      construction in one place.
+  //
+  // Both rules use `no-restricted-syntax` with AST selectors so they fire
+  // before TypeScript checks. Known-violating sites get a baseline
+  // override (below) tagged with `// FIXME: P1-XX` so `main` stays green
+  // while the migration lands.
+  // ---------------------------------------------------------------------------
+  {
+    files: ['**/*.ts', '**/*.tsx'],
+    ignores: [
+      // The catalog SSOT itself — model IDs are LITERALLY the data here.
+      'packages/types/src/models.json',
+      'packages/types/src/model-catalog.ts',
+      // Sanctioned Supabase client constructors — these are where
+      // `getServiceClient()` / `getUserClient(jwt)` are DEFINED, so the
+      // service-role-key gate would self-report here.
+      '**/lib/supabase.ts',
+      '**/lib/supabase-server.ts',
+      '**/lib/supabaseClients.ts',
+      // Tests can — and should — assert against literal model IDs to
+      // pin the catalog SSOT. The harm is in production code paths.
+      '**/*.test.ts',
+      '**/*.test.tsx',
+      '**/*.spec.ts',
+      '**/*.spec.tsx',
+      '**/__tests__/**',
+      '**/__mocks__/**',
+      // MARKETING constants files explicitly carry model IDs as ad copy.
+      // Convention: any file under a `marketing/` directory or whose
+      // name ends with `Marketing.ts(x)` is allowed to hold literals.
+      '**/marketing/**',
+      '**/*Marketing.ts',
+      '**/*Marketing.tsx',
+      // Generated TypeScript declaration files — mirror upstream APIs.
+      '**/*.d.ts',
+    ],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          // Hardcoded model IDs — the catalog (models.json) is the SSOT.
+          // The selector matches string literals that look like a real
+          // model ID, not generic prefix tokens. The regex requires a
+          // digit (or canonical model-family word) immediately after
+          // the provider prefix so substring tests like
+          // `model.includes('claude-')` and tool-name strings like
+          // `'claude-code'` are NOT flagged. Matches: `'gpt-5.4'`,
+          // `"gpt-5.4-mini"`, `'claude-opus-4-7'`, `'claude-sonnet-4.6'`,
+          // `'gemini-3.1-flash-lite'`, `'grok-4.3'`, `'o1-mini'`.
+          // Misses: `'claude-'`, `'gpt-'`, `'claude-code'` (tool name),
+          // `'claude-cookbook'` (doc reference).
+          selector:
+            'Literal[value=/^(gpt-[0-9]|claude-(?:opus|sonnet|haiku|[1-9])|gemini-[0-9]|grok-[0-9]|o[1-9]-[a-z])/]',
+          message:
+            'Hardcoded model ID detected. Read from models.json via packages/types model-catalog helpers (getDefaultModelFor, resolveAutoModeModel, getRoutingSlotModel) — NEVER inline a literal. See CLAUDE.md "Critical rules". To opt out (tests, marketing copy), add `// eslint-disable-next-line no-restricted-syntax` with a `// FIXME: P1-XX` if migration is pending.',
+        },
+        {
+          // Service-role-key Supabase clients outside `lib/supabase*.ts`.
+          // Matches any reference to the env var inside a `createClient(`
+          // call subtree — covers `process.env.SUPABASE_SERVICE_ROLE_KEY`
+          // (MemberExpression) and `SUPABASE_SERVICE_ROLE_KEY` re-exports
+          // (Identifier).
+          selector:
+            "CallExpression[callee.name='createClient'] :matches(Identifier[name='SUPABASE_SERVICE_ROLE_KEY'], MemberExpression[property.name='SUPABASE_SERVICE_ROLE_KEY'])",
+          message:
+            'Service-role Supabase clients must flow through getServiceClient() in lib/supabase-server.ts (web) or lib/supabaseClients.ts (api-gateway) so RLS-bypass usage is auditable. Use getUserClient(userJwt) for user-scoped operations. See docs/plans/UNIFIED_LAUNCH_PLAN.md §1.',
+        },
+      ],
+    },
+  },
+
   // JavaScript files
   {
     files: ['**/*.js', '**/*.cjs', '**/*.mjs'],
@@ -530,6 +618,117 @@ export default [
     files: ['apps/mobile/**/*.ts', 'apps/mobile/**/*.tsx'],
     rules: {
       '@typescript-eslint/no-unused-vars': 'off',
+    },
+  },
+
+  // ---------------------------------------------------------------------------
+  // PREVENTION-LAYER BASELINE — Wave 1.5
+  //
+  // The two prevention rules above (no-restricted-syntax for hardcoded
+  // model IDs + service-role-key Supabase clients) ship in Wave 1.5
+  // BEFORE any caller migration. The files listed below contain known
+  // violations that pre-date the rule; each is tagged with a FIXME
+  // pointing at the wave/task that will migrate it. Tests, the catalog
+  // SSOT, and marketing copy are exempted in the rule itself (above).
+  //
+  // Migration tickets:
+  //   FIXME: P1-MODEL-CATALOG-MIGRATION — replace hardcoded literals with
+  //     getRoutingSlotModel() / getDefaultModelFor() / resolveAutoModeModel()
+  //     reads from packages/types model-catalog. Tracked across:
+  //       - Wave 1   P0-G/I  → services/api-gateway routes (4 files)
+  //       - Wave 1   P0-J/K/L → packages/{routing,llm-normalize}
+  //       - Wave 2   model-id sweep → desktop / cli / mobile / web
+  //   FIXME: P1-RLS-CLIENT-MIGRATION — route handler uses createClient(...,
+  //     SERVICE_ROLE_KEY, ...) directly instead of getServiceClient() /
+  //     getUserClient(jwt). Tracked under Wave 1 P0-G (api-gateway) and
+  //     P0-C (web — Stripe webhook + downgrades + RLS sweep).
+  //
+  // Once a wave migrates a file, remove its entry from the lists below
+  // so the rule starts enforcing on it again.
+  // ---------------------------------------------------------------------------
+  {
+    files: [
+      // Web — production code paths still on hardcoded model IDs.
+      // FIXME: P1-MODEL-CATALOG-MIGRATION (Wave 1 P0-C / Wave 2 sweep)
+      'apps/web/lib/marketing-constants.ts',
+      'apps/web/lib/assert-quota.ts',
+      'apps/web/lib/llm-providers/context-management.ts',
+      'apps/web/lib/llm-providers/google.ts',
+      'apps/web/shared/config/supported-models.ts',
+      'apps/web/shared/stores/chat-store.ts',
+      'apps/web/shared/stores/multi-agent-chat-store.ts',
+      'apps/web/tests/fixtures/test-data-factory.ts',
+      'apps/web/app/api/admin/directory-sync/route.ts',
+      'apps/web/app/api/admin/security/route.ts',
+      'apps/web/app/api/admin/sso/route.ts',
+      'apps/web/app/api/agents/execute/route.ts',
+      'apps/web/app/api/auth/sso-check/route.ts',
+      'apps/web/app/api/completion/route.ts',
+      'apps/web/app/api/github/webhook/route.ts',
+      'apps/web/app/api/mission/route.ts',
+      'apps/web/app/api/stripe-webhook/route.ts',
+      'apps/web/app/api/webhooks/directory-sync/route.ts',
+      'apps/web/app/chat-multi/page.tsx',
+      'apps/web/components/CommandPalette/CommandPalette.tsx',
+      'apps/web/core/ai/llm/providers/anthropic-claude.ts',
+      'apps/web/core/ai/llm/providers/google-gemini.ts',
+      'apps/web/core/ai/llm/providers/grok-ai.ts',
+      'apps/web/core/ai/llm/unified-language-model.ts',
+      'apps/web/core/ai/llm/user-ai-preferences.ts',
+      'apps/web/core/ai/orchestration/model-router.ts',
+      'apps/web/core/ai/tools/tool-invocation-handler.ts',
+      'apps/web/core/security/api-abuse-prevention.ts',
+      'apps/web/features/analytics/pages/AnalyticsDashboard.tsx',
+      'apps/web/features/chat/hooks/use-ai-preferences.ts',
+      'apps/web/features/pages/legal/BusinessLegalPage.tsx',
+      'apps/web/features/schedules/types/index.ts',
+      'apps/web/features/settings/hooks/use-settings-queries.ts',
+      'apps/web/features/settings/services/user-preferences.ts',
+
+      // Desktop — production code paths.
+      // FIXME: P1-MODEL-CATALOG-MIGRATION (Wave 2 desktop+cli sweep)
+      'apps/desktop/src/components/Settings/ComputerUseSettings.tsx',
+      'apps/desktop/src/components/Workflows/AutomationBuilder.tsx',
+      'apps/desktop/src/features/experimental/ModelComparisonView.tsx',
+      'apps/desktop/src/lib/modelRouter.ts',
+      'apps/desktop/src/lib/tauri-mock.ts',
+      'apps/desktop/src/runtime/WebRuntime.ts',
+      'apps/desktop/src/stores/voiceModeStore.ts',
+      'apps/desktop/src/test/msw-setup.ts',
+
+      // Mobile + VS Code extension surfaces.
+      // FIXME: P1-MODEL-CATALOG-MIGRATION (Wave 2 mobile+vscode sweep)
+      'apps/extension-vscode/src/services/modelConstants.ts',
+      'apps/mobile/lib/models.ts',
+
+      // Shared packages.
+      // FIXME: P1-MODEL-CATALOG-MIGRATION (Wave 1 P0-J/K/L)
+      'packages/llm-normalize/src/openai-reasoning-effort.ts',
+      'packages/providers/google/src/catalog.ts',
+      'packages/routing/src/classify.ts',
+      'packages/api/src/memoryImport.ts',
+
+      // Services — api-gateway routes.
+      // FIXME: P1-MODEL-CATALOG-MIGRATION (Wave 1 P0-G/I)
+      'services/api-gateway/src/routes/cloudChat.ts',
+      'services/api-gateway/src/routes/dotfile.ts',
+      'services/api-gateway/src/routes/llm.ts',
+      'services/api-gateway/src/routes/models.ts',
+    ],
+    rules: {
+      // Baseline — these files violate the prevention layer; migration is
+      // tracked above. Remove the entry once migrated.
+      'no-restricted-syntax': 'off',
+    },
+  },
+  {
+    files: [
+      // Service-role key construction outside lib/supabase*.ts.
+      // FIXME: P1-RLS-CLIENT-MIGRATION (Wave 1 P0-C web RLS sweep)
+      'apps/web/lib/security-audit.ts',
+    ],
+    rules: {
+      'no-restricted-syntax': 'off',
     },
   },
 
