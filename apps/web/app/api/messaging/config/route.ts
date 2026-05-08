@@ -5,15 +5,13 @@
  * POST /api/messaging/config - Create/update a messaging connection
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
 
 const VALID_PLATFORMS = ['whatsapp', 'telegram', 'slack'] as const;
 
@@ -21,11 +19,8 @@ async function handleGetConfig(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
 
   const { data, error } = await supabase
     .from('messaging_connections')
@@ -49,7 +44,8 @@ async function handlePostConfig(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
 
   let body: { platform?: string; config?: Record<string, string> };
   try {
@@ -78,10 +74,6 @@ async function handlePostConfig(request: NextRequest) {
       throw createError.validation('Config key/value size limit exceeded');
     }
   }
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   const { data, error } = await supabase
     .from('messaging_connections')

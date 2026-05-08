@@ -6,16 +6,14 @@
  * DELETE /api/chat/conversations/[id] - Soft delete conversation
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { UpdateConversationSchema } from '@/lib/validations/chat';
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -23,12 +21,9 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
   const { id } = await context.params;
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   // Get conversation
   const { data: conversation, error: convError } = await supabase
@@ -71,7 +66,8 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
   const { id } = await context.params;
 
   let rawBody: unknown;
@@ -87,10 +83,6 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
     throw createError.validation('Invalid request body', validationResult.error);
   }
   const body = validationResult.data;
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   const updates: Record<string, unknown> = {};
   if (body['title']) updates['title'] = body['title'];
@@ -120,12 +112,9 @@ async function handleDeleteConversation(request: NextRequest, context: RouteCont
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
   const { id } = await context.params;
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   // Soft delete
   const { error } = await supabase
