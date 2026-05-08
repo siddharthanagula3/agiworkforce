@@ -16,6 +16,8 @@
  * - Rate limited to 5 requests per minute
  */
 
+export const runtime = 'nodejs';
+
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
