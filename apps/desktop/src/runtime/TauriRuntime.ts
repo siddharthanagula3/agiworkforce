@@ -1,7 +1,7 @@
 /**
  * TauriRuntime
  *
- * Implements the ChatRuntime interface from @agiworkforce/chat, bridging
+ * Implements the ChatRuntime interface from @agiworkforce/unified-chat, bridging
  * the shared chat package to the Tauri/Rust backend via invoke() IPC.
  *
  * In Tauri desktop mode: uses invoke() + Tauri event listeners for streaming.
@@ -22,8 +22,8 @@ import type {
   SendMessageOptions,
   SendMessageParams,
   StreamChunk,
-} from '@agiworkforce/chat';
-import type { Conversation, ChatMessage } from '@agiworkforce/chat';
+} from '@agiworkforce/unified-chat';
+import type { Conversation, ChatMessage } from '@agiworkforce/unified-chat';
 import { invoke } from '../lib/tauri-mock';
 import { listen } from '../lib/tauri-mock';
 import { useUnifiedAuthStore } from '../stores/auth';
@@ -156,7 +156,7 @@ export class TauriRuntime implements ChatRuntime {
 
   // Registered onStream callbacks
   private readonly _streamCallbacks = new Set<
-    (event: import('@agiworkforce/chat').StreamEvent) => void
+    (event: import('@agiworkforce/unified-chat').StreamEvent) => void
   >();
 
   // ---------------------------------------------------------------------------
@@ -213,7 +213,7 @@ export class TauriRuntime implements ChatRuntime {
     };
     for await (const chunk of this._streamMessage(params)) {
       if (this._streamCallbacks.size > 0) {
-        let event: import('@agiworkforce/chat').StreamEvent | null = null;
+        let event: import('@agiworkforce/unified-chat').StreamEvent | null = null;
         if (chunk.type === 'text') event = { type: 'content', content: chunk.content };
         else if (chunk.type === 'thinking') event = { type: 'thinking', content: chunk.content };
         else if (chunk.type === 'tool_call') {
@@ -249,7 +249,9 @@ export class TauriRuntime implements ChatRuntime {
     }
   }
 
-  onStream(callback: (event: import('@agiworkforce/chat').StreamEvent) => void): () => void {
+  onStream(
+    callback: (event: import('@agiworkforce/unified-chat').StreamEvent) => void,
+  ): () => void {
     this._streamCallbacks.add(callback);
     return () => this._streamCallbacks.delete(callback);
   }
