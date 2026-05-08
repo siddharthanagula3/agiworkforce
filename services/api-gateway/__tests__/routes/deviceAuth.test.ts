@@ -4,13 +4,24 @@ import request from 'supertest';
 import { deviceAuthRouter } from '../../src/routes/deviceAuth';
 import { errorHandler } from '../../src/middleware/errorHandler';
 
-vi.mock('../../src/lib/supabase', () => ({
-  supabase: {
+// Wave 1.5+ task #17 (2026-05-08): legacy `lib/supabase` singleton deleted;
+// routes/deviceAuth.ts now uses `getServiceClient()` from supabaseClients
+// (every Supabase call in the device-code flow runs without a verified
+// user JWT — service-role is correct).
+vi.mock('../../src/lib/supabaseClients', () => {
+  const mockClient = {
     from: vi.fn(() => ({
       insert: vi.fn().mockResolvedValue({ error: null }),
     })),
-  },
-}));
+  };
+  return {
+    getServiceClient: vi.fn(() => mockClient),
+    getUserClient: vi.fn(() => mockClient),
+    getUserScopedClient: vi.fn(() => mockClient),
+    mintSupabaseJwt: vi.fn(() => 'mock-supabase-jwt'),
+    _resetSupabaseJwtCacheForTests: vi.fn(),
+  };
+});
 
 function createTestApp() {
   const app = express();

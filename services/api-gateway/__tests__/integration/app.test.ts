@@ -12,9 +12,10 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 
-// Mock Supabase before importing routes
-vi.mock('../../src/lib/supabase', () => ({
-  supabase: {
+// Wave 1.5+ task #17 (2026-05-08): legacy `lib/supabase` singleton deleted;
+// every route now goes through supabaseClients helpers.
+vi.mock('../../src/lib/supabaseClients', () => {
+  const mockClient = {
     from: vi.fn(() => ({
       select: vi.fn(() => ({
         eq: vi.fn(() => ({
@@ -27,8 +28,15 @@ vi.mock('../../src/lib/supabase', () => ({
         })),
       })),
     })),
-  },
-}));
+  };
+  return {
+    getServiceClient: vi.fn(() => mockClient),
+    getUserClient: vi.fn(() => mockClient),
+    getUserScopedClient: vi.fn(() => mockClient),
+    mintSupabaseJwt: vi.fn(() => 'mock-supabase-jwt'),
+    _resetSupabaseJwtCacheForTests: vi.fn(),
+  };
+});
 
 /**
  * Creates a test Express app that mirrors the production configuration
