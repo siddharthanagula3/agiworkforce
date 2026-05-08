@@ -16,14 +16,19 @@
     "@agiworkforce/types": "workspace:*"
   },
   "peerDependencies": {
+    "@neondatabase/serverless": ">=1.0.0",
     "@supabase/supabase-js": ">=2.0.0"
   },
   "peerDependenciesMeta": {
+    "@neondatabase/serverless": {
+      "optional": true
+    },
     "@supabase/supabase-js": {
       "optional": true
     }
   },
   "devDependencies": {
+    "@neondatabase/serverless": "^1.1.0",
     "@supabase/supabase-js": "^2.100.1",
     "vitest": "^3.0.0"
   }
