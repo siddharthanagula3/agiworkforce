@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ChatHostBridge } from '@agiworkforce/chat';
+import type { ChatHostBridge } from '@agiworkforce/unified-chat';
 import { isTauri, invoke, listen } from './lib/tauri-mock';
 import { toast } from 'sonner';
 import { useVoiceHotkey } from './hooks/useVoiceHotkey';
@@ -37,6 +37,7 @@ import {
   uuidToDbId,
 } from './stores/unifiedChatStore';
 import { useDeepLink } from './hooks/useDeepLink';
+import { useTierBridge } from './hooks/useTierBridge';
 import type { TimeoutWarningData } from './components/Execution/TimeoutWarningDialog';
 
 import {
@@ -82,7 +83,7 @@ const FloatingChat = lazy(() =>
   })),
 );
 const ChatInterface = lazy(() =>
-  import('@agiworkforce/chat').then((m) => ({
+  import('@agiworkforce/unified-chat').then((m) => ({
     default: m.ChatInterface,
   })),
 );
@@ -149,12 +150,9 @@ const ErrorToastContainer = lazy(() =>
     default: m.default,
   })),
 );
-// Retained for reference — UnifiedAgenticChat is replaced by ChatInterface from @agiworkforce/chat.
-// const UnifiedAgenticChat = lazy(() =>
-//   import('./components/UnifiedAgenticChat').then((m) => ({
-//     default: m.UnifiedAgenticChat,
-//   })),
-// );
+// Cross-surface chat lives in packages/chat (@agiworkforce/unified-chat) — shared by desktop, mobile, web.
+// UnifiedAgenticChat features (BudgetTracker, AgentStepTimeline, etc.) are being ported INTO packages/chat.
+// Once parity is reached, UnifiedAgenticChat will be removed.
 import { useSessionPersistence } from './hooks/useSessionPersistence';
 import { initializeSyncManager, cleanupSyncManager } from './lib/offline/offlineSync';
 import { CHAT_COMPOSER_CAPTURE_EVENT } from './lib/chatComposerEvents';
@@ -562,7 +560,7 @@ const DesktopShell = () => {
         // Enable ManagedCloud provider if user is authenticated (subscription-based models)
         await invoke<boolean>('llm_ensure_managed_cloud').catch(() => false);
 
-        const { useChatModelStore } = await import('@agiworkforce/chat');
+        const { useChatModelStore } = await import('@agiworkforce/unified-chat');
         interface RustModelInfo {
           id: string;
           name: string;
@@ -585,7 +583,7 @@ const DesktopShell = () => {
           name: m.name,
           provider: (validProviders.has(m.provider.toLowerCase())
             ? m.provider.toLowerCase()
-            : 'openai') as import('@agiworkforce/chat').ModelInfo['provider'],
+            : 'openai') as import('@agiworkforce/unified-chat').ModelInfo['provider'],
           tier: (m.name.toLowerCase().includes('opus') ||
           m.name.toLowerCase().includes('4o') ||
           m.name.toLowerCase().includes('pro')
@@ -594,7 +592,7 @@ const DesktopShell = () => {
                 m.name.toLowerCase().includes('mini') ||
                 m.name.toLowerCase().includes('flash')
               ? 'fast'
-              : 'standard') as import('@agiworkforce/chat').ModelInfo['tier'],
+              : 'standard') as import('@agiworkforce/unified-chat').ModelInfo['tier'],
           supportsThinking:
             m.name.toLowerCase().includes('think') || m.provider.toLowerCase() === 'anthropic',
           supportsVision: true,
@@ -612,13 +610,13 @@ const DesktopShell = () => {
             if (res.ok) {
               const data = await res.json();
               if (Array.isArray(data?.models) && data.models.length > 0) {
-                const { useChatModelStore } = await import('@agiworkforce/chat');
+                const { useChatModelStore } = await import('@agiworkforce/unified-chat');
                 useChatModelStore.getState().setModels(
                   data.models.map((m: { id: string; name: string; provider: string }) => ({
                     id: m.id,
                     name: m.name,
                     provider: (m.provider ||
-                      'openai') as import('@agiworkforce/chat').ModelInfo['provider'],
+                      'openai') as import('@agiworkforce/unified-chat').ModelInfo['provider'],
                     tier: 'standard' as const,
                     supportsThinking: false,
                     supportsVision: true,
@@ -639,9 +637,9 @@ const DesktopShell = () => {
 
         // Build fallback models from the shared catalog helpers (single source of truth)
         try {
-          const { useChatModelStore } = await import('@agiworkforce/chat');
+          const { useChatModelStore } = await import('@agiworkforce/unified-chat');
           const fallbackProviders = ['anthropic', 'openai', 'google', 'xai', 'deepseek', 'ollama'];
-          const fallbackModels: import('@agiworkforce/chat').ModelInfo[] =
+          const fallbackModels: import('@agiworkforce/unified-chat').ModelInfo[] =
             fallbackProviders.flatMap((p) => {
               const defaultModelId = getProviderDefaultModel(
                 p as import('./types/provider').Provider,
@@ -653,7 +651,7 @@ const DesktopShell = () => {
                 {
                   id: m.id,
                   name: m.name,
-                  provider: p as import('@agiworkforce/chat').ModelInfo['provider'],
+                  provider: p as import('@agiworkforce/unified-chat').ModelInfo['provider'],
                   tier:
                     m.speed === 'very-fast' || m.speed === 'fast'
                       ? ('fast' as const)
@@ -681,7 +679,7 @@ const DesktopShell = () => {
   useEffect(() => {
     async function syncProfile() {
       try {
-        const { useChatSettingsStore } = await import('@agiworkforce/chat');
+        const { useChatSettingsStore } = await import('@agiworkforce/unified-chat');
 
         const syncFromAuth = () => {
           const authState = useAuthStore.getState();
@@ -1435,6 +1433,7 @@ const App = () => {
   }, []);
 
   useDeepLink();
+  useTierBridge();
 
   const windowMode = (() => {
     if (typeof window === 'undefined') return 'default';
