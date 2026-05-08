@@ -697,6 +697,9 @@ importers:
       '@agiworkforce/api':
         specifier: workspace:*
         version: link:../../packages/api
+      '@agiworkforce/data-layer':
+        specifier: workspace:*
+        version: link:../../packages/data-layer
       '@agiworkforce/routing':
         specifier: workspace:*
         version: link:../../packages/routing
@@ -1114,6 +1117,19 @@ importers:
       vitest:
         specifier: ^4.0.18
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@22.19.15)(@vitest/ui@4.1.2)(jsdom@20.0.3)(msw@2.12.14(@types/node@22.19.15)(typescript@5.9.3))(vite@8.0.10(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3))
+
+  packages/data-layer:
+    dependencies:
+      '@agiworkforce/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@supabase/supabase-js':
+        specifier: ^2.100.1
+        version: 2.100.1
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(jsdom@20.0.3)(msw@2.12.14(@types/node@22.19.15)(typescript@5.9.3))(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3)
 
   packages/llm-normalize:
     devDependencies:
@@ -31886,7 +31902,7 @@ snapshots:
       std-env: 3.10.0
       tinybench: 2.9.0
       tinyexec: 0.3.2
-      tinyglobby: 0.2.15
+      tinyglobby: 0.2.16
       tinypool: 1.1.1
       tinyrainbow: 2.0.0
       vite: 8.0.10(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3)
