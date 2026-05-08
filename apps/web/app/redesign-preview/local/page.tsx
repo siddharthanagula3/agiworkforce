@@ -20,11 +20,13 @@ export default function RedesignPreviewLocalPage() {
         <div className="pv-terminal">
           <div className="pv-terminal-bar">~/agi-workforce — local mode</div>
           <pre className="pv-terminal-pre">
-            <span className="pv-terminal-comment"># macOS</span>
+            <span className="pv-terminal-comment">
+              # macOS — install Ollama, pull any open-weight model, connect
+            </span>
             {'\n'}
             <span className="pv-terminal-prompt">$</span>brew install ollama
             {'\n'}
-            <span className="pv-terminal-prompt">$</span>ollama pull llama3.3
+            <span className="pv-terminal-prompt">$</span>ollama pull &lt;your-model&gt;
             {'\n'}
             <span className="pv-terminal-prompt">$</span>agiworkforce --provider ollama
             {'\n'}
