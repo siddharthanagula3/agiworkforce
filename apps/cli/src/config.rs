@@ -1292,15 +1292,15 @@ max_tokens = 2048
     fn test_set_get_fallback_chain() {
         let mut config = CliConfig::default();
         config
-            .set_value("fallback-chain", "gpt-5.5, gemini-2.0-flash")
+            .set_value("fallback-chain", "gpt-5.5, gemini-3.1-flash-lite")
             .unwrap();
         assert_eq!(
             config.default.fallback_chain,
-            vec!["gpt-5.5", "gemini-2.0-flash"]
+            vec!["gpt-5.5", "gemini-3.1-flash-lite"]
         );
         assert_eq!(
             config.get_value("fallback-chain"),
-            Some("gpt-5.5,gemini-2.0-flash".to_string())
+            Some("gpt-5.5,gemini-3.1-flash-lite".to_string())
         );
     }
 
@@ -1319,13 +1319,13 @@ max_tokens = 2048
     #[test]
     fn test_fallback_chain_serialization() {
         let mut config = CliConfig::default();
-        config.default.fallback_chain = vec!["gpt-5.5".to_string(), "gemini-2.0-flash".to_string()];
+        config.default.fallback_chain = vec!["gpt-5.5".to_string(), "gemini-3.1-flash-lite".to_string()];
         let serialized = toml::to_string_pretty(&config).unwrap();
         assert!(serialized.contains("fallback_chain"));
         let deserialized: CliConfig = toml::from_str(&serialized).unwrap();
         assert_eq!(
             deserialized.default.fallback_chain,
-            vec!["gpt-5.5", "gemini-2.0-flash"]
+            vec!["gpt-5.5", "gemini-3.1-flash-lite"]
         );
     }
 
