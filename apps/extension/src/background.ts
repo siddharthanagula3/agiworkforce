@@ -1293,6 +1293,26 @@ async function handleMessageAsync(
       }
     }
 
+    case 'IN_PAGE_PROMPT' as ExtensionMessage['type']: {
+      // Sent by the in-page chat panel (content-script) to run a prompt and
+      // return the full accumulated response text. Uses the same provider-stream
+      // / bridge / native fallback chain as CHAT_MESSAGE but resolves to a
+      // simple { success, text } rather than broadcasting chunks, since content
+      // scripts cannot receive chunked messages while the panel waits.
+      const promptPayload = message as unknown as { prompt?: string };
+      const promptText = typeof promptPayload.prompt === 'string' ? promptPayload.prompt : '';
+      if (!promptText) {
+        return { success: false, error: 'Missing prompt' } as ExtensionResponse;
+      }
+      try {
+        const responseText = await handleInPagePrompt(promptText);
+        return { success: true, text: responseText } as ExtensionResponse;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Prompt failed';
+        return { success: false, error: msg } as ExtensionResponse;
+      }
+    }
+
     case 'BRIDGE_URL_CHANGED': {
       // Validate the new URL before accepting it
       const newUrl = (message as import('./types').BridgeUrlChangedMessage).url?.trim();
@@ -2745,6 +2765,101 @@ async function handleChatMessage(
     broadcastChunk('', true, errText);
     showNotification('Chat Error', errText);
   }
+}
+
+/**
+ * Handle an in-page prompt from the content-script overlay panel.
+ *
+ * Returns the full accumulated response text so the panel can render it
+ * without needing a chunked messaging protocol.
+ *
+ * Fallback chain (same as handleChatMessage):
+ *  1. Provider-stream via api-gateway (if enabled + JWT present)
+ *  2. HTTP fetch to AGI bridge (localhost:8787)
+ *  3. Native messaging to desktop app
+ *  4. Offline message
+ */
+async function handleInPagePrompt(prompt: string): Promise<string> {
+  const messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [
+    { role: 'user', content: prompt },
+  ];
+
+  // Path 1 — provider-stream via api-gateway
+  const providerStreamSettings = await getProviderStreamSettings();
+  if (providerStreamSettings.enabled) {
+    const jwt = await getSupabaseJwtFromStorage();
+    if (jwt) {
+      try {
+        const model = await getSelectedModel();
+        const providerId =
+          providerStreamSettings.providerOverride === 'auto'
+            ? inferProviderFromModel(model)
+            : providerStreamSettings.providerOverride;
+        let accumulated = '';
+        const streamResult = await streamChatViaProvider({
+          gatewayUrl: providerStreamSettings.gatewayUrl,
+          providerId,
+          jwt,
+          model,
+          messages,
+          broadcast: (chunk: string, _done: boolean) => {
+            accumulated += chunk;
+          },
+        });
+        if (streamResult.paywalled) {
+          throw new Error('Feature requires upgrade');
+        }
+        if (accumulated) return accumulated;
+      } catch (err) {
+        logger.warn('In-page prompt: provider-stream failed, falling back', err);
+      }
+    }
+  }
+
+  // Path 2 — HTTP bridge
+  const AGI_API_BASE = await getAgiBridgeBaseUrl();
+  try {
+    const resp = await fetch(`${AGI_API_BASE}/v1/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages, stream: false }),
+      signal: AbortSignal.timeout(45000),
+    });
+    if (resp.ok) {
+      const json = (await resp.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+        content?: string;
+      };
+      const text =
+        json.choices?.[0]?.message?.content ??
+        (typeof json.content === 'string' ? json.content : '');
+      if (text) return text;
+    }
+  } catch {
+    logger.debug('In-page prompt: bridge fetch failed, trying native');
+  }
+
+  // Path 3 — native messaging
+  if (state.isNativeConnected && state.nativePort) {
+    try {
+      const nativeResp = (await withTimeout(
+        sendNativeRequest({
+          type: 'chat_message',
+          id: `in_page_${Date.now()}`,
+          text: prompt,
+          conversationHistory: [],
+          timestamp: Date.now(),
+        }),
+        30000,
+      )) as unknown as { success?: boolean; reply?: string; error?: string };
+      if (nativeResp?.reply) return nativeResp.reply;
+    } catch (err) {
+      logger.warn('In-page prompt: native fallback failed', err);
+    }
+  }
+
+  // Path 4 — offline
+  return 'The AGI Workforce desktop app is not running or no provider is configured. Please start the desktop app or configure a provider in the extension popup.';
 }
 
 function isValidMessage(message: unknown): message is ExtensionMessage {
