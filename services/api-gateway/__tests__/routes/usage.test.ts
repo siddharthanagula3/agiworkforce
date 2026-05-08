@@ -35,7 +35,12 @@ const { usageRows } = vi.hoisted(() => ({
   ],
 }));
 
-vi.mock('../../src/lib/supabase', () => {
+// Wave 1.5+ task #17 (2026-05-08): legacy `lib/supabase` singleton deleted.
+// middleware/auth.ts kill-switch now uses `getServiceClient()` for the
+// profiles lookup; routes/usage.ts uses `getUserScopedClient(userId)` for
+// usage_events. Mock both helpers separately so each call site sees the
+// right chain (profile mock for kill-switch, usage mock for usage routes).
+vi.mock('../../src/lib/supabaseClients', () => {
   const usageQuery = {
     eq: vi.fn(() => usageQuery),
     gte: vi.fn(() => usageQuery),
@@ -50,15 +55,28 @@ vi.mock('../../src/lib/supabase', () => {
         data: { account_status: 'active' },
         error: null,
       }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+    })),
+  };
+
+  const serviceClient = {
+    from: vi.fn(() => ({
+      select: vi.fn(() => profileQuery),
+    })),
+  };
+
+  const userClient = {
+    from: vi.fn(() => ({
+      select: vi.fn(() => usageQuery),
     })),
   };
 
   return {
-    supabase: {
-      from: vi.fn((table: string) => ({
-        select: vi.fn(() => (table === 'profiles' ? profileQuery : usageQuery)),
-      })),
-    },
+    getServiceClient: vi.fn(() => serviceClient),
+    getUserClient: vi.fn(() => userClient),
+    getUserScopedClient: vi.fn(() => userClient),
+    mintSupabaseJwt: vi.fn(() => 'mock-supabase-jwt'),
+    _resetSupabaseJwtCacheForTests: vi.fn(),
   };
 });
 

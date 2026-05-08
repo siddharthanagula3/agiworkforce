@@ -2,7 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { authenticatedUserSchema, type AuthenticatedUser } from '../authenticated-user';
 import { requireEnv } from '../env';
-import { supabase } from '../lib/supabase';
+import { getServiceClient } from '../lib/supabaseClients';
 import { logger } from '../lib/logger';
 
 const JWT_SECRET = requireEnv('JWT_SECRET');
@@ -100,7 +100,12 @@ export async function authenticateToken(
 
       if (cacheStale) {
         try {
-          const { data: revokedRow, error: revokedError } = await supabase
+          // Wave 1.5+ singleton sweep: revocation lookup happens DURING JWT
+          // verification, so we don't yet have a verified user JWT to bind
+          // to the client. Service-role is the correct client here — it's
+          // bypassing RLS for a security-critical lookup that must
+          // succeed-or-fail-closed, not a user-data read.
+          const { data: revokedRow, error: revokedError } = await getServiceClient()
             .from('revoked_jwts')
             .select('jti')
             .eq('jti', jti)
@@ -145,7 +150,10 @@ export async function authenticateToken(
 
     if (accountStatus === null) {
       try {
-        const { data: profile, error: profileError } = await supabase
+        // Wave 1.5+ singleton sweep: kill-switch check during auth
+        // verification — service-role is correct here for the same reason
+        // as the revocation lookup above.
+        const { data: profile, error: profileError } = await getServiceClient()
           .from('profiles')
           .select('account_status')
           .eq('id', userId)
