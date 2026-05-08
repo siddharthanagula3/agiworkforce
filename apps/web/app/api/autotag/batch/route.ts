@@ -7,15 +7,13 @@
  * Returns 'general' for any conversation without a stored tag.
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
 
 async function handleBatchGetTags(request: NextRequest) {
   // AUDIT-008-006: Enforce CSRF protection for cookie-auth POST endpoint
@@ -25,7 +23,8 @@ async function handleBatchGetTags(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
 
   let body: { conversationIds?: string[] };
   try {
@@ -48,10 +47,6 @@ async function handleBatchGetTags(request: NextRequest) {
   if (!conversationIds.every((id) => typeof id === 'string' && id.length > 0)) {
     throw createError.validation('All conversationIds must be non-empty strings');
   }
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   // Fetch existing tags for this user's conversations
   const { data, error } = await supabase

@@ -6,15 +6,13 @@
  * DELETE /api/teams/[id] - delete a team (CSRF, owner only)
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
 
 function mapRowToTeam(row: Record<string, unknown>) {
   return {
@@ -47,16 +45,13 @@ async function handleGetTeam(request: NextRequest, context: { params: Promise<{ 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
   const { id: teamId } = await context.params;
 
   if (!teamId || typeof teamId !== 'string') {
     throw createError.validation('Invalid team ID');
   }
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   const { data: team, error: teamError } = await supabase
     .from('teams')
@@ -125,7 +120,8 @@ async function handleUpdateTeam(
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
   const { id: teamId } = await context.params;
 
   if (!teamId || typeof teamId !== 'string') {
@@ -154,10 +150,6 @@ async function handleUpdateTeam(
   ) {
     throw createError.validation('Description must be 500 characters or less');
   }
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   // Verify team exists and user has admin or owner access
   const { data: team, error: teamError } = await supabase
@@ -226,16 +218,13 @@ async function handleDeleteTeam(
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
   const { id: teamId } = await context.params;
 
   if (!teamId || typeof teamId !== 'string') {
     throw createError.validation('Invalid team ID');
   }
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   // Only the owner may delete the team
   const { data: team, error: teamError } = await supabase
