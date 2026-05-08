@@ -7,6 +7,29 @@ use std::path::{Path, PathBuf};
 
 use crate::models::Message;
 
+/// Write `contents` to `target` via a tempfile-then-rename so partial writes
+/// are never visible to readers.  Callers that need cross-process
+/// serialization should acquire an external lock before calling this.
+fn atomic_write_session(target: &Path, contents: &[u8]) -> Result<()> {
+    let dir = target
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("path has no parent: {}", target.display()))?;
+    fs::create_dir_all(dir)
+        .with_context(|| format!("Failed to create directory {}", dir.display()))?;
+    let tmp = tempfile::NamedTempFile::new_in(dir)
+        .with_context(|| format!("Failed to create tempfile in {}", dir.display()))?;
+    fs::write(tmp.path(), contents)
+        .with_context(|| format!("Failed to write tempfile {}", tmp.path().display()))?;
+    tmp.persist(target).map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to rename tempfile to {}: {}",
+            target.display(),
+            e
+        )
+    })?;
+    Ok(())
+}
+
 /// Current on-disk schema version for managed CLI sessions.
 pub const MANAGED_SESSION_VERSION: u32 = 1;
 
@@ -113,8 +136,8 @@ impl ManagedSession {
         self.updated_at = Utc::now();
     }
 
-    /// Persist the session to a file. JSONL is used for `.jsonl` paths, while
-    /// `.json` paths are written as a full JSON object.
+    /// Persist the session to a file atomically (tempfile + rename).
+    /// JSONL is used for `.jsonl` paths; `.json` paths use pretty JSON.
     pub fn save_to_path(&self, path: impl AsRef<Path>) -> Result<()> {
         let path = path.as_ref();
         if let Some(parent) = path.parent() {
@@ -122,29 +145,32 @@ impl ManagedSession {
                 .with_context(|| format!("Failed to create {}", parent.display()))?;
         }
 
-        let file = fs::File::create(path)
-            .with_context(|| format!("Failed to create session file {}", path.display()))?;
-        let mut writer = BufWriter::new(file);
-
-        if path
-            .extension()
-            .and_then(|extension| extension.to_str())
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+        let mut buf = Vec::new();
         {
-            serde_json::to_writer_pretty(&mut writer, self)
-                .with_context(|| format!("Failed to write JSON session {}", path.display()))?;
-            writer
-                .write_all(b"\n")
-                .with_context(|| format!("Failed to finalize session file {}", path.display()))?;
-        } else {
-            self.write_jsonl(&mut writer)
-                .with_context(|| format!("Failed to write JSONL session {}", path.display()))?;
+            let mut writer = BufWriter::new(&mut buf);
+            if path
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+            {
+                serde_json::to_writer_pretty(&mut writer, self).with_context(|| {
+                    format!("Failed to serialize JSON session {}", path.display())
+                })?;
+                writer.write_all(b"\n").with_context(|| {
+                    format!("Failed to finalize JSON session {}", path.display())
+                })?;
+            } else {
+                self.write_jsonl(&mut writer).with_context(|| {
+                    format!("Failed to serialize JSONL session {}", path.display())
+                })?;
+            }
+            writer.flush().with_context(|| {
+                format!("Failed to flush session buffer {}", path.display())
+            })?;
         }
 
-        writer
-            .flush()
-            .with_context(|| format!("Failed to flush session file {}", path.display()))?;
-        Ok(())
+        atomic_write_session(path, &buf)
+            .with_context(|| format!("Failed to write session file {}", path.display()))
     }
 
     /// Load a managed session from a JSONL or JSON file.

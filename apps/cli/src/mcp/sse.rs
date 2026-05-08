@@ -7,6 +7,7 @@
 use anyhow::{bail, Context, Result};
 use futures_util::StreamExt;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::mpsc;
 
@@ -146,6 +147,7 @@ pub(super) async fn connect_sse(
         },
         request_id: 0,
         timeouts,
+        stderr_buf: Arc::new(Mutex::new(Vec::new())),
     };
 
     conn.initialize().await?;
