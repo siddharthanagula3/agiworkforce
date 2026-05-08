@@ -173,6 +173,25 @@ export {
 } from './stores/checkpointStore';
 export type { Checkpoint, Branch } from './stores/checkpointStore';
 
+// Phase A Slice 4 — Artifacts + sidecar (ported from UAC, covers Task #16)
+export { ArtifactRenderer } from './components/ArtifactRenderer';
+export type { ArtifactRendererProps } from './components/ArtifactRenderer';
+export { ArtifactsSidebar } from './components/ArtifactsSidebar';
+export type { ArtifactsSidebarProps } from './components/ArtifactsSidebar';
+export { SidecarPanel } from './components/sidecar/SidecarPanel';
+export type { SidecarPanelProps, SidecarPanelType } from './components/sidecar/SidecarPanel';
+export { PresentationArtifact } from './components/artifact-components/PresentationArtifact';
+export type { PresentationArtifactProps } from './components/artifact-components/PresentationArtifact';
+export {
+  ReactPreview,
+  buildReactPreviewDocument,
+} from './components/artifact-components/ReactPreview';
+export type { ReactPreviewProps } from './components/artifact-components/ReactPreview';
+export { SpreadsheetArtifact } from './components/artifact-components/SpreadsheetArtifact';
+export type { SpreadsheetArtifactProps } from './components/artifact-components/SpreadsheetArtifact';
+// Store selectors for the conversation-keyed artifact map
+export { selectArtifacts, selectActiveArtifact, selectArtifactById } from './stores/artifactStore';
+
 // Pro+ tier gating (Task #17 — multi-provider in-thread switch)
 export { ProPlusUpgradePrompt } from './components/ProPlusUpgradePrompt';
 export type { ProPlusUpgradePromptProps } from './components/ProPlusUpgradePrompt';
