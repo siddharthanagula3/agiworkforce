@@ -17,7 +17,7 @@
  * @module inPagePanel/panel
  */
 
-import { getPageActions, truncatePageText } from './pageActions';
+import { getPageActions, truncatePageText, redactSensitiveText } from './pageActions';
 import type { PageAction } from './pageActions';
 import { buildPanelStyles } from './panelStyles';
 
@@ -221,6 +221,42 @@ function autoResizeTextarea(textarea: HTMLTextAreaElement): void {
   textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
 }
 
+// ─── Disclosure banner ─────────────────────────────────────────────────────────
+
+const DISCLOSURE_SHOWN_KEY = 'agi_panel_disclosure_shown';
+
+function showDisclosureBannerOnce(responseArea: HTMLElement): void {
+  chrome.storage.local
+    .get(DISCLOSURE_SHOWN_KEY)
+    .then((result) => {
+      if (result[DISCLOSURE_SHOWN_KEY]) return;
+      void chrome.storage.local.set({ [DISCLOSURE_SHOWN_KEY]: true });
+
+      const banner = document.createElement('div');
+      banner.className = 'agi-disclosure';
+      banner.textContent =
+        'Page text is included in messages to help answer your question. ' +
+        'Sensitive fields (passwords, card numbers) are redacted automatically.';
+      responseArea.prepend(banner);
+    })
+    .catch(() => {});
+}
+
+// ─── Page context capture ──────────────────────────────────────────────────────
+
+function capturePageContext(): {
+  url: string;
+  title: string;
+  pageText: string;
+  actions: PageAction[];
+} {
+  const url = window.location.href;
+  const title = document.title || 'Untitled';
+  const pageText = redactSensitiveText(truncatePageText(document.body?.innerText ?? ''));
+  const actions = getPageActions(url);
+  return { url, title, pageText, actions };
+}
+
 // ─── Public API ────────────────────────────────────────────────────────────────
 
 /**
@@ -237,25 +273,44 @@ export function createPanel(): {
   host.setAttribute('data-agi-panel', 'true');
   host.style.cssText = 'all:initial;';
 
-  const shadow = host.attachShadow({ mode: 'open' });
+  const shadow = host.attachShadow({ mode: 'closed' });
   const els = buildPanelDOM(shadow);
 
-  // Capture page context once at creation time
-  const currentUrl = window.location.href;
-  const currentTitle = document.title || 'Untitled';
-  const pageText = truncatePageText(document.body?.innerText ?? '');
-  const actions = getPageActions(currentUrl);
+  // Capture page context at creation time; refreshed on SPA navigations.
+  let ctx = capturePageContext();
 
-  buildActionChips(actions, els.actionsRow, (action) => {
-    void streamPrompt(action.buildPrompt(currentTitle, pageText), els.responseArea, els.submitBtn);
-  });
+  function rebuildChips(): void {
+    ctx = capturePageContext();
+    buildActionChips(ctx.actions, els.actionsRow, (action) => {
+      // Re-capture on each chip click so SPA navigation changes are reflected.
+      const fresh = capturePageContext();
+      showDisclosureBannerOnce(els.responseArea);
+      void streamPrompt(
+        action.buildPrompt(fresh.title, fresh.pageText),
+        els.responseArea,
+        els.submitBtn,
+      );
+    });
+  }
+
+  rebuildChips();
+
+  // Subscribe to SPA navigation events so chips and page context stay current.
+  window.addEventListener('popstate', rebuildChips);
+  const _origPushState = history.pushState.bind(history);
+  history.pushState = function (...args: Parameters<typeof history.pushState>) {
+    _origPushState(...args);
+    rebuildChips();
+  };
 
   function submitComposer(): void {
     const text = els.textarea.value.trim();
     if (!text) return;
     els.textarea.value = '';
     autoResizeTextarea(els.textarea);
-    const fullPrompt = `Context from page "${currentTitle}":\n${pageText}\n\nUser question: ${text}`;
+    const fresh = capturePageContext();
+    showDisclosureBannerOnce(els.responseArea);
+    const fullPrompt = `Context from page "${fresh.title}":\n${fresh.pageText}\n\nUser question: ${text}`;
     void streamPrompt(fullPrompt, els.responseArea, els.submitBtn);
   }
 
@@ -267,6 +322,9 @@ export function createPanel(): {
     }
   });
   els.textarea.addEventListener('input', () => autoResizeTextarea(els.textarea));
+
+  // Keep ctx reference alive (used by close handler if needed in future).
+  void ctx;
 
   let isOpen = false;
 
