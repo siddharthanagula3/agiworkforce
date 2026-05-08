@@ -2255,6 +2255,14 @@ fn build_system_prompt(
          You are direct, concise, and precise. When showing code, use fenced code blocks with the language specified.",
     );
 
+    // Phase E (W2-W6): compute deferred tool names so we can inject a one-line
+    // hint telling the model which tools need to be loaded via tool_search.
+    let deferred_names: Vec<String> = crate::runtime::tool_catalog::all_builtin_tool_definitions()
+        .into_iter()
+        .filter(|t| t.should_defer)
+        .map(|t| t.name)
+        .collect();
+
     let mut prompt = String::with_capacity(2048);
     prompt.push_str(base);
     prompt.push_str(
@@ -2265,6 +2273,16 @@ fn build_system_prompt(
          - Format output for terminal readability (not web).\n\
          - You have access to tools for reading/writing files, running commands, and searching. Use them when needed.\n",
     );
+
+    // Phase E: deferred-tool hint. Only injected when there are deferred tools
+    // (always true in normal mode; absent in plan mode where tool_catalog
+    // returns the read-only subset directly).
+    if !deferred_names.is_empty() {
+        prompt.push_str(&format!(
+            "- Additional tools available on demand (call `tool_search` to load their schemas): {}.\n",
+            deferred_names.join(", ")
+        ));
+    }
 
     // Hierarchical memory (global -> project -> local) — stable across the session.
     if !memory_context.is_empty() {
@@ -2325,9 +2343,13 @@ mod tests {
     #[test]
     fn test_build_tool_definitions_count() {
         let defs = build_tool_definitions();
-        // 8 base + 1 task + 3 parity (apply_patch, grep_files, tool_search)
-        // + 1 sprint-b4 (update_plan) = 13
-        assert_eq!(defs.len(), 13);
+        // Phase E (W2-W6): full catalog = 11 always-loaded + 9 deferred = 20.
+        // Always-loaded (11): read_file, write_file, edit_file, run_command,
+        //   search_files, list_directory, web_search, web_fetch, task,
+        //   grep_files, tool_search.
+        // Deferred (9): apply_patch, update_plan, glob, batch, multiedit,
+        //   todo_read, todo_write, ask_user, read_many_files.
+        assert_eq!(defs.len(), 20);
     }
 
     #[test]

@@ -1256,6 +1256,9 @@ impl McpManager {
                 is_read_only: false,
                 is_concurrency_safe: false,
                 max_result_size_chars: None,
+                // MCP tools are never deferred — they come from external
+                // servers and are only registered when the server is connected.
+                should_defer: false,
             })
             .collect()
     }

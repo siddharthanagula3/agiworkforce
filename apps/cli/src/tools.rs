@@ -2425,35 +2425,16 @@ async fn execute_tool_search(args: &HashMap<String, String>) -> Result<ToolResul
         .get("max_results")
         .and_then(|s| s.parse().ok())
         .unwrap_or(10);
-    let builtins: Vec<String> = [
-        "read_file",
-        "write_file",
-        "edit_file",
-        "run_command",
-        "search_files",
-        "list_directory",
-        "web_search",
-        "web_fetch",
-        "apply_patch",
-        "grep_files",
-        "task",
-        "glob",
-        "batch",
-        "multiedit",
-        "todo_read",
-        "todo_write",
-        "ask_user",
-        "read_many_files",
-    ]
-    .iter()
-    .map(|s| s.to_string())
-    .collect();
-    let disc = crate::plugins::build_discoverable_tools(&builtins, &[], &[]);
-    let results = crate::tool_search::search_tools(query, &disc, max);
+
+    // Phase E (W2-W6): use the full catalog (including deferred tools) so the
+    // model can load any deferred schema on demand. Supports both keyword
+    // search and `select:tool1,tool2` exact loading.
+    let catalog = crate::runtime::tool_catalog::all_builtin_tool_definitions();
+    let results = crate::tool_search::search_tool_schemas(query, &catalog, max);
     Ok(ToolResult {
         tool_name: "tool_search".into(),
         success: true,
-        output: crate::tool_search::format_search_results(&results),
+        output: crate::tool_search::render_schema_results(&results),
     })
 }
 
