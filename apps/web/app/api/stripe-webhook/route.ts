@@ -11,7 +11,7 @@ import Stripe from 'stripe';
 // route entirely.
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-import { createClient } from '@supabase/supabase-js';
+import { getServiceClient } from '@/lib/supabase-server';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { SubscriptionService } from '@/lib/services/subscription-service';
@@ -31,18 +31,10 @@ import { getUsageBudgetCentsFromPriceCents } from '@agiworkforce/types';
 
 const STRIPE_SECRET_KEY = process.env['STRIPE_SECRET_KEY'];
 const STRIPE_WEBHOOK_SECRET = process.env['STRIPE_WEBHOOK_SECRET'];
-const SUPABASE_URL = process.env['NEXT_PUBLIC_SUPABASE_URL'];
-const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'];
 
 if (!STRIPE_SECRET_KEY || !STRIPE_WEBHOOK_SECRET) {
   logger.error(
     'Stripe webhook is not fully configured. Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET in Vercel environment variables.',
-  );
-}
-
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  logger.error(
-    'Supabase service role environment variables are missing. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel environment variables. Webhook cannot update subscriptions.',
   );
 }
 
@@ -52,12 +44,18 @@ const stripe = STRIPE_SECRET_KEY
     })
   : null;
 
-const supabaseAdmin =
-  SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
-    ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-        auth: { persistSession: false },
-      })
-    : null;
+function getAdminClient() {
+  try {
+    return getServiceClient();
+  } catch {
+    logger.error(
+      'Supabase service role environment variables are missing. Webhook cannot update subscriptions.',
+    );
+    return null;
+  }
+}
+
+const supabaseAdmin = getAdminClient();
 
 function getUsageBudgetOverrideCentsFromStripePrice(
   price: Pick<Stripe.Price, 'unit_amount'> | null | undefined,
@@ -1344,6 +1342,7 @@ export async function POST(request: NextRequest) {
             current_period_end?: string;
           } = { status: 'active' };
 
+          let shouldUpsert = true;
           if (stripeSubId) {
             try {
               const subscription = await stripe.subscriptions.retrieve(stripeSubId);
@@ -1356,36 +1355,39 @@ export async function POST(request: NextRequest) {
               }
             } catch (error) {
               logger.error({ error, stripeSubId }, 'Failed to retrieve subscription for invoice');
+              // P0-C: don't upsert with hardcoded 'active' if subscription retrieve failed
+              shouldUpsert = false;
             }
           }
 
-          try {
-            if (stripeSubId) {
-              const { error: updateError } = await supabaseAdmin
-                .from('subscriptions')
-                .update(updateData)
-                .eq('stripe_subscription_id', stripeSubId);
-              if (updateError) {
-                logger.error(
-                  { error: updateError, stripeSubId },
-                  'Failed to update subscription for payment succeeded',
-                );
+          if (shouldUpsert)
+            try {
+              if (stripeSubId) {
+                const { error: updateError } = await supabaseAdmin
+                  .from('subscriptions')
+                  .update(updateData)
+                  .eq('stripe_subscription_id', stripeSubId);
+                if (updateError) {
+                  logger.error(
+                    { error: updateError, stripeSubId },
+                    'Failed to update subscription for payment succeeded',
+                  );
+                }
+              } else if (stripeCustomerId) {
+                const { error: updateError } = await supabaseAdmin
+                  .from('subscriptions')
+                  .update(updateData)
+                  .eq('stripe_customer_id', stripeCustomerId);
+                if (updateError) {
+                  logger.error(
+                    { error: updateError, stripeCustomerId },
+                    'Failed to update subscription by customer ID for payment succeeded',
+                  );
+                }
               }
-            } else if (stripeCustomerId) {
-              const { error: updateError } = await supabaseAdmin
-                .from('subscriptions')
-                .update(updateData)
-                .eq('stripe_customer_id', stripeCustomerId);
-              if (updateError) {
-                logger.error(
-                  { error: updateError, stripeCustomerId },
-                  'Failed to update subscription by customer ID for payment succeeded',
-                );
-              }
+            } catch (error) {
+              logger.error({ error }, 'Error updating subscription for payment succeeded');
             }
-          } catch (error) {
-            logger.error({ error }, 'Error updating subscription for payment succeeded');
-          }
         }
         break;
       }
