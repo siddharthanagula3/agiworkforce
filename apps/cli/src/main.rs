@@ -97,7 +97,7 @@ struct Cli {
     #[arg(value_name = "PROMPT")]
     prompt: Option<String>,
 
-    /// Model to use (e.g. claude-opus-4-6, gpt-5.4, gemini-3.1-flash-lite, llama3.1:8b)
+    /// Model to use (e.g. claude-opus-4-6, gpt-5.5, gemini-3.1-flash-lite, llama3.1:8b)
     #[arg(short, long, value_name = "MODEL")]
     model: Option<String>,
 
