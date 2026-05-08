@@ -213,28 +213,25 @@ impl ThinkingConfig {
     }
 
     /// Check if a model supports extended thinking.
+    ///
+    /// Reads `capabilities.thinking` from the bundled `models.json` catalog
+    /// (via `models_config::CONFIG`). The catalog is the SSOT.
+    ///
+    /// Per locked rules: never hardcode model IDs OR year-of-release
+    /// model families (claude-4-x, gpt-5-x, o3, o4, claude-3-5-sonnet
+    /// will all be deprecated; future families "just work" by being
+    /// added to the catalog with `capabilities.thinking: true`).
+    ///
+    /// Catalog miss returns `false`. Hosts can still enable thinking
+    /// per-request via `ThinkingConfig::new()` for custom BYO models.
     #[must_use]
     pub fn model_supports_thinking(model: &str) -> bool {
-        let model_lower = super::models_config::get_canonicalized_id(model).to_lowercase();
-
-        // GPT-5.4 and Codex variants support reasoning controls.
-        let is_gpt5_reasoning =
-            model_lower.starts_with("gpt-5") || model_lower.contains("gpt-5.4-codex");
-
-        // Claude 4+ models support extended thinking
-        // (broader "claude-sonnet-4" already covers "claude-sonnet-4-5", etc.)
-        model_lower.contains("claude-sonnet-4")
-            || model_lower.contains("claude-opus-4")
-            || model_lower.contains("claude-haiku-4")
-            || model_lower.contains("claude-4")
-            || is_gpt5_reasoning
-            // OpenAI reasoning models
-            || model_lower.contains("o3")
-            || model_lower.contains("o4")
-            // Google deep thinking models
-            || (model_lower.contains("gemini") && model_lower.contains("think"))
-            // Claude 3.5 Sonnet (new)
-            || model_lower.contains("claude-3-5-sonnet")
+        let canonical = super::models_config::get_canonicalized_id(model);
+        super::models_config::CONFIG
+            .models
+            .get(&canonical)
+            .map(|entry| entry.capabilities.thinking)
+            .unwrap_or(false)
     }
 }
 
@@ -434,22 +431,38 @@ mod tests {
     }
 
     #[test]
-    fn test_model_supports_thinking() {
-        assert!(ThinkingConfig::model_supports_thinking("claude-sonnet-4-5"));
-        assert!(ThinkingConfig::model_supports_thinking("claude-opus-4-6"));
-        assert!(ThinkingConfig::model_supports_thinking("claude-haiku-4-5"));
-        assert!(ThinkingConfig::model_supports_thinking(
-            "claude-3-5-sonnet-20241022"
-        ));
-        assert!(ThinkingConfig::model_supports_thinking("gpt-5.4"));
-        assert!(ThinkingConfig::model_supports_thinking(
-            "gpt-5.4-codex-medium"
-        ));
+    fn test_model_supports_thinking_matches_catalog() {
+        // Catalog-driven: no hardcoded model IDs. Iterates the bundled
+        // models.json and asserts that model_supports_thinking() returns
+        // the resolved canonical entry's `capabilities.thinking`. Some
+        // model IDs are aliased to a canonical entry via the
+        // canonicalization map; the function's output is correctly the
+        // canonical entry's flag, not the alias entry's.
+        use super::super::models_config::{self, CONFIG};
+        let catalog = &CONFIG.models;
+        assert!(!catalog.is_empty(), "models.json catalog is empty");
+        for model_id in catalog.keys() {
+            let canonical = models_config::get_canonicalized_id(model_id);
+            let expected = catalog
+                .get(&canonical)
+                .map(|e| e.capabilities.thinking)
+                .unwrap_or(false);
+            let actual = ThinkingConfig::model_supports_thinking(model_id);
+            assert_eq!(
+                actual, expected,
+                "Resolved {} -> {} (catalog says thinking={}); model_supports_thinking returned {}",
+                model_id, canonical, expected, actual
+            );
+        }
+    }
 
-        // These should not support thinking
-        assert!(!ThinkingConfig::model_supports_thinking("gpt-4"));
-        assert!(ThinkingConfig::model_supports_thinking("gpt-5.4-nano"));
-        assert!(!ThinkingConfig::model_supports_thinking("gemini-pro"));
+    #[test]
+    fn test_model_supports_thinking_unknown_model_returns_false() {
+        // Catalog miss → false. Hosts override via ThinkingConfig::new()
+        // for custom BYO endpoints.
+        assert!(!ThinkingConfig::model_supports_thinking(
+            "definitely-not-in-the-catalog-zzz-xyz-99999"
+        ));
     }
 
     #[test]
