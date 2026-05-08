@@ -1,183 +1,92 @@
 'use client';
 
-import { Button } from '@/components/ui';
-import { Bot, CheckCircle2, Download, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-
-function getDownloadUrl() {
-  if (typeof window === 'undefined') return null;
-
-  const userAgent = window.navigator.userAgent.toLowerCase();
-
-  if (userAgent.includes('mac') || userAgent.includes('darwin')) {
-    return {
-      url: '/api/download-beta?platform=mac',
-      platform: 'macOS',
-      filename: 'AGI-Workforce.dmg',
-    };
-  } else if (userAgent.includes('win')) {
-    return {
-      url: '/api/download-beta?platform=windows',
-      platform: 'Windows',
-      filename: 'AGI-Workforce-Setup.exe',
-    };
-  } else if (userAgent.includes('linux')) {
-    return {
-      url: '/api/download-beta?platform=linux',
-      platform: 'Linux',
-      filename: 'AGI-Workforce.AppImage',
-    };
-  }
-
-  return {
-    url: '/api/download-beta?platform=mac',
-    platform: 'macOS',
-    filename: 'AGI-Workforce.dmg',
-  };
-}
+import { Header } from '../../components/layout/Header';
+import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export default function GetStartedPage() {
-  const [downloadInfo, setDownloadInfo] = useState<{
-    url: string;
-    platform: string;
-    filename: string;
-  } | null>(null);
-  const [downloadStarted, setDownloadStarted] = useState(false);
-  const [autoDownloadAttempted, setAutoDownloadAttempted] = useState(false);
-
-  useEffect(() => {
-    setDownloadInfo(getDownloadUrl());
-  }, []);
-
-  const triggerDownload = (url: string) => {
-    setDownloadStarted(true);
-
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = '';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  useEffect(() => {
-    if (downloadInfo && !autoDownloadAttempted) {
-      const timer = setTimeout(() => {
-        triggerDownload(downloadInfo.url);
-        setAutoDownloadAttempted(true);
-      }, 1500);
-
-      return () => clearTimeout(timer);
-    }
-    return undefined;
-  }, [autoDownloadAttempted, downloadInfo]);
-
-  const handleManualDownload = () => {
-    if (downloadInfo) {
-      triggerDownload(downloadInfo.url);
-    }
-  };
-
   return (
-    <div className="flex min-h-screen flex-col bg-black text-white">
-      <header className="fixed top-0 w-full border-b border-white/10 bg-black/50 backdrop-blur-xl z-50">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <Link href="/" className="flex items-center gap-2 font-bold text-xl tracking-tighter">
-            <Bot className="h-6 w-6 text-blue-500" />
-            <span>AGI Workforce</span>
-          </Link>
-        </div>
-      </header>
-
-      <main className="flex flex-1 items-center justify-center px-4 pt-24 pb-12">
-        <div className="w-full max-w-2xl space-y-8 text-center">
-          {}
-          <div className="mx-auto w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center">
-            <CheckCircle2 className="h-10 w-10 text-green-500" />
+    <div data-design="agi">
+      <main className="agi-shell">
+        <Header />
+        <section className="agi-page-hero">
+          <h1 className="agi-page-h1">Get started.</h1>
+          <p className="agi-page-lede">
+            Five minutes from zero to a working chat across multiple providers.{' '}
+            <strong>Pick your install path, log in or skip auth, and try it.</strong>
+          </p>
+        </section>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">01 / Install</p>
+          <div className="agi-terminal">
+            <div className="agi-terminal-bar">~/agi-workforce — three install paths</div>
+            <pre className="agi-terminal-pre">
+              <span className="agi-terminal-comment"># Homebrew (macOS, Linux)</span>
+              {'\n'}
+              <span className="agi-terminal-prompt">$</span>brew install
+              siddharthanagula3/tap/agiworkforce
+              {'\n'}
+              {'\n'}
+              <span className="agi-terminal-comment"># cargo (any platform)</span>
+              {'\n'}
+              <span className="agi-terminal-prompt">$</span>cargo install agiworkforce-cli
+              {'\n'}
+              {'\n'}
+              <span className="agi-terminal-comment"># curl (macOS, Linux, WSL)</span>
+              {'\n'}
+              <span className="agi-terminal-prompt">$</span>curl -fsSL
+              https://agiworkforce.com/install.sh | sh
+            </pre>
           </div>
-
-          {}
-          <div className="space-y-4">
-            <h1 className="text-4xl font-bold tracking-tight md:text-5xl">You&apos;re all set!</h1>
-            <p className="text-xl text-zinc-400">Your download should start automatically...</p>
-          </div>
-
-          {}
-          <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-8 space-y-6">
-            {downloadStarted ? (
-              <div className="flex items-center justify-center gap-3 text-green-400">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                <span className="text-lg">
-                  Downloading AGI Workforce for {downloadInfo?.platform}...
-                </span>
-              </div>
-            ) : (
-              <div className="flex items-center justify-center gap-3 text-zinc-400">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                <span className="text-lg">Preparing your download...</span>
-              </div>
-            )}
-
-            <div className="border-t border-zinc-800 pt-6">
-              <p className="text-zinc-500 mb-4">
-                Download didn&apos;t start? Click the button below:
+        </section>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">02 / Pick a mode</p>
+          <ul className="agi-reasons">
+            <li className="agi-reason">
+              <h3 className="agi-reason-h">Local — free forever</h3>
+              <p className="agi-reason-p">
+                <code>agiworkforce --provider ollama</code> after installing Ollama. No keys, no
+                quotas, fully offline.
               </p>
-              <Button
-                onClick={handleManualDownload}
-                className="h-14 px-8 text-lg bg-blue-600 hover:bg-blue-700"
-              >
-                <Download className="mr-2 h-5 w-5" />
-                Download for {downloadInfo?.platform || 'Desktop'}
-              </Button>
-            </div>
+            </li>
+            <li className="agi-reason">
+              <h3 className="agi-reason-h">BYOK — free forever</h3>
+              <p className="agi-reason-p">
+                <code>agiworkforce login</code>. Paste your provider key. Encrypted on device.
+              </p>
+            </li>
+            <li className="agi-reason">
+              <h3 className="agi-reason-h">Hobby cloud</h3>
+              <p className="agi-reason-p">
+                Sign in to our managed cloud. We handle the keys; you just chat.
+              </p>
+            </li>
+          </ul>
+        </section>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">03 / Try it</p>
+          <div className="agi-terminal">
+            <div className="agi-terminal-bar">first command</div>
+            <pre className="agi-terminal-pre">
+              <span className="agi-terminal-prompt">$</span>agiworkforce exec &quot;sketch a Rust
+              HTTP router&quot;
+              {'\n'}
+              <span className="agi-terminal-prompt">$</span>agiworkforce
+              {'\n'}
+              <span className="agi-terminal-comment"># interactive TUI</span>
+            </pre>
           </div>
-
-          {}
-          <div className="space-y-4">
-            <p className="text-zinc-500 text-sm">Looking for a different platform?</p>
-            <div className="flex flex-wrap justify-center gap-4">
-              <a
-                href="/api/download-beta?platform=mac"
-                className="text-sm text-zinc-400 hover:text-white transition-colors underline"
-              >
-                macOS
-              </a>
-              <a
-                href="/api/download-beta?platform=windows"
-                className="text-sm text-zinc-400 hover:text-white transition-colors underline"
-              >
-                Windows
-              </a>
-              <a
-                href="/api/download-beta?platform=linux"
-                className="text-sm text-zinc-400 hover:text-white transition-colors underline"
-              >
-                Linux
-              </a>
-            </div>
+          <div className="agi-cta-row" style={{ marginTop: 28 }}>
+            <Link href="/download" className="agi-cta-primary">
+              Download desktop
+            </Link>
+            <Link href="/cli" className="agi-cta-ghost">
+              CLI reference →
+            </Link>
           </div>
-
-          {}
-          <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-xl p-6 text-left space-y-4">
-            <h3 className="font-semibold text-lg">Next Steps:</h3>
-            <ol className="list-decimal list-inside space-y-2 text-zinc-400">
-              <li>Open the downloaded file</li>
-              <li>Follow the installation instructions</li>
-              <li>Sign in with your account</li>
-              <li>Start chatting - just tell the AI what you want done!</li>
-            </ol>
-          </div>
-        </div>
+        </section>
+        <MarketingFooter />
       </main>
-
-      <footer className="border-t border-white/10 bg-black py-8">
-        <div className="container mx-auto px-4 text-center">
-          <div className="text-sm text-zinc-600">
-            © {new Date().getFullYear()} AGI Automation LLC. All rights reserved.
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }

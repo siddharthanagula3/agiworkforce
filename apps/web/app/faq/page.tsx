@@ -1,241 +1,102 @@
-'use client';
-
-import { useState } from 'react';
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Bot, ChevronDown, ChevronUp } from 'lucide-react';
 import { Header } from '../../components/layout/Header';
+import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
-interface FAQItem {
-  question: string;
-  answer: string;
-  category: string;
-}
+export const metadata: Metadata = {
+  title: 'FAQ | AGI Workforce',
+  description: 'Frequently asked questions — providers, BYOK, local mode, pricing, security.',
+  alternates: { canonical: 'https://agiworkforce.com/faq' },
+};
 
-const faqs: FAQItem[] = [
-  // General
+const QA: { q: string; a: string }[] = [
   {
-    category: 'General',
-    question: 'What is AGI Workforce?',
-    answer:
-      'AGI Workforce is a desktop app where you simply tell the AI what you want done, and it autonomously completes the task. No setup wizards, no configuration screens - just open the app and start chatting. Everything the AI does is reversible, so you can always undo if something goes wrong.',
+    q: 'How many providers do you support?',
+    a: 'Ten cloud providers wired in (Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, plus Custom OpenAI-compatible BYO). Two local options (Ollama, LM Studio).',
   },
   {
-    category: 'General',
-    question: 'How is AGI Workforce different from other AI tools?',
-    answer:
-      'AGI Workforce is designed for non-technical users who want results, not configuration. You describe your goal in plain English, and the AI figures out the steps. Unlike tools that require you to build workflows or approve every action, our AI works autonomously with a unique undo-based safety model - everything is reversible, so you can experiment freely.',
+    q: 'What does BYOK mean here?',
+    a: 'You bring your own API key. We encrypt it on your device with AES-256-GCM. Your usage is billed by the provider, not us. Zero markup.',
   },
   {
-    category: 'General',
-    question: 'Do I need technical knowledge to use AGI Workforce?',
-    answer:
-      'Absolutely not. AGI Workforce is built specifically for non-technical users. There are no settings screens to configure, no technical jargon to learn. Just describe what you want in your own words and the AI handles everything. Error messages are in plain English, and you can always say "undo" if something goes wrong.',
-  },
-  // Pricing
-  {
-    category: 'Pricing',
-    question: 'Is there a free tier available?',
-    answer:
-      'Yes. Local-only mode (Desktop app with Ollama or LM Studio) is free forever — no account required. BYOK (Bring Your Own Keys) is also free forever; you supply your own API keys for Anthropic, OpenAI, Google, and others. Hobby ($10/mo) is the entry-level paid plan for managed cloud access with auto-routing. Pro ($29.99/mo), Pro+ ($49.99/mo with daily flagship caps + Runway video), and Max ($299.99/mo) are on the waitlist.',
+    q: 'Can I run AGI Workforce fully offline?',
+    a: 'Yes. Local mode on the desktop app uses Ollama or LM Studio. No API keys, no quotas, no internet. Free forever.',
   },
   {
-    category: 'Pricing',
-    question: 'What payment methods do you accept?',
-    answer:
-      'We accept all major credit cards (Visa, MasterCard, American Express, Discover) through our secure payment processor, Stripe. All transactions are encrypted and secure.',
+    q: 'How does cross-provider continuity work?',
+    a: 'When you switch model mid-conversation, the full history (system prompt, tool calls, intermediate reasoning) travels as token-level events — not summaries. Same chat surface, different brain.',
   },
   {
-    category: 'Pricing',
-    question: 'Can I cancel my subscription anytime?',
-    answer:
-      'Absolutely. You can cancel your subscription at any time from your account settings. You will continue to have access to your plan features until the end of your current billing period.',
-  },
-  // Platform
-  {
-    category: 'Platform',
-    question: 'Which operating systems are supported?',
-    answer:
-      'AGI Workforce is available for macOS, Windows, and Linux. We provide native builds optimized for each platform, ensuring the best performance and integration with your operating system.',
+    q: 'What does Hobby cost?',
+    a: '$10/mo, or $5/mo if you pay annually. The only paid tier shipping today. Pro / Pro+ / Max are on the waitlist until our security audit closes.',
   },
   {
-    category: 'Platform',
-    question: 'Can I sync between multiple devices?',
-    answer:
-      'Yes. Cloud mode (available on Hobby and BYOK plans) syncs your chat history and preferences across Desktop, Web, and Mobile via Supabase real-time sync. Local mode (Desktop only) keeps everything on your machine with no account required.',
+    q: 'Do you train on my data?',
+    a: 'No. We do not train on customer data. Local mode never sends your prompts off your machine.',
   },
   {
-    category: 'Platform',
-    question: 'Does AGI Workforce work offline?',
-    answer:
-      'Yes, AGI Workforce supports offline operation when using local AI models through Ollama. Cloud-based AI providers require an internet connection, but your local workflows and data remain accessible offline.',
-  },
-  // Security
-  {
-    category: 'Security',
-    question: 'How is my data protected?',
-    answer:
-      'Your data stays on your device by default. All credentials are encrypted using AES-256-GCM and stored in your system keychain. In BYOK mode, your API calls go directly to the provider - AGI Workforce never proxies them. In Hobby managed-cloud mode, calls are routed through our servers so you do not need your own provider keys.',
+    q: 'What happens to my master password?',
+    a: 'It is unrecoverable by design — we do not have it. If you forget it, your encrypted keys cannot be decrypted. Back it up.',
   },
   {
-    category: 'Security',
-    question: 'Do you store my conversations or data?',
-    answer:
-      'By default, all conversations and data are stored locally on your device. If you enable cloud sync, encrypted backups are stored securely for synchronization purposes only. You maintain full control over your data and can delete it at any time.',
+    q: 'Is there an Enterprise plan?',
+    a: 'Yes. SSO, SCIM, audit log export, custom retention, regional residency on request, four-hour SLA. Contact sales.',
   },
   {
-    category: 'Security',
-    question: 'Which AI providers are supported?',
-    answer:
-      'AGI Workforce supports 10+ providers: Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, plus local models via Ollama and LM Studio. BYOK users bring their own API keys and pay providers directly. Hobby subscribers access a subset of cloud models through managed credits.',
-  },
-  // Features
-  {
-    category: 'Features',
-    question: 'What kind of tasks can I automate?',
-    answer:
-      'Just tell the AI what you need: "book me a flight to NYC", "organize my downloads folder", "fill out this form", "research competitors and create a report". The AI figures out the steps and handles web automation, file management, data processing, and more.',
-  },
-  {
-    category: 'Features',
-    question: 'How does the undo system work?',
-    answer:
-      'Every action the AI takes is reversible. If something goes wrong, just say "undo" or "revert that" and the AI will restore the previous state. This is how we provide full autonomy without risk - you can let the AI work freely knowing you can always roll back.',
-  },
-  {
-    category: 'Features',
-    question: 'Can I use multiple AI models?',
-    answer:
-      'Yes. AGI Workforce supports 10+ providers including Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, Ollama, and LM Studio. You can switch providers mid-conversation and keep the full context - that cross-provider session continuity is a core differentiator.',
-  },
-  {
-    category: 'Features',
-    question: 'Do I need to build workflows or configure anything?',
-    answer:
-      'No! Unlike traditional automation tools with drag-and-drop builders, AGI Workforce uses a chat-first approach. You describe your goal in plain English and the AI determines the steps. No visual workflow builders, no configuration screens, no technical setup.',
+    q: 'Where do you host data?',
+    a: 'us-east-2 by default (Supabase). EU on the roadmap. Custom regions on Enterprise contracts.',
   },
 ];
 
-const categories = ['General', 'Pricing', 'Platform', 'Security', 'Features'];
-
-export default function FAQPage() {
-  const [openItems, setOpenItems] = useState<Set<number>>(new Set());
-  const [activeCategory, setActiveCategory] = useState<string>('General');
-
-  const toggleItem = (index: number) => {
-    const newOpenItems = new Set(openItems);
-    if (newOpenItems.has(index)) {
-      newOpenItems.delete(index);
-    } else {
-      newOpenItems.add(index);
-    }
-    setOpenItems(newOpenItems);
-  };
-
-  const filteredFaqs = faqs.filter((faq) => faq.category === activeCategory);
-
+export default function FaqPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-black text-white">
-      <Header />
-
-      <main className="flex-1 pt-24">
-        {/* Hero Section */}
-        <section className="relative overflow-hidden py-16 md:py-24">
-          <div className="absolute inset-0 bg-black" />
-          <div className="container relative mx-auto px-4 text-center">
-            <h1 className="text-4xl font-bold tracking-tight md:text-5xl lg:text-6xl">
-              Frequently Asked Questions
-            </h1>
-            <p className="mx-auto mt-6 max-w-2xl text-lg text-zinc-400">
-              Find answers to common questions about AGI Workforce. Can&apos;t find what you&apos;re
-              looking for? Contact our support team.
-            </p>
-          </div>
+    <div data-design="agi">
+      <main className="agi-shell">
+        <Header />
+        <section className="agi-page-hero">
+          <h1 className="agi-page-h1">FAQ.</h1>
+          <p className="agi-page-lede">
+            Direct answers to the questions we get most often.{' '}
+            <strong>
+              If something below is wrong or out of date, email contact@agiworkforce.com.
+            </strong>
+          </p>
         </section>
-
-        {/* FAQ Section */}
-        <section className="py-16 bg-zinc-950">
-          <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto">
-              {/* Category Tabs */}
-              <div className="flex flex-wrap gap-2 mb-12 justify-center">
-                {categories.map((category) => (
-                  <button
-                    key={category}
-                    onClick={() => setActiveCategory(category)}
-                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                      activeCategory === category
-                        ? 'bg-[#c8892a] text-[#09090b]'
-                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
-                    }`}
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">Q &amp; A</p>
+          <table className="agi-ledger">
+            <tbody>
+              {QA.map((item) => (
+                <tr key={item.q}>
+                  <td
+                    style={{
+                      width: '32%',
+                      verticalAlign: 'top',
+                      color: 'var(--agi-ink)',
+                      fontWeight: 600,
+                    }}
                   >
-                    {category}
-                  </button>
-                ))}
-              </div>
-
-              {/* FAQ Items */}
-              <div className="space-y-4">
-                {filteredFaqs.map((faq) => {
-                  const globalIndex = faqs.indexOf(faq);
-                  const isOpen = openItems.has(globalIndex);
-
-                  return (
-                    <div
-                      key={globalIndex}
-                      className="rounded-xl border border-zinc-800 bg-black/50 overflow-hidden"
-                    >
-                      <button
-                        onClick={() => toggleItem(globalIndex)}
-                        className="w-full flex items-center justify-between p-6 text-left hover:bg-zinc-900/50 transition-colors"
-                      >
-                        <span className="font-medium pr-4">{faq.question}</span>
-                        {isOpen ? (
-                          <ChevronUp className="h-5 w-5 text-zinc-500 flex-shrink-0" />
-                        ) : (
-                          <ChevronDown className="h-5 w-5 text-zinc-500 flex-shrink-0" />
-                        )}
-                      </button>
-                      {isOpen && (
-                        <div className="px-6 pb-6">
-                          <p className="text-zinc-400 leading-relaxed">{faq.answer}</p>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+                    {item.q}
+                  </td>
+                  <td>{item.a}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </section>
-
-        {/* Contact CTA */}
-        <section className="py-16 bg-black">
-          <div className="container mx-auto px-4 text-center">
-            <h2 className="text-2xl font-bold mb-4">Still Have Questions?</h2>
-            <p className="text-zinc-400 mb-6">
-              Our support team is here to help you with any questions you may have.
-            </p>
-            <Link
-              href="/contact"
-              className="inline-flex h-12 items-center justify-center rounded-md bg-[#c8892a] px-8 text-sm font-medium text-[#09090b] hover:bg-[#d4993a] transition-colors"
-            >
-              Contact Support
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">Still stuck?</p>
+          <div className="agi-cta-row">
+            <Link href="/help" className="agi-cta-primary">
+              Help index
             </Link>
+            <a href="mailto:contact@agiworkforce.com" className="agi-cta-ghost">
+              Email us →
+            </a>
           </div>
         </section>
+        <MarketingFooter />
       </main>
-
-      <footer className="border-t border-white/10 bg-black py-12">
-        <div className="container mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-6">
-          <div className="flex items-center gap-2 font-bold">
-            <Bot className="h-5 w-5 text-zinc-500" />
-            <span className="text-zinc-500">AGI Workforce</span>
-          </div>
-          <div className="text-sm text-zinc-600">
-            &copy; {new Date().getFullYear()} AGI Automation LLC. All rights reserved.
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
