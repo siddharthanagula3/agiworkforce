@@ -54,7 +54,8 @@
         "agiWorkforce.systemPrompt",
         "agiWorkforce.agent.autoApply",
         "agiWorkforce.autoApplyFixes",
-        "agiWorkforce.telemetryEndpoint"
+        "agiWorkforce.telemetryEndpoint",
+        "agiWorkforce.tier"
       ]
     }
   },
