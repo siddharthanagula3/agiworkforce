@@ -19,21 +19,33 @@ const JWT_SIGN_OPTIONS = {
   audience: 'agiworkforce',
 };
 
-// Mock Supabase client for kill switch checks
-vi.mock('../../src/lib/supabase', () => ({
-  supabase: {
-    from: vi.fn(() => ({
+// Mock Supabase client for kill-switch + revocation checks. Wave 1.5+
+// task #17 (2026-05-08): the legacy `lib/supabase` singleton was deleted;
+// middleware/auth.ts now goes through `getServiceClient()` from
+// supabaseClients. Mock returns `account_status: 'active'` for the
+// kill-switch and `null` for revoked_jwts so the happy path passes.
+vi.mock('../../src/lib/supabaseClients', () => {
+  const mockClient = {
+    from: vi.fn((table: string) => ({
       select: vi.fn(() => ({
         eq: vi.fn(() => ({
           single: vi.fn().mockResolvedValue({
-            data: { account_status: 'active' },
+            data: table === 'profiles' ? { account_status: 'active' } : null,
             error: null,
           }),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         })),
       })),
     })),
-  },
-}));
+  };
+  return {
+    getServiceClient: vi.fn(() => mockClient),
+    getUserClient: vi.fn(() => mockClient),
+    getUserScopedClient: vi.fn(() => mockClient),
+    mintSupabaseJwt: vi.fn(() => 'mock-supabase-jwt'),
+    _resetSupabaseJwtCacheForTests: vi.fn(),
+  };
+});
 
 describe('authenticateToken Middleware', () => {
   let mockReq: Partial<Request>;
@@ -127,16 +139,22 @@ describe('authenticateToken Middleware', () => {
   });
 
   it('should return 403 when account is suspended', async () => {
-    const { supabase } = await import('../../src/lib/supabase');
-    vi.mocked(supabase.from).mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          single: vi.fn().mockResolvedValue({
-            data: { account_status: 'suspended' },
-            error: null,
+    // Wave 1.5+ task #17: kill-switch lookup now goes through
+    // `getServiceClient()`. We override its return so this test sees a
+    // suspended account.
+    const { getServiceClient } = await import('../../src/lib/supabaseClients');
+    vi.mocked(getServiceClient).mockReturnValue({
+      from: vi.fn(() => ({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({
+              data: { account_status: 'suspended' },
+              error: null,
+            }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
           }),
         }),
-      }),
+      })),
     } as never);
 
     // Use a unique userId so the in-memory cache from other tests doesn't interfere
@@ -158,16 +176,19 @@ describe('authenticateToken Middleware', () => {
   });
 
   it('should return 403 when account is banned', async () => {
-    const { supabase } = await import('../../src/lib/supabase');
-    vi.mocked(supabase.from).mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          single: vi.fn().mockResolvedValue({
-            data: { account_status: 'banned' },
-            error: null,
+    const { getServiceClient } = await import('../../src/lib/supabaseClients');
+    vi.mocked(getServiceClient).mockReturnValue({
+      from: vi.fn(() => ({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({
+              data: { account_status: 'banned' },
+              error: null,
+            }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
           }),
         }),
-      }),
+      })),
     } as never);
 
     // Use a unique userId so the in-memory cache from other tests doesn't interfere
@@ -189,10 +210,12 @@ describe('authenticateToken Middleware', () => {
   });
 
   it('should return 503 when Supabase is unavailable and account has no cached status (fail closed)', async () => {
-    const { supabase } = await import('../../src/lib/supabase');
-    vi.mocked(supabase.from).mockImplementation(() => {
-      throw new Error('Supabase connection failed');
-    });
+    const { getServiceClient } = await import('../../src/lib/supabaseClients');
+    vi.mocked(getServiceClient).mockReturnValue({
+      from: vi.fn(() => {
+        throw new Error('Supabase connection failed');
+      }),
+    } as never);
 
     // Use a unique userId so the in-memory cache from other tests doesn't interfere
     const validToken = jwt.sign(

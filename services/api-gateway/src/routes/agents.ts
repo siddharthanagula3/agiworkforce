@@ -17,7 +17,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { supabase } from '../lib/supabase';
+import { getUserScopedClient } from '../lib/supabaseClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { sendCommandToDesktop } from '../websocket';
 import { logger } from '../lib/logger';
@@ -72,6 +72,8 @@ async function verifyDesktopOwnership(desktopId: string, userId: string): Promis
     throw new AppError('Invalid desktop ID format', 400);
   }
 
+  // Wave 1.5+ singleton sweep: user-scoped client.
+  const supabase = getUserScopedClient(userId);
   const { data: desktop, error } = await supabase
     .from('desktop_devices')
     .select('id, user_id')
@@ -112,6 +114,7 @@ router.get('/status', createRateLimiter('device-status'), async (req: Request, r
 
   await verifyDesktopOwnership(desktopId, user.userId);
 
+  const supabase = getUserScopedClient(user.userId);
   // Send a status query to the desktop via WebSocket and return the response.
   // For MVP, we query the last known status from the DB.
   const { data: desktop } = await supabase
@@ -162,6 +165,7 @@ router.get('/pending', createRateLimiter('device-status'), async (req: Request, 
 
   await verifyDesktopOwnership(desktopId, user.userId);
 
+  const supabase = getUserScopedClient(user.userId);
   // Fetch pending approval requests from Supabase
   const { data: pendingRequests, error } = await supabase
     .from('agent_approval_requests')
@@ -212,6 +216,7 @@ router.post(
 
     await verifyDesktopOwnership(desktopId, user.userId);
 
+    const supabase = getUserScopedClient(user.userId);
     // Update the approval request status in DB (best-effort, table may not exist)
     const { error: updateError } = await supabase
       .from('agent_approval_requests')
@@ -270,6 +275,7 @@ router.post('/deny', createRateLimiter('device-command'), async (req: Request, r
 
   await verifyDesktopOwnership(desktopId, user.userId);
 
+  const supabase = getUserScopedClient(user.userId);
   // Update the approval request status in DB (best-effort)
   const { error: updateError } = await supabase
     .from('agent_approval_requests')
