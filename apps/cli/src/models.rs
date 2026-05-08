@@ -188,6 +188,15 @@ pub struct ToolDefinition {
     #[serde(skip)]
     #[serde(default)]
     pub max_result_size_chars: Option<usize>,
+    /// Phase E (W2-W6): when `true`, this tool's schema is NOT included in
+    /// the model's initial system-prompt tool list. Instead the model must
+    /// call `tool_search` to load the schema on demand. Defaults to `false`
+    /// (always-loaded). Set `true` for niche tools: Memory, Notebook,
+    /// Computer, MCP extensions, skills — keeping the initial payload small.
+    /// The tool remains fully executable once its schema is loaded.
+    #[serde(skip)]
+    #[serde(default)]
+    pub should_defer: bool,
 }
 
 /// A tool call parsed from the API response.
