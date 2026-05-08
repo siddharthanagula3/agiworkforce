@@ -21,7 +21,7 @@ import {
 } from '@agiworkforce/types';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { supabase } from '../lib/supabase';
+import { getUserScopedClient } from '../lib/supabaseClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 
@@ -138,9 +138,16 @@ function getProviderKey(provider: Provider): string {
 /**
  * Check the user's subscription tier and enforce model access.
  * Returns the tier string.
+ *
+ * P0-G (Wave 1): the subscription read flows through an RLS-bound
+ * client minted from `userId`, replacing the previous service-role
+ * singleton. The lookup is still filtered by `.eq('user_id', userId)`
+ * — RLS adds defense-in-depth so a missing-filter regression here
+ * cannot leak another tenant's plan_tier.
  */
 async function enforcePlanTier(userId: string, model: string): Promise<string> {
-  const { data: subscription, error } = await supabase
+  const userDb = getUserScopedClient(userId);
+  const { data: subscription, error } = await userDb
     .from('subscriptions')
     .select('plan_tier')
     .eq('user_id', userId)
@@ -730,6 +737,12 @@ router.post(
     }
 
     // Streaming response
+    // P0-G (Wave 1): RLS-bound client for the fire-and-forget usage_events
+    // inserts. RLS on usage_events enforces `user_id = auth.uid()` so any
+    // future regression that drops the explicit user_id field defaults to
+    // safe-fail rather than mis-attribution.
+    const usageDb = getUserScopedClient(user.userId);
+
     if (body.stream) {
       if (provider === 'google') {
         await streamGoogleResponse(upstream, res, body.model);
@@ -737,7 +750,7 @@ router.post(
         await streamResponse(provider, upstream, res, body.model);
       }
       // Best-effort usage tracking (fire and forget for streaming)
-      supabase
+      usageDb
         .from('usage_events')
         .insert({
           user_id: user.userId,
@@ -767,7 +780,7 @@ router.post(
 
     // Best-effort usage tracking
     const usage = openaiResponse['usage'] as Record<string, number> | undefined;
-    supabase
+    usageDb
       .from('usage_events')
       .insert({
         user_id: user.userId,
