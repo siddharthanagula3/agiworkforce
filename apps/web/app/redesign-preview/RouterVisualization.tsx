@@ -22,7 +22,7 @@ const SCRIPT: Step[] = [
   },
   {
     kind: 'assistant',
-    text: 'Reading 142 files in apps/cli/src — drafted a five-stage handoff: receive, normalize, route, stream, reassemble. Returning the outline.',
+    text: 'Reading the source in apps/cli/src — drafted a five-stage handoff: receive, normalize, route, stream, reassemble. Returning the outline.',
     model: 'Claude Opus',
   },
   { kind: 'switch', from: 'Claude Opus', to: 'GPT' },
@@ -33,7 +33,7 @@ const SCRIPT: Step[] = [
   },
   {
     kind: 'assistant',
-    text: 'Continuing from the previous outline. Drafted models.rs with 287 lines covering all five stages. Compiling clean.',
+    text: 'Continuing from the previous outline. Drafted models.rs covering all five stages. Compiling clean.',
     model: 'GPT',
   },
 ];
