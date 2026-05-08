@@ -22,6 +22,62 @@ use crate::runtime::session_control::{ManagedSessionReference, MANAGED_SESSION_D
 
 const SESSION_METADATA_DIR_NAME: &str = "managed_session_metadata";
 
+// ---------------------------------------------------------------------------
+// Atomic write helpers (P1-7: concurrent CLI session safety)
+// ---------------------------------------------------------------------------
+
+/// Write `contents` to `target` atomically: write to a tempfile in the same
+/// directory, then rename into place.  An exclusive flock on a per-directory
+/// `.write.lock` file serializes concurrent CLI processes on Unix.
+fn atomic_write(target: &Path, contents: &[u8]) -> Result<()> {
+    let dir = target
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("target path has no parent: {}", target.display()))?;
+    fs::create_dir_all(dir)
+        .with_context(|| format!("Failed to create directory {}", dir.display()))?;
+    let _lock = DirLock::acquire(dir)?;
+    let tmp = tempfile::NamedTempFile::new_in(dir)
+        .with_context(|| format!("Failed to create tempfile in {}", dir.display()))?;
+    fs::write(tmp.path(), contents)
+        .with_context(|| format!("Failed to write tempfile {}", tmp.path().display()))?;
+    tmp.persist(target).map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to rename tempfile to {}: {}",
+            target.display(),
+            e
+        )
+    })?;
+    Ok(())
+}
+
+struct DirLock {
+    #[cfg(unix)]
+    _guard: nix::fcntl::Flock<fs::File>,
+}
+
+impl DirLock {
+    #[cfg(unix)]
+    fn acquire(dir: &Path) -> Result<Self> {
+        use nix::fcntl::{Flock, FlockArg};
+        let lock_path = dir.join(".write.lock");
+        let file = fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(&lock_path)
+            .with_context(|| format!("Failed to open lock file {}", lock_path.display()))?;
+        let guard = Flock::lock(file, FlockArg::LockExclusive).map_err(|(_, e)| {
+            anyhow::anyhow!("flock on {} failed: {}", lock_path.display(), e)
+        })?;
+        Ok(Self { _guard: guard })
+    }
+
+    #[cfg(not(unix))]
+    fn acquire(_dir: &Path) -> Result<Self> {
+        Ok(Self {})
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Connection {
     base_dir: PathBuf,
@@ -120,6 +176,10 @@ fn save_session_to_default_path(base_dir: &Path, session: &ManagedSession) -> Re
         "{}.{}",
         session.session_id, MANAGED_SESSION_JSONL_EXTENSION
     ));
+    // Acquire an exclusive flock on the managed_sessions directory so
+    // concurrent CLI processes (e.g. session fork + parent) serialise writes.
+    let dir = managed_sessions_dir(base_dir);
+    let _lock = DirLock::acquire(&dir)?;
     session.save_to_path(&path)?;
     Ok(path)
 }
@@ -141,7 +201,7 @@ fn write_metadata(base_dir: &Path, session_id: &str, metadata: &SessionMetadata)
     let path = metadata_path(base_dir, session_id);
     let contents =
         serde_json::to_string_pretty(metadata).context("Failed to serialize session metadata")?;
-    fs::write(&path, contents)
+    atomic_write(&path, contents.as_bytes())
         .with_context(|| format!("Failed to write session metadata {}", path.display()))?;
     Ok(())
 }
