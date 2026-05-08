@@ -220,6 +220,33 @@ router.post('/confirm', createRateLimiter('pairing-code'), async (req: Request, 
     throw new AppError('Failed to verify pairing code', 502);
   }
 
+  // ---------------------------------------------------------------------
+  // FIXME(P1-services-dead-routes, Wave 1 task #10 cleanup, 2026-05-08):
+  //
+  // The two best-effort writes below target tables / columns that DO
+  // NOT exist in production (verified via mcp__supabase introspection):
+  //   - `public.pairing_sessions` is missing; only `public.device_pairings`
+  //     exists in the canonical schema.
+  //   - `public.users` is missing entirely; the canonical user table is
+  //     `public.profiles`, which has no `desktop_id` column.
+  //
+  // Both writes are wrapped in best-effort error swallowing (debug/warn,
+  // never thrown), so pairing succeeds end-to-end despite these failing
+  // — the actual pairing state is established by the upstream signaling
+  // call (lookupResponse.ok above). These writes are dead persistence
+  // sinks.
+  //
+  // Same remediation owner as the auth.ts FIXME — separate Wave 1.5+
+  // ticket. Likely fix: migrate both to `public.device_pairings` with
+  // the right column set (or delete the writes if the signaling server
+  // already records the pairing).
+  //
+  // Left as-is for the same reason as auth.ts: the existing code logs
+  // a clear "table may not exist" debug today, which is the diagnostic
+  // signal we want. Renaming `users` → `profiles` would shift the
+  // failure to "column desktop_id does not exist" silently.
+  // ---------------------------------------------------------------------
+
   // Update the pairing session in Supabase (best-effort)
   const { error: updateError } = await supabase
     .from('pairing_sessions')

@@ -120,6 +120,59 @@ export const rateLimitConfigs = {
 //   const client = createClient({ url: process.env.REDIS_URL });
 //   store: new RedisStore({ sendCommand: (...args) => client.sendCommand(args) })
 
+/**
+ * Multi-instance gap (P1-23, audit 2026-05-08).
+ *
+ * `express-rate-limit` defaults to an in-memory `MemoryStore`, which means
+ * each gateway instance counts its own requests. With N instances behind a
+ * load balancer the effective limit per user is N × max. That makes the
+ * limits above mostly cosmetic in any horizontally-scaled deployment.
+ *
+ * Until Redis migration ships, surface this gap loudly at startup if the
+ * deploy environment hints at multi-instance scaling (Fly.io with >1 VM,
+ * a literal NUM_INSTANCES env override, or a generic `RATE_LIMIT_REDIS_URL`
+ * being unset while a hint variable is present). The warning is non-fatal
+ * — the service still starts — but it lands in the structured log so
+ * ops sees it on the first request after deploy.
+ *
+ * Call this once from `index.ts` before mounting routes. Idempotent.
+ */
+let _multiInstanceWarned = false;
+export function warnIfMultiInstanceWithoutRedis(): void {
+  if (_multiInstanceWarned) return;
+  _multiInstanceWarned = true;
+
+  const flyAppName = process.env['FLY_APP_NAME'];
+  const flyMachineCount = Number(process.env['FLY_MACHINE_COUNT'] ?? '0');
+  const numInstancesHint = Number(process.env['NUM_INSTANCES'] ?? '0');
+  const explicitMulti = process.env['RATE_LIMIT_MULTI_INSTANCE'] === '1';
+  const redisConfigured = Boolean(process.env['RATE_LIMIT_REDIS_URL']);
+
+  const looksMultiInstance =
+    explicitMulti ||
+    flyMachineCount > 1 ||
+    numInstancesHint > 1 ||
+    // Fly.io scales by region; even a single FLY_APP_NAME with no count
+    // hint commonly runs >=2 machines for HA. Don't trigger on FLY_APP_NAME
+    // alone — the count/explicit hints are the signal.
+    false;
+
+  if (!looksMultiInstance) return;
+
+  if (redisConfigured) return;
+
+  logger.warn(
+    {
+      flyAppName,
+      flyMachineCount: flyMachineCount > 0 ? flyMachineCount : undefined,
+      numInstancesHint: numInstancesHint > 0 ? numInstancesHint : undefined,
+      explicitMulti,
+      redisConfigured,
+    },
+    'rateLimit: multi-instance deployment detected without RATE_LIMIT_REDIS_URL — limits are per-instance only. Per-user effective limit is N × max where N = instance count. See P1-23 in services audit; migrate to rate-limit-redis before paid-tier launch.',
+  );
+}
+
 export type RateLimitKey = keyof typeof rateLimitConfigs;
 
 /**

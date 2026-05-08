@@ -34,7 +34,7 @@ import {
   validateSecurityHeaders,
   validateCsrf,
 } from './middleware/requestValidation';
-import { createRateLimiter } from './middleware/rateLimit';
+import { createRateLimiter, warnIfMultiInstanceWithoutRedis } from './middleware/rateLimit';
 import { logger } from './lib/logger';
 import { validateStartupEnv } from './env';
 import { supabase } from './lib/supabase';
@@ -45,6 +45,10 @@ try {
   logger.fatal({}, (err as Error).message);
   process.exit(1);
 }
+
+// P1-23: surface the multi-instance rate-limit gap at startup so ops
+// notices before paid-tier launch. Non-fatal. See rateLimit.ts comment.
+warnIfMultiInstanceWithoutRedis();
 
 const app = express();
 const port = Number(process.env['PORT'] ?? '3000');
@@ -127,8 +131,11 @@ app.get('/health', createRateLimiter('health'), (_req: Request, res: Response) =
 // SECURITY: Rate limited to 100/min for status checks
 app.get('/api/v1/status', createRateLimiter('status'), async (_req: Request, res: Response) => {
   try {
-    // Check Supabase connectivity with a simple query
-    const { error } = await supabase.from('users').select('count', { count: 'exact', head: true });
+    // Check Supabase connectivity with a simple query against `profiles`
+    // (the canonical user table — `users` belongs to `auth.*` schema and is
+    // not exposed via REST, so the previous `from('users')` always returned
+    // a 404 even when the database was healthy).
+    const { error } = await supabase.from('profiles').select('id', { count: 'exact', head: true });
 
     res.json({
       database: error ? 'error' : 'connected',
