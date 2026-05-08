@@ -49,7 +49,7 @@ fi
 # --- Desktop (Tauri + React) ---
 if [[ "$MODE" == "all" || "$MODE" == "fast" || "$MODE" == "desktop" ]]; then
   step "desktop:typecheck" pnpm --filter @agiworkforce/desktop typecheck
-  step "desktop:test"      pnpm --filter @agiworkforce/desktop test --run
+  step "desktop:test"      pnpm --filter @agiworkforce/desktop test
   if [[ "$MODE" == "all" ]]; then
     # Skip Tauri bundle build by default — it requires Rust + native deps and
     # takes minutes. Caller can opt-in with MODE=desktop-build.
