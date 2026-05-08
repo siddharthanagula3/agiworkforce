@@ -37,7 +37,6 @@ import { ANTHROPIC_MODEL_CATALOG } from './catalog';
 import { translateChatRequest } from './translate';
 import { translateAnthropicStream } from './stream';
 import { buildAnthropicReplayPolicy } from './replay-policy';
-import { parseRetryAfterFromError } from './retry-after';
 
 const ANTHROPIC_AUTH_METHODS: readonly AuthMethod[] = [
   {
@@ -127,13 +126,11 @@ export function createAnthropicAdapter(config: AnthropicAdapterConfig = {}): Pro
         const error = err as Error & { status?: number };
         const retryable =
           typeof error.status === 'number' && (error.status === 429 || error.status >= 500);
-        const retryAfterSeconds = retryable ? parseRetryAfterFromError(err) : undefined;
         yield {
           type: 'error',
           message: error.message ?? 'Anthropic request failed',
           ...(typeof error.status === 'number' ? { code: String(error.status) } : {}),
           retryable,
-          ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
         };
         yield { type: 'stop', reason: 'error' };
       }
@@ -148,4 +145,3 @@ export { ANTHROPIC_MODEL_CATALOG } from './catalog';
 export { translateChatRequest } from './translate';
 export { translateAnthropicStream } from './stream';
 export { buildAnthropicReplayPolicy } from './replay-policy';
-export { parseRetryAfter, parseRetryAfterFromError } from './retry-after';

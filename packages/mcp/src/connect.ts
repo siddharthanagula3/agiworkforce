@@ -62,17 +62,8 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
   const timeoutMs = config.connectionTimeoutMs ?? DEFAULT_CONNECTION_TIMEOUT_MS;
   await withTimeout(client.connect(transport), timeoutMs, 'mcp.connect');
 
-  // Discover tools. If listTools throws (auth error, transport drop, or a
-  // server that doesn't implement the tools/list method), close the client
-  // before we propagate — otherwise we leak an open transport for every
-  // failed connect.
-  let listed: Awaited<ReturnType<Client['listTools']>>;
-  try {
-    listed = await client.listTools();
-  } catch (err) {
-    await client.close().catch(() => undefined);
-    throw err;
-  }
+  // Discover tools.
+  const listed = await client.listTools();
   const tools: McpCatalogTool[] = (listed.tools ?? []).map((t) => ({
     serverName,
     safeServerName,
