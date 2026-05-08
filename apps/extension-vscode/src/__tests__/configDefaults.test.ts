@@ -48,6 +48,7 @@ const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
   providerStreamProvider: 'agiWorkforce.providerStreamProvider',
   desktopBridgeEnabled: 'agiWorkforce.desktopBridge.enabled',
   desktopBridgePort: 'agiWorkforce.desktopBridge.port',
+  tier: 'agiWorkforce.tier',
 };
 
 describe('Config DEFAULTS ↔ package.json parity', () => {

@@ -55,6 +55,8 @@ import { initCheckpointManager, getCheckpointManager } from './services/checkpoi
 import { initSubsystemHealth, runBoot, recordFailure } from './services/subsystemHealth';
 import { runInlineCommand } from './lifecycle/runInlineCommand';
 import { validateAdvancedFeatureFlags } from './lifecycle/advancedFeatures';
+import { resolveTier } from './services/tierResolver';
+import { guardProviderSwitch } from './services/providerSwitchGuard';
 
 // ─── Activation ───────────────────────────────────────────────────────────────
 
@@ -524,6 +526,23 @@ export function activate(context: vscode.ExtensionContext): void {
       });
 
       if (picked === undefined || picked.modelId === undefined) return;
+
+      // ── Pro+ cross-provider switch guard ────────────────────────────────────
+      // Switching from one provider to a different one mid-conversation is a
+      // Pro+ feature. Resolve tier (bridge → cache → fallback) then gate.
+      const tier = await resolveTier(context);
+      const guardResult = guardProviderSwitch(currentModel, picked.modelId, tier);
+      if (guardResult === 'upgrade-required') {
+        const choice = await vscode.window.showInformationMessage(
+          'Pro+ unlocks multi-provider chat in VS Code. Upgrade for $49.99/mo.',
+          'Upgrade',
+          'Cancel',
+        );
+        if (choice === 'Upgrade') {
+          await vscode.env.openExternal(vscode.Uri.parse('https://agiworkforce.com/pricing'));
+        }
+        return;
+      }
 
       await vscode.workspace
         .getConfiguration('agiWorkforce')
