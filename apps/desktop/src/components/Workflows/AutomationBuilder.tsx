@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useModelStore } from '../../stores/modelStore';
+import { getDefaultModelFor } from '@agiworkforce/types';
 import {
   Calendar,
   ChevronDown,
@@ -128,7 +129,7 @@ function defaultFormState(): CreateTriggerInput {
     config: { ...DEFAULT_CRON_CONFIG },
     action: {
       prompt: '',
-      model: 'claude-opus-4-5',
+      model: getDefaultModelFor(null, 'chat'),
       approvalRequired: false,
     },
   };

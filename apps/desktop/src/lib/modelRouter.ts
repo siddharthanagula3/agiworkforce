@@ -33,7 +33,7 @@ import {
   applyConversationContext,
   estimateTokens,
 } from '@agiworkforce/routing';
-import { resolveAutoModeModel } from '@agiworkforce/types';
+import { resolveAutoModeModel, getDefaultModelFor } from '@agiworkforce/types';
 import type { RoutingTaskType } from '@agiworkforce/routing';
 import type { RoutingMessage, RoutingAttachment } from '@agiworkforce/routing';
 
@@ -174,7 +174,7 @@ const DEFAULT_CHAT_FALLBACK_MODEL =
   getTaskModelForProvider('openai', 'chat') ??
   getTaskModelForProvider('anthropic', 'chat') ??
   getTaskModelForProvider('google', 'chat') ??
-  'gpt-5.4';
+  getDefaultModelFor(null, 'chat');
 
 // ============================================
 // MINIMUM BENCHMARK THRESHOLDS
