@@ -154,6 +154,25 @@ export type {
 } from './stores/agentLoopStore';
 export { useReducedMotion } from './hooks/useReducedMotion';
 
+// Phase A Slice 3 — Checkpoints + branches (ported from UAC)
+export { CheckpointManager } from './components/CheckpointManager';
+export type { CheckpointManagerProps, ManagerCheckpoint } from './components/CheckpointManager';
+export { BranchNavigator, BranchNavigatorContainer } from './components/BranchNavigator';
+export type {
+  BranchNavigatorProps,
+  BranchNavigatorContainerProps,
+  BranchItem,
+} from './components/BranchNavigator';
+export { RewindTimelineContainer } from './components/RewindTimeline';
+export type { RewindTimelineContainerProps } from './components/RewindTimeline';
+export {
+  useCheckpointStore,
+  selectCheckpoints,
+  selectBranches,
+  selectActiveBranchId,
+} from './stores/checkpointStore';
+export type { Checkpoint, Branch } from './stores/checkpointStore';
+
 // Pro+ tier gating (Task #17 — multi-provider in-thread switch)
 export { ProPlusUpgradePrompt } from './components/ProPlusUpgradePrompt';
 export type { ProPlusUpgradePromptProps } from './components/ProPlusUpgradePrompt';
