@@ -4,18 +4,15 @@
  * POST /api/chat/conversations/[id]/messages - Send a message and get AI response
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { CreditService } from '@/lib/services/credit-service';
-import { getUserClient } from '@/lib/supabase-server';
 import { CreateMessageSchema } from '@/lib/validations/chat';
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -33,15 +30,13 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-message');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client for all DB ops.
+  // userDb is also used as the creditClient so credit reads/writes are RLS-enforced too.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
   const { id: conversationId } = await context.params;
 
-  // Build an RLS-bound credit client when Bearer token is present.
-  // Cookie-path falls back to the string overload (service-role) since no raw JWT is accessible here.
-  const _authHeader = request.headers.get('authorization');
-  const creditClient = _authHeader?.startsWith('Bearer ')
-    ? getUserClient(_authHeader.substring(7))
-    : user.id;
+  // creditClient is the same RLS-bound client — satisfies CreditService.checkAvailable overload.
+  const creditClient = supabase;
 
   let rawBody: unknown;
   try {
@@ -57,10 +52,6 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
   }
 
   const { content, model, role, skipLlm } = validationResult.data;
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   // Verify conversation ownership
   const { data: conversation, error: convError } = await supabase
@@ -148,10 +139,7 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
   }));
 
   // Call LLM API
-  const llmApiUrl =
-    process.env.NODE_ENV === 'development'
-      ? process.env['NEXT_PUBLIC_SITE_URL'] || 'http://localhost:3001'
-      : requireEnv('NEXT_PUBLIC_SITE_URL');
+  const llmApiUrl = process.env['NEXT_PUBLIC_SITE_URL'] || 'http://localhost:3001';
   const llmEndpoint = `${llmApiUrl}/api/llm/v1/chat/completions`;
 
   // Validate outbound URL uses a trusted origin

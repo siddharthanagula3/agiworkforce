@@ -7,15 +7,13 @@
  *   fields can be patched in future without a schema change.
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
 
 type RouteContext = { params: Promise<{ id: string; messageId: string }> };
 
@@ -30,7 +28,8 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-message');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
+  const { user, userDb: client } = await getAuthenticatedUserWithClient(request);
   const { id: conversationId, messageId } = await context.params;
 
   let rawBody: unknown;
@@ -45,12 +44,6 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
     throw createError.validation('Invalid request body', result.error);
   }
   const patch = result.data;
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const serviceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const client = createClient(supabaseUrl, serviceKey, {
-    auth: { persistSession: false },
-  });
 
   // Verify conversation ownership (web_messages has no user_id column)
   const { data: conv, error: convError } = await client
