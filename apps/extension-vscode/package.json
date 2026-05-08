@@ -694,6 +694,27 @@
           "default": "unknown",
           "readOnly": true,
           "description": "Current subscription tier (read-only, populated on activation). Run 'AGI Workforce: Show Tier Status' to see full usage details or visit agiworkforce.com/pricing to upgrade."
+        },
+        "agiWorkforce.tier": {
+          "type": "string",
+          "enum": [
+            "local",
+            "byok",
+            "hobby",
+            "pro",
+            "pro_plus",
+            "max"
+          ],
+          "enumDescriptions": [
+            "Local-only mode — Ollama / LMStudio, no cloud, no multi-provider switch.",
+            "Bring-your-own-key — free, single-provider per session (default).",
+            "Hobby managed cloud — limited credits, single-provider per session.",
+            "Pro managed cloud — higher limits, single-provider per session.",
+            "Pro+ ($49.99/mo) — unlocks multi-provider in-thread switching.",
+            "Max — highest limits, all features."
+          ],
+          "default": "byok",
+          "markdownDescription": "Subscription tier override for the VS Code extension. When set to any value other than `byok`, this overrides the live tier fetched from the desktop bridge or API (useful for testing). Leave at `byok` to use the real resolved tier."
         }
       }
     },
