@@ -14,11 +14,20 @@
  *  - `codeEditing` (@agiworkforce/api) removed. Hosts pass `fetchCheckpoints`
  *    and `rewindCheckpoint` async callbacks so this component has zero backend
  *    coupling and can be tested in isolation.
+ *
+ * Phase A Slice 3 additions:
+ *  - Optional `conversationId` prop: when provided the component enriches each
+ *    `CodingCheckpoint` entry with a `label` sourced from the
+ *    `useCheckpointStore` (conversation-keyed checkpoint store). This enables
+ *    the "deep" checkpoint-aware variant without breaking the Slice 2 API.
+ *  - `RewindTimelineContainer` — store-connected wrapper that provides a
+ *    `conversationId` and a store-connected `label` lookup to `RewindTimeline`.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { History, RotateCcw, RefreshCw } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useCheckpointStore, selectCheckpoints } from '../stores/checkpointStore';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -56,6 +65,13 @@ export interface RewindTimelineProps {
    *   }}
    */
   onToolEvent?: (listener: (payload: { type: string }) => void) => () => void;
+  /**
+   * Phase A Slice 3 — optional conversation scope. When provided, checkpoint
+   * entries are enriched with labels from `useCheckpointStore` (the store
+   * keyed by conversationId). This is the "deep checkpoint-aware" variant.
+   * When omitted, the component behaves exactly as the Slice 2 shell.
+   */
+  conversationId?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -91,7 +107,23 @@ export function RewindTimeline({
   fetchCheckpoints,
   rewindCheckpoint,
   onToolEvent,
+  conversationId,
 }: RewindTimelineProps) {
+  // Phase A Slice 3: read conversation-scoped checkpoints from the store to
+  // enrich CodingCheckpoint entries with human labels when conversationId is
+  // supplied. The hook call is always made (Rules of Hooks) but the lookup is
+  // only applied when conversationId is defined.
+  const storeCheckpoints = useCheckpointStore(selectCheckpoints(conversationId ?? '__none__'));
+
+  // Build a label map: CodingCheckpoint.id → label from the store (if any).
+  const labelMap = useMemo<Record<string, string>>(() => {
+    if (!conversationId) return {};
+    const map: Record<string, string> = {};
+    for (const cp of storeCheckpoints) {
+      if (cp.label) map[cp.id] = cp.label;
+    }
+    return map;
+  }, [conversationId, storeCheckpoints]);
   const [checkpoints, setCheckpoints] = useState<CodingCheckpoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -237,6 +269,10 @@ export function RewindTimeline({
             {checkpoints.map((checkpoint, index) => {
               const isRewinding = rewinding === checkpoint.id;
               const fileLabel = checkpoint.filePath ? getFileBasename(checkpoint.filePath) : null;
+              // Phase A Slice 3: prefer label from conversation-scoped store, fall
+              // back to toolName so Slice 2 behaviour is unchanged when no store
+              // label is present.
+              const storeLabel = labelMap[checkpoint.id];
 
               return (
                 <li
@@ -260,8 +296,14 @@ export function RewindTimeline({
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <span className="text-xs font-mono text-foreground/80 font-medium">
-                          {checkpoint.toolName}
+                          {storeLabel ?? checkpoint.toolName}
                         </span>
+                        {/* Show toolName as sub-label when a store label is present */}
+                        {storeLabel && (
+                          <span className="ml-1 text-xs font-mono text-muted-foreground">
+                            {checkpoint.toolName}
+                          </span>
+                        )}
                         {fileLabel && (
                           <span
                             className="ml-1 text-xs text-muted-foreground font-mono truncate block max-w-[160px]"
@@ -287,7 +329,7 @@ export function RewindTimeline({
                         type="button"
                         onClick={() => handleRewindRequest(checkpoint)}
                         disabled={isRewinding || rewinding !== null}
-                        aria-label={`Rewind to ${checkpoint.toolName} checkpoint`}
+                        aria-label={`Rewind to ${storeLabel ?? checkpoint.toolName} checkpoint`}
                         className={cn(
                           'flex items-center gap-1 shrink-0 rounded px-1.5 py-0.5 text-xs',
                           'text-muted-foreground hover:text-foreground',
@@ -311,3 +353,19 @@ export function RewindTimeline({
 }
 
 export default RewindTimeline;
+
+// ── Store-connected container ─────────────────────────────────────────────────
+
+export interface RewindTimelineContainerProps extends Omit<RewindTimelineProps, 'conversationId'> {
+  /** Required for store-connected variant. */
+  conversationId: string;
+}
+
+/**
+ * RewindTimelineContainer — thin wrapper that forces `conversationId` to be
+ * required, so callers can't accidentally omit the scope when using the
+ * deep checkpoint-aware variant.
+ */
+export function RewindTimelineContainer(props: RewindTimelineContainerProps) {
+  return <RewindTimeline {...props} />;
+}
