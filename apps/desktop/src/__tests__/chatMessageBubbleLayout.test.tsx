@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MessageBubble } from '../../../../packages/chat/src/components/MessageBubble';
+import { MessageBubble } from '../../../../packages/unified-chat/src/components/MessageBubble';
 
 describe('MessageBubble user layout', () => {
   it('keeps the user bubble width constrained on the outer wrapper', () => {

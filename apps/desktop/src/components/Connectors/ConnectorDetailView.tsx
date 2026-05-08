@@ -8,7 +8,7 @@
  *   - Permission dropdown: Always allow / Needs approval / Blocked
  *
  * Persistence: Hybrid (local vault in Tauri, Supabase in cloud).
- * Storage adapter: packages/chat/src/lib/connectorPermissionStore.ts
+ * Storage adapter: packages/unified-chat/src/lib/connectorPermissionStore.ts
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -20,7 +20,7 @@ import {
   CONNECTOR_PERMISSION_DESCRIPTION,
   defaultPermissionForTool,
 } from '@agiworkforce/types';
-import { getConnectorPermissionStore } from '@agiworkforce/chat';
+import { getConnectorPermissionStore } from '@agiworkforce/unified-chat';
 import type { ConnectorDef } from './connectorDefinitions';
 
 // ── Synthetic tool shape for connectors without live MCP introspection ────────

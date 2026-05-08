@@ -113,7 +113,7 @@ describe('tierStore defaults', () => {
 
 describe('refreshTier — success cases', () => {
   it('hydrates tier from /api/auth/me plan field', async () => {
-    mockApiGet.mockResolvedValueOnce({ plan: 'hobby' });
+    mockApiGet.mockResolvedValueOnce({ plan: { tier: 'hobby' } });
 
     await getState().refreshTier();
 
@@ -121,7 +121,7 @@ describe('refreshTier — success cases', () => {
   });
 
   it('normalises "PRO" to "pro"', async () => {
-    mockApiGet.mockResolvedValueOnce({ plan: 'PRO' });
+    mockApiGet.mockResolvedValueOnce({ plan: { tier: 'PRO' } });
 
     await getState().refreshTier();
 
@@ -145,7 +145,7 @@ describe('refreshTier — success cases', () => {
   });
 
   it('sets lastRefreshedAt on success', async () => {
-    mockApiGet.mockResolvedValueOnce({ plan: 'pro_plus' });
+    mockApiGet.mockResolvedValueOnce({ plan: { tier: 'pro_plus' } });
     const before = Date.now();
 
     await getState().refreshTier();
@@ -156,7 +156,7 @@ describe('refreshTier — success cases', () => {
   });
 
   it('sets isRefreshing back to false after success', async () => {
-    mockApiGet.mockResolvedValueOnce({ plan: 'max' });
+    mockApiGet.mockResolvedValueOnce({ plan: { tier: 'max' } });
 
     await getState().refreshTier();
 
@@ -164,11 +164,11 @@ describe('refreshTier — success cases', () => {
   });
 
   it('calls /api/auth/me endpoint', async () => {
-    mockApiGet.mockResolvedValueOnce({ plan: 'hobby' });
+    mockApiGet.mockResolvedValueOnce({ plan: { tier: 'hobby' } });
 
     await getState().refreshTier();
 
-    expect(mockApiGet).toHaveBeenCalledWith('/api/auth/me');
+    expect(mockApiGet).toHaveBeenCalledWith('/api/me');
   });
 });
 
@@ -222,7 +222,7 @@ describe('refreshTier — concurrent call de-duplication', () => {
     expect(mockApiGet).toHaveBeenCalledTimes(1);
 
     // Resolve the first call
-    resolveFirst({ plan: 'hobby' });
+    resolveFirst({ plan: { tier: 'hobby' } });
     await first;
     expect(getState().tier).toBe('hobby');
   });

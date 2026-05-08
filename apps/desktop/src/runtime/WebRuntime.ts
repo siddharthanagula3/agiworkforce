@@ -1,7 +1,7 @@
 /**
  * WebRuntime
  *
- * Implements the ChatRuntime interface from @agiworkforce/chat for the web
+ * Implements the ChatRuntime interface from @agiworkforce/unified-chat for the web
  * (cloud) deployment. Uses the cloud API gateway for conversation CRUD and
  * SSE streaming for message generation.
  *
@@ -18,8 +18,8 @@ import type {
   StreamCallback,
   StreamEvent,
   WebSearchResult,
-} from '@agiworkforce/chat';
-import type { Conversation, ChatMessage } from '@agiworkforce/chat';
+} from '@agiworkforce/unified-chat';
+import type { Conversation, ChatMessage } from '@agiworkforce/unified-chat';
 import {
   listCloudConversations,
   createCloudConversation,
