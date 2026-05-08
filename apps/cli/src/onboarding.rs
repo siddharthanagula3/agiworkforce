@@ -99,7 +99,7 @@ fn print_welcome_banner() {
     eprintln!(
         "  {}  {}",
         "✦".cyan(),
-        "Multi-model fallback — `-m claude-opus-4-6,gpt-5.4,llama3.1:8b`".dimmed()
+        "Multi-model fallback — `-m claude-opus-4-6,gpt-5.5,llama3.1:8b`".dimmed()
     );
     eprintln!(
         "  {}  {}\n",
