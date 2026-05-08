@@ -108,4 +108,59 @@ describe('Ollama tool_result split', () => {
     const translated = translateChatRequest(req);
     expect(translated.messages).toEqual([{ role: 'user', content: 'hello world' }]);
   });
+
+  it('preserves all three tool_results when more than two are present', () => {
+    // Earlier `[0]`-style indexing would emit only the first; this asserts
+    // every result reaches the wire, in submitted order.
+    const req: ChatRequest = {
+      model: 'llama3.3',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'tool_result', toolUseId: 'tu1', content: 'one' },
+            { type: 'tool_result', toolUseId: 'tu2', content: 'two' },
+            { type: 'tool_result', toolUseId: 'tu3', content: 'three' },
+          ],
+        },
+      ],
+    };
+    const translated = translateChatRequest(req);
+    expect(translated.messages).toHaveLength(3);
+    expect(translated.messages.map((m) => m.role)).toEqual(['tool', 'tool', 'tool']);
+    expect(translated.messages.map((m) => m.content)).toEqual(['one', 'two', 'three']);
+  });
+
+  it('flattens multi-block tool_result content (TextBlock[] form) into a single string per result', () => {
+    // The tool_result.content field is `string | TextBlock[]`. The
+    // TextBlock[] form must be joined per-result, not lost or merged
+    // across results.
+    const req: ChatRequest = {
+      model: 'llama3.3',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              toolUseId: 'tu1',
+              content: [
+                { type: 'text', text: 'line A' },
+                { type: 'text', text: 'line B' },
+              ],
+            },
+            {
+              type: 'tool_result',
+              toolUseId: 'tu2',
+              content: [{ type: 'text', text: 'second' }],
+            },
+          ],
+        },
+      ],
+    };
+    const translated = translateChatRequest(req);
+    expect(translated.messages).toHaveLength(2);
+    expect(translated.messages[0]).toEqual({ role: 'tool', content: 'line A\nline B' });
+    expect(translated.messages[1]).toEqual({ role: 'tool', content: 'second' });
+  });
 });
