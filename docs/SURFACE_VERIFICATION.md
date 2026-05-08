@@ -120,14 +120,14 @@ pnpm --filter agi-workforce build
 
 The 6 surfaces share these contracts — when a contract changes, all surfaces must be updated together.
 
-| Contract                    | Owner                                                                                                 | Consumers                                                                                               |
-| --------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `models.json`               | `packages/types/src/models.json`                                                                      | All surfaces — never hardcode model IDs (locked rule)                                                   |
-| `ProviderAdapter` interface | `packages/types/src/provider-adapter.ts`                                                              | All surfaces that call LLMs directly                                                                    |
-| `UIPlanTier` + `tierStore`  | `packages/types/src/design-system/user-identity.ts` + `packages/unified-chat/src/stores/tierStore.ts` | Desktop / Web / Chrome / VSCode → `useTierBridge`; Mobile has its own `apps/mobile/stores/tierStore.ts` |
-| Anthropic Dispatch protocol | `packages/types/src/dispatch.ts`                                                                      | Desktop ↔ Mobile (handoff); Web (read-only display)                                                     |
-| Agent SDK protocol          | `packages/types/src/{agent,a2a,council}.ts`                                                           | CLI ↔ Desktop ↔ Web (all coordinator-mode handlers)                                                     |
-| Stripe webhook contract     | `apps/web/app/api/stripe-webhook/route.ts` + `process_stripe_event_idempotent` RPC                    | Web only (single ingress)                                                                               |
+| Contract                    | Owner                                                                                                                    | Consumers                                                                                               |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `models.json`               | `packages/types/src/models.json`                                                                                         | All surfaces — never hardcode model IDs (locked rule)                                                   |
+| `ProviderAdapter` interface | `packages/types/src/provider-adapter.ts`                                                                                 | All surfaces that call LLMs directly                                                                    |
+| `UIPlanTier` + `tierStore`  | `packages/types/src/design-system/user-identity.ts` + `packages/unified-chat/src/stores/tierStore.ts`                    | Desktop / Web / Chrome / VSCode → `useTierBridge`; Mobile has its own `apps/mobile/stores/tierStore.ts` |
+| Anthropic Dispatch protocol | `apps/mobile/lib/dispatchHmac.ts` (wire format) + `apps/desktop/src-tauri/src/sys/security/dispatch_hmac.rs` (Rust impl) | Desktop ↔ Mobile (handoff); Web (read-only display)                                                     |
+| Agent SDK protocol          | `packages/types/src/{agent,a2a,council}.ts`                                                                              | CLI ↔ Desktop ↔ Web (all coordinator-mode handlers)                                                     |
+| Stripe webhook contract     | `apps/web/app/api/stripe-webhook/route.ts` + `process_stripe_event_idempotent` RPC                                       | Web only (single ingress)                                                                               |
 
 ## Pro+ tier verification (multi-provider in-thread switch)
 
@@ -156,7 +156,6 @@ As of 2026-05-08:
 ## When a surface breaks
 
 1. Run `scripts/verify-surfaces.sh fast <surface>` to localise the failure.
-2. Check the surface's `applications/<surface>.md` for known caveats.
-3. Check `audit/FINAL_AUDIT.md` for any open P0 against that surface.
-4. If the failure is in shared code, check `ARCHITECTURE.md` for the abstraction the surface relies on.
-5. Use the dedicated subagent (`<surface>-engineer`) to debug — they own the surface and have the full context.
+2. Check `audit/AUDIT_2026-05-03.md`, `audit/AUDIT_REPORT_2026-05-01.md`, and `audit/FIX_QUEUE.md` for any open P0 against that surface.
+3. If the failure is in shared code, check `ARCHITECTURE.md` for the abstraction the surface relies on.
+4. Use the dedicated subagent (`<surface>-engineer`) to debug — they own the surface and have the full context.

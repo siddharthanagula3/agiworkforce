@@ -64,13 +64,13 @@ through **one data-layer abstraction** to a **swappable cloud backend**.
 | CLI / TUI   | `apps/cli/`              | Rust monolith, Ratatui TUI, 22 subcommands | cargo, npm, brew    |
 | Desktop     | `apps/desktop/`          | Tauri v2 + React (Vite) + Rust backend     | DMG, MSI, AppImage  |
 | Web         | `apps/web/`              | Next.js 14 app router @ agiworkforce.com   | Vercel              |
-| Mobile      | `apps/mobile/` + `ios/`  | Expo + React Native 0.83.6                 | App Store, Play     |
+| Mobile      | `apps/mobile/` + `ios/`  | Expo + React Native 0.84.0                 | App Store, Play     |
 | Chrome ext  | `apps/extension/`        | MV3 v1.2.0                                 | Chrome Web Store    |
 | VS Code ext | `apps/extension-vscode/` | v0.3.0, @agi chat participant              | VS Code Marketplace |
 
-Each surface is a thin shell. The chat surface is identical (`packages/unified-chat`,
-`packages/chat`); the only surface-specific code is platform integration
-(menu bars, deep links, file pickers, native notifications).
+Each surface is a thin shell. The chat surface is identical
+(`packages/unified-chat`); the only surface-specific code is platform
+integration (menu bars, deep links, file pickers, native notifications).
 
 ## 2. The chat layer
 
@@ -156,7 +156,7 @@ the pattern documented at the top of that file.
 
 | Service            | Path                        | Hosting     | Purpose                      |
 | ------------------ | --------------------------- | ----------- | ---------------------------- |
-| `api-gateway`      | `services/api-gateway`      | Fly.io      | Express v5 — 14 routes, MCP  |
+| `api-gateway`      | `services/api-gateway`      | Fly.io      | Express v5 — 15 routes, MCP  |
 | `signaling-server` | `services/signaling-server` | Fly.io      | WebRTC for Dispatch + Cowork |
 | Supabase           | `supabase/migrations`       | supabase.co | Postgres, Auth, Storage, RT  |
 | Stripe             | `apps/web/app/api/stripe-*` | stripe.com  | Billing webhooks             |
@@ -171,8 +171,10 @@ These are the protocol boundaries that let surfaces evolve independently:
    engine), consumed by every other surface. Documented in
    `crates/agiworkforce-protocol`.
 2. **Anthropic Dispatch parity** — desktop/mobile cross-device session
-   handoff. Mobile listens for `dispatchHmac` + `dispatchSalt`; desktop
-   listener due 2026-06-05 per FINAL_AUDIT §B.
+   handoff. Mobile listens for `dispatchHmac` + `dispatchSalt` (wire
+   format documented inline in `apps/mobile/lib/dispatchHmac.ts`); the
+   desktop listener is implemented at
+   `apps/desktop/src-tauri/src/sys/security/dispatch_hmac.rs`.
 3. **MCP (Model Context Protocol)** — stdio MCP for local tools, HTTP/SSE
    for hosted tools. Implemented in `packages/mcp`.
 4. **Skills format** — Markdown front-matter + optional MCP server, see

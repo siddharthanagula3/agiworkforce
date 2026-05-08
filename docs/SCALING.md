@@ -52,16 +52,23 @@ included — pair with separate adapters.
    - **Auth0** (enterprise SSO, ~$240/mo for 1K MAU).
    - **Cognito** (cheapest, AWS-native, painful DX).
 
-   Each issues JWTs with a `sub` claim. RLS policies that today read
-   `auth.uid()` need to read
-   `current_setting('request.jwt.claims', true)::json->>'sub'`. Write a
-   small migration:
+   Each issues JWTs with a `sub` claim. The `NeonDatabaseAdapter`
+   (`packages/data-layer/src/adapters/neon.ts`) binds the subject as a
+   per-transaction GUC via `SET LOCAL request.jwt.claim.sub = $1`. RLS
+   policies that today read `auth.uid()` need to read
+   `current_setting('request.jwt.claim.sub', true)::uuid`. Write a small
+   migration:
 
    ```sql
    -- For every policy:
    alter policy "users see own rows" on conversations
-     using (user_id = (current_setting('request.jwt.claims', true)::json->>'sub')::uuid);
+     using (user_id = current_setting('request.jwt.claim.sub', true)::uuid);
    ```
+
+   Note: PostgREST canonical convention uses the plural-JSON form
+   (`request.jwt.claims` as a JSON object, then `->>'sub'`). The Neon
+   adapter ships the singular-GUC form for cheaper per-query binding.
+   Pick one and stay consistent across all your RLS policies.
 
 4. **Implement the Neon adapter.** Today `packages/data-layer/src/adapters/neon.ts`
    throws `NotImplementedError`. To finish:
@@ -360,7 +367,8 @@ Stale-read tolerance must be measured per query — typically <1s lag.
 ## 7. Rate limiting
 
 Today: `@upstash/ratelimit` + Upstash Redis. Edge-friendly, single-region
-(us-east-1). 199 callsites use `withRateLimit`.
+(us-east-1). 125 callsites use `withRateLimit` (verified 2026-05-08:
+`grep -rln 'withRateLimit' apps/web/`).
 
 ### Multi-region
 
