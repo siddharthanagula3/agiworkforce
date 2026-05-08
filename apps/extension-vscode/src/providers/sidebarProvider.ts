@@ -44,6 +44,8 @@ import {
 import { Config } from '../utils/config';
 import { resolveUsageMeter, formatManagedUsageLabel, daysUntilReset } from '../services/usageMeter';
 import { getTokenCounter } from '../services/tokenCounter';
+import { guardProviderSwitch } from '../services/providerSwitchGuard';
+import { resolveTier } from '../services/tierResolver';
 
 // ─── Message types (shared protocol) ─────────────────────────────────────────
 
@@ -1274,10 +1276,13 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private _effort: Effort | undefined;
   /** Whether the usage meter banner is collapsed — persisted via workspaceState */
   private _meterCollapsed = false;
+  /** Last model dispatched — used as the "previous" model for paywall guard comparisons */
+  private _activeModel: string = Config.model();
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
     private readonly _secrets: vscode.SecretStorage,
+    private readonly _context: vscode.ExtensionContext,
     private readonly _conversationStore?: ConversationStore,
     private readonly _conversationTreeProvider?: ConversationTreeProvider,
     private readonly _workspaceState?: vscode.Memento,
@@ -1404,6 +1409,21 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       }
 
       case 'sendMessage': {
+        const incomingModel = msg.payload.model ?? this._activeModel;
+        const tier = await resolveTier(this._context);
+        const guardResult = guardProviderSwitch(this._activeModel, incomingModel, tier);
+        if (guardResult === 'upgrade-required') {
+          this._post({
+            type: 'error',
+            payload: {
+              message:
+                'Upgrade to Pro+ to switch between providers mid-conversation. ' +
+                'Visit agiworkforce.com/pricing to upgrade.',
+            },
+          });
+          break;
+        }
+        this._activeModel = incomingModel;
         await this._handleSendMessage(msg.payload.text, msg.payload.model);
         break;
       }
