@@ -102,8 +102,13 @@ export async function resolveTier(
   context: vscode.ExtensionContext,
   preferBridge = true,
 ): Promise<Tier> {
-  // 1. Explicit user override via setting — highest priority (testing / bypass)
-  const settingRaw = vscode.workspace.getConfiguration('agiWorkforce').get<string>('tier');
+  // 1. Explicit user override via setting — read globalValue only so an untrusted
+  //    workspace cannot escalate tier by placing "agiWorkforce.tier": "max" in
+  //    .vscode/settings.json. The workspace value is intentionally ignored here;
+  //    `agiWorkforce.tier` is also listed in restrictedConfigurations as defense-in-depth.
+  const settingRaw = vscode.workspace
+    .getConfiguration('agiWorkforce')
+    .inspect<string>('tier')?.globalValue;
   const settingTier = coerceTier(settingRaw);
   if (settingTier !== undefined && settingTier !== 'byok') {
     // If set to 'byok' (the default), fall through so the bridge can provide
