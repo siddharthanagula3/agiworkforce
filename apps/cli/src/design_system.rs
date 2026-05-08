@@ -202,60 +202,30 @@ pub fn capability_label(tier: CapabilityTier) -> &'static str {
     }
 }
 
+impl From<&str> for CapabilityTier {
+    /// Convert a qualityTier string from models.json to a CapabilityTier.
+    /// Values: "fast" → Fastest, "best" → MostCapable, anything else → Balanced.
+    fn from(tier: &str) -> Self {
+        match tier {
+            "fast" | "economy" => CapabilityTier::Fastest,
+            "best" => CapabilityTier::MostCapable,
+            _ => CapabilityTier::Balanced,
+        }
+    }
+}
+
 /// Map a model ID to its capability tier for the picker sub-label.
 ///
-/// Model IDs are read from the catalog at runtime — this function only handles
-/// the well-known bundled IDs.  Unknown IDs default to `Balanced`.
+/// Looks up the `qualityTier` field from the bundled models.json catalog via
+/// `model_catalog::quality_tier_for_model()`.  Unknown model IDs (Ollama local
+/// models, user-defined BYO endpoints) default to `Balanced`.
+///
+/// This replaces the former 30-arm hard-coded match — no model ID literals live here.
 pub fn capability_for_model(model_id: &str) -> CapabilityTier {
-    match model_id {
-        // Anthropic
-        "claude-haiku-4-5" => CapabilityTier::Fastest,
-        "claude-sonnet-4-5" => CapabilityTier::Balanced,
-        "claude-sonnet-4-6" => CapabilityTier::Balanced,
-        "claude-opus-4-6" => CapabilityTier::MostCapable,
-        "claude-opus-4.6" => CapabilityTier::MostCapable,
-        "claude-opus-4.7" => CapabilityTier::MostCapable,
-        "claude-opus-4-7" => CapabilityTier::MostCapable,
-        // OpenAI
-        "gpt-5.5" => CapabilityTier::Balanced,
-        "gpt-5.5-mini" => CapabilityTier::Fastest,
-        "gpt-5.4-codex" => CapabilityTier::MostCapable,
-        "o3" => CapabilityTier::MostCapable,
-        // Google
-        "gemini-3.1-pro-preview" => CapabilityTier::MostCapable,
-        "gemini-3.1-flash-lite" => CapabilityTier::Fastest,
-        "gemini-3.1-flash-image" => CapabilityTier::Balanced,
-        "gemini-3-pro-preview" => CapabilityTier::MostCapable,
-        "gemini-3-flash-preview" => CapabilityTier::Fastest,
-        "gemini-3-ultra" => CapabilityTier::MostCapable,
-        // xAI
-        "grok-4.3" => CapabilityTier::MostCapable,
-        "grok-4" => CapabilityTier::Balanced,
-        "grok-4-fast" => CapabilityTier::Fastest,
-        "grok-4-mini" => CapabilityTier::Fastest,
-        "grok-4-fast-reasoning" | "grok-4-1-fast-reasoning" => CapabilityTier::Balanced,
-        // DeepSeek
-        "deepseek-chat" => CapabilityTier::Balanced,
-        "deepseek-v4-flash" => CapabilityTier::Fastest,
-        "deepseek-v4-pro" => CapabilityTier::MostCapable,
-        // Perplexity
-        "sonar" => CapabilityTier::Fastest,
-        "sonar-reasoning" => CapabilityTier::Balanced,
-        "sonar-reasoning-pro" => CapabilityTier::MostCapable,
-        // Qwen
-        "qwen-turbo" | "qwen-flash" | "qwen-coder-flash" => CapabilityTier::Fastest,
-        "qwen-max" | "qwen-3.6-plus" | "qwen-coder-plus" => CapabilityTier::MostCapable,
-        // Moonshot
-        "kimi-k2.5-turbo" => CapabilityTier::Fastest,
-        "kimi-k2.5" => CapabilityTier::Balanced,
-        "kimi-k2.5-thinking" | "kimi-k2.6" => CapabilityTier::MostCapable,
-        // Zhipu
-        "glm-4.6v-flash" => CapabilityTier::Fastest,
-        "glm-4.7" | "glm-4.6v" => CapabilityTier::Balanced,
-        "glm-5.1" => CapabilityTier::MostCapable,
-        // Default
-        _ => CapabilityTier::Balanced,
-    }
+    crate::model_catalog::quality_tier_for_model(model_id)
+        .as_deref()
+        .map(CapabilityTier::from)
+        .unwrap_or(CapabilityTier::Balanced)
 }
 
 // ---------------------------------------------------------------------------
@@ -379,19 +349,23 @@ mod tests {
 
     #[test]
     fn capability_tier_for_known_models() {
+        // Use API model IDs as they appear in models.json apiModelId fields.
+        // haiku-4.5 → apiModelId=claude-haiku-4-5-20251001, qualityTier=fast → Fastest
         assert_eq!(
-            capability_for_model("claude-haiku-4-5"),
+            capability_for_model("claude-haiku-4-5-20251001"),
             CapabilityTier::Fastest
         );
+        // sonnet-4.6 → apiModelId=claude-sonnet-4-6, qualityTier=balanced → Balanced
         assert_eq!(
             capability_for_model("claude-sonnet-4-6"),
             CapabilityTier::Balanced
         );
+        // opus-4.7 → apiModelId=claude-opus-4-7, qualityTier=best → MostCapable
         assert_eq!(
             capability_for_model("claude-opus-4-7"),
             CapabilityTier::MostCapable
         );
-        // default fallback
+        // default fallback for models not in the shared catalog (e.g. local Ollama)
         assert_eq!(
             capability_for_model("some-unknown-model"),
             CapabilityTier::Balanced

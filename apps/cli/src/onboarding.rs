@@ -280,48 +280,63 @@ async fn run_api_key_flow() -> Result<()> {
 struct ModelChoice {
     id: String,
     label: String,
-    description: &'static str,
+    description: String,
     provider: String,
     has_reasoning: bool,
 }
 
-// TODO(rule-models-json): derive from model_catalog::legacy_bundled_models() filtered
-// to active=true, top 3 per provider. Currently hardcoded to avoid runtime cost at
-// first-run onboarding; acceptable while catalog is stable. Sprint B target.
-const ONBOARDING_MODEL_SPECS: &[(&str, &str)] = &[
-    ("claude-opus-4-6", "Most capable for complex work"),
-    ("claude-sonnet-4-6", "Best for everyday tasks"),
-    ("claude-haiku-4-5-20251001", "Fastest for quick answers"),
-    ("gpt-5.4", "Latest frontier agentic model"),
-    ("gpt-5.4-mini", "Smaller frontier agentic model"),
-    ("gpt-5.4-pro", "Highest-effort OpenAI reasoning model"),
-    (
-        "gemini-3.1-pro-preview",
-        "Best Gemini model for long context and research",
-    ),
-    (
-        "gemini-3.1-flash-lite",
-        "Fast Gemini model for everyday work",
-    ),
-];
+/// Providers shown in the onboarding model picker, in display order.
+const ONBOARDING_PROVIDERS: &[&str] = &["anthropic", "openai", "google"];
 
+/// Build the onboarding model list from the bundled catalog.
+///
+/// For each provider in ONBOARDING_PROVIDERS we select up to 3 models using this
+/// priority order:
+///   1. qualityTier == "best"   → shown as the flagship option.
+///   2. qualityTier == "balanced" → shown as the everyday option.
+///   3. qualityTier == "fast"   → shown as the quick-answers option.
+///
+/// Model descriptions are derived from qualityTier so they stay accurate as the
+/// catalog evolves — no hardcoded model IDs or descriptions.
 fn onboarding_models() -> Vec<ModelChoice> {
-    ONBOARDING_MODEL_SPECS
-        .iter()
-        .filter_map(|(id, description)| {
-            model_catalog::find(id).map(|model| ModelChoice {
-                id: model.id.clone(),
-                label: if model.id == model_catalog::default_model() {
+    let default_id = model_catalog::default_model();
+    let mut choices: Vec<ModelChoice> = Vec::new();
+
+    for &provider in ONBOARDING_PROVIDERS {
+        let mut provider_models = model_catalog::models_for(provider);
+        // Exclude deprecated / inactive models.
+        provider_models.retain(|m| m.status == "active");
+
+        for tier in ["best", "balanced", "fast"] {
+            // Find the first active model for this provider+tier from the catalog.
+            let candidate = provider_models.iter().find(|m| {
+                model_catalog::quality_tier_for_model(&m.id)
+                    .as_deref()
+                    .unwrap_or("")
+                    == tier
+            });
+            if let Some(model) = candidate {
+                let description = match tier {
+                    "best" => "Most capable — complex work and research".to_string(),
+                    "fast" => "Fastest — quick answers and simple tasks".to_string(),
+                    _ => "Everyday tasks — quality and speed balanced".to_string(),
+                };
+                let label = if model.id == default_id {
                     format!("{} (default)", model.display_name)
                 } else {
                     model.display_name.clone()
-                },
-                description,
-                provider: model.provider.clone(),
-                has_reasoning: model.supports_reasoning,
-            })
-        })
-        .collect()
+                };
+                choices.push(ModelChoice {
+                    id: model.id.clone(),
+                    label,
+                    description,
+                    provider: model.provider.clone(),
+                    has_reasoning: model.supports_reasoning,
+                });
+            }
+        }
+    }
+    choices
 }
 
 fn select_model() -> Result<(String, String, bool)> {
