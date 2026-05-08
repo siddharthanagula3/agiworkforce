@@ -19,7 +19,7 @@ import { MARKETING } from '@/lib/marketing-constants';
 export const metadata: Metadata = {
   title: 'Mobile App | AGI Workforce',
   description:
-    'AGI Workforce mobile companion. Dispatch tasks to your desktop, watch them complete in real time. Expo + React Native, 41 screens. Coming to App Store and Google Play.',
+    'AGI Workforce mobile companion. Dispatch tasks to your desktop, watch them complete in real time. Expo + React Native, 43 screens. Coming to App Store and Google Play.',
   alternates: { canonical: 'https://agiworkforce.com/mobile' },
   openGraph: {
     title: 'Mobile App | AGI Workforce',
@@ -54,7 +54,7 @@ const features = [
   },
   {
     icon: Layers,
-    title: '41 Screens',
+    title: '43 Screens',
     desc: 'Full chat, settings, onboarding, skills browser, conversation history, and more. Drawer navigation with tab compatibility retained.',
   },
   {
@@ -76,7 +76,7 @@ const features = [
 
 const techFacts = [
   { label: 'Framework', value: 'Expo + React Native' },
-  { label: 'Screens', value: '41' },
+  { label: 'Screens', value: '43' },
   { label: 'Navigation', value: 'Drawer (tabs retained)' },
   { label: 'iOS bundle ID', value: 'com.agiworkforce.app' },
   { label: 'iOS min version', value: '~15.1 (SDK-derived)' },

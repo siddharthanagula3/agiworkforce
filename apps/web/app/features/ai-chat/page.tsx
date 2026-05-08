@@ -162,7 +162,7 @@ export default function AIChatFeaturePage() {
                     <div className="mt-2 space-y-1 text-[#888480]">
                       <div>
                         anthropic {'  '}
-                        <span className="text-[#edebe8]">claude-opus-4-6</span>
+                        <span className="text-[#edebe8]">claude-opus-4-7</span>
                       </div>
                       <div>
                         openai {'     '}
@@ -270,7 +270,7 @@ export default function AIChatFeaturePage() {
                   <div className="h-2.5 w-2.5 rounded-full bg-[#555150]" />
                   <div className="h-2.5 w-2.5 rounded-full bg-[#555150]" />
                   <span className="ml-2 text-xs text-[#555150]">
-                    AGI Workforce - claude-opus-4-6
+                    AGI Workforce - claude-opus-4-7
                   </span>
                 </div>
                 <div className="space-y-5 p-5">
@@ -309,7 +309,7 @@ export default function AIChatFeaturePage() {
 
                   {/* Assistant reply */}
                   <div>
-                    <span className="text-[#888480]">claude-opus-4-6</span>
+                    <span className="text-[#888480]">claude-opus-4-7</span>
                     <p className="mt-1 text-[#edebe8]">
                       Done. Replaced bcrypt with argon2id (OWASP-recommended params: m=19456, t=2,
                       p=1). Updated the hash-verification path in mod.rs to use the new

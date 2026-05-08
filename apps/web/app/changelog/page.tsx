@@ -58,7 +58,7 @@ const dispatches: Dispatch[] = [
     headline: 'CLI v1.0.0',
     headlineEmphasis: 'live.',
     body: [
-      '195 .rs files · 155,029 LOC · 2,161 tests · 22 subcommands · 22 hook events · 5.7 MB arm64 binary · ~/.cargo/bin/agiworkforce. Five-platform GitHub Release. Homebrew tap auto-generated. install.sh tested.',
+      '200 .rs files · 155,029 LOC · 999 tests · 22 subcommands · 22 hook events · 5.7 MB arm64 binary · ~/.cargo/bin/agiworkforce. Five-platform GitHub Release. Homebrew tap auto-generated. install.sh tested.',
       'Cleanup pass: -1.04 M LOC net (102 codex-rs port crates removed). Audit closed P0 13/14, P1 20/25.',
     ],
   },

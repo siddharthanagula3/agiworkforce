@@ -187,7 +187,7 @@ function OperatorsColophon() {
     { label: 'License', value: 'Proprietary' },
     { label: 'Region', value: 'us-east-2 (Supabase)' },
     { label: 'Set in', value: 'Newsreader & JetBrains Mono' },
-    { label: 'Engine', value: 'Pure Rust CLI · 195 .rs files · 2,161 tests' },
+    { label: 'Engine', value: 'Pure Rust CLI · 200 .rs files · 999 tests' },
     { label: 'Surfaces', value: '6 (CLI, Desktop, Web, Mobile, Chrome ext, VS Code ext)' },
     { label: 'Providers', value: '12 (10+ as a count includes BYO endpoints)' },
     { label: 'Audit posture', value: 'P0 13/14 closed · P1 20/25 closed (2026-05-03)' },

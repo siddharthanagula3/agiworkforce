@@ -21,12 +21,12 @@ import { MARKETING } from '@/lib/marketing-constants';
 export const metadata: Metadata = {
   title: 'VS Code Extension | AGI Workforce',
   description:
-    'AGI Workforce VS Code Extension v0.3.0. Multi-provider AI coding assistant — 10+ providers, 53 commands, inline completions, code lens, @agi chat participant. Install via VSIX from GitHub Releases.',
+    'AGI Workforce VS Code Extension v0.3.0. Multi-provider AI coding assistant — 10+ providers, 56 commands, inline completions, code lens, @agi chat participant. Install via VSIX from GitHub Releases.',
   alternates: { canonical: 'https://agiworkforce.com/vscode-extension' },
   openGraph: {
     title: 'VS Code Extension | AGI Workforce',
     description:
-      'Multi-provider AI coding assistant. v0.3.0, 56 commands, 386 tests, inline completions, @agi chat participant.',
+      'Multi-provider AI coding assistant. v0.3.0, 56 commands, 352 tests, inline completions, @agi chat participant.',
     url: 'https://agiworkforce.com/vscode-extension',
     type: 'website',
     images: [
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
 const extStats = [
   { label: 'Version', value: 'v0.3.0', sub: 'stable' },
   { label: 'Commands', value: '56', sub: 'unique' },
-  { label: 'Tests', value: '386', sub: '21 suites' },
+  { label: 'Tests', value: '352', sub: '20 suites' },
   { label: 'Settings', value: '23', sub: 'configurable' },
 ];
 
@@ -131,7 +131,7 @@ export default function VscodeExtensionPage() {
                 {MARKETING.providers.display} providers in VS Code. Not locked to one model.
               </p>
               <p className="text-base text-zinc-500 max-w-xl mx-auto mb-6">
-                53 commands, inline completions, code lens, @agi chat, and an optional bridge to
+                56 commands, inline completions, code lens, @agi chat, and an optional bridge to
                 your desktop agent.
               </p>
 
