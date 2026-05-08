@@ -390,12 +390,19 @@ pub fn model_uses_responses_api(model_id: &str) -> bool {
     false
 }
 
-/// Whether a model supports Gemini-style thinking_config.
+/// Whether a model supports Gemini-style `thinking_config` API parameter.
+///
+/// Reads `capabilities.thinking` from the bundled `models.json` catalog and
+/// gates by `provider == "google"` since the `thinking_config` field is
+/// Google-specific (Anthropic + OpenAI use different parameter shapes).
+/// No hardcoded model-family prefixes per the locked rule.
 pub fn model_supports_gemini_thinking(model_id: &str) -> bool {
     let canonical_model_id = get_canonicalized_id(model_id);
-    canonical_model_id.contains("gemini-3-pro")
-        || canonical_model_id.contains("gemini-3.1-pro")
-        || canonical_model_id.contains("gemini-2.5-pro")
+    CONFIG
+        .models
+        .get(&canonical_model_id)
+        .map(|entry| entry.provider == "google" && entry.capabilities.thinking)
+        .unwrap_or(false)
 }
 
 /// Return all model entries from the catalog.
