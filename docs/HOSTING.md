@@ -112,7 +112,7 @@ For HA: run behind nginx + multiple replicas + a shared session store
 
 ## 2. API Gateway hosting
 
-`services/api-gateway` (Express v5, 14 routes, MCP). Stateless, easy to
+`services/api-gateway` (Express v5, 15 routes, MCP). Stateless, easy to
 horizontally scale.
 
 ### Fly.io (current)
@@ -335,18 +335,20 @@ prod weekly via `pg_dump | pg_restore` (or Supabase branching when GA).
 
 ## 7. CI/CD
 
-8 GitHub workflows live in `.github/workflows/`:
+10 GitHub workflows live in `.github/workflows/`:
 
-| Workflow                      | Triggers                  | Purpose                    |
-| ----------------------------- | ------------------------- | -------------------------- |
-| `ci.yml`                      | PR + push                 | Lint, typecheck, test      |
-| `release.yml`                 | tag `v*`                  | Publish npm / brew / cargo |
-| `release-desktop.yml`         | tag `v-desktop-*`         | Build + sign Tauri bundles |
-| `build-windows-release.yml`   | matrix from `release.yml` | Windows-specific signing   |
-| `e2e-tests.yml`               | nightly                   | Playwright across surfaces |
-| `deploy-signaling-server.yml` | push to main              | Auto-deploy to Fly.io      |
-| `codeql.yml`                  | weekly                    | Security scanning          |
-| `agiworkforce-bot.yml`        | comment trigger           | PR ops bot                 |
+| Workflow                      | Triggers                  | Purpose                          |
+| ----------------------------- | ------------------------- | -------------------------------- |
+| `ci.yml`                      | PR + push                 | Lint, typecheck, test            |
+| `release.yml`                 | tag `v*`                  | Publish npm / brew / cargo       |
+| `release-desktop.yml`         | tag `v-desktop-*`         | Build + sign Tauri bundles       |
+| `release-cli.yml`             | tag `v-cli-*`             | Build + publish CLI binaries     |
+| `build-windows-release.yml`   | matrix from `release.yml` | Windows-specific signing         |
+| `e2e-tests.yml`               | nightly                   | Playwright across surfaces       |
+| `deploy-signaling-server.yml` | push to main              | Auto-deploy to Fly.io            |
+| `codeql.yml`                  | weekly                    | Security scanning                |
+| `actions-pinned-check.yml`    | PR + push                 | Verify GitHub Actions are pinned |
+| `agiworkforce-bot.yml`        | comment trigger           | PR ops bot                       |
 
 Auto-deploy on `main` push for the api-gateway + signaling-server.
 Web deploys via Vercel's GitHub integration on push.

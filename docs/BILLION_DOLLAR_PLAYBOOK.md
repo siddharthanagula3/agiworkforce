@@ -99,6 +99,6 @@ Total backend QPS = `Web QPS + Mobile QPS + Chrome QPS + VSCode QPS`. The data-l
 
 ## The bet
 
-The code shipped today says: **"every cloud assumption is a config decision, not a code decision."** That's the bet. If we ever need to leave Supabase, leave Vercel, leave Fly.io, leave Stripe, leave any single vendor — the application code changes are bounded by how much we kept inside the abstractions. Today: ~5% of routes use the data-layer (one vertical slice). Goal: 100% by end of Phase B (~W22 of the locked plan).
+The code shipped today says: **"every cloud assumption is a config decision, not a code decision."** That's the bet. If we ever need to leave Supabase, leave Vercel, leave Fly.io, leave Stripe, leave any single vendor — the application code changes are bounded by how much we kept inside the abstractions. Today: ~1% of routes use the data-layer (1 of ~90 routes — `apps/web/app/api/me/route.ts` is the lone vertical slice). Goal: 100% by end of Phase B (~W22 of the locked plan).
 
 Read [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the full system map. Read [`SCALING.md`](./SCALING.md) for the migration steps. Read [`HOSTING.md`](./HOSTING.md) for multi-cloud hosting. Read [`PERFORMANCE.md`](./PERFORMANCE.md) for high-traffic patterns.
