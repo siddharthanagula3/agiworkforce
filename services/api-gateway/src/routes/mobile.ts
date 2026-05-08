@@ -21,7 +21,7 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { supabase } from '../lib/supabase';
+import { getUserScopedClient } from '../lib/supabaseClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 
@@ -147,6 +147,9 @@ router.post(
 
     const deviceId = clientId ?? randomUUID();
 
+    // Wave 1.5+ singleton sweep: user-scoped client.
+    const supabase = getUserScopedClient(user.userId);
+
     // SECURITY: Verify ownership before upsert to prevent device registration hijack.
     // Without this check, an attacker who knows another user's device ID could
     // overwrite their registration by supplying it as clientId.
@@ -200,6 +203,8 @@ router.post(
       throw new AppError('Unauthorized', 401);
     }
 
+    // Wave 1.5+ singleton sweep: user-scoped client.
+    const supabase = getUserScopedClient(user.userId);
     // First verify the device exists and belongs to the user
     const { data: device, error: fetchError } = await supabase
       .from('mobile_devices')
@@ -330,6 +335,8 @@ router.get('/', createRateLimiter('device-list'), async (req: Request, res: Resp
     throw new AppError('Unauthorized', 401);
   }
 
+  // Wave 1.5+ singleton sweep: user-scoped client.
+  const supabase = getUserScopedClient(user.userId);
   const { data: devices, error } = await supabase
     .from('mobile_devices')
     .select('*')
@@ -427,6 +434,8 @@ router.delete(
       throw new AppError('Invalid device ID format', 400);
     }
 
+    // Wave 1.5+ singleton sweep: user-scoped client.
+    const supabase = getUserScopedClient(user.userId);
     // First verify ownership
     const { data: device, error: fetchError } = await supabase
       .from('mobile_devices')

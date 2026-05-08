@@ -4,10 +4,18 @@ import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { requireEnv } from '../env';
-import { supabase } from '../lib/supabase';
+import { getServiceClient } from '../lib/supabaseClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { AppError } from '../middleware/errorHandler';
 import { logger } from '../lib/logger';
+
+// Wave 1.5+ singleton sweep (task #17, 2026-05-08): every Supabase call in
+// this file runs without a verified user JWT — the device-code flow IS the
+// login. Service-role is the correct client for `device_codes` writes and
+// post-approval `profiles` lookups. The /approve handler still constructs
+// its own anon-key+userJWT client inline (line ~190) to validate the
+// browser-side Supabase token; that path is unchanged.
+const supabase = getServiceClient();
 
 const router: Router = Router();
 

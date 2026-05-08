@@ -37,7 +37,7 @@ import {
 import { createRateLimiter, warnIfMultiInstanceWithoutRedis } from './middleware/rateLimit';
 import { logger } from './lib/logger';
 import { validateStartupEnv } from './env';
-import { supabase } from './lib/supabase';
+import { getServiceClient } from './lib/supabaseClients';
 
 try {
   validateStartupEnv();
@@ -135,7 +135,11 @@ app.get('/api/v1/status', createRateLimiter('status'), async (_req: Request, res
     // (the canonical user table — `users` belongs to `auth.*` schema and is
     // not exposed via REST, so the previous `from('users')` always returned
     // a 404 even when the database was healthy).
-    const { error } = await supabase.from('profiles').select('id', { count: 'exact', head: true });
+    // Wave 1.5+ singleton sweep: liveness probe runs without user context;
+    // service-role is the right client for a system-health query.
+    const { error } = await getServiceClient()
+      .from('profiles')
+      .select('id', { count: 'exact', head: true });
 
     res.json({
       database: error ? 'error' : 'connected',

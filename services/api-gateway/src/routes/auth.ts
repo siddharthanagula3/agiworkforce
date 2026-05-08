@@ -1,34 +1,16 @@
 import { Router, type Request, type Response } from 'express';
-import { randomUUID } from 'node:crypto';
-import jwt, { type SignOptions } from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
-import { z } from 'zod';
 import { authenticatedUserSchema } from '../authenticated-user';
 import { requireEnv } from '../env';
 import { AppError } from '../middleware/errorHandler';
 import { authenticateToken } from '../middleware/auth';
+import { getServiceClient } from '../lib/supabaseClients';
 import { logger } from '../lib/logger';
 
 const router: Router = Router();
 
 const JWT_SECRET = requireEnv('JWT_SECRET');
-// SECURITY (H7, redteam-services 2026-05-04): JWT lifetime reduced from 7d.
-// Default 1h with refresh-token flow (planned). Until refresh tokens land,
-// allow operators to override via env to manage rollout (was previously 7d
-// hardcoded — a stolen token had a full week of validity with no revocation).
-//
-// Cast: @types/jsonwebtoken v9 typed `expiresIn` as a template-literal
-// `StringValue` from `ms` (e.g. '1h', '7d') — env-sourced strings need an
-// explicit cast since they're widened to `string` at the type level.
-const JWT_EXPIRES_IN = (process.env['JWT_EXPIRES_IN'] ?? '1h') as SignOptions['expiresIn'];
-
-import { supabase } from '../lib/supabase';
-
-// Dummy hash for timing attack prevention - generated with bcrypt.hash('dummy', 10)
-// This ensures we always run bcrypt.compare even when user doesn't exist,
-// preventing timing-based user enumeration attacks
-const DUMMY_PASSWORD_HASH = '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
 
 // Rate limiting for auth endpoints: 5 attempts per 15 minute window
 const authRateLimiter = rateLimit({
@@ -41,146 +23,37 @@ const authRateLimiter = rateLimit({
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
 
-// DB User interface
-interface DbUser {
-  id: string;
-  email: string;
-  password_hash: string;
-  desktop_id: string | null;
-  created_at: number;
-}
-
-// Zod v4: Use top-level format validators for better performance
-const registerSchema = z.object({
-  email: z.email(),
-  // SECURITY: max(128) prevents BCrypt's 72-byte truncation from silently
-  // weakening passwords that users believe are stronger than they actually are.
-  password: z.string().min(8).max(128),
-});
-
-const loginSchema = z.object({
-  email: z.email(),
-  password: z.string(),
-});
-
 // =============================================================================
-// FIXME(P1-services-dead-routes, Wave 1 task #10 cleanup, 2026-05-08):
+// /register and /login retired (Wave 1.5+ task #17, 2026-05-08).
 //
-// The /register and /login routes below target a `public.users` table
-// that DOES NOT exist in production (verified via mcp__supabase
-// introspection). The canonical user table is `public.profiles` and
-// password hashing lives in `auth.users` via Supabase Auth. The
-// columns these handlers reference (`password_hash`, `desktop_id`)
-// don't exist on `profiles` either, so renaming `from('users')` to
-// `from('profiles')` would only mask the bug.
+// The legacy handlers targeted a `public.users` table that does not exist
+// in production. The canonical user table is `public.profiles`, password
+// hashing lives in `auth.users` via Supabase Auth, and `password_hash`
+// + `desktop_id` columns don't exist on either — so a column rename
+// would only have masked the bug.
 //
-// Live auth path is the device-auth flow in routes/deviceAuth.ts. The
-// `/register` and `/login` endpoints are effectively dead; any client
-// that calls them gets a 500 from a missing-table error and falls
-// back to the device-auth flow.
-//
-// Remediation owner: separate Wave 1.5+ ticket. Options are (a) delete
-// these routes entirely and have clients use Supabase Auth directly,
-// (b) re-implement on top of Supabase Auth Admin API, or (c) replace
-// with 501-Not-Implemented stubs that point clients at /auth/device.
-// The decision is product-shaped, not infra, so it's out of scope for
-// task #10 (services RLS + model-id work).
-//
-// The from('users') calls in this file are LEFT IN PLACE on purpose:
-// they fail loudly today (table-missing 500), which is the diagnostic
-// signal we want until the route is properly retired. Renaming them
-// to from('profiles') would silently flip the error to "column
-// password_hash does not exist", obscuring the underlying issue.
+// Canonical login flow is the device-code path in routes/deviceAuth.ts.
+// We return 501 + a `next` link rather than deleting the routes entirely
+// so existing clients hitting these paths get a structured error and a
+// pointer to the right endpoint instead of a generic 404.
 // =============================================================================
 
-router.post('/register', authRateLimiter, async (req: Request, res: Response) => {
-  const { email, password } = registerSchema.parse(req.body);
+const RETIRED_AUTH_BODY = {
+  error: 'Endpoint retired. Use the device-code flow.',
+  code: 'AUTH_RETIRED',
+  next: {
+    code: 'POST /api/v1/auth/device/code',
+    token: 'POST /api/v1/auth/device/token',
+    approve: 'POST /api/v1/auth/device/approve',
+  },
+} as const;
 
-  // Check if user exists
-  const { data: existingUser } = await supabase
-    .from('users')
-    .select('id')
-    .eq('email', email)
-    .single();
-
-  if (existingUser) {
-    throw new AppError('User already exists', 400);
-  }
-
-  const passwordHash = await bcrypt.hash(password, 10);
-  // Note: DB generates UUID via gen_random_uuid(), we get it from the insert response
-
-  const { data: newUser, error } = await supabase
-    .from('users')
-    .insert({
-      email,
-      password_hash: passwordHash,
-      created_at: Date.now(),
-    })
-    .select()
-    .single();
-
-  if (error || !newUser) {
-    throw new AppError('Failed to create user', 500);
-  }
-
-  const user = newUser as DbUser; // Type assertion since we defined interface locally matching DB
-
-  // SECURITY (H7): include `jti` so this specific token can be revoked
-  // independently of the user's account state. The middleware checks
-  // `revoked_jwts` on every request.
-  const token = jwt.sign({ userId: user.id, email }, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN,
-    issuer: 'agiworkforce-api-gateway',
-    audience: 'agiworkforce',
-    jwtid: randomUUID(),
-  });
-
-  res.json({
-    token,
-    user: {
-      id: user.id,
-      email: user.email,
-    },
-  });
+router.post('/register', authRateLimiter, (_req: Request, res: Response) => {
+  res.status(501).json(RETIRED_AUTH_BODY);
 });
 
-router.post('/login', authRateLimiter, async (req: Request, res: Response) => {
-  const { email, password } = loginSchema.parse(req.body);
-
-  const { data: userRecord } = await supabase.from('users').select('*').eq('email', email).single();
-
-  // Always run bcrypt.compare to prevent timing attacks that could reveal user existence
-  // Use dummy hash when user doesn't exist so timing is consistent
-  const hashToCompare = userRecord ? (userRecord as DbUser).password_hash : DUMMY_PASSWORD_HASH;
-  const isValid = await bcrypt.compare(password, hashToCompare);
-
-  // Check both conditions after bcrypt to maintain consistent timing
-  if (!userRecord || !isValid) {
-    throw new AppError('Invalid credentials', 401);
-  }
-
-  // safe cast (we know userRecord exists at this point)
-  const user = userRecord as DbUser;
-
-  // SECURITY (H7): include `jti` so this specific token can be revoked
-  // independently of the user's account state. The middleware checks
-  // `revoked_jwts` on every request.
-  const token = jwt.sign({ userId: user.id, email }, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN,
-    issuer: 'agiworkforce-api-gateway',
-    audience: 'agiworkforce',
-    jwtid: randomUUID(),
-  });
-
-  res.json({
-    token,
-    user: {
-      id: user.id,
-      email: user.email,
-      desktopId: user.desktop_id ?? undefined,
-    },
-  });
+router.post('/login', authRateLimiter, (_req: Request, res: Response) => {
+  res.status(501).json(RETIRED_AUTH_BODY);
 });
 
 // SECURITY (H7, redteam-services 2026-05-04): explicit logout that revokes the
@@ -218,7 +91,9 @@ router.post('/logout', authenticateToken, async (req: Request, res: Response) =>
   }
 
   const untilExp = new Date(exp * 1000).toISOString();
-  const { error } = await supabase
+  // Wave 1.5+ singleton sweep: revoked_jwts is a security table; inserts
+  // bypass user-RLS by design (the policy only allows service-role writes).
+  const { error } = await getServiceClient()
     .from('revoked_jwts')
     .insert({ jti, user_id: userId, until_exp: untilExp, reason: 'sign_out' });
 
