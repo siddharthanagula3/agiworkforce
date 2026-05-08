@@ -66,14 +66,14 @@ export function applyPosition(host: HTMLElement, pos: LauncherPosition): void {
 /**
  * Create and inject the floating launcher button into the page.
  *
- * Returns the host element so the caller can show/hide it and the
- * ShadowRoot so the caller can access the button reference.
+ * Returns the host element so the caller can show/hide it.
+ * ShadowRoot is held internally (mode:'closed') to prevent page scripts from
+ * reaching inside the shadow tree.
  *
  * @param onOpen Called when the user clicks the launcher button.
  */
 export function createLauncher(onOpen: () => void): {
   host: HTMLElement;
-  shadow: ShadowRoot;
   button: HTMLButtonElement;
 } {
   // ── Host element (fixed-position wrapper) ──────────────────────────────────
@@ -89,7 +89,7 @@ export function createLauncher(onOpen: () => void): {
     'will-change:opacity,transform',
   ].join(';');
 
-  const shadow = host.attachShadow({ mode: 'open' });
+  const shadow = host.attachShadow({ mode: 'closed' });
 
   // ── Styles ─────────────────────────────────────────────────────────────────
   const style = document.createElement('style');
@@ -150,7 +150,7 @@ export function createLauncher(onOpen: () => void): {
   shadow.appendChild(button);
   shadow.appendChild(tooltip);
 
-  return { host, shadow, button };
+  return { host, button };
 }
 
 /**

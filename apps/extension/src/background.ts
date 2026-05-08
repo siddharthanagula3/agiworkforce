@@ -795,6 +795,14 @@ const DOM_MUTATION_MESSAGE_TYPES = new Set<string>([
   // LinkedIn / Lever autofill entry point and writes to form fields.
   'RUN_PAGE_ACTIONS',
   'AUTO_FILL_JOB_APPLICATION',
+  // P0-D fix (2026-05-08): these three types have content-script handlers
+  // that mutate the target tab's DOM (dispatch MouseEvent/simulate context-menu/
+  // write form fields). Without this guard, an allowlisted origin could send
+  // `{ type: 'DOUBLE_CLICK', tabId: <other-tab>, selector: '#btn' }` and drive
+  // a different tab's DOM.
+  'DOUBLE_CLICK',
+  'RIGHT_CLICK',
+  'FILL_FORM',
 ]);
 
 function senderTabAllowedToMutate(

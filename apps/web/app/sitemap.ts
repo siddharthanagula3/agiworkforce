@@ -42,20 +42,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: '/features/plugins', priority: 0.8, changeFrequency: 'weekly' },
     { path: '/features/ai-chat', priority: 0.8, changeFrequency: 'weekly' },
 
-    // Use case pages
-    { path: '/use-cases', priority: 0.8, changeFrequency: 'monthly' },
-    { path: '/use-cases/consulting', priority: 0.7, changeFrequency: 'monthly' },
-    { path: '/use-cases/sales-teams', priority: 0.7, changeFrequency: 'monthly' },
-    { path: '/use-cases/it-providers', priority: 0.7, changeFrequency: 'monthly' },
-    { path: '/use-cases/startups', priority: 0.7, changeFrequency: 'monthly' },
-
     // Documentation / developer
     { path: '/docs', priority: 0.8, changeFrequency: 'weekly' },
     { path: '/api-docs', priority: 0.7, changeFrequency: 'weekly' },
     { path: '/integrations', priority: 0.8, changeFrequency: 'weekly' },
 
-    // Marketplace / Gallery
-    { path: '/marketplace', priority: 0.8, changeFrequency: 'weekly' },
+    // Gallery
     { path: '/gallery', priority: 0.7, changeFrequency: 'weekly' },
 
     // Company / content
