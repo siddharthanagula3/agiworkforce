@@ -1,6 +1,8 @@
 use crate::core::llm::{
     ChatMessage, ContentPart, ImageDetail, ImageFormat, ImageInput, LLMRequest,
 };
+use crate::core::llm::Provider;
+use crate::core::llm::models_config;
 use crate::sys::commands::{AppDatabase, LLMState};
 use image::codecs::jpeg::JpegEncoder;
 use image::imageops::FilterType;
@@ -11,7 +13,13 @@ use tauri::State;
 
 const MAX_IMAGE_DIMENSION: u32 = 2048;
 const JPEG_QUALITY: u8 = 85;
-const DEFAULT_VISION_MODEL: &str = "gpt-5.4";
+
+/// Default vision model — looked up from `models.json` `taskRouting.vision`
+/// per the locked rule "NEVER hardcode model IDs". Falls back to OpenAI's
+/// default model if `taskRouting.vision` is absent for the provider.
+fn default_vision_model() -> String {
+    models_config::get_task_model(&Provider::OpenAI, "vision").to_string()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VisionRequest {
@@ -131,7 +139,7 @@ pub async fn vision_send_message(
     let selected_model = request
         .model
         .clone()
-        .unwrap_or_else(|| DEFAULT_VISION_MODEL.to_string());
+        .unwrap_or_else(|| default_vision_model());
 
     let llm_request = LLMRequest {
         messages,
@@ -260,7 +268,7 @@ pub async fn vision_extract_text(
             detail: Some("high".to_string()),
         }],
         provider,
-        model: Some(DEFAULT_VISION_MODEL.to_string()),
+        model: Some(default_vision_model()),
         temperature: Some(0.0),
         max_tokens: Some(2000),
         detail_level: Some("high".to_string()),
@@ -312,7 +320,7 @@ pub async fn vision_compare_images(
             },
         ],
         provider,
-        model: Some(DEFAULT_VISION_MODEL.to_string()),
+        model: Some(default_vision_model()),
         temperature: Some(0.3),
         max_tokens: Some(1500),
         detail_level: Some("high".to_string()),
@@ -365,7 +373,7 @@ pub async fn vision_locate_element(
             detail: Some("high".to_string()),
         }],
         provider,
-        model: Some(DEFAULT_VISION_MODEL.to_string()),
+        model: Some(default_vision_model()),
         temperature: Some(0.0),
         max_tokens: Some(500),
         detail_level: Some("high".to_string()),
@@ -402,7 +410,7 @@ pub async fn vision_describe_ui_elements(
             detail: Some("high".to_string()),
         }],
         provider,
-        model: Some(DEFAULT_VISION_MODEL.to_string()),
+        model: Some(default_vision_model()),
         temperature: Some(0.3),
         max_tokens: Some(2000),
         detail_level: Some("high".to_string()),
