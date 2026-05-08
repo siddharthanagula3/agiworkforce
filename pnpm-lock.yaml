@@ -1145,6 +1145,10 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.4
         version: 1.29.0(zod@4.3.6)
+    devDependencies:
+      vitest:
+        specifier: ^4.0.18
+        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@22.19.15)(@vitest/ui@4.1.2)(jsdom@20.0.3)(msw@2.12.14(@types/node@22.19.15)(typescript@5.9.3))(vite@8.0.10(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3))
 
   packages/providers/anthropic:
     dependencies:
@@ -1301,7 +1305,11 @@ importers:
         specifier: '>=2.0.0'
         version: 2.10.1
 
-  packages/skills: {}
+  packages/skills:
+    devDependencies:
+      vitest:
+        specifier: ^4.0.18
+        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@22.19.15)(@vitest/ui@4.1.2)(jsdom@20.0.3)(msw@2.12.14(@types/node@22.19.15)(typescript@5.9.3))(vite@8.0.10(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3))
 
   packages/stores:
     dependencies:
