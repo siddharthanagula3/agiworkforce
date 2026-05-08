@@ -6956,9 +6956,11 @@ impl ChatWidget {
             let effort_label = Self::reasoning_effort_label(effort);
             format!("⚠ {effort_label} reasoning effort can quickly consume Plus plan rate limits.")
         });
-        let warn_for_model = preset.model.starts_with("claude-opus-4-6")
-            || preset.model.starts_with("claude-opus-4-6-max")
-            || preset.model.starts_with("gpt-5.2");
+        // Warn when the preset model is not in the bundled catalog — it may be
+        // deprecated or an unrecognised custom BYO endpoint.  This replaces the
+        // former hardcoded starts_with("claude-opus-4-6") / starts_with("gpt-5.2")
+        // check, which violated rule-models-json and would not catch future cases.
+        let warn_for_model = !crate::model_catalog::is_known_model(&preset.model);
 
         struct EffortChoice {
             stored: Option<ReasoningEffortConfig>,
