@@ -13,13 +13,14 @@ import { DispatchSection } from '../../components/marketing/editorial/DispatchSe
 export const metadata: Metadata = {
   title: 'Rates | AGI Workforce',
   description:
-    'Honest pricing. No tier theatre. Local + BYOK free forever; Hobby ~$5/mo; Pro and Max waitlisted.',
+    'Honest pricing. No tier theatre. Local + BYOK free forever. Hobby $10/mo, or $5/mo billed annually. Pro and Max waitlisted.',
   alternates: {
     canonical: 'https://agiworkforce.com/pricing',
   },
   openGraph: {
     title: 'Rates | AGI Workforce',
-    description: 'Honest pricing. No tier theatre. Local + BYOK free forever; Hobby ~$5/mo.',
+    description:
+      'Honest pricing. No tier theatre. Local + BYOK free forever. Hobby $10/mo, or $5/mo billed annually.',
     url: 'https://agiworkforce.com/pricing',
     siteName: 'AGI Workforce',
     type: 'website',
@@ -48,8 +49,8 @@ function RatesHero() {
           <Specimen columns={2}>
             <p className="font-body text-[1.0625rem] leading-[1.65] text-[var(--color-ink)]">
               Local-only and BYOK are free forever. Hobby is the only paid tier we ship at launch —
-              managed cloud at ~$5/mo. Pro and Max are open after our security audit closes; you can
-              join the waitlist below.
+              managed cloud at $10/mo, or $5/mo if you pay annually. Pro and Max open after our
+              security audit closes; you can join the waitlist below.
             </p>
           </Specimen>
         </div>
@@ -99,7 +100,12 @@ function RateCard() {
                 values={[
                   'Free',
                   'Free',
-                  '$10/mo',
+                  <span key="h" className="leading-tight inline-block">
+                    $10/mo
+                    <span className="block text-[10px] tracking-[0.06em] text-[var(--color-fg-quiet)]">
+                      $5/mo billed yearly
+                    </span>
+                  </span>,
                   '$29.99/mo',
                   '$49.99/mo',
                   '$299.99/mo',

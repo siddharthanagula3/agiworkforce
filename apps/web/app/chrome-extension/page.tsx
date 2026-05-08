@@ -24,7 +24,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Chrome Extension | AGI Workforce',
     description:
-      'AI alongside every webpage. Manifest V3 v1.2.0, 16 test suites, 521 tests. CWS listing coming soon.',
+      'AI alongside every webpage. Manifest V3 v1.2.0, 13 test suites, 472 tests. CWS listing coming soon.',
     url: 'https://agiworkforce.com/chrome-extension',
     type: 'website',
     images: [
@@ -35,8 +35,8 @@ export const metadata: Metadata = {
 
 const extStats = [
   { label: 'Manifest', value: 'V3', sub: 'v1.2.0' },
-  { label: 'Test suites', value: '16', sub: '521 tests' },
-  { label: 'Package size', value: '101 KB', sub: 'no source maps' },
+  { label: 'Test suites', value: '13', sub: '472 tests' },
+  { label: 'Package size', value: '116 KB', sub: 'no source maps' },
   { label: 'Build date', value: '2026-05-05', sub: 'CWS-ready' },
 ];
 

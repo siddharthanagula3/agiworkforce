@@ -96,7 +96,7 @@ const complianceBadges = [
 const tiers = [
   {
     name: 'Hobby',
-    price: '$5/mo target',
+    price: '$10/mo',
     features: ['Managed cloud', 'Limited credits', 'Basic models'],
     cta: 'Join Waitlist',
     href: '/pricing',

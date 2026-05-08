@@ -12,12 +12,12 @@ import { DispatchSection } from '../../components/marketing/editorial/DispatchSe
 export const metadata: Metadata = {
   title: 'CLI | AGI Workforce',
   description:
-    'agiworkforce — pure Rust CLI. 22 subcommands. 13 wired providers. 2,161 tests. v1.0 live.',
+    'agiworkforce — pure Rust CLI. 22 subcommands. 13 wired providers. 999 tests. v1.0 live.',
   alternates: { canonical: 'https://agiworkforce.com/cli' },
   openGraph: {
     title: 'CLI | AGI Workforce',
     description:
-      'Pure Rust CLI with Ratatui TUI. 22 subcommands. 13 providers. 5.7 MB binary. 2,161 tests.',
+      'Pure Rust CLI with Ratatui TUI. 22 subcommands. 13 providers. 5.7 MB binary. 999 tests.',
     url: 'https://agiworkforce.com/cli',
     type: 'website',
     images: [{ url: '/app-preview.png', width: 1200, height: 630, alt: 'AGI Workforce CLI' }],
@@ -54,7 +54,7 @@ const ENGINEERING_SPECS: { label: string; value: string }[] = [
   { label: 'Language', value: 'Rust (no Electron, no Tauri -- pure Rust)' },
   { label: 'Source files', value: '195 .rs files' },
   { label: 'Lines of code', value: '155,029 LOC' },
-  { label: 'Test count', value: '2,161 tests' },
+  { label: 'Test count', value: '999 tests' },
   { label: 'TUI', value: 'Ratatui -- 125 files' },
   { label: 'Subcommands', value: '22' },
   { label: 'Hook events', value: '22' },
@@ -108,7 +108,7 @@ export default function CliPage() {
                   'whitespace-pre-line',
                 ].join(' ')}
               >
-                {`Pure Rust. Ratatui TUI. 22 subcommands. 13 wired providers. 2,161 tests. 5.7 MB binary on arm64.
+                {`Pure Rust. Ratatui TUI. 22 subcommands. 13 wired providers. 999 tests. 5.7 MB binary on arm64.
 
 The CLI is the product. The apps are surfaces over it.
 
