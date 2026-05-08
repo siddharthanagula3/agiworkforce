@@ -43,6 +43,10 @@
  *     Sambanova,
  *     Azure,
  *     Bedrock,
+ *     OllamaCloud,
+ *     Minimax,
+ *     Runway,
+ *     LmStudio,
  * }
  * ```
  *

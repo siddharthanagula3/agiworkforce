@@ -61,7 +61,7 @@ export function createLMStudioAdapter(config: LMStudioAdapterConfig = {}): Provi
   });
 
   return {
-    id: 'lmstudio' as ProviderAdapter['id'],
+    id: 'lmstudio',
     label: 'LMStudio',
     auth: LMSTUDIO_AUTH_METHODS,
     config,
