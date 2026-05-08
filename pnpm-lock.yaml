@@ -1124,6 +1124,9 @@ importers:
         specifier: workspace:*
         version: link:../types
     devDependencies:
+      '@neondatabase/serverless':
+        specifier: ^1.1.0
+        version: 1.1.0
       '@supabase/supabase-js':
         specifier: ^2.100.1
         version: 2.100.1
@@ -4407,6 +4410,13 @@ packages:
     peerDependencies:
       '@emnapi/core': ^1.7.1
       '@emnapi/runtime': ^1.7.1
+
+  '@neondatabase/serverless@1.1.0':
+    resolution:
+      {
+        integrity: sha512-r3ZZhRjEcfEdKIZnoB1RusNgvHuaBRqfCzV4Gi+5A9yUX0S4HTws/ASWqt13wL4y4I+0rqsWGdA2w7EQXHi3+Q==,
+      }
+    engines: { node: '>=19.0.0' }
 
   '@next/env@16.2.4':
     resolution:
@@ -21598,6 +21608,8 @@ snapshots:
       '@emnapi/runtime': 1.10.0
       '@tybys/wasm-util': 0.10.1
     optional: true
+
+  '@neondatabase/serverless@1.1.0': {}
 
   '@next/env@16.2.4': {}
 

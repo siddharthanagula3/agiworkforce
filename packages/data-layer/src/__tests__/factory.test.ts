@@ -63,11 +63,14 @@ describe('createDatabaseClient', () => {
     expect(db).toBeInstanceOf(NeonDatabaseAdapter);
   });
 
-  it('Neon adapter throws NotImplementedError on query', async () => {
+  it('Neon adapter is constructed lazily without opening a connection', async () => {
     process.env['AGI_DATABASE_PROVIDER'] = 'neon';
     process.env['AGI_DATABASE_URL'] = 'postgresql://u:p@ep.neon.tech/db';
+    // Construction must NOT throw — connections open on first query.
     const db = createDatabaseClient();
-    await expect(db.query('select 1')).rejects.toBeInstanceOf(NotImplementedError);
+    expect(db).toBeInstanceOf(NeonDatabaseAdapter);
+    // Dispose without ever connecting must be safe (no network in tests).
+    await expect(db.dispose()).resolves.toBeUndefined();
   });
 
   it('returns Postgres adapter when AGI_DATABASE_PROVIDER=postgres', () => {
