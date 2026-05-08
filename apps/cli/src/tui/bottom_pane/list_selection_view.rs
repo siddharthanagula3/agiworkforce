@@ -1400,9 +1400,10 @@ mod tests {
     fn width_changes_do_not_hide_rows() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
+        // Use generic names — this test verifies rendering geometry, not model IDs.
         let items = vec![
             SelectionItem {
-                name: "claude-opus-4-6".to_string(),
+                name: "Model A (flagship)".to_string(),
                 description: Some(
                     "Optimized for AGI Workforce. Balance of reasoning quality and coding ability."
                         .to_string(),
@@ -1412,7 +1413,7 @@ mod tests {
                 ..Default::default()
             },
             SelectionItem {
-                name: "claude-haiku-4-5".to_string(),
+                name: "Model B (fast)".to_string(),
                 description: Some(
                     "Optimized for AGI Workforce. Cheaper, faster, but less capable.".to_string(),
                 ),
@@ -1420,7 +1421,7 @@ mod tests {
                 ..Default::default()
             },
             SelectionItem {
-                name: "claude-sonnet-4-6".to_string(),
+                name: "Model C (legacy)".to_string(),
                 description: Some(
                     "Legacy model. Use when you need compatibility with older automations."
                         .to_string(),
@@ -1482,9 +1483,10 @@ mod tests {
     fn snapshot_model_picker_width_80() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
+        // Generic names — this test verifies rendering geometry, not model IDs.
         let items = vec![
             SelectionItem {
-                name: "claude-opus-4-6".to_string(),
+                name: "Model A (flagship)".to_string(),
                 description: Some(
                     "Optimized for AGI Workforce. Balance of reasoning quality and coding ability."
                         .to_string(),
@@ -1494,7 +1496,7 @@ mod tests {
                 ..Default::default()
             },
             SelectionItem {
-                name: "claude-haiku-4-5".to_string(),
+                name: "Model B (fast)".to_string(),
                 description: Some(
                     "Optimized for AGI Workforce. Cheaper, faster, but less capable.".to_string(),
                 ),
@@ -1502,7 +1504,7 @@ mod tests {
                 ..Default::default()
             },
             SelectionItem {
-                name: "claude-sonnet-4-6".to_string(),
+                name: "Model C (legacy)".to_string(),
                 description: Some(
                     "Legacy model. Use when you need compatibility with older automations."
                         .to_string(),

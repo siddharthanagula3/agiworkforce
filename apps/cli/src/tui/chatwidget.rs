@@ -341,9 +341,11 @@ use strum::IntoEnumIterator;
 const USER_SHELL_COMMAND_HELP_TITLE: &str = "Prefix a command with ! to run it locally";
 const USER_SHELL_COMMAND_HELP_HINT: &str = "Example: !ls";
 const DEFAULT_OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
-// TODO(rule-models-json): FAST_STATUS_MODEL replaced with provider-based check below.
-// Use of a sentinel prevents stale string comparison if gpt-5.4 is removed from models.json.
-const FAST_STATUS_MODEL: &str = "__sentinel_fast_status__";
+// rule-models-json: do NOT hardcode a model ID here.  The fast status model is
+// the OpenAI fast_completion slot read from models.json at startup via the catalog.
+fn fast_status_model() -> String {
+    crate::model_catalog::fast_completion_model("openai")
+}
 const DEFAULT_STATUS_LINE_ITEMS: [&str; 3] =
     ["model-with-reasoning", "context-remaining", "current-dir"];
 // Track information about an in-flight exec command.
@@ -411,9 +413,11 @@ fn is_standard_tool_call(parsed_cmd: &[ParsedCommand]) -> bool {
 }
 
 const RATE_LIMIT_WARNING_THRESHOLDS: [f64; 3] = [75.0, 90.0, 95.0];
-// Lightweight model offered in the rate-limit nudge widget.
-// Must resolve to a real model in the catalog — read via model_catalog to avoid hardcoding.
-const NUDGE_MODEL_SLUG: &str = "claude-haiku-4-5";
+// rule-models-json: the nudge model is the Anthropic fast_completion slot from
+// models.json — do NOT hardcode a model ID here.
+fn nudge_model_slug() -> String {
+    crate::model_catalog::fast_completion_model("anthropic")
+}
 const RATE_LIMIT_SWITCH_PROMPT_THRESHOLD: f64 = 90.0;
 
 #[derive(Default)]
@@ -2144,7 +2148,7 @@ impl ChatWidget {
             if high_usage
                 && !has_workspace_credits
                 && !self.rate_limit_switch_prompt_hidden()
-                && self.current_model() != NUDGE_MODEL_SLUG
+                && self.current_model() != nudge_model_slug()
                 && !matches!(
                     self.rate_limit_switch_prompt,
                     RateLimitSwitchPromptState::Shown
@@ -6201,7 +6205,7 @@ impl ChatWidget {
         let models = self.models_manager.try_list_models().ok()?;
         models
             .iter()
-            .find(|preset| preset.show_in_picker && preset.model == NUDGE_MODEL_SLUG)
+            .find(|preset| preset.show_in_picker && preset.model == nudge_model_slug())
             .cloned()
     }
 
@@ -8085,7 +8089,7 @@ impl ChatWidget {
         model: &str,
         service_tier: Option<ServiceTier>,
     ) -> bool {
-        model == FAST_STATUS_MODEL
+        model == fast_status_model()
             && matches!(service_tier, Some(ServiceTier::Fast))
             && self
                 .auth_manager
