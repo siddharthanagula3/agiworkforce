@@ -633,11 +633,14 @@ impl OpenAIAdapter {
             api_request["instructions"] = serde_json::json!(system);
         }
 
-        // Determine reasoning effort for GPT-5 / o-series models.
-        // GPT-5.4 supports: none (default), low, medium, high, xhigh.
+        // Determine reasoning effort for thinking-capable OpenAI models.
+        // We're already inside the OpenAIAdapter, so checking
+        // capabilities.thinking on the catalog entry is sufficient — every
+        // thinking-capable OpenAI model accepts the reasoning_effort param.
+        // No hardcoded model-family prefixes here per the locked rule.
         // temperature, top_p, logprobs are ONLY allowed when effort is "none" (unset).
         let resolved_reasoning_effort: Option<String> =
-            if request.model.starts_with("gpt-5") || request.model.starts_with("o") {
+            if super::thinking::ThinkingConfig::model_supports_thinking(&request.model) {
                 use super::ThinkingParameter;
                 let raw_effort: Option<&str> = if let Some(thinking) = &request.thinking {
                     match thinking {
