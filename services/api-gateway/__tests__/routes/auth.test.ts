@@ -1,42 +1,22 @@
 /**
  * Auth Routes Tests
  *
+ * Wave 1.5+ task #17 (2026-05-08): /register and /login routes were
+ * retired (they targeted a `public.users` table that doesn't exist in
+ * production; canonical login flow is the device-code path in
+ * routes/deviceAuth.ts). The legacy mocks were removed alongside the
+ * deleted `lib/supabase` singleton.
+ *
  * Tests for /api/auth endpoints:
- * - POST /api/auth/register
- * - POST /api/auth/login
- * - GET /api/auth/verify
+ * - POST /api/auth/register  → 501 retired stub
+ * - POST /api/auth/login     → 501 retired stub
+ * - GET  /api/auth/verify    → JWT verification path (still live)
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { authRouter } from '../../src/routes/auth';
 import { errorHandler } from '../../src/middleware/errorHandler';
-
-// Mock Supabase client
-vi.mock('../../src/lib/supabase', () => ({
-  supabase: {
-    from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          single: vi.fn(),
-        })),
-      })),
-      insert: vi.fn(() => ({
-        select: vi.fn(() => ({
-          single: vi.fn(),
-        })),
-      })),
-    })),
-  },
-}));
-
-// Mock bcryptjs
-vi.mock('bcryptjs', () => ({
-  default: {
-    hash: vi.fn().mockResolvedValue('$2a$10$hashedpassword'),
-    compare: vi.fn().mockResolvedValue(true),
-  },
-}));
 
 // Create test app with error handler
 function createTestApp() {
@@ -53,144 +33,34 @@ describe('Auth Routes', () => {
 
   beforeEach(() => {
     app = createTestApp();
-    vi.clearAllMocks();
   });
 
-  describe('POST /api/auth/register', () => {
-    it('should return 400 for invalid email format', async () => {
+  describe('POST /api/auth/register (retired)', () => {
+    it('returns 501 with a pointer to the device-code flow', async () => {
       const response = await request(app)
         .post('/api/auth/register')
-        .send({ email: 'invalid-email', password: 'password123' });
+        .send({ email: 'someone@example.com', password: 'password123' });
 
-      // Zod validation error returns 500 without proper handling, or rate limit may kick in
-      // Just verify it's not a success
-      expect(response.status).toBeGreaterThanOrEqual(400);
-    });
-
-    it('should return 400 for password less than 8 characters', async () => {
-      const response = await request(app)
-        .post('/api/auth/register')
-        .send({ email: 'test@example.com', password: 'short' });
-
-      expect(response.status).toBeGreaterThanOrEqual(400);
-    });
-
-    it('should return 400 if user already exists', async () => {
-      const { supabase } = await import('../../src/lib/supabase');
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({ data: { id: '123' }, error: null }),
-          }),
-        }),
-        insert: vi.fn(),
-      } as never);
-
-      const response = await request(app)
-        .post('/api/auth/register')
-        .send({ email: 'existing@example.com', password: 'password123' });
-
-      // May hit rate limit in test - check for either 400 or 429
-      expect([400, 429]).toContain(response.status);
-      if (response.status === 400) {
-        expect(response.body.error).toBe('User already exists');
-      }
-    });
-
-    it('should register a new user successfully', async () => {
-      const { supabase } = await import('../../src/lib/supabase');
-      vi.mocked(supabase.from).mockImplementation((table: string) => {
-        if (table === 'users') {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({ data: null, error: null }),
-              }),
-            }),
-            insert: vi.fn().mockReturnValue({
-              select: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({
-                  data: { id: 'new-user-id', email: 'new@example.com' },
-                  error: null,
-                }),
-              }),
-            }),
-          } as never;
-        }
-        return {} as never;
-      });
-
-      const response = await request(app)
-        .post('/api/auth/register')
-        .send({ email: 'new@example.com', password: 'password123' });
-
-      // May hit rate limit - accept either success or rate limit
-      if (response.status === 200) {
-        expect(response.body).toHaveProperty('token');
-        expect(response.body.user).toHaveProperty('id');
-        expect(response.body.user.email).toBe('new@example.com');
-      } else {
-        expect(response.status).toBe(429); // Rate limited
+      // 501 retired stub OR 429 if the in-process rate-limiter from a sibling
+      // test bled across (this router shares `authRateLimiter` state).
+      expect([501, 429]).toContain(response.status);
+      if (response.status === 501) {
+        expect(response.body.code).toBe('AUTH_RETIRED');
+        expect(response.body.next.code).toBe('POST /api/v1/auth/device/code');
       }
     });
   });
 
-  describe('POST /api/auth/login', () => {
-    it('should return 401 for invalid credentials', async () => {
-      const { supabase } = await import('../../src/lib/supabase');
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({ data: null, error: null }),
-          }),
-        }),
-      } as never);
-
-      const bcrypt = await import('bcryptjs');
-      vi.mocked(bcrypt.default.compare).mockResolvedValue(false as never);
-
+  describe('POST /api/auth/login (retired)', () => {
+    it('returns 501 with a pointer to the device-code flow', async () => {
       const response = await request(app)
         .post('/api/auth/login')
-        .send({ email: 'nonexistent@example.com', password: 'wrongpassword' });
+        .send({ email: 'someone@example.com', password: 'whatever' });
 
-      // May hit rate limit - accept either 401 or 429
-      expect([401, 429]).toContain(response.status);
-      if (response.status === 401) {
-        expect(response.body.error).toBe('Invalid credentials');
-      }
-    });
-
-    it('should login successfully with valid credentials', async () => {
-      const { supabase } = await import('../../src/lib/supabase');
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({
-              data: {
-                id: 'user-123',
-                email: 'valid@example.com',
-                password_hash: '$2a$10$hashedpassword',
-                desktop_id: null,
-              },
-              error: null,
-            }),
-          }),
-        }),
-      } as never);
-
-      const bcrypt = await import('bcryptjs');
-      vi.mocked(bcrypt.default.compare).mockResolvedValue(true as never);
-
-      const response = await request(app)
-        .post('/api/auth/login')
-        .send({ email: 'valid@example.com', password: 'correctpassword' });
-
-      // May hit rate limit - accept either success or rate limit
-      if (response.status === 200) {
-        expect(response.body).toHaveProperty('token');
-        expect(response.body.user.id).toBe('user-123');
-      } else {
-        expect(response.status).toBe(429); // Rate limited
+      expect([501, 429]).toContain(response.status);
+      if (response.status === 501) {
+        expect(response.body.code).toBe('AUTH_RETIRED');
+        expect(response.body.next.token).toBe('POST /api/v1/auth/device/token');
       }
     });
   });

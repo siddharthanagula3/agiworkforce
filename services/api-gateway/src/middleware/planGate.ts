@@ -10,7 +10,7 @@
  */
 
 import type { NextFunction, Request, Response } from 'express';
-import { supabase } from '../lib/supabase';
+import { getUserScopedClient } from '../lib/supabaseClients';
 import { logger } from '../lib/logger';
 
 /**
@@ -51,7 +51,11 @@ export async function requireProPlan(
   }
 
   try {
-    const { data: subscription, error } = await supabase
+    // Wave 1.5+ singleton sweep: post-auth user-scoped query. RLS on
+    // `subscriptions` is then enforced even if the .eq filter is dropped
+    // by a future regression.
+    const userDb = getUserScopedClient(user.userId);
+    const { data: subscription, error } = await userDb
       .from('subscriptions')
       .select('plan_tier')
       .eq('user_id', user.userId)

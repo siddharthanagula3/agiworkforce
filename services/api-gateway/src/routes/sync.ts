@@ -19,7 +19,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { supabase } from '../lib/supabase';
+import { getUserScopedClient } from '../lib/supabaseClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 
@@ -96,6 +96,9 @@ router.post('/batch', createRateLimiter('sync-batch'), async (req: Request, res:
   if (batch.user_id !== user.userId) {
     throw new AppError('user_id mismatch', 403);
   }
+
+  // Wave 1.5+ singleton sweep: user-scoped client.
+  const supabase = getUserScopedClient(user.userId);
 
   // SECURITY (H11): Validate device_id ownership — prevent cross-user device contamination
   const rawDeviceId = (req.headers['x-device-id'] as string | undefined) ?? batch.device_id;
@@ -224,6 +227,8 @@ router.get('/updates', createRateLimiter('sync-updates'), async (req: Request, r
   const since = typeof sinceRaw === 'string' ? sinceRaw : new Date(0).toISOString();
   const deviceId = req.headers['x-device-id'] as string | undefined;
 
+  // Wave 1.5+ singleton sweep: user-scoped client.
+  const supabase = getUserScopedClient(user.userId);
   // Query sync data from Supabase
   let query = supabase
     .from('sync_data')
@@ -273,6 +278,8 @@ router.post(
     const resolution = conflictResolutionSchema.parse(req.body);
     const deviceId = req.headers['x-device-id'] as string | undefined;
 
+    // Wave 1.5+ singleton sweep: user-scoped client.
+    const supabase = getUserScopedClient(user.userId);
     // For now, just insert the resolved data as a new entry
     // Full implementation would update existing entry with version check
     const { error } = await supabase.from('sync_data').insert({
@@ -306,6 +313,8 @@ router.get('/status', createRateLimiter('sync-status'), async (req: Request, res
     throw new AppError('Unauthorized', 401);
   }
 
+  // Wave 1.5+ singleton sweep: user-scoped client.
+  const supabase = getUserScopedClient(user.userId);
   // Get counts for this user
   const { count: pendingCount } = await supabase
     .from('sync_data')
@@ -343,6 +352,9 @@ router.post(
     }
 
     const registration = deviceRegistrationSchema.parse(req.body);
+
+    // Wave 1.5+ singleton sweep: user-scoped client.
+    const supabase = getUserScopedClient(user.userId);
 
     // Store device registration in sync_data as a special type
     // Full implementation would have a dedicated devices table
@@ -390,6 +402,8 @@ router.delete(
       throw new AppError('Device ID required', 400);
     }
 
+    // Wave 1.5+ singleton sweep: user-scoped client.
+    const supabase = getUserScopedClient(user.userId);
     // Delete device registration and all sync data for this device
     const { error } = await supabase
       .from('sync_data')
@@ -428,6 +442,8 @@ router.post('/push', createRateLimiter('sync-legacy'), async (req: Request, res:
     throw new AppError('Unauthorized', 401);
   }
 
+  // Wave 1.5+ singleton sweep: user-scoped client.
+  const supabase = getUserScopedClient(user.userId);
   const { error } = await supabase.from('sync_data').insert({
     user_id: user.userId,
     device_id: deviceId,
@@ -465,6 +481,8 @@ router.get('/pull', createRateLimiter('sync-legacy'), async (req: Request, res: 
 
   const sinceDate = new Date(since).toISOString();
 
+  // Wave 1.5+ singleton sweep: user-scoped client.
+  const supabase = getUserScopedClient(user.userId);
   let query = supabase
     .from('sync_data')
     .select('*')
@@ -505,6 +523,8 @@ router.delete('/clear', createRateLimiter('sync-legacy'), async (req: Request, r
     throw new AppError('Unauthorized', 401);
   }
 
+  // Wave 1.5+ singleton sweep: user-scoped client.
+  const supabase = getUserScopedClient(user.userId);
   const { error } = await supabase.from('sync_data').delete().eq('user_id', user.userId);
 
   if (error) {
