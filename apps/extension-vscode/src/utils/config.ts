@@ -29,6 +29,7 @@ const DEFAULTS = {
   agentMode: 'auto',
   agentEffort: 'medium',
   codeLensEnabled: true,
+  hoverEnabled: false,
   inlineCompletionsEnabled: true,
   inlineCompletionsDebounceMs: 300,
   inlineCompletionsMaxLength: 500,
@@ -44,6 +45,7 @@ const DEFAULTS = {
   desktopBridgeEnabled: true,
   desktopBridgePort: 8787,
   tier: 'byok',
+  currentTier: 'unknown',
 } as const;
 
 function get<T>(key: string, fallback: T): T {
@@ -75,6 +77,11 @@ export const Config = {
     const raw = get<string>('agent.effort', DEFAULTS.agentEffort);
     if (raw === 'low' || raw === 'medium' || raw === 'high' || raw === 'max') return raw;
     return 'medium';
+  },
+
+  // ── Hover actions ───────────────────────────────────────────────────────
+  hoverEnabled(): boolean {
+    return get<boolean>('hoverEnabled', DEFAULTS.hoverEnabled);
   },
 
   // ── CodeLens / inline completions ───────────────────────────────────────
@@ -138,6 +145,17 @@ export const Config = {
    */
   tier(): string {
     return get<string>('tier', DEFAULTS.tier);
+  },
+
+  /**
+   * Read the cached current tier from global (user-scoped) settings only.
+   * Workspace values are ignored to prevent untrusted-workspace tier spoofing.
+   */
+  currentTier(): string {
+    const inspected = vscode.workspace
+      .getConfiguration('agiWorkforce')
+      .inspect<string>('currentTier');
+    return inspected?.globalValue ?? DEFAULTS.currentTier;
   },
 } as const;
 
