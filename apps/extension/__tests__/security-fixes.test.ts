@@ -619,3 +619,144 @@ describe('CHROME-SUB-5 console buffering gated by user allowlist', () => {
     expect(slice).toMatch(/allowlist\.has\(/);
   });
 });
+
+// ─── P0-D: DOUBLE_CLICK / RIGHT_CLICK / FILL_FORM in DOM_MUTATION_MESSAGE_TYPES ─
+//
+// Audit 2026-05-08: content.ts has case handlers for DOUBLE_CLICK, RIGHT_CLICK,
+// and FILL_FORM that write to the target tab's DOM. Without including them in the
+// mutation guard set, an allowlisted page could send
+// `{ type: 'DOUBLE_CLICK', tabId: <other-tab>, selector: '#submit' }` and trigger
+// a click on a different tab.
+
+const DOM_MUTATION_MESSAGE_TYPES_V3 = new Set<string>([
+  'TYPE',
+  'CLICK',
+  'SET_LOCAL_STORAGE',
+  'CLEAR_LOCAL_STORAGE',
+  'SUBMIT_FORM',
+  'SELECT_OPTION',
+  'CHECK',
+  'UNCHECK',
+  'FOCUS',
+  'BLUR',
+  'HOVER',
+  'SCROLL',
+  'DRAG_DROP',
+  'CLICK_AT_COORDINATES',
+  'EXECUTE_SCRIPT',
+  'RUN_PAGE_ACTIONS',
+  'AUTO_FILL_JOB_APPLICATION',
+  'DOUBLE_CLICK',
+  'RIGHT_CLICK',
+  'FILL_FORM',
+]);
+
+function senderTabAllowedToMutateV3(
+  senderTabId: number | undefined,
+  targetTabId: number | undefined,
+): boolean {
+  if (typeof targetTabId !== 'number') return true;
+  return senderTabId === targetTabId;
+}
+
+describe('P0-D cross-tab mutation guard — DOUBLE_CLICK, RIGHT_CLICK, FILL_FORM', () => {
+  it('DOUBLE_CLICK is in the mutation guard set', () => {
+    expect(DOM_MUTATION_MESSAGE_TYPES_V3.has('DOUBLE_CLICK')).toBe(true);
+  });
+
+  it('RIGHT_CLICK is in the mutation guard set', () => {
+    expect(DOM_MUTATION_MESSAGE_TYPES_V3.has('RIGHT_CLICK')).toBe(true);
+  });
+
+  it('FILL_FORM is in the mutation guard set', () => {
+    expect(DOM_MUTATION_MESSAGE_TYPES_V3.has('FILL_FORM')).toBe(true);
+  });
+
+  it('cross-tab DOUBLE_CLICK is rejected by senderTabAllowedToMutate (sender=10, target=99)', () => {
+    expect(DOM_MUTATION_MESSAGE_TYPES_V3.has('DOUBLE_CLICK')).toBe(true);
+    expect(senderTabAllowedToMutateV3(10, 99)).toBe(false);
+  });
+
+  it('same-tab DOUBLE_CLICK is allowed', () => {
+    expect(senderTabAllowedToMutateV3(42, 42)).toBe(true);
+  });
+
+  it('DOUBLE_CLICK with no tabId is always allowed (sender acts on own tab)', () => {
+    expect(senderTabAllowedToMutateV3(10, undefined)).toBe(true);
+  });
+
+  it('cross-tab RIGHT_CLICK is rejected', () => {
+    expect(DOM_MUTATION_MESSAGE_TYPES_V3.has('RIGHT_CLICK')).toBe(true);
+    expect(senderTabAllowedToMutateV3(5, 100)).toBe(false);
+  });
+
+  it('cross-tab FILL_FORM is rejected', () => {
+    expect(DOM_MUTATION_MESSAGE_TYPES_V3.has('FILL_FORM')).toBe(true);
+    expect(senderTabAllowedToMutateV3(3, 77)).toBe(false);
+  });
+
+  it('all prior mutation types are still present in V3', () => {
+    for (const t of [
+      'TYPE',
+      'CLICK',
+      'SUBMIT_FORM',
+      'EXECUTE_SCRIPT',
+      'RUN_PAGE_ACTIONS',
+      'AUTO_FILL_JOB_APPLICATION',
+    ]) {
+      expect(DOM_MUTATION_MESSAGE_TYPES_V3.has(t)).toBe(true);
+    }
+  });
+});
+
+// ─── P1-14: redactSensitiveText — credit-card + password-field redaction ───────
+
+import { redactSensitiveText } from '../src/inPagePanel/pageActions';
+
+describe('P1-14 redactSensitiveText — sensitive field redaction', () => {
+  it('redacts a 16-digit Visa number', () => {
+    const result = redactSensitiveText('Your card: 4111111111111111 expires soon');
+    expect(result).toContain('[REDACTED]');
+    expect(result).not.toContain('4111111111111111');
+  });
+
+  it('redacts a formatted card number with spaces', () => {
+    const result = redactSensitiveText('Card: 4111 1111 1111 1111');
+    expect(result).toContain('[REDACTED]');
+    expect(result).not.toContain('4111 1111 1111 1111');
+  });
+
+  it('redacts a 15-digit Amex number', () => {
+    const result = redactSensitiveText('Amex: 371449635398431');
+    expect(result).toContain('[REDACTED]');
+    expect(result).not.toContain('371449635398431');
+  });
+
+  it('redacts a password-field line', () => {
+    const result = redactSensitiveText('Username: alice\nPassword: hunter2\nEmail: alice@x.com');
+    expect(result).toContain('[REDACTED LINE]');
+    expect(result).not.toContain('hunter2');
+    expect(result).toContain('Username: alice');
+    expect(result).toContain('Email: alice@x.com');
+  });
+
+  it('redacts passwd variant', () => {
+    const result = redactSensitiveText('passwd: s3cr3t123');
+    expect(result).toContain('[REDACTED LINE]');
+    expect(result).not.toContain('s3cr3t123');
+  });
+
+  it('preserves non-sensitive text unchanged', () => {
+    const safe = 'This is a normal article about technology trends.';
+    expect(redactSensitiveText(safe)).toBe(safe);
+  });
+
+  it('handles empty string without error', () => {
+    expect(redactSensitiveText('')).toBe('');
+  });
+
+  it('does not redact short digit sequences (phone numbers stay intact)', () => {
+    const result = redactSensitiveText('Call us at 555-867-5309');
+    expect(result).not.toContain('[REDACTED]');
+  });
+});

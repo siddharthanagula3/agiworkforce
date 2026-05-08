@@ -123,6 +123,13 @@ export function buildPanelStyles(): string {
       margin-top:6px;
     }
 
+    .agi-disclosure {
+      color:#6b7280; font-size:11px;
+      background:#f9fafb; border:1px solid #e5e7eb;
+      border-radius:6px; padding:7px 10px;
+      margin-bottom:8px; line-height:1.4;
+    }
+
     /* ── Composer ────────────────────────────────────────────────────────── */
     .agi-composer {
       display:flex; gap:8px; align-items:flex-end;
