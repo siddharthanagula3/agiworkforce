@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@agiworkforce/api": "workspace:*",
+    "@agiworkforce/data-layer": "workspace:*",
     "@agiworkforce/unified-chat": "workspace:*",
     "@agiworkforce/routing": "workspace:*",
     "@agiworkforce/runtime": "workspace:*",
