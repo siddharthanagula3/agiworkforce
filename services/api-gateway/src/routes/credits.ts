@@ -15,7 +15,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { supabase } from '../lib/supabase';
+import { getUserScopedClient } from '../lib/supabaseClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 
@@ -68,7 +68,11 @@ router.get(
       throw new AppError('Unauthorized', 401);
     }
 
-    const { data, error } = await supabase.rpc('get_credit_balance', {
+    // P0-G (Wave 1): RLS-bound client minted per-request from req.user.userId.
+    // Replaces the old service-role singleton which bypassed RLS — a
+    // missing-filter regression here would have leaked across tenants.
+    const userDb = getUserScopedClient(user.userId);
+    const { data, error } = await userDb.rpc('get_credit_balance', {
       p_user_id: user.userId,
     });
 
@@ -127,7 +131,9 @@ router.post('/check', createRateLimiter('credits-check'), async (req: Request, r
   // SECURITY: Use strict schema to reject unexpected fields
   const { amount_cents } = checkCreditsSchema.parse(req.body);
 
-  const { data, error } = await supabase.rpc('check_credits_available', {
+  // P0-G: RLS-bound user-scoped client.
+  const userDb = getUserScopedClient(user.userId);
+  const { data, error } = await userDb.rpc('check_credits_available', {
     p_user_id: user.userId,
     p_amount_cents: amount_cents,
   });
@@ -160,7 +166,9 @@ router.post('/deduct', createRateLimiter('credits-deduct'), async (req: Request,
     req.body,
   );
 
-  const { data, error } = await supabase.rpc('deduct_credits', {
+  // P0-G: RLS-bound user-scoped client.
+  const userDb = getUserScopedClient(user.userId);
+  const { data, error } = await userDb.rpc('deduct_credits', {
     p_user_id: user.userId,
     p_amount_cents: amount_cents,
     p_description: description || `LLM usage: ${metadata?.model || 'unknown model'}`,
