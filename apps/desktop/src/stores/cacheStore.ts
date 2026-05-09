@@ -1,3 +1,4 @@
+// TODO(task-1.3): migrate to packages/runtime/state (see AppStateStore.ts domain mapping)
 import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import { storageFallback } from '../lib/storageFallback';
