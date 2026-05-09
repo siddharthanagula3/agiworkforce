@@ -7,6 +7,16 @@
  * as the systemPrompt.
  *
  * Uses a 5-minute cache to avoid re-parsing on every access.
+ *
+ * Filesystem-resident skills (user-authored under `<project>/.claude/skills/`,
+ * `~/.claude/skills/`, etc.) load through the shared `@agiworkforce/skills`
+ * package — see `loadFilesystemSkills()` below. The two paths intentionally
+ * coexist: the bundled employees ship with the desktop binary, while user
+ * skills live on disk and merge in via precedence (highest wins).
+ *
+ * @deprecated The bundled-only `loadSkills()` API will be retired once
+ * the `appStateStore` slice for skill catalogs lands. New consumers should
+ * prefer `loadFilesystemSkills()` for layered loading.
  */
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -295,4 +305,46 @@ export function getSkillCategories(): string[] {
 export function invalidateSkillCache(): void {
   cachedSkills = null;
   cacheTimestamp = 0;
+}
+
+// ── Filesystem-Resident Skills (via @agiworkforce/skills) ──────────────────────
+
+/**
+ * Layered skill loader powered by the shared `@agiworkforce/skills` package.
+ *
+ * Reads SKILL.md / *.md files from one or more directories, resolves
+ * frontmatter (with prototype-pollution defense), and merges across six
+ * precedence layers (extra > workspace > project > personal > managed-local
+ * > bundled). The shared package depends on `node:fs/promises`, so this
+ * function is only callable from a Node environment (Tauri sidecar, build
+ * scripts, tests) — in a browser/renderer build the dynamic import will
+ * fail. Guarded with a runtime-environment check; returns `[]` on web.
+ *
+ * Progressive disclosure: only metadata loads at session start. Bodies are
+ * available on the returned `Skill[]` for on-demand access — UIs that show
+ * a skill list should defer rendering the body until the user opens it.
+ */
+export async function loadFilesystemSkills(
+  layers: Array<{ rootDir: string; source: import('@agiworkforce/skills').SkillSource }>,
+): Promise<import('@agiworkforce/skills').Skill[]> {
+  // Browser / renderer guard: `@agiworkforce/skills` uses `node:fs`. If we
+  // ever land a Tauri-fs-backed shim, this guard moves into the package.
+  if (typeof window !== 'undefined' && typeof process === 'undefined') {
+    return [];
+  }
+  const skillsPkg = await import('@agiworkforce/skills');
+  const layerResults = await skillsPkg.loadSkillsFromLayers(layers);
+  return skillsPkg.mergeSkills(layerResults);
+}
+
+/**
+ * Format filesystem skills as a system-prompt block. Used when generating
+ * the agent's session-start system reminder.
+ */
+export async function formatFilesystemSkills(
+  skills: import('@agiworkforce/skills').Skill[],
+  options?: import('@agiworkforce/skills').FormatSkillsOptions,
+): Promise<string> {
+  const skillsPkg = await import('@agiworkforce/skills');
+  return skillsPkg.formatSkillsForPrompt(skills, options);
 }
