@@ -28,6 +28,15 @@ export type { EventCallback, UnlistenFn } from './events';
 // HTTP transport (typically not used directly — command() handles routing)
 export { routeToCloud } from './http';
 
+// Per-command async context isolation
+export {
+  getAgentContext,
+  runWithContext,
+  deriveChildContext,
+  reestablishContextInWorker,
+} from './context';
+export type { AgentContext, AgentOrigin } from './context';
+
 // Central state architecture — createStore + onChangeAppState choke-point
 export {
   createStore,
