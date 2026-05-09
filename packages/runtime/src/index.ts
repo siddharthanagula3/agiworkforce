@@ -28,6 +28,15 @@ export type { EventCallback, UnlistenFn } from './events';
 // HTTP transport (typically not used directly — command() handles routing)
 export { routeToCloud } from './http';
 
+// Per-command async context isolation
+export {
+  getAgentContext,
+  runWithContext,
+  deriveChildContext,
+  reestablishContextInWorker,
+} from './context';
+export type { AgentContext, AgentOrigin } from './context';
+
 // Central state architecture — createStore + onChangeAppState choke-point
 export {
   createStore,
@@ -64,3 +73,28 @@ export type {
   MemoryState,
   PlanTier,
 } from './state';
+
+// Per-surface priority send pipeline (messageQueueManager)
+export {
+  createMessageQueue,
+  createWebStorageAdapter,
+  createKvStorageAdapter,
+  LANE_CAP,
+  PRIORITY_ORDER,
+  QueueDequeueRaceError,
+  QueueFullError,
+} from './queue';
+export type {
+  ContentBlock,
+  CreateMessageQueueOptions,
+  EditablePromptInputMode,
+  MessageQueue,
+  PastedContent,
+  PopAllEditableResult,
+  PromptInputMode,
+  QueueListener,
+  QueuePriority,
+  QueueStorageAdapter,
+  QueuedCommand,
+  SyncKvStore,
+} from './queue';
