@@ -1,0 +1,82 @@
+-- =============================================================================
+-- History marker: canonical dir vs prod state reconciliation
+-- Date: 2026-05-09
+-- Wave: 5.4
+-- Source: tasks/research/EXECUTION_PLAN_2026-05-09.md §1.1
+--          tasks/research/exec/1.1-stripe-staging-verified.md (EXEC-1.1's flag)
+--
+-- This migration is purely a NOTICE marker. It performs no DDL or DML.
+-- Its purpose is to leave a permanent row in `supabase_migrations.schema_migrations`
+-- so future contributors reading the migration ledger can find the
+-- explanatory text below.
+--
+-- == Background ==
+--
+-- The canonical directory `supabase/migrations/` and the legacy directory
+-- `apps/web/supabase/migrations/` had two filename collisions on the same
+-- 14-digit version prefix but with DIFFERENT SQL bodies:
+--
+--   20260505000001
+--     canonical: 20260505000001_api_keys_key_prefix.sql
+--                  -> ADD COLUMN key_prefix + non-unique partial index
+--     legacy:    20260505000001_add_api_key_prefix.sql
+--                  -> ADD COLUMN key_prefix + UNIQUE partial index
+--
+--   20260505000002
+--     canonical: 20260505000002_fix_github_installations_update_with_check.sql
+--                  -> ALTER POLICY "Users can update their own installations" + WITH CHECK
+--     legacy:    20260505000002_replace_authrole_with_role_grant.sql
+--                  -> DO block: scan pg_policies and rewrite auth.role()='service_role'
+--
+-- Verified 2026-05-09 via `mcp__supabase__list_migrations` against the prod
+-- project, the LEGACY content was applied to prod, but under DIFFERENT
+-- version numbers (the `20260506*` set):
+--
+--   prod 20260506025923 fix_github_installations_update_with_check
+--     == canonical 20260505000002 content
+--   prod 20260506025937 replace_authrole_with_role_grant
+--     == canonical 20260505000003 == legacy 20260505000002 content
+--   prod 20260506232038 create_api_keys_with_prefix
+--     == legacy 20260505000001 content (UNIQUE partial index, not the
+--        canonical's non-unique form)
+--
+-- The corresponding canonical migrations 20260505000001..20260505000007
+-- exist on disk but are NOT recorded in prod's schema_migrations under
+-- those version numbers. A blind `supabase db push` from the canonical dir
+-- would attempt to apply all 7. Most are idempotent (DO blocks, IF NOT
+-- EXISTS) but a re-apply would still:
+--   * create a redundant non-unique index alongside the prod's UNIQUE
+--     partial index on api_keys.key_prefix (wasteful, not broken);
+--   * succeed-as-noop on the github_installations + authrole + connector
+--     + stripe migrations.
+-- One non-idempotent edge case: 20260505000005_connector_tool_permissions.sql
+-- has a `CREATE POLICY "users manage own connector permissions"` without
+-- `IF NOT EXISTS`, which would error on re-apply. The matching prod
+-- version (20260506025954) already created that policy.
+--
+-- == Reconciliation strategy ==
+--
+-- Per the user's task scope: "do NOT modify production. Document the
+-- prod-push runbook for the user."
+--
+-- The recommended runbook (in tasks/research/exec/w54-timestamp-reconcile-report.md
+-- §6) is:
+--   1. Run `supabase migration repair --status applied 20260505000001` ...
+--      through `20260505000007` for the seven redundant canonical migrations.
+--      This inserts the version into `schema_migrations` WITHOUT executing
+--      the SQL — so the next `db push` will skip them.
+--   2. Run `supabase db push` to apply the genuinely new canonical migrations
+--      (Wave 5.1's worker tables, Wave 5.3's dispatch_keys, this marker, and
+--      any future).
+--   3. The legacy directory `apps/web/supabase/migrations/` is treated as
+--      DEPRECATED. It contains the originals that were renumbered into prod's
+--      `20260506*` set. Do not push from it; do not consult it for new work.
+-- =============================================================================
+
+DO $$
+BEGIN
+    RAISE NOTICE '20260509000005: Canonical-dir history marker. ' ||
+                 'See tasks/research/exec/w54-timestamp-reconcile-report.md ' ||
+                 'for the prod-push runbook and the legacy/canonical/prod ' ||
+                 'alignment table.';
+END $$;
