@@ -10,7 +10,7 @@
  *  - Property test: N sequential mutations → N listener invocations (no skips)
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createStore } from '../createStore';
 
 // ---------------------------------------------------------------------------
