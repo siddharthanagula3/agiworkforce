@@ -439,6 +439,9 @@ importers:
 
   apps/extension:
     dependencies:
+      '@agiworkforce/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       dompurify:
         specifier: '>=3.4.0'
         version: 3.4.2
@@ -467,6 +470,9 @@ importers:
 
   apps/extension-vscode:
     dependencies:
+      '@agiworkforce/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       ws:
         specifier: ^8.20.0
         version: 8.20.0
@@ -513,6 +519,9 @@ importers:
 
   apps/mobile:
     dependencies:
+      '@agiworkforce/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       '@agiworkforce/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -1337,6 +1346,9 @@ importers:
 
   packages/unified-chat:
     dependencies:
+      '@agiworkforce/runtime':
+        specifier: workspace:*
+        version: link:../runtime
       '@agiworkforce/types':
         specifier: workspace:*
         version: link:../types
