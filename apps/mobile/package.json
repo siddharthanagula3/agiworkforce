@@ -17,6 +17,8 @@
     "test:local": "jest --runInBand --detectOpenHandles --openHandlesTimeout=5000"
   },
   "dependencies": {
+    "@agiworkforce/mcp": "workspace:*",
+    "@agiworkforce/skills": "workspace:*",
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
     "@expo/metro-runtime": "~55.0.11",
