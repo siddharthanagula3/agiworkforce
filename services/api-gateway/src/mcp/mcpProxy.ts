@@ -1,6 +1,12 @@
 /**
  * @file MCP Proxy Service
  *
+ * @deprecated New code should consume `./sharedClient.ts`, which uses the
+ * official `@modelcontextprotocol/sdk` via the shared `@agiworkforce/mcp`
+ * package. The hand-rolled JSON-RPC framing in this file predates the
+ * shared client — kept for backward-compat while existing callers migrate.
+ * On first use per process the proxy logs a one-shot deprecation warning.
+ *
  * Manages server-side MCP server connections and forwards tool calls from
  * web/mobile clients to the appropriate MCP server.
  *
@@ -620,12 +626,23 @@ export class McpProxyError extends Error {
 // =============================================================================
 
 let proxyInstance: McpProxy | null = null;
+let deprecationLogged = false;
 
 /**
  * Get the singleton MCP proxy instance.
  * Creates and initializes it on first call.
+ *
+ * @deprecated Prefer `./sharedClient.ts`'s `getSharedMcpCatalog` /
+ * `callSharedMcpTool` for new code — they use the official MCP SDK via
+ * `@agiworkforce/mcp` and avoid the hand-rolled JSON-RPC framing here.
  */
 export async function getMcpProxy(): Promise<McpProxy> {
+  if (!deprecationLogged) {
+    deprecationLogged = true;
+    logger.warn(
+      'mcpProxy.getMcpProxy() is deprecated; new callers should use sharedClient.ts (powered by @agiworkforce/mcp).',
+    );
+  }
   if (proxyInstance) return proxyInstance;
 
   proxyInstance = new McpProxy();
