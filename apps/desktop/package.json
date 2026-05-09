@@ -25,6 +25,9 @@
   },
   "dependencies": {
     "@agiworkforce/api": "workspace:*",
+    "@agiworkforce/apply-patch": "workspace:*",
+    "@agiworkforce/mcp": "workspace:*",
+    "@agiworkforce/skills": "workspace:*",
     "@agiworkforce/unified-chat": "workspace:*",
     "@agiworkforce/routing": "workspace:*",
     "@agiworkforce/runtime": "workspace:*",

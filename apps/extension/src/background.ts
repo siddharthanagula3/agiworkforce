@@ -13,6 +13,17 @@ import {
   type ProviderStreamProvider,
   type StreamChunk as ProviderStreamChunk,
 } from './providerStreamClient';
+// Wires `@agiworkforce/browser-tool`'s canonical action shapes onto the
+// extension's existing `RunPageAction` machinery. The package's runtime
+// (Playwright-based) is NOT bundled — only types travel through this
+// import. See `browserTool.ts` for action-coverage notes (16 Computer Use
+// actions; 15 implementable in content-script context, `zoom` is N/A).
+import {
+  computerUseToPageActions,
+  browserActionToPageActions,
+  type ComputerUseAction,
+  type BrowserAction,
+} from './browserTool';
 
 interface BackgroundState {
   isNativeConnected: boolean;
@@ -2931,6 +2942,61 @@ chrome.runtime.onSuspend.addListener(() => {
     logger.debug('Native disconnect on suspend failed', error);
   }
 });
+
+/**
+ * Public bridge: translate an array of `@agiworkforce/browser-tool`
+ * `BrowserAction`s OR Anthropic Computer Use actions into the extension's
+ * native `RunPageAction[]` plan. Exposed for the side panel and external
+ * MCP-style entrypoints. Returns the planned step list; the caller is
+ * responsible for sending `RUN_PAGE_ACTIONS` to the active tab.
+ */
+export function planActionsFromBrowserTool(
+  actions: ReadonlyArray<BrowserAction | ComputerUseAction>,
+): RunPageAction[] {
+  const plan: RunPageAction[] = [];
+  for (const action of actions) {
+    const steps = isComputerUseKind(action.kind)
+      ? computerUseToPageActions(action as ComputerUseAction)
+      : browserActionToPageActions(action as BrowserAction);
+    for (const step of steps) {
+      plan.push({
+        id: step.id,
+        type: step.type,
+        selector: step.selector ?? null,
+        value: step.value ?? null,
+        delay: step.delay ?? null,
+      });
+    }
+  }
+  return plan;
+}
+
+const COMPUTER_USE_KINDS = new Set<string>([
+  'screenshot',
+  'left_click',
+  'right_click',
+  'middle_click',
+  'double_click',
+  'triple_click',
+  'mouse_move',
+  'key',
+  'type',
+  'scroll',
+  'hold_key',
+  'wait',
+  'left_mouse_down',
+  'left_mouse_up',
+  'cursor_position',
+  'zoom',
+]);
+
+function isComputerUseKind(kind: string): boolean {
+  // 'type' / 'wait' / 'screenshot' overlap between the two action sets;
+  // we treat them as Computer Use because that's the broader vocabulary
+  // (Computer Use's 'type' takes the same shape as the package's 'type'
+  // when no `coordinate` is supplied).
+  return COMPUTER_USE_KINDS.has(kind);
+}
 
 // Export for testing
 export { state, handleMessage, checkDesktopConnection };

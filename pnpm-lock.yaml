@@ -99,12 +99,21 @@ importers:
       '@agiworkforce/api':
         specifier: workspace:*
         version: link:../../packages/api
+      '@agiworkforce/apply-patch':
+        specifier: workspace:*
+        version: link:../../packages/apply-patch
+      '@agiworkforce/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
       '@agiworkforce/routing':
         specifier: workspace:*
         version: link:../../packages/routing
       '@agiworkforce/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
+      '@agiworkforce/skills':
+        specifier: workspace:*
+        version: link:../../packages/skills
       '@agiworkforce/stores':
         specifier: workspace:*
         version: link:../../packages/stores
@@ -439,6 +448,9 @@ importers:
 
   apps/extension:
     dependencies:
+      '@agiworkforce/browser-tool':
+        specifier: workspace:*
+        version: link:../../packages/browser-tool
       dompurify:
         specifier: '>=3.4.0'
         version: 3.4.2
@@ -513,6 +525,12 @@ importers:
 
   apps/mobile:
     dependencies:
+      '@agiworkforce/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
+      '@agiworkforce/skills':
+        specifier: workspace:*
+        version: link:../../packages/skills
       '@agiworkforce/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -697,15 +715,24 @@ importers:
       '@agiworkforce/api':
         specifier: workspace:*
         version: link:../../packages/api
+      '@agiworkforce/apply-patch':
+        specifier: workspace:*
+        version: link:../../packages/apply-patch
       '@agiworkforce/data-layer':
         specifier: workspace:*
         version: link:../../packages/data-layer
+      '@agiworkforce/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
       '@agiworkforce/routing':
         specifier: workspace:*
         version: link:../../packages/routing
       '@agiworkforce/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
+      '@agiworkforce/skills':
+        specifier: workspace:*
+        version: link:../../packages/skills
       '@agiworkforce/stores':
         specifier: workspace:*
         version: link:../../packages/stores
@@ -1413,9 +1440,15 @@ importers:
 
   services/api-gateway:
     dependencies:
+      '@agiworkforce/apply-patch':
+        specifier: workspace:*
+        version: link:../../packages/apply-patch
       '@agiworkforce/llm-normalize':
         specifier: workspace:*
         version: link:../../packages/llm-normalize
+      '@agiworkforce/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
       '@agiworkforce/providers-anthropic':
         specifier: workspace:*
         version: link:../../packages/providers/anthropic
@@ -1428,6 +1461,9 @@ importers:
       '@agiworkforce/providers-openai':
         specifier: workspace:*
         version: link:../../packages/providers/openai
+      '@agiworkforce/skills':
+        specifier: workspace:*
+        version: link:../../packages/skills
       '@agiworkforce/types':
         specifier: workspace:*
         version: link:../../packages/types
