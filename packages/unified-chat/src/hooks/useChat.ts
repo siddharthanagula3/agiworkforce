@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
+import { QueueFullError, type MessageQueue } from '@agiworkforce/runtime';
 import type { ChatHostBridge } from '../lib/hostBridge';
 import type { ChatRuntime } from '../lib/runtime';
 import type { ChatMessage } from '../lib/types';
@@ -7,10 +8,22 @@ import { syncPackageStoreFromHost } from './useHostBridgeSync';
 import { useChatStore, getSystemPromptForMode } from '../stores/chatStore';
 import { useModelStore } from '../stores/modelStore';
 import { buildRoutingDecision } from '../lib/promptClassifier';
+import { getSendQueue, defaultBrowserStorage } from '../queue/sendQueue';
 
 interface UseChatOptions {
   hostBridge?: ChatHostBridge | null;
   externalAddMessage?: (msg: { role: string; content: string; id?: string }) => void;
+  /**
+   * Send-pipeline queue. Defaults to the per-surface singleton from
+   * `getSendQueue(surfaceId)`. Tests inject a fresh instance for isolation.
+   */
+  sendQueue?: MessageQueue;
+  /**
+   * Surface identifier used to scope the queue when `sendQueue` is omitted.
+   * Defaults to `'default'` — host apps should pass their own (`'web'`,
+   * `'desktop'`, etc.) so persistence keys don't collide.
+   */
+  surfaceId?: string;
 }
 
 export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
@@ -18,6 +31,16 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
   externalAddMessageRef.current = options?.externalAddMessage;
   const hostBridgeRef = useRef(options?.hostBridge ?? null);
   hostBridgeRef.current = options?.hostBridge ?? null;
+
+  // Resolve the send-pipeline queue once per hook instance. Default to the
+  // per-surface singleton; storage falls back to localStorage when available.
+  const surfaceIdRef = useRef(options?.surfaceId ?? 'default');
+  const sendQueueRef = useRef<MessageQueue>(
+    options?.sendQueue ??
+      getSendQueue(surfaceIdRef.current, {
+        storage: defaultBrowserStorage(surfaceIdRef.current) ?? undefined,
+      }),
+  );
 
   /** Add message to the host bridge when provided, then to the package store for rendering. */
   const addMsg = useCallback((msg: Partial<ChatMessage> & { role: string; content: string }) => {
@@ -334,6 +357,29 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
   const sendMessage = useCallback(
     (content: string, agentMode?: string, effort?: string) => {
       if (!runtime || isStreamingRef.current) return;
+
+      // Route the prompt through the priority send queue first. This is the
+      // single entry point for every LLM-bound user input: it provides
+      // backpressure (lane cap), cancellation (AbortSignal), and round-trip
+      // editing (popAllEditable) on top of the existing send pipeline.
+      //
+      // For direct user-typed input we use the `next` lane (default for user
+      // input) so it never starves behind a queued task notification, but
+      // also doesn't preempt an in-flight `now`-priority interrupt.
+      const queue = sendQueueRef.current;
+      try {
+        queue.enqueue({ value: content, mode: 'prompt' });
+      } catch (err) {
+        if (err instanceof QueueFullError) {
+          toast.error(`Queue is full (lane "${err.lane}"). Please wait for prior sends to drain.`);
+          return;
+        }
+        throw err;
+      }
+      // Drain immediately — current behavior is direct send. The queue layer
+      // captures the command for cancellation / replay; we don't defer it.
+      const queued = queue.dequeue();
+      if (!queued) return;
 
       const store = useChatStore.getState();
 

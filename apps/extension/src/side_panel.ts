@@ -1,4 +1,5 @@
 import DOMPurify from 'dompurify';
+import { QueueFullError } from '@agiworkforce/runtime';
 import {
   getCoreManualModelOptions,
   normalizeModelId,
@@ -7,6 +8,9 @@ import {
   type ProviderId,
   type CapabilityTier,
 } from '@agiworkforce/types';
+import { getExtensionSendQueue } from './sendQueue';
+
+const extensionSendQueue = getExtensionSendQueue();
 
 /**
  * Side-panel UI message shape.
@@ -1756,6 +1760,20 @@ function expandSlashCommand(
 
 function sendMessage(text: string): void {
   if (!text.trim() || isStreaming) return;
+
+  // Route through the shared priority send queue for backpressure /
+  // cancellation parity with other surfaces. Drain immediately — current
+  // behavior is direct send.
+  try {
+    extensionSendQueue.enqueue({ value: text, mode: 'prompt' });
+  } catch (err) {
+    if (err instanceof QueueFullError) {
+      console.warn('[SidePanel] queue lane full:', err.lane);
+      return;
+    }
+    throw err;
+  }
+  extensionSendQueue.dequeue();
 
   const slashCmd = expandSlashCommand(text);
   if (slashCmd?.captureContext) {

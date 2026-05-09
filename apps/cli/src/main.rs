@@ -16,6 +16,8 @@ mod hooks;
 mod markdown;
 mod mcp;
 mod memory;
+#[allow(dead_code)] // FOUNDATION: cross-surface send-pipeline contract; CLI integrations wire through Sprint B (REPL drain + SDK headless)
+mod message_queue;
 mod models;
 mod output;
 mod output_styles;

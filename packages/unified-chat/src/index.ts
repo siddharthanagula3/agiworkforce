@@ -19,6 +19,15 @@ export { useSettingsStore as useChatSettingsStore } from './stores/settingsStore
 export { useArtifactStore as useChatArtifactStore } from './stores/artifactStore';
 export { useAgentControlStore as useChatAgentControlStore } from './stores/agentControlStore';
 
+// Send pipeline queue (per-surface; see packages/runtime for primitives)
+export {
+  getSendQueue,
+  enqueuePrompt,
+  defaultBrowserStorage,
+  __resetAllSendQueuesForTests,
+} from './queue/sendQueue';
+export type { GetSendQueueOptions } from './queue/sendQueue';
+
 // Hooks
 export { useChat } from './hooks/useChat';
 export { useTheme } from './hooks/useTheme';
