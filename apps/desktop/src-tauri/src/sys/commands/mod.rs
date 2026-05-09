@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod agent_context;
 pub mod agi;
 pub mod connector_permissions;
 pub mod dispatch_hmac;
@@ -125,6 +126,7 @@ mod path_validation_tests;
 mod window_tests;
 
 pub use agent::*;
+pub use agent_context::{CommandContext, COMMAND_CTX, try_get_request_id, try_get_conversation_id, try_get_command_name};
 pub use agi::*;
 pub use connector_permissions::*;
 pub use dispatch_hmac::*;
