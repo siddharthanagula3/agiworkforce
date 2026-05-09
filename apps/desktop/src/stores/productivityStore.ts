@@ -1,3 +1,4 @@
+// TODO(task-1.3): migrate to packages/runtime/state (see AppStateStore.ts domain mapping)
 import { toast } from 'sonner';
 import { create } from 'zustand';
 import { invoke } from '../lib/tauri-mock';
