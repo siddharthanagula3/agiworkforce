@@ -13,12 +13,15 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@agiworkforce/apply-patch": "workspace:*",
     "@agiworkforce/llm-normalize": "workspace:*",
     "@agiworkforce/llm-runtime": "workspace:*",
+    "@agiworkforce/mcp": "workspace:*",
     "@agiworkforce/providers-anthropic": "workspace:*",
     "@agiworkforce/providers-google": "workspace:*",
     "@agiworkforce/providers-ollama": "workspace:*",
     "@agiworkforce/providers-openai": "workspace:*",
+    "@agiworkforce/skills": "workspace:*",
     "@agiworkforce/types": "workspace:*",
     "@supabase/supabase-js": "^2.100.1",
     "bcryptjs": "^3.0.3",
