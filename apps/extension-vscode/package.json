@@ -810,6 +810,7 @@
     "build": "pnpm run compile"
   },
   "dependencies": {
+    "@agiworkforce/runtime": "workspace:*",
     "ws": "^8.20.0"
   },
   "devDependencies": {
