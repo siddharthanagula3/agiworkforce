@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "@agiworkforce/types": "workspace:*",
-    "@agiworkforce/llm-normalize": "workspace:*"
+    "@agiworkforce/llm-normalize": "workspace:*",
+    "@agiworkforce/llm-runtime": "workspace:*"
   },
   "devDependencies": {
     "vitest": "^4.0.18"
