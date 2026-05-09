@@ -26,6 +26,7 @@ import type {
   StreamChunk,
 } from '@agiworkforce/types';
 import { detectOpenAICompletionsCompat } from '@agiworkforce/llm-normalize';
+import { classifyError, withStreamIdleWatchdog } from '@agiworkforce/llm-runtime';
 import {
   translateChatRequest,
   translateOpenAIStream,
@@ -98,20 +99,22 @@ export function createLMStudioAdapter(config: LMStudioAdapterConfig = {}): Provi
           params as unknown as Parameters<typeof sdk.chat.completions.create>[0],
           { signal },
         );
-        for await (const chunk of translateOpenAIStream(
-          sdkStream as unknown as AsyncIterable<OpenAIChatCompletionChunk>,
-        )) {
+        const watched = withStreamIdleWatchdog(
+          translateOpenAIStream(sdkStream as unknown as AsyncIterable<OpenAIChatCompletionChunk>),
+        );
+        for await (const chunk of watched) {
           yield chunk;
         }
       } catch (err) {
-        const error = err as Error & { status?: number };
-        const retryable =
-          typeof error.status === 'number' && (error.status === 429 || error.status >= 500);
+        const classified = classifyError(err);
         yield {
           type: 'error',
-          message: error.message ?? 'LMStudio request failed',
-          ...(typeof error.status === 'number' ? { code: String(error.status) } : {}),
-          retryable,
+          message: classified.message,
+          ...(classified.status !== undefined ? { code: String(classified.status) } : {}),
+          retryable: classified.retryable,
+          ...(classified.retryAfterSeconds !== undefined
+            ? { retryAfterSeconds: classified.retryAfterSeconds }
+            : {}),
         };
         yield { type: 'stop', reason: 'error' };
       }
