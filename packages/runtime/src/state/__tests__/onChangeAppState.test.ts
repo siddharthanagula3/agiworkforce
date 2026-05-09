@@ -9,7 +9,7 @@
  *  - No-op paths (e.g. model unchanged → no model-switch event)
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   onChangeAppState,
   onFanOutError,
