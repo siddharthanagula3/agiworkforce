@@ -64,3 +64,28 @@ export type {
   MemoryState,
   PlanTier,
 } from './state';
+
+// Per-surface priority send pipeline (messageQueueManager) — Task 1.4
+export {
+  createMessageQueue,
+  createWebStorageAdapter,
+  createKvStorageAdapter,
+  LANE_CAP,
+  PRIORITY_ORDER,
+  QueueDequeueRaceError,
+  QueueFullError,
+} from './queue';
+export type {
+  ContentBlock,
+  CreateMessageQueueOptions,
+  EditablePromptInputMode,
+  MessageQueue,
+  PastedContent,
+  PopAllEditableResult,
+  PromptInputMode,
+  QueueListener,
+  QueuePriority,
+  QueueStorageAdapter,
+  QueuedCommand,
+  SyncKvStore,
+} from './queue';
