@@ -29,6 +29,7 @@ import type {
   StreamChunk,
 } from '@agiworkforce/types';
 import { detectOpenAICompletionsCompat } from '@agiworkforce/llm-normalize';
+import { classifyError, withStreamIdleWatchdog } from '@agiworkforce/llm-runtime';
 import {
   translateChatRequest,
   translateOpenAIStream,
@@ -150,18 +151,20 @@ export function createPerplexityAdapter(config: PerplexityAdapterConfig = {}): P
           sdkStream as unknown as AsyncIterable<PerplexityChunk>,
           includeCitations,
         );
-        for await (const chunk of translateOpenAIStream(decorated)) {
+        const watched = withStreamIdleWatchdog(translateOpenAIStream(decorated));
+        for await (const chunk of watched) {
           yield chunk;
         }
       } catch (err) {
-        const error = err as Error & { status?: number };
-        const retryable =
-          typeof error.status === 'number' && (error.status === 429 || error.status >= 500);
+        const classified = classifyError(err);
         yield {
           type: 'error',
-          message: error.message ?? 'Perplexity request failed',
-          ...(typeof error.status === 'number' ? { code: String(error.status) } : {}),
-          retryable,
+          message: classified.message,
+          ...(classified.status !== undefined ? { code: String(classified.status) } : {}),
+          retryable: classified.retryable,
+          ...(classified.retryAfterSeconds !== undefined
+            ? { retryAfterSeconds: classified.retryAfterSeconds }
+            : {}),
         };
         yield { type: 'stop', reason: 'error' };
       }

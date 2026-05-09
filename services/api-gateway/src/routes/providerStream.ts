@@ -34,6 +34,7 @@ import {
   type ProviderId,
 } from '../lib/providerAdapters';
 import type { ChatRequest, StreamChunk } from '@agiworkforce/types';
+import { classifyError } from '@agiworkforce/llm-runtime';
 
 const router: Router = Router();
 
@@ -228,9 +229,27 @@ router.post(
         writeEvent(chunk);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      logger.warn({ providerId, userId: user.userId, err: message }, 'Provider stream errored');
-      writeEvent({ type: 'error', message });
+      const classified = classifyError(err);
+      logger.warn(
+        {
+          providerId,
+          userId: user.userId,
+          err: classified.message,
+          category: classified.category,
+          code: classified.code,
+        },
+        'Provider stream errored',
+      );
+      const errorChunk: StreamChunk = {
+        type: 'error',
+        message: classified.message,
+        retryable: classified.retryable,
+        ...(classified.status !== undefined ? { code: String(classified.status) } : {}),
+        ...(classified.retryAfterSeconds !== undefined
+          ? { retryAfterSeconds: classified.retryAfterSeconds }
+          : {}),
+      };
+      writeEvent(errorChunk);
       writeEvent({ type: 'stop', reason: 'error' });
     } finally {
       logger.info(

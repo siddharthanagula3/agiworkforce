@@ -27,6 +27,7 @@ import type {
   ProviderCatalogContext,
   StreamChunk,
 } from '@agiworkforce/types';
+import { classifyError, withStreamIdleWatchdog } from '@agiworkforce/llm-runtime';
 
 import { fetchGoogleCatalog, GOOGLE_MODEL_CATALOG } from './catalog';
 import { translateChatRequest } from './translate';
@@ -108,11 +109,15 @@ export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderA
           signal,
         });
       } catch (err) {
-        const error = err as Error;
+        const classified = classifyError(err);
         yield {
           type: 'error',
-          message: error.message ?? 'Google request failed',
-          retryable: true,
+          message: classified.message,
+          retryable: classified.retryable,
+          ...(classified.status !== undefined ? { code: String(classified.status) } : {}),
+          ...(classified.retryAfterSeconds !== undefined
+            ? { retryAfterSeconds: classified.retryAfterSeconds }
+            : {}),
         };
         yield { type: 'stop', reason: 'error' };
         return;
@@ -120,11 +125,22 @@ export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderA
 
       if (!res.ok) {
         const text = await res.text().catch(() => '');
+        // Build a synthetic error to feed the classifier; res.headers is a
+        // real Headers instance so retry-after parsing works without extra glue.
+        const synthetic = {
+          status: res.status,
+          message: `Google responded ${res.status}: ${text || res.statusText}`,
+          headers: res.headers,
+        };
+        const classified = classifyError(synthetic);
         yield {
           type: 'error',
           code: String(res.status),
-          message: `Google responded ${res.status}: ${text || res.statusText}`,
-          retryable: res.status >= 500,
+          message: classified.message,
+          retryable: classified.retryable,
+          ...(classified.retryAfterSeconds !== undefined
+            ? { retryAfterSeconds: classified.retryAfterSeconds }
+            : {}),
         };
         yield { type: 'stop', reason: 'error' };
         return;
@@ -135,7 +151,8 @@ export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderA
         return;
       }
 
-      for await (const chunk of translateGeminiStream(parseGeminiStream(res.body))) {
+      const watched = withStreamIdleWatchdog(translateGeminiStream(parseGeminiStream(res.body)));
+      for await (const chunk of watched) {
         yield chunk;
       }
     },
