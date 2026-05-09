@@ -63,13 +63,13 @@ import {
   waitForAuthReady,
   waitForHydration,
 } from './stores/auth';
-import { initializeAuthOrchestrator } from './stores/authOrchestrator';
+import { initializeAuthOrchestrator } from './stores/connectionStore';
 import { initializeModelStoreFromSettings, useModelStore } from './stores/modelStore';
 import useErrorStore, { useSimpleModeStore, selectOnboardingCompleted } from './stores/ui';
 import { useAppModeStore } from './stores/appModeStore';
-import { useSettingsDialogStore } from './stores/settingsDialogStore';
+import { useSettingsDialogStore } from './stores/settingsStore';
 import { useSettingsStore, waitForSettingsHydration } from './stores/settingsStore';
-import { useVoiceInputStore } from './stores/voiceInputStore';
+import { useVoiceInputStore } from './stores/settingsStore';
 import { applyTheme, getThemeById } from './themes/index';
 
 const VisualizationLayer = lazy(() =>
@@ -386,7 +386,7 @@ const DesktopShell = () => {
     if (isTauri) {
       void (async () => {
         try {
-          const { initializeMcpbInstallListener } = await import('./stores/mcpbStore');
+          const { initializeMcpbInstallListener } = await import('./stores/mcpStore');
           await runStartupStep('MCP bundle install listener', () =>
             initializeMcpbInstallListener(),
           );
@@ -880,7 +880,7 @@ const DesktopShell = () => {
 
       const voiceInputState = useVoiceInputStore.getState();
 
-      if (voiceInputState.mode === 'listening') {
+      if (voiceInputState.voiceMode === 'listening') {
         await voiceInputState.stopListening();
       } else {
         await voiceInputState.startListening();

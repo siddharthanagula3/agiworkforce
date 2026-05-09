@@ -16,12 +16,12 @@ import {
 import { toast } from 'sonner';
 import { Label } from '../ui/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
-import { useVoiceInputStore, type PostProcessingMode } from '../../stores/voiceInputStore';
+import { useVoiceInputStore, type PostProcessingMode } from '../../stores/settingsStore';
 import {
   useVoiceModeStore,
   type WhisperModelInfo,
   type PiperVoiceInfo,
-} from '../../stores/voiceModeStore';
+} from '../../stores/settingsStore';
 import { VoicePersonaSelector } from './VoicePersonaSelector';
 
 const VOICE_PERSONA_STORAGE_KEY = 'agiworkforce-voice-persona';
@@ -78,9 +78,9 @@ const POST_PROCESSING_OPTIONS: Array<{
 
 export function VoiceSettings() {
   const hotkey = useVoiceInputStore((s) => s.hotkey);
-  const provider = useVoiceInputStore((s) => s.provider);
-  const language = useVoiceInputStore((s) => s.language);
-  const mode = useVoiceInputStore((s) => s.mode);
+  const provider = useVoiceInputStore((s) => s.voiceProvider);
+  const language = useVoiceInputStore((s) => s.voiceLanguage);
+  const mode = useVoiceInputStore((s) => s.voiceMode);
   const postProcessingMode = useVoiceInputStore((s) => s.postProcessingMode);
   const setHotkey = useVoiceInputStore((s) => s.setHotkey);
   const setProvider = useVoiceInputStore((s) => s.setProvider);

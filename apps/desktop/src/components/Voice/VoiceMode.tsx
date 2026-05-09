@@ -16,7 +16,7 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Mic, MicOff, X, RotateCcw, Volume2 } from 'lucide-react';
-import { useVoiceModeStore, type VoiceModePhase } from '../../stores/voiceModeStore';
+import { useVoiceModeStore, type VoiceModePhase } from '../../stores/settingsStore';
 import { cn } from '../../lib/utils';
 
 // ---------------------------------------------------------------------------
