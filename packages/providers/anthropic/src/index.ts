@@ -33,11 +33,16 @@ import {
   resolveAnthropicPayloadPolicy,
 } from '@agiworkforce/llm-normalize';
 
+import {
+  classifyError,
+  withStreamIdleWatchdog,
+  parseRetryAfterFromError,
+} from '@agiworkforce/llm-runtime';
+
 import { ANTHROPIC_MODEL_CATALOG } from './catalog';
 import { translateChatRequest } from './translate';
 import { translateAnthropicStream } from './stream';
 import { buildAnthropicReplayPolicy } from './replay-policy';
-import { parseRetryAfterFromError } from './retry-after';
 
 const ANTHROPIC_AUTH_METHODS: readonly AuthMethod[] = [
   {
@@ -115,24 +120,26 @@ export function createAnthropicAdapter(config: AnthropicAdapterConfig = {}): Pro
 
       // Hand off to SDK. The SDK's `messages.stream()` returns an async iterable
       // of MessageStreamEvent which we translate to our StreamChunk shape.
+      // The 90s stream watchdog wraps the translated chunks so silent-drop
+      // connections (cellular hand-off, NAT timeout) surface as a clean
+      // StreamIdleTimeoutError instead of hanging the chat indefinitely.
       try {
         const sdkStream = sdk.messages.stream(
           translated as unknown as Anthropic.MessageStreamParams,
           { signal },
         );
-        for await (const chunk of translateAnthropicStream(sdkStream)) {
+        const watched = withStreamIdleWatchdog(translateAnthropicStream(sdkStream));
+        for await (const chunk of watched) {
           yield chunk;
         }
       } catch (err) {
-        const error = err as Error & { status?: number };
-        const retryable =
-          typeof error.status === 'number' && (error.status === 429 || error.status >= 500);
-        const retryAfterSeconds = retryable ? parseRetryAfterFromError(err) : undefined;
+        const classified = classifyError(err);
+        const retryAfterSeconds = classified.retryAfterSeconds ?? parseRetryAfterFromError(err);
         yield {
           type: 'error',
-          message: error.message ?? 'Anthropic request failed',
-          ...(typeof error.status === 'number' ? { code: String(error.status) } : {}),
-          retryable,
+          message: classified.message,
+          ...(classified.status !== undefined ? { code: String(classified.status) } : {}),
+          retryable: classified.retryable,
           ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
         };
         yield { type: 'stop', reason: 'error' };
