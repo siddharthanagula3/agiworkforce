@@ -38,6 +38,12 @@ import { createRateLimiter, warnIfMultiInstanceWithoutRedis } from './middleware
 import { logger } from './lib/logger';
 import { validateStartupEnv } from './env';
 import { getServiceClient } from './lib/supabaseClients';
+import {
+  registrationRouter,
+  assignmentRouter,
+  heartbeatRouter,
+  startHeartbeatSweep,
+} from './worker';
 
 try {
   validateStartupEnv();
@@ -118,6 +124,12 @@ app.use('/api/llm/v1', llmRouter);
 app.use('/api/v1/providers', providerStreamRouter);
 app.use('/api/v1/usage', usageRouter);
 
+// Outbound-worker protocol (direction-inversion layer, Task 1.7).
+// Inbound bridge at /ws remains live for 30-day backward-compat window.
+app.use('/', registrationRouter);
+app.use('/', assignmentRouter);
+app.use('/', heartbeatRouter);
+
 // SECURITY: Rate limited to 100/min for monitoring endpoints
 app.get('/health', createRateLimiter('health'), (_req: Request, res: Response) => {
   res.json({
@@ -169,6 +181,8 @@ setupWebSocket(wss);
 server.listen(port, () => {
   logger.info({ port }, 'API Gateway running');
   logger.info({ port, path: '/ws' }, 'WebSocket server available');
+  startHeartbeatSweep();
+  logger.info({}, 'Worker heartbeat sweep started (60s interval)');
 });
 
 process.on('SIGTERM', () => {
