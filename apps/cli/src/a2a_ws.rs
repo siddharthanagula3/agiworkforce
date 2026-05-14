@@ -10,6 +10,9 @@
 //! - Binary frames are rejected with a JSON-RPC error.
 //! - Connection-level state: each WS connection owns a clone of the
 //!   `PeerRegistry` (read-only via Arc) and an immutable `self_card`.
+//! - v1.5.0: `WsServer::new` accepts an optional `auth_token`. When set, the
+//!   WS handshake callback rejects connections without a matching
+//!   `Authorization: Bearer <token>` header with HTTP 401.
 
 #![allow(dead_code)]
 
@@ -17,18 +20,26 @@ use anyhow::{Context, Result};
 use futures_util::{SinkExt, StreamExt};
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tokio_tungstenite::{accept_async, tungstenite::Message};
+use tokio_tungstenite::{
+    accept_hdr_async,
+    tungstenite::{
+        handshake::server::{ErrorResponse, Request, Response},
+        http::StatusCode,
+        Message,
+    },
+};
 
 use crate::a2a::jsonrpc::{handle_request, A2aRequest, AgentCard, PeerRegistry};
 
 pub struct WsServer {
     self_card: AgentCard,
     registry: Arc<PeerRegistry>,
+    auth_token: Option<String>,
 }
 
 impl WsServer {
-    pub fn new(self_card: AgentCard, registry: Arc<PeerRegistry>) -> Self {
-        Self { self_card, registry }
+    pub fn new(self_card: AgentCard, registry: Arc<PeerRegistry>, auth_token: Option<String>) -> Self {
+        Self { self_card, registry, auth_token }
     }
 
     /// Bind to `addr` and accept WS connections until cancelled.
@@ -40,8 +51,9 @@ impl WsServer {
             tracing::debug!(target: "a2a::ws", "accepted connection from {peer}");
             let card = self.self_card.clone();
             let registry = self.registry.clone();
+            let auth_token = self.auth_token.clone();
             tokio::spawn(async move {
-                if let Err(e) = handle_ws_connection(stream, card, registry).await {
+                if let Err(e) = handle_ws_connection(stream, card, registry, auth_token).await {
                     tracing::warn!(target: "a2a::ws", "connection error: {e}");
                 }
             });
@@ -53,8 +65,23 @@ async fn handle_ws_connection(
     stream: tokio::net::TcpStream,
     self_card: AgentCard,
     registry: Arc<PeerRegistry>,
+    auth_token: Option<String>,
 ) -> Result<()> {
-    let mut ws = accept_async(stream).await.context("WS handshake")?;
+    let callback = move |req: &Request, response: Response| -> Result<Response, ErrorResponse> {
+        if let Some(expected) = auth_token.as_deref() {
+            let provided = req.headers().get("Authorization")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| s.strip_prefix("Bearer "));
+            if provided != Some(expected) {
+                let mut err = ErrorResponse::new(Some("invalid bearer token".into()));
+                *err.status_mut() = StatusCode::UNAUTHORIZED;
+                return Err(err);
+            }
+        }
+        Ok(response)
+    };
+
+    let mut ws = accept_hdr_async(stream, callback).await.context("WS handshake")?;
     while let Some(frame) = ws.next().await {
         let frame = frame.context("read frame")?;
         match frame {
@@ -153,8 +180,103 @@ mod tests {
 
     #[test]
     fn ws_server_can_be_constructed() {
-        // Construction does not bind; this is a smoke test.
-        let server = WsServer::new(card(), Arc::new(registry()));
+        let server = WsServer::new(card(), Arc::new(registry()), None);
         let _ = server;
+    }
+
+    #[test]
+    fn ws_server_can_be_constructed_with_auth_token() {
+        let server = WsServer::new(card(), Arc::new(registry()), Some("secret".into()));
+        let _ = server;
+    }
+
+    // E2E tests: these bind real TCP sockets and test WS auth end-to-end.
+    // The dropped-listener pattern has a tiny rebind race; if it proves flaky
+    // in CI, switch serve() to accept a TcpListener directly via serve_on().
+
+    #[tokio::test]
+    async fn ws_server_e2e_discover_no_auth() {
+        use futures_util::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::Message;
+
+        let server = WsServer::new(card(), Arc::new(registry()), None);
+
+        // Bind an ephemeral port to discover the OS-assigned address, then
+        // drop the listener so serve() can rebind the same addr.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(listener);
+
+        let handle = tokio::spawn(async move {
+            let _ = server.serve(&addr.to_string()).await;
+        });
+
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        let url = format!("ws://{}", addr);
+        let (mut ws, _) = tokio_tungstenite::connect_async(url).await.unwrap();
+
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"discover","params":{}}"#;
+        ws.send(Message::Text(req.to_string().into())).await.unwrap();
+
+        let resp = ws.next().await.unwrap().unwrap();
+        let body = resp.into_text().unwrap();
+        assert!(body.contains("agi-test"));
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn ws_server_e2e_auth_required_rejects_missing_token() {
+        let server = WsServer::new(card(), Arc::new(registry()), Some("secret-token".into()));
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(listener);
+
+        let handle = tokio::spawn(async move {
+            let _ = server.serve(&addr.to_string()).await;
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        let url = format!("ws://{}", addr);
+        let result = tokio_tungstenite::connect_async(url).await;
+        assert!(result.is_err(), "connection should fail without bearer token");
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn ws_server_e2e_auth_accepts_valid_token() {
+        use futures_util::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+        use tokio_tungstenite::tungstenite::Message;
+
+        let token = "secret-token";
+        let server = WsServer::new(card(), Arc::new(registry()), Some(token.into()));
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(listener);
+
+        let handle = tokio::spawn(async move {
+            let _ = server.serve(&addr.to_string()).await;
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        let url = format!("ws://{}", addr);
+        let mut req = url.into_client_request().unwrap();
+        req.headers_mut().insert("Authorization", format!("Bearer {token}").parse().unwrap());
+
+        let (mut ws, _) = tokio_tungstenite::connect_async(req).await.unwrap();
+        ws.send(Message::Text(
+            r#"{"jsonrpc":"2.0","id":1,"method":"discover","params":{}}"#.to_string().into(),
+        ))
+        .await
+        .unwrap();
+        let resp = ws.next().await.unwrap().unwrap();
+        assert!(resp.into_text().unwrap().contains("agi-test"));
+
+        handle.abort();
     }
 }
