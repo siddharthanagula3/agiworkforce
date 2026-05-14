@@ -167,6 +167,26 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('agi-workforce.refreshContext', () => {
       contextPanelProvider.refreshAutoContext();
     }),
+
+    vscode.commands.registerCommand('agi-workforce.mentionFileInChat', async (uri?: vscode.Uri) => {
+      const target = uri ?? vscode.window.activeTextEditor?.document.uri;
+      if (target === undefined) {
+        vscode.window.showWarningMessage('AGI Workforce: No file selected to mention in chat.');
+        return;
+      }
+      const relPath = vscode.workspace.asRelativePath(target);
+      const query = `@agi #file:${relPath} `;
+      try {
+        await vscode.commands.executeCommand('workbench.action.chat.open', { query });
+      } catch {
+        try {
+          await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+        } catch {
+          // Chat panel unavailable — fall back to sidebar with prefilled mention
+          sidebarProvider.reveal();
+        }
+      }
+    }),
   );
 
   // ── 3c. Workspace indexer file watcher (incremental updates) ─────────────
