@@ -10,6 +10,8 @@ Multi-provider, local-first AI agent platform. One Tauri desktop app, one Next.j
 
 > **CLI v1.0 SHIPPED** (2026-05-03). Install: `brew install siddharthanagula3/tap/agiworkforce` or see [Quick start](#quick-start) below.
 >
+> **Foundation Sprint shipped** at tag [`v0.7.0-foundation`](https://github.com/siddharthanagula3/agiworkforce/releases/tag/v0.7.0-foundation) (2026-05-13): central state pattern, message-queue priority lane, `packages/llm-runtime` (retry + stream watchdog + error classifier), outbound-worker direction inversion (`worker_registrations` + `work_units` live in Supabase), HKDF dispatch-key rotation (`rotate_dispatch_keys` RPC live), Stripe webhook idempotency RPC live in prod. All four tiers (Hobby / Pro / **Pro+** / Max) wired in Stripe.
+>
 > **For contributors and AI agents:** [AGI_WORKFORCE.md](AGI_WORKFORCE.md) is the single source of truth.
 > **For builds and deployment:** [BUILD.md](BUILD.md).
 > **For PR conventions:** [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -30,14 +32,15 @@ The unique slice: **multi-provider + BYOK + local LLM all in one app, on every s
 
 ## Pricing
 
-| Tier                                         | Price                          | Available now |
-| -------------------------------------------- | ------------------------------ | ------------- |
-| Local-only (run Ollama / LM Studio yourself) | Free forever                   | ✅            |
-| BYOK (bring your own API keys)               | Free forever                   | ✅            |
-| Hobby (managed cloud, limited credits)       | $10/mo · $5/mo billed annually | ✅            |
-| Pro (full models, higher caps)               | TBD                            | Waitlist      |
-| Max (highest caps, computer use)             | TBD                            | Waitlist      |
-| Enterprise (SSO, SCIM, custom retention)     | Contact sales                  | Contact sales |
+| Tier                                                                   | Price         | Available now |
+| ---------------------------------------------------------------------- | ------------- | ------------- |
+| Local-only (run Ollama / LM Studio yourself)                           | Free forever  | ✅            |
+| BYOK (bring your own API keys)                                         | Free forever  | ✅            |
+| Hobby (managed cloud, limited credits)                                 | $10/mo        | ✅            |
+| Pro (full models, higher caps)                                         | $29.99/mo     | ✅            |
+| **Pro+** (Pro pool + Opus 4.7 + GPT-5.5 daily caps + 60s Runway Gen-4) | $49.99/mo     | ✅            |
+| Max (highest caps, computer use)                                       | $299.99/mo    | ✅            |
+| Enterprise (SSO, SCIM, custom retention)                               | Contact sales | Contact sales |
 
 See [docs/PRICING.md](docs/PRICING.md) for details.
 

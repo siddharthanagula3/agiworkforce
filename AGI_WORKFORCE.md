@@ -1,6 +1,8 @@
 # AGI Workforce — Single Source of Truth
 
-> Last updated: 2026-05-05. This file is the entry point for any agent (human or AI) working on this repo. Read this first; everything else links from here.
+> Last updated: 2026-05-13. This file is the entry point for any agent (human or AI) working on this repo. Read this first; everything else links from here.
+>
+> **Foundation Sprint shipped** at tag [`v0.7.0-foundation`](https://github.com/siddharthanagula3/agiworkforce/releases/tag/v0.7.0-foundation) (2026-05-13). Phase 1 close-out: central state (`createStore` + `onChangeAppState`), `messageQueueManager` priority lane (now>next>later FIFO), `packages/llm-runtime` (`withRetry` + stream watchdog + error classifier), outbound-worker direction inversion, HKDF dispatch-key rotation, Stripe webhook idempotency. **Wave 5 Supabase migrations applied to prod 2026-05-13:** `worker_registrations`, `work_units`, `dispatch_keys`, `rotate_dispatch_keys(uuid)` RPC, canonical-dir history marker. **Stripe live:** Hobby / Pro / **Pro+** (`prod_UTTTGQ9T01Ukge`) / Max all wired.
 
 ## What this is
 
@@ -29,16 +31,19 @@ These are the only three. Everything else (mobile dispatch, CLI with TUI, comput
 **Shared TS packages:** `packages/chat` (canonical chat component), `packages/api`, `packages/types`, `packages/runtime`, `packages/utils`.
 **Active Rust crates:** 14 active workspace crates per `cargo metadata --no-deps` (down from 84+ — 70 codex-rs port crates removed per `Cargo.toml:4-9` comment, NOT 102 nor 110 as multiple sources had previously claimed). Specifically: `agiworkforce-protocol`, `agiworkforce-sandbox-policy`, plus 10 transitive path-deps needed by protocol (`async-utils`, `execpolicy`, `network-proxy`, `utils-{absolute-path,cache,home-dir,image,rustls-provider,string,template}`), plus apps/cli + apps/desktop/src-tauri as workspace members.
 
-## Pricing model (locked 2026-05-03)
+## Pricing model (locked 2026-05-13 — all paid tiers live in Stripe)
 
-| Tier       | Price              | At MVP        | What                                                                                 |
-| ---------- | ------------------ | ------------- | ------------------------------------------------------------------------------------ |
-| Local-only | Free forever       | YES           | Run Ollama/LMStudio on your laptop. No Supabase. Desktop only.                       |
-| BYOK       | Free forever       | YES           | Bring your own keys to Anthropic/OpenAI/Google/etc. Optional Supabase if Cloud mode. |
-| Hobby      | TBD ($5/mo target) | YES           | Managed cloud, limited credits, basic models. Only paid MVP tier.                    |
-| Pro        | TBD                | NO (waitlist) | Released after security audit clears.                                                |
-| Max        | TBD                | NO (waitlist) | Released after security audit clears.                                                |
-| Enterprise | Contact sales      | Contact sales | SSO, SCIM, custom retention, audit log export, dedicated support.                    |
+| Tier       | Price         | Stripe product        | What                                                                                                                                    |
+| ---------- | ------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Local-only | Free forever  | n/a                   | Run Ollama/LMStudio on your laptop. No Supabase. Desktop only.                                                                          |
+| BYOK       | Free forever  | n/a                   | Bring your own keys to Anthropic/OpenAI/Google/etc. Optional Supabase if Cloud mode.                                                    |
+| Hobby      | $10/mo        | `prod_TeFMHLjQt0sgMy` | Managed cloud, limited credits, basic models.                                                                                           |
+| Pro        | $29.99/mo     | `prod_TeFMDyIcU6xYJ3` | Full models, higher caps, Pro pool routing.                                                                                             |
+| **Pro+**   | $49.99/mo     | `prod_UTTTGQ9T01Ukge` | Pro pool + Opus 4.7 (15K tokens/day) + GPT-5.5 (15K tokens/day) + 60 sec/mo Runway Gen-4 video + advanced computer use. US-only toggle. |
+| Max        | $299.99/mo    | `prod_TeFMn7oAjLQTvG` | Highest caps, computer use, dedicated multi-provider gating.                                                                            |
+| Enterprise | Contact sales | n/a                   | SSO, SCIM, custom retention, audit log export, dedicated support.                                                                       |
+
+**Stripe webhook idempotency:** `public.process_stripe_event_idempotent(p_event_id text) RETURNS boolean` (SECURITY DEFINER, `search_path=public`) live in prod 2026-05-13. Called from `apps/web/app/api/stripe-webhook/route.ts:1251`.
 
 ## Local vs Cloud mode (architecture)
 
@@ -47,14 +52,16 @@ These are the only three. Everything else (mobile dispatch, CLI with TUI, comput
 - Mode picker: `apps/desktop/src/components/Onboarding/OnboardingWizard.tsx` (ModeSelectionDialog was deleted; consolidated into OnboardingWizard).
 - Runtime detection: `packages/runtime/src/detect.ts` (`isTauri`, `isCloudWeb`).
 
-## MVP plan (3 waves, parallel where possible)
+## MVP plan (waves, parallel where possible)
 
-| Wave       | Timeline   | What ships                                                                                              | Status                               |
-| ---------- | ---------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| **Wave 0** | 2026-05-03 | Cleanup: -1.04M LOC, SSOT created, audit P0/P1 mostly closed                                            | ✅ SHIPPED                           |
-| **Wave 1** | 2026-05-03 | CLI v1.0 — Homebrew + install.sh + cargo + GitHub Release (5 platforms) live; npm pending NPM_TOKEN     | ✅ SHIPPED                           |
-| **Wave 2** | Weeks 2-5  | Desktop v1.0 — pixel-close Claude Desktop UI, Windows EV cert, web UnifiedAgenticChat done, IPC pruning | In progress                          |
-| **Wave 3** | Weeks 6-9  | Mobile (App Store + Play) + Chrome ext (Web Store) + VS Code ext (Marketplace) + Hobby tier launch      | **In progress (kickoff 2026-05-04)** |
+| Wave       | Timeline   | What ships                                                                                                                                                                                                                                        | Status                               |
+| ---------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| **Wave 0** | 2026-05-03 | Cleanup: -1.04M LOC, SSOT created, audit P0/P1 mostly closed                                                                                                                                                                                      | ✅ SHIPPED                           |
+| **Wave 1** | 2026-05-03 | CLI v1.0 — Homebrew + install.sh + cargo + GitHub Release (5 platforms) live; npm pending NPM_TOKEN                                                                                                                                               | ✅ SHIPPED                           |
+| **Wave 2** | Weeks 2-5  | Desktop v1.0 — pixel-close Claude Desktop UI, Windows EV cert, web UnifiedAgenticChat done, IPC pruning                                                                                                                                           | In progress                          |
+| **Wave 3** | Weeks 6-9  | Mobile (App Store + Play) + Chrome ext (Web Store) + VS Code ext (Marketplace) + Hobby tier launch                                                                                                                                                | In progress (kickoff 2026-05-04)     |
+| **Wave 4** | 2026-05-08 | Phase A slices 1-4: Budget, agentic-loop, checkpoints/branches, artifacts/sidecar; Pro+ tier wired end-to-end across Desktop+Web+Mobile+VS Code+Chrome ext; 6 P0 security fixes; `packages/data-layer`; Stripe+Supabase production verified       | ✅ SHIPPED                           |
+| **Wave 5** | 2026-05-13 | Foundation Sprint (v0.7.0-foundation): central state + queue + llm-runtime + worker direction-inversion + HKDF dispatch keys; Supabase migrations applied to prod (`worker_registrations`, `work_units`, `dispatch_keys`, `rotate_dispatch_keys`) | ✅ SHIPPED (tag `v0.7.0-foundation`) |
 
 Active sprint plan: [docs/plans/sprint1-vault-rewire.md](docs/plans/sprint1-vault-rewire.md). Master remediation: [docs/plans/master-remediation.md](docs/plans/master-remediation.md). License: PROPRIETARY (see [LICENSE](LICENSE)).
 
