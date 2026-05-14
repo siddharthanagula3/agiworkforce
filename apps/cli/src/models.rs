@@ -32,7 +32,7 @@ pub enum OllamaMode {
 /// `Google` (Gemini), and `Ollama` (newline-delimited JSON, local or cloud).
 ///
 /// Everything else — OpenAI itself, xAI, DeepSeek, Perplexity, Qwen, Moonshot,
-/// Zhipu, LM Studio, plus any user-defined `[providers.*]` block — flows
+/// Zhipu, LM Studio, Mistral, plus any user-defined `[providers.*]` block — flows
 /// through the `OpenAICompatible` variant. The variant carries the canonical
 /// base URL and the env var name for the API key (or `None` for unauthenticated
 /// local endpoints like LM Studio).
@@ -135,6 +135,15 @@ pub fn lmstudio_provider() -> Provider {
         name: "lmstudio",
         base_url: "http://localhost:1234/v1/chat/completions",
         api_key_env: None,
+    }
+}
+
+/// Mistral AI — OpenAI-compatible endpoint.
+pub fn mistral_provider() -> Provider {
+    Provider::OpenAICompatible {
+        name: "mistral",
+        base_url: "https://api.mistral.ai/v1/chat/completions",
+        api_key_env: Some("MISTRAL_API_KEY"),
     }
 }
 
@@ -290,7 +299,7 @@ pub struct CompletionResult {
 /// Returns `None` if the name is not recognized, in which case callers
 /// should fall back to [`detect_provider`] for model-name-based detection.
 ///
-/// Recognizes the 9 pre-registered cloud providers, the two Ollama modes,
+/// Recognizes the 10 pre-registered cloud providers, the two Ollama modes,
 /// LM Studio, plus any custom provider registered through the dynamic
 /// registry (see `register_custom_providers`).
 pub fn provider_from_name(name: &str) -> Option<Provider> {
@@ -310,6 +319,7 @@ pub fn provider_from_name(name: &str) -> Option<Provider> {
         "moonshot" | "kimi" => Some(moonshot_provider()),
         "zhipu" | "glm" => Some(zhipu_provider()),
         "lmstudio" | "lm-studio" | "lm_studio" => Some(lmstudio_provider()),
+        "mistral" | "mistral-ai" | "mistralai" => Some(mistral_provider()),
         _ => lookup_custom_provider(&lower),
     }
 }
@@ -333,15 +343,7 @@ pub fn detect_provider(model: &str) -> Provider {
     } else if m.starts_with("gemini") || m.starts_with("models/gemini") {
         Provider::Google
     } else if m.starts_with("mistral") || m.starts_with("codestral") {
-        // Mistral routed via OpenAI-compatible endpoint with the canonical
-        // `https://api.mistral.ai/v1` base URL — kept as a custom inline entry
-        // because we no longer pre-register it (no API key wired). Users who
-        // want it can add a `[providers.mistral]` block to config.toml.
-        Provider::OpenAICompatible {
-            name: "mistral",
-            base_url: "https://api.mistral.ai/v1/chat/completions",
-            api_key_env: Some("MISTRAL_API_KEY"),
-        }
+        mistral_provider()
     } else if m.starts_with("grok") {
         xai_provider()
     } else if m.starts_with("deepseek") {
@@ -478,7 +480,7 @@ static CUSTOM_PROVIDERS: once_cell::sync::Lazy<
 ///
 /// Skips entries whose name collides with a pre-registered provider (Anthropic,
 /// OpenAI, Google, Ollama, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu,
-/// LM Studio) so users cannot accidentally hijack a native handler.
+/// LM Studio, Mistral) so users cannot accidentally hijack a native handler.
 ///
 /// Each entry needs a `base_url`; `api_key_env` is optional (omit for keyless
 /// local endpoints). Base URLs without `/chat/completions` get the path
@@ -505,6 +507,9 @@ pub fn register_custom_providers(config: &CliConfig) {
         "lmstudio",
         "lm-studio",
         "lm_studio",
+        "mistral",
+        "mistral-ai",
+        "mistralai",
     ];
 
     let Ok(mut registry) = CUSTOM_PROVIDERS.write() else {
@@ -2266,6 +2271,28 @@ mod tests {
         };
         assert_eq!(*name, "lmstudio");
         assert!(api_key_env.is_none(), "LM Studio is keyless local");
+    }
+
+    #[test]
+    fn mistral_provider_resolved_from_name() {
+        assert_eq!(
+            provider_name(&provider_from_name("mistral").unwrap()),
+            "mistral"
+        );
+        assert_eq!(
+            provider_name(&provider_from_name("mistral-ai").unwrap()),
+            "mistral"
+        );
+        assert_eq!(
+            provider_name(&provider_from_name("mistralai").unwrap()),
+            "mistral"
+        );
+        // Verify MISTRAL_API_KEY is wired
+        let p = provider_from_name("mistral").unwrap();
+        let Provider::OpenAICompatible { api_key_env, .. } = &p else {
+            panic!("Expected OpenAICompatible");
+        };
+        assert_eq!(*api_key_env, Some("MISTRAL_API_KEY"));
     }
 
     #[test]

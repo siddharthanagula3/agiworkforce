@@ -2,6 +2,28 @@
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [cli-1.5.0] — 2026-05-14
+
+Final close-out release. Three architectural items the previous releases noted as deferred are now closed:
+
+### Added
+
+- **`apps/cli/src/a2a_ws.rs`** — `WsServer::new` now accepts `auth_token: Option<String>`; `accept_hdr_async` callback enforces `Authorization: Bearer <token>` before WebSocket upgrade. Three new live E2E tests (`ws_server_e2e_discover_no_auth`, `ws_server_e2e_auth_required_rejects_missing_token`, `ws_server_e2e_auth_accepts_valid_token`) using `tokio_tungstenite::connect_async` against ephemeral-port servers prove the WS transport works end-to-end, not just at the handler layer.
+- **`apps/cli/src/subagent_v2.rs`** — new `AgentSessionRunner` impl of `SubagentTaskRunner` plus injectable `LlmCaller` async trait. Maintains conversation history across turns; emits `Response` on success, `Error` on caller failure. Test-only `MockLlmCaller` for deterministic scripting. This is the production-shaped impl; the `EchoRunner` (v1.4) stays as the default. 3 new tests for scripted response, error propagation, and history preservation.
+- **`apps/cli/src/models.rs`** — Mistral re-added to the CLI provider registry. `mistral_provider()` constructor wired into `provider_from_name` (aliases: `mistral`, `mistral-ai`, `mistralai`) and `detect_provider`. Reserved names list updated. Named provider count: 12 → **13** (+ user-defined Custom). "10+ Providers" tagline is now comfortably met in code as well as marketing.
+
+### Changed
+
+- CLI version bumped 1.4.0 → 1.5.0. `cargo check --workspace` green on macOS.
+- Tests: 1285 → **1293** (+8: 1 Mistral resolution + 4 ws auth/E2E + 3 AgentSessionRunner).
+
+### Notes
+
+- The injectable `LlmCaller` trait is the seam where a real Anthropic/OpenAI/Ollama client wires in. The `MockLlmCaller` is `#[cfg(test)]` only — production callers live in `crate::providers::*` and will be wired in v1.6 once we add cross-provider session continuity between subagent and parent.
+- E2E tests use the "drop ephemeral listener then rebind" pattern; there is a tiny port-reuse race that hasn't manifested in CI runs to date but is documented in code comments.
+
+---
+
 ## [cli-1.4.0] — 2026-05-14
 
 Security and protocol hardening release. Closes three v1.3 deferred backlog items: real seccomp-BPF filter installation on Linux, `SubagentTaskRunner` trait abstraction making the subagent task body swappable, and a2a WebSocket transport for persistent cross-process agent streaming.

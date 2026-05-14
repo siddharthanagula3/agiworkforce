@@ -121,6 +121,105 @@ impl SubagentTaskRunner for MockRunner {
     }
 }
 
+/// Abstraction over an LLM provider call. Production impls wire to
+/// crate::providers::{anthropic,openai,ollama}; tests use MockLlmCaller.
+#[async_trait]
+pub trait LlmCaller: Send + Sync + 'static {
+    /// Take one prompt + the conversation history so far, return the
+    /// assistant's response. Errors propagate up to the subagent loop
+    /// which emits an Error message to outbox.
+    async fn call(&self, model: &str, history: Vec<ConversationTurn>) -> Result<String>;
+}
+
+#[derive(Debug, Clone)]
+pub struct ConversationTurn {
+    pub role: TurnRole,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TurnRole {
+    User,
+    Assistant,
+    System,
+}
+
+/// Production runner: calls an LlmCaller per turn and emits Response or
+/// Error messages. Maintains conversation history across turns.
+pub struct AgentSessionRunner {
+    pub caller: Arc<dyn LlmCaller>,
+    pub system_prompt: Option<String>,
+}
+
+#[async_trait]
+impl SubagentTaskRunner for AgentSessionRunner {
+    async fn run(
+        &self,
+        id: SubagentId,
+        model: String,
+        mut inbox_rx: mpsc::Receiver<String>,
+        outbox_tx: mpsc::Sender<SubagentMessage>,
+    ) {
+        let mut history: Vec<ConversationTurn> = Vec::new();
+        if let Some(sys) = &self.system_prompt {
+            history.push(ConversationTurn { role: TurnRole::System, content: sys.clone() });
+        }
+        while let Some(prompt) = inbox_rx.recv().await {
+            history.push(ConversationTurn { role: TurnRole::User, content: prompt });
+            match self.caller.call(&model, history.clone()).await {
+                Ok(response) => {
+                    history.push(ConversationTurn {
+                        role: TurnRole::Assistant,
+                        content: response.clone(),
+                    });
+                    if outbox_tx
+                        .send(SubagentMessage {
+                            from: id,
+                            kind: MessageKind::Response,
+                            body: response,
+                        })
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    if outbox_tx
+                        .send(SubagentMessage {
+                            from: id,
+                            kind: MessageKind::Error,
+                            body: format!("LLM call failed: {e}"),
+                        })
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Test-only LLM caller with scripted responses.
+#[cfg(test)]
+pub struct MockLlmCaller {
+    pub responses: std::sync::Mutex<Vec<Result<String>>>,
+}
+
+#[cfg(test)]
+#[async_trait]
+impl LlmCaller for MockLlmCaller {
+    async fn call(&self, _model: &str, _history: Vec<ConversationTurn>) -> Result<String> {
+        let mut responses = self.responses.lock().unwrap();
+        if responses.is_empty() {
+            anyhow::bail!("no more scripted responses");
+        }
+        responses.remove(0)
+    }
+}
+
 pub struct SubagentSpec {
     pub model: String,
     pub system_prompt: Option<String>,
@@ -385,5 +484,87 @@ mod tests {
         // Verify the status is Completed or Running (not Killed).
         let s = arc.read().await.status().await;
         assert!(matches!(s, SubagentStatus::Running | SubagentStatus::Completed));
+    }
+
+    #[tokio::test]
+    async fn agent_session_runner_returns_scripted_response() {
+        let caller = Arc::new(MockLlmCaller {
+            responses: std::sync::Mutex::new(vec![Ok("[mock-llm] hello back".into())]),
+        });
+        let runner = Arc::new(AgentSessionRunner { caller, system_prompt: None });
+        let r = SubagentRegistry::new();
+        let mut spec = SubagentSpec::new("claude-opus-4-7");
+        spec.runner = runner;
+        let id = r.spawn(spec).await.unwrap();
+        let arc = r.get(id).await.unwrap();
+        let handle = arc.read().await;
+        handle.send_message("hi".into()).await.unwrap();
+        let msg = handle.recv_message().await.unwrap();
+        assert_eq!(msg.kind, MessageKind::Response);
+        assert!(msg.body.contains("[mock-llm] hello back"));
+    }
+
+    #[tokio::test]
+    async fn agent_session_runner_emits_error_on_caller_failure() {
+        let caller = Arc::new(MockLlmCaller {
+            responses: std::sync::Mutex::new(vec![Err(anyhow::anyhow!("rate limit"))]),
+        });
+        let runner = Arc::new(AgentSessionRunner { caller, system_prompt: None });
+        let r = SubagentRegistry::new();
+        let mut spec = SubagentSpec::new("claude-opus-4-7");
+        spec.runner = runner;
+        let id = r.spawn(spec).await.unwrap();
+        let arc = r.get(id).await.unwrap();
+        let handle = arc.read().await;
+        handle.send_message("hi".into()).await.unwrap();
+        let msg = handle.recv_message().await.unwrap();
+        assert_eq!(msg.kind, MessageKind::Error);
+        assert!(msg.body.contains("rate limit"));
+    }
+
+    #[tokio::test]
+    async fn agent_session_runner_preserves_history_across_turns() {
+        use std::sync::{Arc as StdArc, Mutex as StdMutex};
+
+        struct HistorySpy {
+            recorded: StdArc<StdMutex<Vec<Vec<ConversationTurn>>>>,
+        }
+        #[async_trait]
+        impl LlmCaller for HistorySpy {
+            async fn call(&self, _model: &str, history: Vec<ConversationTurn>) -> Result<String> {
+                self.recorded.lock().unwrap().push(history);
+                Ok("ack".into())
+            }
+        }
+
+        let recorded = StdArc::new(StdMutex::new(Vec::new()));
+        let caller = Arc::new(HistorySpy { recorded: recorded.clone() });
+        let runner = Arc::new(AgentSessionRunner {
+            caller,
+            system_prompt: Some("you are a helpful agent".into()),
+        });
+        let r = SubagentRegistry::new();
+        let mut spec = SubagentSpec::new("claude-opus-4-7");
+        spec.runner = runner;
+        let id = r.spawn(spec).await.unwrap();
+        let arc = r.get(id).await.unwrap();
+        let handle = arc.read().await;
+
+        handle.send_message("turn 1".into()).await.unwrap();
+        let _ = handle.recv_message().await.unwrap();
+        handle.send_message("turn 2".into()).await.unwrap();
+        let _ = handle.recv_message().await.unwrap();
+
+        let recorded = recorded.lock().unwrap();
+        assert_eq!(recorded.len(), 2, "two calls recorded");
+        // Turn 1 history: [System, User("turn 1")]
+        assert_eq!(recorded[0].len(), 2);
+        assert_eq!(recorded[0][0].role, TurnRole::System);
+        assert_eq!(recorded[0][1].role, TurnRole::User);
+        assert_eq!(recorded[0][1].content, "turn 1");
+        // Turn 2 history: [System, User("turn 1"), Assistant("ack"), User("turn 2")]
+        assert_eq!(recorded[1].len(), 4);
+        assert_eq!(recorded[1][3].role, TurnRole::User);
+        assert_eq!(recorded[1][3].content, "turn 2");
     }
 }

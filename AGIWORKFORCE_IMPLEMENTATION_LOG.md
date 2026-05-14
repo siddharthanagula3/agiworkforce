@@ -16,6 +16,42 @@
 
 ---
 
+## v1.5.0 — RELEASED (2026-05-14)
+
+Final close-out release. Three architectural items the previous releases noted as deferred are now closed.
+
+### Wave — `agi-cli-v1-5-0` team (3 teammates, all green)
+
+- **ws-auth-engineer** → `apps/cli/src/a2a_ws.rs`. `WsServer::new` now accepts `auth_token: Option<String>`. Uses `accept_hdr_async` with an inline callback to enforce `Authorization: Bearer <token>` before WS upgrade; on mismatch returns HTTP 401. Three live E2E tests using `tokio_tungstenite::connect_async`: no-auth path, missing-token rejection, valid-token acceptance. 9 tests total in a2a_ws (5 pure-function + 1 new construction smoke + 3 E2E).
+- **session-runner-engineer** → `apps/cli/src/subagent_v2.rs`. Added `LlmCaller` async trait (injectable), `ConversationTurn`/`TurnRole` types, `AgentSessionRunner` impl of `SubagentTaskRunner` with history preservation + system prompt support, `MockLlmCaller` (#[cfg(test)]) for scripted Ok/Err sequences. 3 new tests covering scripted response, error propagation, and history accumulation across turns. 13 tests total in subagent_v2.
+- **mistral-engineer** → `apps/cli/src/models.rs`. Re-added Mistral (option a, not removal). New `mistral_provider()` constructor; registered `mistral` / `mistral-ai` / `mistralai` aliases in `provider_from_name`; added to RESERVED list; updated docstring counts. Named provider count: 12 → **13**. 1 new test (3 alias assertions + API key env var check). Full models suite 31/31 still green.
+
+### Files added
+
+- edit `apps/cli/src/a2a_ws.rs` — auth gate + E2E tests (+93 / -10)
+- edit `apps/cli/src/subagent_v2.rs` — LlmCaller trait, AgentSessionRunner, MockLlmCaller, 3 tests (+131 / -0)
+- edit `apps/cli/src/models.rs` — mistral_provider, registration, RESERVED, test (+25 / -7)
+- edit `apps/cli/Cargo.toml` — version 1.4.0 → 1.5.0
+- edit `CHANGELOG.md` — `[cli-1.5.0]` entry
+
+### Tests run
+
+- `cargo check -p agiworkforce-cli` — Finished, green
+- `cargo test -p agiworkforce-cli a2a_ws` — 9 passed (5 pure + 1 new ctor + 3 E2E)
+- `cargo test -p agiworkforce-cli subagent_v2` — 13 passed (10 + 3 new)
+- `cargo test -p agiworkforce-cli mistral` — 3 passed
+- `cargo test -p agiworkforce-cli` — **1293 passed, 0 failed, 0 ignored** (+8 from v1.4.0 baseline of 1285)
+
+### What's left after v1.5.0 (genuinely external)
+
+- **Hosted infra** — plugin marketplace registry, production OAuth credentials for known providers
+- **Real LLM wiring** — bridging `AgentSessionRunner` to `crate::providers::*` is one straight follow-up (the seam is in place; the wire is a v1.6 polish)
+- **Cross-process a2a coordination at scale** — the WS transport is in-process today and would benefit from a hosted relay for many-agent meshes
+
+These are operational / hosted concerns that exit the "ship code locally" loop. The locked v1 architecture is complete.
+
+---
+
 ## v1.4.0 — RELEASED (2026-05-14)
 
 Security + protocol hardening release. Closes three v1.3 deferred items:
