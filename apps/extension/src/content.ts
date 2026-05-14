@@ -581,6 +581,38 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
       })) as unknown as ActionExecutionResult;
       return { type: actionType, ...response };
     }
+    case 'key': {
+      // Native keydown+keyup dispatch — `key` is passed as structured event data,
+      // never interpolated into a JS source string (closes CodeQL
+      // js/bad-code-sanitization #451-454 originally fired on the previous
+      // scriptForKey helper).
+      const key = action.value ? String(action.value) : '';
+      if (!key) {
+        return { type: actionType, success: false, error: 'Missing key for key action' };
+      }
+      const target = (document.activeElement as HTMLElement | null) || document.body;
+      target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+      target.dispatchEvent(new KeyboardEvent('keyup', { key, bubbles: true }));
+      return { type: actionType, success: true, key };
+    }
+    case 'hold_key': {
+      // Same as 'key' but with a delay between keydown and keyup. The duration is
+      // explicitly coerced to a finite non-negative number to avoid any chance of
+      // string-shaped data flowing through to setTimeout.
+      const key = action.value ? String(action.value) : '';
+      if (!key) {
+        return { type: actionType, success: false, error: 'Missing key for hold_key action' };
+      }
+      const rawDelay = Number(action.delay ?? 0);
+      const durationMs =
+        Number.isFinite(rawDelay) && rawDelay >= 0 ? Math.min(rawDelay, 60_000) : 0;
+      const target = (document.activeElement as HTMLElement | null) || document.body;
+      target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+      setTimeout(() => {
+        target.dispatchEvent(new KeyboardEvent('keyup', { key, bubbles: true }));
+      }, durationMs);
+      return { type: actionType, success: true, key, durationMs };
+    }
     default:
       return {
         type: actionType || 'unknown',
