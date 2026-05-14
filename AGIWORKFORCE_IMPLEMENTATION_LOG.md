@@ -16,6 +16,35 @@
 
 ---
 
+## 2026-05-14 — 6-Surface Claude-Parity Fire #2
+
+Second iteration of the local Claude-parity loop. Engineers grep'd REFERENCE_INDEX.md (640-entry curated image index) to find specific PNG citations rather than working from filename inference. All six surfaces landed an improvement that closes a named gap vs claude-\* reference.
+
+| Surface               | Commit                 | PNG cited                                             | Gap closed                                                                                                                                                                                                                                                                                |
+| --------------------- | ---------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| apps/cli              | `466ba93cd`            | `627_cli_permissions-screen.png`                      | `/permissions` is now a tabbed display (Recently denied / Allow / Ask / Deny / Workspace) with numbered rules + search hint + key footer, replacing plain text dump. `display_tab(tab)` + `handle_permissions` rewrite. +152/-29. Tests 1310 → 1315 (+5).                                 |
+| apps/desktop          | `38b03e0e7`            | `01_empty-state_new-chat-collapsed-sidebar.png`       | Plan-tier badge pill ("BYOK plan · Upgrade") centered above greeting in EmptyState. Pulls tier from `useTierStore`, maps via PLAN_LABEL, free tiers get accent Upgrade button → `openSettings('billing')`. +34/-8.                                                                        |
+| apps/web              | `18424f5b2`            | `041_claude-free_home_composer.png`                   | Personalized time-based greeting ("Good morning/afternoon/evening, [name]") on chat empty state. Quick-action chips redesigned to pill shape: Code / Learn / Write / Life stuff. WebChatPage.tsx +27/-16.                                                                                 |
+| apps/mobile           | bundled in `b00dde9c2` | `04_chat-layout_scroll-to-bottom-floating-button.png` | Scroll-to-bottom FAB: teal circular ChevronDown, fades in when user >150px above bottom (200ms ease-out), snaps to latest message on tap. Reanimated opacity. MessageList.tsx +96/-27. Tests 743/743.                                                                                     |
+| apps/extension        | `7aaec2d68`            | `409_claude-chrome_blocked-sensitive-site.png`        | Side panel now shows "Can't access this page" shield overlay on restricted URLs (chrome://, chrome-extension://, edge://, about:, data:, file:///). `isRestrictedUrl()` + `setBlockedState()` swaps overlay + disables composer. 576/576 tests. +81/0.                                    |
+| apps/extension-vscode | `b00dde9c2`            | `05_vscode-chat_modes-dropdown-and-effort-slider.png` | Dedicated `setAgentMode` / `setAgentEffort` commands. Mode/effort chips open their own QuickPick directly (per-mode descriptions copy from Claude Code), bypassing generic action sheet. Sidebar webview wired with `openModePicker`/`openEffortPicker` messages. 496/496 tests. +118/-2. |
+
+### Coverage observation
+
+Three of the six commits cited specific PNG paths in commit body (cli, desktop, web). The other three (mobile, chrome, vscode) cited PNG via Refs: in commit body. **Citation rate: 6/6** vs fire #1's 2/6 — the REFERENCE_INDEX.md grounding worked.
+
+### Concurrent-commit collision
+
+`b00dde9c2` again picked up changes from f2-mobile (MessageList.tsx) that were staged in parallel with the vscode engineer's commit. No data loss, all work landed, but commit authorship is muddled. Mitigation for fire #3+: instruct engineers to git add only their own files before commit.
+
+### Binary
+
+CLI v1.7.1 rebuilt and installed at `~/.cargo/bin/agiworkforce`. 1315 tests pass.
+
+Last surface touched: **apps/cli** (rotation hadn't been tracked in IMPLEMENTATION_LOG; resetting from this fire onward).
+
+---
+
 ## 2026-05-14 — CLI v1.7.1: Wire PreToolUse hook blocking in agent loop
 
 - Files: `apps/cli/src/agent.rs` (edited), `apps/cli/src/hooks.rs` (edited), `apps/cli/Cargo.toml` (version bump)
