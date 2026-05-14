@@ -70,7 +70,7 @@ jest.mock('../lib/mmkv', () => ({
 // Imports after mocks
 // ---------------------------------------------------------------------------
 
-import OnboardingScreen from '../app/onboarding';
+import OnboardingScreen from '../app/(public)/onboarding';
 
 // ---------------------------------------------------------------------------
 // Tests
