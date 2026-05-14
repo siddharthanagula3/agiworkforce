@@ -15,6 +15,7 @@
   "dependencies": {
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/llm-normalize": "workspace:*",
+    "@agiworkforce/llm-runtime": "workspace:*",
     "openai": "^4.85.0"
   },
   "devDependencies": {
