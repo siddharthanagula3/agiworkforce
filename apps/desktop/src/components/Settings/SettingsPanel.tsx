@@ -62,7 +62,7 @@ import { cn } from '@/lib/utils';
 import { useAppModeStore, selectMode, selectIsCloud } from '../../stores/appModeStore';
 import { useAuthStore } from '../../stores/auth';
 
-// ── Canonical tab IDs (10 tabs displayed in nav) ──────────────────────────────
+// ── Canonical tab IDs (11 tabs displayed in nav) ──────────────────────────────
 type CanonicalTab =
   | 'general'
   | 'account'
@@ -73,7 +73,8 @@ type CanonicalTab =
   | 'mcp-skills'
   | 'connectors'
   | 'notifications'
-  | 'voice';
+  | 'voice'
+  | 'capabilities';
 
 /** Resolve any legacy alias to its canonical tab. */
 function resolveTab(tab: SettingsTab): CanonicalTab {
@@ -89,6 +90,7 @@ const SETTINGS_NAV: { key: CanonicalTab; label: string; icon: React.ElementType 
   { key: 'agents', label: 'Agents', icon: Zap },
   { key: 'mcp-skills', label: 'MCP & Skills', icon: Wrench },
   { key: 'connectors', label: 'Apps & Integrations', icon: Plug },
+  { key: 'capabilities', label: 'Capabilities', icon: Zap },
   { key: 'notifications', label: 'Notifications', icon: Bell },
   { key: 'voice', label: 'Voice', icon: Mic },
 ];
@@ -195,6 +197,11 @@ const LazyFeaturesPrivacySettings = lazy(() =>
 const LazyPrivacyDataSection = lazy(() =>
   import('./Privacy/DataSection').then((module) => ({
     default: module.DataSection,
+  })),
+);
+const LazyCapabilitiesSettings = lazy(() =>
+  import('./CapabilitiesSettings').then((module) => ({
+    default: module.CapabilitiesSettings,
   })),
 );
 const LazyOAuthCredentialsPanel = lazy(() =>
@@ -1874,6 +1881,14 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         return (
           <SettingsSectionLoader label="Loading voice settings...">
             <LazyVoiceSettings />
+          </SettingsSectionLoader>
+        );
+
+      // ── 11. Capabilities (Memory + Tool access + Visuals) ──────────────
+      case 'capabilities':
+        return (
+          <SettingsSectionLoader label="Loading capabilities settings...">
+            <LazyCapabilitiesSettings />
           </SettingsSectionLoader>
         );
 
