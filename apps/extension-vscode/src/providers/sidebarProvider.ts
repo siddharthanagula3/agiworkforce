@@ -63,6 +63,8 @@ type WebviewToExtMessage =
   | { type: 'shareDiagnostics' }
   | { type: 'clearConversation' }
   | { type: 'openActionSheet' }
+  | { type: 'openModePicker' }
+  | { type: 'openEffortPicker' }
   | { type: 'setMode'; payload: { mode: AgentMode } }
   | { type: 'setEffort'; payload: { effort: Effort } }
   | { type: 'dismissUsageMeter' }
@@ -1094,11 +1096,11 @@ function getWebviewContent(
     });
 
     modeChip.addEventListener('click', () => {
-      vscode.postMessage({ type: 'openActionSheet' });
+      vscode.postMessage({ type: 'openModePicker' });
     });
 
     effortChip.addEventListener('click', () => {
-      vscode.postMessage({ type: 'openActionSheet' });
+      vscode.postMessage({ type: 'openEffortPicker' });
     });
 
     saveKeyBtn.addEventListener('click', () => {
@@ -1493,6 +1495,16 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       case 'openActionSheet': {
         // Delegate to the global command so the QuickPick runs in the extension host
         await vscode.commands.executeCommand('agi-workforce.openActionSheet');
+        break;
+      }
+
+      case 'openModePicker': {
+        await vscode.commands.executeCommand('agi-workforce.setAgentMode');
+        break;
+      }
+
+      case 'openEffortPicker': {
+        await vscode.commands.executeCommand('agi-workforce.setAgentEffort');
         break;
       }
 
