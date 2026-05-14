@@ -6,9 +6,9 @@ pub mod client;
 pub mod types;
 
 #[allow(unused_imports)]
-pub use client::LspClient;
+pub use client::{DiagnosticsBuffer, LspClient};
 #[allow(unused_imports)]
-pub use types::{Diagnostic, Hover, Location, Position, Range};
+pub use types::{CompletionItem, Diagnostic, DocumentSymbol, Hover, Location, Position, Range, TextEdit};
 
 /// Pick the default LSP server for a given file extension.
 pub fn server_for_extension(ext: &str) -> Option<(&'static str, &'static [&'static str])> {

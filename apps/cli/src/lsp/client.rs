@@ -5,14 +5,48 @@
 use anyhow::{Context, Result};
 use serde_json::Value;
 use std::path::Path;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, Ordering};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
+use tokio::sync::RwLock;
+
+use crate::lsp::types::Diagnostic;
+
+/// In-memory buffer for LSP publishDiagnostics notifications.
+// Real push-diagnostics requires a dedicated async notification reader loop
+// running concurrently with the request channel — out of scope for M36 MVP.
+// The buffer API is in place so callers compile; it stays empty until wired.
+#[derive(Default, Clone)]
+pub struct DiagnosticsBuffer {
+    inner: Arc<RwLock<Vec<(String, Vec<Diagnostic>)>>>,
+}
+
+impl DiagnosticsBuffer {
+    pub fn new() -> Self { Self::default() }
+    pub fn handle(&self) -> Arc<RwLock<Vec<(String, Vec<Diagnostic>)>>> { self.inner.clone() }
+    pub async fn for_uri(&self, uri: &str) -> Vec<Diagnostic> {
+        let r = self.inner.read().await;
+        r.iter().find(|(u, _)| u == uri).map(|(_, d)| d.clone()).unwrap_or_default()
+    }
+    pub async fn replace(&self, uri: String, diags: Vec<Diagnostic>) {
+        let mut w = self.inner.write().await;
+        if let Some(entry) = w.iter_mut().find(|(u, _)| *u == uri) {
+            entry.1 = diags;
+        } else {
+            w.push((uri, diags));
+        }
+    }
+    pub async fn count(&self) -> usize {
+        self.inner.read().await.iter().map(|(_, d)| d.len()).sum()
+    }
+}
 
 #[allow(dead_code)]
 pub struct LspClient {
     child: Child,
     next_id: AtomicI64,
+    diagnostics_buffer: DiagnosticsBuffer,
 }
 
 impl LspClient {
@@ -48,6 +82,7 @@ impl LspClient {
         Ok(Self {
             child,
             next_id: AtomicI64::new(2),
+            diagnostics_buffer: DiagnosticsBuffer::new(),
         })
     }
 
@@ -90,5 +125,38 @@ impl LspClient {
         let _ = self.request("shutdown", Value::Null).await;
         let _ = self.child.kill().await;
         Ok(())
+    }
+
+    pub async fn completion(&mut self, file: &str, line: u32, character: u32) -> Result<Value> {
+        let uri = format!("file://{}", file);
+        let params = serde_json::json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character},
+        });
+        self.request("textDocument/completion", params).await
+    }
+
+    pub async fn document_symbol(&mut self, file: &str) -> Result<Value> {
+        let uri = format!("file://{}", file);
+        let params = serde_json::json!({"textDocument": {"uri": uri}});
+        self.request("textDocument/documentSymbol", params).await
+    }
+
+    pub async fn formatting(&mut self, file: &str, tab_size: u32) -> Result<Value> {
+        let uri = format!("file://{}", file);
+        let params = serde_json::json!({
+            "textDocument": {"uri": uri},
+            "options": {"tabSize": tab_size, "insertSpaces": true}
+        });
+        self.request("textDocument/formatting", params).await
+    }
+
+    // Diagnostics are server-pushed (textDocument/publishDiagnostics). The
+    // request() method blocks on the next Content-Length frame — interleaved
+    // notifications would deadlock. A real push-diagnostics loop requires a
+    // separate concurrent reader task (M-future). For now, expose the empty
+    // buffer so the lsp_diagnostics tool compiles and returns a useful hint.
+    pub fn diagnostics(&self) -> Vec<Diagnostic> {
+        Vec::new()
     }
 }

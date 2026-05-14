@@ -2,6 +2,40 @@
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [cli-1.2.1] — 2026-05-14
+
+Backlog-close release. v1.2.0 shipped the audit-driven gap closure; v1.2.1 closes the architectural follow-ups (interactive overlay catalog, plugin marketplace client, LSP completion path, OAuth endpoint discovery).
+
+### Added
+
+- **7 new interactive overlay modules** in `apps/cli/src/tui/widgets/`:
+  - `list_selection_view.rs` — generic `ListSelectionView<T>` base implementing `InteractiveView` (used by 4 derived overlays)
+  - `memories_settings.rs` — toggle auto-memory, decay threshold, max-facts
+  - `skills_toggle.rs` — spacebar-toggle enabled state per discovered skill
+  - `statusline_setup.rs` — multi-checkbox status line composition
+  - `terminal_title_setup.rs` — multi-checkbox terminal title composition
+  - `command_popup.rs` — autocomplete slash-command popup (typed filter, ↑↓ Enter Esc)
+  - `diff_review.rs` — per-file diff with `y/n/s` decisions and final Submit count
+- **`apps/cli/src/marketplace.rs`** — plugin marketplace client: `Marketplace { registry_url }`, `list_plugins`, `search`, `install`. Default registry URL placeholder; hosted infra is an ops step.
+- **`auth_oauth::discover_endpoints`** — RFC 8414 / OpenID Connect Discovery: probes `/.well-known/openid-configuration` then `/.well-known/oauth-authorization-server`. Returns typed `DiscoveredEndpoints { authorization_endpoint, token_endpoint, scopes_supported, code_challenge_methods_supported, ... }`.
+- **LSP completion path**:
+  - `LspClient::completion`, `LspClient::document_symbol`, `LspClient::formatting` methods
+  - `DiagnosticsBuffer` shared-state container for future `textDocument/publishDiagnostics` push subscription
+  - `CompletionItem`, `DocumentSymbol`, `TextEdit` LSP wire types
+  - 3 new tools registered: `lsp_completion`, `lsp_document_symbols`, `lsp_format` — catalog 38 → 41
+
+### Changed
+
+- Tests: **1281 → 1347** (+66) across 6 crates.
+- `tui/widgets/mod.rs` registers all 7 new overlay modules.
+
+### Notes
+
+- Reference screenshots at `~/Desktop/reference/ui-capture-runs/.../screenshots/claude-code/` (captures 607–618 for slash palette, 621 for skills) show **dismissed** overlay state (post-close). The new interactive overlays use a boxed-modal style during active use; the pure-text `screen_renderers.rs` continues to produce the dismissed-state shape. Both serve complementary rendering purposes.
+- Real OAuth-app registrations for known providers (anthropic / openai) remain placeholder; `discover_endpoints` is provider-agnostic and works against any RFC 8414 / OIDC-compliant issuer URL.
+
+---
+
 ## [cli-1.2.0] — 2026-05-14
 
 The "comparable with other CLIs" release. Closes every P0 and P1 item identified in the 2026-05-14 deep audit against Codex CLI, Claude Code, Gemini CLI, OpenCode, and Claw-code.

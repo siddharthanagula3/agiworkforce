@@ -171,6 +171,9 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
             | "task_list"
             | "task_output"
             | "cron_list"
+            | "lsp_completion"
+            | "lsp_document_symbols"
+            | "lsp_format"
     );
     let require_confirm = opts.require_confirmation && !(opts.auto_approve_safe && is_safe_tool);
 
@@ -222,6 +225,9 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         "lsp_definition" => execute_lsp_definition(&call.args).await,
         "lsp_hover" => execute_lsp_hover(&call.args).await,
         "lsp_diagnostics" => execute_lsp_diagnostics(&call.args).await,
+        "lsp_completion" => execute_lsp_completion(&call.args).await,
+        "lsp_document_symbols" => execute_lsp_document_symbols(&call.args).await,
+        "lsp_format" => execute_lsp_format(&call.args).await,
         _ => Ok(ToolResult {
             tool_name: call.name.clone(),
             success: false,
@@ -3519,6 +3525,75 @@ async fn execute_lsp_diagnostics(args: &HashMap<String, String>) -> Result<ToolR
             "next": "Use lsp_hover or lsp_definition for synchronous LSP probes."
         }).to_string(),
     })
+}
+
+async fn execute_lsp_completion(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let file = match args.get("file").filter(|s| !s.is_empty()) {
+        Some(f) => f.clone(),
+        None => return Ok(ToolResult { tool_name: "lsp_completion".into(), success: false, output: "Missing required argument: file".into() }),
+    };
+    let line = args.get("line").and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+    let character = args.get("character").and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+    let ext = std::path::Path::new(&file).extension().and_then(|e| e.to_str()).unwrap_or("");
+    let Some((server_cmd, server_args)) = crate::lsp::server_for_extension(ext) else {
+        return Ok(ToolResult { tool_name: "lsp_completion".into(), success: false, output: format!("No LSP server configured for .{ext} files") });
+    };
+    let workspace = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let mut client = match crate::lsp::LspClient::spawn(server_cmd, server_args, &workspace).await {
+        Ok(c) => c,
+        Err(e) => return Ok(ToolResult { tool_name: "lsp_completion".into(), success: false, output: format!("Failed to spawn {server_cmd}: {e}") }),
+    };
+    let result = client.completion(&file, line, character).await;
+    let _ = client.shutdown().await;
+    match result {
+        Ok(v) => Ok(ToolResult { tool_name: "lsp_completion".into(), success: true, output: serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string()) }),
+        Err(e) => Ok(ToolResult { tool_name: "lsp_completion".into(), success: false, output: format!("LSP completion failed: {e}") }),
+    }
+}
+
+async fn execute_lsp_document_symbols(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let file = match args.get("file").filter(|s| !s.is_empty()) {
+        Some(f) => f.clone(),
+        None => return Ok(ToolResult { tool_name: "lsp_document_symbols".into(), success: false, output: "Missing required argument: file".into() }),
+    };
+    let ext = std::path::Path::new(&file).extension().and_then(|e| e.to_str()).unwrap_or("");
+    let Some((server_cmd, server_args)) = crate::lsp::server_for_extension(ext) else {
+        return Ok(ToolResult { tool_name: "lsp_document_symbols".into(), success: false, output: format!("No LSP server configured for .{ext} files") });
+    };
+    let workspace = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let mut client = match crate::lsp::LspClient::spawn(server_cmd, server_args, &workspace).await {
+        Ok(c) => c,
+        Err(e) => return Ok(ToolResult { tool_name: "lsp_document_symbols".into(), success: false, output: format!("Failed to spawn {server_cmd}: {e}") }),
+    };
+    let result = client.document_symbol(&file).await;
+    let _ = client.shutdown().await;
+    match result {
+        Ok(v) => Ok(ToolResult { tool_name: "lsp_document_symbols".into(), success: true, output: serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string()) }),
+        Err(e) => Ok(ToolResult { tool_name: "lsp_document_symbols".into(), success: false, output: format!("LSP documentSymbol failed: {e}") }),
+    }
+}
+
+async fn execute_lsp_format(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let file = match args.get("file").filter(|s| !s.is_empty()) {
+        Some(f) => f.clone(),
+        None => return Ok(ToolResult { tool_name: "lsp_format".into(), success: false, output: "Missing required argument: file".into() }),
+    };
+    let tab_size = args.get("tab_size").and_then(|s| s.parse::<u32>().ok()).unwrap_or(4);
+    let ext = std::path::Path::new(&file).extension().and_then(|e| e.to_str()).unwrap_or("");
+    let Some((server_cmd, server_args)) = crate::lsp::server_for_extension(ext) else {
+        return Ok(ToolResult { tool_name: "lsp_format".into(), success: false, output: format!("No LSP server configured for .{ext} files") });
+    };
+    let workspace = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let mut client = match crate::lsp::LspClient::spawn(server_cmd, server_args, &workspace).await {
+        Ok(c) => c,
+        Err(e) => return Ok(ToolResult { tool_name: "lsp_format".into(), success: false, output: format!("Failed to spawn {server_cmd}: {e}") }),
+    };
+    let result = client.formatting(&file, tab_size).await;
+    let _ = client.shutdown().await;
+    match result {
+        Ok(v) => Ok(ToolResult { tool_name: "lsp_format".into(), success: true, output: serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string()) }),
+        Err(e) => Ok(ToolResult { tool_name: "lsp_format".into(), success: false, output: format!("LSP formatting failed: {e}") }),
+    }
 }
 
 // ---------------------------------------------------------------------------
