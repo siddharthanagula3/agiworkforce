@@ -131,6 +131,8 @@ export interface ChatPreferences {
    * 'cloud'  — SQLite + best-effort Supabase sync after every message save.
    */
   chatStorageMode: 'local' | 'cloud';
+  /** Automatically speak assistant responses via text-to-speech */
+  autoTTS?: boolean;
 }
 
 /**
@@ -2277,6 +2279,7 @@ export const defaultChatPreferences: ChatPreferences = {
   autoApproveTools: false,
   autoInjectSkills: true,
   agentMode: 'build' as AgentMode,
+  chatStorageMode: 'local',
   autoTTS: true,
 };
 
