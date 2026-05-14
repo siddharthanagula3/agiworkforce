@@ -508,6 +508,9 @@ async function handleSaveShortcut(
     actions: message.actions,
     createdAt: Date.now(),
     url: message.url,
+    prompt: message.prompt,
+    startUrl: message.startUrl,
+    scheduled: message.scheduled,
   };
   shortcuts.push(shortcut);
   await saveShortcuts(shortcuts);

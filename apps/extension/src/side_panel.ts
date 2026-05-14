@@ -1181,6 +1181,34 @@ function injectStyles(): void {
     .sp-wf-form-cancel-btn { background: none; border: 1px solid #1e1e2e; color: #64748b; border-radius: 5px; padding: 6px 10px; font-size: 12px; cursor: pointer; align-self: flex-end; transition: color 0.12s; }
     .sp-wf-form-cancel-btn:hover { color: #e2e8f0; }
     .sp-wf-form-actions { display: flex; gap: 6px; justify-content: flex-end; }
+    .sp-wf-create-shortcut-btn { background: #1e1b4b; border: 1px solid #312e81; color: #a5b4fc; font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
+    .sp-wf-create-shortcut-btn:hover { background: #312e81; }
+    .sp-create-shortcut-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; align-items: center; justify-content: center; }
+    .sp-create-shortcut-overlay.open { display: flex; }
+    .sp-create-shortcut-modal { background: #13131a; border: 1px solid #1e1e2e; border-radius: 10px; padding: 18px 18px 14px; width: 290px; max-width: 95vw; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+    .sp-create-shortcut-header { display: flex; align-items: center; justify-content: space-between; }
+    .sp-create-shortcut-title { font-size: 13px; font-weight: 600; color: #e2e8f0; }
+    .sp-create-shortcut-close { background: none; border: none; color: #64748b; font-size: 16px; cursor: pointer; padding: 0 2px; line-height: 1; transition: color 0.12s; }
+    .sp-create-shortcut-close:hover { color: #e2e8f0; }
+    .sp-create-shortcut-field { display: flex; flex-direction: column; gap: 4px; }
+    .sp-create-shortcut-label { font-size: 10px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; }
+    .sp-create-shortcut-input { background: #0f0f14; border: 1px solid #1e1e2e; border-radius: 5px; color: #e2e8f0; font-size: 12px; padding: 6px 9px; outline: none; font-family: inherit; transition: border-color 0.15s; width: 100%; box-sizing: border-box; }
+    .sp-create-shortcut-input:focus { border-color: #4338ca; }
+    .sp-create-shortcut-input::placeholder { color: #334155; }
+    .sp-create-shortcut-textarea { background: #0f0f14; border: 1px solid #1e1e2e; border-radius: 5px; color: #e2e8f0; font-size: 12px; padding: 6px 9px; outline: none; font-family: inherit; transition: border-color 0.15s; width: 100%; box-sizing: border-box; resize: none; height: 70px; line-height: 1.4; }
+    .sp-create-shortcut-textarea:focus { border-color: #4338ca; }
+    .sp-create-shortcut-textarea::placeholder { color: #334155; }
+    .sp-create-shortcut-schedule-row { display: flex; align-items: center; justify-content: space-between; }
+    .sp-create-shortcut-schedule-label { font-size: 12px; color: #94a3b8; }
+    .sp-create-shortcut-toggle { appearance: none; width: 34px; height: 18px; border-radius: 9px; background: #1e1e2e; position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; border: none; outline: none; }
+    .sp-create-shortcut-toggle:checked { background: #4338ca; }
+    .sp-create-shortcut-toggle::after { content: ''; position: absolute; width: 13px; height: 13px; border-radius: 50%; background: white; top: 2.5px; left: 2.5px; transition: transform 0.2s; }
+    .sp-create-shortcut-toggle:checked::after { transform: translateX(16px); }
+    .sp-create-shortcut-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 2px; }
+    .sp-create-shortcut-cancel { background: none; border: 1px solid #1e1e2e; color: #64748b; border-radius: 5px; padding: 6px 14px; font-size: 12px; cursor: pointer; transition: color 0.12s; }
+    .sp-create-shortcut-cancel:hover { color: #e2e8f0; }
+    .sp-create-shortcut-save { background: #4338ca; color: white; border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; cursor: pointer; transition: background 0.12s; }
+    .sp-create-shortcut-save:hover { background: #3730a3; }
     .sp-wf-group-desc { font-size: 11px; color: #64748b; line-height: 1.55; }
     .sp-wf-group-btns { display: flex; gap: 8px; flex-wrap: wrap; }
     .sp-wf-group-action-btn { display: flex; align-items: center; gap: 5px; background: #13131a; border: 1px solid #1e1e2e; border-radius: 6px; color: #94a3b8; font-size: 11px; padding: 5px 11px; cursor: pointer; transition: color 0.15s, border-color 0.15s, background 0.15s; }
@@ -2762,11 +2790,145 @@ function buildUI(): void {
   shortcutsTitle.innerHTML =
     'Saved Shortcuts <span class="sp-wf-count-badge" id="sp-wf-shortcuts-count">0</span>';
   shortcutsSectionHeader.appendChild(shortcutsTitle);
+  const createShortcutBtn = el(
+    'button',
+    { class: 'sp-wf-create-shortcut-btn', id: 'sp-wf-create-shortcut-btn' },
+    '+ Create shortcut',
+  );
+  shortcutsSectionHeader.appendChild(createShortcutBtn);
   shortcutsSection.appendChild(shortcutsSectionHeader);
   const wfShortcutsList = el('div', { class: 'sp-wf-shortcuts-list', id: 'sp-wf-shortcuts-list' });
-  wfShortcutsList.innerHTML = '<div class="sp-wf-empty">Record your first workflow</div>';
+  wfShortcutsList.innerHTML =
+    '<div class="sp-wf-empty">Record your first workflow or create a prompt shortcut</div>';
   shortcutsSection.appendChild(wfShortcutsList);
   workflowsPanel.appendChild(shortcutsSection);
+
+  /* ── Create-shortcut modal overlay ── */
+  const createShortcutOverlay = el('div', {
+    class: 'sp-create-shortcut-overlay',
+    id: 'sp-create-shortcut-overlay',
+  });
+  const createShortcutModal = el('div', { class: 'sp-create-shortcut-modal' });
+  const modalHeader = el('div', { class: 'sp-create-shortcut-header' });
+  modalHeader.appendChild(el('div', { class: 'sp-create-shortcut-title' }, 'Create shortcut'));
+  const modalCloseBtn = el('button', { class: 'sp-create-shortcut-close', title: 'Close' }, '×');
+  modalHeader.appendChild(modalCloseBtn);
+  createShortcutModal.appendChild(modalHeader);
+
+  const nameField = el('div', { class: 'sp-create-shortcut-field' });
+  nameField.appendChild(el('div', { class: 'sp-create-shortcut-label' }, 'Name'));
+  const scNameInput = el('input', {
+    class: 'sp-create-shortcut-input',
+    placeholder: '/ task-name',
+    id: 'sp-sc-name',
+  }) as HTMLInputElement;
+  nameField.appendChild(scNameInput);
+  createShortcutModal.appendChild(nameField);
+
+  const promptField = el('div', { class: 'sp-create-shortcut-field' });
+  promptField.appendChild(el('div', { class: 'sp-create-shortcut-label' }, 'Prompt'));
+  const scPromptInput = el('textarea', {
+    class: 'sp-create-shortcut-textarea',
+    placeholder: 'Enter your prompt text...',
+    id: 'sp-sc-prompt',
+  }) as HTMLTextAreaElement;
+  promptField.appendChild(scPromptInput);
+  createShortcutModal.appendChild(promptField);
+
+  const startFromField = el('div', { class: 'sp-create-shortcut-field' });
+  startFromField.appendChild(el('div', { class: 'sp-create-shortcut-label' }, 'Start from'));
+  const scStartUrlInput = el('input', {
+    class: 'sp-create-shortcut-input',
+    placeholder: 'https://example.com',
+    id: 'sp-sc-starturl',
+    type: 'url',
+  }) as HTMLInputElement;
+  startFromField.appendChild(scStartUrlInput);
+  createShortcutModal.appendChild(startFromField);
+
+  const scheduleRow = el('div', { class: 'sp-create-shortcut-schedule-row' });
+  scheduleRow.appendChild(el('div', { class: 'sp-create-shortcut-schedule-label' }, 'Schedule'));
+  const scScheduleToggle = el('input', {
+    type: 'checkbox',
+    class: 'sp-create-shortcut-toggle',
+    id: 'sp-sc-schedule',
+  }) as HTMLInputElement;
+  scheduleRow.appendChild(scScheduleToggle);
+  createShortcutModal.appendChild(scheduleRow);
+
+  const modalActions = el('div', { class: 'sp-create-shortcut-actions' });
+  const scCancelBtn = el('button', { class: 'sp-create-shortcut-cancel' }, 'Cancel');
+  const scSaveBtn = el('button', { class: 'sp-create-shortcut-save' }, 'Create shortcut');
+  modalActions.appendChild(scCancelBtn);
+  modalActions.appendChild(scSaveBtn);
+  createShortcutModal.appendChild(modalActions);
+  createShortcutOverlay.appendChild(createShortcutModal);
+  document.body.appendChild(createShortcutOverlay);
+
+  function openCreateShortcutModal(): void {
+    scNameInput.value = '';
+    scPromptInput.value = '';
+    scStartUrlInput.value = '';
+    scScheduleToggle.checked = false;
+    createShortcutOverlay.classList.add('open');
+    setTimeout(() => scNameInput.focus(), 50);
+  }
+  function closeCreateShortcutModal(): void {
+    createShortcutOverlay.classList.remove('open');
+  }
+
+  createShortcutBtn.addEventListener('click', openCreateShortcutModal);
+  modalCloseBtn.addEventListener('click', closeCreateShortcutModal);
+  scCancelBtn.addEventListener('click', closeCreateShortcutModal);
+  createShortcutOverlay.addEventListener('click', (e: MouseEvent) => {
+    if (e.target === createShortcutOverlay) closeCreateShortcutModal();
+  });
+
+  scSaveBtn.addEventListener('click', () => {
+    const name = scNameInput.value.trim();
+    const prompt = scPromptInput.value.trim();
+    if (!name) {
+      scNameInput.style.borderColor = '#dc2626';
+      setTimeout(() => {
+        scNameInput.style.borderColor = '';
+      }, 1500);
+      return;
+    }
+    if (!prompt) {
+      scPromptInput.style.borderColor = '#dc2626';
+      setTimeout(() => {
+        scPromptInput.style.borderColor = '';
+      }, 1500);
+      return;
+    }
+    const startUrl = scStartUrlInput.value.trim() || undefined;
+    const scheduled = scScheduleToggle.checked;
+    (scSaveBtn as HTMLButtonElement).disabled = true;
+    scSaveBtn.textContent = 'Saving...';
+    chrome.runtime.sendMessage(
+      { type: 'SAVE_SHORTCUT', name, actions: [], prompt, startUrl, scheduled },
+      () => {
+        (scSaveBtn as HTMLButtonElement).disabled = false;
+        scSaveBtn.textContent = 'Create shortcut';
+        if (chrome.runtime.lastError) {
+          scNameInput.style.borderColor = '#dc2626';
+          setTimeout(() => {
+            scNameInput.style.borderColor = '';
+          }, 2000);
+          return;
+        }
+        closeCreateShortcutModal();
+        refreshWorkflowsShortcuts();
+      },
+    );
+  });
+
+  scNameInput.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Escape') closeCreateShortcutModal();
+  });
+  scPromptInput.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Escape') closeCreateShortcutModal();
+  });
 
   const tasksSection = el('div', { class: 'sp-wf-section' });
   const tasksSectionHeader = el('div', { class: 'sp-wf-section-header' });
@@ -3269,7 +3431,15 @@ function refreshWorkflowsShortcuts(): void {
       response:
         | {
             success?: boolean;
-            shortcuts?: Array<{ id: string; name: string; actions: unknown[]; createdAt: number }>;
+            shortcuts?: Array<{
+              id: string;
+              name: string;
+              actions: unknown[];
+              createdAt: number;
+              prompt?: string;
+              startUrl?: string;
+              scheduled?: boolean;
+            }>;
           }
         | undefined,
     ) => {
@@ -3281,12 +3451,14 @@ function refreshWorkflowsShortcuts(): void {
       const shortcuts = response.shortcuts ?? [];
       if (countBadge) countBadge.textContent = String(shortcuts.length);
       if (shortcuts.length === 0) {
-        list.innerHTML = '<div class="sp-wf-empty">Record your first workflow</div>';
+        list.innerHTML =
+          '<div class="sp-wf-empty">Record your first workflow or create a prompt shortcut</div>';
         return;
       }
       for (const sc of shortcuts) {
         const item = el('div', { class: 'sp-wf-shortcut-item' });
-        item.appendChild(el('div', { class: 'sp-wf-shortcut-icon' }, '⚡'));
+        const isPromptBased = sc.prompt && Array.isArray(sc.actions) && sc.actions.length === 0;
+        item.appendChild(el('div', { class: 'sp-wf-shortcut-icon' }, isPromptBased ? '/' : '⚡'));
         const info = el('div', { class: 'sp-wf-shortcut-info' });
         info.appendChild(el('div', { class: 'sp-wf-shortcut-name' }, sc.name));
         const actionsCount = Array.isArray(sc.actions) ? sc.actions.length : 0;
@@ -3294,9 +3466,10 @@ function refreshWorkflowsShortcuts(): void {
           month: 'short',
           day: 'numeric',
         });
-        info.appendChild(
-          el('div', { class: 'sp-wf-shortcut-meta' }, `${actionsCount} actions · ${dateStr}`),
-        );
+        const metaText = isPromptBased
+          ? `prompt shortcut${sc.scheduled ? ' · scheduled' : ''} · ${dateStr}`
+          : `${actionsCount} actions · ${dateStr}`;
+        info.appendChild(el('div', { class: 'sp-wf-shortcut-meta' }, metaText));
         item.appendChild(info);
         const btns = el('div', { class: 'sp-wf-shortcut-btns' });
         const playBtn = el(
