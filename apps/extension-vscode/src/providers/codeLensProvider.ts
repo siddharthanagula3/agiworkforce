@@ -76,6 +76,14 @@ function computeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
 
       lenses.push(
         new vscode.CodeLens(range, {
+          title: '$(edit) Refactor',
+          tooltip: 'Refactor this with AGI Workforce',
+          command: 'agi-workforce.refactor',
+        }),
+      );
+
+      lenses.push(
+        new vscode.CodeLens(range, {
           title: '$(book) Docs',
           tooltip: 'Generate documentation with AGI Workforce',
           command: 'agi-workforce.docs',
