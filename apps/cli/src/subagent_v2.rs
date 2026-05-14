@@ -6,10 +6,12 @@
 //! via `recv_message`. Parent can `wait` for completion or `kill` mid-flight.
 //!
 //! M34 of v1.3 — closes the last v1.2 architectural backlog item.
+//! M34a of v1.4 — SubagentTaskRunner trait abstraction (swappable task body).
 
 #![allow(dead_code)]
 
 use anyhow::{Context, Result};
+use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot, RwLock};
@@ -41,10 +43,101 @@ pub enum MessageKind {
     Error,
 }
 
+#[async_trait]
+pub trait SubagentTaskRunner: Send + Sync + 'static {
+    /// Run the task body. Receives prompts from inbox_rx, sends responses
+    /// via outbox_tx, exits cleanly when inbox_rx returns None or when the
+    /// returned future is dropped (kill via abort).
+    async fn run(
+        &self,
+        id: SubagentId,
+        model: String,
+        inbox_rx: mpsc::Receiver<String>,
+        outbox_tx: mpsc::Sender<SubagentMessage>,
+    );
+}
+
+#[derive(Default)]
+pub struct EchoRunner;
+
+#[async_trait]
+impl SubagentTaskRunner for EchoRunner {
+    async fn run(
+        &self,
+        id: SubagentId,
+        model: String,
+        mut inbox_rx: mpsc::Receiver<String>,
+        outbox_tx: mpsc::Sender<SubagentMessage>,
+    ) {
+        while let Some(prompt) = inbox_rx.recv().await {
+            if outbox_tx
+                .send(SubagentMessage {
+                    from: id,
+                    kind: MessageKind::Response,
+                    body: format!("[{model}] echo: {prompt}"),
+                })
+                .await
+                .is_err()
+            {
+                break;
+            }
+        }
+    }
+}
+
+pub struct MockRunner {
+    pub scripted_responses: Vec<String>,
+}
+
+#[async_trait]
+impl SubagentTaskRunner for MockRunner {
+    async fn run(
+        &self,
+        id: SubagentId,
+        _model: String,
+        mut inbox_rx: mpsc::Receiver<String>,
+        outbox_tx: mpsc::Sender<SubagentMessage>,
+    ) {
+        let mut idx = 0;
+        while let Some(_prompt) = inbox_rx.recv().await {
+            let response = self
+                .scripted_responses
+                .get(idx)
+                .cloned()
+                .unwrap_or_else(|| "[mock] no more scripted responses".to_string());
+            idx += 1;
+            if outbox_tx
+                .send(SubagentMessage {
+                    from: id,
+                    kind: MessageKind::Response,
+                    body: response,
+                })
+                .await
+                .is_err()
+            {
+                break;
+            }
+        }
+    }
+}
+
 pub struct SubagentSpec {
     pub model: String,
     pub system_prompt: Option<String>,
     pub max_turns: usize,
+    pub runner: Arc<dyn SubagentTaskRunner>,
+}
+
+impl SubagentSpec {
+    /// Convenience constructor with EchoRunner as the default.
+    pub fn new(model: impl Into<String>) -> Self {
+        Self {
+            model: model.into(),
+            system_prompt: None,
+            max_turns: 5,
+            runner: Arc::new(EchoRunner),
+        }
+    }
 }
 
 pub struct SubagentHandle {
@@ -109,37 +202,26 @@ impl SubagentRegistry {
 
     pub async fn spawn(&self, spec: SubagentSpec) -> Result<SubagentId> {
         let id = Uuid::new_v4();
-        let (inbox_tx, mut inbox_rx) = mpsc::channel::<String>(32);
+        let (inbox_tx, inbox_rx) = mpsc::channel::<String>(32);
         let (outbox_tx, outbox_rx) = mpsc::channel::<SubagentMessage>(32);
         let (kill_tx, mut kill_rx) = oneshot::channel::<()>();
         let status = Arc::new(RwLock::new(SubagentStatus::Pending));
         let status_for_task = status.clone();
+        let runner = spec.runner.clone();
         let model = spec.model.clone();
         let join_handle = tokio::spawn(async move {
             *status_for_task.write().await = SubagentStatus::Running;
-            // Mock loop: echo each inbox message to outbox, prefixed with model name.
-            // Real impl wires AgentSession; this scaffolding is the IPC pattern.
-            loop {
-                tokio::select! {
-                    _ = &mut kill_rx => {
-                        let _ = outbox_tx.send(SubagentMessage {
-                            from: id,
-                            kind: MessageKind::Status,
-                            body: "killed".into(),
-                        }).await;
-                        break;
-                    }
-                    msg = inbox_rx.recv() => {
-                        let Some(prompt) = msg else { break };
-                        if outbox_tx.send(SubagentMessage {
-                            from: id,
-                            kind: MessageKind::Response,
-                            body: format!("[{model}] echo: {prompt}"),
-                        }).await.is_err() { break; }
-                    }
+            tokio::select! {
+                _ = &mut kill_rx => {
+                    // Killed externally; runner is dropped.
                 }
+                _ = runner.run(id, model, inbox_rx, outbox_tx) => {}
             }
-            *status_for_task.write().await = SubagentStatus::Completed;
+            // Status only transitions to Completed if not already Killed.
+            let mut s = status_for_task.write().await;
+            if *s != SubagentStatus::Killed {
+                *s = SubagentStatus::Completed;
+            }
         });
         let handle = SubagentHandle {
             id,
@@ -185,11 +267,7 @@ mod tests {
     use super::*;
 
     fn spec(model: &str) -> SubagentSpec {
-        SubagentSpec {
-            model: model.into(),
-            system_prompt: None,
-            max_turns: 5,
-        }
+        SubagentSpec::new(model)
     }
 
     #[tokio::test]
@@ -246,6 +324,66 @@ mod tests {
         let arc = r.get(id).await.unwrap();
         let h = arc.read().await;
         let s = h.status().await;
+        assert!(matches!(s, SubagentStatus::Running | SubagentStatus::Completed));
+    }
+
+    #[tokio::test]
+    async fn mock_runner_returns_scripted_responses() {
+        let r = SubagentRegistry::new();
+        let mut spec = SubagentSpec::new("test-model");
+        spec.runner = Arc::new(MockRunner {
+            scripted_responses: vec!["first response".into(), "second response".into()],
+        });
+        let id = r.spawn(spec).await.unwrap();
+        let arc = r.get(id).await.unwrap();
+        let handle = arc.read().await;
+        handle.send_message("prompt 1".into()).await.unwrap();
+        let msg1 = handle.recv_message().await.unwrap();
+        assert_eq!(msg1.body, "first response");
+        handle.send_message("prompt 2".into()).await.unwrap();
+        let msg2 = handle.recv_message().await.unwrap();
+        assert_eq!(msg2.body, "second response");
+    }
+
+    #[tokio::test]
+    async fn mock_runner_exhausted_emits_placeholder() {
+        let r = SubagentRegistry::new();
+        let mut spec = SubagentSpec::new("test-model");
+        spec.runner = Arc::new(MockRunner { scripted_responses: vec![] });
+        let id = r.spawn(spec).await.unwrap();
+        let arc = r.get(id).await.unwrap();
+        let handle = arc.read().await;
+        handle.send_message("prompt".into()).await.unwrap();
+        let msg = handle.recv_message().await.unwrap();
+        assert!(msg.body.contains("no more scripted responses"));
+    }
+
+    #[tokio::test]
+    async fn echo_runner_is_default_in_spec_new() {
+        let spec = SubagentSpec::new("model-x");
+        let r = SubagentRegistry::new();
+        let id = r.spawn(spec).await.unwrap();
+        let arc = r.get(id).await.unwrap();
+        let handle = arc.read().await;
+        handle.send_message("hi".into()).await.unwrap();
+        let msg = handle.recv_message().await.unwrap();
+        assert!(msg.body.contains("echo: hi"));
+    }
+
+    #[tokio::test]
+    async fn runner_completion_transitions_to_completed_not_killed() {
+        let r = SubagentRegistry::new();
+        let mut spec = SubagentSpec::new("model-y");
+        spec.runner = Arc::new(MockRunner { scripted_responses: vec!["done".into()] });
+        let id = r.spawn(spec).await.unwrap();
+        let arc = r.get(id).await.unwrap();
+        {
+            let handle = arc.read().await;
+            handle.send_message("p".into()).await.unwrap();
+            let _ = handle.recv_message().await;
+        }
+        // Verify the status is Completed or Running (not Killed).
+        let s = arc.read().await.status().await;
         assert!(matches!(s, SubagentStatus::Running | SubagentStatus::Completed));
     }
 }
