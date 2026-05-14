@@ -4,7 +4,7 @@
 
 Rotation order: `apps/cli → apps/desktop → apps/web → apps/mobile → apps/extension → apps/extension-vscode → apps/cli`.
 
-**Last surface audited:** apps/cli
+**Last surface audited:** apps/cli (Phase A fixes 2026-05-14)
 
 ---
 
@@ -92,3 +92,53 @@ Rotation order: `apps/cli → apps/desktop → apps/web → apps/mobile → apps
 - cargo check (workspace): PASS
 - clippy (`-D warnings -D unsafe-code`): 40 pre-existing errors in other modules (not introduced by this audit); zero new errors in `a2a.rs`; one pre-existing warning in `a2a_ws.rs:101` (useless `.into()` on String, original code)
 - Cumulative diff: 107 LOC (+96 / -11) / 500 LOC limit
+
+---
+
+## 2026-05-14T00:00Z — apps/cli — Phase A fixes (#1 #2 #3 #4 from MASTER_PLAN §5)
+
+**Audited:** `apps/cli/src/a2a.rs`, `apps/cli/src/tui/_attic/` (118 files deleted), `apps/cli/src/agent.rs`
+**Total items:** 4 — 1 security · 1 correctness · 1 dead-code · 1 false-positive
+**Fixed:** 3 · **Deferred:** 0 · **False alarms:** 1
+
+### Fix 1 — SSRF allowlist for A2A outbound URL validation (security)
+
+- Location: `apps/cli/src/a2a.rs:36-101` (new `validate_a2a_endpoint` + `is_private_ip`)
+- Caller sites: `fetch_agent_card:429`, `delegate_task:473`, `handoff_conversation:562`
+- What was wrong: All three outbound reqwest callsites accepted arbitrary user-controlled URLs with no scheme or host validation. `http://169.254.169.254/` (AWS IMDS) and RFC1918 addresses were accepted.
+- Fix: Added `validate_a2a_endpoint(url)` that requires http/https scheme, resolves DNS, and rejects private/loopback/link-local/IMDS IPs. Override via `AGI_A2A_ALLOW_PRIVATE=1` with one-time stderr warning.
+- Tests added: 8 (deny-loopback, deny-10-block, deny-172-block, deny-192.168, deny-imds, deny-bad-scheme, allow-public-ip, ip-classification)
+- Commit: `ceda1ad10`
+
+### Fix 2 — handle_post_handoff returns HTTP 501 instead of misleading 200 (correctness)
+
+- Location: `apps/cli/src/a2a.rs:904-918` (`handle_post_handoff`)
+- What was wrong: Stub function returned HTTP 200 "accepted" while silently discarding all handoff messages. Callers incorrectly assumed session continuity.
+- Fix: Returns HTTP 501 with `{"error":"handoff not yet implemented","status":"not-implemented","messages_received":<n>}`. Added `501 => "Not Implemented"` to `http_response` status map at line 1007.
+- Commit: `a618d13ef`
+
+### Fix 3 — delete apps/cli/src/tui/\_attic/ (dead code, 344 files / 107K LOC)
+
+- Location: `apps/cli/src/tui/_attic/` (118 .rs files, 344 total including subdirs)
+- What was wrong: Directory had zero module declarations (`mod _attic`) and zero cross-references outside itself. Never compiled, never tested. Pure dead weight in the source tree.
+- Fix: `rm -rf apps/cli/src/tui/_attic/`. Build and 1326 tests remained green.
+- Commit: `0e81d1546`
+
+### Fix 4 — agent.rs Ok(()) at lines 517/540/557 — false positive
+
+- Location: `apps/cli/src/agent.rs:517` (`enable_managed_session`), `:540` (`persist_managed_session`), `:557` (`sync_managed_session_metadata`)
+- Finding from plan: "Replace Ok(()) after failure with typed errors"
+- Actual code: All three are `let-else` early returns on `Option::None` conditions — correct idempotency/no-op guards, not silent failure swallows.
+  - Line 517: guard "already initialized" before redundant session creation
+  - Line 540: guard "no managed session exists" before pointless persist
+  - Line 557: guard "no session_id" before pointless metadata sync
+- Decision: No change. Documented as false alarm per MASTER_PLAN §5 item 4 instruction ("document in commit body and skip").
+- Commit: `c0c012464` (empty commit with explanation)
+
+### Verification log
+
+- Tests before: 1318 · after: 1326 (+8 new SSRF tests, no regressions)
+- cargo build --release -p agiworkforce-cli: PASS
+- cargo test --release -p agiworkforce-cli: 1326/1326 PASS
+- Cumulative diff: +160 / -107411 (net -107251, dominated by \_attic deletion)
+- Commits: 4 (ceda1ad10, a618d13ef, 0e81d1546, c0c012464)
