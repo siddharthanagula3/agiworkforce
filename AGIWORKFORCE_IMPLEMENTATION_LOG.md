@@ -16,6 +16,27 @@
 
 ---
 
+## 2026-05-14 — 6-Surface Claude-Parity Fire #3
+
+Third iteration. All six surfaces landed an improvement against a specific PNG-cited gap from REFERENCE_INDEX.md.
+
+- apps/cli `4e9e4f636` — `/agents` overview tab + `[Active] Other Other` bracket-notation tab strip vs `619_cli_agents-screen.png` + `620_cli_agents-library-tab.png`. Tests 1315 → **1318**.
+- apps/desktop `44ddc9ba5` — New "Capabilities" settings tab (Memory / Tool Access / Visuals / Code Execution / Network Egress) vs `12_settings-capabilities-memory-tool-access.png` + `13_settings-capabilities-technical-toggles.png`. +202/-2. 1648 tests.
+- apps/web `17835b3f5` — Bulk-select mode for chat history sidebar (toolbar with "N selected · Select all/Deselect all · Delete · Cancel") vs `153_claude-max20x_chats_bulk-select-mode.png`.
+- apps/mobile `4c1dafbaf` — Voice screen polish (SVG radial gradient bg + thin outer ring + active model label) vs `talk-mode.png`. 743/743 tests.
+- apps/extension `a6f57d8cf` — "+ Create shortcut" modal on Workflows panel (Name/Prompt/Start URL/Schedule) vs `414_claude-chrome_record-workflow-entry.png`. 576/576 tests.
+- apps/extension-vscode bundled in `17835b3f5` — `agi-workforce.showSessionsHistory` QuickPick with relative timestamps vs `09_vscode-main-editor_chat-sessions-history-dropdown.png`. 8 new tests. 496 → **504**.
+
+**Concurrent commit collisions**: 3 of 3 fires so far. Mitigation for fire #4+: tighter `git add <surface-paths-only>` in engineer prompts.
+
+**Citation rate**: 6/6 PNG-grounded (same as fire #2).
+
+**Cloud routine**: fired at 20:13 UTC (3:13 PM CDT) today against `main`. User then changed cloud cadence to **5:03 AM CDT daily** (cron `3 10 * * *` UTC) to reduce churn.
+
+Last surface touched: **apps/cli**
+
+---
+
 ## 2026-05-14 — 6-Surface Claude-Parity Fire #2
 
 Second iteration of the local Claude-parity loop. Engineers grep'd REFERENCE_INDEX.md (640-entry curated image index) to find specific PNG citations rather than working from filename inference. All six surfaces landed an improvement that closes a named gap vs claude-\* reference.
