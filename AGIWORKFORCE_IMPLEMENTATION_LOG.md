@@ -16,6 +16,15 @@
 
 ---
 
+## 2026-05-14 — Desktop: Quick-chip labels aligned to reference
+
+- Files: `packages/unified-chat/src/stores/chatStore.ts`, `packages/unified-chat/src/components/QuickChips.tsx`, `packages/unified-chat/src/components/ChatInterface.tsx`
+- Change: Replaced Research/Web Search/Skills chips with Learn/Life stuff (matches claude-desktop reference 210_claude-desktop_updated-chat-home-type-for-skills.png). Added `'learn'` and `'life'` to `ActiveMode` union + system prompts.
+- Typecheck: PASS (desktop + unified-chat)
+- Last surface touched: apps/desktop
+
+---
+
 ## v1.7.0 — RELEASED (2026-05-14) — HONESTY PASS
 
 A deep audit against `~/Desktop/reference/` (codex-cli, claude-code, gemini-cli, opencode) found that v1.6.0 wasn't actually the final loop. Six items previously claimed shipped were broken or absent. v1.7.0 closes them.
@@ -730,3 +739,27 @@ The audit ran three parallel deep-dive Explore agents against `~/Desktop/referen
 - Inline diff preview for apply_patch (from Codex)
 
 CLI is comparable. The remaining gaps are scoped follow-up work, not parity blockers.
+
+---
+
+## 2026-05-14 — Mobile: Animated Typing Indicator
+
+**Surface:** apps/mobile
+**Commit:** e930c310c
+**Change:** Replaced static three-dot placeholder in `MessageList` with a dedicated `TypingIndicator` component. Each dot now bounces vertically with staggered 160ms delays on a 900ms cycle using react-native-reanimated, matching the visual quality of claude-mobile. Static `View`-based dots had no animation.
+**Files:** `components/chat/TypingIndicator.tsx` (new, 94 LOC), `components/chat/MessageList.tsx` (-23 LOC)
+**Tests:** 743/743 pass. Typecheck clean.
+
+Last surface touched: apps/mobile
+
+---
+
+## 2026-05-14 — Chrome Ext: Atlassian + Teams platform prompts
+
+**Surface:** apps/extension
+**Commit:** TBD
+**Change:** Added three platform-specific system-prompt entries to `src/platform-prompts.ts`: `atlassian.net` (covers both Jira Cloud and Confluence via subdomain matching — mycompany.atlassian.net resolves via `hostname.endsWith('.atlassian.net')`), and `teams.microsoft.com`. The reference captures show Claude's extension injects context-aware guidance per hostname; AGI had 8 platforms, now has 10.
+**Files:** `apps/extension/src/platform-prompts.ts` (+36 LOC)
+**Tests:** 576/576 pass. Typecheck clean. Build green.
+
+Last surface touched: apps/extension
