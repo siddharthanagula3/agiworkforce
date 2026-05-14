@@ -125,6 +125,137 @@ impl McpOAuthStore {
 }
 
 // ---------------------------------------------------------------------------
+// Per-server keyring-backed store (M29)
+// ---------------------------------------------------------------------------
+
+/// OS keyring service name for MCP OAuth tokens.
+const KEYRING_SERVICE: &str = "agiworkforce-mcp-oauth";
+
+/// Per-server token entry used by `McpServerOAuthStore`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpServerToken {
+    pub access_token: String,
+    pub refresh_token: Option<String>,
+    /// Unix epoch seconds.
+    pub expires_at: Option<i64>,
+    pub scope: Option<String>,
+}
+
+/// Keyring-backed OAuth token store keyed by server *name* (not URL).
+///
+/// Strategy:
+/// 1. Primary: OS keyring (`keyring` crate) — survives reboots, OS-encrypted.
+/// 2. Fallback: file at `~/.agiworkforce/secrets/<server>.token` with 0o600 perms.
+///
+/// On Linux without DBus, keyring fails immediately; we silently fall back to
+/// the file store. On Windows, keyring uses the Windows Credential Manager.
+#[allow(dead_code)]
+pub struct McpServerOAuthStore {
+    base_dir: PathBuf,
+    /// When false, all save/load/delete go through the file fallback only
+    /// (no OS keychain interaction). Tests + headless environments use this
+    /// path to avoid auth prompts.
+    use_keyring: bool,
+}
+
+/// Honor `AGIWORKFORCE_NO_KEYRING=1` (or any non-empty value) — opt-out for
+/// environments where the OS keyring is unavailable or undesirable (CI,
+/// sandboxes, devs who don't want the Mac to prompt them constantly).
+fn env_disables_keyring() -> bool {
+    std::env::var("AGIWORKFORCE_NO_KEYRING")
+        .map(|v| !v.is_empty() && v != "0")
+        .unwrap_or(false)
+}
+
+#[allow(dead_code)]
+impl McpServerOAuthStore {
+    pub fn new() -> Result<Self> {
+        let home = dirs::home_dir().context("no home dir")?;
+        let base = home.join(".agiworkforce").join("secrets");
+        fs::create_dir_all(&base).ok();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(&base, fs::Permissions::from_mode(0o700));
+        }
+        Ok(Self {
+            base_dir: base,
+            use_keyring: !env_disables_keyring(),
+        })
+    }
+
+    /// Test / sandboxed-runtime entry. **Does not touch the OS keyring.**
+    /// Useful for unit tests (avoids macOS Keychain auth prompts) and for
+    /// headless / CI / containerized environments where DBus or Keychain
+    /// aren't available.
+    pub fn with_base_dir(base: PathBuf) -> Result<Self> {
+        fs::create_dir_all(&base).ok();
+        Ok(Self {
+            base_dir: base,
+            use_keyring: false,
+        })
+    }
+
+    /// Save a token. When `use_keyring` is on, tries the OS keyring first;
+    /// on failure (or when keyring is disabled), writes to the file fallback
+    /// with 0o600 perms.
+    pub fn save(&self, server: &str, token: &McpServerToken) -> Result<()> {
+        let json = serde_json::to_string(token)?;
+        if self.use_keyring {
+            if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, server) {
+                if entry.set_password(&json).is_ok() {
+                    return Ok(());
+                }
+            }
+        }
+        self.write_file(server, &json)
+    }
+
+    pub fn load(&self, server: &str) -> Option<McpServerToken> {
+        if self.use_keyring {
+            if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, server) {
+                if let Ok(json) = entry.get_password() {
+                    if let Ok(token) = serde_json::from_str::<McpServerToken>(&json) {
+                        return Some(token);
+                    }
+                }
+            }
+        }
+        self.read_file(server)
+    }
+
+    pub fn delete(&self, server: &str) -> Result<()> {
+        if self.use_keyring {
+            if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, server) {
+                let _ = entry.delete_password();
+            }
+        }
+        let path = self.base_dir.join(format!("{server}.token"));
+        if path.exists() {
+            fs::remove_file(&path)?;
+        }
+        Ok(())
+    }
+
+    fn write_file(&self, server: &str, json: &str) -> Result<()> {
+        let path = self.base_dir.join(format!("{server}.token"));
+        fs::write(&path, json).with_context(|| format!("write {}", path.display()))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+        }
+        Ok(())
+    }
+
+    fn read_file(&self, server: &str) -> Option<McpServerToken> {
+        let path = self.base_dir.join(format!("{server}.token"));
+        let json = fs::read_to_string(&path).ok()?;
+        serde_json::from_str::<McpServerToken>(&json).ok()
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -188,5 +319,61 @@ mod tests {
         };
         s.put("https://mcp.example.com/mcp".to_string(), t);
         assert!(s.get("https://mcp.example.com/mcp").is_some());
+    }
+
+    // -----------------------------------------------------------------------
+    // McpServerOAuthStore (keyring fallback path via file)
+    // -----------------------------------------------------------------------
+
+    fn dummy_server_token() -> McpServerToken {
+        McpServerToken {
+            access_token: "atk-abc".into(),
+            refresh_token: Some("rtk-xyz".into()),
+            expires_at: Some(1_700_000_000),
+            scope: Some("read write".into()),
+        }
+    }
+
+    #[test]
+    fn server_store_save_and_load_roundtrip_via_file_fallback() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = McpServerOAuthStore::with_base_dir(dir.path().to_path_buf()).unwrap();
+        store.save("server-a", &dummy_server_token()).expect("save");
+        let loaded = store.load("server-a").expect("load should succeed");
+        assert_eq!(loaded.access_token, "atk-abc");
+        assert_eq!(loaded.refresh_token.as_deref(), Some("rtk-xyz"));
+    }
+
+    #[test]
+    fn server_store_missing_server_returns_none() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = McpServerOAuthStore::with_base_dir(dir.path().to_path_buf()).unwrap();
+        assert!(store.load("nope").is_none());
+    }
+
+    #[test]
+    fn server_store_delete_clears_token() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = McpServerOAuthStore::with_base_dir(dir.path().to_path_buf()).unwrap();
+        store.save("server-b", &dummy_server_token()).unwrap();
+        assert!(store.load("server-b").is_some());
+        store.delete("server-b").unwrap();
+        assert!(store.load("server-b").is_none());
+    }
+
+    #[test]
+    fn server_store_overwrite_updates_token() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = McpServerOAuthStore::with_base_dir(dir.path().to_path_buf()).unwrap();
+        store.save("server-c", &dummy_server_token()).unwrap();
+        let updated = McpServerToken {
+            access_token: "new-token".into(),
+            refresh_token: None,
+            expires_at: None,
+            scope: None,
+        };
+        store.save("server-c", &updated).unwrap();
+        let loaded = store.load("server-c").unwrap();
+        assert_eq!(loaded.access_token, "new-token");
     }
 }

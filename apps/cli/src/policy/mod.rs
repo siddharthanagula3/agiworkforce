@@ -6,5 +6,8 @@
 
 mod engine;
 
+#[cfg(target_os = "macos")]
+pub mod macos_sandbox;
+
 #[allow(unused_imports)]
 pub use engine::{PolicyDecision, PolicyEngine, PolicyRule, WorkspacePolicy};

@@ -1,0 +1,9 @@
+{
+  "name": "fixture-agi",
+  "version": "0.1.0",
+  "description": "AGI Workforce canonical plugin manifest fixture",
+  "commands": ["commands/foo.md"],
+  "agents": ["agents/researcher.md"],
+  "skills": ["skills/rust-reviewer.md"],
+  "dependencies": []
+}
