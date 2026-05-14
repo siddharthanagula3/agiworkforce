@@ -756,6 +756,9 @@ export interface SavedShortcut {
   actions: RunPageAction[];
   createdAt: number;
   url?: string;
+  prompt?: string;
+  startUrl?: string;
+  scheduled?: boolean;
 }
 
 export interface SaveShortcutMessage extends BaseMessage {
@@ -763,6 +766,9 @@ export interface SaveShortcutMessage extends BaseMessage {
   name: string;
   actions: RunPageAction[];
   url?: string;
+  prompt?: string;
+  startUrl?: string;
+  scheduled?: boolean;
 }
 
 export interface ListShortcutsMessage extends BaseMessage {
