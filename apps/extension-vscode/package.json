@@ -344,6 +344,11 @@
         "icon": "$(history)"
       },
       {
+        "command": "agi-workforce.mentionFileInChat",
+        "title": "AGI Workforce: Mention File in @agi Chat",
+        "icon": "$(mention)"
+      },
+      {
         "command": "agi-workforce.showSubsystemHealth",
         "title": "AGI: Show Subsystem Health",
         "category": "AGI"
@@ -468,6 +473,16 @@
           "command": "agi-workforce.removeFromContext",
           "when": "view == agi-workforce.contextPanel && viewItem == pinnedFile",
           "group": "inline"
+        },
+        {
+          "command": "agi-workforce.mentionFileInChat",
+          "when": "view == agi-workforce.contextPanel && viewItem == pinnedFile",
+          "group": "navigation@1"
+        },
+        {
+          "command": "agi-workforce.mentionFileInChat",
+          "when": "view == agi-workforce.contextPanel && viewItem == autoFile",
+          "group": "navigation@1"
         }
       ],
       "view/title": [
