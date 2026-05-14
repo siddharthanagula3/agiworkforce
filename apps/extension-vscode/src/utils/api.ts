@@ -82,6 +82,26 @@ export class AgiWorkforceApiError extends Error {
   }
 }
 
+/**
+ * Thrown when the API returns HTTP 429 with a structured paywall payload:
+ * `{ kind: 'paywall', feature, requiredTier, reason }`.
+ *
+ * This is distinct from a generic rate-limit 429 — it indicates the user has
+ * consumed 150% of their tier cap and must upgrade to continue.
+ */
+export class AgiWorkforcePaywallError extends Error {
+  public readonly kind = 'paywall' as const;
+
+  constructor(
+    public readonly feature: string,
+    public readonly requiredTier: string,
+    public readonly reason: string,
+  ) {
+    super(`Upgrade to ${requiredTier} required for ${feature}: ${reason}`);
+    this.name = 'AgiWorkforcePaywallError';
+  }
+}
+
 // ─── Retry helper ─────────────────────────────────────────────────────────────
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 1000): Promise<T> {
@@ -102,7 +122,9 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 1000): 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SECRET_KEY = 'agiWorkforce.apiKey';
+const SUPABASE_JWT_SECRET_KEY = 'agiWorkforce.supabaseJwt';
 const DEFAULT_ENDPOINT = 'https://agiworkforce.com/api/llm/v1';
+const DEFAULT_GATEWAY_URL = 'https://api.agiworkforce.com';
 
 // ─── Secret storage ───────────────────────────────────────────────────────────
 
@@ -129,15 +151,97 @@ export async function clearApiKey(secrets: vscode.SecretStorage): Promise<void> 
   await secrets.delete(SECRET_KEY);
 }
 
+/**
+ * Retrieve the stored Supabase JWT used by the new provider-stream path
+ * (`/api/v1/providers/:id/stream`). Distinct from the legacy `apiKey` so
+ * users can run both paths in parallel during rollout.
+ */
+export async function getSupabaseJwt(secrets: vscode.SecretStorage): Promise<string | undefined> {
+  return secrets.get(SUPABASE_JWT_SECRET_KEY);
+}
+
+export async function setSupabaseJwt(secrets: vscode.SecretStorage, jwt: string): Promise<void> {
+  await secrets.store(SUPABASE_JWT_SECRET_KEY, jwt);
+}
+
+export async function clearSupabaseJwt(secrets: vscode.SecretStorage): Promise<void> {
+  await secrets.delete(SUPABASE_JWT_SECRET_KEY);
+}
+
+// ─── Trusted-config helper (VSCODE-01 fix) ────────────────────────────────────
+//
+// Security: workspace settings are attacker-controlled in any cloned repo.
+// For security-sensitive settings (endpoint URLs, paths) we MUST ignore the
+// workspace layer and read only from the user's global config.
+//
+// VS Code's `inspect()` returns values split by scope:
+//   { defaultValue, globalValue, workspaceValue, workspaceFolderValue }
+// We use globalValue ?? defaultValue, skipping workspace overrides entirely.
+//
+// Belt-and-suspenders: even if isTrusted is true, we still validate URL shape
+// to defend against a compromised global config or social-engineering.
+
+/** Allowlist of hosts valid for the AGI Workforce API endpoint. */
+const ENDPOINT_ALLOWED_HOSTS = new Set([
+  'agiworkforce.com',
+  'api.agiworkforce.com',
+  'staging.agiworkforce.com',
+]);
+
+/**
+ * Validate that a URL is safe to use as an API endpoint.
+ * - Must be https: (or http://localhost/127.0.0.1 which is fine for local dev)
+ * - Host must be in the allowlist OR be localhost/127.0.0.1
+ * Returns the sanitised URL string (trailing slashes stripped) or undefined if invalid.
+ */
+export function validateEndpointUrl(raw: string): string | undefined {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return undefined;
+  }
+
+  const isHttps = parsed.protocol === 'https:';
+  const isLocalhost =
+    parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '::1';
+
+  if (!isHttps && !isLocalhost) {
+    return undefined;
+  }
+
+  if (!isLocalhost && !ENDPOINT_ALLOWED_HOSTS.has(parsed.hostname)) {
+    return undefined;
+  }
+
+  return raw.replace(/\/+$/, '');
+}
+
+/**
+ * Read a setting that must never be overridden by workspace settings.
+ * Returns the global value (user settings) → fallback to default.
+ * Workspace-scoped values are intentionally ignored.
+ */
+function getGlobalConfig<T>(section: string, key: string, defaultValue: T): T {
+  const config = vscode.workspace.getConfiguration(section);
+  const inspected = config.inspect<T>(key);
+  // Use globalValue (user's own settings) only — ignore workspaceValue / workspaceFolderValue
+  return inspected?.globalValue ?? inspected?.defaultValue ?? defaultValue;
+}
+
 // ─── Config helpers ───────────────────────────────────────────────────────────
 
 /**
  * Returns the cloud AI API endpoint. Used for all LLM calls (chat completions).
  * Never routes through the desktop bridge — the bridge is for non-AI operations only.
+ *
+ * SECURITY (VSCODE-01): reads from global config only. Workspace overrides are
+ * silently ignored to prevent API-key exfiltration via a malicious .vscode/settings.json.
+ * URL is additionally validated against the host allowlist.
  */
 function getCloudApiEndpoint(): string {
-  const config = vscode.workspace.getConfiguration('agiWorkforce');
-  return (config.get<string>('apiEndpoint') ?? DEFAULT_ENDPOINT).replace(/\/+$/, '');
+  const raw = getGlobalConfig('agiWorkforce', 'apiEndpoint', DEFAULT_ENDPOINT);
+  return validateEndpointUrl(raw) ?? DEFAULT_ENDPOINT;
 }
 
 function getModel(): string {
@@ -261,6 +365,29 @@ function httpsPostStream(
         res.on('end', () => {
           cancelListener.dispose();
           const errBody = Buffer.concat(errorChunks).toString('utf8');
+          // Detect structured paywall payload: 429 + { kind: 'paywall', ... }
+          if (res.statusCode === 429) {
+            try {
+              const parsed = JSON.parse(errBody) as Record<string, unknown>;
+              if (
+                parsed['kind'] === 'paywall' &&
+                typeof parsed['feature'] === 'string' &&
+                typeof parsed['requiredTier'] === 'string' &&
+                typeof parsed['reason'] === 'string'
+              ) {
+                reject(
+                  new AgiWorkforcePaywallError(
+                    parsed['feature'],
+                    parsed['requiredTier'],
+                    parsed['reason'],
+                  ),
+                );
+                return;
+              }
+            } catch {
+              // Not JSON — fall through to generic error
+            }
+          }
           reject(
             new AgiWorkforceApiError(
               `API error ${res.statusCode}: ${errBody}`,
@@ -428,6 +555,27 @@ export async function streamChatCompletion(
     );
 
     if (response.statusCode >= 400) {
+      // Detect structured paywall payload: 429 + { kind: 'paywall', ... }
+      if (response.statusCode === 429) {
+        try {
+          const parsed = JSON.parse(response.body) as Record<string, unknown>;
+          if (
+            parsed['kind'] === 'paywall' &&
+            typeof parsed['feature'] === 'string' &&
+            typeof parsed['requiredTier'] === 'string' &&
+            typeof parsed['reason'] === 'string'
+          ) {
+            throw new AgiWorkforcePaywallError(
+              parsed['feature'],
+              parsed['requiredTier'],
+              parsed['reason'],
+            );
+          }
+        } catch (parseErr) {
+          if (parseErr instanceof AgiWorkforcePaywallError) throw parseErr;
+          // Not JSON — fall through to generic error
+        }
+      }
       throw new AgiWorkforceApiError(
         `API error ${response.statusCode}: ${response.body}`,
         response.statusCode,
@@ -490,4 +638,211 @@ export async function chatCompletion(
       overrideModel,
     ).catch(safeReject);
   });
+}
+
+// ─── Tier info ────────────────────────────────────────────────────────────────
+
+export interface TierInfo {
+  tier: string;
+  /** Tokens used in the current billing period (may be undefined if not returned). */
+  tokensUsed?: number;
+  /** Total token cap for the current billing period (may be undefined). */
+  tokenCap?: number;
+}
+
+/**
+ * Fetch the current user's tier and usage from /api/auth/me.
+ * Returns undefined if the request fails (e.g. no key, network error) — callers
+ * should treat undefined as "unknown tier".
+ */
+export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<TierInfo | undefined> {
+  const apiKey = await getApiKey(secrets);
+  if (apiKey === undefined || apiKey === '') {
+    return undefined;
+  }
+
+  const endpoint = getCloudApiEndpoint();
+  // Strip the /api/llm/v1 suffix to get the root origin, then append /api/auth/me
+  const rootOrigin = endpoint.replace(/\/api\/llm\/v1$/, '').replace(/\/api\/llm$/, '');
+  const url = `${rootOrigin}/api/auth/me`;
+
+  return new Promise((resolve) => {
+    const parsed = new URL(url);
+    const isHttps = parsed.protocol === 'https:';
+    const lib = isHttps ? https : http;
+
+    const options: https.RequestOptions = {
+      hostname: parsed.hostname,
+      port: parsed.port !== '' ? parseInt(parsed.port, 10) : isHttps ? 443 : 80,
+      path: parsed.pathname + parsed.search,
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'User-Agent': 'agi-workforce-vscode/0.1.0',
+        'X-Client': 'vscode-extension',
+      },
+    };
+
+    const req = lib.request(options, (res) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (chunk: Buffer) => chunks.push(chunk));
+      res.on('end', () => {
+        if ((res.statusCode ?? 0) >= 400) {
+          resolve(undefined);
+          return;
+        }
+        try {
+          const body = Buffer.concat(chunks).toString('utf8');
+          const json = JSON.parse(body) as Record<string, unknown>;
+          const tier =
+            typeof json['tier'] === 'string'
+              ? json['tier']
+              : typeof json['plan_tier'] === 'string'
+                ? json['plan_tier']
+                : 'unknown';
+          const tierInfo: TierInfo = { tier };
+          if (typeof json['tokens_used'] === 'number') {
+            tierInfo.tokensUsed = json['tokens_used'];
+          }
+          if (typeof json['token_cap'] === 'number') {
+            tierInfo.tokenCap = json['token_cap'];
+          }
+          resolve(tierInfo);
+        } catch {
+          resolve(undefined);
+        }
+      });
+      res.on('error', () => resolve(undefined));
+    });
+
+    req.on('error', () => resolve(undefined));
+    req.end();
+  });
+}
+
+// ─── Provider-stream path (Wave 3 follow-up) ──────────────────────────────────
+//
+// Opt-in alternative to streamChatCompletion that calls the new
+// /api/v1/providers/:id/stream route on the AGI Workforce gateway. Activated
+// via the `agiWorkforce.useProviderStream: true` setting. Requires a
+// Supabase JWT in SecretStorage (set via "AGI Workforce: Set Supabase JWT").
+
+import { streamFromProvider } from '../services/providerStreamClient';
+
+type ProviderStreamId = 'anthropic' | 'openai' | 'google' | 'ollama';
+
+/**
+ * Map a model id to its provider stream id. Best-effort by prefix; falls
+ * through to Ollama (the catch-all for local / any-string-model). Caller
+ * can override by setting `agiWorkforce.providerStreamProvider` if the
+ * heuristic doesn't fit.
+ */
+function inferProviderFromModel(model: string): ProviderStreamId {
+  const id = model.toLowerCase();
+  if (id.startsWith('claude') || id.startsWith('anthropic/')) return 'anthropic';
+  if (
+    id.startsWith('gpt-') ||
+    id.startsWith('o1') ||
+    id.startsWith('o3') ||
+    id.startsWith('o4') ||
+    id.startsWith('codex') ||
+    id.startsWith('openai/')
+  ) {
+    return 'openai';
+  }
+  if (id.startsWith('gemini') || id.startsWith('palm') || id.startsWith('google/')) {
+    return 'google';
+  }
+  return 'ollama';
+}
+
+function getGatewayUrl(): string {
+  // SECURITY (VSCODE-01): read from global config only — same as getCloudApiEndpoint().
+  const raw = getGlobalConfig('agiWorkforce', 'gatewayUrl', DEFAULT_GATEWAY_URL);
+  return validateEndpointUrl(raw) ?? DEFAULT_GATEWAY_URL;
+}
+
+function getProviderOverride(): ProviderStreamId | undefined {
+  const config = vscode.workspace.getConfiguration('agiWorkforce');
+  const raw = config.get<string>('providerStreamProvider');
+  if (raw === 'anthropic' || raw === 'openai' || raw === 'google' || raw === 'ollama') {
+    return raw;
+  }
+  return undefined;
+}
+
+/**
+ * Stream a chat completion through the new ProviderAdapter pipeline. Same
+ * `StreamCallbacks` shape as `streamChatCompletion`, so chat participant
+ * call sites can branch on a feature flag without restructuring.
+ */
+export async function streamChatCompletionViaProvider(
+  secrets: vscode.SecretStorage,
+  messages: LlmChatMessage[],
+  callbacks: StreamCallbacks,
+  cancellationToken: vscode.CancellationToken,
+  overrideModel?: string,
+): Promise<void> {
+  const jwt = await getSupabaseJwt(secrets);
+  if (jwt === undefined || jwt === '') {
+    throw new AgiWorkforceApiError(
+      'No Supabase JWT configured for provider-stream path. Run "AGI Workforce: Set Supabase JWT", or unset agiWorkforce.useProviderStream to use the legacy API key path.',
+      401,
+      'NO_SUPABASE_JWT',
+    );
+  }
+
+  const model = overrideModel ?? getModel();
+  const providerId = getProviderOverride() ?? inferProviderFromModel(model);
+  const gatewayUrl = getGatewayUrl();
+
+  const ctrl = new AbortController();
+  const cancelSub = cancellationToken.onCancellationRequested(() => ctrl.abort());
+
+  try {
+    for await (const chunk of streamFromProvider({
+      gatewayUrl,
+      providerId,
+      authToken: jwt,
+      request: {
+        model,
+        messages: messages.map((m) => ({ role: m.role, content: m.content })),
+        maxOutputTokens: 4096,
+        temperature: 0.2,
+      },
+      signal: ctrl.signal,
+    })) {
+      switch (chunk.type) {
+        case 'text-delta':
+          callbacks.onToken(chunk.delta);
+          break;
+        case 'error':
+          callbacks.onError(
+            new AgiWorkforceApiError(chunk.message, 500, chunk.code ?? 'STREAM_ERROR'),
+          );
+          return;
+        case 'stop':
+          if (chunk.reason === 'error') {
+            callbacks.onError(
+              new AgiWorkforceApiError('Stream ended with error stop', 500, 'STREAM_STOP_ERROR'),
+            );
+            return;
+          }
+          callbacks.onDone();
+          return;
+        // text-delta / thinking-delta / tool-use-* / usage are ignored in
+        // the chat-participant integration for now (they don't have a slot
+        // in the StreamCallbacks shape). Future: enrich callbacks to
+        // surface usage + thinking inline.
+        default:
+          break;
+      }
+    }
+    // Stream ended without an explicit stop — treat as done.
+    callbacks.onDone();
+  } catch (err) {
+    callbacks.onError(err instanceof Error ? err : new Error(String(err)));
+  } finally {
+    cancelSub.dispose();
+  }
 }

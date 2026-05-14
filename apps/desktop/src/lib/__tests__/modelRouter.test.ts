@@ -2,7 +2,10 @@
  * H50 — modelRouter tests
  *
  * Tests for AutoMode tier selection, capability filtering, fallback behaviour,
- * and MODEL_POOLS tier composition.
+ * MODEL_POOLS tier composition, and tier-aware resolveAutoModeModel routing.
+ *
+ * Phase 2c-1: desktop classifier now delegates to @agiworkforce/routing
+ * (shared heuristic) + resolveAutoModeModel from @agiworkforce/types.
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -11,11 +14,13 @@ import {
   selectModelFromPool,
   estimateComplexity,
   classifyTaskLocally,
+  classifyTaskWithContext,
   getMissingCapabilities,
   canModelHandleInput,
   type AutoMode,
   type TaskType,
 } from '../modelRouter';
+import type { RoutingMessage } from '../modelRouter';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // MODEL_POOLS structure
@@ -57,8 +62,8 @@ describe('MODEL_POOLS', () => {
   it('auto-premium pool includes flagship models', () => {
     const pool = MODEL_POOLS['auto-premium'];
     // Premium tier should include the top-tier Claude Opus and GPT-5 class models
-    expect(pool).toContain('claude-opus-4.6');
-    expect(pool).toContain('gpt-5.4');
+    expect(pool).toContain('claude-opus-4.7');
+    expect(pool).toContain('gpt-5.5');
   });
 
   it('all models in each pool are strings', () => {
@@ -178,19 +183,22 @@ describe('classifyTaskLocally', () => {
   });
 
   it('returns a result for a clear reasoning message', () => {
-    const result = classifyTaskLocally('Analyze the pros and cons of this approach');
+    // Use a message that triggers the shared classifier's RE_REASONING_VERB or
+    // RE_REASONING_MATH patterns. "Analyze pros and cons" is a short message that
+    // the shared classifier (correctly) routes to simple_chat; use "prove" or math.
+    const result = classifyTaskLocally('prove that sqrt(2) is irrational using contradiction');
     expect(result).not.toBeNull();
     if (result) {
       expect(result.taskType).toBe('reasoning');
     }
   });
 
-  it('returns null or low-confidence for ambiguous messages', () => {
+  it('returns null for ambiguous / simple-chat messages', () => {
+    // The shared classifier returns simple_chat @ 0.7 for short messages.
+    // The adapter treats <= 0.7 as low-confidence and returns null, so the
+    // caller can fall through to intentClassifier or LLM-based classification.
     const result = classifyTaskLocally('ok');
-    // Either null or very low confidence
-    if (result !== null) {
-      expect(result.confidence).toBeLessThan(0.7);
-    }
+    expect(result).toBeNull();
   });
 
   it('confidence is between 0 and 1 when result is non-null', () => {
@@ -270,5 +278,89 @@ describe('selectModelFromPool', () => {
     const pool = MODEL_POOLS['auto-premium'];
     const result = selectModelFromPool(pool, 'coding', 'auto-premium');
     expect(pool).toContain(result.modelId);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Phase 2c-1: Tier-aware routing via resolveAutoModeModel
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('routeMessage — tier-aware routing (Phase 2c-1)', () => {
+  it('coding message + Pro tier → returns claude-sonnet-4.6 (Pro coding_premium_pro slot)', () => {
+    // "Write a function" triggers RE_CODING → coding type → coding_premium_pro → claude-sonnet-4.6
+    // claude-sonnet-4.6 is in the Pro pool so it wins over pool-ranked selection.
+    const result = routeMessage(
+      'Write a function to parse JSON with error handling',
+      'auto-balanced',
+      false,
+      'pro',
+    );
+    // The Pro coding slot maps to claude-sonnet-4.6; it IS in the pro pool.
+    expect(result.selectedModel).toBe('claude-sonnet-4.6');
+    expect(result.taskType).toBe('coding');
+  });
+
+  it('coding message + Hobby tier → model is from economy pool', () => {
+    // Hobby pool = economy tier models. The escalation_coding slot (glm-4.7) is
+    // not in the economy TIER_ALLOWED_MODELS list so pool fallback applies.
+    // The router should still return a valid model from the economy pool.
+    const result = routeMessage(
+      'Write a function to parse JSON with error handling',
+      'auto-economy',
+      false,
+      'hobby',
+    );
+    const hobbyPool = MODEL_POOLS['auto-economy'];
+    expect(hobbyPool).toContain(result.selectedModel);
+    expect(result.taskType).toBe('coding');
+  });
+
+  it('research message + Free tier → returns gemini-3.1-flash-lite (workhorse_general slot)', () => {
+    // RE_RESEARCH fires on "latest AI news 2026" → research @ 0.85 (> 0.7 threshold)
+    // adapter returns ClassificationResult { taskType: 'general', confidence: 0.85 }
+    // resolveAutoModeModel('auto-economy', 'free', 'research') → workhorse_general → gemini-3.1-flash-lite
+    // gemini-3.1-flash-lite IS in the economy pool → canonical model selected.
+    const result = routeMessage('latest AI news 2026', 'auto-economy', false, 'free');
+    const economyPool = MODEL_POOLS['auto-economy'];
+    expect(economyPool).toContain(result.selectedModel);
+    expect(result.selectedModel).toBe('gemini-3.1-flash-lite');
+  });
+
+  it('selected model stays in the correct pool regardless of tier', () => {
+    const economyResult = routeMessage('Tell me a story', 'auto-economy', false, 'free');
+    const proResult = routeMessage('Tell me a story', 'auto-balanced', false, 'pro');
+
+    expect(MODEL_POOLS['auto-economy']).toContain(economyResult.selectedModel);
+    expect(MODEL_POOLS['auto-balanced']).toContain(proResult.selectedModel);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Phase 2c-1: Sticky pivot via classifyTaskWithContext
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('classifyTaskWithContext — sticky pivot (Phase 2c-1)', () => {
+  it('boosts confidence for coding when conversation history is all coding', () => {
+    const history: RoutingMessage[] = [
+      { role: 'user', content: 'def parse_json(s): ...', taskType: 'coding' },
+      { role: 'assistant', content: 'Here is the implementation', taskType: 'coding' },
+      { role: 'user', content: 'class Parser:', taskType: 'coding' },
+    ];
+
+    // Message with coding signal — sticky pivot should boost confidence
+    const result = classifyTaskWithContext('import os\nprint("hello")', history);
+    // Must return non-null (coding signals + sticky boost keeps it above threshold)
+    expect(result).not.toBeNull();
+    if (result) {
+      expect(result.taskType).toBe('coding');
+      // Confidence should be boosted (>= shared base of 0.85)
+      expect(result.confidence).toBeGreaterThan(0.7);
+    }
+  });
+
+  it('returns null for low-confidence messages even with conversation context', () => {
+    // 'ok' is simple_chat @ 0.7, adapter returns null for <= 0.7
+    const result = classifyTaskWithContext('ok', []);
+    expect(result).toBeNull();
   });
 });

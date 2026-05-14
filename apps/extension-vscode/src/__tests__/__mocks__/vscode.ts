@@ -343,6 +343,30 @@ class MockWebview {
   }
 }
 
+// ─── MarkdownString ───────────────────────────────────────────────────────────
+
+class MarkdownString {
+  isTrusted?: boolean;
+  supportThemeIcons?: boolean;
+
+  constructor(public value: string = '') {}
+
+  appendMarkdown(text: string): this {
+    this.value += text;
+    return this;
+  }
+
+  appendText(text: string): this {
+    this.value += text;
+    return this;
+  }
+
+  appendCodeblock(code: string, language?: string): this {
+    this.value += `\`\`\`${language ?? ''}\n${code}\n\`\`\``;
+    return this;
+  }
+}
+
 // ─── ChatRequestTurn / ChatResponseTurn ───────────────────────────────────────
 
 class ChatRequestTurn {
@@ -399,28 +423,71 @@ export const window = {
     },
   ),
   registerWebviewViewProvider: vi.fn(() => new Disposable()),
+  registerTreeDataProvider: vi.fn(() => new Disposable()),
+  createTreeView: vi.fn(() => ({
+    reveal: vi.fn(),
+    onDidChangeSelection: vi.fn(() => new Disposable()),
+    dispose: vi.fn(),
+  })),
+  createOutputChannel: vi.fn(() => ({
+    appendLine: vi.fn(),
+    append: vi.fn(),
+    clear: vi.fn(),
+    show: vi.fn(),
+    hide: vi.fn(),
+    dispose: vi.fn(),
+  })),
+  terminals: [] as unknown[],
+  onDidCloseTerminal: vi.fn(() => new Disposable()),
+  onDidOpenTerminal: vi.fn(() => new Disposable()),
+  onDidChangeActiveTerminal: vi.fn(() => new Disposable()),
   createWebviewPanel: vi.fn(() => ({
     webview: new MockWebview(),
     onDidDispose: vi.fn(),
     reveal: vi.fn(),
     dispose: vi.fn(),
   })),
+  onDidChangeActiveTextEditor: vi.fn(() => new Disposable()),
+  onDidChangeVisibleTextEditors: vi.fn(() => new Disposable()),
+  tabGroups: {
+    onDidChangeTabs: vi.fn(() => new Disposable()),
+    all: [] as unknown[],
+  },
 };
 
 export const workspace = {
   workspaceFolders: undefined as unknown,
+  name: undefined as string | undefined,
+  isTrusted: true,
   getConfiguration: vi.fn((_section?: string) => ({
     get: vi.fn(<T>(_key: string, defaultValue?: T): T | undefined => defaultValue),
     update: vi.fn().mockResolvedValue(undefined),
     has: vi.fn().mockReturnValue(false),
     inspect: vi.fn().mockReturnValue(undefined),
   })),
+  getWorkspaceFolder: vi.fn((_uri: Uri) => undefined as unknown),
   onDidChangeConfiguration: vi.fn(() => new Disposable()),
   onDidSaveTextDocument: vi.fn(() => new Disposable()),
   onDidOpenTextDocument: vi.fn(() => new Disposable()),
+  onDidCloseTextDocument: vi.fn(() => new Disposable()),
+  onDidChangeTextDocument: vi.fn(() => new Disposable()),
+  onDidChangeWorkspaceFolders: vi.fn(() => new Disposable()),
   openTextDocument: vi.fn().mockResolvedValue(new MockTextDocument()),
   applyEdit: vi.fn().mockResolvedValue(true),
   registerTextDocumentContentProvider: vi.fn(() => new Disposable()),
+  createFileSystemWatcher: vi.fn(() => ({
+    onDidCreate: vi.fn(() => new Disposable()),
+    onDidChange: vi.fn(() => new Disposable()),
+    onDidDelete: vi.fn(() => new Disposable()),
+    dispose: vi.fn(),
+  })),
+  fs: {
+    readDirectory: vi.fn().mockResolvedValue([]),
+    readFile: vi.fn().mockResolvedValue(new Uint8Array()),
+    writeFile: vi.fn().mockResolvedValue(undefined),
+    stat: vi.fn().mockResolvedValue({ type: 1, ctime: 0, mtime: 0, size: 0 }),
+    delete: vi.fn().mockResolvedValue(undefined),
+  },
   findFiles: vi.fn().mockResolvedValue([]),
   asRelativePath: vi.fn((uri: Uri | string) =>
     typeof uri === 'string' ? uri : uri.fsPath.replace('/mock/workspace/', ''),
@@ -431,6 +498,13 @@ export const languages = {
   registerCodeActionsProvider: vi.fn(() => new Disposable()),
   registerHoverProvider: vi.fn(() => new Disposable()),
   registerInlineCompletionItemProvider: vi.fn(() => new Disposable()),
+  registerCodeLensProvider: vi.fn(() => new Disposable()),
+  createDiagnosticCollection: vi.fn(() => ({
+    set: vi.fn(),
+    delete: vi.fn(),
+    clear: vi.fn(),
+    dispose: vi.fn(),
+  })),
 };
 
 export const commands = {
@@ -440,7 +514,7 @@ export const commands = {
 
 export const extensions = {
   getExtension: vi.fn(() => ({
-    packageJSON: { version: '0.1.0' },
+    packageJSON: { version: '0.3.0' },
     isActive: true,
   })),
 };
@@ -448,6 +522,7 @@ export const extensions = {
 export const env = {
   isTelemetryEnabled: true,
   createTelemetryLogger: vi.fn((_sender: unknown, _options?: unknown) => new MockTelemetryLogger()),
+  openExternal: vi.fn().mockResolvedValue(true),
 };
 
 export const lm = {
@@ -513,6 +588,31 @@ export const InlineCompletionTriggerKind = {
   Invoke: 1,
 } as const;
 
+export const OverviewRulerLane = {
+  Left: 1,
+  Center: 2,
+  Right: 4,
+  Full: 7,
+} as const;
+
+export const FileType = {
+  Unknown: 0,
+  File: 1,
+  Directory: 2,
+  SymbolicLink: 64,
+} as const;
+
+export const ExtensionMode = {
+  Production: 1,
+  Development: 2,
+  Test: 3,
+} as const;
+
+export const QuickPickItemKind = {
+  Separator: -1,
+  Default: 0,
+} as const;
+
 export const version = '1.95.0';
 
 // ─── Class exports ────────────────────────────────────────────────────────────
@@ -521,6 +621,7 @@ export {
   CancellationTokenSource,
   Disposable,
   EventEmitter,
+  MarkdownString,
   Position,
   Range,
   Selection,

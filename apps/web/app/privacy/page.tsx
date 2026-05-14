@@ -1,120 +1,244 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Bot } from 'lucide-react';
+import { Header } from '../../components/layout/Header';
+import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
-export const metadata = {
-  title: 'Privacy Policy',
-  description:
-    'Privacy policy for AGI Workforce. Learn how we protect your data with local-first architecture, encrypted API keys, and zero server-side storage.',
-  alternates: { canonical: '/privacy' },
-  openGraph: {
-    title: 'Privacy Policy | AGI Workforce',
-    description:
-      'How AGI Workforce protects your data. Local-first architecture, encrypted API keys, zero server-side storage.',
-    type: 'website',
-    url: 'https://agiworkforce.com/privacy',
-  },
-  twitter: {
-    card: 'summary' as const,
-    title: 'Privacy Policy | AGI Workforce',
-    description:
-      'How AGI Workforce protects your data. Local-first, encrypted keys, zero server storage.',
-  },
+export const metadata: Metadata = {
+  title: 'Privacy policy | AGI Workforce',
+  description: 'How AGI Workforce collects, uses, and protects your data.',
+  alternates: { canonical: 'https://agiworkforce.com/privacy' },
 };
 
 export default function PrivacyPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-black text-white">
-      <header className="fixed top-0 w-full border-b border-white/10 bg-black/50 backdrop-blur-xl z-50">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <Link href="/" className="flex items-center gap-2 font-bold text-xl tracking-tighter">
-            <Bot className="h-6 w-6 text-blue-500" />
-            <span>AGI Workforce</span>
-          </Link>
-          <Link
-            href="/"
-            className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
-          >
-            Back to Home
-          </Link>
-        </div>
-      </header>
+    <div data-design="agi">
+      <main className="agi-shell">
+        <Header />
+        <section className="agi-page-hero">
+          <h1 className="agi-page-h1">Privacy policy.</h1>
+          <p className="agi-page-lede">
+            How we collect, use, and protect your data.{' '}
+            <strong>
+              We do not train on your data. We do not sell your data. We collect the minimum needed
+              to run the service.
+            </strong>{' '}
+            Last updated: 2026-05-08.
+          </p>
+        </section>
 
-      <main className="flex-1 pt-24 pb-12">
-        <div className="container mx-auto px-4 max-w-3xl">
-          <h1 className="text-4xl font-bold mb-8">Privacy Policy</h1>
-          <div className="prose prose-invert prose-lg text-zinc-400">
-            <p className="lead text-xl text-zinc-300 mb-8">
-              Last updated:{' '}
-              {new Date().toLocaleDateString('en-US', {
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric',
-              })}
-            </p>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">01 — What we collect</p>
+          <table className="agi-ledger">
+            <thead>
+              <tr>
+                <th>Category</th>
+                <th>Examples</th>
+                <th>Why</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Account</td>
+                <td>Email, hashed password, account ID.</td>
+                <td>Authentication.</td>
+              </tr>
+              <tr>
+                <td>Billing</td>
+                <td>Stripe customer ID, plan, invoice metadata. We never see your card.</td>
+                <td>Subscription management.</td>
+              </tr>
+              <tr>
+                <td>Conversations (cloud mode)</td>
+                <td>Threads, messages, tool calls, attached files.</td>
+                <td>Cross-device sync via Supabase. RLS-enforced; only you can read your rows.</td>
+              </tr>
+              <tr>
+                <td>Conversations (local mode)</td>
+                <td>SQLite on disk. Never leaves your machine.</td>
+                <td>n/a</td>
+              </tr>
+              <tr>
+                <td>BYOK keys</td>
+                <td>Encrypted on device with AES-256-GCM. Master password unrecoverable.</td>
+                <td>You stay in control of provider auth.</td>
+              </tr>
+              <tr>
+                <td>Telemetry</td>
+                <td>
+                  Aggregated, anonymous usage counts via Sentry (error reporting), Google Analytics
+                  and Google Tag Manager (anonymous traffic + funnel analytics, IP-anonymized). No
+                  prompt content. Opt-in.
+                </td>
+                <td>Operational visibility.</td>
+              </tr>
+              <tr>
+                <td>Logs</td>
+                <td>Server logs with redacted bearer tokens. 30-day retention by default.</td>
+                <td>Debugging and security.</td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="agi-page-lede" style={{ marginTop: 16, fontSize: 14 }}>
+            <strong>Hosted AI providers we may route requests to (cloud mode, optional):</strong>{' '}
+            Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Moonshot, Groq, Mistral. BYOK mode
+            routes from your client directly to the provider; cloud mode (Hobby tier and above)
+            routes through our gateway. Local mode (Ollama, LM Studio) never contacts any of these.
+          </p>
+        </section>
 
-            <h3>1. Introduction</h3>
-            <p>
-              AGI Workforce (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;) is committed to
-              protecting your privacy. This Privacy Policy explains how we collect, use, and
-              safeguard your information when you use our desktop application and website.
-            </p>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">02 — What we do not collect</p>
+          <ul className="agi-reasons">
+            <li className="agi-reason">
+              <h3 className="agi-reason-h">Training data</h3>
+              <p className="agi-reason-p">
+                We do not train models on your prompts, responses, or files. Period.
+              </p>
+            </li>
+            <li className="agi-reason">
+              <h3 className="agi-reason-h">Provider traffic in BYOK mode</h3>
+              <p className="agi-reason-p">
+                When you BYOK against Anthropic, OpenAI, Google, etc., the request goes from your
+                client to the provider. We do not see, log, or store that traffic.
+              </p>
+            </li>
+            <li className="agi-reason">
+              <h3 className="agi-reason-h">Local-mode anything</h3>
+              <p className="agi-reason-p">
+                Local mode (Ollama / LM Studio on your machine) is fully offline. No telemetry, no
+                sync, no logs leave your laptop.
+              </p>
+            </li>
+          </ul>
+        </section>
 
-            <h3>2. Data Collection</h3>
-            <p>We collect minimal data necessary to provide our services:</p>
-            <ul>
-              <li>
-                <strong>Account Information:</strong> Email address and authentication details
-                provided via Supabase/OAuth.
-              </li>
-              <li>
-                <strong>Usage Data:</strong> Basic telemetry regarding application performance and
-                error rates (if opted in).
-              </li>
-              <li>
-                <strong>Billing Information:</strong> Processed securely by Stripe; we do not store
-                credit card details.
-              </li>
-            </ul>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">03 — How we use it</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            To run the service, bill you, secure the system, respond to support requests, and comply
+            with the law. We do not use your data to advertise to you, and we do not share it with
+            advertisers. Aggregated, non-identifying analytics may be used to improve the product.
+          </p>
+        </section>
 
-            <h3>3. Local Execution</h3>
-            <p>
-              AGI Workforce is designed as a local-first application. Your chat history, task data,
-              and local files remain on your device unless you explicitly choose to sync them using
-              our optional cloud features.
-            </p>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">04 — Sharing</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            We share data only with the subprocessors listed at{' '}
+            <Link href="/subprocessors" style={{ color: 'var(--agi-ink)' }}>
+              /subprocessors
+            </Link>{' '}
+            (Supabase, Vercel, Fly.io, Stripe, Resend, Cloudflare), and only as necessary to run the
+            service. We do not sell data. We may disclose data if compelled by valid legal process;
+            we narrow such disclosures to the minimum required.
+          </p>
+        </section>
 
-            <h3>4. AI Model Privacy</h3>
-            <p>
-              AGI Workforce uses a managed proxy model for LLM access. When using local LLMs (e.g.,
-              Ollama), no data leaves your machine. When using cloud models (OpenAI, Anthropic,
-              Google, etc.), your requests are routed through our secure proxy. We do not store,
-              log, or use your conversations to train any models. You pay AGI Workforce directly -
-              we handle billing with AI providers on your behalf.
-            </p>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">05 — Retention and deletion</p>
+          <table className="agi-ledger">
+            <tbody>
+              <tr>
+                <td>Account data</td>
+                <td>
+                  Retained while your account is active. Deleted within 30 days of account deletion
+                  request.
+                </td>
+              </tr>
+              <tr>
+                <td>Conversations (cloud)</td>
+                <td>Retained per your subscription. Org-level retention windows on Enterprise.</td>
+              </tr>
+              <tr>
+                <td>Server logs</td>
+                <td>
+                  30 days by default. Up to 180 days for security incidents under investigation.
+                </td>
+              </tr>
+              <tr>
+                <td>Backups</td>
+                <td>
+                  Encrypted, 30-day rolling. Deletion propagates to backups within the same window.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
 
-            <h3>5. Undo System and Action History</h3>
-            <p>
-              To enable our undo-based safety system, AGI Workforce stores action history locally on
-              your device. This allows you to reverse any AI action. This data is never transmitted
-              to our servers and can be cleared at any time from the application.
-            </p>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">06 — Your rights</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            Under GDPR, CCPA, and similar laws, you have the right to access, correct, delete, port,
+            and object to processing of your personal data. To exercise any of these, email{' '}
+            <a href="mailto:contact@agiworkforce.com" style={{ color: 'var(--agi-ink)' }}>
+              contact@agiworkforce.com
+            </a>{' '}
+            from your account email. We respond within 30 days. EU/UK customers can also lodge a
+            complaint with their supervisory authority.
+          </p>
+        </section>
 
-            <h3>6. Contact Us</h3>
-            <p>
-              If you have any questions about this Privacy Policy, please contact us at
-              contact@agiworkforce.com.
-            </p>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">07 — International transfers and EU residency</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            <strong>EU residency status:</strong> AGI Workforce data is hosted in the United States
+            (us-east-2) by default. We do not currently offer European residency for stored data;
+            European customers&rsquo; data is transferred to and processed in the US. For EU/UK
+            personal data we use Standard Contractual Clauses through our DPA — see{' '}
+            <Link href="/dpa" style={{ color: 'var(--agi-ink)' }}>
+              /dpa
+            </Link>
+            . EU/UK residency hosting is on our roadmap; see{' '}
+            <Link href="/changelog" style={{ color: 'var(--agi-ink)' }}>
+              /changelog
+            </Link>{' '}
+            for updates.
+          </p>
+        </section>
+
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">08 — Children</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            AGI Workforce is not directed at children under 13 (or 16 in the EU/UK). We do not
+            knowingly collect data from children.
+          </p>
+        </section>
+
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">09 — Changes</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            We may update this policy. Material changes are announced via email and on{' '}
+            <Link href="/changelog" style={{ color: 'var(--agi-ink)' }}>
+              /changelog
+            </Link>
+            . The &ldquo;last updated&rdquo; date at the top reflects the most recent revision.
+          </p>
+        </section>
+
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">10 — Contact</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            AGI Automation LLC, Austin, Texas, USA. Email{' '}
+            <a href="mailto:contact@agiworkforce.com" style={{ color: 'var(--agi-ink)' }}>
+              contact@agiworkforce.com
+            </a>
+            .
+          </p>
+          <div className="agi-cta-row" style={{ marginTop: 28 }}>
+            <Link href="/terms" className="agi-cta-ghost">
+              Terms →
+            </Link>
+            <Link href="/dpa" className="agi-cta-ghost">
+              DPA →
+            </Link>
+            <Link href="/cookies" className="agi-cta-ghost">
+              Cookies →
+            </Link>
           </div>
-        </div>
+        </section>
+
+        <MarketingFooter />
       </main>
-
-      <footer className="border-t border-white/10 bg-black py-12">
-        <div className="container mx-auto px-4 text-center">
-          <div className="text-sm text-zinc-600">
-            © {new Date().getFullYear()} AGI Automation LLC. All rights reserved.
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }

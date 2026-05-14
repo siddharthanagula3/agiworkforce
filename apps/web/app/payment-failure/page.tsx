@@ -1,80 +1,65 @@
-'use client';
-
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
-import { Suspense } from 'react';
-import { XCircle, ArrowLeft, CreditCard } from 'lucide-react';
-import { Button } from '@/components/ui';
+import { Header } from '../../components/layout/Header';
+import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
-function PaymentFailureContent() {
-  const searchParams = useSearchParams();
-  const error = searchParams?.get('error');
-  const sessionId = searchParams?.get('session_id');
-
-  return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-black text-white p-4">
-      <div className="mx-auto flex w-full max-w-md flex-col items-center justify-center text-center space-y-6">
-        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-red-500/10 ring-1 ring-red-500/50">
-          <XCircle className="h-10 w-10 text-red-500" />
-        </div>
-
-        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Payment Failed</h1>
-
-        <p className="text-lg text-zinc-400">
-          {error
-            ? `Payment could not be processed: ${error}`
-            : 'We were unable to process your payment. Please try again or contact support if the problem persists.'}
-        </p>
-
-        {sessionId && (
-          <p className="text-sm text-zinc-600 font-mono">Session ID: {sessionId.slice(-8)}</p>
-        )}
-
-        <div className="flex flex-col gap-3 w-full pt-4">
-          <Link href="/pricing" className="w-full">
-            <Button className="w-full h-11 bg-white text-black hover:bg-zinc-200 font-medium">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Return to Pricing
-            </Button>
-          </Link>
-
-          <Link href="/billing" className="w-full">
-            <Button
-              variant="outline"
-              className="w-full h-11 border-zinc-800 text-zinc-300 hover:bg-zinc-900 hover:text-white"
-            >
-              <CreditCard className="mr-2 h-4 w-4" />
-              Manage Billing
-            </Button>
-          </Link>
-
-          <div className="pt-4 border-t border-zinc-900/50 w-full mt-2">
-            <p className="text-xs text-zinc-600 mb-2">Need help?</p>
-            <Link
-              href="mailto:contact@agiworkforce.com"
-              className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
-            >
-              Contact Support
-            </Link>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+export const metadata: Metadata = {
+  title: 'Payment issue | AGI Workforce',
+  description: 'Something went wrong with your payment. Here is how to resolve it.',
+};
 
 export default function PaymentFailurePage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-screen flex-col items-center justify-center bg-black text-white p-4">
-          <div className="mx-auto flex w-full max-w-md flex-col items-center justify-center text-center space-y-6">
-            <p className="text-lg text-zinc-400">Loading...</p>
+    <div data-design="agi">
+      <main className="agi-shell">
+        <Header />
+        <section className="agi-page-hero">
+          <h1 className="agi-page-h1">Payment didn&rsquo;t go through.</h1>
+          <p className="agi-page-lede">
+            Your card was declined or the charge was canceled.{' '}
+            <strong>
+              No subscription was created and you weren&rsquo;t charged. Try a different payment
+              method or email us if it keeps happening.
+            </strong>
+          </p>
+        </section>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">Common reasons</p>
+          <ul className="agi-reasons">
+            <li className="agi-reason">
+              <h3 className="agi-reason-h">Card declined</h3>
+              <p className="agi-reason-p">
+                Insufficient funds, expired card, or the issuer flagged the charge. Try a different
+                card or contact your bank.
+              </p>
+            </li>
+            <li className="agi-reason">
+              <h3 className="agi-reason-h">3D Secure timed out</h3>
+              <p className="agi-reason-p">
+                The verification window closed before you confirmed. Start the checkout again.
+              </p>
+            </li>
+            <li className="agi-reason">
+              <h3 className="agi-reason-h">Network error</h3>
+              <p className="agi-reason-p">
+                Stripe couldn&rsquo;t reach your bank. Usually resolves on retry.
+              </p>
+            </li>
+          </ul>
+        </section>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">Next step</p>
+          <div className="agi-cta-row">
+            <Link href="/pricing" className="agi-cta-primary">
+              Try again
+            </Link>
+            <a href="mailto:contact@agiworkforce.com" className="agi-cta-ghost">
+              Email us →
+            </a>
           </div>
-        </div>
-      }
-    >
-      <PaymentFailureContent />
-    </Suspense>
+        </section>
+        <MarketingFooter />
+      </main>
+    </div>
   );
 }

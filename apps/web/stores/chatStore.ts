@@ -4,6 +4,32 @@ import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 
 // Types
+export interface MessageMetadata {
+  /** Raw extended thinking text rendered by ThinkingBlock */
+  thinkingContent?: string;
+  /** True while thinking content is still streaming */
+  isThinkingStreaming?: boolean;
+  /** ISO timestamp when thinking started */
+  thinkingStartedAt?: string;
+  /** ISO timestamp when thinking completed */
+  thinkingCompletedAt?: string;
+  /** True while a server-managed web search is in progress */
+  isSearching?: boolean;
+  /** Web search results from server-managed tools */
+  searchResults?: Array<{ url: string; title: string; snippet: string }>;
+  /** True while server-managed code execution is running */
+  isExecutingCode?: boolean;
+  /** Code execution result from server-managed code_execution_20260120 tool */
+  codeExecutionResult?: {
+    stdout: string;
+    stderr: string;
+    returnCode: number;
+    images?: Array<{ mediaType: string; data: string }>;
+  };
+  /** Persisted user reaction (stored in Supabase messages.metadata) */
+  reaction?: 'thumbsUp' | 'thumbsDown' | null;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -13,7 +39,8 @@ export interface Message {
   isStreaming?: boolean;
   attachments?: Attachment[];
   reactions?: { type: 'thumbsUp' | 'thumbsDown'; userId: string }[];
-  error?: boolean; // Indicates if this message contains an error
+  error?: boolean;
+  metadata?: MessageMetadata;
 }
 
 export interface Attachment {
@@ -111,6 +138,17 @@ interface ChatState {
   addMessage: (message: Message) => void;
   updateMessage: (id: string, updates: Partial<Message>) => void;
   appendToMessage: (id: string, content: string) => void;
+  appendToThinking: (id: string, thinking: string) => void;
+  setSearching: (id: string, isSearching: boolean) => void;
+  setSearchResults: (
+    id: string,
+    results: Array<{ url: string; title: string; snippet: string }>,
+  ) => void;
+  setExecutingCode: (id: string, isExecuting: boolean) => void;
+  setCodeExecutionResult: (
+    id: string,
+    result: NonNullable<MessageMetadata['codeExecutionResult']>,
+  ) => void;
   deleteMessage: (id: string) => void;
   clearMessages: () => void;
 
@@ -237,6 +275,85 @@ export const useChatStore = create<ChatState>()(
             }),
             undefined,
             'chat/appendToMessage',
+          ),
+
+        appendToThinking: (id, thinking) =>
+          set(
+            (state) => ({
+              messages: state.messages.map((m) =>
+                m.id === id
+                  ? {
+                      ...m,
+                      metadata: {
+                        ...m.metadata,
+                        thinkingContent: (m.metadata?.thinkingContent ?? '') + thinking,
+                      },
+                    }
+                  : m,
+              ),
+            }),
+            undefined,
+            'chat/appendToThinking',
+          ),
+
+        setSearching: (id, isSearching) =>
+          set(
+            (state) => ({
+              messages: state.messages.map((m) =>
+                m.id === id ? { ...m, metadata: { ...m.metadata, isSearching } } : m,
+              ),
+            }),
+            undefined,
+            'chat/setSearching',
+          ),
+
+        setSearchResults: (id, results) =>
+          set(
+            (state) => ({
+              messages: state.messages.map((m) =>
+                m.id === id
+                  ? {
+                      ...m,
+                      metadata: { ...m.metadata, searchResults: results, isSearching: false },
+                    }
+                  : m,
+              ),
+            }),
+            undefined,
+            'chat/setSearchResults',
+          ),
+
+        setExecutingCode: (id, isExecuting) =>
+          set(
+            (state) => ({
+              messages: state.messages.map((m) =>
+                m.id === id
+                  ? { ...m, metadata: { ...m.metadata, isExecutingCode: isExecuting } }
+                  : m,
+              ),
+            }),
+            undefined,
+            'chat/setExecutingCode',
+          ),
+
+        setCodeExecutionResult: (id, result) =>
+          set(
+            (state) => ({
+              messages: state.messages.map((m) =>
+                m.id === id
+                  ? {
+                      ...m,
+                      metadata: {
+                        ...m.metadata,
+                        codeExecutionResult: result,
+                        isExecutingCode: false,
+                      },
+                    }
+                  : m,
+              ),
+            }),
+            undefined,
+            'chat/setCodeExecutionResult',
           ),
 
         deleteMessage: (id) =>

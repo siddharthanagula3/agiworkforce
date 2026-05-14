@@ -21,7 +21,7 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { supabase } from '../lib/supabase';
+import { getUserScopedClient } from '../lib/supabaseClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 
@@ -104,6 +104,17 @@ const pairingCodeResponseSchema = z.object({
   httpUrl: z.string(),
   wsUrl: z.string(),
   qrData: z.string(),
+  // SECURITY (C2, redteam-services 2026-05-04): per-role pair tokens issued by
+  // the signaling server. We MUST forward the desktop token to the desktop
+  // client (over the authenticated gateway channel) and the mobile token to
+  // the mobile client. Optional during the rollout window; required in
+  // production once SIGNALING_REQUIRE_PAIR_TOKEN=1.
+  pairTokens: z
+    .object({
+      desktop: z.string(),
+      mobile: z.string(),
+    })
+    .optional(),
 });
 
 // SECURITY: .strict() rejects unexpected fields
@@ -135,6 +146,9 @@ router.post(
     }
 
     const deviceId = clientId ?? randomUUID();
+
+    // Wave 1.5+ singleton sweep: user-scoped client.
+    const supabase = getUserScopedClient(user.userId);
 
     // SECURITY: Verify ownership before upsert to prevent device registration hijack.
     // Without this check, an attacker who knows another user's device ID could
@@ -189,6 +203,8 @@ router.post(
       throw new AppError('Unauthorized', 401);
     }
 
+    // Wave 1.5+ singleton sweep: user-scoped client.
+    const supabase = getUserScopedClient(user.userId);
     // First verify the device exists and belongs to the user
     const { data: device, error: fetchError } = await supabase
       .from('mobile_devices')
@@ -285,6 +301,14 @@ router.post(
 
     const payload = pairingCodeResponseSchema.parse(jsonBody);
 
+    // SECURITY (C2): forward both pair tokens. The mobile client (current
+    // request) gets the mobile token; the desktop client picks up its own
+    // token via a separate authenticated channel — typically the
+    // /api/desktop/* endpoints which read from a server-side store keyed
+    // by user_id. For Wave 3, we return both tokens here and rely on the
+    // caller's surface ID to select the right one. (When the gateway has
+    // persistent device routing, the desktop token should NOT round-trip
+    // through the mobile response.)
     res.json({
       code: payload.code,
       expiresAt: payload.expiresAt,
@@ -294,6 +318,7 @@ router.post(
         httpUrl: payload.httpUrl,
         wsUrl: payload.wsUrl,
       },
+      pairTokens: payload.pairTokens,
     });
   },
 );
@@ -310,6 +335,8 @@ router.get('/', createRateLimiter('device-list'), async (req: Request, res: Resp
     throw new AppError('Unauthorized', 401);
   }
 
+  // Wave 1.5+ singleton sweep: user-scoped client.
+  const supabase = getUserScopedClient(user.userId);
   const { data: devices, error } = await supabase
     .from('mobile_devices')
     .select('*')
@@ -407,6 +434,8 @@ router.delete(
       throw new AppError('Invalid device ID format', 400);
     }
 
+    // Wave 1.5+ singleton sweep: user-scoped client.
+    const supabase = getUserScopedClient(user.userId);
     // First verify ownership
     const { data: device, error: fetchError } = await supabase
       .from('mobile_devices')

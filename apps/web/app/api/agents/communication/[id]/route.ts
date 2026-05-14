@@ -15,7 +15,7 @@ import { getAuthenticatedUser } from '@/lib/api-auth';
  * Agent Delegation Response API
  *
  * PUT /api/agents/communication/[id]
- *     — Accept or reject a delegation
+ *     - Accept or reject a delegation
  */
 
 const RespondToDelegationSchema = z.object({
@@ -70,7 +70,7 @@ async function handleRespondToDelegation(request: NextRequest, context: RouteCon
 
   if (error) {
     if (error.code === '42P01' || (error.message && error.message.includes('does not exist'))) {
-      // Table doesn't exist yet — return graceful success
+      // Table doesn't exist yet - return graceful success
       return NextResponse.json({ success: true, delegation: null });
     }
     if (error.code === 'PGRST116') {

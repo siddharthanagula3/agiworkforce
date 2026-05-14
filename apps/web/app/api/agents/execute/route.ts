@@ -12,7 +12,9 @@ import { createError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { CreditService } from '@/lib/services/credit-service';
+import { getUserClient } from '@/lib/supabase-server';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getTaskModelForProvider } from '@agiworkforce/types';
 
@@ -111,6 +113,8 @@ async function handler(request: NextRequest) {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   let userId: string;
+  // RLS-bound client for credit operations on behalf of this user.
+  let userClient: SupabaseClient;
 
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.slice(7);
@@ -122,6 +126,7 @@ async function handler(request: NextRequest) {
       throw createError.unauthorized('Invalid or expired token');
     }
     userId = user.id;
+    userClient = getUserClient(token);
   } else {
     // Try cookie-based auth for browser requests
     const { createServerClient } = await import('@supabase/ssr');
@@ -143,6 +148,8 @@ async function handler(request: NextRequest) {
       throw createError.unauthorized('Authentication required');
     }
     userId = user.id;
+    // ssrClient is already RLS-bound via cookie session; use it directly.
+    userClient = ssrClient;
   }
 
   // H9: Validate request body with Zod
@@ -163,7 +170,7 @@ async function handler(request: NextRequest) {
   const { employeeId, message, model, provider, systemPrompt, conversationHistory } =
     validationResult.data;
 
-  // H10: Load canonical skill from filesystem — caller's systemPrompt is appended as context, never replaces
+  // H10: Load canonical skill from filesystem - caller's systemPrompt is appended as context, never replaces
   const canonicalPrompt = await loadEmployeeSystemPrompt(employeeId);
   if (!canonicalPrompt) {
     throw createError.badRequest(`Employee "${employeeId}" not found`);
@@ -194,10 +201,10 @@ async function handler(request: NextRequest) {
 
   // --- BILLING: Pre-flight credit check ---
   const estimatedCents = estimateCostCents(messages);
-  const hasCredits = await CreditService.checkAvailable(userId, estimatedCents);
+  const hasCredits = await CreditService.checkAvailable(userClient, userId, estimatedCents);
 
   if (!hasCredits) {
-    const balance = await CreditService.getBalance(userId);
+    const balance = await CreditService.getBalance(userClient, userId);
     const remainingCents = balance?.credits_remaining_cents ?? 0;
     throw createError.forbidden(
       `Insufficient credits. You need approximately ${estimatedCents} credits but have ${remainingCents} remaining. Please upgrade your plan at /pricing.`,
@@ -252,6 +259,7 @@ async function handler(request: NextRequest) {
           );
 
           const result = await CreditService.deductCredits(
+            userClient,
             userId,
             estimatedCents,
             `${selectedProvider}/${selectedModel} agent execution`,
@@ -281,7 +289,7 @@ async function handler(request: NextRequest) {
             );
           }
         } catch (error) {
-          // Log but don't fail — the response was already streamed
+          // Log but don't fail - the response was already streamed
           logger.error(
             { error, userId, requestId },
             'Error deducting credits after agent execution',

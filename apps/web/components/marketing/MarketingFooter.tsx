@@ -1,106 +1,93 @@
-import { Bot } from 'lucide-react';
 import Link from 'next/link';
+import { AgiMark } from '../agi/AgiMark';
 
-const productLinks = [
-  { label: 'Features', href: '/features/ai-chat' },
-  { label: 'AI Skills', href: '/features/ai-skills' },
-  { label: 'Plugins & MCP', href: '/features/plugins' },
-  { label: 'Pricing', href: '/pricing' },
-  { label: 'Download', href: '/download' },
-  { label: 'Changelog', href: '/changelog' },
+/*
+ * Site-wide marketing footer. Three-column compact layout — Product,
+ * Surfaces, Company. Bottom strip with copyright + data policy.
+ *
+ * Same default export as the previous footer so every page importer
+ * keeps working.
+ */
+
+const PRODUCT = [
+  { href: '/', label: 'Home' },
+  { href: '/providers', label: 'Providers' },
+  { href: '/pricing', label: 'Pricing' },
+  { href: '/byok', label: 'BYOK' },
+  { href: '/local', label: 'Local' },
+  { href: '/compare', label: 'Compare' },
 ];
 
-const companyLinks = [
-  { label: 'About', href: '/about' },
-  { label: 'Documentation', href: '/docs' },
-  { label: 'FAQ', href: '/faq' },
-  { label: 'Contact', href: '/contact' },
+const SURFACES = [
+  { href: '/desktop', label: 'Desktop' },
+  { href: '/mobile', label: 'Mobile' },
+  { href: '/cli', label: 'CLI' },
+  { href: '/chrome-extension', label: 'Chrome' },
+  { href: '/vscode-extension', label: 'VS Code' },
+  { href: '/download', label: 'Download' },
 ];
 
-const legalLinks = [
-  { label: 'Privacy', href: '/privacy' },
-  { label: 'Terms', href: '/terms' },
-  { label: 'Security', href: '/security' },
+const COMPANY = [
+  { href: '/about', label: 'About' },
+  { href: '/enterprise', label: 'Enterprise' },
+  { href: '/contact', label: 'Contact' },
+  { href: '/privacy', label: 'Privacy' },
+  { href: '/terms', label: 'Terms' },
+  { href: '/security', label: 'Security' },
 ];
 
 export function MarketingFooter() {
   return (
-    <footer className="border-t border-white/10 bg-black py-16">
-      <div className="container mx-auto px-4">
-        <div className="grid gap-10 md:grid-cols-4">
-          {/* Brand column */}
-          <div className="md:col-span-1">
-            <div className="flex items-center gap-2 font-bold mb-4">
-              <Bot className="h-5 w-5 text-[#c8892a]" />
-              <span className="text-white">AGI Workforce</span>
-            </div>
-            <p className="text-sm text-zinc-500 leading-relaxed">
-              AI automation for your desktop. Built by AGI Automation LLC in Austin, TX.
-            </p>
-          </div>
-
-          {/* Product column */}
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-4">
-              Product
-            </h3>
-            <ul className="flex flex-col gap-3">
-              {productLinks.map((link) => (
-                <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    className="text-sm text-zinc-500 transition-colors hover:text-white"
-                  >
-                    {link.label}
+    <div data-design="agi" className="agi-chrome-band" style={{ marginTop: 96 }}>
+      <footer
+        className="agi-footer"
+        style={{ maxWidth: 1180, margin: '0 auto', padding: '56px 28px 28px' }}
+      >
+        <div className="agi-footer-row">
+          <Link href="/" className="agi-footer-mark" aria-label="AGI Workforce home">
+            <AgiMark size={18} />
+            <span style={{ marginLeft: 8 }}>
+              agi<span className="agi-mark-dot">.</span>workforce
+            </span>
+          </Link>
+          <div className="agi-footer-cols">
+            <ul className="agi-footer-col">
+              <li className="agi-footer-col-title">Product</li>
+              {PRODUCT.map((l) => (
+                <li key={l.href}>
+                  <Link href={l.href} className="agi-footer-link">
+                    {l.label}
                   </Link>
                 </li>
               ))}
             </ul>
-          </div>
-
-          {/* Company column */}
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-4">
-              Company
-            </h3>
-            <ul className="flex flex-col gap-3">
-              {companyLinks.map((link) => (
-                <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    className="text-sm text-zinc-500 transition-colors hover:text-white"
-                  >
-                    {link.label}
+            <ul className="agi-footer-col">
+              <li className="agi-footer-col-title">Surfaces</li>
+              {SURFACES.map((l) => (
+                <li key={l.href}>
+                  <Link href={l.href} className="agi-footer-link">
+                    {l.label}
                   </Link>
                 </li>
               ))}
             </ul>
-          </div>
-
-          {/* Legal column */}
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-4">
-              Legal
-            </h3>
-            <ul className="flex flex-col gap-3">
-              {legalLinks.map((link) => (
-                <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    className="text-sm text-zinc-500 transition-colors hover:text-white"
-                  >
-                    {link.label}
+            <ul className="agi-footer-col">
+              <li className="agi-footer-col-title">Company</li>
+              {COMPANY.map((l) => (
+                <li key={l.href}>
+                  <Link href={l.href} className="agi-footer-link">
+                    {l.label}
                   </Link>
                 </li>
               ))}
             </ul>
           </div>
         </div>
-
-        <div className="mt-12 border-t border-white/10 pt-8 text-center text-sm text-zinc-600">
-          &copy; {new Date().getFullYear()} AGI Automation LLC. All rights reserved.
+        <div className="agi-footer-strip">
+          <span>© 2026 AGI Automation LLC · Austin, Texas</span>
+          <span>We do not train on your data.</span>
         </div>
-      </div>
-    </footer>
+      </footer>
+    </div>
   );
 }

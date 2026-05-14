@@ -262,7 +262,7 @@ export const UsageDashboard: React.FC = () => {
           <div className="bg-card p-4 rounded-lg shadow-xs border border-border">
             <h3 className="text-sm font-medium text-muted-foreground">Automations Run</h3>
             <p className="text-2xl font-bold mt-2 text-green-500">
-              {analyticsUsageStats?.total_events?.toLocaleString() ?? '0'}
+              {analyticsUsageStats?.totalEvents?.toLocaleString() ?? '0'}
             </p>
             <p className="text-xs text-muted-foreground mt-1">Lifetime total</p>
           </div>

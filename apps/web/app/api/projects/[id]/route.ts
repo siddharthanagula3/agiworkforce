@@ -6,15 +6,13 @@
  * DELETE /api/projects/[id] - Delete a project
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -22,12 +20,9 @@ async function handleGetProject(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
   const { id } = await context.params;
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   const { data, error } = await supabase
     .from('user_projects')
@@ -65,7 +60,8 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
   const { id } = await context.params;
 
   let body: {
@@ -106,10 +102,6 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
   if (body.color !== undefined) updates['color'] = body.color.trim();
   if (body.isArchived !== undefined) updates['is_archived'] = body.isArchived;
 
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
   const { data, error } = await supabase
     .from('user_projects')
     .update(updates)
@@ -145,12 +137,9 @@ async function handleDeleteProject(request: NextRequest, context: RouteContext) 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
   const { id } = await context.params;
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   const { error } = await supabase
     .from('user_projects')

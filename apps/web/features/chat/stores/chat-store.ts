@@ -68,6 +68,40 @@ export interface ChatMessage {
     thinkingDurationSeconds?: number;
     /** Multi-segment thinking blocks (interleaved reasoning) */
     thinkingSegments?: ThinkingSegment[];
+    /** True while a server-managed web search is in progress */
+    isSearching?: boolean;
+    /** Web search results from server-managed tools */
+    searchResults?: Array<{ url: string; title: string; snippet: string }>;
+    /** True while server-managed code execution is running */
+    isExecutingCode?: boolean;
+    /** Code execution result from server-managed code_execution_20260120 tool */
+    codeExecutionResult?: {
+      stdout: string;
+      stderr: string;
+      returnCode: number;
+      images?: Array<{ mediaType: string; data: string }>;
+    };
+    /** Persisted user reaction (loaded from Supabase messages.metadata on conversation load) */
+    reaction?: 'thumbsUp' | 'thumbsDown' | null;
+    /**
+     * Paywall gate payload — set when the API returns { kind: 'paywall', ... }
+     * with HTTP 402. When present, the message slot renders InlinePaywallCard
+     * instead of MessageBubble.
+     */
+    paywall?: {
+      feature:
+        | 'video_generation'
+        | 'opus_4_7'
+        | 'gpt_5_5'
+        | 'computer_use'
+        | 'deep_research'
+        | 'image_quota'
+        | 'token_cap'
+        | 'mcp'
+        | 'web_search';
+      requiredTier: 'hobby' | 'pro' | 'pro_plus' | 'max';
+      reason?: string;
+    };
   };
 }
 

@@ -352,6 +352,33 @@ use std::sync::RwLock;
 static ACCESS_TOKEN: RwLock<Option<String>> = RwLock::new(None);
 static REFRESH_TOKEN: RwLock<Option<String>> = RwLock::new(None);
 static API_BASE_URL_OVERRIDE: RwLock<Option<String>> = RwLock::new(None);
+static SUPABASE_URL: RwLock<Option<String>> = RwLock::new(None);
+static SUPABASE_ANON_KEY: RwLock<Option<String>> = RwLock::new(None);
+
+/// Seed Supabase credentials from environment variables (dev only — called once at process start).
+/// In production the frontend calls `set_supabase_credentials` which overwrites these.
+pub fn init_supabase_from_env() {
+    let url = std::env::var("SUPABASE_URL")
+        .or_else(|_| std::env::var("NEXT_PUBLIC_SUPABASE_URL"))
+        .or_else(|_| std::env::var("VITE_SUPABASE_URL"))
+        .unwrap_or_default();
+    let anon_key = std::env::var("SUPABASE_ANON_KEY")
+        .or_else(|_| std::env::var("NEXT_PUBLIC_SUPABASE_ANON_KEY"))
+        .or_else(|_| std::env::var("VITE_SUPABASE_ANON_KEY"))
+        .unwrap_or_default();
+    if !url.is_empty() {
+        *SUPABASE_URL.write().unwrap_or_else(|p| p.into_inner()) = Some(url);
+        *SUPABASE_ANON_KEY.write().unwrap_or_else(|p| p.into_inner()) = Some(anon_key);
+    }
+}
+
+pub fn get_supabase_url() -> Option<String> {
+    SUPABASE_URL.read().unwrap_or_else(|p| p.into_inner()).clone()
+}
+
+pub fn get_supabase_anon_key() -> Option<String> {
+    SUPABASE_ANON_KEY.read().unwrap_or_else(|p| p.into_inner()).clone()
+}
 
 /// Get the API base URL for desktop -> backend calls.
 ///
@@ -536,6 +563,22 @@ pub fn account_store_refresh_token(refreshToken: String) -> Result<(), String> {
         .write()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     *token = Some(refreshToken);
+    Ok(())
+}
+
+/// Store Supabase credentials forwarded from the frontend at startup.
+///
+/// Vite bakes `VITE_SUPABASE_*` into the JS bundle but those vars are never in
+/// the Rust process environment in a bundled app. The frontend calls this once
+/// on startup so all Rust code can reach Supabase without reading env vars.
+#[tauri::command]
+#[allow(non_snake_case)]
+pub fn set_supabase_credentials(url: String, anonKey: String) -> Result<(), String> {
+    if url.is_empty() {
+        return Err("Supabase URL cannot be empty".to_string());
+    }
+    *SUPABASE_URL.write().unwrap_or_else(|p| p.into_inner()) = Some(url);
+    *SUPABASE_ANON_KEY.write().unwrap_or_else(|p| p.into_inner()) = Some(anonKey);
     Ok(())
 }
 

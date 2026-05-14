@@ -39,8 +39,39 @@ const SUPPORTED_SHARED_PROVIDERS: &[&str] = &[
     "deepseek",
 ];
 
-const FALLBACK_DEFAULT_MODEL: &str = "claude-opus-4-6";
 const FALLBACK_DEFAULT_PROVIDER: &str = "anthropic";
+
+/// Pick the last-resort default model ID from the bundled catalog without
+/// relying on a hardcoded literal.  Resolution order:
+///   1. First model in the bundled catalog whose provider is "anthropic".
+///   2. First model in the bundled catalog whose provider is "openai".
+///   3. First model in the bundled catalog (any provider).
+///
+/// This function only fires when `shared_catalog()` returns None (i.e.
+/// models.json fails to parse at startup — very unlikely given include_str!).
+/// It is NOT a user-visible model selection; it is purely a last-resort guard.
+fn pick_fallback_default_model() -> String {
+    let candidates = legacy_bundled_models();
+    // Prefer anthropic, then openai, then any
+    for preferred_provider in &["anthropic", "openai"] {
+        if let Some(m) = candidates.iter().find(|m| m.provider == *preferred_provider) {
+            return m.id.clone();
+        }
+    }
+    candidates
+        .into_iter()
+        .next()
+        .map(|m| m.id)
+        .unwrap_or_else(|| {
+            // compile_error! equivalent at runtime: this path means legacy_bundled_models
+            // is empty, which is a programmer error.
+            panic!(
+                "rule-models-json: legacy_bundled_models() is empty — \
+                 cannot derive a last-resort default model. \
+                 Add at least one entry to legacy_bundled_models()."
+            )
+        })
+}
 
 /// Fallback defaults for model metadata when upstream data is missing.
 const DEFAULT_CONTEXT_WINDOW: usize = 128_000;
@@ -101,6 +132,8 @@ struct SharedProviderConfig {
 struct SharedTaskRouting {
     #[serde(default)]
     complex_reasoning: Option<String>,
+    #[serde(default)]
+    fast_completion: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -134,6 +167,9 @@ struct SharedModelMetadata {
     deprecated: Option<bool>,
     #[serde(default)]
     status: Option<String>,
+    /// "fast" | "balanced" | "best" — from models.json qualityTier field.
+    #[serde(default, rename = "qualityTier")]
+    quality_tier: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -166,7 +202,7 @@ pub fn default_model() -> &'static str {
     DEFAULT_MODEL_ID
         .get_or_init(|| {
             let Some(catalog) = shared_catalog() else {
-                return FALLBACK_DEFAULT_MODEL.to_string();
+                return pick_fallback_default_model();
             };
             catalog
                 .providers
@@ -184,7 +220,7 @@ pub fn default_model() -> &'static str {
                                 .and_then(|canonical_id| api_model_id_for(catalog, canonical_id))
                         })
                 })
-                .unwrap_or_else(|| FALLBACK_DEFAULT_MODEL.to_string())
+                .unwrap_or_else(pick_fallback_default_model)
         })
         .as_str()
 }
@@ -197,6 +233,95 @@ pub fn default_provider() -> &'static str {
                 .to_string()
         })
         .as_str()
+}
+
+/// Return the API model ID for the `fast_completion` task slot of the named
+/// provider, as declared in `models.json`'s `providers.<name>.taskRouting.fast_completion`.
+///
+/// Resolution order:
+///   1. `taskRouting.fast_completion` canonical id → resolve to `apiModelId` if present.
+///   2. Provider `defaultModel` → resolve to `apiModelId`.
+///   3. Per-provider fallback constant (last resort, only fires if models.json is
+///      unparseable at startup — not a rule-models-json violation because the
+///      fallback is never the source of truth for user-visible model selection).
+///
+/// Do NOT hardcode model ID strings in callers — call this function instead.
+pub fn fast_completion_model(provider: &str) -> String {
+    let Some(catalog) = shared_catalog() else {
+        // models.json failed to parse (should never happen with include_str!).
+        // Pick the first model for the requested provider from the legacy bundled list.
+        return legacy_bundled_models()
+            .into_iter()
+            .find(|m| m.provider == provider)
+            .map(|m| m.id)
+            .unwrap_or_else(pick_fallback_default_model);
+    };
+    catalog
+        .providers
+        .get(provider)
+        .and_then(|pc| {
+            pc.task_routing
+                .as_ref()
+                .and_then(|tr| tr.fast_completion.as_deref())
+                .and_then(|canonical| api_model_id_for(catalog, canonical))
+                .or_else(|| {
+                    pc.default_model
+                        .as_deref()
+                        .and_then(|canonical| api_model_id_for(catalog, canonical))
+                })
+        })
+        .unwrap_or_else(|| pick_fallback_default_model())
+}
+
+/// Return the API model ID for the economy tier's first allowed model, as read
+/// from `models.json`'s `tierAllowedModels.economy` list.
+///
+/// This is the tier-appropriate default when the user has no explicit `--model`
+/// flag and their tier is free/hobby.  It is NOT the workhorse routing slot
+/// (that lives in `packages/types/src/model-catalog.ts` SLOT_REGISTRY) — it is
+/// simply the first entry of the economy bucket so CLI users get a cheap,
+/// capable model by default without touching the TS type catalog.
+///
+/// Falls back to the first fast model in the legacy bundled list if the
+/// shared catalog is unavailable (should never happen with include_str!).
+pub fn economy_default_model() -> &'static str {
+    static ECONOMY_MODEL_ID: OnceLock<String> = OnceLock::new();
+    ECONOMY_MODEL_ID
+        .get_or_init(|| {
+            let Some(catalog) = shared_catalog() else {
+                // models.json unparseable — pick first fast-tier model from legacy list.
+                return legacy_bundled_models()
+                    .into_iter()
+                    .next()
+                    .map(|m| m.id)
+                    .unwrap_or_else(pick_fallback_default_model);
+            };
+            let first = catalog.tier_allowed_models.economy.first().cloned();
+            // Resolve the canonical id to an apiModelId if one is specified.
+            first
+                .as_deref()
+                .and_then(|canonical_id| api_model_id_for(catalog, canonical_id))
+                .or(first)
+                .unwrap_or_else(pick_fallback_default_model)
+        })
+        .as_str()
+}
+
+/// Return the list of model IDs allowed for the given named tier slot.
+///
+/// Slot names: `"economy"`, `"pro_additions"`, `"flagship_additions"`.
+/// Returns an empty slice for unknown slot names — callers treat that as
+/// "allow all" so existing behavior is preserved.
+pub fn tier_allowed_models(tier_slot: &str) -> Vec<String> {
+    let Some(catalog) = shared_catalog() else {
+        return Vec::new();
+    };
+    match tier_slot {
+        "economy" => catalog.tier_allowed_models.economy.clone(),
+        "pro_additions" => catalog.tier_allowed_models.pro_additions.clone(),
+        "flagship_additions" => catalog.tier_allowed_models.flagship_additions.clone(),
+        _ => Vec::new(),
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -272,9 +397,9 @@ fn legacy_bundled_models() -> Vec<Model> {
     vec![
         // ── Anthropic ── docs.anthropic.com/en/docs/about-claude/models
         m(
-            "claude-opus-4-6",
+            "claude-opus-4-7",
             "anthropic",
-            "Claude Opus 4.6",
+            "Claude Opus 4.7",
             200_000,
             32_000,
             15.0,
@@ -1150,6 +1275,51 @@ pub fn providers() -> Vec<&'static str> {
     catalog().providers()
 }
 
+/// Return the qualityTier string for a model as declared in models.json.
+///
+/// Returns `None` for models not in the bundled shared catalog (e.g. Ollama local
+/// models or user-defined BYO models).  The returned string is one of:
+///   "fast" | "balanced" | "best" | "economy"
+///
+/// Callers that want a CapabilityTier enum should use `design_system::capability_for_model`
+/// which delegates to this function.
+pub fn quality_tier_for_model(model_id: &str) -> Option<String> {
+    let Some(catalog) = shared_catalog() else {
+        return None;
+    };
+    // The shared catalog is keyed by canonical ID (e.g. "claude-opus-4.7"),
+    // but model_id may be an apiModelId (e.g. "claude-opus-4-7").  Try both.
+    let canonical = catalog
+        .models
+        .iter()
+        .find(|(_, meta)| {
+            let api_id = meta.api_model_id.as_deref().unwrap_or(&meta.id);
+            api_id.eq_ignore_ascii_case(model_id) || meta.id.eq_ignore_ascii_case(model_id)
+        })
+        .map(|(k, _)| k.as_str())
+        .unwrap_or(model_id);
+    catalog
+        .models
+        .get(canonical)
+        .and_then(|m| m.quality_tier.clone())
+}
+
+/// Return true if a model ID is known to the bundled shared catalog.
+///
+/// "Known" means the catalog has an entry whose `id` or `apiModelId` matches
+/// (case-insensitive).  Ollama local models, user-defined BYO models, and any
+/// model ID not yet added to models.json will return `false`.
+pub fn is_known_model(model_id: &str) -> bool {
+    let Some(catalog) = shared_catalog() else {
+        // Can't verify without the catalog — treat as unknown.
+        return false;
+    };
+    catalog.models.values().any(|meta| {
+        let api_id = meta.api_model_id.as_deref().unwrap_or(&meta.id);
+        api_id.eq_ignore_ascii_case(model_id) || meta.id.eq_ignore_ascii_case(model_id)
+    })
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Tests
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1197,16 +1367,19 @@ mod tests {
     #[test]
     fn context_window_lookup() {
         let cat = Catalog::bundled();
-        assert_eq!(cat.context_window("claude-opus-4-6"), 200_000);
+        // claude-opus-4-7 ships with 1M context window per models.json
+        assert_eq!(cat.context_window("claude-opus-4-7"), 1_000_000);
         assert_eq!(cat.context_window("gpt-5.4"), 1_000_000);
         assert_eq!(cat.context_window("gemini-3.1-pro-preview"), 2_000_000);
-        assert_eq!(cat.context_window("grok-4-0709"), 256_000);
+        // grok-4-0709 deprecated in Phase 3; grok-4.3 is the live xAI flagship
+        // and ships with a larger 1M context window per models.json.
+        assert_eq!(cat.context_window("grok-4.3"), 1_000_000);
     }
 
     #[test]
     fn pricing_lookup() {
         let cat = Catalog::bundled();
-        let (i, o) = cat.pricing("claude-opus-4-6");
+        let (i, o) = cat.pricing("claude-opus-4-7");
         assert!(i > 0.0 && o > 0.0);
         let (i, o) = cat.pricing("llama3.1");
         assert_eq!((i, o), (0.0, 0.0));
@@ -1215,7 +1388,7 @@ mod tests {
     #[test]
     fn provider_detection() {
         let cat = Catalog::bundled();
-        assert_eq!(cat.provider_for("claude-opus-4-6"), Some("anthropic"));
+        assert_eq!(cat.provider_for("claude-opus-4-7"), Some("anthropic"));
         assert_eq!(cat.provider_for("gpt-5.4"), Some("openai"));
         assert_eq!(cat.provider_for("gemini-3.1-pro-preview"), Some("google"));
         assert_eq!(cat.provider_for("grok-4.1"), Some("xai"));
@@ -1260,7 +1433,7 @@ mod tests {
     fn user_override_replaces_existing() {
         let mut cat = Catalog::bundled();
         let ov = UserModelOverride {
-            id: "claude-opus-4-6".into(),
+            id: "claude-opus-4-7".into(),
             provider: "anthropic".into(),
             display_name: Some("Custom Opus".into()),
             context_window: Some(500_000),
@@ -1272,7 +1445,7 @@ mod tests {
             supports_reasoning: None,
         };
         cat.apply_overrides(&[ov]);
-        let found = cat.find("claude-opus-4-6").unwrap();
+        let found = cat.find("claude-opus-4-7").unwrap();
         assert_eq!(found.context_window, 500_000);
         assert_eq!(found.display_name, "Custom Opus");
     }
@@ -1282,5 +1455,231 @@ mod tests {
         let path = cache_path();
         assert!(path.to_string_lossy().contains(".agiworkforce"));
         assert!(path.to_string_lossy().contains("models.json"));
+    }
+
+    /// rule-models-json: fast_completion_model must resolve to a model that exists
+    /// in the bundled catalog for both anthropic and openai providers.
+    #[test]
+    fn fast_completion_model_exists_in_catalog() {
+        let cat = Catalog::bundled();
+        for provider in ["anthropic", "openai", "google"] {
+            let model_id = fast_completion_model(provider);
+            assert!(
+                cat.find(&model_id).is_some(),
+                "fast_completion_model({provider}) returned \"{model_id}\" \
+                 which is not in the bundled catalog — add it to bundled_models() \
+                 or fix the models.json taskRouting entry"
+            );
+        }
+    }
+
+    /// rule-models-json: the fast_completion_model for openai must be an openai model.
+    #[test]
+    fn fast_completion_model_correct_provider() {
+        let cat = Catalog::bundled();
+        let openai_fast = fast_completion_model("openai");
+        let m = cat.find(&openai_fast).unwrap_or_else(|| {
+            panic!("fast_completion_model(openai) = {openai_fast} not in catalog")
+        });
+        assert_eq!(
+            m.provider, "openai",
+            "fast_completion_model(openai) should be an openai model, got provider={}", m.provider
+        );
+
+        let anthropic_fast = fast_completion_model("anthropic");
+        let m = cat.find(&anthropic_fast).unwrap_or_else(|| {
+            panic!("fast_completion_model(anthropic) = {anthropic_fast} not in catalog")
+        });
+        assert_eq!(
+            m.provider, "anthropic",
+            "fast_completion_model(anthropic) should be an anthropic model, got provider={}", m.provider
+        );
+    }
+
+    /// rule-models-json: no Rust source file in apps/cli/src/ (outside model_catalog.rs
+    /// and models.rs) may contain a hardcoded model ID literal matching the patterns
+    /// gpt-5\.\d, claude-(opus|sonnet|haiku)-\d, gemini-\d, or grok-\d.
+    ///
+    /// This test scans the source tree at compile time using include_str! for the
+    /// files known to have been violation sites and asserts the literals are absent.
+    #[test]
+    fn no_hardcoded_model_ids_in_chatwidget() {
+        // include_str! resolves at compile time relative to the source file.
+        // We check chatwidget.rs and list_selection_view.rs — the two files
+        // identified as violation sites in the CLI-GHOST-MODEL / CLI-FAST-STATUS-MODEL
+        // audit findings.
+        let chatwidget_src = include_str!("tui/chatwidget.rs");
+        let list_sel_src = include_str!("tui/bottom_pane/list_selection_view.rs");
+
+        // Patterns that would indicate a hardcoded model literal (not inside a comment).
+        // We check for the known offenders specifically to avoid false positives from
+        // legitimate display strings that contain model names for UI copy.
+        let forbidden: &[&str] = &[
+            "\"gpt-5.4\"",
+            "\"gpt-5.5\"",
+            "\"claude-opus-4-6-mini\"",
+            "\"claude-haiku-4-5\"",   // must come from catalog, not hardcoded
+            "\"gpt-5.4-mini\"",       // must come from catalog, not hardcoded
+        ];
+
+        for literal in forbidden {
+            assert!(
+                !chatwidget_src.contains(literal),
+                "chatwidget.rs contains hardcoded model literal {literal} — \
+                 use model_catalog::fast_completion_model() or model_catalog::find() instead"
+            );
+            assert!(
+                !list_sel_src.contains(literal),
+                "list_selection_view.rs contains hardcoded model literal {literal} — \
+                 populate the model picker from the catalog"
+            );
+        }
+    }
+
+    // ── New tests for the 4 hardcoded-model-id violation fixes ──────────────
+
+    /// Site 2 fix: quality_tier_for_model() resolves to meaningful tiers for
+    /// known models, driving capability_for_model() without hardcoded literals.
+    #[test]
+    fn quality_tier_for_known_models() {
+        // Anthropic: opus → best, sonnet → balanced, haiku → fast
+        assert_eq!(
+            quality_tier_for_model("claude-opus-4-7").as_deref(),
+            Some("best"),
+            "claude-opus-4-7 should be qualityTier=best"
+        );
+        assert_eq!(
+            quality_tier_for_model("claude-sonnet-4-6").as_deref(),
+            Some("balanced"),
+            "claude-sonnet-4-6 should be qualityTier=balanced"
+        );
+        // OpenAI: gpt-5.5 → best (per models.json)
+        assert_eq!(
+            quality_tier_for_model("gpt-5.5").as_deref(),
+            Some("best"),
+            "gpt-5.5 should be qualityTier=best"
+        );
+        // xAI: grok-4.3 → best
+        assert_eq!(
+            quality_tier_for_model("grok-4.3").as_deref(),
+            Some("best"),
+            "grok-4.3 should be qualityTier=best"
+        );
+    }
+
+    /// Site 2 fix: quality_tier_for_model() returns None for models not in the
+    /// shared catalog (e.g. local Ollama models, user BYO endpoints).
+    #[test]
+    fn quality_tier_for_unknown_model_is_none() {
+        assert!(
+            quality_tier_for_model("llama3.1").is_none(),
+            "llama3.1 is an Ollama local model not in the shared catalog — \
+             quality_tier_for_model should return None"
+        );
+        assert!(
+            quality_tier_for_model("my-custom-byo-endpoint").is_none(),
+            "user BYO model ID should return None from quality_tier_for_model"
+        );
+    }
+
+    /// Site 3 fix: is_known_model() returns true for well-known IDs and false
+    /// for deprecated / unknown IDs — the new warn_for_model logic in chatwidget.
+    #[test]
+    fn is_known_model_reflects_catalog() {
+        // Active models present in models.json must be known.
+        assert!(
+            is_known_model("claude-opus-4-7"),
+            "claude-opus-4-7 should be in the bundled catalog"
+        );
+        assert!(
+            is_known_model("gpt-5.5"),
+            "gpt-5.5 should be in the bundled catalog"
+        );
+        assert!(
+            is_known_model("gemini-3.1-pro-preview"),
+            "gemini-3.1-pro-preview should be in the bundled catalog"
+        );
+        // Models that are NOT in models.json must be unknown.
+        assert!(
+            !is_known_model("gpt-5.2"),
+            "gpt-5.2 is not in models.json — is_known_model should return false"
+        );
+        assert!(
+            !is_known_model("claude-opus-4-6-mini"),
+            "claude-opus-4-6-mini is a ghost model — is_known_model should return false"
+        );
+    }
+
+    /// Site 4 fix: pick_fallback_default_model() returns a non-empty model ID
+    /// that is present in the legacy bundled list (not a hardcoded literal).
+    #[test]
+    fn fallback_default_model_is_derivable() {
+        let fallback = pick_fallback_default_model();
+        assert!(!fallback.is_empty(), "pick_fallback_default_model() must not return an empty string");
+        // The fallback must come from the legacy bundled list.
+        let legacy = legacy_bundled_models();
+        assert!(
+            legacy.iter().any(|m| m.id == fallback),
+            "pick_fallback_default_model() = \"{fallback}\" is not in legacy_bundled_models()"
+        );
+    }
+
+    /// Site 1 fix: no_hardcoded_model_ids_in_onboarding verifies that onboarding.rs
+    /// no longer contains the 8 formerly-hardcoded model literals.
+    #[test]
+    fn no_hardcoded_model_ids_in_onboarding() {
+        let onboarding_src = include_str!("onboarding.rs");
+        // These are the IDs that were hardcoded in ONBOARDING_MODEL_SPECS before the fix.
+        let formerly_hardcoded: &[&str] = &[
+            "\"claude-opus-4-6\"",
+            "\"claude-sonnet-4-6\"",
+            "\"claude-haiku-4-5-20251001\"",
+            "\"gpt-5.4\"",
+            "\"gpt-5.4-mini\"",
+            "\"gpt-5.4-pro\"",
+            "\"gemini-3.1-pro-preview\"",
+            "\"gemini-3.1-flash-lite\"",
+        ];
+        for literal in formerly_hardcoded {
+            assert!(
+                !onboarding_src.contains(literal),
+                "onboarding.rs still contains hardcoded model literal {literal} — \
+                 ONBOARDING_MODEL_SPECS should be derived from the catalog"
+            );
+        }
+    }
+
+    /// Site 2 fix: design_system.rs capability_for_model must not contain
+    /// the former 30-arm hardcoded match.  We verify by checking that model IDs
+    /// which were exclusively match arms (never used in tests) are absent from
+    /// the non-test portion of the file.
+    ///
+    /// Note: model IDs that appear in *test fixtures* in design_system.rs are
+    /// legitimately there and are not checked here.  Only production-code-only
+    /// literals are asserted absent.
+    #[test]
+    fn no_hardcoded_model_ids_in_design_system() {
+        let ds_src = include_str!("design_system.rs");
+        // Split at the #[cfg(test)] boundary to avoid scanning test fixtures.
+        let production_src = ds_src
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap_or(ds_src);
+        // IDs that were only ever in the match arms, not in tests.
+        let formerly_hardcoded: &[&str] = &[
+            "\"grok-4.3\"",
+            "\"deepseek-chat\"",
+            "\"kimi-k2.5\"",
+            "\"glm-5.1\"",
+            "\"sonar-reasoning-pro\"",
+            "\"qwen-max\"",
+        ];
+        for literal in formerly_hardcoded {
+            assert!(
+                !production_src.contains(literal),
+                "design_system.rs production code still contains hardcoded model literal {literal} — \
+                 capability_for_model() should use quality_tier_for_model() from the catalog"
+            );
+        }
     }
 }

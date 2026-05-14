@@ -280,10 +280,10 @@ mod tests {
 
     #[test]
     fn test_provider_default_model_spot_checks() {
-        assert_eq!(Provider::OpenAI.default_model(), "gpt-5.4");
+        assert_eq!(Provider::OpenAI.default_model(), "gpt-5.5");
         assert_eq!(Provider::Anthropic.default_model(), "claude-sonnet-4.6");
         assert_eq!(Provider::Google.default_model(), "gemini-3.1-pro-preview");
-        assert_eq!(Provider::DeepSeek.default_model(), "deepseek-chat");
+        assert_eq!(Provider::DeepSeek.default_model(), "deepseek-v4-flash");
         assert_eq!(Provider::Ollama.default_model(), "llama4-maverick");
     }
 
@@ -300,7 +300,7 @@ mod tests {
     #[test]
     fn test_get_model_for_task_openai_complex_reasoning() {
         let model = Provider::OpenAI.get_model_for_task(TaskType::ComplexReasoning);
-        assert_eq!(model, "gpt-5.4-pro");
+        assert_eq!(model, "gpt-5.5");
     }
 
     #[test]
@@ -329,8 +329,8 @@ mod tests {
     fn test_get_model_for_task_deepseek_code_generation() {
         let model = Provider::DeepSeek.get_model_for_task(TaskType::CodeGeneration);
         assert!(!model.is_empty());
-        // DeepSeek uses the same model for all tasks
-        assert_eq!(model, "deepseek-chat");
+        // DeepSeek's code-generation task routes to V4 Flash (the new default after V4 launch).
+        assert_eq!(model, "deepseek-v4-flash");
     }
 
     #[test]
@@ -969,7 +969,7 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5.4");
+        assert_eq!(suggestion.model, "gpt-5.5");
     }
 
     #[test]
@@ -1001,7 +1001,8 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Anthropic);
-        assert_eq!(suggestion.model, "claude-sonnet-4.5");
+        // claude-sonnet-4.5 is deprecated; canonicalization forwards to current Sonnet.
+        assert_eq!(suggestion.model, "claude-sonnet-4.6");
     }
 
     #[test]
@@ -1030,11 +1031,13 @@ mod tests {
     #[test]
     fn test_intelligent_routing_infer_deepseek_provider() {
         let router = router_with_all_providers();
+        // models.json canonicalization maps deepseek-chat → deepseek-v4-flash
+        // (deepseek-chat deprecates 2026-07-24).
         let context =
             intelligent_context("hobby", Some("coding"), Some("chat"), Some("deepseek-chat"));
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::DeepSeek);
-        assert_eq!(suggestion.model, "deepseek-chat");
+        assert_eq!(suggestion.model, "deepseek-v4-flash");
     }
 
     #[test]
@@ -1049,6 +1052,8 @@ mod tests {
     #[test]
     fn test_intelligent_routing_infer_xai_provider() {
         let router = router_with_all_providers();
+        // models.json canonicalization maps grok-4-fast-reasoning + siblings
+        // → grok-4.3 (the deprecated families all sunset 2026-05-15).
         let context = intelligent_context(
             "hobby",
             Some("reasoning"),
@@ -1057,7 +1062,7 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::XAI);
-        assert_eq!(suggestion.model, "grok-4-1-fast-reasoning");
+        assert_eq!(suggestion.model, "grok-4.3");
     }
 
     // --- Intelligent routing: intent_type-based (no selected_model) ---
@@ -1113,7 +1118,7 @@ mod tests {
         let context = intelligent_context("pro", Some("reasoning"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5.4-pro");
+        assert_eq!(suggestion.model, "gpt-5.5");
     }
 
     #[test]

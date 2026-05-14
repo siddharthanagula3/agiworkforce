@@ -1,13 +1,22 @@
 import { Alert } from 'react-native';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { QueueFullError } from '@agiworkforce/runtime';
 import { mmkvStorage } from '@/lib/mmkv';
-import { api } from '@/services/api';
+import { getMobileSendQueue } from '@/lib/sendQueue';
+import { api, ApiPaywallError } from '@/services/api';
 import { streamChat, type StreamDelta } from '@/services/streaming';
 import { useProjectStore } from '@/stores/projectStore';
 import type { ChatMessage, ConversationSummary, MessageAttachment } from '@/types/chat';
 import type { Attachment } from '@/components/chat/AttachmentPreview';
 import type { UploadFileInput, UploadFileResult } from '@/services/api';
+
+/** Paywall error state captured when the API returns a tier-cap paywall response. */
+export interface PaywallErrorState {
+  feature: string;
+  requiredTier: string;
+  reason: string;
+}
 
 /** Chat mode — determines how the AI processes the conversation. */
 export type ChatMode = 'chat' | 'research' | 'create';
@@ -44,6 +53,8 @@ interface ChatState {
   isLoadingMessages: boolean;
   /** Error message from the last failed operation */
   error: string | null;
+  /** Paywall error from the last tier-blocked request. Non-null triggers PaywallBottomSheet. */
+  paywallError: PaywallErrorState | null;
   /** Global search query for conversations + messages */
   searchQuery: string;
   /** Search results: matching conversation IDs with snippet and optional match offset for highlighting */
@@ -86,6 +97,7 @@ interface ChatState {
   renameConversation: (id: string, title: string) => Promise<void>;
   setCurrentConversationId: (id: string | null) => void;
   clearError: () => void;
+  clearPaywallError: () => void;
   searchConversations: (query: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
   retryMessage: (conversationId: string, messageId: string) => void;
@@ -172,6 +184,7 @@ export const useChatStore = create<ChatState>()(
       searchResults: [],
       isSearching: false,
       isEditing: false,
+      paywallError: null,
       retryAttempts: {},
       chatMode: 'chat',
       chatStyle: 'normal',
@@ -290,6 +303,26 @@ export const useChatStore = create<ChatState>()(
       },
 
       sendMessage: async (conversationId, content, model, attachments) => {
+        // Route the prompt through the priority send queue first. The mobile
+        // queue persists `next` and `later` lanes to MMKV so a deferred
+        // send survives an OS-driven background process kill.
+        const queue = getMobileSendQueue();
+        try {
+          queue.enqueue({ value: content, mode: 'prompt' });
+        } catch (err) {
+          if (err instanceof QueueFullError) {
+            Alert.alert(
+              'Queue full',
+              `The "${err.lane}" lane is at capacity. Please wait for prior sends to drain.`,
+            );
+            return;
+          }
+          throw err;
+        }
+        // Drain immediately — current behavior is direct send. The queue
+        // captures the command for cancellation / replay; we don't defer it.
+        queue.dequeue();
+
         // Cancel any existing stream for this conversation
         const existingController = abortControllers.get(conversationId);
         if (existingController) {
@@ -543,13 +576,40 @@ export const useChatStore = create<ChatState>()(
                 });
               },
 
-              onError: (_error: Error) => {
+              onError: (error: Error) => {
                 thinkingStartTimes.delete(conversationId);
                 abortControllers.delete(conversationId);
                 streamingConversations.delete(conversationId);
 
                 const state = get();
                 const msgs = state.messages[conversationId] ?? [];
+
+                // Detect paywall errors and store them separately so the UI can
+                // show the PaywallBottomSheet instead of a generic error message.
+                if (error instanceof ApiPaywallError) {
+                  const updatedMsgs = msgs.map((m) =>
+                    m.id === assistantMessageId
+                      ? {
+                          ...m,
+                          content: state.streamingContent || '',
+                          isStreaming: false,
+                        }
+                      : m,
+                  );
+                  set({
+                    isStreaming: streamingConversations.size > 0,
+                    streamingContent: '',
+                    streamingReasoning: '',
+                    messages: { ...state.messages, [conversationId]: updatedMsgs },
+                    paywallError: {
+                      feature: error.feature,
+                      requiredTier: error.requiredTier,
+                      reason: error.reason,
+                    },
+                  });
+                  return;
+                }
+
                 const updatedMsgs = msgs.map((m) =>
                   m.id === assistantMessageId
                     ? {
@@ -571,7 +631,7 @@ export const useChatStore = create<ChatState>()(
             },
             controller.signal,
           );
-        } catch {
+        } catch (caughtErr) {
           // Handle synchronous errors from streamChat (e.g., network failure before stream starts)
           // Always clean up streaming state, even on abort
           thinkingStartTimes.delete(conversationId);
@@ -585,6 +645,29 @@ export const useChatStore = create<ChatState>()(
 
           const state = get();
           const msgs = state.messages[conversationId] ?? [];
+
+          // Paywall errors from the synchronous throw path (ApiPaywallError propagated
+          // out of streamChat before any streaming started).
+          if (caughtErr instanceof ApiPaywallError) {
+            const updatedMsgs = msgs.map((m) =>
+              m.id === assistantMessageId
+                ? { ...m, content: state.streamingContent || '', isStreaming: false }
+                : m,
+            );
+            set({
+              isStreaming: streamingConversations.size > 0,
+              streamingContent: '',
+              streamingReasoning: '',
+              messages: { ...state.messages, [conversationId]: updatedMsgs },
+              paywallError: {
+                feature: caughtErr.feature,
+                requiredTier: caughtErr.requiredTier,
+                reason: caughtErr.reason,
+              },
+            });
+            return;
+          }
+
           const updatedMsgs = msgs.map((m) =>
             m.id === assistantMessageId
               ? {
@@ -677,6 +760,10 @@ export const useChatStore = create<ChatState>()(
 
       clearError: () => {
         set({ error: null });
+      },
+
+      clearPaywallError: () => {
+        set({ paywallError: null });
       },
 
       searchConversations: (query: string) => {

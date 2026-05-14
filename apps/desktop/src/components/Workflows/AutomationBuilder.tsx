@@ -6,8 +6,10 @@
  *
  * All Tauri invoke() params are camelCase per IPC rules.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import { useModelStore } from '../../stores/modelStore';
+import { getDefaultModelFor } from '@agiworkforce/types';
 import {
   Calendar,
   ChevronDown,
@@ -127,7 +129,7 @@ function defaultFormState(): CreateTriggerInput {
     config: { ...DEFAULT_CRON_CONFIG },
     action: {
       prompt: '',
-      model: 'claude-opus-4-5',
+      model: getDefaultModelFor(null, 'chat'),
       approvalRequired: false,
     },
   };
@@ -374,6 +376,13 @@ interface TriggerFormProps {
 function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormProps) {
   const [form, setForm] = useState<CreateTriggerInput>(initial ?? defaultFormState());
   const [saving, setSaving] = useState(false);
+
+  // Dynamic model list from the catalog (rule-models-json: no hardcoded model IDs).
+  const availableModels = useModelStore((s) => s.availableModels);
+  const automationModelOptions = useMemo(
+    () => availableModels.filter((m) => m.available).map((m) => ({ value: m.id, label: m.name })),
+    [availableModels],
+  );
 
   // Sync when the dialog re-opens with new initial data
   useEffect(() => {
@@ -649,12 +658,18 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="claude-opus-4.6">Claude Opus 4.6</SelectItem>
-                  <SelectItem value="claude-sonnet-4.6">Claude Sonnet 4.6</SelectItem>
-                  <SelectItem value="gpt-5.4">GPT-5.4</SelectItem>
-                  <SelectItem value="gpt-5.4-mini">GPT-5.4 Mini</SelectItem>
-                  <SelectItem value="gemini-3.1-pro-preview">Gemini 3.1 Pro</SelectItem>
-                  <SelectItem value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</SelectItem>
+                  {automationModelOptions.length > 0 ? (
+                    automationModelOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    // Fallback while model store is loading — empty state.
+                    <SelectItem value="" disabled>
+                      Loading models…
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>

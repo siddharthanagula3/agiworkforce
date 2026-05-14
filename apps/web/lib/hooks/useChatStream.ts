@@ -9,6 +9,10 @@ interface SendMessageOptions {
   maxTokens?: number;
   attachments?: Attachment[];
   conversationId?: string;
+  webSearch?: boolean;
+  webFetch?: boolean;
+  codeExecution?: boolean;
+  thinkingEnabled?: boolean;
 }
 
 interface UseChatStreamReturn {
@@ -63,6 +67,11 @@ export function useChatStream(): UseChatStreamReturn {
   const addMessage = useChatStore((state) => state.addMessage);
   const updateMessage = useChatStore((state) => state.updateMessage);
   const appendToMessage = useChatStore((state) => state.appendToMessage);
+  const appendToThinking = useChatStore((state) => state.appendToThinking);
+  const setSearching = useChatStore((state) => state.setSearching);
+  const setSearchResults = useChatStore((state) => state.setSearchResults);
+  const setExecutingCode = useChatStore((state) => state.setExecutingCode);
+  const setCodeExecutionResult = useChatStore((state) => state.setCodeExecutionResult);
   const startStreaming = useChatStore((state) => state.startStreaming);
   const stopStreaming = useChatStore((state) => state.stopStreaming);
   const setLoading = useChatStore((state) => state.setLoading);
@@ -181,6 +190,11 @@ export function useChatStream(): UseChatStreamReturn {
             stream: true,
             temperature: options.temperature,
             max_tokens: options.maxTokens,
+            web_search: options.webSearch || undefined,
+            web_fetch: options.webFetch || undefined,
+            code_execution: options.codeExecution || undefined,
+            thinking_mode: options.thinkingEnabled || undefined,
+            use_prompt_cache: true,
           }),
           signal: abortControllerRef.current.signal,
         });
@@ -199,6 +213,8 @@ export function useChatStream(): UseChatStreamReturn {
         const decoder = new TextDecoder();
         let buffer = '';
         let fullAssistantContent = '';
+        // Extended-thinking state: tracks whether we're currently inside a <thinking> block
+        let inThinkingBlock = false;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -215,7 +231,19 @@ export function useChatStream(): UseChatStreamReturn {
 
             const data = trimmedLine.slice(6);
             if (data === '[DONE]') {
-              // Save the complete assistant message to database
+              // Close any dangling thinking block
+              if (inThinkingBlock) {
+                updateMessage(assistantMessageId, {
+                  metadata: {
+                    isThinkingStreaming: false,
+                    thinkingCompletedAt: new Date().toISOString(),
+                  },
+                });
+                inThinkingBlock = false;
+              }
+              // Clear any lingering tool indicators
+              setSearching(assistantMessageId, false);
+              setExecutingCode(assistantMessageId, false);
               if (fullAssistantContent) {
                 saveMessageToDb(
                   conversationId,
@@ -233,28 +261,104 @@ export function useChatStream(): UseChatStreamReturn {
             try {
               const parsed = JSON.parse(data);
 
-              // Handle OpenAI-compatible format
-              if (parsed.choices?.[0]?.delta?.content) {
-                const chunk = parsed.choices[0].delta.content;
-                fullAssistantContent += chunk;
-                appendToMessage(assistantMessageId, chunk);
+              // Resolve content chunk from OpenAI-compatible or raw Anthropic format
+              let chunk: string | null = null;
+              if (parsed.choices?.[0]?.delta?.content != null) {
+                chunk = parsed.choices[0].delta.content;
+              } else if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+                chunk = parsed.delta.text;
               }
 
-              // Handle Anthropic format
-              if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-                const chunk = parsed.delta.text;
-                fullAssistantContent += chunk;
-                appendToMessage(assistantMessageId, chunk);
+              if (chunk !== null) {
+                if (chunk === '<thinking>') {
+                  // Server signals the start of an extended thinking block
+                  inThinkingBlock = true;
+                  updateMessage(assistantMessageId, {
+                    metadata: {
+                      isThinkingStreaming: true,
+                      thinkingStartedAt: new Date().toISOString(),
+                    },
+                  });
+                } else if (chunk === '</thinking>') {
+                  // Server signals the end of an extended thinking block
+                  inThinkingBlock = false;
+                  updateMessage(assistantMessageId, {
+                    metadata: {
+                      isThinkingStreaming: false,
+                      thinkingCompletedAt: new Date().toISOString(),
+                    },
+                  });
+                } else if (inThinkingBlock) {
+                  appendToThinking(assistantMessageId, chunk);
+                } else {
+                  fullAssistantContent += chunk;
+                  appendToMessage(assistantMessageId, chunk);
+                }
+              }
+
+              // Handle server-managed tool status indicators
+              const toolStatus = parsed.choices?.[0]?.delta?.x_tool_status;
+              if (toolStatus?.status === 'searching' || toolStatus?.status === 'fetching') {
+                setSearching(assistantMessageId, true);
+              } else if (toolStatus?.status === 'executing') {
+                setExecutingCode(assistantMessageId, true);
+              }
+
+              // Handle code execution result
+              const codeResultBlock = parsed.choices?.[0]?.delta?.x_code_result;
+              if (codeResultBlock) {
+                const content = Array.isArray(codeResultBlock.content)
+                  ? (codeResultBlock.content as Record<string, unknown>[])
+                  : [];
+                const textItem = content.find((c) => c['type'] === 'text');
+                const rawText = (textItem?.['text'] as string) || '';
+                const images = content
+                  .filter((c) => c['type'] === 'image')
+                  .map((c) => {
+                    const src = c['source'] as Record<string, unknown> | undefined;
+                    return {
+                      mediaType: (src?.['media_type'] as string) || 'image/png',
+                      data: (src?.['data'] as string) || '',
+                    };
+                  })
+                  .filter((img) => img.data);
+
+                // Parse stdout/stderr/return_code from the text block.
+                // Anthropic formats this as: <stdout>...</stdout><stderr>...</stderr><return_code>N</return_code>
+                const stdout = rawText.match(/<stdout>([\s\S]*?)<\/stdout>/)?.[1] ?? rawText;
+                const stderr = rawText.match(/<stderr>([\s\S]*?)<\/stderr>/)?.[1] ?? '';
+                const returnCode = parseInt(
+                  rawText.match(/<return_code>(\d+)<\/return_code>/)?.[1] ?? '0',
+                  10,
+                );
+                setCodeExecutionResult(assistantMessageId, {
+                  stdout,
+                  stderr,
+                  returnCode,
+                  images: images.length > 0 ? images : undefined,
+                });
+              }
+
+              // Handle web search results (server-managed tool completed)
+              const searchResultsBlock = parsed.choices?.[0]?.delta?.x_search_results;
+              if (searchResultsBlock?.content && Array.isArray(searchResultsBlock.content)) {
+                const results = (searchResultsBlock.content as Record<string, unknown>[])
+                  .filter((r) => r['type'] === 'web_search_result' && r['url'])
+                  .map((r) => ({
+                    url: r['url'] as string,
+                    title: (r['title'] as string) || (r['url'] as string),
+                    snippet: (r['encrypted_content'] as string) || '',
+                  }));
+                if (results.length > 0) {
+                  setSearchResults(assistantMessageId, results);
+                }
               }
 
               // Handle finish reason
-              // Note: We keep the originally selected model name for display consistency.
-              // The API may return a different model name (e.g., due to fallback, version
-              // differences, or auto-model resolution), but users should see what they selected.
+              // We keep the originally selected model name for display consistency - the API
+              // may return a different model name due to fallback or version differences.
               if (parsed.choices?.[0]?.finish_reason || parsed.type === 'message_stop') {
-                updateMessage(assistantMessageId, {
-                  isStreaming: false,
-                });
+                updateMessage(assistantMessageId, { isStreaming: false });
               }
             } catch {
               // Ignore parse errors for incomplete chunks
@@ -301,6 +405,11 @@ export function useChatStream(): UseChatStreamReturn {
       addMessage,
       updateMessage,
       appendToMessage,
+      appendToThinking,
+      setSearching,
+      setSearchResults,
+      setExecutingCode,
+      setCodeExecutionResult,
       startStreaming,
       stopStreaming,
       setLoading,

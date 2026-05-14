@@ -1,7 +1,14 @@
 import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { combineAbortSignals } from '@/lib/abortSignal';
 import { AbortError } from '@agiworkforce/utils';
+import {
+  streamFromProvider,
+  type ProviderStreamProvider,
+  type StreamChunk as ProviderStreamChunk,
+} from '@/lib/providerStreamClient';
 import { supabase } from './supabase';
+import { secureFetch } from './secureFetch';
+import { ApiPaywallError } from './api';
 
 export interface StreamDelta {
   content?: string;
@@ -73,7 +80,7 @@ async function attemptStream(
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
 
-  const response = await fetch(`${API_URL}/api/llm/v1/chat/completions`, {
+  const response = await secureFetch(`${API_URL}/api/llm/v1/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -86,6 +93,27 @@ async function attemptStream(
 
   if (!response.ok) {
     const text = await response.text();
+
+    // Detect structured paywall response: HTTP 429 + { kind: 'paywall', ... }.
+    // Throw ApiPaywallError so the caller can distinguish paywall from other
+    // stream errors and show the PaywallBottomSheet instead of a generic toast.
+    if (response.status === 429) {
+      try {
+        const parsed = JSON.parse(text) as Record<string, unknown>;
+        if (parsed && parsed.kind === 'paywall') {
+          throw new ApiPaywallError(
+            typeof parsed.feature === 'string' ? parsed.feature : 'token_cap',
+            typeof parsed.requiredTier === 'string' ? parsed.requiredTier : 'hobby',
+            typeof parsed.reason === 'string' ? parsed.reason : '',
+          );
+        }
+      } catch (jsonErr) {
+        // If jsonErr is our ApiPaywallError, re-throw it
+        if (jsonErr instanceof ApiPaywallError) throw jsonErr;
+        // Otherwise fall through to generic error below
+      }
+    }
+
     callbacks.onError(new Error(`HTTP ${response.status}: ${text}`));
     return false;
   }
@@ -149,6 +177,127 @@ async function attemptStream(
 }
 
 /**
+ * Default-off feature flag: when `EXPO_PUBLIC_USE_PROVIDER_STREAM === '1'`,
+ * `streamChat` will first try the api-gateway's `/api/v1/providers/:id/stream`
+ * endpoint and fall back to the legacy `/api/llm/v1/chat/completions` path on
+ * error.
+ */
+const USE_PROVIDER_STREAM = process.env.EXPO_PUBLIC_USE_PROVIDER_STREAM === '1';
+
+const VALID_PROVIDER_IDS: ReadonlySet<ProviderStreamProvider> = new Set([
+  'anthropic',
+  'openai',
+  'google',
+  'ollama',
+]);
+
+function inferProviderFromModel(modelId: string | undefined): ProviderStreamProvider {
+  if (!modelId) return 'anthropic';
+  const m = modelId.toLowerCase();
+  if (m.startsWith('claude-')) return 'anthropic';
+  if (m.startsWith('gpt-') || m.startsWith('o1-') || m.startsWith('codex-')) return 'openai';
+  if (m.startsWith('gemini-')) return 'google';
+  if (
+    m === 'ollama-local' ||
+    m.startsWith('llama') ||
+    m.startsWith('qwen') ||
+    m.startsWith('mistral')
+  ) {
+    return 'ollama';
+  }
+  return 'anthropic';
+}
+
+function getProviderOverride(): 'auto' | ProviderStreamProvider {
+  const raw = process.env.EXPO_PUBLIC_PROVIDER_STREAM_PROVIDER?.trim().toLowerCase();
+  if (!raw || raw === 'auto') return 'auto';
+  return VALID_PROVIDER_IDS.has(raw as ProviderStreamProvider)
+    ? (raw as ProviderStreamProvider)
+    : 'auto';
+}
+
+/**
+ * Flatten the chat-completions content shape (string OR multimodal parts) down
+ * to a single string for the provider-stream endpoint, which currently only
+ * accepts text. Image parts are dropped with a `[image]` placeholder so the
+ * conversation history remains coherent.
+ */
+function flattenChatContent(
+  content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>,
+): string {
+  if (typeof content === 'string') return content;
+  return content
+    .map((part) => (part.type === 'text' && part.text ? part.text : '[image]'))
+    .join('\n');
+}
+
+/**
+ * Attempt a streaming reply via the api-gateway provider-stream endpoint.
+ * Throws on transport / upstream error so the caller can fall back to the
+ * legacy chat-completions path. Returns `true` on a clean stop.
+ */
+async function attemptProviderStream(
+  body: {
+    model: string;
+    messages: Array<{
+      role: string;
+      content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+    }>;
+  },
+  callbacks: StreamCallbacks,
+  signal: AbortSignal,
+): Promise<boolean> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) {
+    throw new Error('No Supabase session for provider-stream path');
+  }
+
+  const override = getProviderOverride();
+  const providerId = override === 'auto' ? inferProviderFromModel(body.model) : override;
+
+  const flattened: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = body.messages
+    .filter((m) => m.role === 'user' || m.role === 'assistant' || m.role === 'system')
+    .map((m) => ({
+      role: m.role as 'user' | 'assistant' | 'system',
+      content: flattenChatContent(m.content),
+    }));
+
+  const stream = streamFromProvider({
+    gatewayUrl: API_URL,
+    providerId,
+    authToken: token,
+    request: { model: body.model, messages: flattened },
+    signal,
+  });
+
+  let sawError: { code?: string; message: string } | null = null;
+  let doneCalled = false;
+  for await (const chunk of stream as AsyncIterable<ProviderStreamChunk>) {
+    if (chunk.type === 'text-delta') {
+      if (chunk.delta) callbacks.onDelta({ content: chunk.delta });
+    } else if (chunk.type === 'thinking-delta') {
+      if (chunk.delta) callbacks.onDelta({ reasoning: chunk.delta });
+    } else if (chunk.type === 'error') {
+      sawError = { ...(chunk.code ? { code: chunk.code } : {}), message: chunk.message };
+    } else if (chunk.type === 'stop') {
+      if (sawError) {
+        throw new Error(`provider-stream:${sawError.code ?? 'STREAM_ERROR'}:${sawError.message}`);
+      }
+      callbacks.onDelta({ finish_reason: chunk.reason });
+      doneCalled = true;
+      callbacks.onDone();
+      return true;
+    }
+  }
+  if (sawError) {
+    throw new Error(`provider-stream:${sawError.code ?? 'STREAM_ERROR'}:${sawError.message}`);
+  }
+  if (!doneCalled) callbacks.onDone();
+  return true;
+}
+
+/**
  * SSE streaming consumer for `/api/llm/v1/chat/completions`.
  * Uses fetch + ReadableStream (RN 0.76+ supports this natively).
  *
@@ -176,6 +325,36 @@ export async function streamChat(
   let combinedSignal = signal
     ? combineAbortSignals([signal, timeoutController.signal])
     : timeoutController.signal;
+
+  // Feature-flagged: route through the api-gateway provider-stream endpoint
+  // first. Falls through to the legacy chat-completions path on failure so a
+  // misconfigured gateway never strands the user.
+  if (USE_PROVIDER_STREAM) {
+    try {
+      const ok = await attemptProviderStream(
+        { model: body.model, messages: body.messages },
+        callbacks,
+        combinedSignal,
+      );
+      if (ok) {
+        clearTimeout(timeoutId);
+        return;
+      }
+    } catch (err) {
+      if (combinedSignal.aborted || signal?.aborted) {
+        clearTimeout(timeoutId);
+        return;
+      }
+      // Reset the timeout for the legacy retry budget
+      console.warn('[streaming] provider-stream path failed, falling back to legacy:', err);
+      clearTimeout(timeoutId);
+      timeoutController = new AbortController();
+      timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAMING);
+      combinedSignal = signal
+        ? combineAbortSignals([signal, timeoutController.signal])
+        : timeoutController.signal;
+    }
+  }
 
   let lastNetworkError: Error | null = null;
 

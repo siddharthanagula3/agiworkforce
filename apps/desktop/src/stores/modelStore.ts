@@ -69,6 +69,7 @@ const MANAGED_CLOUD_DEFAULT_CATEGORY: Record<Provider, ManagedCloudModel['catego
   openai: 'latest',
   google: 'thinking',
   ollama: 'latest',
+  lmstudio: 'latest',
   xai: 'latest',
   deepseek: 'thinking',
   qwen: 'thinking',
@@ -373,6 +374,7 @@ const defaultUsageStats: UsageStats = {
     anthropic: { tokens: 0, cost: 0, messages: 0 },
     google: { tokens: 0, cost: 0, messages: 0 },
     ollama: { tokens: 0, cost: 0, messages: 0 },
+    lmstudio: { tokens: 0, cost: 0, messages: 0 },
     xai: { tokens: 0, cost: 0, messages: 0 },
     deepseek: { tokens: 0, cost: 0, messages: 0 },
     qwen: { tokens: 0, cost: 0, messages: 0 },
@@ -415,6 +417,7 @@ export const useModelStore = create<ModelState>()(
           anthropic: null,
           google: null,
           ollama: null,
+          lmstudio: null,
           xai: null,
           deepseek: null,
           qwen: null,
@@ -920,8 +923,10 @@ export const useModelStore = create<ModelState>()(
           // If no model is selected yet, use the best auto mode the current plan allows.
           const effectiveModel = resolveEffectiveModelForTier(selectedModel, currentPlan);
 
-          // Use the model router to determine the actual model
-          const routingResult = getModelForRequest(effectiveModel, message, hasImages);
+          // Use the model router to determine the actual model.
+          // Pass currentPlan as tier so Pro/Max users get *_pro slot routing
+          // (e.g. coding -> coding_premium_pro -> claude-sonnet-4.6).
+          const routingResult = getModelForRequest(effectiveModel, message, hasImages, currentPlan);
 
           const decision: RoutingDecision = {
             routedModelId: routingResult.modelId,
@@ -955,6 +960,7 @@ export const useModelStore = create<ModelState>()(
             message,
             hasImages,
             llmClassify,
+            currentPlan,
           );
 
           const decision: RoutingDecision = {
@@ -1009,6 +1015,7 @@ export const useModelStore = create<ModelState>()(
                 anthropic: null,
                 google: null,
                 ollama: null,
+                lmstudio: null,
                 xai: null,
                 deepseek: null,
                 qwen: null,

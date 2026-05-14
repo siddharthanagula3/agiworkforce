@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /** WEB-1 (audit 2026-05-03): hard cap on a single completion's max_tokens.
  *  Without this, a single authenticated request can drain a billing
- *  period — both via inflated credit reservation and via the actual
+ *  period - both via inflated credit reservation and via the actual
  *  upstream LLM call (which honours whatever cap we forward). 32k is
  *  larger than any current model's per-request output ceiling that we
  *  serve through this endpoint; raise per-model in MODEL_TIER_REQUIREMENTS

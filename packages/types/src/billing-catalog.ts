@@ -1,4 +1,12 @@
-export type BillingPlanTier = 'free' | 'hobby' | 'pro' | 'max' | 'enterprise';
+export type BillingPlanTier =
+  | 'local-only'
+  | 'byok'
+  | 'free'
+  | 'hobby'
+  | 'pro'
+  | 'pro_plus'
+  | 'max'
+  | 'enterprise';
 export type BillingInterval = 'monthly' | 'yearly';
 
 export const INCLUDED_USAGE_BUDGET_RATIO = 0.35;
@@ -11,6 +19,18 @@ export interface BillingPlanPricing {
 }
 
 export const BILLING_PLAN_PRICING: Record<BillingPlanTier, BillingPlanPricing> = {
+  'local-only': {
+    id: 'local-only',
+    label: 'Local Only',
+    monthlyPriceUsd: 0,
+    yearlyPriceUsd: 0,
+  },
+  byok: {
+    id: 'byok',
+    label: 'BYOK',
+    monthlyPriceUsd: 0,
+    yearlyPriceUsd: 0,
+  },
   free: {
     id: 'free',
     label: 'Free',
@@ -28,6 +48,12 @@ export const BILLING_PLAN_PRICING: Record<BillingPlanTier, BillingPlanPricing> =
     label: 'Pro',
     monthlyPriceUsd: 29.99,
     yearlyPriceUsd: 299.88,
+  },
+  pro_plus: {
+    id: 'pro_plus',
+    label: 'Pro+',
+    monthlyPriceUsd: 49.99,
+    yearlyPriceUsd: 499.88,
   },
   max: {
     id: 'max',

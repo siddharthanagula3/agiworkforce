@@ -1,6 +1,5 @@
 // Active modules — core CLI functionality
-#[allow(dead_code)]
-mod a2a;
+mod design_system;
 mod agent;
 mod agent_events;
 mod agents;
@@ -17,10 +16,13 @@ mod hooks;
 mod markdown;
 mod mcp;
 mod memory;
+#[allow(dead_code)] // FOUNDATION: cross-surface send-pipeline contract; CLI integrations wire through Sprint B (REPL drain + SDK headless)
+mod message_queue;
 mod models;
 mod output;
 mod output_styles;
 mod permissions;
+mod plan_mode;
 mod provider;
 mod repl;
 mod safety;
@@ -30,53 +32,49 @@ mod subagent;
 mod teams;
 mod tools;
 mod tui;
-#[allow(dead_code)]
-mod tui_basic;
 mod voice;
-// Extended CLI modules
+
+// Extended CLI modules — used by subcommand handlers
 mod app_server;
 mod apply_patch;
 mod cloud;
+mod ecosystem;
 mod exec_policy;
+mod init;
 mod model_catalog;
+mod models_cache;
+mod oauth;
+mod onboarding;
 mod plugins;
-#[allow(dead_code)]
-mod policy;
-#[allow(dead_code)]
+mod project_registry;
 mod project_scope;
 mod review;
-#[allow(dead_code)]
 mod routing;
 mod runtime;
 mod sandbox;
-#[allow(dead_code)]
-mod sdk_io;
-mod tool_search;
-// In-progress modules — compiled and partially wired. Public APIs available for future integration.
-#[allow(dead_code)]
-mod ecosystem;
-#[allow(dead_code)]
-mod history;
-#[allow(dead_code)]
-mod init;
-#[allow(dead_code)]
-mod marketplace;
-#[allow(dead_code)]
-mod memory_pipeline;
-#[allow(dead_code)]
-mod models_cache;
-#[allow(dead_code)]
-mod oauth;
-#[allow(dead_code)]
-mod onboarding;
-#[allow(dead_code)]
-mod project_registry;
-#[allow(dead_code)]
 mod shell_snapshot;
-#[allow(dead_code)]
-mod skill_learner;
-#[allow(dead_code)]
 mod sync;
+mod tier_cache;
+mod tool_search;
+
+// Phase-2 candidates — implementations exist but the user-facing surface is
+// not yet wired. Each carries an inline PHASE2 marker explaining the unblock.
+#[allow(dead_code)] // PHASE2: registry.agiworkforce.com not deployed; rewires to plugin-manifest discovery (Sprint B6)
+mod marketplace;
+#[allow(dead_code)] // PHASE2: Gemini-style declarative TOML tool-rule eval not yet wired into agent
+mod policy;
+#[allow(dead_code)] // PHASE2: SDK stdin-reader surface (StdinReader, ControlRequest, etc.) ships in Sprint B (headless mode hardening)
+mod sdk_io;
+
+// Phase-2 candidates — implementations exist with no current call sites.
+// PHASE2 markers in each module describe what wires them up.
+// Removed 2026-05-03 (dead): history, models_cache, shell_snapshot, tui_basic.
+#[allow(dead_code)] // PHASE2: expose `agiworkforce a2a serve/discover/delegate`
+mod a2a;
+#[allow(dead_code)] // PHASE2: hook into session-end lifecycle in daemon.rs
+mod memory_pipeline;
+#[allow(dead_code)] // PHASE2: wire into daemon background tick
+mod skill_learner;
 
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
@@ -101,7 +99,7 @@ struct Cli {
     #[arg(value_name = "PROMPT")]
     prompt: Option<String>,
 
-    /// Model to use (e.g. claude-opus-4-6, gpt-5.4, gemini-3.1-flash-lite, llama3.1:8b)
+    /// Model to use (e.g. claude-opus-4-6, gpt-5.5, gemini-3.1-flash-lite, llama3.1:8b)
     #[arg(short, long, value_name = "MODEL")]
     model: Option<String>,
 
@@ -263,6 +261,12 @@ struct Cli {
     #[arg(long)]
     no_tui: bool,
 
+    /// Disable OS-level sandboxing for tool execution.
+    /// On macOS this suppresses Seatbelt; on Linux it suppresses bwrap.
+    /// The TUI footer will show a red "no sandbox" indicator when this flag is set.
+    #[arg(long)]
+    no_sandbox: bool,
+
     /// Input format for print/SDK mode (text or stream-json).
     #[arg(long, value_name = "FORMAT", value_enum, default_value = "text")]
     input_format: cli_options::InputFormat,
@@ -270,6 +274,19 @@ struct Cli {
     /// Permission mode for tool use.
     #[arg(long, value_name = "MODE", value_enum)]
     permission_mode: Option<cli_options::PermissionMode>,
+
+    /// Sprint B4: short alias for `--permission-mode`. Accepts the same
+    /// values (default, plan, accept-edits, bypass-permissions, dont-ask).
+    /// When both `--mode` and `--permission-mode` are provided, `--mode`
+    /// wins (it's the more visible flag for plan-mode users).
+    #[arg(long, value_name = "MODE", value_enum)]
+    mode: Option<cli_options::PermissionMode>,
+
+    /// Sprint B4: in plan mode, auto-approve the first complete plan the
+    /// model writes via `update_plan` -- intended for headless / CI runs
+    /// where there is no human at the prompt to type `/plan accept`.
+    #[arg(long)]
+    auto_approve_plan: bool,
 
     /// Allow specific tools or tool patterns. Comma-separated and repeatable.
     #[arg(long = "allowedTools", alias = "allowed-tools", value_delimiter = ',')]
@@ -326,6 +343,17 @@ struct Cli {
     #[arg(long)]
     demo: bool,
 
+    /// Use automatic model routing (mutually exclusive with --model).
+    ///
+    /// Sends `model: "auto-economy"` to the AGI Workforce managed-cloud API,
+    /// which delegates routing to the server-side classifier.  The CLI never
+    /// discloses which model was actually used (silent routing).
+    ///
+    /// Only applies to managed-cloud sessions; BYOK and local (Ollama / LMStudio)
+    /// providers always require an explicit --model.
+    #[arg(long, conflicts_with = "model")]
+    auto: bool,
+
     /// Read the system prompt from a file. Mutually composes with
     /// `--system-prompt`: file contents win when both are supplied.
     #[arg(long = "system-prompt-file", value_name = "FILE")]
@@ -352,6 +380,12 @@ struct Cli {
     /// that pre-allocate ids.
     #[arg(long = "session-id", value_name = "UUID")]
     session_id_override: Option<String>,
+
+    /// Print the assembled system prompt to stdout and exit. No API call is
+    /// made. Useful for inspecting `<environment>`, memory injection, and
+    /// project instructions before running a session.
+    #[arg(long = "dump-system-prompt")]
+    dump_system_prompt: bool,
 }
 
 /// Effort level presets that bundle max_turns + max_tokens + temperature.
@@ -786,6 +820,12 @@ async fn main() -> Result<()> {
     // Load configuration (global + project + env overrides merged)
     let mut app_config = config::CliConfig::load_merged()?;
 
+    // Pull any user-defined `[providers.<name>]` blocks into the runtime
+    // OpenAI-compatible registry (OpenRouter, NVIDIA NIM, Groq, Together,
+    // Fireworks, etc.). Reserved provider names are ignored — see
+    // `models::register_custom_providers`.
+    models::register_custom_providers(&app_config);
+
     // --debug: enable verbose logging
     if cli.debug.is_some() {
         // Setting verbose mode so debug info is visible
@@ -818,9 +858,12 @@ async fn main() -> Result<()> {
             eprintln!("Warning: failed to initialize home directory: {}", e);
         }
 
-        // First-run onboarding wizard (only if interactive terminal and no subcommand)
+        // First-run onboarding wizard (only if interactive terminal and no subcommand).
+        // Skipped when the user is running a non-interactive read-only flag like
+        // `--dump-system-prompt` — those should never block on a TTY prompt.
         if cli.command.is_none()
             && cli.prompt.is_none()
+            && !cli.dump_system_prompt
             && io::stdin().is_terminal()
             && !onboarding::is_setup_complete()
         {
@@ -828,6 +871,7 @@ async fn main() -> Result<()> {
                 Ok(true) => {
                     // Reload config after onboarding may have changed it
                     app_config = config::CliConfig::load_merged()?;
+                    models::register_custom_providers(&app_config);
                 }
                 Ok(false) => {
                     // User skipped or interrupted — continue with defaults
@@ -936,8 +980,8 @@ async fn main() -> Result<()> {
                                 session_id: session_id.clone(),
                                 in_tokens: turn.input_tokens as u32,
                                 out_tokens: turn.output_tokens as u32,
-                                cache_read: 0,
-                                cache_creation: 0,
+                                cache_read: turn.cache_read_tokens,
+                                cache_creation: turn.cache_creation_tokens,
                                 cumulative_dollars: 0.0,
                             }
                             .emit_stdout();
@@ -973,7 +1017,7 @@ async fn main() -> Result<()> {
                         } else {
                             eprintln!("{}", e);
                         }
-                        std::process::exit(1);
+                        exit_with_error(&e);
                     }
                 }
             }
@@ -1007,6 +1051,8 @@ async fn main() -> Result<()> {
                     false,
                     false,
                     false,
+                    cli_options::PermissionMode::Default,
+                    false,
                 )
                 .await
             }
@@ -1032,6 +1078,8 @@ async fn main() -> Result<()> {
                     None,
                     false,
                     false,
+                    false,
+                    cli_options::PermissionMode::Default,
                     false,
                 )
                 .await
@@ -1138,7 +1186,20 @@ async fn main() -> Result<()> {
                             } else {
                                 "disabled".red()
                             };
-                            println!("  {} [{}] {}", p.config_name, st, p.root.display());
+                            // Sprint B6: surface manifest format origin so users can
+                            // tell at a glance whether a plugin is using the AGI,
+                            // Claude, Codex, or legacy schema.
+                            let fmt_tag = match p.format {
+                                Some(fmt) => format!("[{}]", fmt.short_tag()),
+                                None => "[no-manifest]".to_string(),
+                            };
+                            println!(
+                                "  {} {} [{}] {}",
+                                p.config_name,
+                                fmt_tag,
+                                st,
+                                p.root.display()
+                            );
                         }
                         Ok(())
                     }
@@ -1158,8 +1219,12 @@ async fn main() -> Result<()> {
                             source: psrc,
                             name: pname,
                         }) {
-                            plugins::PluginInstallOutcome::Installed { path } => {
-                                println!("Installed to {}", path.display())
+                            plugins::PluginInstallOutcome::Installed { path, format } => {
+                                let fmt_tag = match format {
+                                    Some(fmt) => format!(" ({} manifest)", fmt.short_tag()),
+                                    None => String::new(),
+                                };
+                                println!("Installed to {}{}", path.display(), fmt_tag)
                             }
                             plugins::PluginInstallOutcome::AlreadyInstalled { path } => {
                                 println!("Already at {}", path.display())
@@ -1677,12 +1742,49 @@ async fn main() -> Result<()> {
         app_config.default.temperature = Some(temp);
     }
 
-    // Resolve model
-    let model = cli
-        .model
-        .as_deref()
-        .unwrap_or(&app_config.default.model)
-        .to_string();
+    // Resolve model.
+    //
+    // Priority (highest first):
+    //   1. `--auto` flag → use "auto-economy" sentinel (server-side routing).
+    //   2. Explicit `--model` CLI flag.
+    //   3. Tier-aware default: if no model specified AND user has a managed-cloud
+    //      JWT, resolve the tier (cache-first, 1 h TTL) and use the economy-tier
+    //      default model from `models.json`.  Falls back to config default on any
+    //      error so startup is never blocked.
+    //   4. `config.toml` default.model.
+    let model: String = if cli.auto {
+        // --auto: delegate routing entirely to the managed-cloud API classifier.
+        "auto-economy".to_string()
+    } else if let Some(ref explicit_model) = cli.model {
+        explicit_model.clone()
+    } else {
+        // No explicit model — attempt tier-aware selection.
+        let jwt = tier_cache::load_jwt();
+        let cached_tier =
+            tokio::time::timeout(
+                std::time::Duration::from_secs(3),
+                tier_cache::resolve_user_tier(jwt.as_deref()),
+            )
+            .await
+            .unwrap_or(None);
+
+        if let Some(ct) = cached_tier {
+            // Use the tier's economy default if no model is pinned in config.
+            // Managed-cloud Byok tier falls through to config default so users
+            // who added BYOK keys don't accidentally hit the managed API.
+            if !matches!(ct.tier, tier_cache::UserTier::Byok) {
+                if let Some(economy_model) = ct.tier.default_model_id() {
+                    economy_model.to_string()
+                } else {
+                    app_config.default.model.clone()
+                }
+            } else {
+                app_config.default.model.clone()
+            }
+        } else {
+            app_config.default.model.clone()
+        }
+    };
 
     // Read file contents for -f flag
     let file_context = read_file_contexts(&cli.files)?;
@@ -1705,10 +1807,28 @@ async fn main() -> Result<()> {
         (None, None) => None,
     };
 
+    // --dump-system-prompt: assemble the system prompt the way AgentSession::new
+    // would, print it to stdout, and exit. No API call. Useful for debugging.
+    if cli.dump_system_prompt {
+        let prompt =
+            agent::assemble_system_prompt(&sys_context, effective_system_prompt.as_deref());
+        println!("{}", prompt);
+        return Ok(());
+    }
+
     let oneshot_output_mode = resolve_oneshot_output_mode(cli.json, cli.raw, cli.print, cli.output);
     let effective_skip_permissions =
         normalized_cli_options.should_skip_permissions(cli.dangerously_skip_permissions);
     let effective_auto_approve_safe = normalized_cli_options.should_auto_approve_safe(cli.yes);
+
+    // Sprint B4: `--mode` wins over `--permission-mode` when both are
+    // provided. Falls back to Default when neither is set, matching the
+    // existing PermissionMode default.
+    let effective_permission_mode: cli_options::PermissionMode = cli
+        .mode
+        .or(cli.permission_mode)
+        .unwrap_or(cli_options::PermissionMode::Default);
+    let effective_auto_approve_plan = cli.auto_approve_plan;
 
     // Resolve effective max_turns: explicit --max-turns wins, then --effort preset
     let effective_max_turns = cli.max_turns.or(effort_max_turns);
@@ -1726,6 +1846,8 @@ async fn main() -> Result<()> {
             effective_skip_permissions,
             effective_auto_approve_safe,
             cli.quiet,
+            effective_permission_mode,
+            effective_auto_approve_plan,
         )
         .await;
     }
@@ -1794,6 +1916,27 @@ async fn main() -> Result<()> {
     // Resolve team mode from --team flag or AGI_TEAM env var
     let team_mode = cli.team || std::env::var("AGI_TEAM").is_ok_and(|v| v == "1" || v == "true");
 
+    // Quota warning: only for Hobby-tier managed accounts with < 10% credits left.
+    // BYOK and Local users never see this banner — they have no managed quota.
+    // TODO(phase-5): wire to real /quota endpoint once cloud auth exposes remaining_pct.
+    {
+        let remaining: u8 = std::env::var("AGI_QUOTA_REMAINING_PCT")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(100);
+        let is_hobby = std::env::var("AGI_PLAN")
+            .map(|v| v.eq_ignore_ascii_case("hobby"))
+            .unwrap_or(false);
+        if is_hobby && remaining < 10 {
+            eprintln!(
+                "{}",
+                colored::Colorize::yellow(
+                    "Warning: you have less than 10% of your weekly limit left. Run /status for a breakdown."
+                )
+            );
+        }
+    }
+
     // Interactive mode: TUI (default) or classic REPL (--no-tui)
     if cli.no_tui {
         repl::run_repl(
@@ -1810,6 +1953,8 @@ async fn main() -> Result<()> {
             team_mode,
             effective_auto_approve_safe,
             cli.quiet,
+            effective_permission_mode,
+            effective_auto_approve_plan,
         )
         .await
     } else {
@@ -1828,6 +1973,9 @@ async fn main() -> Result<()> {
             effective_auto_approve_safe,
             cli.quiet,
             cli.provider,
+            effective_permission_mode,
+            effective_auto_approve_plan,
+            cli.no_sandbox,
         )
         .await
     }
@@ -2000,6 +2148,21 @@ mod tests {
     }
 }
 
+/// Exit with the appropriate status code for the given error.
+///
+/// Paywall errors use EX_CONFIG (78, sysexits.h) so callers can distinguish
+/// "user needs to upgrade" from a generic execution failure.  All other errors
+/// use exit code 1.
+fn exit_with_error(e: &anyhow::Error) -> ! {
+    // Walk the error chain looking for a CliError::Paywall.
+    let exit_code = e
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<errors::CliError>())
+        .map(|cli_err| cli_err.exit_code())
+        .unwrap_or(1);
+    std::process::exit(exit_code)
+}
+
 /// Execute a single prompt and exit.
 #[allow(clippy::too_many_arguments)]
 async fn run_oneshot(
@@ -2013,6 +2176,8 @@ async fn run_oneshot(
     skip_permissions: bool,
     auto_approve_safe: bool,
     quiet: bool,
+    permission_mode: cli_options::PermissionMode,
+    auto_approve_plan: bool,
 ) -> Result<()> {
     let mut session = agent::AgentSession::new(model, sys_context, custom_system_prompt);
     // Apply config-based provider override (e.g. "ollama-cloud") when the
@@ -2022,6 +2187,14 @@ async fn run_oneshot(
     session.skip_permissions = skip_permissions;
     session.auto_approve_safe = auto_approve_safe;
     session.quiet = quiet;
+    // Sprint B4: thread the permission mode + auto-approval into the
+    // session before any send. `--mode plan` here means the model sees
+    // the plan-mode reminder and the dispatcher gates mutating tools.
+    session.permission_mode = permission_mode;
+    session.auto_approve_plan = auto_approve_plan;
+    if matches!(permission_mode, cli_options::PermissionMode::Plan) {
+        session.plan_mode = true;
+    }
     session.enable_managed_session()?;
 
     if output_mode == OneShotOutputMode::JsonLine {
@@ -2095,7 +2268,7 @@ async fn run_oneshot(
                     }))
                     .await
                     .ok();
-                std::process::exit(1);
+                exit_with_error(&e);
             }
         }
     } else if output_mode == OneShotOutputMode::JsonPretty {
@@ -2135,7 +2308,7 @@ async fn run_oneshot(
                     "duration_ms": duration_ms,
                 });
                 eprintln!("{}", serde_json::to_string_pretty(&json_out)?);
-                std::process::exit(1);
+                exit_with_error(&e);
             }
         }
     } else if output_mode == OneShotOutputMode::RawText {
@@ -2156,7 +2329,7 @@ async fn run_oneshot(
             }
             Err(e) => {
                 eprintln!("{}", e);
-                std::process::exit(1);
+                exit_with_error(&e);
             }
         }
     } else {
@@ -2195,7 +2368,7 @@ async fn run_oneshot(
             }
             Err(e) => {
                 output::print_error(&format!("{:#}", e));
-                std::process::exit(1);
+                exit_with_error(&e);
             }
         }
     }

@@ -87,7 +87,7 @@ const SETTINGS_NAV: { key: CanonicalTab; label: string; icon: React.ElementType 
   { key: 'privacy', label: 'Privacy', icon: Shield },
   { key: 'models-keys', label: 'Models & Keys', icon: Server },
   { key: 'agents', label: 'Agents', icon: Zap },
-  { key: 'mcp-skills', label: 'Customize', icon: Wrench },
+  { key: 'mcp-skills', label: 'MCP & Skills', icon: Wrench },
   { key: 'connectors', label: 'Apps & Integrations', icon: Plug },
   { key: 'notifications', label: 'Notifications', icon: Bell },
   { key: 'voice', label: 'Voice', icon: Mic },
@@ -190,6 +190,11 @@ const LazyAccountSettings = lazy(() =>
 const LazyFeaturesPrivacySettings = lazy(() =>
   import('./FeaturesPrivacySettings').then((module) => ({
     default: module.FeaturesPrivacySettings,
+  })),
+);
+const LazyPrivacyDataSection = lazy(() =>
+  import('./Privacy/DataSection').then((module) => ({
+    default: module.DataSection,
   })),
 );
 const LazyOAuthCredentialsPanel = lazy(() =>
@@ -1406,6 +1411,11 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
               </p>
               <SettingsSectionLoader label="Loading security settings...">
                 <LazyMasterPasswordSettings />
+              </SettingsSectionLoader>
+            </div>
+            <div className="pt-6 border-t border-border">
+              <SettingsSectionLoader label="Loading data controls...">
+                <LazyPrivacyDataSection />
               </SettingsSectionLoader>
             </div>
             <div className="pt-6 border-t border-border">

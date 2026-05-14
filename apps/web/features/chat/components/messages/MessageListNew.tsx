@@ -17,12 +17,17 @@ import {
   FileCode,
   Plus,
   Minus,
+  ThumbsUp,
+  ThumbsDown,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import type { ChatMessage } from '../../stores/chat-store';
 import type { Components } from 'react-markdown';
 import { ReasoningAccordion } from './ReasoningAccordion';
 import { ToolTimeline } from './ToolTimeline';
+import { SearchingIndicator, CompactSearchResults } from '../search/SearchResults';
+import { CitationFooter, type Citation } from './InlineCitation';
+import { CodeExecutionBlock } from './CodeExecutionBlock';
 
 interface MessageListProps {
   messages: ChatMessage[];
@@ -159,10 +164,7 @@ function CodeBlock({ className, children }: { className?: string; children: Reac
               }
               return (
                 <div key={idx} className={cn('flex', color)} style={{ backgroundColor: bg }}>
-                  <span
-                    className="select-none pr-4 text-right text-zinc-600"
-                    style={{ minWidth: '2.5em' }}
-                  >
+                  <span className="min-w-[2.5em] select-none pr-4 text-right text-zinc-600">
                     {idx + 1}
                   </span>
                   <span className="flex-1 whitespace-pre">{line}</span>
@@ -266,6 +268,28 @@ const MessageItemComponent = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [showActions, setShowActions] = useState(false);
+  const storedReaction = message.metadata?.reaction;
+  const [reaction, setReaction] = useState<'up' | 'down' | null>(
+    storedReaction === 'thumbsUp' ? 'up' : storedReaction === 'thumbsDown' ? 'down' : null,
+  );
+
+  const persistReaction = useCallback(
+    async (next: 'up' | 'down' | null) => {
+      if (!message.sessionId) return;
+      try {
+        await fetch(`/api/chat/conversations/${message.sessionId}/messages/${message.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            reaction: next === 'up' ? 'thumbsUp' : next === 'down' ? 'thumbsDown' : null,
+          }),
+        });
+      } catch {
+        // Best-effort — local state is already updated
+      }
+    },
+    [message.id, message.sessionId],
+  );
   const isUser = message.role === 'user';
   const actionsRef = useRef<HTMLDivElement>(null);
 
@@ -340,6 +364,37 @@ const MessageItemComponent = ({
             </div>
           )}
 
+          {/* Web search indicator — shown while server-side search is running */}
+          {!isUser && message.metadata?.isSearching && (
+            <div className="mb-3">
+              <SearchingIndicator />
+            </div>
+          )}
+
+          {/* Web search results — shown after search completes */}
+          {!isUser &&
+            message.metadata?.searchResults &&
+            message.metadata.searchResults.length > 0 && (
+              <div className="mb-3">
+                <CompactSearchResults
+                  searchResponse={{
+                    query: '',
+                    results: message.metadata.searchResults,
+                    timestamp: new Date(),
+                  }}
+                />
+              </div>
+            )}
+
+          {/* Code execution block — shown while executing or after result arrives */}
+          {!isUser &&
+            (message.metadata?.isExecutingCode || message.metadata?.codeExecutionResult) && (
+              <CodeExecutionBlock
+                isExecuting={message.metadata?.isExecutingCode}
+                result={message.metadata?.codeExecutionResult}
+              />
+            )}
+
           {/* User message bubble or assistant prose */}
           {isUser ? (
             <div className="inline-block rounded-2xl rounded-tr-sm bg-primary/10 px-4 py-3 text-[15px] text-foreground text-left">
@@ -347,7 +402,10 @@ const MessageItemComponent = ({
             </div>
           ) : (
             <div className="prose prose-sm dark:prose-invert max-w-none text-[15px]">
-              {message.isStreaming && !message.content.trim() ? (
+              {message.isStreaming &&
+              !message.content.trim() &&
+              !message.metadata?.isSearching &&
+              !message.metadata?.isExecutingCode ? (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
                   <span className="text-sm">Thinking...</span>
@@ -364,6 +422,23 @@ const MessageItemComponent = ({
               )}
             </div>
           )}
+
+          {/* Citation footer — shown after content when web search results are available */}
+          {!isUser &&
+            !message.isStreaming &&
+            message.metadata?.searchResults &&
+            message.metadata.searchResults.length > 0 && (
+              <CitationFooter
+                citations={message.metadata.searchResults.map(
+                  (r, i): Citation => ({
+                    index: i + 1,
+                    url: r.url,
+                    title: r.title,
+                    snippet: r.snippet || undefined,
+                  }),
+                )}
+              />
+            )}
 
           {/* Tool timeline — shown after content for assistant messages */}
           {!isUser &&
@@ -399,6 +474,45 @@ const MessageItemComponent = ({
               >
                 {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               </button>
+
+              {!isUser && (
+                <>
+                  <button
+                    onClick={() => {
+                      const next = reaction === 'up' ? null : 'up';
+                      setReaction(next);
+                      void persistReaction(next);
+                    }}
+                    className={cn(
+                      'flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted/60',
+                      reaction === 'up'
+                        ? 'text-emerald-500 hover:text-emerald-400'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                    aria-label="Good response"
+                    aria-pressed={reaction === 'up'}
+                  >
+                    <ThumbsUp className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      const next = reaction === 'down' ? null : 'down';
+                      setReaction(next);
+                      void persistReaction(next);
+                    }}
+                    className={cn(
+                      'flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted/60',
+                      reaction === 'down'
+                        ? 'text-red-500 hover:text-red-400'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                    aria-label="Bad response"
+                    aria-pressed={reaction === 'down'}
+                  >
+                    <ThumbsDown className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              )}
 
               {!isUser && (
                 <div className="relative" ref={actionsRef}>

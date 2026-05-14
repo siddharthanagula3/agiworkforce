@@ -1,116 +1,185 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Bot } from 'lucide-react';
+import { Header } from '../../components/layout/Header';
+import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
-export const metadata = {
-  title: 'Terms of Service',
+export const metadata: Metadata = {
+  title: 'Terms of service | AGI Workforce',
   description:
-    'Terms of service for AGI Workforce. Read the license terms, user responsibilities, and policies for using the AI agent desktop platform.',
-  alternates: { canonical: '/terms' },
-  openGraph: {
-    title: 'Terms of Service | AGI Workforce',
-    description: 'Terms of service for AGI Workforce, the AI agent desktop platform.',
-    type: 'website',
-    url: 'https://agiworkforce.com/terms',
-  },
-  twitter: {
-    card: 'summary' as const,
-    title: 'Terms of Service | AGI Workforce',
-    description: 'Terms of service for the AGI Workforce AI agent desktop platform.',
-  },
+    'Terms of service for AGI Workforce — license, account responsibilities, payment, termination.',
+  alternates: { canonical: 'https://agiworkforce.com/terms' },
 };
 
 export default function TermsPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-black text-white">
-      <header className="fixed top-0 w-full border-b border-white/10 bg-black/50 backdrop-blur-xl z-50">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <Link href="/" className="flex items-center gap-2 font-bold text-xl tracking-tighter">
-            <Bot className="h-6 w-6 text-blue-500" />
-            <span>AGI Workforce</span>
-          </Link>
-          <Link
-            href="/"
-            className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
-          >
-            Back to Home
-          </Link>
-        </div>
-      </header>
+    <div data-design="agi">
+      <main className="agi-shell">
+        <Header />
+        <section className="agi-page-hero">
+          <h1 className="agi-page-h1">Terms of service.</h1>
+          <p className="agi-page-lede">
+            These terms govern your use of AGI Workforce.{' '}
+            <strong>
+              Plain language summary at top, formal terms below. By installing the software or
+              creating an account you accept these terms.
+            </strong>{' '}
+            Last updated: 2026-05-08.
+          </p>
+        </section>
 
-      <main className="flex-1 pt-24 pb-12">
-        <div className="container mx-auto px-4 max-w-3xl">
-          <h1 className="text-4xl font-bold mb-8">Terms of Service</h1>
-          <div className="prose prose-invert prose-lg text-zinc-400">
-            <p className="lead text-xl text-zinc-300 mb-8">
-              Last updated:{' '}
-              {new Date().toLocaleDateString('en-US', {
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric',
-              })}
-            </p>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">01 — License</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            AGI Automation LLC grants you a non-exclusive, non-transferable, revocable license to
+            install and use AGI Workforce on devices you own or control, subject to these terms. The
+            software is proprietary; you may not redistribute, decompile, or reverse-engineer it
+            except as permitted by applicable law.
+          </p>
+        </section>
 
-            <h3>1. Acceptance of Terms</h3>
-            <p>
-              By accessing or using AGI Workforce, you agree to be bound by these Terms of Service.
-              If you disagree with any part of the terms, you may not access the service.
-            </p>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">02 — Your account</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            You are responsible for keeping your account credentials and master password secure. We
+            cannot recover the master password used to encrypt your local key vault — see the{' '}
+            <Link href="/byok" style={{ color: 'var(--agi-ink)' }}>
+              BYOK posture
+            </Link>
+            . You are responsible for the activity that occurs through your account.
+          </p>
+        </section>
 
-            <h3>2. License</h3>
-            <p>
-              Subject to your compliance with these Terms, we grant you a limited, non-exclusive,
-              non-transferable, non-sublicensable license to download and use a copy of the AGI
-              Workforce application on a device that you own or control.
-            </p>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">03 — Payment, refunds, and auto-renewal</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            Paid tiers (Hobby and above) are billed in advance through Stripe.{' '}
+            <strong>Auto-renewal:</strong> subscriptions auto-renew at the end of each billing
+            period (monthly or annual) until you cancel. You can cancel any time from your billing
+            portal; cancellation stops the next auto-renew but does not refund the current period.
+            Refund terms are at{' '}
+            <Link href="/refund-policy" style={{ color: 'var(--agi-ink)' }}>
+              /refund-policy
+            </Link>
+            . We may change pricing with 30 days&rsquo; notice; existing annual subscriptions retain
+            their original price through the end of the term.
+          </p>
+        </section>
 
-            <h3>3. User Responsibilities</h3>
-            <p>You are responsible for:</p>
-            <ul>
-              <li>Maintaining the confidentiality of your account credentials.</li>
-              <li>All activities that occur under your account.</li>
-              <li>
-                Ensuring your use of the application complies with applicable laws and regulations.
-              </li>
-            </ul>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">04 — Acceptable use</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            Don&rsquo;t use AGI Workforce to break the law, harass people, generate child sexual
+            abuse material, or build weapons. Don&rsquo;t reverse-engineer or stress-test the
+            service without our written consent. We reserve the right to suspend accounts that
+            violate this section.
+          </p>
+        </section>
 
-            <h3>4. Termination</h3>
-            <p>
-              We may terminate or suspend your access immediately, without prior notice or
-              liability, for any reason whatsoever, including without limitation if you breach the
-              Terms.
-            </p>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">05 — BYOK and provider terms</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            When you bring your own API key (BYOK) for any provider — Anthropic, OpenAI, Google,
+            etc. — your use of that provider is governed by <em>their</em> terms, not ours. Provider
+            charges go directly from you to them; we add zero markup and do not process those
+            payments.
+          </p>
+        </section>
 
-            <h3>5. Limitation of Liability</h3>
-            <p>
-              In no event shall AGI Workforce, nor its directors, employees, partners, agents,
-              suppliers, or affiliates, be liable for any indirect, incidental, special,
-              consequential or punitive damages, including without limitation, loss of profits,
-              data, use, goodwill, or other intangible losses.
-            </p>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">06 — Termination</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            You can terminate at any time by deleting your account. We may terminate or suspend
+            access for material breach of these terms, with notice where reasonable. Sections that
+            by their nature should survive (license, IP, liability, governing law) survive
+            termination.
+          </p>
+        </section>
 
-            <h3>6. Changes</h3>
-            <p>
-              We reserve the right, at our sole discretion, to modify or replace these Terms at any
-              time. We will try to provide at least 30 days&apos; notice prior to any new terms
-              taking effect.
-            </p>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">
+            07 — Warranty disclaimer and Limitation of Liability
+          </p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            <strong>Warranty disclaimer:</strong> AGI Workforce is provided &ldquo;AS IS&rdquo; and
+            &ldquo;AS-IS&rdquo; without warranty of any kind, express or implied. We disclaim all
+            implied warranties including merchantability, fitness for a particular purpose, and
+            non-infringement, to the maximum extent permitted by law.
+          </p>
+          <p className="agi-page-lede" style={{ marginTop: 16 }}>
+            <strong>Limitation of Liability:</strong> to the fullest extent permitted, our aggregate
+            liability is limited to the fees you paid in the 12 months preceding the claim, or $100
+            USD, whichever is greater. We are not liable for loss of profits, data, or consequential
+            damages.
+          </p>
+        </section>
 
-            <h3>7. Contact Us</h3>
-            <p>
-              If you have any questions about these Terms, please contact us at
-              contact@agiworkforce.com.
-            </p>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">08 — Governing law, arbitration, and disputes</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            These terms are governed by the laws of the State of Texas, USA, without regard to
+            conflict-of-laws principles.
+          </p>
+          <p className="agi-page-lede" style={{ marginTop: 16 }}>
+            <strong>Arbitration:</strong> any dispute arising out of or relating to these terms or
+            your use of AGI Workforce will be resolved by binding individual arbitration
+            administered by the American Arbitration Association under its Commercial Arbitration
+            Rules, seated in Travis County, Texas. You waive any right to a jury trial or to
+            participate in a class action. You may opt out of arbitration within 30 days of first
+            accepting these terms by emailing contact@agiworkforce.com with subject
+            &ldquo;Arbitration opt-out.&rdquo; If arbitration is unavailable, disputes will be
+            resolved in the state or federal courts located in Travis County, Texas.
+          </p>
+        </section>
+
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">08a — Indemnification</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            <strong>Indemnification:</strong> you agree to indemnify, defend, and hold harmless AGI
+            Automation LLC, its officers, employees, and agents from any claims, damages, or
+            expenses (including reasonable attorneys&rsquo; fees) arising from (a) your use or
+            misuse of AGI Workforce, (b) content you submit through the service, (c) your violation
+            of these terms or applicable law, or (d) your infringement of any third-party right. We
+            reserve the right to assume the exclusive defense of any matter for which you owe us
+            indemnification.
+          </p>
+        </section>
+
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">09 — Changes to these terms</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            We may update these terms with notice posted on this page. Material changes will be
+            announced via email and via{' '}
+            <Link href="/changelog" style={{ color: 'var(--agi-ink)' }}>
+              /changelog
+            </Link>
+            . Continued use after changes means you accept them.
+          </p>
+        </section>
+
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">10 — Contact</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            AGI Automation LLC, Austin, Texas, USA. Email{' '}
+            <a href="mailto:contact@agiworkforce.com" style={{ color: 'var(--agi-ink)' }}>
+              contact@agiworkforce.com
+            </a>{' '}
+            for any questions about these terms.
+          </p>
+          <div className="agi-cta-row" style={{ marginTop: 28 }}>
+            <Link href="/privacy" className="agi-cta-ghost">
+              Privacy →
+            </Link>
+            <Link href="/dpa" className="agi-cta-ghost">
+              DPA →
+            </Link>
+            <Link href="/refund-policy" className="agi-cta-ghost">
+              Refunds →
+            </Link>
           </div>
-        </div>
+        </section>
+
+        <MarketingFooter />
       </main>
-
-      <footer className="border-t border-white/10 bg-black py-12">
-        <div className="container mx-auto px-4 text-center">
-          <div className="text-sm text-zinc-600">
-            © {new Date().getFullYear()} AGI Automation LLC. All rights reserved.
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }

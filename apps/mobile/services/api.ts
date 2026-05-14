@@ -2,6 +2,39 @@ import { Alert } from 'react-native';
 import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { combineAbortSignals } from '@/lib/abortSignal';
 import { supabase } from './supabase';
+// FIX-MOB-10: every outbound HTTPS call goes through secureFetch — the
+// chokepoint that the TLS-pinning gate hooks into. Today it's a
+// passthrough; flipping `PINNING_ENFORCED` in lib/pinning.ts (after ops
+// drops SPKI hashes) makes it enforce pin coverage at the JS layer.
+import { secureFetch } from './secureFetch';
+
+// ---------------------------------------------------------------------------
+// Paywall error type
+// ---------------------------------------------------------------------------
+
+/**
+ * Thrown by the HTTP client when the API returns HTTP 429 with a structured
+ * paywall payload: `{ kind: 'paywall', feature, requiredTier, reason }`.
+ *
+ * Callers should catch this specifically (not the generic `Error`) to
+ * distinguish paywall blocks from other network errors.
+ */
+export class ApiPaywallError extends Error {
+  /** Which feature is gated (e.g. 'token_cap', 'image_quota', 'video_generation'). */
+  readonly feature: string;
+  /** Minimum tier required to use the feature (e.g. 'hobby', 'pro', 'pro_plus', 'max'). */
+  readonly requiredTier: string;
+  /** Human-readable description from the server (e.g. '10/10 images used this month'). */
+  readonly reason: string;
+
+  constructor(feature: string, requiredTier: string, reason: string) {
+    super(`Paywall: ${feature} requires ${requiredTier} tier. ${reason}`);
+    this.name = 'ApiPaywallError';
+    this.feature = feature;
+    this.requiredTier = requiredTier;
+    this.reason = reason;
+  }
+}
 
 /**
  * Authenticated HTTP client.
@@ -94,7 +127,7 @@ async function request<T>(
   const timeoutId = setTimeout(() => controller.abort(), timeout);
 
   try {
-    const response = await fetch(`${API_URL}${path}`, {
+    const response = await secureFetch(`${API_URL}${path}`, {
       ...init,
       headers: { ...headers, ...(init.headers as Record<string, string>) },
       signal: options.signal
@@ -112,6 +145,41 @@ async function request<T>(
       // Refresh failed — session is truly expired
       handleUnrecoverableAuth();
       throw new Error('HTTP 401: Session expired. Please sign in again.');
+    }
+
+    // Detect structured paywall response before the generic !response.ok branch.
+    // The server emits HTTP 429 + { kind: 'paywall', feature, requiredTier, reason }
+    // when a user hits 150% of their tier cap. We parse the JSON here so callers
+    // can catch ApiPaywallError separately from generic network errors.
+    if (response.status === 429) {
+      let paywallPayload: Record<string, unknown> | null = null;
+      try {
+        const bodyText = await response.text();
+        // Attempt parse; if it fails fall through to generic error below
+        const parsed = JSON.parse(bodyText) as Record<string, unknown>;
+        if (parsed && parsed.kind === 'paywall') {
+          paywallPayload = parsed;
+        } else {
+          // Not a paywall 429 — re-throw as generic error with body
+          const safeBody =
+            bodyText.length > 500 ? bodyText.slice(0, 500) + '...(truncated)' : bodyText;
+          throw new Error(`HTTP 429: ${safeBody}`);
+        }
+      } catch (parseErr) {
+        // If parseErr is already an Error we re-threw above, propagate it
+        if (parseErr instanceof Error && !parseErr.message.startsWith('{')) {
+          throw parseErr;
+        }
+        throw new Error(`HTTP 429`);
+      }
+
+      if (paywallPayload) {
+        throw new ApiPaywallError(
+          typeof paywallPayload.feature === 'string' ? paywallPayload.feature : 'token_cap',
+          typeof paywallPayload.requiredTier === 'string' ? paywallPayload.requiredTier : 'hobby',
+          typeof paywallPayload.reason === 'string' ? paywallPayload.reason : '',
+        );
+      }
     }
 
     if (!response.ok) {
@@ -190,7 +258,7 @@ export const api = {
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {
-      const response = await fetch(`${API_URL}/api/upload`, {
+      const response = await secureFetch(`${API_URL}/api/upload`, {
         method: 'POST',
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),

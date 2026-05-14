@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { authenticatedUserSchema } from './authenticated-user';
 import { requireEnv } from './env';
 import { logger } from './lib/logger';
-import { supabase } from './lib/supabase';
+import { getUserScopedClient } from './lib/supabaseClients';
 
 const JWT_SECRET = requireEnv('JWT_SECRET');
 
@@ -143,17 +143,55 @@ const authMessageSchema = z.object({
   deviceId: z.string().optional(),
 });
 
+// SECURITY (H3, redteam-services 2026-05-04): the WS broadcast endpoints
+// previously accepted `payload: z.unknown()` which let a compromised peer
+// device send arbitrary commands to the user's other devices, bypassing
+// the desktop ownership/approval pipeline enforced over HTTPS at
+// services/api-gateway/src/routes/desktop.ts. We now require an explicit
+// allowlist of command types and a small payload schema for each. New
+// command types MUST be added here AND mirror the discriminated union in
+// the desktop's commandSchema (desktop.ts).
+const wsCommandPayloadSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('chat'),
+    text: z.string().min(1).max(10_000),
+    targetDeviceId: z.string().uuid().optional(),
+  }),
+  z.object({
+    type: z.literal('automation'),
+    action: z.literal('run'),
+    workflowId: z.string().uuid(),
+    parameters: z.record(z.string(), z.unknown()).optional(),
+  }),
+  z.object({
+    type: z.literal('query'),
+    question: z.string().min(1).max(10_000),
+  }),
+]);
+
+const wsSyncPayloadSchema = z
+  .object({
+    // sync events are descriptive — they carry small state deltas that the
+    // receiver applies to its local cache. We bound the size with a JSON
+    // serialization check at parse time.
+    kind: z.string().min(1).max(64),
+    data: z.record(z.string(), z.unknown()),
+  })
+  .refine((v) => JSON.stringify(v).length <= 4096, {
+    message: 'Sync payload too large',
+  });
+
 const nonAuthMessageSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('ping'),
   }),
   z.object({
     type: z.literal('command'),
-    payload: z.unknown(),
+    payload: wsCommandPayloadSchema,
   }),
   z.object({
     type: z.literal('sync'),
-    payload: z.unknown(),
+    payload: wsSyncPayloadSchema,
   }),
 ]);
 
@@ -405,9 +443,11 @@ async function handleAuthMessage(ws: AuthenticatedWebSocket, message: AuthMessag
     const { userId } = parseResult.data;
     ws.userId = userId;
 
-    // SECURITY: Verify deviceId ownership before accepting it
+    // SECURITY: Verify deviceId ownership before accepting it.
+    // Wave 1.5+ singleton sweep: post-JWT-verification user-scoped query.
     if (typeof message.deviceId === 'string' && message.deviceId.length > 0) {
-      const { data: pairing } = await supabase
+      const wsUserDb = getUserScopedClient(userId);
+      const { data: pairing } = await wsUserDb
         .from('device_pairings')
         .select('id')
         .eq('user_id', userId)

@@ -7,12 +7,13 @@ import type { SearchResponse } from '@core/integrations/web-search-handler';
 import type { MediaGenerationResult } from '@core/integrations/media-generation-handler';
 import type { GeneratedDocument } from '../../services/document-generation-service';
 import { MessageBubble, messageListVariants } from '../messages/MessageBubble';
-import { EmployeeThinkingIndicator } from '../agents/EmployeeThinkingIndicator';
+import { TypingIndicator } from '../messages/TypingIndicator';
 import { useChatStore } from '@shared/stores/chat-store';
 import ErrorBoundary from '@shared/components/ErrorBoundary';
 import { Button } from '@shared/ui/button';
 import { AlertCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@shared/ui/dialog';
+import { useUserPlan } from '@shared/stores/user-profile-store';
 import { Textarea } from '@shared/ui/textarea';
 
 /**
@@ -178,6 +179,69 @@ function getValidatedMetadata(
   return result;
 }
 
+/** Maps the legacy store plan field to a UI-friendly label. */
+const PLAN_BADGE_LABEL: Record<string, string> = {
+  free: 'Free',
+  hobby: 'Hobby',
+  pro: 'Pro',
+  max: 'Max',
+  enterprise: 'Enterprise',
+};
+
+/**
+ * Empty-state view shown when there are no messages yet.
+ * Includes a plan badge chip that links to /pricing.
+ */
+function PlanBadgeEmptyState({
+  messages,
+  isLoading,
+}: {
+  messages: ChatMessage[];
+  isLoading: boolean;
+}) {
+  const plan = useUserPlan();
+
+  if (messages.length > 0 || isLoading) return null;
+
+  const badgeLabel = plan ? (PLAN_BADGE_LABEL[plan] ?? plan) : null;
+  const showUpgrade = plan === 'free';
+
+  return (
+    <div className="flex flex-col items-center justify-center h-full text-center">
+      {/* Plan badge chip */}
+      {badgeLabel && (
+        <div className="mb-4">
+          <a
+            href="/pricing"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-400" aria-hidden="true" />
+            <span>{badgeLabel} plan</span>
+            {showUpgrade && <span className="font-medium text-amber-400">Upgrade</span>}
+          </a>
+        </div>
+      )}
+      <div className="max-w-md space-y-4">
+        <div className="w-16 h-16 mx-auto bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+          <Bot className="h-8 w-8 text-white" aria-hidden="true" />
+        </div>
+        <h2 className="text-2xl font-semibold text-foreground">Welcome to AGI Workforce</h2>
+        <p className="text-muted-foreground">Start a conversation by typing a message below...</p>
+        <div className="space-y-2 text-sm text-left">
+          <p className="font-medium text-foreground">Try asking me to:</p>
+          <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+            <li>Research any topic in depth</li>
+            <li>Write and review code</li>
+            <li>Generate images and videos</li>
+            <li>Analyze data and documents</li>
+            <li>Help with creative writing</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface MessageListProps {
   messages: ChatMessage[];
   isLoading: boolean;
@@ -263,29 +327,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         </div>
       }
     >
-      {messages.length === 0 && !isLoading && (
-        <div className="flex flex-col items-center justify-center h-full text-center">
-          <div className="max-w-md space-y-4">
-            <div className="w-16 h-16 mx-auto bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-              <Bot className="h-8 w-8 text-white" aria-hidden="true" />
-            </div>
-            <h2 className="text-2xl font-semibold text-foreground">Welcome to AGI Workforce</h2>
-            <p className="text-muted-foreground">
-              Start a conversation by typing a message below...
-            </p>
-            <div className="space-y-2 text-sm text-left">
-              <p className="font-medium text-foreground">Try asking me to:</p>
-              <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                <li>Research any topic in depth</li>
-                <li>Write and review code</li>
-                <li>Generate images and videos</li>
-                <li>Analyze data and documents</li>
-                <li>Help with creative writing</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      )}
+      <PlanBadgeEmptyState messages={messages} isLoading={isLoading} />
       <ScrollArea className="flex-1">
         <motion.div
           className="space-y-0"
@@ -307,14 +349,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
               // Check if this is a thinking/processing indicator message
               if (meta.isThinking || meta.isSearching || meta.isToolProcessing) {
-                return (
-                  <EmployeeThinkingIndicator
-                    key={message.id}
-                    employeeName={meta.employeeName}
-                    employeeAvatar={meta.employeeAvatar}
-                    message={message.content}
-                  />
-                );
+                return <TypingIndicator key={message.id} agentName={meta.employeeName} />;
               }
 
               return (
@@ -376,7 +411,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
           {/* Loading indicator - fallback if not using thinking indicator */}
           {isLoading && messages.every((m) => !getValidatedMetadata(m.metadata).isThinking) && (
-            <EmployeeThinkingIndicator message="Processing your request..." />
+            <TypingIndicator />
           )}
         </motion.div>
       </ScrollArea>

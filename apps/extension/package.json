@@ -9,7 +9,7 @@
   "homepage": "https://agiworkforce.com",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/agiworkforce.git",
+    "url": "https://github.com/siddharthanagula3/agiworkforce.git",
     "directory": "apps/extension"
   },
   "keywords": [
@@ -30,6 +30,8 @@
     "format": "prettier --write \"src/**/*.{js,html}\""
   },
   "dependencies": {
+    "@agiworkforce/browser-tool": "workspace:*",
+    "@agiworkforce/runtime": "workspace:*",
     "dompurify": "^3.3.3"
   },
   "devDependencies": {

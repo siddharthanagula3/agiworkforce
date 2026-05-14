@@ -7,6 +7,7 @@ import { requireEnv, getOptionalEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { getUserClient } from '@/lib/supabase-server';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { CreditService } from '@/lib/services/credit-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
@@ -25,7 +26,7 @@ import { randomUUID } from 'crypto';
  * Users authenticate with their Supabase JWT and must have an active subscription.
  */
 
-// Next.js route configuration — image generation takes 10–30s, so we extend to 60s.
+// Next.js route configuration - image generation takes 10–30s, so we extend to 60s.
 // Without this the serverless function would time out at the default (10s on Vercel).
 export const maxDuration = 60;
 export const runtime = 'nodejs';
@@ -220,7 +221,7 @@ async function generateWithImagen(
   const apiKey = getApiKey('google');
   const model = 'imagen-4.0-generate-001';
 
-  // Parse size to aspect ratio — validate exactly 2 positive integer parts
+  // Parse size to aspect ratio - validate exactly 2 positive integer parts
   const sizeParts = size.split('x').map(Number);
   if (sizeParts.length !== 2 || sizeParts.some((n) => !Number.isFinite(n) || n <= 0)) {
     throw new Error(`Invalid size format: "${size}". Expected format: WxH (e.g. 1024x1024)`);
@@ -416,7 +417,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   const rateLimitResponse = await withRateLimit(request, 'image-generation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // Authentication — validate Bearer token format to reject malformed/injected values
+  // Authentication - validate Bearer token format to reject malformed/injected values
   const authHeader = request.headers.get('authorization');
   const bearerMatch = authHeader?.match(/^Bearer\s+([\w\-.~+/]+=*)$/i);
   if (!bearerMatch) {
@@ -438,7 +439,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  const token = bearerMatch[1];
+  const token = bearerMatch[1]!;
 
   // Verify user with Supabase
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
@@ -472,8 +473,11 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
+  // RLS-bound client for all downstream DB ops on behalf of this user.
+  const userClient = getUserClient(token);
+
   // Check subscription
-  const subscription = await SubscriptionService.getSubscription(user.id);
+  const subscription = await SubscriptionService.getSubscription(userClient, user.id);
 
   if (!subscription) {
     return NextResponse.json(
@@ -646,9 +650,9 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   const estimatedCostCents = maxProviderCost * n;
 
   // Check credits BEFORE invoking the provider (402 if insufficient)
-  const hasCredits = await CreditService.checkAvailable(user.id, estimatedCostCents);
+  const hasCredits = await CreditService.checkAvailable(userClient, user.id, estimatedCostCents);
   if (!hasCredits) {
-    const balance = await CreditService.getBalance(user.id);
+    const balance = await CreditService.getBalance(userClient, user.id);
     logger.warn(
       { userId: user.id, estimatedCostCents, balance },
       'Insufficient credits for image generation',
@@ -678,6 +682,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   const requestId = randomUUID();
   const reservationKey = CreditService.generateIdempotencyKey(user.id, 'reservation', requestId);
   const reserveResult = await CreditService.deductCredits(
+    userClient,
     user.id,
     estimatedCostCents,
     `Credit reservation: image generation (${provider})`,
@@ -748,6 +753,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     // Refund the reserved credits on generation failure
     const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
     await CreditService.deductCredits(
+      userClient,
       user.id,
       -estimatedCostCents,
       `Refund: image generation failed (${provider})`,
@@ -761,7 +767,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
         userId: user.id,
         provider,
       },
-      'Image generation failed — credits refunded',
+      'Image generation failed - credits refunded',
     );
 
     const errorMessage = error instanceof Error ? error.message : 'Image generation failed';
@@ -783,7 +789,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       errorMessage.includes('TimeoutError')
     ) {
       friendlyMessage =
-        'The image generation request timed out. Please try again — image generation can take up to 30 seconds.';
+        'The image generation request timed out. Please try again - image generation can take up to 30 seconds.';
     }
 
     return NextResponse.json(
@@ -819,6 +825,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       requestId,
     );
     await CreditService.deductCredits(
+      userClient,
       user.id,
       costDifference,
       costDifference > 0

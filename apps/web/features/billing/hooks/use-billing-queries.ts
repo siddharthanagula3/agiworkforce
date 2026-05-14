@@ -28,7 +28,7 @@ import { getPlanPriceUsd, getPlanUsageBudgetCents } from '@agiworkforce/types';
 /**
  * Billing plan types
  */
-export type BillingPlan = 'free' | 'hobby' | 'pro' | 'max' | 'enterprise';
+export type BillingPlan = 'free' | 'hobby' | 'pro' | 'pro_plus' | 'max' | 'enterprise';
 
 /**
  * Subscription status types
@@ -188,6 +188,19 @@ const TIER_CONFIG: Record<
       'Full computer use & browser automation',
       'Image generation & analysis',
       'Email support',
+    ],
+  },
+  pro_plus: {
+    creditLimitCents: getPlanUsageBudgetCents('pro_plus'),
+    price: getPlanPriceUsd('pro_plus'),
+    name: 'Pro+',
+    features: [
+      `${getPlanUsageBudgetCents('pro_plus').toLocaleString()} credits per billing cycle`,
+      'Flagship models (Opus 4.7, GPT-5.5) — 15K tokens/day',
+      '60s/month video generation (Runway Gen-4 720p)',
+      'US-only routing toggle',
+      'Advanced computer use & deep research preview',
+      'Priority email support',
     ],
   },
   max: {
@@ -359,7 +372,11 @@ async function fetchUserPlan(userId: string): Promise<UserPlanData> {
   // Map plan_tier to BillingPlan — hobby is a valid paid tier
   const planTier = (row.plan_tier ?? row.plan_name ?? 'free').toLowerCase();
   const plan: BillingPlan =
-    planTier === 'hobby' || planTier === 'pro' || planTier === 'max' || planTier === 'enterprise'
+    planTier === 'hobby' ||
+    planTier === 'pro' ||
+    planTier === 'pro_plus' ||
+    planTier === 'max' ||
+    planTier === 'enterprise'
       ? (planTier as BillingPlan)
       : 'free';
 

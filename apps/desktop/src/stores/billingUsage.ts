@@ -1,3 +1,4 @@
+// TODO(task-1.3): migrate to packages/runtime/state (see AppStateStore.ts domain mapping)
 /**
  * Unified Billing & Usage Store
  *
@@ -54,13 +55,16 @@ import type {
   SystemMetrics as ApiSystemMetrics,
   AppMetrics as ApiAppMetrics,
 } from '../api/analytics';
+import type { AnalyticsConfig, PrivacyConsent } from '../types/analytics';
 import type {
-  AnalyticsConfig,
-  FeatureUsageStats,
-  PrivacyConsent,
+  ROIReport,
+  ProcessMetrics,
+  UserMetrics as ApiUserMetrics,
+  ToolMetrics,
+  TrendPoint,
   UsageStats as AnalyticsUsageStats,
-} from '../types/analytics';
-import type { AllTimeStats, ChartDataPoint, TopEmployee } from '../types/roi';
+  FeatureUsageEntry,
+} from '../api/analytics';
 
 // ============================================================================
 // Types
@@ -173,18 +177,18 @@ interface BillingUsageState {
   systemMetrics: ApiSystemMetrics | null;
   appMetrics: ApiAppMetrics | null;
   analyticsUsageStats: AnalyticsUsageStats | null;
-  featureUsage: FeatureUsageStats[];
+  featureUsage: FeatureUsageEntry[];
   analyticsConfig: AnalyticsConfig;
   privacyConsent: PrivacyConsent | null;
   isLoadingMetrics: boolean;
   isLoadingStats: boolean;
 
   // --- ROI State ---
-  roiReport: AllTimeStats | null;
-  processMetrics: ChartDataPoint[];
-  userMetrics: TopEmployee[];
-  toolMetrics: ChartDataPoint[];
-  trends: Record<string, ChartDataPoint[]>;
+  roiReport: ROIReport | null;
+  processMetrics: ProcessMetrics[];
+  userMetrics: ApiUserMetrics[];
+  toolMetrics: ToolMetrics[];
+  trends: Record<string, TrendPoint[]>;
   isLoadingROI: boolean;
 }
 
@@ -268,11 +272,11 @@ interface BillingUsageActions {
   trackWorkflowView: (workflowId: string) => Promise<void>;
 
   // --- ROI Actions ---
-  calculateROI: (startDate: number, endDate: number) => Promise<AllTimeStats>;
-  loadProcessMetrics: (startDate: number, endDate: number) => Promise<ChartDataPoint[]>;
-  loadUserMetrics: (startDate: number, endDate: number) => Promise<TopEmployee[]>;
-  loadToolMetrics: (startDate: number, endDate: number) => Promise<ChartDataPoint[]>;
-  loadTrends: (metric: string, days: number) => Promise<ChartDataPoint[]>;
+  calculateROI: (startDate: number, endDate: number) => Promise<ROIReport>;
+  loadProcessMetrics: (startDate: number, endDate: number) => Promise<ProcessMetrics[]>;
+  loadUserMetrics: (startDate: number, endDate: number) => Promise<ApiUserMetrics[]>;
+  loadToolMetrics: (startDate: number, endDate: number) => Promise<ToolMetrics[]>;
+  loadTrends: (metric: string, days: number) => Promise<TrendPoint[]>;
   exportReport: (format: string, startDate: number, endDate: number) => Promise<string>;
   loadAllROIData: (startDate: number, endDate: number) => Promise<void>;
 }
@@ -1297,7 +1301,7 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
           loadAnalyticsUsageStats: async () => {
             set({ isLoadingStats: true });
             try {
-              const stats = (await analyticsGetUsageStats()) as unknown as AnalyticsUsageStats;
+              const stats = await analyticsGetUsageStats();
               set({ analyticsUsageStats: stats });
             } catch (error) {
               console.error('Failed to load usage stats:', error);
@@ -1315,7 +1319,7 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
 
           loadFeatureUsage: async () => {
             try {
-              const usage = (await analyticsGetFeatureUsage()) as unknown as FeatureUsageStats[];
+              const usage = await analyticsGetFeatureUsage();
               // STR-006 fix: Cap featureUsage at 500 entries to prevent unbounded growth
               const cappedUsage = Array.isArray(usage) ? usage.slice(0, 500) : [];
               set({ featureUsage: cappedUsage });
@@ -1481,10 +1485,7 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
           calculateROI: async (startDate: number, endDate: number) => {
             set({ isLoadingROI: true });
             try {
-              const roi = (await analyticsCalculateRoi(
-                startDate,
-                endDate,
-              )) as unknown as AllTimeStats;
+              const roi = await analyticsCalculateRoi(startDate, endDate);
               set({ roiReport: roi });
               return roi;
             } catch (error) {
@@ -1504,10 +1505,7 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
 
           loadProcessMetrics: async (startDate: number, endDate: number) => {
             try {
-              const metrics = (await analyticsGetProcessMetrics(
-                startDate,
-                endDate,
-              )) as unknown as ChartDataPoint[];
+              const metrics = await analyticsGetProcessMetrics(startDate, endDate);
               set({ processMetrics: metrics || [] });
               return metrics || [];
             } catch (error) {
@@ -1518,10 +1516,7 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
 
           loadUserMetrics: async (startDate: number, endDate: number) => {
             try {
-              const metrics = (await analyticsGetUserMetrics(
-                startDate,
-                endDate,
-              )) as unknown as TopEmployee[];
+              const metrics = await analyticsGetUserMetrics(startDate, endDate);
               set({ userMetrics: metrics || [] });
               return metrics || [];
             } catch (error) {
@@ -1532,10 +1527,7 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
 
           loadToolMetrics: async (startDate: number, endDate: number) => {
             try {
-              const metrics = (await analyticsGetToolMetrics(
-                startDate,
-                endDate,
-              )) as unknown as ChartDataPoint[];
+              const metrics = await analyticsGetToolMetrics(startDate, endDate);
               set({ toolMetrics: metrics || [] });
               return metrics || [];
             } catch (error) {
@@ -1546,10 +1538,7 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
 
           loadTrends: async (metric: string, days: number) => {
             try {
-              const trendsData = (await analyticsGetMetricTrends(
-                metric,
-                days,
-              )) as unknown as ChartDataPoint[];
+              const trendsData = await analyticsGetMetricTrends(metric, days);
               // STR-007 fix: Cap trends dictionary at 20 metrics to prevent unbounded growth
               // Each metric can have up to 365 data points, so 20 metrics × 365 = 7,300 points max
               const MAX_TREND_METRICS = 20;
@@ -1732,10 +1721,12 @@ let cleanupRegistered = false;
 
 /**
  * Start auto-refresh of analytics metrics every 30 seconds.
+ * Returns a teardown function that clears the interval and removes the
+ * beforeunload listener — call it from React effect cleanup or on explicit stop.
  */
-export function startMetricsAutoRefresh() {
+export function startMetricsAutoRefresh(): () => void {
   if (metricsRefreshInterval !== null || typeof window === 'undefined') {
-    return;
+    return () => {};
   }
 
   metricsRefreshInterval = setInterval(() => {
@@ -1745,11 +1736,16 @@ export function startMetricsAutoRefresh() {
     }
   }, 30000);
 
-  // Register cleanup on window unload to prevent interval leaking
-  if (!cleanupRegistered && typeof window !== 'undefined') {
+  if (!cleanupRegistered) {
     cleanupRegistered = true;
     window.addEventListener('beforeunload', stopMetricsAutoRefresh);
   }
+
+  return () => {
+    stopMetricsAutoRefresh();
+    window.removeEventListener('beforeunload', stopMetricsAutoRefresh);
+    cleanupRegistered = false;
+  };
 }
 
 /**

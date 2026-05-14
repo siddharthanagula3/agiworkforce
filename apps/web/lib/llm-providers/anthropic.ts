@@ -11,10 +11,10 @@ import { logger } from '@/lib/logger';
 /**
  * Transform tools from OpenAI format to Anthropic format.
  * Handles four cases:
- *   1. Anthropic server-managed tools (web_search, code_execution) — pass through as-is
- *   2. Already-Anthropic custom tools (has input_schema) — pass through as-is
- *   3. OpenAI function format (type: 'function', function: {...}) — transform
- *   4. Bare format — transform with fallback input_schema
+ *   1. Anthropic server-managed tools (web_search, code_execution) - pass through as-is
+ *   2. Already-Anthropic custom tools (has input_schema) - pass through as-is
+ *   3. OpenAI function format (type: 'function', function: {...}) - transform
+ *   4. Bare format - transform with fallback input_schema
  */
 
 /** Anthropic server-managed tool type prefixes (e.g. web_search_20260209, code_execution_20260120) */
@@ -42,7 +42,7 @@ interface AnthropicTool {
 function transformTools(tools: OpenAITool[]): AnthropicTool[] {
   return tools.map((tool) => {
     // 1. Anthropic server-managed tools: type starts with a known server-tool prefix.
-    //    These must be passed through exactly as-is — they have no input_schema.
+    //    These must be passed through exactly as-is - they have no input_schema.
     //    Examples: { type: 'web_search_20260209', name: 'web_search' }
     //             { type: 'code_execution_20260120', name: 'code_execution' }
     if (
@@ -256,7 +256,7 @@ export class AnthropicProvider extends BaseLLMProvider {
 
       // Extract tool_use blocks (client-executed tools) and map to OpenAI-format tool_calls
       // Note: server_tool_use blocks (like web_search) are server-executed and do NOT
-      // need client-side execution — Anthropic handles them internally
+      // need client-side execution - Anthropic handles them internally
       const toolUseBlocks = (data.content || []).filter(
         (block: { type: string }) => block.type === 'tool_use',
       );
@@ -277,7 +277,7 @@ export class AnthropicProvider extends BaseLLMProvider {
 
       // Map Anthropic stop_reason to OpenAI finish_reason
       // server_tool_use stop_reason means Anthropic executed tools server-side and
-      // returned results in the same response — this is a completed turn, map to 'stop'
+      // returned results in the same response - this is a completed turn, map to 'stop'
       const finishReason =
         stopReason === 'tool_use' ? 'tool_calls' : stopReason === 'end_turn' ? 'stop' : stopReason;
 
@@ -393,10 +393,43 @@ export class AnthropicProvider extends BaseLLMProvider {
  * Map messages to Anthropic format, converting tool_calls/tool_call_id
  * to Anthropic's tool_use/tool_result content blocks.
  */
+type ContentPart = { type: string; text?: string; image_url?: { url: string; detail?: string } };
+
+function buildAnthropicContentBlocks(
+  text: string,
+  multimodalContent?: ContentPart[],
+): Array<Record<string, unknown>> {
+  if (!multimodalContent || multimodalContent.length === 0) {
+    return [{ type: 'text', text }];
+  }
+
+  return multimodalContent.map((part) => {
+    if (part.type === 'image_url' && part.image_url?.url) {
+      const url = part.image_url.url;
+      // Parse data URLs: data:<mediaType>;base64,<data>
+      const dataUrlMatch = url.match(/^data:([^;]+);base64,(.+)$/);
+      if (dataUrlMatch) {
+        return {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: dataUrlMatch[1] as string,
+            data: dataUrlMatch[2] as string,
+          },
+        };
+      }
+      // Fall back to URL type for remote images
+      return { type: 'image', source: { type: 'url', url } };
+    }
+    return { type: 'text', text: part.text ?? '' };
+  });
+}
+
 function mapMessagesToAnthropic(
   messages: Array<{
     role: string;
     content: string;
+    multimodal_content?: unknown[];
     tool_calls?: unknown[];
     tool_call_id?: string;
   }>,
@@ -476,26 +509,34 @@ function mapMessagesToAnthropic(
       continue;
     }
 
-    // Skip empty content messages
-    if (!msg.content || msg.content.trim().length === 0) {
+    // Skip empty content messages (unless there are image attachments)
+    const multimodalParts = msg.multimodal_content as ContentPart[] | undefined;
+    const hasImages = multimodalParts?.some((p) => p.type === 'image_url');
+    if (!hasImages && (!msg.content || msg.content.trim().length === 0)) {
       continue;
     }
 
-    // Normal messages
-    const contentObj: Record<string, unknown> = {
-      role: msg.role === 'tool' ? 'user' : msg.role,
-      content: msg.content,
-    };
-
-    // Add cache_control to last message if prompt caching is enabled.
-    // The Anthropic API requires cache_control inside content block objects, not at message level.
-    if (usePromptCache && isLast) {
-      contentObj['content'] = [
-        { type: 'text', text: msg.content, cache_control: { type: 'ephemeral' } },
-      ];
+    // Normal messages (possibly multimodal)
+    let contentValue: unknown;
+    if (hasImages) {
+      // Build Anthropic content blocks from multimodal parts
+      const blocks = buildAnthropicContentBlocks(msg.content, multimodalParts);
+      contentValue =
+        usePromptCache && isLast
+          ? blocks.map((b, idx) =>
+              idx === blocks.length - 1 ? { ...b, cache_control: { type: 'ephemeral' } } : b,
+            )
+          : blocks;
+    } else if (usePromptCache && isLast) {
+      contentValue = [{ type: 'text', text: msg.content, cache_control: { type: 'ephemeral' } }];
+    } else {
+      contentValue = msg.content;
     }
 
-    result.push(contentObj);
+    result.push({
+      role: msg.role === 'tool' ? 'user' : msg.role,
+      content: contentValue,
+    });
   }
 
   return result;

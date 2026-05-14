@@ -17,7 +17,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { supabase } from '../lib/supabase';
+import { getUserScopedClient } from '../lib/supabaseClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 
@@ -136,20 +136,11 @@ router.post('/initiate', createRateLimiter('pairing-code'), async (req: Request,
 
   const payload = pairingCodeResponseSchema.parse(jsonBody);
 
-  // Optionally store the pairing session in Supabase for tracking
-  const { error: insertError } = await supabase.from('pairing_sessions').insert({
-    code: payload.code,
-    user_id: user.userId,
-    desktop_id: desktopId ?? null,
-    status: 'pending',
-    expires_at: new Date(payload.expiresAt).toISOString(),
-    created_at: new Date().toISOString(),
-  });
-
-  if (insertError) {
-    // Non-fatal: pairing still works through the signaling server
-    logger.debug({ error: insertError }, 'Failed to persist pairing session (table may not exist)');
-  }
+  // Wave 1.5+ task #17 (2026-05-08): the legacy `pairing_sessions` write
+  // here was a dead persistence sink — the table doesn't exist in the
+  // canonical schema (only `device_pairings` does), so the insert always
+  // failed and was swallowed. The signaling server is the source of truth
+  // for pairing state; the DB write was never load-bearing. Removed.
 
   res.json({
     code: payload.code,
@@ -182,8 +173,12 @@ router.post('/confirm', createRateLimiter('pairing-code'), async (req: Request, 
 
   logger.info({ userId: user.userId, desktopId, code }, 'Pairing confirmation from desktop');
 
+  // Wave 1.5+ singleton sweep: user-scoped client. RLS on `desktop_devices`
+  // is the second line of defense if the .eq filter ever drops.
+  const userDb = getUserScopedClient(user.userId);
+
   // Verify the desktop belongs to this user
-  const { data: desktop, error: desktopError } = await supabase
+  const { data: desktop, error: desktopError } = await userDb
     .from('desktop_devices')
     .select('id, user_id')
     .eq('id', desktopId)
@@ -220,30 +215,13 @@ router.post('/confirm', createRateLimiter('pairing-code'), async (req: Request, 
     throw new AppError('Failed to verify pairing code', 502);
   }
 
-  // Update the pairing session in Supabase (best-effort)
-  const { error: updateError } = await supabase
-    .from('pairing_sessions')
-    .update({
-      desktop_id: desktopId,
-      status: 'confirmed',
-      confirmed_at: new Date().toISOString(),
-    })
-    .eq('code', code)
-    .eq('user_id', user.userId);
-
-  if (updateError) {
-    logger.debug({ error: updateError }, 'Failed to update pairing session (table may not exist)');
-  }
-
-  // Link the desktop to the user's mobile (update the user record)
-  const { error: linkError } = await supabase
-    .from('users')
-    .update({ desktop_id: desktopId })
-    .eq('id', user.userId);
-
-  if (linkError) {
-    logger.warn({ error: linkError }, 'Failed to link desktop to user');
-  }
+  // Wave 1.5+ task #17 (2026-05-08): two legacy best-effort writes were
+  // removed here. They targeted `public.pairing_sessions` (table doesn't
+  // exist; only `public.device_pairings` does) and `public.users.desktop_id`
+  // (table+column don't exist; canonical user table is `public.profiles`,
+  // no desktop_id column). Both calls always failed and were swallowed —
+  // the signaling server is the source of truth for pairing state, so
+  // these were dead persistence sinks, not load-bearing.
 
   res.json({
     code,
@@ -348,16 +326,9 @@ router.delete(
       logger.warn({ error: fetchError }, 'Failed to delete from signaling server');
     }
 
-    // Update DB status (best-effort)
-    const { error: updateError } = await supabase
-      .from('pairing_sessions')
-      .update({ status: 'cancelled' })
-      .eq('code', code)
-      .eq('user_id', user.userId);
-
-    if (updateError) {
-      logger.debug({ error: updateError }, 'Failed to update pairing status (table may not exist)');
-    }
+    // Wave 1.5+ task #17 (2026-05-08): legacy `pairing_sessions` update
+    // removed (dead — table doesn't exist; cancellation is enforced by
+    // the signaling-server DELETE above).
 
     res.json({ code, status: 'cancelled' });
   },

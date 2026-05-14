@@ -10,6 +10,7 @@ pub mod audit_logger;
 pub mod auth;
 pub mod auth_db;
 pub mod command_validator;
+pub mod dispatch_hmac;
 pub mod dm_protection;
 pub mod encryption;
 pub mod guardrails;
@@ -85,4 +86,5 @@ pub use tool_guard::{
     SecurityError, ToolConfirmationRequest, ToolConfirmationResponse, ToolExecutionGuard,
     ToolPolicy, ToolSafetyTier,
 };
-pub use updater::{UpdateMetadata, UpdateSecurityManager, VerificationResult};
+// SEV-DESK-14: `updater` module emptied — Tauri's built-in Ed25519 updater
+// handles production update verification. See `updater.rs` for context.

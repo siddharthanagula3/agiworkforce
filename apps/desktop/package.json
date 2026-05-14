@@ -1,6 +1,6 @@
 {
   "name": "@agiworkforce/desktop",
-  "version": "1.1.7",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -25,7 +25,11 @@
   },
   "dependencies": {
     "@agiworkforce/api": "workspace:*",
-    "@agiworkforce/chat": "workspace:*",
+    "@agiworkforce/apply-patch": "workspace:*",
+    "@agiworkforce/mcp": "workspace:*",
+    "@agiworkforce/skills": "workspace:*",
+    "@agiworkforce/unified-chat": "workspace:*",
+    "@agiworkforce/routing": "workspace:*",
     "@agiworkforce/runtime": "workspace:*",
     "@agiworkforce/stores": "workspace:*",
     "@agiworkforce/types": "workspace:*",

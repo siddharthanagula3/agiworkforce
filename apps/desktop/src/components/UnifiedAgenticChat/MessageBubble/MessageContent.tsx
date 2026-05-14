@@ -22,7 +22,7 @@ import { InlineCodeOutput, CodeExecutionResult } from '../InlineCodeOutput';
 import { GenerativeWidget } from '../GenerativeWidget';
 import { useShallow } from 'zustand/react/shallow';
 import { useSettingsStore } from '../../../stores/settingsStore';
-import { useCanvasStore } from '../../../stores/canvasStore';
+import { useCanvasStore } from '../../../stores/editingStore';
 import { invoke } from '../../../lib/tauri-mock';
 
 const EXECUTABLE_LANGUAGES = new Set([

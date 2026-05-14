@@ -141,6 +141,9 @@ pub fn run() {
         }
     }
 
+    // Seed Supabase credentials from env vars (no-op in production; frontend overwrites via set_supabase_credentials).
+    crate::sys::account::init_supabase_from_env();
+
     let _telemetry_guard = match telemetry::init() {
         Ok(guard) => Some(guard),
         Err(e) => {
@@ -378,9 +381,12 @@ pub fn run() {
             app.manage(llm_state);
 
             // Initialize browser automation with graceful degradation.
-            // If initialization fails, we still manage a degraded state so commands
-            // can return meaningful errors instead of panicking on state retrieval.
-            let browser_state = match tauri::async_runtime::block_on(BrowserStateWrapper::new()) {
+            // SEV-DESK-02: pass the Tauri AppHandle so ExtensionBridge can
+            // surface confirmation prompts before any execute_script, navigate,
+            // cookie, or localStorage operation reaches the active browser tab.
+            let browser_state = match tauri::async_runtime::block_on(
+                BrowserStateWrapper::new(Some(app.handle().clone())),
+            ) {
                 Ok(state) => {
                     tracing::info!("Browser automation initialized successfully");
                     state
@@ -400,6 +406,8 @@ pub fn run() {
             // Native Messaging state for browser extension communication
             app.manage(NativeMessagingStateWrapper::new());
             tracing::info!("NativeMessagingStateWrapper initialized");
+
+            app.manage(crate::sys::commands::dispatch_hmac::DispatchHmacState::new());
 
             app.manage(SettingsState::new());
 
@@ -693,7 +701,7 @@ pub fn run() {
             tracing::info!("Diagnostics state initialized");
 
             // Tool Confirmation state for safety tier confirmation dialogs
-            app.manage(ToolConfirmationState::new());
+            app.manage(ToolConfirmationState::new_with_db(db_conn_arc.clone()));
             tracing::info!("Tool confirmation state initialized");
 
             // Capability state for frontend feature toggles enforcement
@@ -760,6 +768,33 @@ pub fn run() {
             app.manage(Arc::new(TokioMutex::new(GitHubState::new(workspace_dir))));
 
             app.manage(Arc::new(TokioMutex::new(ComputerUseState::new())));
+
+            // Per-app permission registry for Computer Use (Stream 1).
+            // Persisted to ~/Library/Application Support/.../app_permissions.json
+            // (or platform equivalent). Loaded on startup; saved on every change.
+            {
+                use crate::automation::computer_use::AppPermissionManager;
+                let perm_path = app_data_dir.join("app_permissions.json");
+                let manager = Arc::new(AppPermissionManager::new());
+                if perm_path.exists() {
+                    if let Ok(json) = std::fs::read_to_string(&perm_path) {
+                        let manager_clone = manager.clone();
+                        tauri::async_runtime::block_on(async move {
+                            if let Err(e) = manager_clone.from_json(&json).await {
+                                tracing::warn!(
+                                    "Failed to load app_permissions.json: {}",
+                                    e
+                                );
+                            }
+                        });
+                    }
+                }
+                app.manage(manager);
+                tracing::info!(
+                    "App permission registry initialized (persist path: {})",
+                    perm_path.display()
+                );
+            }
 
             app.manage(Arc::new(TokioMutex::new(CodeEditingState::new())));
 
@@ -879,9 +914,16 @@ pub fn run() {
                 }
             }
 
+            // B6 fix: share a single Arc<RwLock<String>> between the live
+            // RealtimeServer (which authenticates handshakes against it)
+            // and the RealtimeState that backs the bridge_rotate_token /
+            // bridge_get_token Tauri commands. Rotation now updates both
+            // sides through the same lock.
+            let realtime_token_shared =
+                std::sync::Arc::new(tokio::sync::RwLock::new(realtime_token));
             let realtime_server = Arc::new(crate::integrations::realtime::RealtimeServer::new(
                 presence_manager.clone(),
-                realtime_token.clone(),
+                realtime_token_shared.clone(),
                 Some(app.handle().clone()),
             ));
             {
@@ -895,7 +937,7 @@ pub fn run() {
             app.manage(crate::sys::commands::RealtimeState::new(
                 presence_manager.clone(),
                 websocket_port,
-                realtime_token,
+                realtime_token_shared,
             ));
             let metrics_db = Arc::new(Mutex::new(
                 crate::data::db::encryption::open_encrypted_connection(
@@ -1113,6 +1155,12 @@ pub fn run() {
             // Completion / Ghost Text
             crate::sys::commands::get_code_completion,
             crate::sys::commands::get_prompt_completion,
+
+            // Dispatch HMAC verification (mobile↔desktop control-message auth)
+            crate::sys::commands::dispatch_hmac_init,
+            crate::sys::commands::dispatch_hmac_verify,
+            crate::sys::commands::dispatch_hmac_sign,
+            crate::sys::commands::dispatch_hmac_reset,
 
             crate::sys::commands::window_get_state,
             crate::sys::commands::window_set_pinned,
@@ -1479,6 +1527,7 @@ pub fn run() {
             crate::sys::account::oauth_refresh,
             crate::sys::account::fetch_credit_balance,
             crate::sys::account::report_llm_usage,
+            crate::sys::account::set_supabase_credentials,
             crate::sys::account::account_store_api_base_url,
             crate::sys::account::account_store_access_token,
             crate::sys::account::account_store_refresh_token,
@@ -1783,6 +1832,11 @@ pub fn run() {
             crate::sys::commands::mcp_connect_connector,
             crate::sys::commands::get_connector_manifests,
             crate::sys::commands::save_api_key,
+
+            // Connector per-tool permissions (Desktop P0, audit C-rank 1)
+            crate::sys::commands::connector_permission_get,
+            crate::sys::commands::connector_permission_set,
+            crate::sys::commands::connector_permission_list,
 
             // MCPB (MCP Bundles)
             crate::sys::commands::mcpb_fetch_registry,
@@ -2153,11 +2207,17 @@ pub fn run() {
             crate::sys::commands::realtime::set_user_online,
             crate::sys::commands::realtime::set_user_offline,
             crate::sys::commands::realtime::update_user_activity,
+            // RT-04: Bridge token management
+            crate::sys::commands::realtime::bridge_get_token,
+            crate::sys::commands::realtime::bridge_rotate_token,
 
             // Privacy
             crate::sys::commands::privacy::privacy_delete_account,
             crate::sys::commands::privacy::privacy_export_data,
             crate::sys::commands::privacy::settings_update_privacy,
+            crate::sys::commands::privacy::privacy_request_account_deletion,
+            crate::sys::commands::privacy::privacy_get_pending_deletion,
+            crate::sys::commands::privacy::privacy_cancel_pending_deletion,
 
             // Undo Manager (AGI action reversal)
             crate::sys::commands::undo_get_summary,
@@ -2372,6 +2432,12 @@ pub fn run() {
             crate::sys::commands::computer_use_type_text,
             crate::sys::commands::computer_use_stop_session,
             crate::sys::commands::computer_use_zoom_at_point,
+            // Stream 1: per-app permission registry
+            crate::sys::commands::app_permissions_list,
+            crate::sys::commands::app_permissions_set,
+            crate::sys::commands::app_permissions_remove,
+            crate::sys::commands::app_permissions_always_blocked,
+            crate::sys::commands::app_permissions_active_window,
             crate::sys::commands::contact_export_vcard,
             crate::sys::commands::contact_get,
             crate::sys::commands::contact_import_vcard,

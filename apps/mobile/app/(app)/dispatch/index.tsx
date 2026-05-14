@@ -7,7 +7,6 @@ import * as Haptics from 'expo-haptics';
 import {
   Monitor,
   Send,
-  Plus,
   QrCode,
   CheckCircle,
   Clock,
@@ -274,15 +273,8 @@ function DispatchInput({ onSend }: { onSend: (text: string) => void }) {
       )}
 
       <View className="flex-row items-end gap-2">
-        {/* Attachment button */}
-        <Pressable
-          className="w-10 h-10 rounded-full items-center justify-center active:bg-white/5"
-          style={{ backgroundColor: colors.surfaceElevated }}
-          accessibilityLabel="Attach file"
-          accessibilityRole="button"
-        >
-          <Plus size={20} color={colors.textMuted} />
-        </Pressable>
+        {/* dispatch attachment button intentionally absent until decision E5 in
+            docs/superpowers/specs/2026-05-05-ui-audit/mobile.md is resolved */}
 
         {/* Text input */}
         <View

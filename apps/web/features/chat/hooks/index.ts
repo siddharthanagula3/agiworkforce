@@ -1,14 +1,10 @@
 // Chat Hooks - Public API
 
-export { useMultiAgentChat } from './use-multi-agent-chat';
 export { useSessionTokens } from './use-session-tokens';
 export { useKeyboardShortcuts } from './use-keyboard-shortcuts';
 export { useAIPreferences } from './use-ai-preferences';
-export { useTools as useToolIntegration } from './use-tool-integration';
 export { useExport as useExportConversation } from './use-export-conversation';
-export { useAgentCollaboration } from './use-agent-collaboration';
 export { useChatPersistence } from './use-chat-persistence';
-export { useChat as useChatInterface } from './use-chat-interface';
 export * from './use-chat-queries';
 export { useChatHistory as useConversationHistory } from './use-conversation-history';
 export { useVoiceRecording } from './use-voice-recording';

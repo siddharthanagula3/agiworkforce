@@ -6,6 +6,7 @@
 import { storage } from '@/lib/mmkv';
 import { API_URL } from '@/lib/constants';
 import { MODEL_LIST, type ModelDef, type ModelTier } from '@/lib/models';
+import { secureFetch } from './secureFetch';
 
 const CACHE_KEY = 'model_catalog_cache';
 const CACHE_TTL_KEY = 'model_catalog_ttl';
@@ -88,7 +89,7 @@ export async function fetchModelCatalog(): Promise<ModelDef[]> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10_000);
 
-    const response = await fetch(`${API_URL}/api/models`, {
+    const response = await secureFetch(`${API_URL}/api/models`, {
       method: 'GET',
       headers: { Accept: 'application/json' },
       signal: controller.signal,

@@ -2,15 +2,27 @@ import { useCallback } from 'react';
 import { View, ScrollView, Pressable, Alert, Linking, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import Constants from 'expo-constants';
 import { ArrowLeft, Sparkles, ExternalLink, MessageCircle, Mail, Info } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { colors } from '@/lib/theme';
+// Metro's default config supports importing package.json — read versions from
+// the manifest so the About screen never drifts from the actual installed deps.
+import pkg from '../../package.json';
 
-const APP_VERSION = '1.0.0';
-const APP_BUILD = '1.0.0 (1)';
-const RUNTIME = 'Expo 55 + React Native 0.83';
+const APP_VERSION = Constants.expoConfig?.version ?? 'unknown';
+const APP_BUILD = (() => {
+  const cfg = Constants.expoConfig;
+  if (!cfg) return 'unknown';
+  if (Platform.OS === 'ios') return `${cfg.version} (${cfg.ios?.buildNumber ?? '?'})`;
+  if (Platform.OS === 'android') return `${cfg.version} (${cfg.android?.versionCode ?? '?'})`;
+  return cfg.version ?? 'unknown';
+})();
+const expoVersion = (pkg.dependencies?.expo ?? '').replace(/^[~^]/, '').split('.')[0] || '?';
+const rnVersion = pkg.dependencies?.['react-native'] ?? '?';
+const RUNTIME = `Expo ${expoVersion} + React Native ${rnVersion}`;
 
 // ---------------------------------------------------------------------------
 // Link row

@@ -81,8 +81,6 @@ export const PROVIDERS: ProviderDef[] = MOBILE_PROVIDER_IDS.map((providerId) => 
   color: PROVIDER_META[providerId]?.color ?? '#888',
 }));
 
-const NEW_MODEL_IDS = new Set<string>(['gpt-5.4', 'grok-4']);
-
 export const MODEL_LIST: ModelDef[] = getPickerModels({
   allowedProviders: MOBILE_PROVIDER_IDS,
   modelTypes: ['chat', 'reasoning', 'multimodal', 'search'],
@@ -95,7 +93,6 @@ export const MODEL_LIST: ModelDef[] = getPickerModels({
   supportsVision: model.supportsVision,
   supportsThinking: model.supportsThinking,
   tier: model.tier,
-  isNew: NEW_MODEL_IDS.has(model.id) || undefined,
 }));
 
 const modelMap = new Map<string, ModelDef>(MODEL_LIST.map((model) => [model.id, model]));
@@ -150,9 +147,13 @@ export function getShortDisplayName(id: string): string {
     return id;
   }
 
+  // MOB-HARDCODED-MODELS fix: strip well-known provider name prefixes generically
+  // so this survives era changes without manual updates.
+  // Pattern: "Claude X.Y ", "GPT-X.Y ", "Gemini X.Y ", "Grok X ", "OpenAI " etc.
   return model.name
-    .replace('Claude 4.6 ', '')
-    .replace('Claude 4.5 ', '')
-    .replace('GPT-5.4 ', 'GPT-')
-    .replace('OpenAI ', '');
+    .replace(/^Claude\s+[\d.]+\s+/i, '')
+    .replace(/^GPT-[\d.]+\s+/, 'GPT-')
+    .replace(/^Gemini\s+[\d.]+\s+/i, '')
+    .replace(/^Grok\s+\d+\s+/i, '')
+    .replace(/^OpenAI\s+/i, '');
 }

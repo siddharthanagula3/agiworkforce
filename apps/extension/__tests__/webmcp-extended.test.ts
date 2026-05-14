@@ -591,26 +591,36 @@ describe('stopWatchingToolChanges', () => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe('security — declarative tool discovery does not execute scripts', () => {
-  it('does not interpret tool-name as a script source or URL', () => {
+  it('CHROME-MED-5: rejects a tool whose name contains URL-scheme metacharacters', () => {
     addDeclarativeForm({ toolName: 'javascript:alert(1)', toolDescription: 'XSS attempt' });
 
-    // The tool should be discovered as-is (name = literal string)
+    // CHROME-MED-5 (audit 2026-05-05): tool names that fail the conservative
+    // identifier pattern `^[A-Za-z][A-Za-z0-9_\-. ]{0,63}$` are dropped at
+    // discovery time. The colon in `javascript:alert(1)` is not in the
+    // allowed character class, so the tool is rejected outright rather than
+    // stored verbatim. The previous test asserted the verbatim-storage
+    // behavior — that contract has changed.
     const result = discoverAllTools();
-    const tool = result.tools[0];
-
-    // We verify it is treated as a plain string name and not executed
-    expect(typeof tool.name).toBe('string');
-    expect(tool.name).toBe('javascript:alert(1)'); // stored verbatim
+    expect(result.tools).toHaveLength(0);
   });
 
-  it('does not allow HTML injection via tool-description', () => {
+  it('CHROME-MED-5: still discovers tools whose names match the identifier pattern', () => {
+    addDeclarativeForm({ toolName: 'safe_tool-1', toolDescription: 'fine' });
+    const result = discoverAllTools();
+    expect(result.tools).toHaveLength(1);
+    expect(result.tools[0].name).toBe('safe_tool-1');
+  });
+
+  it('does not allow HTML injection via tool-description (string is stored, then rendered via createTextNode)', () => {
     addDeclarativeForm({
       toolName: 'safe-tool',
       toolDescription: '<img src=x onerror=alert(1)>',
     });
 
     const result = discoverAllTools();
-    // The description is stored as a plain string — no DOM injection
+    // The description is stored as a plain string — no DOM injection.
+    // CHROME-MED-5 also caps it at 500 chars but doesn't strip content
+    // because rendering goes through createTextNode in side_panel.
     expect(result.tools[0].description).toBe('<img src=x onerror=alert(1)>');
   });
 

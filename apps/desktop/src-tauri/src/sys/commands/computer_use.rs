@@ -8,9 +8,11 @@ use enigo::{Button, Coordinate, Direction, Enigo, Keyboard, Mouse, Settings};
 use xcap::Monitor;
 
 use crate::automation::computer_use::{
-    zoom_region, ComputerUseAgent, ComputerUseConfig, ComputerUseTask, InterpolationMethod, Region,
-    ZoomAction, ZoomLevel,
+    zoom_region, AppPermission, AppPermissionManager, ComputerUseAgent, ComputerUseConfig,
+    ComputerUseTask, InterpolationMethod, PermissionStatus, Region, ZoomAction, ZoomLevel,
+    ALWAYS_BLOCKED_BUNDLE_IDS,
 };
+use crate::core::llm::Provider;
 use crate::sys::commands::llm::LLMState;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -144,9 +146,14 @@ pub async fn computer_use_start_session(
     Ok(session_id)
 }
 
-#[tauri::command]
-pub async fn computer_use_capture_screen(
-    state: State<'_, Arc<Mutex<ComputerUseState>>>,
+/// Internal screen-capture worker — does the actual work without any
+/// confirmation gate. Used by both the gated IPC entry point
+/// (`computer_use_capture_screen`) and the dispatcher
+/// (`computer_use_execute_tool`), which has its own dispatch-level gate.
+/// Calling this from a non-IPC code path bypasses the user-confirmation
+/// gate, so any new caller MUST justify why bypass is acceptable.
+async fn capture_screen_inner(
+    state: &Arc<Mutex<ComputerUseState>>,
 ) -> Result<ScreenCapture, String> {
     tracing::info!("Capturing screen");
 
@@ -193,6 +200,27 @@ pub async fn computer_use_capture_screen(
     }
 
     Ok(capture)
+}
+
+/// SEV-DESK-09 fix: gate the IPC entry point on `require_confirmation`
+/// to match the click/move_mouse/type_text pattern at lines 296-343.
+/// The dispatcher path (`computer_use_execute_tool`) calls
+/// `capture_screen_inner` directly because it gates `screenshot` once
+/// at the dispatch level (line 403); double-prompting would be hostile.
+/// A direct frontend `invoke('computer_use_capture_screen', ...)` from
+/// a prompt-injected LLM no longer bypasses confirmation.
+#[tauri::command]
+pub async fn computer_use_capture_screen(
+    state: State<'_, Arc<Mutex<ComputerUseState>>>,
+    app_handle: tauri::AppHandle,
+) -> Result<ScreenCapture, String> {
+    require_confirmation(
+        &app_handle,
+        "computer_use_capture_screen",
+        serde_json::json!({}),
+    )
+    .await?;
+    capture_screen_inner(state.inner()).await
 }
 
 /// FIX-003 (Sprint 2): every `computer_use_*` IPC routes through
@@ -407,7 +435,9 @@ pub async fn computer_use_execute_tool(
 
     match tool_name.as_str() {
         "screenshot" => {
-            let capture = computer_use_capture_screen(state).await?;
+            // SEV-DESK-09: dispatcher already gated above (line 403); call the
+            // inner worker directly to avoid a second confirmation prompt.
+            let capture = capture_screen_inner(state.inner()).await?;
             serde_json::to_value(capture).map_err(|e| format!("Serialization error: {}", e))
         }
         "click" => {
@@ -447,7 +477,8 @@ pub async fn computer_use_execute_tool(
                 save_path,
             };
 
-            let result = computer_use_zoom_region(request, state).await?;
+            // Dispatcher is already gated above (~line 429); call inner directly.
+            let result = zoom_region_inner(request, state.inner()).await?;
             serde_json::to_value(result).map_err(|e| format!("Serialization error: {}", e))
         }
         "zoom_at_point" => {
@@ -456,7 +487,20 @@ pub async fn computer_use_execute_tool(
             let context_size = args["context_size"].as_u64().map(|v| v as u32);
             let zoom_level = args["zoom_level"].as_f64().map(|v| v as f32);
 
-            let result = computer_use_zoom_at_point(x, y, context_size, zoom_level, state).await?;
+            let size = context_size.unwrap_or(100);
+            let level = zoom_level.unwrap_or(4.0);
+            let half = (size / 2) as i32;
+            let req = ZoomRegionRequest {
+                x: x - half,
+                y: y - half,
+                width: size,
+                height: size,
+                zoom_level: level,
+                interpolation: None,
+                save_path: None,
+            };
+            // Dispatcher is already gated above (~line 429); call inner directly.
+            let result = zoom_region_inner(req, state.inner()).await?;
             serde_json::to_value(result).map_err(|e| format!("Serialization error: {}", e))
         }
         _ => Err(format!("Unknown tool: {}", tool_name)),
@@ -549,10 +593,46 @@ fn perform_type(text: &str) -> Result<(), anyhow::Error> {
 /// });
 /// // result.image_data contains base64 PNG of 200x120 zoomed image
 /// ```
+///
+/// DESK-ZOOM-REGION-UNGATED (audit 2026-05-06): zoom captures screen pixels —
+/// identical privacy surface to `computer_use_capture_screen`. This command
+/// now requires the same `require_confirmation` gate. The inner work is
+/// extracted to `zoom_region_inner` so the execute_tool dispatcher (already
+/// gated at dispatch level, ~line 429) and `computer_use_zoom_at_point` can
+/// call it without a second confirmation dialog.
 #[tauri::command]
 pub async fn computer_use_zoom_region(
     request: ZoomRegionRequest,
     state: State<'_, Arc<Mutex<ComputerUseState>>>,
+    app_handle: tauri::AppHandle,
+) -> Result<ZoomRegionResponse, String> {
+    require_confirmation(
+        &app_handle,
+        "computer_use_zoom_region",
+        serde_json::json!({
+            "x": request.x,
+            "y": request.y,
+            "width": request.width,
+            "height": request.height,
+            "zoom_level": request.zoom_level,
+        }),
+    )
+    .await?;
+
+    zoom_region_inner(request, state.inner()).await
+}
+
+/// Inner zoom implementation — no confirmation gate.
+///
+/// Callers that are already behind a confirmation gate may call this directly:
+/// - `computer_use_zoom_region` (gated immediately above)
+/// - `computer_use_zoom_at_point` (gated inside that command)
+/// - `computer_use_execute_tool` dispatcher (gated at dispatch level, ~line 429)
+///
+/// Any new caller NOT already behind a gate MUST add one before calling this.
+async fn zoom_region_inner(
+    request: ZoomRegionRequest,
+    state: &Arc<Mutex<ComputerUseState>>,
 ) -> Result<ZoomRegionResponse, String> {
     tracing::info!(
         "Zooming region at ({}, {}) size {}x{} with {}x magnification",
@@ -636,6 +716,7 @@ pub async fn computer_use_zoom_at_point(
     context_size: Option<u32>,
     zoom_level: Option<f32>,
     state: State<'_, Arc<Mutex<ComputerUseState>>>,
+    app_handle: tauri::AppHandle,
 ) -> Result<ZoomRegionResponse, String> {
     let size = context_size.unwrap_or(100);
     let level = zoom_level.unwrap_or(4.0);
@@ -651,7 +732,20 @@ pub async fn computer_use_zoom_at_point(
         save_path: None,
     };
 
-    computer_use_zoom_region(request, state).await
+    require_confirmation(
+        &app_handle,
+        "computer_use_zoom_at_point",
+        serde_json::json!({
+            "x": request.x,
+            "y": request.y,
+            "width": request.width,
+            "height": request.height,
+            "zoom_level": request.zoom_level,
+        }),
+    )
+    .await?;
+
+    zoom_region_inner(request, state.inner()).await
 }
 
 /// Suggest an appropriate zoom level based on element dimensions.
@@ -671,31 +765,54 @@ pub fn computer_use_suggest_zoom_level(width: u32, height: u32) -> f32 {
     crate::automation::computer_use::suggest_zoom_level(width, height).scale_factor()
 }
 
+/// Executes an OPA (Observe-Plan-Act) computer use task.
+///
+/// Stream 2 params:
+/// - `model`: explicit model id from the catalog (e.g. `claude-opus-4.7`,
+///   `gpt-5.5`, `gemini-3.1-pro`, `grok-4.3-vision`). `None` lets the
+///   router pick the user's default vision model.
+/// - `provider`: explicit provider name (`anthropic`, `openai`, `google`,
+///   `xai`, etc). `None` resolves from the model id.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn computer_use_execute_opa_task(
     description: String,
     timeout_ms: Option<u64>,
     max_actions: Option<u32>,
     target_application: Option<String>,
     success_indicators: Option<Vec<String>>,
+    model: Option<String>,
+    provider: Option<String>,
     app: tauri::AppHandle,
     _state: State<'_, Arc<Mutex<ComputerUseState>>>,
     llm_state: State<'_, LLMState>,
+    permissions_state: State<'_, Arc<AppPermissionManager>>,
 ) -> Result<serde_json::Value, String> {
     let router = llm_state.router.clone();
 
     let timeout_duration = Duration::from_millis(timeout_ms.unwrap_or(300_000));
     let iterations = max_actions.unwrap_or(100);
 
+    let resolved_provider = provider.as_deref().and_then(Provider::from_string);
+
     let config = ComputerUseConfig {
         max_iterations: iterations,
         max_duration: timeout_duration,
+        model,
+        provider: resolved_provider,
         ..ComputerUseConfig::default()
     };
 
-    let agent = ComputerUseAgent::new(router, config)
-        .map_err(|e| format!("Failed to create ComputerUseAgent: {}", e))?
-        .with_app_handle(app);
+    // Stream 1: wire the per-app permission manager into the agent so the
+    // safety layer's `check_app_permission` consults the active foreground
+    // app on every action. Closes the gap from today's audit.
+    let agent = ComputerUseAgent::with_app_permissions(
+        router,
+        config,
+        permissions_state.inner().clone(),
+    )
+    .map_err(|e| format!("Failed to create ComputerUseAgent: {}", e))?
+    .with_app_handle(app);
 
     let task = ComputerUseTask {
         description,
@@ -719,6 +836,109 @@ pub async fn computer_use_execute_opa_task(
     });
 
     Ok(value)
+}
+
+// ---------------------------------------------------------------------------
+// Per-app permissions (Stream 1)
+// ---------------------------------------------------------------------------
+
+/// Lists every app the user has explicitly allowed/denied/marked-ask.
+/// Apps not in this list default to `AskEveryTime` on first encounter.
+#[tauri::command]
+pub async fn app_permissions_list(
+    permissions_state: State<'_, Arc<AppPermissionManager>>,
+) -> Result<Vec<AppPermission>, String> {
+    Ok(permissions_state.list_permissions().await)
+}
+
+/// Sets the permission status for an app (allow / deny / ask).
+///
+/// `bundle_id` is optional but recommended on macOS — it lets the gate
+/// match against `frontmostApplication.bundleIdentifier` rather than the
+/// localized display name.
+///
+/// `status` accepts: `allowed`, `denied`, or `ask`.
+#[tauri::command]
+pub async fn app_permissions_set(
+    app_name: String,
+    bundle_id: Option<String>,
+    status: String,
+    app_handle: tauri::AppHandle,
+    permissions_state: State<'_, Arc<AppPermissionManager>>,
+) -> Result<(), String> {
+    let parsed = match status.to_lowercase().as_str() {
+        "allowed" | "allow" => PermissionStatus::Allowed,
+        "denied" | "deny" | "block" | "blocked" => PermissionStatus::Denied,
+        "ask" | "ask_every_time" | "askeverytime" => PermissionStatus::AskEveryTime,
+        other => {
+            return Err(format!(
+                "Invalid status '{other}'. Expected one of: allowed, denied, ask"
+            ))
+        }
+    };
+
+    permissions_state
+        .set_permission_with_bundle(&app_name, bundle_id.as_deref(), parsed)
+        .await;
+
+    persist_permissions(&app_handle, permissions_state.inner()).await;
+    Ok(())
+}
+
+/// Removes a per-app permission entry, reverting it to `AskEveryTime` on
+/// next encounter.
+#[tauri::command]
+pub async fn app_permissions_remove(
+    app_name: String,
+    app_handle: tauri::AppHandle,
+    permissions_state: State<'_, Arc<AppPermissionManager>>,
+) -> Result<(), String> {
+    permissions_state.remove_permission(&app_name).await;
+    persist_permissions(&app_handle, permissions_state.inner()).await;
+    Ok(())
+}
+
+/// Best-effort persistence of the permission registry to the app data dir.
+/// Failures are logged but don't bubble up — the in-memory state is still
+/// authoritative for the current session.
+async fn persist_permissions(app_handle: &tauri::AppHandle, mgr: &Arc<AppPermissionManager>) {
+    use tauri::Manager as _;
+    let path = match app_handle.path().app_data_dir() {
+        Ok(dir) => dir.join("app_permissions.json"),
+        Err(e) => {
+            tracing::warn!("Could not resolve app_data_dir for app_permissions.json: {}", e);
+            return;
+        }
+    };
+
+    match mgr.to_json().await {
+        Ok(json) => {
+            if let Err(e) = tokio::fs::write(&path, json).await {
+                tracing::warn!("Failed to persist app_permissions.json at {:?}: {}", path, e);
+            }
+        }
+        Err(e) => {
+            tracing::warn!("Failed to serialize app_permissions: {}", e);
+        }
+    }
+}
+
+/// Returns the hardcoded refuse-list (investment / crypto / banking
+/// apps) so the UI can surface them as "always blocked" entries that the
+/// user cannot enable.
+#[tauri::command]
+pub fn app_permissions_always_blocked() -> Vec<String> {
+    ALWAYS_BLOCKED_BUNDLE_IDS
+        .iter()
+        .map(|s| s.to_string())
+        .collect()
+}
+
+/// Returns the currently focused application — used by the settings UI to
+/// help the user discover and approve new apps.
+#[tauri::command]
+pub fn app_permissions_active_window() -> Option<crate::automation::computer_use::ActiveWindow> {
+    crate::automation::computer_use::WindowCoordinator::get_active_window()
 }
 
 #[tauri::command]

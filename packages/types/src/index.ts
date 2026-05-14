@@ -114,8 +114,17 @@ export * from './a2a';
 // Cross-device orchestration types (desktop↔mobile threads)
 export * from './cross-device';
 
+// Anthropic Dispatch HMAC envelope contract (canonical wire format)
+export * from './dispatch';
+
 // Workspace analytics types (enterprise usage tracking)
 export * from './workspace-analytics';
 
 // Command capability types (runtime-aware dispatch)
 export * from './command-capabilities';
+
+// Provider adapter contract (lifted from OpenClaw, adapted)
+export * from './provider-adapter';
+
+// Design-system shared contracts (provider identity, effort, agent mode, settings IA, etc.)
+export * from './design-system';

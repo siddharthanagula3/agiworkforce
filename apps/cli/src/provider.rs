@@ -3,9 +3,10 @@
 //! Each provider normalizes messages, tool definitions, and streaming responses
 //! into a common format. Provider-specific quirks are handled here.
 
-// Model catalog API surface is intentionally broad: find_model, models_for_provider,
-// supports_tool_use, etc. are used by --list-models and will be wired into model
-// selection heuristics, deprecation warnings, and the /models REPL command.
+// Provider catalog mixes live helpers (find_model, format_model_list, ModelInfo
+// — used by output.rs, repl.rs, --list-models) with reserved-for-deprecation-
+// warnings/heuristics helpers (models_for_provider, supports_tool_use, …).
+// File-level allow stays until those secondary surfaces are wired.
 #![allow(dead_code)]
 
 use crate::model_catalog;
@@ -348,8 +349,10 @@ mod tests {
         assert!(ids.contains(&"gpt-5.4-pro"));
         assert!(ids.contains(&"gemini-3.1-pro-preview"));
         assert!(ids.contains(&"gemini-3.1-flash-lite"));
-        assert!(ids.contains(&"grok-4-0709"));
-        assert!(ids.contains(&"grok-4-1-fast-reasoning"));
+        // grok-4-0709 (apiModelId for grok-4) and grok-4-1-fast-reasoning are
+        // deprecated as of the Phase 3 catalog refresh; the live xAI flagship
+        // is grok-4.3. Catalog filters out deprecated entries by design.
+        assert!(ids.contains(&"grok-4.3"));
         assert!(ids.contains(&"mistral-large-2512"));
         assert!(ids.contains(&"mistral-medium-2508"));
         assert!(ids.contains(&"deepseek-chat"));
@@ -454,7 +457,9 @@ mod tests {
         assert!(reasoning_ids.contains(&"gpt-5.4-mini"));
         assert!(reasoning_ids.contains(&"gpt-5.4-pro"));
         assert!(reasoning_ids.contains(&"gemini-3.1-pro-preview"));
-        assert!(reasoning_ids.contains(&"grok-4-0709"));
+        // grok-4-0709 was deprecated in the Phase 3 catalog refresh; the live
+        // xAI flagship is grok-4.3 which has reasoning enabled.
+        assert!(reasoning_ids.contains(&"grok-4.3"));
         assert!(reasoning_ids.contains(&"deepseek-reasoner"));
     }
 
@@ -524,7 +529,8 @@ mod tests {
         assert!(find_model("gpt-5.4-pro").is_some());
         assert!(find_model("gemini-3.1-pro-preview").is_some());
         assert!(find_model("gemini-3.1-flash-lite").is_some());
-        assert!(find_model("grok-4-0709").is_some());
+        // grok-4-0709 was deprecated in Phase 3 — use grok-4.3 (live xAI flagship).
+        assert!(find_model("grok-4.3").is_some());
         assert!(find_model("mistral-large-2512").is_some());
         assert!(find_model("llama3.1").is_some());
         assert!(find_model("qwen2.5").is_some());
@@ -623,7 +629,8 @@ mod tests {
         assert!(supports_tool_use("claude-opus-4-6"));
         assert!(supports_tool_use("gpt-5.4"));
         assert!(supports_tool_use("gemini-3.1-pro-preview"));
-        assert!(supports_tool_use("grok-4-0709"));
+        // grok-4-0709 deprecated; use grok-4.3 (live xAI flagship).
+        assert!(supports_tool_use("grok-4.3"));
         assert!(supports_tool_use("deepseek-reasoner"));
     }
 
@@ -779,7 +786,8 @@ mod tests {
         assert!(list.contains("gpt-5.4-pro"));
         assert!(list.contains("gemini-3.1-pro-preview"));
         assert!(list.contains("gemini-3.1-flash-lite"));
-        assert!(list.contains("grok-4-0709"));
+        // grok-4-0709 deprecated; grok-4.3 is the live xAI flagship.
+        assert!(list.contains("grok-4.3"));
         assert!(list.contains("mistral-large-2512"));
         assert!(list.contains("llama3.1"));
         assert!(list.contains("qwen2.5"));

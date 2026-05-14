@@ -10,6 +10,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import { getTaskModelForProvider, getProviderDefaultModel } from '@agiworkforce/types';
 
 /**
  * Prompt Completion API
@@ -54,7 +55,7 @@ async function handleCompletion(request: NextRequest): Promise<NextResponse> {
   const token = authHeader.substring(7);
 
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  // Use service role key for server-side JWT verification — anon key cannot verify
+  // Use service role key for server-side JWT verification - anon key cannot verify
   // JWT signatures server-side since it lacks the JWT secret.
   const supabase = createClient(supabaseUrl, requireEnv('SUPABASE_SERVICE_ROLE_KEY'));
 
@@ -85,8 +86,12 @@ async function handleCompletion(request: NextRequest): Promise<NextResponse> {
 
   const startTime = Date.now();
 
-  // Use a fast, cheap model for prompt completions
-  const completionModel = 'claude-haiku-4.5';
+  // Use a fast, cheap model for prompt completions.
+  // MODEL-IDS-HARDCODED fix: look up via catalog instead of hardcoding.
+  const completionModel =
+    getTaskModelForProvider('anthropic', 'fast_completion') ??
+    getProviderDefaultModel('anthropic') ??
+    'claude-haiku-4-5'; // last-resort fallback — should never be reached
   const provider = LLMProviderFactory.getProviderFromModel(completionModel);
 
   const systemContent = context

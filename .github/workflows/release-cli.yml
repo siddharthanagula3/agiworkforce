@@ -1,0 +1,195 @@
+name: Release CLI
+
+# Triggers on tags starting with v-cli- (e.g. v-cli-1.0.0).
+# Builds 6 platform binaries, publishes 7 npm packages, creates a GitHub release.
+#
+# Required GitHub Secrets:
+#   NPM_TOKEN       — npm automation token (npmjs.com → access tokens → automation)
+#
+# Existing secrets reused:
+#   GITHUB_TOKEN    — auto-provided by GitHub Actions
+
+on:
+  push:
+    tags:
+      - 'v-cli-*'
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  RUST_VERSION: '1.94.0'
+  NODE_VERSION: '22'
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            platform: darwin-arm64
+            archive: tar.gz
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            platform: darwin-x64
+            archive: tar.gz
+          # linux-arm64 dropped from v1.0 matrix: openssl-sys cross-compile
+          # needs libssl-dev:arm64 + correct linker setup which cross's
+          # default docker image doesn't ship. Users on linux-arm64 can run:
+          #   cargo install --git https://github.com/siddharthanagula3/agiworkforce agiworkforce-cli
+          # which builds natively. v1.1 to add this back via either rustls
+          # migration (no openssl) or self-hosted arm64 runner.
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            platform: linux-x64
+            archive: tar.gz
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            platform: win32-arm64
+            archive: zip
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            platform: win32-x64
+            archive: zip
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable @ 2026-05-05
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: ${{ matrix.target }}
+
+      # Linux-only: install ALSA + udev dev headers so cpal (voice) and any
+      # other linux-system-lib crate can compile. Required because the cli
+      # binary statically links cpal regardless of feature flags.
+      - name: Install linux system deps (libasound2-dev, libudev-dev)
+        if: runner.os == 'Linux' && !matrix.cross
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libudev-dev pkg-config
+
+      - name: Install cross (for aarch64 linux)
+        if: matrix.cross
+        run: cargo install cross --locked
+
+      # Cross runs builds in a Docker container — system deps need to be
+      # installed inside the container via Cross.toml's pre-build hook.
+      # Generate it on the fly (kept out of git so the file doesn't apply
+      # to local cargo invocations).
+      - name: Configure cross with linux deps
+        if: matrix.cross
+        run: |
+          cat > Cross.toml <<'EOF'
+          [target.aarch64-unknown-linux-gnu]
+          pre-build = [
+              "dpkg --add-architecture $CROSS_DEB_ARCH",
+              "apt-get update && apt-get install -y libasound2-dev:$CROSS_DEB_ARCH libudev-dev:$CROSS_DEB_ARCH pkg-config",
+          ]
+          EOF
+
+      - name: Build (cross)
+        if: matrix.cross
+        run: cross build --release --target ${{ matrix.target }} -p agiworkforce-cli
+
+      - name: Build (cargo)
+        if: '!matrix.cross'
+        run: cargo build --release --target ${{ matrix.target }} -p agiworkforce-cli
+
+      - name: Stage binary
+        shell: bash
+        run: |
+          mkdir -p dist/cli/${{ matrix.platform }}/bin
+          if [[ "${{ matrix.os }}" == windows-* ]]; then
+            cp target/${{ matrix.target }}/release/agiworkforce.exe dist/cli/${{ matrix.platform }}/bin/
+          else
+            cp target/${{ matrix.target }}/release/agiworkforce dist/cli/${{ matrix.platform }}/bin/
+            chmod +x dist/cli/${{ matrix.platform }}/bin/agiworkforce
+          fi
+
+      - name: Archive (tar.gz)
+        if: matrix.archive == 'tar.gz'
+        run: tar -czf agiworkforce-${{ matrix.platform }}.tar.gz -C dist/cli/${{ matrix.platform }}/bin .
+
+      - name: Archive (zip)
+        if: matrix.archive == 'zip'
+        run: |
+          cd dist/cli/${{ matrix.platform }}/bin
+          7z a ../../../../agiworkforce-${{ matrix.platform }}.zip *
+
+      - name: Upload binary artifact (npm)
+        uses: actions/upload-artifact@v5
+        with:
+          name: cli-${{ matrix.platform }}
+          path: dist/cli/${{ matrix.platform }}/
+
+      - name: Upload archive artifact (gh release)
+        uses: actions/upload-artifact@v5
+        with:
+          name: archive-${{ matrix.platform }}
+          path: agiworkforce-${{ matrix.platform }}.${{ matrix.archive }}
+
+  publish-npm:
+    name: Publish to npm
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+
+      - name: Download all binary artifacts
+        uses: actions/download-artifact@v6
+        with:
+          path: dist/cli
+          pattern: cli-*
+          merge-multiple: false
+
+      - name: Reorganize artifacts (cli-darwin-arm64 -> dist/cli/darwin-arm64)
+        run: |
+          for d in dist/cli/cli-*; do
+            mv "$d" "dist/cli/$(basename $d | sed 's/^cli-//')"
+          done
+          ls -R dist/cli/
+
+      - name: Publish all packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: ./scripts/publish-cli.sh --yes
+
+  github-release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download archives
+        uses: actions/download-artifact@v6
+        with:
+          path: archives
+          pattern: archive-*
+          merge-multiple: true
+
+      - name: Get version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v-cli-}" >> $GITHUB_OUTPUT
+
+      - name: Create release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: 'AGI Workforce CLI v${{ steps.version.outputs.VERSION }}'
+          body_path: CHANGELOG.md
+          files: archives/*
+          draft: false
+          prerelease: false

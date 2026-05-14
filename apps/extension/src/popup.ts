@@ -3,6 +3,7 @@ import type {
   ConnectionStatusResponse,
   CaptureScreenshotResponse,
   ConnectionStatus,
+  PaywallHitMessage,
 } from './types';
 import { logger, storageUtils } from './utils';
 
@@ -19,11 +20,15 @@ const popupState: PopupState = {
   isConnected: false,
 };
 
+/** Storage key matching inPagePanel/setup.ts IN_PAGE_PANEL_ENABLED_KEY */
+const IN_PAGE_PANEL_ENABLED_KEY = 'in_page_panel_enabled';
+
 async function initializePopup(): Promise<void> {
   try {
-    await Promise.all([updateStatus(), updateTabInfo(), updateStats()]);
+    await Promise.all([updateStatus(), updateTabInfo(), updateStats(), updateTierDisplay()]);
     setupEventListeners();
     startSessionTimer();
+    await initInPagePanelToggle();
   } catch (error) {
     logger.error('Failed to initialize popup', error);
   }
@@ -79,18 +84,23 @@ function setupEventListeners(): void {
     versionEl.textContent = `v${chrome.runtime.getManifest().version}`;
   }
 
-  // Listen for connection status changes broadcast from background
+  // Listen for connection status changes and paywall hits broadcast from background
   chrome.runtime.onMessage.addListener((message: unknown) => {
-    if (
-      typeof message !== 'object' ||
-      message === null ||
-      !('type' in message) ||
-      (message as Record<string, unknown>)['type'] !== 'CONNECTION_STATUS_CHANGED'
-    ) {
+    if (typeof message !== 'object' || message === null || !('type' in message)) {
       return;
     }
-    const msg = message as { type: string; status?: ConnectionStatus; connected?: boolean };
-    applyConnectionStatus(msg.status ?? (msg.connected ? 'connected' : 'disconnected'));
+    const msgType = (message as Record<string, unknown>)['type'];
+
+    if (msgType === 'CONNECTION_STATUS_CHANGED') {
+      const msg = message as { type: string; status?: ConnectionStatus; connected?: boolean };
+      applyConnectionStatus(msg.status ?? (msg.connected ? 'connected' : 'disconnected'));
+      return;
+    }
+
+    if (msgType === 'PAYWALL_HIT') {
+      const msg = message as PaywallHitMessage;
+      showPaywallCard(msg.feature, msg.requiredTier, msg.reason);
+    }
   });
 
   window.addEventListener('unload', () => {
@@ -379,6 +389,182 @@ async function incrementActionCount(): Promise<void> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Tier display
+// ---------------------------------------------------------------------------
+
+/**
+ * Human-readable labels for each tier value returned by the API.
+ * Keeps tier display logic in one place — update here if tier IDs change.
+ */
+const TIER_LABELS: Readonly<Record<string, string>> = {
+  free: 'Free',
+  hobby: 'Hobby',
+  pro: 'Pro',
+  pro_plus: 'Pro+',
+  max: 'Max',
+  local: 'Local',
+  byok: 'BYOK',
+};
+
+/**
+ * Read the user's cached tier from chrome.storage.local ('agi_user_tier') and
+ * render it next to the version string.  Does NOT enforce anything — enforcement
+ * is server-side.  If no cached tier is found, the element is hidden so the
+ * popup is not cluttered for unauthenticated users.
+ */
+async function updateTierDisplay(): Promise<void> {
+  const tierEl = document.getElementById('userTier') as HTMLElement | null;
+  if (!tierEl) return;
+  try {
+    const stored = await storageUtils.getItem<string>('agi_user_tier');
+    if (stored) {
+      // Only show the element when a tier is known — no blank badge
+      tierEl.textContent = TIER_LABELS[stored] ?? stored;
+      tierEl.removeAttribute('hidden');
+    } else {
+      tierEl.setAttribute('hidden', '');
+    }
+  } catch {
+    tierEl.setAttribute('hidden', '');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Paywall card
+// ---------------------------------------------------------------------------
+
+/**
+ * Required-tier display strings for the upgrade CTA.
+ */
+const REQUIRED_TIER_LABELS: Readonly<Record<string, string>> = {
+  hobby: 'Hobby',
+  pro: 'Pro',
+  pro_plus: 'Pro+',
+  max: 'Max',
+};
+
+/**
+ * Feature display names for the paywall card title.
+ */
+const PAYWALL_FEATURE_LABELS: Readonly<Record<string, string>> = {
+  video_generation: 'video generation',
+  opus_4_7: 'Opus 4.7 access',
+  gpt_5_5: 'GPT-5.5 access',
+  computer_use: 'computer use',
+  deep_research: 'deep research',
+  image_quota: 'more image generation',
+  token_cap: 'higher token limits',
+  mcp: 'MCP server support',
+  web_search: 'web search',
+};
+
+/**
+ * Render a paywall notification card in the popup.
+ *
+ * The card uses plain DOM construction so no innerHTML with user-controlled
+ * content is involved (security constraint: DOMPurify is available in
+ * side_panel.ts but popup.ts is a simpler surface — we avoid it by not
+ * rendering any LLM-derived content, only static strings derived from the
+ * structured paywall payload).
+ *
+ * Layout: injected above the .actions section so it is immediately visible.
+ */
+function showPaywallCard(feature: string, requiredTier: string, reason?: string): void {
+  // Remove any existing paywall card (idempotent)
+  document.getElementById('paywallCard')?.remove();
+
+  const featureLabel = PAYWALL_FEATURE_LABELS[feature] ?? feature.replace(/_/g, ' ');
+  const tierLabel = REQUIRED_TIER_LABELS[requiredTier] ?? requiredTier;
+
+  // Build upgrade URL with UTM-style query params for analytics
+  const upgradeUrl = new URL('https://agiworkforce.com/pricing');
+  upgradeUrl.searchParams.set('from', 'ext-paywall');
+  upgradeUrl.searchParams.set('tier', requiredTier);
+  upgradeUrl.searchParams.set('feature', feature);
+
+  // ── Card container ──────────────────────────────────────────────────────
+  const card = document.createElement('div');
+  card.id = 'paywallCard';
+  card.setAttribute('role', 'region');
+  card.setAttribute('aria-label', 'Upgrade required');
+
+  // ── Title row ───────────────────────────────────────────────────────────
+  const titleEl = document.createElement('p');
+  titleEl.className = 'paywall-title';
+  // All text set via textContent — no innerHTML — so no XSS risk
+  titleEl.textContent = `Upgrade to ${tierLabel} for ${featureLabel}`;
+
+  // ── Reason (optional) ───────────────────────────────────────────────────
+  const reasonEl = document.createElement('p');
+  reasonEl.className = 'paywall-reason';
+  if (reason) {
+    reasonEl.textContent = reason;
+  } else {
+    reasonEl.setAttribute('hidden', '');
+  }
+
+  // ── CTA: Upgrade ────────────────────────────────────────────────────────
+  const upgradeBtn = document.createElement('a');
+  upgradeBtn.className = 'paywall-upgrade-btn';
+  upgradeBtn.href = upgradeUrl.toString();
+  upgradeBtn.target = '_blank';
+  upgradeBtn.rel = 'noopener noreferrer';
+  upgradeBtn.textContent = `Upgrade to ${tierLabel}`;
+
+  // ── CTA: Dismiss ────────────────────────────────────────────────────────
+  const dismissBtn = document.createElement('button');
+  dismissBtn.className = 'paywall-dismiss-btn';
+  dismissBtn.textContent = 'Try later';
+  dismissBtn.addEventListener('click', () => {
+    card.remove();
+  });
+
+  // ── Button row ──────────────────────────────────────────────────────────
+  const btnRow = document.createElement('div');
+  btnRow.className = 'paywall-btn-row';
+  btnRow.appendChild(upgradeBtn);
+  btnRow.appendChild(dismissBtn);
+
+  card.appendChild(titleEl);
+  card.appendChild(reasonEl);
+  card.appendChild(btnRow);
+
+  // Insert before .actions so it appears near the top of the visible content
+  const actionsEl = document.querySelector('.actions');
+  const contentEl = document.querySelector('.content');
+  if (actionsEl && contentEl) {
+    contentEl.insertBefore(card, actionsEl);
+  } else if (contentEl) {
+    contentEl.prepend(card);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// In-page panel toggle
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Sync the toggle UI with the stored flag and wire the change listener.
+ * Default is enabled (checked) on first run.
+ */
+async function initInPagePanelToggle(): Promise<void> {
+  const toggle = document.getElementById('inPagePanelToggle') as HTMLInputElement | null;
+  if (!toggle) return;
+
+  try {
+    const result = await storageUtils.getItem<boolean>(IN_PAGE_PANEL_ENABLED_KEY);
+    // Default true when not set
+    toggle.checked = result !== false;
+  } catch {
+    toggle.checked = true;
+  }
+
+  toggle.addEventListener('change', () => {
+    storageUtils.setItem(IN_PAGE_PANEL_ENABLED_KEY, toggle.checked).catch(() => {});
+  });
+}
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initializePopup);
 } else {
@@ -387,4 +573,16 @@ if (document.readyState === 'loading') {
   });
 }
 
-export { popupState, updateStatus, updateTabInfo, updateStats };
+export {
+  popupState,
+  updateStatus,
+  updateTabInfo,
+  updateStats,
+  updateTierDisplay,
+  showPaywallCard,
+  initInPagePanelToggle,
+  TIER_LABELS,
+  PAYWALL_FEATURE_LABELS,
+  REQUIRED_TIER_LABELS,
+  IN_PAGE_PANEL_ENABLED_KEY,
+};

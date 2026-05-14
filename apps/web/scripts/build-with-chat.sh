@@ -1,19 +1,16 @@
 #!/bin/bash
-# Build the Vite chat app and copy it to public/chat/ before building Next.js
+# Build the Next.js web app.
+#
+# Note: Earlier versions of this script also built the Vite desktop SPA into
+# apps/web/public/chat/ and a vercel.json rewrite served it for /chat/*.
+# That architecture was replaced by the native Next.js route at
+# apps/web/app/chat/[sessionId]/page.tsx, so we no longer build or ship the
+# desktop SPA bundle here. The script name is kept for backwards compatibility
+# with the Vercel buildCommand pin.
 set -e
 
 cd ../..
 
-# Build Vite chat app with /chat/ base path
-echo "Building Vite chat app..."
-NODE_OPTIONS="--max-old-space-size=8192" VITE_BUILD_TARGET=web pnpm --filter @agiworkforce/desktop exec vite build --outDir dist-web --base /chat/
-
-# Copy to Next.js public directory
-echo "Copying chat build to public/chat/..."
-rm -rf apps/web/public/chat
-cp -r apps/desktop/dist-web apps/web/public/chat
-
-# Build Next.js
 echo "Building Next.js..."
 pnpm --filter web build:next-only
 

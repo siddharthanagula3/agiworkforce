@@ -1,17 +1,63 @@
 import * as vscode from 'vscode';
-import { AgiWorkforceApiError, chatCompletion, type LlmChatMessage } from '../utils/api';
+import {
+  AgiWorkforceApiError,
+  AgiWorkforcePaywallError,
+  chatCompletion,
+  type LlmChatMessage,
+} from '../utils/api';
+import { Config } from '../utils/config';
 
 const MIN_PREFIX_CHARS = 3;
 const MAX_CONTEXT_LINES = 80;
 const MAX_SUFFIX_LINES = 20;
 const CACHE_TTL_MS = 15_000;
-const DEFAULT_DEBOUNCE_MS = 300;
-const DEFAULT_MAX_COMPLETION_LENGTH = 500;
+const CACHE_MAX_ENTRIES = 16;
 
 interface CachedCompletion {
   key: string;
   value: string;
   createdAt: number;
+}
+
+/**
+ * Bounded LRU keyed by `${docUri}::line:col::context`. Replaces the previous
+ * single-slot cache so typo-correction loops (move cursor 1 char, type, undo)
+ * don't fire a fresh network request every keystroke.
+ */
+class CompletionLruCache {
+  private readonly map = new Map<string, CachedCompletion>();
+
+  get(key: string): CachedCompletion | undefined {
+    const entry = this.map.get(key);
+    if (entry === undefined) return undefined;
+    if (Date.now() - entry.createdAt > CACHE_TTL_MS) {
+      this.map.delete(key);
+      return undefined;
+    }
+    // Touch (move to most-recent end of insertion order).
+    this.map.delete(key);
+    this.map.set(key, entry);
+    return entry;
+  }
+
+  set(key: string, value: string): void {
+    if (this.map.has(key)) this.map.delete(key);
+    this.map.set(key, { key, value, createdAt: Date.now() });
+    while (this.map.size > CACHE_MAX_ENTRIES) {
+      const oldest = this.map.keys().next().value;
+      if (oldest === undefined) break;
+      this.map.delete(oldest);
+    }
+  }
+
+  clear(): void {
+    this.map.clear();
+  }
+
+  /** Test-only inspector. */
+  size(): number {
+    return this.map.size;
+  }
 }
 
 function extractCompletionText(raw: string, maxLength: number): string {
@@ -33,9 +79,15 @@ function extractCompletionText(raw: string, maxLength: number): string {
 }
 
 export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemProvider {
-  private cache: CachedCompletion | undefined;
+  private readonly cache = new CompletionLruCache();
   private debounceTimer: ReturnType<typeof setTimeout> | undefined;
   private pendingResolve: (() => void) | undefined;
+  /**
+   * When true, inline completions are silently suppressed for the remainder of
+   * the VS Code session.  Set on the first paywall hit so we don't spam the
+   * user with a toast on every keystroke.
+   */
+  private paywallSuppressed = false;
 
   constructor(private readonly secrets: vscode.SecretStorage) {}
 
@@ -45,9 +97,7 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
     _context: vscode.InlineCompletionContext,
     token: vscode.CancellationToken,
   ): Promise<vscode.InlineCompletionList | vscode.InlineCompletionItem[] | undefined> {
-    const config = vscode.workspace.getConfiguration('agiWorkforce');
-    const enabled = config.get<boolean>('inlineCompletions.enabled') ?? false;
-    if (!enabled) {
+    if (!Config.inlineCompletionsEnabled() || this.paywallSuppressed) {
       return [];
     }
 
@@ -82,19 +132,13 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
       `${document.uri.toString()}::${position.line}:${position.character}::` +
       contextBeforeCursor.slice(-1200);
 
-    if (
-      this.cache !== undefined &&
-      this.cache.key === cacheKey &&
-      Date.now() - this.cache.createdAt <= CACHE_TTL_MS
-    ) {
-      return [
-        new vscode.InlineCompletionItem(this.cache.value, new vscode.Range(position, position)),
-      ];
+    const cached = this.cache.get(cacheKey);
+    if (cached !== undefined) {
+      return [new vscode.InlineCompletionItem(cached.value, new vscode.Range(position, position))];
     }
 
-    const debounceMs = config.get<number>('inlineCompletions.debounceMs') ?? DEFAULT_DEBOUNCE_MS;
-    const maxLength =
-      config.get<number>('inlineCompletions.maxLength') ?? DEFAULT_MAX_COMPLETION_LENGTH;
+    const debounceMs = Config.inlineCompletionsDebounceMs();
+    const maxLength = Config.inlineCompletionsMaxLength();
 
     // Debounce: cancel any pending request and wait for the user to stop typing
     if (this.debounceTimer !== undefined) {
@@ -167,15 +211,35 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
         return [];
       }
 
-      this.cache = {
-        key: cacheKey,
-        value: completion,
-        createdAt: Date.now(),
-      };
-
+      this.cache.set(cacheKey, completion);
       return [new vscode.InlineCompletionItem(completion, new vscode.Range(position, position))];
     } catch (error) {
       // Keep inline completions silent; chat/commands surface explicit errors.
+      if (error instanceof AgiWorkforcePaywallError) {
+        // Suppress all future inline completion requests for this session to
+        // avoid a toast+request loop on every keystroke.
+        if (!this.paywallSuppressed) {
+          this.paywallSuppressed = true;
+          // Show a single one-time notification — never repeated.
+          vscode.window
+            .showInformationMessage(
+              `AGI Workforce: Inline completions paused — upgrade to ${error.requiredTier} to continue.`,
+              'Upgrade',
+            )
+            .then((choice) => {
+              if (choice === 'Upgrade') {
+                vscode.env.openExternal(
+                  vscode.Uri.parse(
+                    `https://agiworkforce.com/pricing?from=paywall` +
+                      `&tier=${encodeURIComponent(error.requiredTier)}` +
+                      `&feature=${encodeURIComponent(error.feature)}`,
+                  ),
+                );
+              }
+            });
+        }
+        return [];
+      }
       if (error instanceof AgiWorkforceApiError && error.code === 'NO_API_KEY') {
         return [];
       }
@@ -190,5 +254,6 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
     if (this.debounceTimer !== undefined) {
       clearTimeout(this.debounceTimer);
     }
+    this.cache.clear();
   }
 }

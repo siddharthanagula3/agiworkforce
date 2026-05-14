@@ -163,11 +163,7 @@ export function ReasoningAccordion({
             <div className="border-t border-zinc-800">
               <div
                 ref={contentRef}
-                className="max-h-96 overflow-y-auto"
-                style={{
-                  scrollbarWidth: 'thin',
-                  scrollbarColor: 'rgba(113,113,122,0.5) rgba(39,39,42,0.5)',
-                }}
+                className="max-h-96 overflow-y-auto [scrollbar-width:thin] [scrollbar-color:rgba(113,113,122,0.5)_rgba(39,39,42,0.5)]"
               >
                 <div className="px-4 py-4 text-sm text-zinc-300 leading-relaxed font-mono whitespace-pre-wrap">
                   {content}

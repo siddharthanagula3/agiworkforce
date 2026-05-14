@@ -102,6 +102,17 @@ pub enum CliError {
         message: String,
         is_retryable: bool,
     },
+    /// AGI Workforce managed-cloud paywall — user's tier cap reached.
+    ///
+    /// HTTP 429 + `{"kind":"paywall", "feature":..., "requiredTier":..., "reason":...}`
+    /// returned by `api/llm/v1/chat/completions` when the user has consumed
+    /// 150 % of their monthly token quota.  Exit code 78 (EX_CONFIG per
+    /// sysexits.h — "configuration error requiring user action").
+    Paywall {
+        feature: String,
+        required_tier: String,
+        reason: String,
+    },
 }
 
 // ---------------------------------------------------------------------------
@@ -151,6 +162,20 @@ impl fmt::Display for CliError {
             } => {
                 write!(f, "[{}] Stream error: {}", provider, message)
             }
+            CliError::Paywall {
+                feature,
+                required_tier,
+                reason,
+            } => {
+                write!(
+                    f,
+                    "Cloud chat requires {} plan. Reason: {}\nUpgrade: https://agiworkforce.com/pricing?from=cli-paywall&tier={}&feature={}",
+                    required_tier,
+                    reason,
+                    urlencoding::encode(required_tier),
+                    urlencoding::encode(feature),
+                )
+            }
         }
     }
 }
@@ -175,6 +200,7 @@ impl CliError {
             CliError::ContextOverflow { .. } => "context_overflow",
             CliError::RateLimited { .. } => "api_rate_limit",
             CliError::StreamError { .. } => "stream_disconnect",
+            CliError::Paywall { .. } => "paywall",
         }
     }
 
@@ -214,11 +240,11 @@ impl CliError {
             CliError::RateLimited { provider, retry_after } => match retry_after {
                 Some(secs) => format!(
                     "{provider} is rate-limiting. Wait {secs}s, or use a fallback model: \
-                     `--model claude-sonnet-4-6,gpt-5.4`."
+                     `--model claude-sonnet-4-6,gpt-5.5`."
                 ),
                 None => format!(
                     "{provider} is rate-limiting. Switch to a fallback model with \
-                     `--model claude-sonnet-4-6,gpt-5.4`."
+                     `--model claude-sonnet-4-6,gpt-5.5`."
                 ),
             },
             CliError::StreamError { is_retryable, .. } => if *is_retryable {
@@ -228,6 +254,10 @@ impl CliError {
                 "Stream disconnected with a non-retryable signal. Re-run the command."
             }
             .to_string(),
+            CliError::Paywall { required_tier, .. } => format!(
+                "Visit https://agiworkforce.com/pricing to upgrade to {required_tier}, \
+                 or switch to a BYOK provider with `--provider anthropic`."
+            ),
         }
     }
 }
@@ -315,6 +345,34 @@ impl CliError {
             provider: provider.into(),
             message: message.into(),
             is_retryable,
+        }
+    }
+
+    /// Create a paywall error (AGI Workforce managed-cloud tier cap exceeded).
+    pub fn paywall(
+        feature: impl Into<String>,
+        required_tier: impl Into<String>,
+        reason: impl Into<String>,
+    ) -> Self {
+        CliError::Paywall {
+            feature: feature.into(),
+            required_tier: required_tier.into(),
+            reason: reason.into(),
+        }
+    }
+
+    /// Returns true if this error is a paywall response (exits with EX_CONFIG = 78).
+    pub fn is_paywall(&self) -> bool {
+        matches!(self, CliError::Paywall { .. })
+    }
+
+    /// Exit code for this error. Uses sysexits.h values where applicable.
+    /// - 78 (EX_CONFIG) for paywall — the user's configuration (tier) needs updating.
+    /// - 1 for all other errors.
+    pub fn exit_code(&self) -> i32 {
+        match self {
+            CliError::Paywall { .. } => 78,
+            _ => 1,
         }
     }
 }
@@ -454,10 +512,10 @@ mod tests {
 
     #[test]
     fn display_context_overflow() {
-        let err = CliError::context_overflow("gpt-4o", 200_000, 128_000);
+        let err = CliError::context_overflow("gpt-5.5", 200_000, 128_000);
         assert_eq!(
             err.to_string(),
-            "Context overflow for model 'gpt-4o': 200000 tokens exceeds limit of 128000"
+            "Context overflow for model 'gpt-5.5': 200000 tokens exceeds limit of 128000"
         );
     }
 
@@ -576,7 +634,7 @@ mod tests {
 
     #[test]
     fn not_retryable_context_overflow() {
-        let err = CliError::context_overflow("gpt-4o", 200_000, 128_000);
+        let err = CliError::context_overflow("gpt-5.5", 200_000, 128_000);
         assert!(!err.is_retryable());
     }
 
@@ -698,7 +756,7 @@ mod tests {
 
     #[test]
     fn context_overflow_variant_detected() {
-        let err = CliError::context_overflow("gpt-4o", 200_000, 128_000);
+        let err = CliError::context_overflow("gpt-5.5", 200_000, 128_000);
         assert!(err.is_context_overflow());
     }
 

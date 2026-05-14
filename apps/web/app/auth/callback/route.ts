@@ -30,16 +30,18 @@ export async function GET(request: Request) {
       return NextResponse.redirect(errorUrl);
     }
 
-    // WEB-9: validate the OAuth state nonce against the cookie set at
-    // sign-in time. We only enforce when both are present so PKCE-only
-    // flows that don't carry `state` still work; new code paths should
-    // always set `state` and the cookie together.
+    // WEB-OAUTH-STATE-BYPASS fix (RFC 6749 §10.12): when a state cookie is
+    // present the server initiated an OAuth flow that required state
+    // validation. We MUST reject if stateParam is absent or mismatched.
+    // The old guard (`stateParam && expectedState && ...`) allowed an
+    // attacker to strip the ?state= query param, causing the check to
+    // short-circuit even when the cookie was set.
     const cookieStore = await cookies();
     const expectedState = cookieStore.get(OAUTH_STATE_COOKIE)?.value;
-    if (stateParam && expectedState && stateParam !== expectedState) {
+    if (expectedState && (stateParam === null || stateParam !== expectedState)) {
       logger.error(
         { stateParamPresent: !!stateParam, expectedPresent: !!expectedState },
-        'OAuth callback state mismatch — possible CSRF',
+        'OAuth callback state mismatch - possible CSRF',
       );
       const errorUrl = new URL('/auth/error', requestUrl.origin);
       errorUrl.searchParams.set('error', 'state_mismatch');

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ChatHostBridge } from '@agiworkforce/chat';
+import type { ChatHostBridge } from '@agiworkforce/unified-chat';
 import { isTauri, invoke, listen } from './lib/tauri-mock';
 import { toast } from 'sonner';
 import { useVoiceHotkey } from './hooks/useVoiceHotkey';
@@ -37,6 +37,7 @@ import {
   uuidToDbId,
 } from './stores/unifiedChatStore';
 import { useDeepLink } from './hooks/useDeepLink';
+import { useTierBridge } from './hooks/useTierBridge';
 import type { TimeoutWarningData } from './components/Execution/TimeoutWarningDialog';
 
 import {
@@ -66,9 +67,9 @@ import { initializeAuthOrchestrator } from './stores/authOrchestrator';
 import { initializeModelStoreFromSettings, useModelStore } from './stores/modelStore';
 import useErrorStore, { useSimpleModeStore, selectOnboardingCompleted } from './stores/ui';
 import { useAppModeStore } from './stores/appModeStore';
-import { useSettingsDialogStore } from './stores/settingsDialogStore';
+import { useSettingsDialogStore } from './stores/settingsStore';
 import { useSettingsStore, waitForSettingsHydration } from './stores/settingsStore';
-import { useVoiceInputStore } from './stores/voiceInputStore';
+import { useVoiceInputStore } from './stores/settingsStore';
 import { applyTheme, getThemeById } from './themes/index';
 
 const VisualizationLayer = lazy(() =>
@@ -82,7 +83,7 @@ const FloatingChat = lazy(() =>
   })),
 );
 const ChatInterface = lazy(() =>
-  import('@agiworkforce/chat').then((m) => ({
+  import('@agiworkforce/unified-chat').then((m) => ({
     default: m.ChatInterface,
   })),
 );
@@ -99,11 +100,6 @@ const CommandPalette = lazy(() =>
 const QuickQuery = lazy(() =>
   import('./components/QuickQuery').then((m) => ({
     default: m.QuickQuery,
-  })),
-);
-const ModeSelectionDialog = lazy(() =>
-  import('./components/ModeSelectionDialog').then((m) => ({
-    default: m.ModeSelectionDialog,
   })),
 );
 const VoiceInputOverlay = lazy(() =>
@@ -154,16 +150,14 @@ const ErrorToastContainer = lazy(() =>
     default: m.default,
   })),
 );
-// Retained for reference — UnifiedAgenticChat is replaced by ChatInterface from @agiworkforce/chat.
-// const UnifiedAgenticChat = lazy(() =>
-//   import('./components/UnifiedAgenticChat').then((m) => ({
-//     default: m.UnifiedAgenticChat,
-//   })),
-// );
+// Cross-surface chat lives in packages/chat (@agiworkforce/unified-chat) — shared by desktop, mobile, web.
+// UnifiedAgenticChat features (BudgetTracker, AgentStepTimeline, etc.) are being ported INTO packages/chat.
+// Once parity is reached, UnifiedAgenticChat will be removed.
 import { useSessionPersistence } from './hooks/useSessionPersistence';
 import { initializeSyncManager, cleanupSyncManager } from './lib/offline/offlineSync';
 import { CHAT_COMPOSER_CAPTURE_EVENT } from './lib/chatComposerEvents';
 import type { CaptureResult } from './types/capture';
+import { PlansModal } from './components/Pricing/PlansModal';
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center h-full w-full bg-background">
@@ -185,6 +179,7 @@ const DesktopShell = () => {
   const openSettingsDialog = useSettingsDialogStore((s) => s.openSettings);
   const closeSettingsDialog = useSettingsDialogStore((s) => s.closeSettings);
   const [quickQueryOpen, setQuickQueryOpen] = useState(false);
+  const [plansModalOpen, setPlansModalOpen] = useState(false);
   const [timeoutWarning, setTimeoutWarning] = useState<TimeoutWarningData | null>(null);
   const [isTimeoutWarningOpen, setIsTimeoutWarningOpen] = useState(false);
   const [subscriptionFetchFailed, setSubscriptionFetchFailed] = useState(false);
@@ -221,8 +216,9 @@ const DesktopShell = () => {
   const isAuthLoading = useAuthStore((state) => state.isLoading);
   const sessionValidated = useAuthStore((state) => state.sessionValidated);
 
-  // Mode selection dialog — show on first launch before mode has been chosen
-  const hasSelectedMode = useAppModeStore((state) => state.hasSelectedMode);
+  // Mode selection is handled inside the OnboardingWizard (single onboarding flow).
+  // The legacy `hasSelectedMode` flag is still flipped by the wizard for any
+  // downstream consumers that read it from the appModeStore.
 
   const subscriptionFetchStatus = useAccountStore((state) => state.subscriptionFetchStatus);
 
@@ -390,7 +386,7 @@ const DesktopShell = () => {
     if (isTauri) {
       void (async () => {
         try {
-          const { initializeMcpbInstallListener } = await import('./stores/mcpbStore');
+          const { initializeMcpbInstallListener } = await import('./stores/mcpStore');
           await runStartupStep('MCP bundle install listener', () =>
             initializeMcpbInstallListener(),
           );
@@ -480,6 +476,17 @@ const DesktopShell = () => {
           await runStartupStep(
             'Managed cloud credential sync',
             async () => {
+              // Forward Supabase credentials to Rust only in cloud mode.
+              // Local-mode users have no use for the Supabase anon key in the
+              // Rust process — forwarding it unconditionally violates least-
+              // privilege and lets local-mode code accidentally reach Supabase
+              // (e.g. submit_feedback).
+              if (useAppModeStore.getState().mode === 'cloud') {
+                await invoke('set_supabase_credentials', {
+                  url: import.meta.env['VITE_SUPABASE_URL'] ?? '',
+                  anonKey: import.meta.env['VITE_SUPABASE_ANON_KEY'] ?? '',
+                }).catch(() => {});
+              }
               // Ensure Rust uses the same backend base URL as the UI (critical in local dev).
               await invoke('account_store_api_base_url', { apiBaseUrl: API_BASE_URL });
               if (disposed) return;
@@ -553,7 +560,7 @@ const DesktopShell = () => {
         // Enable ManagedCloud provider if user is authenticated (subscription-based models)
         await invoke<boolean>('llm_ensure_managed_cloud').catch(() => false);
 
-        const { useChatModelStore } = await import('@agiworkforce/chat');
+        const { useChatModelStore } = await import('@agiworkforce/unified-chat');
         interface RustModelInfo {
           id: string;
           name: string;
@@ -576,7 +583,7 @@ const DesktopShell = () => {
           name: m.name,
           provider: (validProviders.has(m.provider.toLowerCase())
             ? m.provider.toLowerCase()
-            : 'openai') as import('@agiworkforce/chat').ModelInfo['provider'],
+            : 'openai') as import('@agiworkforce/unified-chat').ModelInfo['provider'],
           tier: (m.name.toLowerCase().includes('opus') ||
           m.name.toLowerCase().includes('4o') ||
           m.name.toLowerCase().includes('pro')
@@ -585,7 +592,7 @@ const DesktopShell = () => {
                 m.name.toLowerCase().includes('mini') ||
                 m.name.toLowerCase().includes('flash')
               ? 'fast'
-              : 'standard') as import('@agiworkforce/chat').ModelInfo['tier'],
+              : 'standard') as import('@agiworkforce/unified-chat').ModelInfo['tier'],
           supportsThinking:
             m.name.toLowerCase().includes('think') || m.provider.toLowerCase() === 'anthropic',
           supportsVision: true,
@@ -603,13 +610,13 @@ const DesktopShell = () => {
             if (res.ok) {
               const data = await res.json();
               if (Array.isArray(data?.models) && data.models.length > 0) {
-                const { useChatModelStore } = await import('@agiworkforce/chat');
+                const { useChatModelStore } = await import('@agiworkforce/unified-chat');
                 useChatModelStore.getState().setModels(
                   data.models.map((m: { id: string; name: string; provider: string }) => ({
                     id: m.id,
                     name: m.name,
                     provider: (m.provider ||
-                      'openai') as import('@agiworkforce/chat').ModelInfo['provider'],
+                      'openai') as import('@agiworkforce/unified-chat').ModelInfo['provider'],
                     tier: 'standard' as const,
                     supportsThinking: false,
                     supportsVision: true,
@@ -630,9 +637,9 @@ const DesktopShell = () => {
 
         // Build fallback models from the shared catalog helpers (single source of truth)
         try {
-          const { useChatModelStore } = await import('@agiworkforce/chat');
+          const { useChatModelStore } = await import('@agiworkforce/unified-chat');
           const fallbackProviders = ['anthropic', 'openai', 'google', 'xai', 'deepseek', 'ollama'];
-          const fallbackModels: import('@agiworkforce/chat').ModelInfo[] =
+          const fallbackModels: import('@agiworkforce/unified-chat').ModelInfo[] =
             fallbackProviders.flatMap((p) => {
               const defaultModelId = getProviderDefaultModel(
                 p as import('./types/provider').Provider,
@@ -644,7 +651,7 @@ const DesktopShell = () => {
                 {
                   id: m.id,
                   name: m.name,
-                  provider: p as import('@agiworkforce/chat').ModelInfo['provider'],
+                  provider: p as import('@agiworkforce/unified-chat').ModelInfo['provider'],
                   tier:
                     m.speed === 'very-fast' || m.speed === 'fast'
                       ? ('fast' as const)
@@ -672,7 +679,7 @@ const DesktopShell = () => {
   useEffect(() => {
     async function syncProfile() {
       try {
-        const { useChatSettingsStore } = await import('@agiworkforce/chat');
+        const { useChatSettingsStore } = await import('@agiworkforce/unified-chat');
 
         const syncFromAuth = () => {
           const authState = useAuthStore.getState();
@@ -757,6 +764,8 @@ const DesktopShell = () => {
         useSettingsDialogStore.getState().openShortcuts();
       } else if (detail.type === 'logout') {
         supabaseAuth.signOut();
+      } else if (detail.type === 'open-plans-modal') {
+        setPlansModalOpen(true);
       }
     };
     window.addEventListener('chat:action', handleChatAction);
@@ -871,7 +880,7 @@ const DesktopShell = () => {
 
       const voiceInputState = useVoiceInputStore.getState();
 
-      if (voiceInputState.mode === 'listening') {
+      if (voiceInputState.voiceMode === 'listening') {
         await voiceInputState.stopListening();
       } else {
         await voiceInputState.startListening();
@@ -1215,11 +1224,6 @@ const DesktopShell = () => {
             <OnboardingWelcome onComplete={() => setShowOnboarding(false)} />
           </Suspense>
         )}
-        {isTauri && !hasSelectedMode && (
-          <Suspense fallback={null}>
-            <ModeSelectionDialog open={!hasSelectedMode} />
-          </Suspense>
-        )}
         <div className="flex flex-col gap-1">
           <Suspense fallback={null}>
             <StatusBanner />
@@ -1329,6 +1333,8 @@ const DesktopShell = () => {
         <Suspense fallback={null}>
           <ErrorToastContainer position="top-right" />
         </Suspense>
+        {/* Plans/Pricing modal — triggered by chat:action open-plans-modal */}
+        <PlansModal open={plansModalOpen} onOpenChange={setPlansModalOpen} />
         <Suspense fallback={null}>
           <TimeoutWarningDialog
             warning={timeoutWarning}
@@ -1427,6 +1433,7 @@ const App = () => {
   }, []);
 
   useDeepLink();
+  useTierBridge();
 
   const windowMode = (() => {
     if (typeof window === 'undefined') return 'default';

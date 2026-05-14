@@ -91,6 +91,8 @@ pub struct TaskRouting {
     pub chat: Option<String>,
     pub vision: Option<String>,
     pub long_context: Option<String>,
+    #[serde(default)]
+    pub computer_use: Option<String>,
 }
 
 impl TaskRouting {
@@ -103,6 +105,7 @@ impl TaskRouting {
             "chat" => self.chat.as_deref(),
             "vision" => self.vision.as_deref(),
             "long_context" => self.long_context.as_deref(),
+            "computer_use" => self.computer_use.as_deref(),
             _ => None,
         }
     }
@@ -351,12 +354,27 @@ pub fn get_sse_delimiter(provider: &Provider) -> &'static [u8] {
 pub fn model_uses_responses_api(model_id: &str) -> bool {
     let id = get_canonicalized_id(model_id).to_lowercase();
 
-    // O-series reasoning models and codex always use Responses API
-    if id.starts_with("o3")
-        || id.starts_with("o4")
-        || id.starts_with("gpt-oss")
-        || id.starts_with("codex-")
-    {
+    // Catalog-first: any OpenAI reasoning-tier model uses Responses API.
+    // No hardcoded SPECIFIC model IDs per the locked rule — capability
+    // info flows through models.json.
+    if let Some(entry) = CONFIG.models.get(&id) {
+        if entry.provider == "openai" && entry.model_type == "reasoning" {
+            return true;
+        }
+    }
+
+    // O-series (oN) reasoning family — parse a single digit after the
+    // leading 'o' to future-proof for o5/o6/o7/etc. without code edits.
+    // Variants like "o3-mini" / "o4-mini" / "o3-pro" are also covered.
+    if let Some(rest) = id.strip_prefix('o') {
+        if rest.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+            return true;
+        }
+    }
+
+    // OpenAI reasoning-adjacent families (gpt-oss open-weight, codex-).
+    // These are non-versioned product names so prefix is the only signal.
+    if id.starts_with("gpt-oss") || id.starts_with("codex-") {
         return true;
     }
 
@@ -387,12 +405,19 @@ pub fn model_uses_responses_api(model_id: &str) -> bool {
     false
 }
 
-/// Whether a model supports Gemini-style thinking_config.
+/// Whether a model supports Gemini-style `thinking_config` API parameter.
+///
+/// Reads `capabilities.thinking` from the bundled `models.json` catalog and
+/// gates by `provider == "google"` since the `thinking_config` field is
+/// Google-specific (Anthropic + OpenAI use different parameter shapes).
+/// No hardcoded model-family prefixes per the locked rule.
 pub fn model_supports_gemini_thinking(model_id: &str) -> bool {
     let canonical_model_id = get_canonicalized_id(model_id);
-    canonical_model_id.contains("gemini-3-pro")
-        || canonical_model_id.contains("gemini-3.1-pro")
-        || canonical_model_id.contains("gemini-2.5-pro")
+    CONFIG
+        .models
+        .get(&canonical_model_id)
+        .map(|entry| entry.provider == "google" && entry.capabilities.thinking)
+        .unwrap_or(false)
 }
 
 /// Return all model entries from the catalog.
@@ -500,11 +525,13 @@ mod tests {
             get_canonicalized_id("gemini-3-pro-preview"),
             "gemini-3.1-pro-preview"
         );
+        // claude-sonnet-4.5 is deprecated; the dash form forwards to current Sonnet.
         assert_eq!(
             get_canonicalized_id("claude-sonnet-4-5"),
-            "claude-sonnet-4.5"
+            "claude-sonnet-4.6"
         );
-        assert_eq!(get_canonicalized_id("gpt-5.4-nano"), "gpt-5.4-mini");
+        // gpt-5.4-nano is its own SKU now (was previously aliased to mini).
+        assert_eq!(get_canonicalized_id("gpt-5.4-nano"), "gpt-5.4-nano");
     }
 
     #[test]

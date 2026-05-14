@@ -11,6 +11,28 @@ import React from 'react';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
+// ConnectorsPage now reads category from the URL via next/navigation. jsdom has
+// no app-router context, so stub the hooks with a minimal in-memory implementation.
+vi.mock('next/navigation', () => {
+  let currentParams = new URLSearchParams();
+  return {
+    useRouter: () => ({
+      push: (url: string) => {
+        const queryStart = url.indexOf('?');
+        currentParams =
+          queryStart >= 0 ? new URLSearchParams(url.slice(queryStart + 1)) : new URLSearchParams();
+      },
+      replace: vi.fn(),
+      refresh: vi.fn(),
+      back: vi.fn(),
+      forward: vi.fn(),
+      prefetch: vi.fn(),
+    }),
+    useSearchParams: () => currentParams,
+    usePathname: () => '/connectors',
+  };
+});
+
 vi.mock('@shared/lib/utils', () => ({
   cn: (...args: (string | boolean | undefined | null)[]) => args.filter(Boolean).join(' '),
 }));
@@ -61,7 +83,7 @@ vi.mock('@shared/ui/badge', () => {
   return { Badge };
 });
 
-// Mock all lucide-react icons used in ConnectorsPage
+// Mock lucide-react icons used by ConnectorsPage and the ErrorBoundary it nests.
 vi.mock('lucide-react', () => {
   const Icon = ({ className, ...props }: Record<string, unknown>) => (
     <span className={className as string | undefined} {...props} />
@@ -75,6 +97,12 @@ vi.mock('lucide-react', () => {
     Lock: Icon,
     ExternalLink: Icon,
     Loader2: Icon,
+    Link2: Icon,
+    BookOpen: Icon,
+    AlertTriangle: Icon,
+    RefreshCw: Icon,
+    Home: Icon,
+    X: Icon,
   };
 });
 
@@ -157,7 +185,9 @@ describe('ConnectorsPage', () => {
   // 6. Shows "Available" section header
   it('shows the Available section', async () => {
     await renderConnectorsPage();
-    expect(screen.getByText(/Available/)).toBeDefined();
+    // Multiple "Available" strings now appear (section header + per-tile badges).
+    // The section heading is sufficient to prove the section renders.
+    expect(screen.getAllByText(/Available/).length).toBeGreaterThan(0);
   });
 
   // 7. Shows search input placeholder
@@ -209,7 +239,10 @@ describe('ConnectorsPage', () => {
     ];
 
     for (const label of expectedLabels) {
-      expect(screen.getByText(label)).toBeDefined();
+      // Some labels (e.g. "All") collide with text elsewhere on the page —
+      // assert presence with getAllByText so the tab match doesn't have to be
+      // unique across the whole DOM.
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
   });
 
@@ -235,8 +268,12 @@ describe('ConnectorsPage', () => {
     fireEvent.click(screen.getByText('Developer'));
     expect(screen.queryByText('Gmail & Calendar')).toBeNull();
 
-    // Then switch back to All
-    fireEvent.click(screen.getByText('All'));
+    // Then switch back to All. The page renders two "All" buttons: a tri-state
+    // status filter (first in DOM order) and the category tab (second). Clicking
+    // the category tab is what resets activeCategory back to 'All'.
+    const allButtons = screen.getAllByRole('button', { name: 'All' });
+    expect(allButtons.length).toBeGreaterThanOrEqual(2);
+    fireEvent.click(allButtons[1]!);
     expect(screen.getByText('Gmail & Calendar')).toBeDefined();
     expect(screen.getByText('GitHub')).toBeDefined();
   });

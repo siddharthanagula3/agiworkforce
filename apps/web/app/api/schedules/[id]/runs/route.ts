@@ -5,15 +5,13 @@
  * POST /api/schedules/[id]/runs - Trigger an immediate run
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
 
 function mapRowToRun(row: Record<string, unknown>) {
   return {
@@ -37,16 +35,13 @@ async function handleGetRuns(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
   const { id: scheduleId } = await context.params;
 
   const url = new URL(request.url);
   const parsedLimit = parseInt(url.searchParams.get('limit') ?? '20', 10);
   const limit = Math.min(Number.isNaN(parsedLimit) ? 20 : parsedLimit, 100);
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   // Verify the schedule belongs to this user
   const { data: schedule, error: scheduleError } = await supabase
@@ -91,12 +86,9 @@ async function handleTriggerRun(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
   const { id: scheduleId } = await context.params;
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   // Verify the schedule belongs to this user
   const { data: schedule, error: scheduleError } = await supabase

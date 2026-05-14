@@ -440,7 +440,7 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
           )}
 
           {/* Results */}
-          <ScrollArea className="flex-1 px-6 py-4" style={{ maxHeight: '400px' }}>
+          <ScrollArea className="flex-1 max-h-[400px] px-6 py-4">
             {isSearching ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

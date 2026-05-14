@@ -34,9 +34,15 @@ pub async fn run_repl(
     team_mode: bool,
     auto_approve_safe: bool,
     quiet: bool,
+    permission_mode: crate::cli_options::PermissionMode,
+    auto_approve_plan: bool,
 ) -> Result<()> {
     let provider_name = crate::models::detect_provider(model);
-    output::print_banner(model, &format!("{:?}", provider_name).to_lowercase());
+    let provider_str = format!("{:?}", provider_name).to_lowercase();
+    output::print_compact_header(&provider_str);
+    output::print_banner(model, &provider_str);
+    // Show tier + token balance from cache (non-blocking — reads disk only).
+    output::print_tier_status();
 
     let mut session = AgentSession::new(model, sys_context, custom_system_prompt);
     session.max_turns = max_turns;
@@ -45,6 +51,15 @@ pub async fn run_repl(
     session.quiet = quiet;
     session.fallback_model = fallback_model;
     session.session_name = session_name;
+    // Sprint B4: thread the initial permission mode + auto-approve flag
+    // into the session before the REPL loop. The /plan slash command can
+    // change permission_mode at runtime; auto_approve_plan is a one-shot
+    // CLI flag and only affects the very first plan write.
+    session.permission_mode = permission_mode;
+    session.auto_approve_plan = auto_approve_plan;
+    if matches!(permission_mode, crate::cli_options::PermissionMode::Plan) {
+        session.plan_mode = true;
+    }
 
     // Enable team mode if requested
     if team_mode {
@@ -493,7 +508,15 @@ fn handle_slash_command(
         }
         "/model" | "/m" => {
             if arg.is_empty() {
+                // In the REPL (non-TUI) path there is no ratatui terminal,
+                // so we print the current model and hint the user toward the
+                // interactive TUI picker (available via `agiworkforce` with no
+                // --no-tui flag, then `/model` with no argument).
                 output::print_info(&format!("Current model: {}", session.model));
+                output::print_info(
+                    "Tip: run without --no-tui and type /model to open the \
+                     interactive model picker (search + provider sections + effort selector).",
+                );
             } else {
                 session.switch_model(arg);
                 let provider = format!("{:?}", session.provider).to_lowercase();
@@ -598,15 +621,74 @@ fn handle_slash_command(
                 return SlashResult::Btw(arg.to_string());
             }
         }
-        "/plan" => {
-            session.plan_mode = !session.plan_mode;
-            if session.plan_mode {
-                output::print_info(
-                    "Plan mode ON — only read-only tools (read_file, search_files, list_directory, web_search, web_fetch).",
+        // Sprint B4: 3-state /plan command. The legacy boolean toggle
+        // (`/plan`) becomes "/plan on" (entering plan mode + clearing
+        // approval). Sub-commands `accept`, `reject`, `show`, `off` drive
+        // the model-written-plan -> approve -> execute flow. Without
+        // arguments, `/plan` flips between on (Plan + unapproved) and
+        // off (Default + reset).
+        "/plan" if arg.is_empty() || arg == "on" => {
+            session.permission_mode = crate::cli_options::PermissionMode::Plan;
+            session.plan_mode = true;
+            session.plan_approved = false;
+            output::print_info(
+                "Plan mode ON. Ask the model to plan; then `/plan accept` or `/plan reject <feedback>`.",
+            );
+        }
+        "/plan" if arg == "off" => {
+            session.permission_mode = crate::cli_options::PermissionMode::Default;
+            session.plan_mode = false;
+            session.reset_plan_state();
+            output::print_info("Plan mode OFF. All tools available.");
+        }
+        "/plan" if arg == "accept" || arg == "approve" => {
+            if !matches!(
+                session.permission_mode,
+                crate::cli_options::PermissionMode::Plan
+            ) {
+                output::print_warn(
+                    "/plan accept: not in plan mode. Use `/plan` to enter first.",
+                );
+            } else if session.current_plan.is_none() {
+                output::print_warn(
+                    "/plan accept: no plan to approve yet. Ask the model to call `update_plan` first.",
                 );
             } else {
-                output::print_info("Plan mode OFF — all tools available.");
+                session.plan_approved = true;
+                output::print_info("Plan approved. Mutating tools enabled for this session.");
             }
+        }
+        "/plan" if arg.starts_with("reject") => {
+            let feedback = arg.strip_prefix("reject").unwrap_or("").trim().to_string();
+            if feedback.is_empty() {
+                output::print_warn(
+                    "/plan reject: needs a reason. Usage: /plan reject <feedback>",
+                );
+            } else {
+                session.plan_rejection_feedback = Some(feedback);
+                session.current_plan = None;
+                session.current_plan_path = None;
+                session.plan_approved = false;
+                output::print_info(
+                    "Plan rejected. Feedback queued for the model on the next turn.",
+                );
+            }
+        }
+        "/plan" if arg == "show" || arg == "view" => {
+            match (&session.current_plan, &session.current_plan_path) {
+                (Some(plan), Some(path)) => {
+                    eprintln!("\n# Plan ({})\n\n{}", path.display(), plan.render_markdown());
+                }
+                (Some(plan), None) => {
+                    eprintln!("\n{}", plan.render_markdown());
+                }
+                _ => output::print_info("No plan yet. Ask the model to call `update_plan`."),
+            }
+        }
+        "/plan" => {
+            output::print_warn(&format!(
+                "Unknown /plan subcommand: {arg}. Use one of: on | off | accept | reject <feedback> | show"
+            ));
         }
         "/fast" => {
             let fast_model = config.default.fast_model.as_deref();
@@ -674,6 +756,23 @@ fn handle_slash_command(
                 ));
             } else {
                 return SlashResult::Voice(lang.to_string());
+            }
+        }
+        "/theme" => {
+            if arg.is_empty() {
+                output::print_info(
+                    "Available themes: dark | light | ansi | solarized-dark | solarized-light | colorblind\n  \
+                     Use /theme <name> to set directly.\n  \
+                     In TUI mode, /theme (no arg) opens the interactive picker with live preview.",
+                );
+            } else {
+                use crate::tui::widgets::theme_picker::ThemeChoice;
+                match ThemeChoice::from_arg(arg) {
+                    Some(choice) => output::print_info(&format!("Theme set to {}", choice.label())),
+                    None => output::print_warn(&format!(
+                        "Unknown theme: '{arg}'. Available: dark | light | ansi | solarized-dark | solarized-light | colorblind"
+                    )),
+                }
             }
         }
         "/login" => {
@@ -841,7 +940,7 @@ async fn handle_batch_command(
 fn print_help() {
     eprintln!("{}", "Agent & Mode:".cyan().bold());
     eprintln!(
-        "  {}    Switch model (e.g. /model gpt-4o)",
+        "  {}    Switch model (e.g. /model gpt-5.5)",
         "/model <name>".bold()
     );
     eprintln!(
@@ -853,6 +952,10 @@ fn print_help() {
         "/fast [on|off]".bold()
     );
     eprintln!("  {} Manual context compaction", "/compact [focus]".bold());
+    eprintln!(
+        "  {}  Set syntax theme (dark/light/ansi/solarized-dark/…)",
+        "/theme [name]".bold()
+    );
     eprintln!(
         "  {}  Side query (not added to history)",
         "/btw <question>".bold()

@@ -1,158 +1,153 @@
-import Link from 'next/link';
 import type { Metadata } from 'next';
-import { Bot, ArrowRight } from 'lucide-react';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Changelog',
+  title: 'Changelog | AGI Workforce',
   description:
-    'See what is new in AGI Workforce. Release notes, new features, bug fixes, and improvements for the desktop AI assistant.',
+    'A dated archive of what shipped. CLI live. Desktop in active development. Honest about what has not.',
   alternates: { canonical: '/changelog' },
   openGraph: {
     title: 'Changelog | AGI Workforce',
-    description:
-      'Release notes and updates for AGI Workforce. New features, improvements, and bug fixes.',
+    description: 'A dated archive of what shipped. Honest about what has not.',
     type: 'website',
-    url: '/changelog',
-  },
-  twitter: {
-    card: 'summary',
-    title: 'Changelog | AGI Workforce',
-    description: 'Release notes and updates for AGI Workforce.',
+    url: 'https://agiworkforce.com/changelog',
   },
 };
 
 interface Release {
-  version: string;
   date: string;
-  tag: 'latest' | 'stable' | 'beta';
-  highlights: string[];
+  headline: string;
+  body: string[];
 }
 
-const releases: Release[] = [
+// Changelog is the one place versions belong — that's the page's purpose.
+// Everything else on the marketing site avoids version numbers.
+const RELEASES: Release[] = [
   {
-    version: '1.1.5',
-    date: 'March 2026',
-    tag: 'latest',
-    highlights: [
-      'Stabilization sprint: 484 commands, 150 skills, 8 security fixes',
-      'Resolved 10 failing Rust tests for CI',
-      'Fixed imageproc dependency (yanked crate audit)',
-      'Address 34 code review findings across 13 files',
+    date: '2026-05-08',
+    headline: 'Marketing site redesign · live',
+    body: [
+      'Site-wide redesign on the new dark theme — same surface across every marketing route.',
+      'Single typeface (Geist Sans), 12-spoke brand mark, single amber accent used surgically.',
+      'No version numbers, no model IDs, no vanity counts in marketing copy. /changelog is the explicit exception.',
     ],
   },
   {
-    version: '1.1.0',
-    date: 'February 2026',
-    tag: 'stable',
-    highlights: [
-      'Multi-model chat with 25+ providers',
-      'Parallel agent orchestration (swarm engine)',
-      'AI skills across multiple categories',
-      'Unlimited MCP tool support (stdio + SSE + HTTP)',
-      'Mobile companion app with QR pairing',
+    date: '2026-05-04',
+    headline: 'OpenClaw porting · complete',
+    body: [
+      'Provider adapter interface stable. Anthropic, OpenAI, Ollama, Google adapters live.',
+      'MCP transport and skills loader landed. Hook events parity in the Rust CLI. Live cross-provider demo runs through the API gateway.',
     ],
   },
   {
-    version: '1.0.0',
-    date: 'January 2026',
-    tag: 'stable',
-    highlights: [
-      'Initial public release',
-      'Native desktop app for macOS, Windows, and Linux',
-      'Browser automation with Playwright',
-      'Terminal and file system tools',
-      'Voice input with Whisper transcription',
+    date: '2026-05-03',
+    headline: 'CLI v1.0 · live',
+    body: [
+      'Pure Rust binary on five platforms. GitHub Release, Homebrew tap auto-generated, install.sh tested.',
+      'Cleanup pass: removed ~70 codex-rs port crates and a large net of dead code. Audit closed most P0/P1 items.',
+    ],
+  },
+  {
+    date: '2026-02 — 2026-05',
+    headline: 'Desktop · early releases',
+    body: [
+      'Tauri + React. macOS DMG signed (Apple Developer ID D2PR62RLT4). Linux AppImage. Windows EV cert pending.',
+      'Linux build live; macOS notarization re-enabled once the missing CI secret is restored.',
     ],
   },
 ];
 
-function TagBadge({ tag }: { tag: Release['tag'] }) {
-  const styles = {
-    latest: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-    stable: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-    beta: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${styles[tag]}`}
-    >
-      {tag}
-    </span>
-  );
-}
+const FORTHCOMING: { item: string; detail: string; quarter: string }[] = [
+  { item: 'Mobile', detail: 'App Store + Play Store listings.', quarter: 'Q3 2026' },
+  {
+    item: 'Chrome extension',
+    detail: 'CWS submission once visual review clears.',
+    quarter: 'Q3 2026',
+  },
+  {
+    item: 'VS Code extension',
+    detail: 'Marketplace listing once private beta clears.',
+    quarter: 'Q3 2026',
+  },
+  { item: 'Pro tier', detail: 'Opens after security audit closes.', quarter: 'TBD' },
+  { item: 'Max tier', detail: 'Opens after Pro stabilizes.', quarter: 'TBD' },
+];
 
 export default function ChangelogPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-black text-white">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            '@context': 'https://schema.org',
-            '@type': 'WebPage',
-            name: 'Changelog',
-            description:
-              'Release notes and updates for AGI Workforce. New features, improvements, and bug fixes.',
-            url: 'https://agiworkforce.com/changelog',
-          }),
-        }}
-      />
-      <Header />
+    <div data-design="agi">
+      <main className="agi-shell">
+        <Header />
 
-      <main className="flex-1 pt-24 pb-12">
-        <div className="container mx-auto px-4 max-w-3xl">
-          <div className="mb-12 text-center">
-            <div className="mb-4 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-blue-400">
-              <Bot className="mr-2 h-4 w-4" />
-              Release Notes
-            </div>
-            <h1 className="text-4xl font-bold tracking-tight md:text-5xl">Changelog</h1>
-            <p className="mt-4 text-lg text-zinc-400">
-              New features, improvements, and fixes in each release of AGI Workforce.
-            </p>
-          </div>
+        <section className="agi-page-hero">
+          <h1 className="agi-page-h1">Changelog.</h1>
+          <p className="agi-page-lede">
+            Every shipped feature is dated. Every &ldquo;in progress&rdquo; item is named openly.
+            <strong>
+              {' '}
+              We do not backdate, we do not pre-announce, and we do not list things we are not
+              actively maintaining.
+            </strong>
+          </p>
+        </section>
 
-          <div className="space-y-12">
-            {releases.map((release) => (
-              <article
-                key={release.version}
-                className="relative rounded-2xl border border-zinc-800 bg-zinc-950/50 p-8"
-              >
-                <div className="mb-4 flex flex-wrap items-center gap-3">
-                  <h2 className="text-2xl font-bold">v{release.version}</h2>
-                  <TagBadge tag={release.tag} />
-                  <span className="text-sm text-zinc-500">{release.date}</span>
-                </div>
-                <ul className="space-y-3">
-                  {release.highlights.map((item) => (
-                    <li key={item} className="flex items-start gap-3 text-zinc-300">
-                      <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-blue-500" />
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </article>
-            ))}
-          </div>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">Releases, newest first</p>
+          <table className="agi-ledger">
+            <tbody>
+              {RELEASES.map((r) => (
+                <tr key={r.date}>
+                  <td style={{ width: '20%', verticalAlign: 'top' }}>{r.date}</td>
+                  <td>
+                    <div style={{ fontWeight: 600, color: 'var(--agi-ink)', marginBottom: 6 }}>
+                      {r.headline}
+                    </div>
+                    {r.body.map((line, idx) => (
+                      <p
+                        key={idx}
+                        style={{
+                          margin: idx === 0 ? '0' : '8px 0 0',
+                          color: 'var(--agi-ink-2)',
+                          fontSize: 14,
+                          lineHeight: 1.55,
+                        }}
+                      >
+                        {line}
+                      </p>
+                    ))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
 
-          <div className="mt-16 text-center">
-            <p className="text-zinc-500">
-              Want to try the latest version?{' '}
-              <Link
-                href="/download"
-                className="text-blue-400 underline underline-offset-2 hover:text-blue-300 transition-colors"
-              >
-                Download AGI Workforce
-              </Link>
-            </p>
-          </div>
-        </div>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">Forthcoming</p>
+          <table className="agi-ledger">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Status</th>
+                <th>Target</th>
+              </tr>
+            </thead>
+            <tbody>
+              {FORTHCOMING.map((f) => (
+                <tr key={f.item}>
+                  <td style={{ width: '25%' }}>{f.item}</td>
+                  <td>{f.detail}</td>
+                  <td style={{ width: '15%', color: 'var(--agi-ink-quiet)' }}>{f.quarter}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+
+        <MarketingFooter />
       </main>
-
-      <MarketingFooter />
     </div>
   );
 }

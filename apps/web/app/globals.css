@@ -22,15 +22,67 @@
 
 /* Tailwind v4 CSS-based configuration */
 @theme {
-  /* Font families */
-  --font-sans:
-    'FK Grotesk', 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: 'Berkeley Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
-  --font-heading: var(--font-instrument, Georgia), Georgia, 'Times New Roman', serif;
-  --font-body: var(--font-manrope, system-ui), system-ui, -apple-system, sans-serif;
+  /* Font families — Operator-Broadsheet redesign 2026-05-05.
+     Newsreader (variable serif) for display + body on Tier A/B marketing pages.
+     JetBrains Mono for UI chrome: slugs, datelines, CTAs, marginalia. */
+  --font-sans: var(--font-newsreader), Georgia, 'Times New Roman', serif;
+  --font-mono: var(--font-jetbrains), 'Berkeley Mono', ui-monospace, monospace;
+  --font-display: var(--font-newsreader), Georgia, serif;
+  --font-heading: var(--font-newsreader), Georgia, 'Times New Roman', serif;
+  --font-body: var(--font-newsreader), Georgia, serif;
+  --font-ui: var(--font-jetbrains), ui-monospace, monospace;
 
   /* Line height */
   --line-height-chat: 1.6;
+
+  /* Editorial palette — terminal/CLI retheme 2026-05-06.
+     Paper now reads as near-black; graphite is the deepest tier.
+     Phosphor mint replaces amber as the rule/accent color.
+     Channel-only tokens (*-rgb) feed alpha variants via rgb(var() / α). */
+  --color-rule-rgb: 109 255 172;
+  --color-paper-rgb: 10 13 10;
+  --color-ink-rgb: 233 230 223;
+
+  --color-paper: rgb(var(--color-paper-rgb));
+  --color-paper-2: #11140e;
+  --color-ink: rgb(var(--color-ink-rgb));
+  --color-ink-2: #c8c5bd;
+  --color-graphite: #050705;
+  --color-graphite-2: #0a0d0a;
+  --color-cream-on-graphite: rgb(var(--color-ink-rgb));
+  /* On dark, fg-* and fg-paper-* converge — both surfaces are dark. */
+  --color-fg-muted: #a8b0a4;
+  --color-fg-quiet: #6e766a;
+  --color-fg-faint: #4a504a;
+  --color-fg-paper-muted: #a8b0a4; /* ≥7:1 on paper black, body-safe */
+  --color-fg-paper-quiet: #6e766a; /* ≥4.5:1 on paper black, body-safe AA */
+  --color-fg-paper-faint: #4a504a; /* large text only */
+
+  /* Brand: phosphor mint as RULE color (structural rule lines, drop-caps, carets). */
+  --color-rule: rgb(var(--color-rule-rgb));
+  --color-rule-soft: rgb(var(--color-rule-rgb) / 0.18);
+  --color-rule-strong: rgb(var(--color-rule-rgb));
+
+  /* Aliases retained for backwards-compatibility with existing call sites
+     that still reference the old amber-named tokens. */
+  --color-amber-text: rgb(var(--color-rule-rgb));
+  --color-amber-ink: var(--color-graphite);
+
+  /* Status stamps — oxblood for "coming soon", phosphor for "ok". */
+  --color-stamp-oxblood: #8b1a1a;
+  --color-stamp-ok: rgb(var(--color-rule-rgb));
+
+  /* Motion tokens — operator-broadsheet redesign 2026-05-05.
+     Rule: enter at --dur-base, exit at ~70% of enter (~220ms) with --ease-in.
+     All scroll reveals: opacity 0→1 + translateY(8→0). Drop the 1000ms / 32px
+     pattern that signals dated AI-tool aesthetic. */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-quart: cubic-bezier(0.5, 0, 0.75, 0);
+  --dur-fast: 180ms;
+  --dur-base: 320ms;
+  --dur-slow: 520ms;
+  --stagger-tight: 40ms;
+  --stagger-loose: 80ms;
 
   /* Custom colors - Cream */
   --color-cream-50: #fcfcf9;
@@ -96,7 +148,7 @@
   --color-surface-overlay: #242424;
   --color-surface-hover: #2e2e2e;
 
-  /* Semantic colors — shadcn base */
+  /* Semantic colors - shadcn base */
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
   --color-card: hsl(var(--card));
@@ -119,7 +171,7 @@
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
 
-  /* Brand colors — agent/workforce/status */
+  /* Brand colors - agent/workforce/status */
   --color-agent: hsl(var(--agent));
   --color-agent-foreground: hsl(var(--agent-foreground));
   --color-agent-glow: hsl(var(--agent-glow));
@@ -144,7 +196,7 @@
   --color-sidebar-border: hsl(var(--sidebar-border));
   --color-sidebar-ring: hsl(var(--sidebar-ring));
 
-  /* Chat surface color aliases — Tailwind utilities bg-chat-bg, bg-chat-sidebar, etc. */
+  /* Chat surface color aliases - Tailwind utilities bg-chat-bg, bg-chat-sidebar, etc. */
   --color-chat-bg: var(--chat-bg);
   --color-chat-bg-elevated: var(--chat-bg-elevated);
   --color-chat-sidebar: var(--chat-sidebar-bg);
@@ -155,7 +207,7 @@
   --color-chat-glass: var(--chat-glass);
   --color-chat-glass-border: var(--chat-glass-border);
 
-  /* Exact hex aliases for the four canonical surface values — matches desktop design system.
+  /* Exact hex aliases for the four canonical surface values - matches desktop design system.
      These allow bg-chat-bg-light, bg-chat-bg-dark, etc. as Tailwind utility classes. */
   --color-chat-bg-light: #faf9f7;
   --color-chat-bg-dark: #0f0f13;
@@ -373,6 +425,25 @@
   }
 }
 
+/* =====================================================
+   Editorial primitive kit — operator-broadsheet c4/11
+   ===================================================== */
+
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes opsz-morph {
+  from {
+    font-variation-settings: 'opsz' var(--opsz-from, 36);
+  }
+  to {
+    font-variation-settings: 'opsz' var(--opsz-to, 56);
+  }
+}
+
 @keyframes slide-in-right {
   from {
     opacity: 0;
@@ -389,7 +460,7 @@
   :root {
     color-scheme: light;
 
-    /* #faf9f7 ≈ hsl(40 23% 97%) — light background matches desktop */
+    /* #faf9f7 ≈ hsl(40 23% 97%) - light background matches desktop */
     --background: 40 23% 97%;
     --foreground: 222.2 84% 4.9%;
 
@@ -406,7 +477,7 @@
     --secondary-foreground: 222.2 47.4% 11.2%;
 
     --muted: 210 40% 96.1%;
-    /* 44% lightness → ~4.96:1 contrast on light bg — WCAG AA pass for normal text */
+    /* 44% lightness → ~4.96:1 contrast on light bg - WCAG AA pass for normal text */
     --muted-foreground: 215.4 16.3% 44%;
 
     --accent: 210 40% 96.1%;
@@ -442,7 +513,7 @@
     --glow-primary: 217 91% 60%;
     --glow-secondary: 262 52% 47%;
 
-    /* Sidebar — #f5f4f1 ≈ hsl(45 17% 95%) matches desktop light sidebar */
+    /* Sidebar - #f5f4f1 ≈ hsl(45 17% 95%) matches desktop light sidebar */
     --sidebar-background: 45 17% 95%;
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-primary: 221.2 83.2% 53.3%;
@@ -452,7 +523,7 @@
     --sidebar-border: 214.3 31.8% 91.4%;
     --sidebar-ring: 221.2 83.2% 53.3%;
 
-    /* Chat surface tokens — light mode (#faf9f7 main, #f5f4f1 sidebar) */
+    /* Chat surface tokens - light mode (#faf9f7 main, #f5f4f1 sidebar) */
     --chat-bg: #faf9f7;
     --chat-bg-elevated: #f9fafb;
     --chat-sidebar-bg: #f5f4f1;
@@ -498,11 +569,11 @@
   .dark {
     color-scheme: dark;
 
-    /* #0f0f13 — exact: hsl(240 14% 6.7%) matches desktop dark main bg */
+    /* #0f0f13 - exact: hsl(240 14% 6.7%) matches desktop dark main bg */
     --background: 240 14% 6.7%;
     --foreground: 210 40% 98%;
 
-    /* Slightly elevated surface above background — ~hsl(240 12% 9%) = #14141a */
+    /* Slightly elevated surface above background - ~hsl(240 12% 9%) = #14141a */
     --card: 240 12% 9%;
     --card-foreground: 210 40% 98%;
 
@@ -512,7 +583,7 @@
     --primary: 217.2 91.2% 59.8%;
     --primary-foreground: 222.2 47.4% 11.2%;
 
-    /* Elevated surface: ~hsl(240 10% 15%) = #22222a — consistent with #0f0f13 base */
+    /* Elevated surface: ~hsl(240 10% 15%) = #22222a - consistent with #0f0f13 base */
     --secondary: 240 10% 15%;
     --secondary-foreground: 210 40% 98%;
 
@@ -527,7 +598,7 @@
 
     --border: 240 10% 15%;
     --input: 240 10% 15%;
-    /* 52% lightness → 3.24:1 on dark bg — WCAG AA for focus indicators */
+    /* 52% lightness → 3.24:1 on dark bg - WCAG AA for focus indicators */
     --ring: 224.3 76.3% 52%;
 
     /* Brand colors */
@@ -553,7 +624,7 @@
     --glow-primary: 217 91% 60%;
     --glow-secondary: 262 52% 47%;
 
-    /* Sidebar — #0b0c14 ≈ hsl(233 29% 6%) matches desktop dark sidebar */
+    /* Sidebar - #0b0c14 ≈ hsl(233 29% 6%) matches desktop dark sidebar */
     --sidebar-background: 233 29% 6%;
     --sidebar-foreground: 240 5% 65%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -563,7 +634,7 @@
     --sidebar-border: 240 12% 14%;
     --sidebar-ring: 224.3 76.3% 48%;
 
-    /* Chat surface tokens — dark mode (glassmorphism dark theme) */
+    /* Chat surface tokens - dark mode (glassmorphism dark theme) */
     --chat-bg: #0a0a0a;
     --chat-bg-elevated: rgba(26, 26, 26, 0.8);
     --chat-sidebar-bg: #0b0c14;
@@ -602,6 +673,20 @@
     --chat-radius-lg: 12px;
     --chat-radius-xl: 16px;
     --chat-radius-2xl: 24px;
+  }
+}
+
+@layer base {
+  /* Editorial specimen drop-cap */
+  .specimen--dropcap > p:first-of-type::first-letter {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-style: italic;
+    font-size: 4em;
+    line-height: 0.8;
+    padding-right: 0.1em;
+    float: left;
+    color: var(--color-rule);
   }
 }
 
@@ -659,16 +744,16 @@
     animation: messageIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  /* Message metadata text — timestamp, role badge, streaking indicator */
+  /* Message metadata text - timestamp, role badge, streaking indicator */
   .message-meta {
     @apply text-xs text-muted-foreground;
   }
 
   /* =====================================================
-     Message Layout — Desktop parity (Phase 7.1)
+     Message Layout - Desktop parity (Phase 7.1)
      ===================================================== */
 
-  /* Message row container — py-6 px-4 matches desktop .message-container */
+  /* Message row container - py-6 px-4 matches desktop .message-container */
   .message-row {
     @apply relative py-6 px-4;
   }
@@ -678,43 +763,43 @@
     @apply border-t border-gray-100 dark:border-gray-800/50;
   }
 
-  /* Assistant message row — subtle tinted background (desktop .message-assistant) */
+  /* Assistant message row - subtle tinted background (desktop .message-assistant) */
   .message-row-assistant {
     @apply bg-gray-50/80 dark:bg-gray-900/30;
   }
 
-  /* User message row — plain white / transparent (desktop .message-user) */
+  /* User message row - plain white / transparent (desktop .message-user) */
   .message-row-user {
     @apply bg-white dark:bg-transparent;
   }
 
-  /* Inner content column constrained to readable width — desktop max-w-3xl centred */
+  /* Inner content column constrained to readable width - desktop max-w-3xl centred */
   .message-inner {
     @apply max-w-3xl mx-auto flex gap-3;
   }
 
-  /* Avatar — 32 × 32 circle matching desktop .message-avatar */
+  /* Avatar - 32 × 32 circle matching desktop .message-avatar */
   .message-avatar {
     @apply shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium;
   }
 
-  /* Assistant avatar gradient (teal-400 → cyan-500) — desktop .message-avatar-assistant */
+  /* Assistant avatar gradient (teal-400 → cyan-500) - desktop .message-avatar-assistant */
   .message-avatar-assistant {
     @apply bg-gradient-to-br from-teal-400 to-cyan-500 text-white;
   }
 
-  /* User avatar gradient (blue-500 → indigo-600) — desktop .message-avatar-user */
+  /* User avatar gradient (blue-500 → indigo-600) - desktop .message-avatar-user */
   .message-avatar-user {
     @apply bg-gradient-to-br from-blue-500 to-indigo-600 text-white;
   }
 
-  /* Body — fills remaining width, prevents overflow */
+  /* Body - fills remaining width, prevents overflow */
   .message-body {
     @apply flex-1 min-w-0;
   }
 
   /*
-   * Message text — 15 px / 1.6 lh matching desktop .message-text.
+   * Message text - 15 px / 1.6 lh matching desktop .message-text.
    * 'text-[15px]' is an arbitrary-value Tailwind v4 class.
    */
   .message-text {
@@ -734,17 +819,17 @@
     @apply my-1.5;
   }
 
-  /* Inline code — desktop .message-text code:not(pre code) */
+  /* Inline code - desktop .message-text code:not(pre code) */
   .message-text code:not(pre code) {
     @apply px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-[13px] font-mono;
   }
 
-  /* Timestamp / meta text — 12 px (desktop .message-meta: 11 px, kept at 12 px for web readability) */
+  /* Timestamp / meta text - 12 px (desktop .message-meta: 11 px, kept at 12 px for web readability) */
   .message-timestamp {
     @apply text-[12px] text-muted-foreground;
   }
 
-  /* User bubble max-width — 100% mobile, 640 px tablet, 720 px desktop */
+  /* User bubble max-width - 100% mobile, 640 px tablet, 720 px desktop */
   .user-bubble {
     @apply w-full;
     max-width: 100%;
@@ -763,7 +848,7 @@
   }
 
   /* =====================================================
-     Bottom gradient fade — chat scroll area overlay
+     Bottom gradient fade - chat scroll area overlay
      ===================================================== */
 
   /*
@@ -789,17 +874,17 @@
     @apply h-9;
   }
 
-  /* Code block styling — matches desktop oneDark theme */
+  /* Code block styling - matches desktop oneDark theme */
   .code-block-container {
     @apply my-3 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700/50;
-    background-color: #111827; /* gray-900 — dark code bg */
+    background-color: #111827; /* gray-900 - dark code bg */
   }
 
   .code-block-header-bar {
     @apply flex items-center justify-between px-4 py-2.5 bg-gray-800 dark:bg-gray-900 border-b border-gray-700/50;
   }
 
-  /* Language label — desktop .code-block-language */
+  /* Language label - desktop .code-block-language */
   .code-block-lang-label {
     @apply text-xs font-medium text-gray-400 uppercase tracking-wide;
   }
@@ -1360,6 +1445,74 @@
   background: rgba(100, 110, 130, 0.7);
 }
 
+/* =====================================================
+   Editorial shell — terminal/CLI retheme 2026-05-06.
+   Applied to every EditorialPage wrapper across all 22 marketing pages.
+   Provides phosphor grid + scanline overlay using channel tokens only.
+   ===================================================== */
+
+/* Phosphor grid overlay, viewport-fixed, edge-faded radial mask.
+   Sits above EditorialPage NoiseOverlay (z-0) at z-1, below content (z-10). */
+.editorial-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgb(var(--color-rule-rgb) / 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--color-rule-rgb) / 0.045) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: radial-gradient(ellipse 90% 80% at center, black 30%, transparent 100%);
+  mask-image: radial-gradient(ellipse 90% 80% at center, black 30%, transparent 100%);
+}
+
+/* Faint scanline texture — CRT phosphor afterglow */
+.editorial-shell::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 2px,
+    rgb(var(--color-rule-rgb) / 0.018) 2px,
+    rgb(var(--color-rule-rgb) / 0.018) 3px
+  );
+  mix-blend-mode: screen;
+}
+
+/* Selection on dark editorial surfaces */
+.editorial-shell ::selection {
+  background: rgb(var(--color-rule-rgb) / 0.28);
+  color: var(--color-ink);
+}
+
+/* Drop cap glow */
+.editorial-shell .specimen--dropcap > p:first-of-type::first-letter {
+  color: var(--color-rule);
+  text-shadow: 0 0 24px rgb(var(--color-rule-rgb) / 0.35);
+}
+
+/* Soft phosphor glow on the blinking caret */
+.editorial-shell [class*='animate-[caret-blink'] {
+  box-shadow: 0 0 12px rgb(var(--color-rule-rgb) / 0.6);
+}
+
+/* Headline-emphasis glow utility — phosphor halo on the accented em */
+.text-glow-rule {
+  text-shadow: 0 0 32px rgb(var(--color-rule-rgb) / 0.25);
+}
+
+/* Honor reduced-motion: disable scanline overlay */
+@media (prefers-reduced-motion: reduce) {
+  .editorial-shell::after {
+    display: none;
+  }
+}
+
 /* Selection styles */
 ::selection {
   background: hsl(var(--primary) / 0.2);
@@ -1411,4 +1564,839 @@
 
 [data-chat-font='dyslexic'] {
   --font-chat: 'OpenDyslexic', system-ui, sans-serif;
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+ * AGI marketing theme — applied to elements with [data-design="agi"].
+ * Scoped so this does not bleed into the /chat product UI.
+ * ────────────────────────────────────────────────────────────────────── */
+
+[data-design='agi'] {
+  --agi-bg: #060604;
+  --agi-bg-2: #0d0d0a;
+  --agi-bg-3: #16161a;
+  --agi-card: #111110;
+
+  --agi-rule: rgba(245, 244, 238, 0.12);
+  --agi-rule-strong: rgba(245, 244, 238, 0.22);
+
+  --agi-ink: #f5f4ee;
+  --agi-ink-2: #b8b5ac;
+  --agi-ink-quiet: #7a7770;
+  --agi-ink-faint: #4a4843;
+
+  --agi-amber: #ffb800;
+  --agi-amber-soft: rgba(255, 184, 0, 0.16);
+
+  --agi-font: var(--font-geist-sans), 'Helvetica Neue', system-ui, sans-serif;
+  --agi-font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --agi-dur-fast: 180ms;
+  --agi-dur-base: 360ms;
+  --agi-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  background: var(--agi-bg);
+  color: var(--agi-ink);
+  font-family: var(--agi-font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  font-feature-settings:
+    'cv11' on,
+    'ss01' on;
+}
+
+[data-design='agi'] *,
+[data-design='agi'] *::before,
+[data-design='agi'] *::after {
+  box-sizing: border-box;
+}
+
+[data-design='agi'] ::selection {
+  background: var(--agi-amber);
+  color: var(--agi-bg);
+}
+
+/* shell */
+[data-design='agi'] .agi-shell {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 28px;
+}
+
+/* top bar */
+[data-design='agi'] .agi-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 0;
+}
+[data-design='agi'] .agi-mark {
+  font-family: var(--agi-font);
+  font-weight: 600;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  color: var(--agi-ink);
+  display: inline-flex;
+  align-items: baseline;
+  text-decoration: none;
+}
+[data-design='agi'] .agi-mark-dot {
+  color: var(--agi-amber);
+  font-weight: 800;
+  margin: 0 1px;
+}
+[data-design='agi'] .agi-top-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 24px;
+}
+[data-design='agi'] .agi-top-link {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--agi-ink-2);
+  text-decoration: none;
+  transition: color var(--agi-dur-fast) var(--agi-ease-out);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+[data-design='agi'] .agi-top-link:hover {
+  color: var(--agi-ink);
+}
+[data-design='agi'] .agi-top-cta {
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--agi-bg);
+  background: var(--agi-ink);
+  padding: 8px 14px;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: background var(--agi-dur-fast) var(--agi-ease-out);
+}
+[data-design='agi'] .agi-top-cta:hover {
+  background: var(--agi-ink-2);
+}
+
+/* hero */
+[data-design='agi'] .agi-hero {
+  padding: 96px 0 56px;
+}
+@media (max-width: 760px) {
+  [data-design='agi'] .agi-hero {
+    padding: 56px 0 36px;
+  }
+}
+[data-design='agi'] .agi-h1 {
+  font-family: var(--agi-font);
+  font-weight: 600;
+  font-size: clamp(2.25rem, 6vw, 5rem);
+  line-height: 1.04;
+  letter-spacing: -0.034em;
+  color: var(--agi-ink);
+  margin: 0;
+}
+[data-design='agi'] .agi-h1-line {
+  display: block;
+  white-space: nowrap;
+}
+[data-design='agi'] .agi-h1-line--quiet {
+  color: var(--agi-ink-2);
+}
+[data-design='agi'] .agi-lede {
+  margin: 32px 0 0;
+  max-width: 60ch;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  color: var(--agi-ink-2);
+  font-weight: 400;
+}
+[data-design='agi'] .agi-lede strong {
+  color: var(--agi-ink);
+  font-weight: 600;
+}
+[data-design='agi'] .agi-cta-row {
+  margin-top: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+[data-design='agi'] .agi-cta-primary {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--agi-bg);
+  background: var(--agi-ink);
+  padding: 11px 18px;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: background var(--agi-dur-fast) var(--agi-ease-out);
+}
+[data-design='agi'] .agi-cta-primary:hover {
+  background: var(--agi-ink-2);
+}
+[data-design='agi'] .agi-cta-ghost {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--agi-ink-2);
+  padding: 11px 0;
+  text-decoration: none;
+  transition: color var(--agi-dur-fast) var(--agi-ease-out);
+}
+[data-design='agi'] .agi-cta-ghost:hover {
+  color: var(--agi-ink);
+}
+
+/* page hero (subroutes) */
+[data-design='agi'] .agi-page-hero {
+  padding: 88px 0 56px;
+  border-bottom: 1px solid var(--agi-rule);
+}
+@media (max-width: 760px) {
+  [data-design='agi'] .agi-page-hero {
+    padding: 48px 0 36px;
+  }
+}
+[data-design='agi'] .agi-page-h1 {
+  font-family: var(--agi-font);
+  font-weight: 600;
+  font-size: clamp(2rem, 5vw, 3.75rem);
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  color: var(--agi-ink);
+  margin: 0;
+  max-width: 22ch;
+}
+[data-design='agi'] .agi-page-lede {
+  margin: 22px 0 0;
+  max-width: 64ch;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  color: var(--agi-ink-2);
+}
+[data-design='agi'] .agi-page-lede strong {
+  color: var(--agi-ink);
+  font-weight: 600;
+}
+
+/* generic section */
+[data-design='agi'] .agi-section {
+  padding: 64px 0;
+  border-bottom: 1px solid var(--agi-rule);
+}
+[data-design='agi'] .agi-section:last-of-type {
+  border-bottom: none;
+}
+[data-design='agi'] .agi-section-eyebrow {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--agi-ink-quiet);
+  letter-spacing: 0.02em;
+  margin: 0 0 12px;
+}
+[data-design='agi'] .agi-section-h2 {
+  font-size: clamp(1.5rem, 3vw, 2.25rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0 0 24px;
+  color: var(--agi-ink);
+}
+
+/* tier grid */
+[data-design='agi'] .agi-tier-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  background: var(--agi-bg-2);
+  border: 1px solid var(--agi-rule);
+  border-radius: 8px;
+  margin-bottom: 36px;
+  font-size: 13px;
+  font-weight: 500;
+}
+[data-design='agi'] .agi-tier-toggle-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--agi-ink-2);
+  border: none;
+  cursor: pointer;
+  transition:
+    background var(--agi-dur-fast) var(--agi-ease-out),
+    color var(--agi-dur-fast);
+  font-family: inherit;
+}
+[data-design='agi'] .agi-tier-toggle-btn--active {
+  background: var(--agi-ink);
+  color: var(--agi-bg);
+}
+[data-design='agi'] .agi-tier-toggle-save {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--agi-amber);
+  margin-left: 4px;
+}
+[data-design='agi'] .agi-tier-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+@media (max-width: 880px) {
+  [data-design='agi'] .agi-tier-grid {
+    grid-template-columns: 1fr;
+  }
+}
+[data-design='agi'] .agi-tier {
+  background: var(--agi-card);
+  border: 1px solid var(--agi-rule);
+  border-radius: 14px;
+  padding: 28px 26px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+[data-design='agi'] .agi-tier-name {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--agi-ink-quiet);
+  margin: 0;
+}
+[data-design='agi'] .agi-tier-price {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+}
+[data-design='agi'] .agi-tier-price-num {
+  font-size: 38px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: var(--agi-ink);
+}
+[data-design='agi'] .agi-tier-price-sub {
+  font-size: 13px;
+  color: var(--agi-ink-quiet);
+}
+[data-design='agi'] .agi-tier-body {
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--agi-ink-2);
+  margin: 0;
+  flex: 1;
+}
+[data-design='agi'] .agi-tier-features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--agi-ink-2);
+}
+[data-design='agi'] .agi-tier-features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+[data-design='agi'] .agi-tier-features li::before {
+  content: '';
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--agi-ink-quiet);
+  flex-shrink: 0;
+  margin-top: 8px;
+}
+[data-design='agi'] .agi-tier-cta {
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--agi-bg);
+  background: var(--agi-ink);
+  padding: 11px 16px;
+  border-radius: 8px;
+  text-align: center;
+  transition: background var(--agi-dur-fast) var(--agi-ease-out);
+}
+[data-design='agi'] .agi-tier-cta:hover {
+  background: var(--agi-ink-2);
+}
+[data-design='agi'] .agi-tier-cta--ghost {
+  background: transparent;
+  color: var(--agi-ink);
+  border: 1px solid var(--agi-rule-strong);
+}
+[data-design='agi'] .agi-tier-cta--ghost:hover {
+  background: var(--agi-bg-2);
+}
+[data-design='agi'] .agi-tier-note {
+  margin: 36px 0 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--agi-rule);
+  font-size: 14px;
+  color: var(--agi-ink-quiet);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: baseline;
+}
+[data-design='agi'] .agi-tier-note a {
+  color: var(--agi-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--agi-rule-strong);
+}
+[data-design='agi'] .agi-tier-note a:hover {
+  text-decoration-color: var(--agi-ink);
+}
+
+/* providers grid */
+[data-design='agi'] .agi-providers-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid var(--agi-rule);
+  border-left: 1px solid var(--agi-rule);
+}
+@media (max-width: 880px) {
+  [data-design='agi'] .agi-providers-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 480px) {
+  [data-design='agi'] .agi-providers-grid {
+    grid-template-columns: 1fr;
+  }
+}
+[data-design='agi'] .agi-provider-cell {
+  border-right: 1px solid var(--agi-rule);
+  border-bottom: 1px solid var(--agi-rule);
+  padding: 26px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: background var(--agi-dur-fast) var(--agi-ease-out);
+}
+[data-design='agi'] .agi-provider-cell:hover {
+  background: var(--agi-bg-2);
+}
+[data-design='agi'] .agi-provider-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--agi-ink);
+  letter-spacing: -0.01em;
+}
+[data-design='agi'] .agi-provider-models {
+  font-size: 13px;
+  color: var(--agi-ink-2);
+  line-height: 1.5;
+}
+[data-design='agi'] .agi-provider-auth {
+  font-size: 11px;
+  color: var(--agi-ink-quiet);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-top: auto;
+}
+
+/* steps (BYOK, mobile) */
+[data-design='agi'] .agi-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+@media (max-width: 880px) {
+  [data-design='agi'] .agi-steps {
+    grid-template-columns: 1fr;
+  }
+}
+[data-design='agi'] .agi-step {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--agi-rule-strong);
+}
+[data-design='agi'] .agi-step-n {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--agi-ink-quiet);
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+[data-design='agi'] .agi-step-h {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--agi-ink);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+[data-design='agi'] .agi-step-body {
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--agi-ink-2);
+  margin: 0;
+}
+
+/* callout */
+[data-design='agi'] .agi-callout {
+  background: var(--agi-card);
+  border: 1px solid var(--agi-rule-strong);
+  border-radius: 14px;
+  padding: 36px 36px 32px;
+}
+[data-design='agi'] .agi-callout-h {
+  font-size: clamp(1.25rem, 2.5vw, 1.75rem);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--agi-ink);
+  margin: 0 0 12px;
+  line-height: 1.15;
+}
+[data-design='agi'] .agi-callout-p {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--agi-ink-2);
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+[data-design='agi'] .agi-callout-amber {
+  color: var(--agi-amber);
+  font-weight: 700;
+}
+
+/* ledger */
+[data-design='agi'] .agi-ledger {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+[data-design='agi'] .agi-ledger th,
+[data-design='agi'] .agi-ledger td {
+  text-align: left;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--agi-rule);
+}
+[data-design='agi'] .agi-ledger th {
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--agi-ink-quiet);
+  background: var(--agi-bg-2);
+}
+[data-design='agi'] .agi-ledger td:first-child {
+  font-weight: 500;
+  color: var(--agi-ink-quiet);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  width: 22%;
+}
+[data-design='agi'] .agi-ledger td:not(:first-child) {
+  color: var(--agi-ink-2);
+}
+
+/* terminal */
+[data-design='agi'] .agi-terminal {
+  background: var(--agi-card);
+  border: 1px solid var(--agi-rule);
+  border-radius: 14px;
+  overflow: hidden;
+}
+[data-design='agi'] .agi-terminal-bar {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--agi-rule);
+  font-size: 12px;
+  color: var(--agi-ink-quiet);
+}
+[data-design='agi'] .agi-terminal-pre {
+  padding: 22px 24px 26px;
+  margin: 0;
+  font-family: var(--agi-font-mono);
+  font-size: 13.5px;
+  line-height: 1.85;
+  color: var(--agi-ink);
+  overflow-x: auto;
+}
+[data-design='agi'] .agi-terminal-comment {
+  color: var(--agi-ink-quiet);
+}
+[data-design='agi'] .agi-terminal-prompt {
+  color: var(--agi-ink-quiet);
+  user-select: none;
+  margin-right: 6px;
+}
+
+/* reasons */
+[data-design='agi'] .agi-reasons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+@media (max-width: 880px) {
+  [data-design='agi'] .agi-reasons {
+    grid-template-columns: 1fr;
+  }
+}
+[data-design='agi'] .agi-reason {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+[data-design='agi'] .agi-reason-h {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--agi-ink);
+  margin: 0;
+  letter-spacing: -0.005em;
+}
+[data-design='agi'] .agi-reason-p {
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--agi-ink-2);
+  margin: 0;
+}
+
+/* colophon */
+[data-design='agi'] .agi-colophon {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  border-top: 1px solid var(--agi-rule);
+}
+@media (max-width: 600px) {
+  [data-design='agi'] .agi-colophon {
+    grid-template-columns: 1fr;
+  }
+}
+[data-design='agi'] .agi-colophon-row {
+  display: contents;
+}
+[data-design='agi'] .agi-colophon-key,
+[data-design='agi'] .agi-colophon-val {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--agi-rule);
+  font-size: 14px;
+}
+[data-design='agi'] .agi-colophon-key {
+  color: var(--agi-ink-quiet);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+[data-design='agi'] .agi-colophon-val {
+  color: var(--agi-ink);
+  font-weight: 500;
+}
+
+/* chat panel (homepage demo) */
+[data-design='agi'] .agi-demo {
+  margin: 56px 0 96px;
+}
+[data-design='agi'] .agi-chat {
+  background: var(--agi-card);
+  border: 1px solid var(--agi-rule);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+}
+[data-design='agi'] .agi-chat-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--agi-rule);
+  background: linear-gradient(0deg, transparent, rgba(255, 255, 255, 0.015));
+}
+[data-design='agi'] .agi-chat-model {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--agi-ink);
+  letter-spacing: -0.01em;
+  transition: opacity var(--agi-dur-base) var(--agi-ease-out);
+}
+[data-design='agi'] .agi-chat-meta {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--agi-ink-quiet);
+  font-weight: 500;
+}
+[data-design='agi'] .agi-chat-body {
+  padding: 24px 22px 22px;
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+[data-design='agi'] .agi-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+[data-design='agi'] .agi-msg-role {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--agi-ink-quiet);
+  letter-spacing: 0.01em;
+}
+[data-design='agi'] .agi-msg-text {
+  font-size: 14.5px;
+  line-height: 1.62;
+  color: var(--agi-ink);
+  font-weight: 400;
+  max-width: 68ch;
+}
+[data-design='agi'] .agi-msg-text code {
+  font-family: var(--agi-font-mono);
+  font-size: 0.92em;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--agi-ink);
+}
+[data-design='agi'] .agi-msg-quiet .agi-msg-text {
+  color: var(--agi-ink-2);
+}
+[data-design='agi'] .agi-switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--agi-ink-quiet);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+[data-design='agi'] .agi-switch::before,
+[data-design='agi'] .agi-switch::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--agi-rule);
+}
+[data-design='agi'] .agi-switch-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+[data-design='agi'] .agi-switch-label::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--agi-amber);
+  flex-shrink: 0;
+}
+[data-design='agi'] .agi-cursor {
+  display: inline-block;
+  width: 7px;
+  height: 1em;
+  background: var(--agi-ink);
+  vertical-align: -2px;
+  margin-left: 2px;
+  animation: agi-blink 1s steps(2) infinite;
+}
+
+/* footer */
+[data-design='agi'] .agi-footer {
+  margin-top: 96px;
+  padding: 56px 0 28px;
+  border-top: 1px solid var(--agi-rule);
+}
+[data-design='agi'] .agi-footer-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 48px;
+  flex-wrap: wrap;
+}
+[data-design='agi'] .agi-footer-mark {
+  display: inline-flex;
+  align-items: baseline;
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: -0.018em;
+  color: var(--agi-ink);
+  text-decoration: none;
+}
+[data-design='agi'] .agi-footer-cols {
+  display: flex;
+  gap: 56px;
+  flex-wrap: wrap;
+}
+[data-design='agi'] .agi-footer-col {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+[data-design='agi'] .agi-footer-col-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--agi-ink-quiet);
+  margin-bottom: 5px;
+}
+[data-design='agi'] .agi-footer-link {
+  font-size: 14px;
+  color: var(--agi-ink-2);
+  text-decoration: none;
+  transition: color var(--agi-dur-fast) var(--agi-ease-out);
+}
+[data-design='agi'] .agi-footer-link:hover {
+  color: var(--agi-ink);
+}
+[data-design='agi'] .agi-footer-strip {
+  margin-top: 48px;
+  padding-top: 22px;
+  border-top: 1px solid var(--agi-rule);
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--agi-ink-quiet);
+}
+
+@keyframes agi-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes agi-mark-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-design='agi'] .agi-cursor {
+    animation: none;
+  }
+  [data-design='agi'] .agi-chat-model {
+    transition: none;
+  }
 }

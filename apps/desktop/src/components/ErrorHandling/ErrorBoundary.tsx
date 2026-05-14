@@ -1,5 +1,5 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
-import { AlertCircle, RefreshCw, Home, Copy, Send } from 'lucide-react';
+import { AlertCircle, AlertTriangle, RefreshCw, Home, Copy, Send } from 'lucide-react';
 import useErrorStore from '../../stores/ui';
 import { errorReportingService } from '../../services/errorReporting';
 
@@ -255,3 +255,43 @@ class ErrorBoundary extends Component<Props, State> {
 }
 
 export default ErrorBoundary;
+
+/** Specialized boundary for the chat interface — shows a "Restart Chat" recovery UI. */
+export class ChatErrorBoundary extends ErrorBoundary {
+  override render(): ReactNode {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full p-8 bg-neutral-950 text-white">
+          <div className="flex items-center gap-3 mb-4">
+            <AlertTriangle className="w-8 h-8 text-amber-500" />
+            <h2 className="text-xl font-semibold">Chat Error</h2>
+          </div>
+          <p className="text-neutral-400 text-center mb-6 max-w-md">
+            The chat interface encountered an error. Your conversation history is safe. Click below
+            to restart the chat.
+          </p>
+          <button
+            type="button"
+            onClick={this.handleReset}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Restart Chat
+          </button>
+          {import.meta.env.DEV && this.state.error && (
+            <details className="mt-6 w-full max-w-2xl">
+              <summary className="cursor-pointer text-neutral-500 hover:text-neutral-400 text-sm">
+                Error Details (Development Only)
+              </summary>
+              <pre className="mt-2 p-4 bg-neutral-900 rounded-lg text-xs text-red-400 overflow-auto max-h-64">
+                {this.state.error.toString()}
+                {this.state.errorInfo?.componentStack}
+              </pre>
+            </details>
+          )}
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}

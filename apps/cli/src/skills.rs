@@ -11,9 +11,10 @@
 //! Skill mentions: Use `$skill-name` or `@skill-name` in a query to explicitly
 //! request a skill by name (scored at 0.9).
 
-// Skills API surface is intentionally broad: scoring, matching, categorization,
-// and formatting functions are all needed by the /skills REPL command and will be
-// wired into automatic skill injection in the system prompt builder.
+// Skills API surface mixes live items (discover_skills, Skill, format_skills_for_prompt
+// — used in agent.rs, repl.rs, command_registry.rs, tui_app.rs) with auxiliary
+// helpers (match_skills, format_skills_by_category, scoring helpers) reserved for
+// future automatic-skill-injection wiring. File-level allow stays until that lands.
 #![allow(dead_code)]
 
 use anyhow::{Context, Result};
@@ -71,7 +72,14 @@ impl Skill {
 // Discovery
 // ---------------------------------------------------------------------------
 
-/// Discover all available skills from project and global directories.
+/// Discover all available skills from project, global, and plugin sources.
+///
+/// Sources in load order (later sources can shadow earlier ones if names collide,
+/// though we don't dedupe — the matcher prefers higher-scoring entries):
+/// 1. Project: `.agiworkforce/skills/`
+/// 2. Global: `~/.agiworkforce/skills/`
+/// 3. Plugins: every path declared in any installed plugin's manifest under
+///    `skills:` (Sprint B6) — both files and dirs are accepted.
 pub fn discover_skills() -> Vec<Skill> {
     let mut skills = Vec::new();
 
@@ -88,6 +96,26 @@ pub fn discover_skills() -> Vec<Skill> {
         let global_dir = config_dir.join("skills");
         if global_dir.exists() {
             load_skills_from_dir(&global_dir, &mut skills);
+        }
+    }
+
+    // Plugin-declared skills (Sprint B6). Each path in the plugin manifest
+    // can be either a single SKILL.md file or a directory holding many.
+    let mut plugins_mgr = crate::plugins::PluginsManager::new();
+    if plugins_mgr
+        .load_all(std::env::current_dir().ok().as_deref())
+        .is_ok()
+    {
+        for skill_path in plugins_mgr.skill_paths() {
+            if skill_path.is_dir() {
+                load_skills_from_dir(&skill_path, &mut skills);
+            } else if skill_path.is_file()
+                && skill_path.extension().and_then(|e| e.to_str()) == Some("md")
+            {
+                if let Ok(skill) = load_skill(&skill_path) {
+                    skills.push(skill);
+                }
+            }
         }
     }
 

@@ -7,15 +7,13 @@
  * PATCH /api/schedules/[id] - Toggle active status
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
 
 function mapRowToSchedule(row: Record<string, unknown>) {
   return {
@@ -49,12 +47,9 @@ async function handleGetSchedule(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
   const { id } = await context.params;
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   const { data, error } = await supabase
     .from('scheduled_tasks')
@@ -84,7 +79,8 @@ async function handleUpdateSchedule(request: NextRequest, context: RouteContext)
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
   const { id } = await context.params;
 
   let body: Record<string, unknown>;
@@ -100,10 +96,6 @@ async function handleUpdateSchedule(request: NextRequest, context: RouteContext)
   if (typeof body['prompt'] === 'string' && body['prompt'].length > 10_000) {
     throw createError.validation('Prompt must be 10,000 characters or less');
   }
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   // Build update object from provided fields
   const updates: Record<string, unknown> = {
@@ -175,12 +167,9 @@ async function handleDeleteSchedule(request: NextRequest, context: RouteContext)
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
   const { id } = await context.params;
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   const { error } = await supabase
     .from('scheduled_tasks')
@@ -208,7 +197,8 @@ async function handleToggleSchedule(request: NextRequest, context: RouteContext)
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
   const { id } = await context.params;
 
   let body: { isActive?: boolean };
@@ -221,10 +211,6 @@ async function handleToggleSchedule(request: NextRequest, context: RouteContext)
   if (typeof body.isActive !== 'boolean') {
     throw createError.validation('isActive (boolean) is required');
   }
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   const { data, error } = await supabase
     .from('scheduled_tasks')

@@ -204,7 +204,7 @@ function CliMockup() {
             <div className="h-2.5 w-2.5 rounded-full bg-yellow-500/70" />
             <div className="h-2.5 w-2.5 rounded-full bg-green-500/70" />
           </div>
-          <span className="ml-3 text-[10px] text-zinc-500">Terminal — bash</span>
+          <span className="ml-3 text-[10px] text-zinc-500">Terminal - bash</span>
         </div>
         {/* Terminal content */}
         <div className="h-80 space-y-1 p-4 font-mono text-[11px] leading-relaxed">
@@ -247,7 +247,7 @@ function VsCodeMockup() {
       <div className="rounded-xl border border-white/10 bg-[#1e1e1e] shadow-2xl overflow-hidden">
         {/* Title bar */}
         <div className="flex items-center bg-[#2d2d2d] px-3 py-1.5">
-          <span className="text-[10px] text-zinc-500">main.tsx — AGI Workforce — VS Code</span>
+          <span className="text-[10px] text-zinc-500">main.tsx - AGI Workforce - VS Code</span>
         </div>
         <div className="flex h-80">
           {/* Activity bar */}
@@ -443,12 +443,9 @@ function ExtensionMockup() {
 /* ─── Mobile Mockup ───────────────────────────────────────────────── */
 function MobileMockup() {
   return (
-    <div className="relative mx-auto" style={{ width: 180 }}>
+    <div className="relative mx-auto w-[180px]">
       {/* Phone frame */}
-      <div
-        className="rounded-[36px] border-[3px] border-zinc-700 bg-[#0e0e0e] p-1.5 shadow-2xl"
-        style={{ aspectRatio: '9 / 19.5' }}
-      >
+      <div className="aspect-[9/19.5] rounded-[36px] border-[3px] border-zinc-700 bg-[#0e0e0e] p-1.5 shadow-2xl">
         {/* Dynamic Island */}
         <div className="mx-auto mb-1 h-5 w-20 rounded-b-2xl bg-black" />
         {/* Status bar */}
@@ -530,7 +527,7 @@ const surfaces: Surface[] = [
     tech: 'Tauri v2 · Rust + React 19',
     color: '#c8892a',
     features: [
-      'Full computer use — browser, keyboard, screen capture',
+      'Full computer use - browser, keyboard, screen capture',
       `${MARKETING.tools.display} native IPC tools, no plugins required`,
       'Runs Ollama, LM Studio, and local models offline',
     ],
@@ -542,7 +539,7 @@ const surfaces: Surface[] = [
     tech: 'Next.js SPA',
     color: '#06b6d4',
     features: [
-      'Access from any browser — Chrome, Safari, Firefox, Edge',
+      'Access from any browser - Chrome, Safari, Firefox, Edge',
       'Same AI capabilities as the desktop app',
       'No install needed, share links to conversations',
     ],
@@ -555,8 +552,8 @@ const surfaces: Surface[] = [
     color: '#a855f7',
     features: [
       'Terminal-native agent with streaming output',
-      'Pipe-friendly — compose with grep, jq, and shell scripts',
-      'CI/CD ready — run in GitHub Actions, Docker, headless',
+      'Pipe-friendly - compose with grep, jq, and shell scripts',
+      'CI/CD ready - run in GitHub Actions, Docker, headless',
     ],
     mockup: <CliMockup />,
   },
@@ -567,8 +564,8 @@ const surfaces: Surface[] = [
     color: '#3b82f6',
     features: [
       'Inline code assistance inside your editor',
-      'Workspace-aware — understands your full project',
-      'MCP integrated — same tools as the desktop app',
+      'Workspace-aware - understands your full project',
+      'MCP integrated - same tools as the desktop app',
     ],
     mockup: <VsCodeMockup />,
   },
@@ -578,9 +575,9 @@ const surfaces: Surface[] = [
     tech: 'Chrome MV3',
     color: '#f59e0b',
     features: [
-      'AI overlay on any webpage — summarize, extract, act',
+      'AI overlay on any webpage - summarize, extract, act',
       "Context extraction from the page you're viewing",
-      'Quick actions — explain, translate, rewrite, code review',
+      'Quick actions - explain, translate, rewrite, code review',
     ],
     mockup: <ExtensionMockup />,
   },
@@ -673,7 +670,7 @@ function SurfaceShowcaseStatic() {
   );
 }
 
-/* ─── Main Component (JS-controlled fixed position — bypasses overflow-x:hidden breaking sticky) */
+/* ─── Main Component (JS-controlled fixed position - bypasses overflow-x:hidden breaking sticky) */
 const PX_PER_SURFACE = 600;
 
 export function SurfaceShowcase() {
@@ -695,10 +692,10 @@ export function SurfaceShowcase() {
         // Section hasn't reached viewport top yet
         setPinState('before');
       } else if (rect.bottom <= vh) {
-        // Section bottom has passed viewport bottom — unpin
+        // Section bottom has passed viewport bottom - unpin
         setPinState('after');
       } else {
-        // Section top is at/above viewport, bottom is below — pin it
+        // Section top is at/above viewport, bottom is below - pin it
         setPinState('fixed');
         const scrolled = -rect.top;
         const scrollable = section.offsetHeight - vh;
@@ -747,7 +744,7 @@ export function SurfaceShowcase() {
 
           {/* Content grid */}
           <div className="grid items-center gap-8 md:grid-cols-[2fr_1fr]">
-            {/* Left — Mockup */}
+            {/* Left - Mockup */}
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeIndex}
@@ -760,7 +757,7 @@ export function SurfaceShowcase() {
               </motion.div>
             </AnimatePresence>
 
-            {/* Right — Info + Progress */}
+            {/* Right - Info + Progress */}
             <div className="flex gap-6">
               <AnimatePresence mode="wait">
                 <motion.div

@@ -28,10 +28,18 @@ vi.mock('next/headers', () => ({
   })),
 }));
 
-// Mock api-auth to avoid server-only import issues in transitive dependencies
-const mockGetAuthenticatedUser = vi.fn();
+// RLS-bound Supabase client returned by getAuthenticatedUserWithClient.
+// Tests set up .from() chains on this object to simulate DB responses.
+const mockSupabaseData = {
+  from: vi.fn(),
+};
+
+// Mock api-auth so routes receive {user, userDb: mockSupabaseData} directly,
+// bypassing the real getServiceClient/getUserClient singleton calls.
+const mockGetAuthenticatedUserWithClient = vi.fn();
 vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUser: (...args: unknown[]) => mockGetAuthenticatedUser(...args),
+  getAuthenticatedUserWithClient: (...args: unknown[]) =>
+    mockGetAuthenticatedUserWithClient(...args),
 }));
 
 // Mock CreditService
@@ -44,35 +52,6 @@ vi.mock('@/lib/services/credit-service', () => ({
 // Mock fetch for LLM API calls
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
-
-// Mock Supabase clients
-const mockSupabaseAuth = {
-  auth: {
-    getUser: vi.fn(),
-    getSession: vi.fn(),
-  },
-};
-
-const mockSupabaseData = {
-  auth: {
-    getUser: vi.fn(),
-    getSession: vi.fn(),
-  },
-  from: vi.fn(),
-};
-
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn((_url: string, key: string) => {
-    if (key.includes('service')) {
-      return mockSupabaseData;
-    }
-    return mockSupabaseAuth;
-  }),
-}));
-
-vi.mock('@supabase/ssr', () => ({
-  createServerClient: vi.fn(() => mockSupabaseAuth),
-}));
 
 // Import after mocks
 import { POST } from '@/app/api/chat/conversations/[id]/messages/route';
@@ -118,17 +97,10 @@ describe('Chat Messages API', () => {
     // Set env vars needed by the route
     process.env['NEXT_PUBLIC_SITE_URL'] = 'http://localhost:3001';
 
-    // Default: authenticated user via api-auth mock
-    mockGetAuthenticatedUser.mockResolvedValue(mockUser);
-
-    // Also set up supabase auth mocks for direct usage in tests
-    mockSupabaseAuth.auth.getUser.mockResolvedValue({
-      data: { user: mockUser },
-      error: null,
-    });
-    mockSupabaseData.auth.getUser.mockResolvedValue({
-      data: { user: mockUser },
-      error: null,
+    // Default: authenticated user — routes receive {user, userDb} via mocked helper.
+    mockGetAuthenticatedUserWithClient.mockResolvedValue({
+      user: mockUser,
+      userDb: mockSupabaseData,
     });
 
     // Default: user has credits
@@ -151,9 +123,9 @@ describe('Chat Messages API', () => {
   describe('POST /api/chat/conversations/[id]/messages', () => {
     describe('Authentication', () => {
       it('should return 401 if not authenticated', async () => {
-        // Make getAuthenticatedUser throw unauthorized error
+        // Make getAuthenticatedUserWithClient throw unauthorized error
         const { createError } = await import('@/lib/errors');
-        mockGetAuthenticatedUser.mockRejectedValue(createError.unauthorized());
+        mockGetAuthenticatedUserWithClient.mockRejectedValueOnce(createError.unauthorized());
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
           method: 'POST',
@@ -303,7 +275,12 @@ describe('Chat Messages API', () => {
         });
         await POST(request, mockContext);
 
-        expect(CreditService.checkAvailable).toHaveBeenCalledWith('user-123', 0.01);
+        // Signature: checkAvailable(userClient, userId, cents)
+        expect(CreditService.checkAvailable).toHaveBeenCalledWith(
+          expect.anything(),
+          'user-123',
+          0.01,
+        );
       });
     });
 

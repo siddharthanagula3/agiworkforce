@@ -68,7 +68,7 @@ LICENSE
 
 # Development Scripts
 .husky
-scripts
+/scripts
 .lintstagedrc.json
 
 # Rust/Cargo (Not needed for web deployment)

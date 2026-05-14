@@ -184,7 +184,14 @@ impl LlmExecutor {
             (Some(p), Some(m)) => (*p, m.clone()),
             (Some(p), None) => (*p, self.default_model_for_provider(*p)),
             (None, Some(m)) => (self.infer_provider_from_model(m), m.clone()),
-            (None, None) => (Provider::ManagedCloud, "gpt-5.4-mini".to_string()),
+            (None, None) => (
+                Provider::ManagedCloud,
+                crate::core::llm::models_config::get_task_model(
+                    &Provider::ManagedCloud,
+                    "fast_completion",
+                )
+                .to_string(),
+            ),
         };
 
         // Build router preferences
@@ -376,12 +383,9 @@ impl LlmExecutor {
         }
     }
 
-    /// Get the default model for a given provider.
+    /// Get the default model for a given provider (reads from models.json via models_config).
     fn default_model_for_provider(&self, provider: Provider) -> String {
-        match provider {
-            Provider::Ollama => "llama4-maverick".to_string(),
-            _ => "gpt-5.4-mini".to_string(),
-        }
+        crate::core::llm::models_config::get_default_model(&provider).to_string()
     }
 
     /// Infer provider from model name.
@@ -597,20 +601,28 @@ mod tests {
 
     #[test]
     fn test_default_model_for_provider() {
+        // DESK-MODEL-DEFAULT-WRONG (audit 2026-05-06): previous assertions
+        // incorrectly expected "gpt-5.4-mini" for every provider.
+        // default_model_for_provider delegates to models_config::get_default_model
+        // which reads per-provider defaultModel from models.json.
+        // Correct expected values per models.json (as of 2026-05-06):
+        //   anthropic → claude-sonnet-4.6
+        //   openai    → gpt-5.5
+        //   google    → gemini-3.1-pro-preview
         let router = create_test_router();
         let executor = LlmExecutor::new(router);
 
         assert_eq!(
             executor.default_model_for_provider(Provider::Anthropic),
-            "gpt-5.4-mini"
+            "claude-sonnet-4.6"
         );
         assert_eq!(
             executor.default_model_for_provider(Provider::OpenAI),
-            "gpt-5.4-mini"
+            "gpt-5.5"
         );
         assert_eq!(
             executor.default_model_for_provider(Provider::Google),
-            "gpt-5.4-mini"
+            "gemini-3.1-pro-preview"
         );
     }
 

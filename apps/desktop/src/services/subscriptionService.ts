@@ -22,6 +22,32 @@ export interface PlanFeatures {
 }
 
 export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
+  'local-only': {
+    automationsPerDay: 'unlimited',
+    browserAutomation: false,
+    advancedUiAutomation: false,
+    emailSupport: false,
+    prioritySupport: false,
+    teamFeatures: false,
+    sso: false,
+    customWorkflows: false,
+    webhookIntegration: false,
+    analytics: false,
+    llmCostTracking: false,
+  },
+  byok: {
+    automationsPerDay: 'unlimited',
+    browserAutomation: false,
+    advancedUiAutomation: false,
+    emailSupport: false,
+    prioritySupport: false,
+    teamFeatures: false,
+    sso: false,
+    customWorkflows: false,
+    webhookIntegration: false,
+    analytics: false,
+    llmCostTracking: true,
+  },
   hobby: {
     automationsPerDay: 10,
     browserAutomation: false,
@@ -59,6 +85,19 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     customWorkflows: false,
     webhookIntegration: false,
     analytics: false,
+    llmCostTracking: true,
+  },
+  pro_plus: {
+    automationsPerDay: 'unlimited',
+    browserAutomation: true,
+    advancedUiAutomation: true,
+    emailSupport: true,
+    prioritySupport: true,
+    teamFeatures: false,
+    sso: false,
+    customWorkflows: true,
+    webhookIntegration: false,
+    analytics: true,
     llmCostTracking: true,
   },
   max: {

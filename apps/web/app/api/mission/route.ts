@@ -9,6 +9,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { getUserClient } from '@/lib/supabase-server';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
@@ -154,7 +155,7 @@ async function handleMissionControl(request: NextRequest): Promise<NextResponse>
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  // Rate limiting — share the llm-completion bucket
+  // Rate limiting - share the llm-completion bucket
   const rateLimitResponse = await withRateLimit(request, 'llm-completion');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -193,8 +194,11 @@ async function handleMissionControl(request: NextRequest): Promise<NextResponse>
     );
   }
 
+  // RLS-bound client for all downstream DB ops on behalf of this user.
+  const userClient = getUserClient(token);
+
   // Validate subscription
-  const subscription = await SubscriptionService.getSubscription(user.id);
+  const subscription = await SubscriptionService.getSubscription(userClient, user.id);
   if (!subscription || !['active', 'trialing'].includes(subscription.status)) {
     throw createError.forbidden('An active subscription is required to use Mission Control.');
   }
@@ -235,7 +239,7 @@ async function handleMissionControl(request: NextRequest): Promise<NextResponse>
   // Estimate cost for pre-flight credit check
   const totalChars = messages.reduce((sum, m) => sum + m.content.length, 0);
   const estimatedTokens = Math.ceil(totalChars / 3.5) + 500; // +500 for output buffer
-  // Use claude-haiku-4.5 as the mission planner — cost-effective and fast
+  // Use claude-haiku-4.5 as the mission planner - cost-effective and fast
   const missionModel = 'claude-haiku-4.5';
   const missionProvider = 'anthropic';
   const estimatedCostCents = Math.max(
@@ -243,9 +247,9 @@ async function handleMissionControl(request: NextRequest): Promise<NextResponse>
     Math.ceil((estimatedTokens * 2 * 0.001) / 1000), // rough: $0.001/1K tokens average
   );
 
-  const hasCredits = await CreditService.checkAvailable(user.id, estimatedCostCents);
+  const hasCredits = await CreditService.checkAvailable(userClient, user.id, estimatedCostCents);
   if (!hasCredits) {
-    const balance = await CreditService.getBalance(user.id);
+    const balance = await CreditService.getBalance(userClient, user.id);
     return NextResponse.json(
       {
         error: {
@@ -265,6 +269,7 @@ async function handleMissionControl(request: NextRequest): Promise<NextResponse>
   const requestId = randomUUID();
   const reservationKey = CreditService.generateIdempotencyKey(user.id, 'reservation', requestId);
   const reserveResult = await CreditService.deductCredits(
+    userClient,
     user.id,
     estimatedCostCents,
     `Credit reservation: mission control planning`,
@@ -309,6 +314,7 @@ async function handleMissionControl(request: NextRequest): Promise<NextResponse>
     if (costDiff !== 0) {
       const reconcKey = CreditService.generateIdempotencyKey(user.id, 'reconciliation', requestId);
       await CreditService.deductCredits(
+        userClient,
         user.id,
         costDiff,
         `Credit adjustment: mission control (${missionProvider}/${missionModel})`,
@@ -320,6 +326,7 @@ async function handleMissionControl(request: NextRequest): Promise<NextResponse>
     // Refund reserved credits on failure
     const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
     await CreditService.deductCredits(
+      userClient,
       user.id,
       -estimatedCostCents,
       `Refund: mission control planning failed`,

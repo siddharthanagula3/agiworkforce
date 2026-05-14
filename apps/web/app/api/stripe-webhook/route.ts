@@ -2,7 +2,16 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createClient } from '@supabase/supabase-js';
+
+// WEB-4 audit fix (2026-05-03): pin to Node runtime so the Stripe SDK's
+// HMAC verification (stripe.webhooks.constructEvent) has access to Node
+// crypto. Edge runtime would silently fail signature checks. Also marks
+// this route as dynamic so Next.js doesn't try to pre-render or cache it.
+// Pairs with the proxy.ts matcher exclusion that keeps middleware off this
+// route entirely.
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+import { getServiceClient } from '@/lib/supabase-server';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { SubscriptionService } from '@/lib/services/subscription-service';
@@ -22,18 +31,10 @@ import { getUsageBudgetCentsFromPriceCents } from '@agiworkforce/types';
 
 const STRIPE_SECRET_KEY = process.env['STRIPE_SECRET_KEY'];
 const STRIPE_WEBHOOK_SECRET = process.env['STRIPE_WEBHOOK_SECRET'];
-const SUPABASE_URL = process.env['NEXT_PUBLIC_SUPABASE_URL'];
-const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'];
 
 if (!STRIPE_SECRET_KEY || !STRIPE_WEBHOOK_SECRET) {
   logger.error(
     'Stripe webhook is not fully configured. Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET in Vercel environment variables.',
-  );
-}
-
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  logger.error(
-    'Supabase service role environment variables are missing. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel environment variables. Webhook cannot update subscriptions.',
   );
 }
 
@@ -43,12 +44,18 @@ const stripe = STRIPE_SECRET_KEY
     })
   : null;
 
-const supabaseAdmin =
-  SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
-    ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-        auth: { persistSession: false },
-      })
-    : null;
+function getAdminClient() {
+  try {
+    return getServiceClient();
+  } catch {
+    logger.error(
+      'Supabase service role environment variables are missing. Webhook cannot update subscriptions.',
+    );
+    return null;
+  }
+}
+
+const supabaseAdmin = getAdminClient();
 
 function getUsageBudgetOverrideCentsFromStripePrice(
   price: Pick<Stripe.Price, 'unit_amount'> | null | undefined,
@@ -290,7 +297,7 @@ async function upsertSubscriptionFromSession(
 
   let supabaseUserId =
     session.metadata?.['supabase_user_id'] ||
-    session.metadata?.['userId'] || // Legacy key — kept for sessions created before cleanup
+    session.metadata?.['userId'] || // Legacy key - kept for sessions created before cleanup
     session.client_reference_id;
 
   // If no user ID in metadata, try to find user by Stripe customer ID (BEST PRACTICE)
@@ -465,7 +472,7 @@ async function upsertSubscriptionFromSession(
         priceId,
         registeredPriceIds: Object.keys(getTierMapping()),
       },
-      'Checkout session contained unrecognised price ID — skipping subscription upsert. ' +
+      'Checkout session contained unrecognised price ID - skipping subscription upsert. ' +
         'This may happen legitimately during price migration; verify STRIPE_PRICE_* env vars if unexpected.',
     );
     return;
@@ -793,7 +800,7 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
         priceId: stripePriceId,
         registeredPriceIds: Object.keys(getTierMapping()),
       },
-      'Webhook contained unrecognised price ID — skipping subscription update. ' +
+      'Webhook contained unrecognised price ID - skipping subscription update. ' +
         'This may happen legitimately during price migration; verify STRIPE_PRICE_* env vars if unexpected.',
     );
     return;
@@ -1221,7 +1228,10 @@ export async function POST(request: NextRequest) {
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(body, signature, STRIPE_WEBHOOK_SECRET);
+    // SEV-WEB-HIGH-5 fix: shorten the replay window from the SDK default of
+    // 300 s to 60 s. Stripe recommends 60 s; the longer window only matters
+    // when retries take more than a minute, and we have idempotency on top.
+    event = stripe.webhooks.constructEvent(body, signature, STRIPE_WEBHOOK_SECRET, 60);
     logger.info({ eventType: event.type, eventId: event.id }, 'Webhook verified');
   } catch (err) {
     logger.error(
@@ -1332,6 +1342,7 @@ export async function POST(request: NextRequest) {
             current_period_end?: string;
           } = { status: 'active' };
 
+          let shouldUpsert = true;
           if (stripeSubId) {
             try {
               const subscription = await stripe.subscriptions.retrieve(stripeSubId);
@@ -1344,36 +1355,39 @@ export async function POST(request: NextRequest) {
               }
             } catch (error) {
               logger.error({ error, stripeSubId }, 'Failed to retrieve subscription for invoice');
+              // P0-C: don't upsert with hardcoded 'active' if subscription retrieve failed
+              shouldUpsert = false;
             }
           }
 
-          try {
-            if (stripeSubId) {
-              const { error: updateError } = await supabaseAdmin
-                .from('subscriptions')
-                .update(updateData)
-                .eq('stripe_subscription_id', stripeSubId);
-              if (updateError) {
-                logger.error(
-                  { error: updateError, stripeSubId },
-                  'Failed to update subscription for payment succeeded',
-                );
+          if (shouldUpsert)
+            try {
+              if (stripeSubId) {
+                const { error: updateError } = await supabaseAdmin
+                  .from('subscriptions')
+                  .update(updateData)
+                  .eq('stripe_subscription_id', stripeSubId);
+                if (updateError) {
+                  logger.error(
+                    { error: updateError, stripeSubId },
+                    'Failed to update subscription for payment succeeded',
+                  );
+                }
+              } else if (stripeCustomerId) {
+                const { error: updateError } = await supabaseAdmin
+                  .from('subscriptions')
+                  .update(updateData)
+                  .eq('stripe_customer_id', stripeCustomerId);
+                if (updateError) {
+                  logger.error(
+                    { error: updateError, stripeCustomerId },
+                    'Failed to update subscription by customer ID for payment succeeded',
+                  );
+                }
               }
-            } else if (stripeCustomerId) {
-              const { error: updateError } = await supabaseAdmin
-                .from('subscriptions')
-                .update(updateData)
-                .eq('stripe_customer_id', stripeCustomerId);
-              if (updateError) {
-                logger.error(
-                  { error: updateError, stripeCustomerId },
-                  'Failed to update subscription by customer ID for payment succeeded',
-                );
-              }
+            } catch (error) {
+              logger.error({ error }, 'Error updating subscription for payment succeeded');
             }
-          } catch (error) {
-            logger.error({ error }, 'Error updating subscription for payment succeeded');
-          }
         }
         break;
       }

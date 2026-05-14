@@ -92,7 +92,10 @@ describe('Device Poll API', () => {
         expect(response.status).toBe(400);
       });
 
-      it('should return pending status for valid request with no matching device', async () => {
+      it('should return 404 for valid request with no matching device (no info disclosure)', async () => {
+        // Route hardened to return 404 + generic error for unknown devices rather than
+        // 200 + {status:"pending"}, to avoid exposing device-id existence to
+        // unauthenticated callers. See apps/web/app/api/device/poll/route.ts:65-69.
         const request = new NextRequest('http://localhost/api/device/poll', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -100,10 +103,11 @@ describe('Device Poll API', () => {
         });
 
         const response = await POST(request);
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(404);
 
         const data = await response.json();
-        expect(data.status).toBe('pending');
+        expect(data.error).toBe('Not found');
+        expect(data.status).toBeUndefined();
       });
     });
 
@@ -272,10 +276,13 @@ describe('Device Poll API', () => {
         });
 
         const response = await POST(request);
-        expect(response.status).toBe(200);
+        // Route hardened to return 404 + generic error for expired/consumed records
+        // rather than 200 + {status:"expired"}. See route.ts:73-85.
+        expect(response.status).toBe(404);
 
         const data = await response.json();
-        expect(data.status).toBe('expired');
+        expect(data.error).toBe('Not found');
+        expect(data.status).toBeUndefined();
       });
     });
   });

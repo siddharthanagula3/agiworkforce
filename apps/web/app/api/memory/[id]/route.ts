@@ -6,15 +6,13 @@
  * DELETE /api/memory/[id] - Soft delete a memory
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -22,18 +20,14 @@ async function handleGetMemory(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-bound client: .eq('user_id') not needed — DB enforces via RLS.
+  const { userDb: supabase } = await getAuthenticatedUserWithClient(request);
   const { id } = await context.params;
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   const { data, error } = await supabase
     .from('user_memories')
     .select('id, content, category, source, created_at, updated_at')
     .eq('id', id)
-    .eq('user_id', user.id)
     .eq('is_deleted', false)
     .single();
 
@@ -61,7 +55,8 @@ async function handleUpdateMemory(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-bound client: .eq('user_id') not needed — DB enforces via RLS.
+  const { userDb: supabase } = await getAuthenticatedUserWithClient(request);
   const { id } = await context.params;
 
   let body: { content?: string };
@@ -79,10 +74,6 @@ async function handleUpdateMemory(request: NextRequest, context: RouteContext) {
     throw createError.validation('Content must be 10,000 characters or less');
   }
 
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
   const { data, error } = await supabase
     .from('user_memories')
     .update({
@@ -90,7 +81,6 @@ async function handleUpdateMemory(request: NextRequest, context: RouteContext) {
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)
-    .eq('user_id', user.id)
     .eq('is_deleted', false)
     .select()
     .single();
@@ -119,12 +109,9 @@ async function handleDeleteMemory(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-bound client: .eq('user_id') not needed — DB enforces via RLS.
+  const { userDb: supabase } = await getAuthenticatedUserWithClient(request);
   const { id } = await context.params;
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   const { error } = await supabase
     .from('user_memories')
@@ -133,7 +120,6 @@ async function handleDeleteMemory(request: NextRequest, context: RouteContext) {
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)
-    .eq('user_id', user.id)
     .eq('is_deleted', false);
 
   if (error) {

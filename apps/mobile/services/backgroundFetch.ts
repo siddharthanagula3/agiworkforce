@@ -45,10 +45,15 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
 
       if (result.pendingApprovals.length > 0) {
         for (const approval of result.pendingApprovals) {
+          // MED-MOB-08 fix (2026-05-04): the notification body previously
+          // included `toolName: description`, which reveals agent task details
+          // on the lock screen without authentication. We now show only a
+          // generic count notification; full details are behind the biometric
+          // gate inside the app.
           await Notifications.scheduleNotificationAsync({
             content: {
-              title: `${approval.agentName} needs approval`,
-              body: `${approval.toolName}: ${approval.description}`,
+              title: 'AGI Workforce',
+              body: `${result.pendingApprovals.length} agent action${result.pendingApprovals.length === 1 ? '' : 's'} need your approval`,
               data: {
                 type: 'agent_approval_needed',
                 approvalId: approval.id,
@@ -58,6 +63,9 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
             },
             trigger: null,
           });
+          // Only send one notification per batch — the user taps through to the
+          // app (behind biometric) to see per-approval detail.
+          break;
         }
         return BackgroundFetch.BackgroundFetchResult.NewData;
       }

@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireEnv } from '@/utils/env';
+import { getUserClient } from '@/lib/supabase-server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimitHandler } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -24,6 +25,7 @@ async function handler(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
 
   let userId: string;
+  let userClient: import('@supabase/supabase-js').SupabaseClient;
 
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.slice(7);
@@ -36,6 +38,7 @@ async function handler(request: NextRequest) {
       throw createError.unauthorized('Invalid or expired token');
     }
     userId = user.id;
+    userClient = getUserClient(token);
   } else {
     // Try cookie-based auth for browser requests
     const { createServerClient } = await import('@supabase/ssr');
@@ -57,13 +60,15 @@ async function handler(request: NextRequest) {
       throw createError.unauthorized('Authentication required');
     }
     userId = user.id;
+    // ssrClient is already RLS-bound via cookie session; use it directly.
+    userClient = ssrClient;
   }
 
   try {
     // Fetch credit balance and subscription in parallel
     const [balance, subscription] = await Promise.all([
-      CreditService.getBalance(userId),
-      SubscriptionService.getSubscription(userId),
+      CreditService.getBalance(userClient, userId),
+      SubscriptionService.getSubscription(userClient, userId),
     ]);
 
     const planTier = subscription?.plan_tier || 'free';

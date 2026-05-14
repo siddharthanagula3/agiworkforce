@@ -63,7 +63,10 @@ async function handleDevicePoll(request: NextRequest) {
       .single();
 
     if (error || !data) {
-      return NextResponse.json({ status: 'pending' }, { headers: { 'Cache-Control': 'no-store' } });
+      return NextResponse.json(
+        { error: 'Not found' },
+        { status: 404, headers: { 'Cache-Control': 'no-store' } },
+      );
     }
 
     // Expiry check first (also treat already-consumed codes as expired)
@@ -75,12 +78,15 @@ async function handleDevicePoll(request: NextRequest) {
           .update({ status: 'expired', updated_at: new Date().toISOString() })
           .eq('device_id', device_id);
       }
-      return NextResponse.json({ status: 'expired' }, { headers: { 'Cache-Control': 'no-store' } });
+      return NextResponse.json(
+        { error: 'Not found' },
+        { status: 404, headers: { 'Cache-Control': 'no-store' } },
+      );
     }
 
     // Device ownership verification with backfill for legacy sessions.
     if (data.device_fingerprint) {
-      // Fingerprint was recorded on link — enforce strict match on every poll.
+      // Fingerprint was recorded on link - enforce strict match on every poll.
       if (!device_fingerprint || data.device_fingerprint !== device_fingerprint) {
         logger.warn(
           {
@@ -93,7 +99,7 @@ async function handleDevicePoll(request: NextRequest) {
         throw createError.forbidden('Device fingerprint does not match');
       }
     } else if (device_fingerprint) {
-      // Legacy session (no fingerprint stored) but client IS sending one now — backfill it.
+      // Legacy session (no fingerprint stored) but client IS sending one now - backfill it.
       // Use WHERE device_fingerprint IS NULL to prevent race conditions: if two concurrent
       // polls both reach this branch, only the first UPDATE wins; the second is a no-op.
       await supabase
@@ -108,7 +114,7 @@ async function handleDevicePoll(request: NextRequest) {
       // Returning HTTP 410 Gone to force clients to update to fingerprint-aware versions.
       logger.warn(
         { deviceId: device_id },
-        'DEPRECATED: Device poll without fingerprint rejected — legacy path is sunset. Client must update.',
+        'DEPRECATED: Device poll without fingerprint rejected - legacy path is sunset. Client must update.',
       );
       return NextResponse.json(
         {
@@ -153,7 +159,7 @@ async function handleDevicePoll(request: NextRequest) {
         );
       }
       if (!consumed.status) {
-        // RPC returned a row but status is missing — unexpected state.
+        // RPC returned a row but status is missing - unexpected state.
         throw createError.internal('Device token consumption returned unexpected state');
       }
 
@@ -198,7 +204,7 @@ async function handleDevicePoll(request: NextRequest) {
             error: decryptError instanceof Error ? decryptError.message : String(decryptError),
             deviceId: device_id,
           },
-          'Failed to decrypt device tokens — they may have been stored before encryption was enabled',
+          'Failed to decrypt device tokens - they may have been stored before encryption was enabled',
         );
         throw createError.internal('Failed to decrypt device authorization tokens');
       }

@@ -412,9 +412,9 @@ describe('buildStatusResponse', () => {
   });
 
   it('allows extra fields to be merged in', () => {
-    const resp = buildStatusResponse(true, { tabId: 42, bridgeUrl: 'http://localhost:8765' });
+    const resp = buildStatusResponse(true, { tabId: 42, bridgeUrl: 'http://localhost:8787' });
     expect(resp.tabId).toBe(42);
-    expect(resp.bridgeUrl).toBe('http://localhost:8765');
+    expect(resp.bridgeUrl).toBe('http://localhost:8787');
   });
 });
 

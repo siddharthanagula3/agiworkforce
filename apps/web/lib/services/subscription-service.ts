@@ -1,8 +1,22 @@
+/**
+ * @file subscription-service.ts
+ *
+ * # Client injection contract (WEB-RLS-BYPASS mitigation)
+ *
+ * USER-CONTEXT methods accept a `SupabaseClient` parameter. Callers construct it via:
+ *   `import { getUserClient } from '@/lib/supabase-server';`
+ *   `const client = getUserClient(jwtFromBearerHeader);`
+ *
+ * SERVICE-CONTEXT methods (Stripe webhook, cron, claim-offer) call `getServiceClient()`
+ * internally. Their doc-comments say "SERVICE-CONTEXT" and list valid callers.
+ *
+ * Never add a private `getSupabaseClient()` here. See lib/services/README.md.
+ */
 import 'server-only';
 
-import { createClient } from '@supabase/supabase-js';
+import { type SupabaseClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
-import { requireEnv } from '@/utils/env';
+import { getServiceClient } from '@/lib/supabase-server';
 import { logger } from '@/lib/logger';
 import { CreditService } from './credit-service';
 import {
@@ -14,14 +28,6 @@ import {
 import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-types';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 import { getPlanUsageBudgetCents, getUsageBudgetCentsFromPriceCents } from '@agiworkforce/types';
-
-function getSupabaseClient() {
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  return createClient(supabaseUrl, supabaseServiceKey, {
-    auth: { persistSession: false },
-  });
-}
 
 export interface SubscriptionInfo {
   id: string;
@@ -59,13 +65,18 @@ function resolveCreditsAllocationCents(
 
 export class SubscriptionService {
   /**
-   * Get subscription for a user
+   * Get subscription for a user.
+   * USER-CONTEXT: caller passes an RLS-bound SupabaseClient so the query is
+   * scoped to the authenticated user's rows.
+   *
    * PERFORMANCE OPTIMIZATION: Select only required columns instead of '*'
    */
-  static async getSubscription(userId: string): Promise<SubscriptionInfo | null> {
+  static async getSubscription(
+    client: SupabaseClient,
+    userId: string,
+  ): Promise<SubscriptionInfo | null> {
     try {
-      const supabase = getSupabaseClient();
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from('subscriptions')
         .select(
           'id, user_id, plan_tier, status, current_period_start, current_period_end, stripe_subscription_id, stripe_price_id',
@@ -103,7 +114,8 @@ export class SubscriptionService {
   }
 
   /**
-   * Allocate credits for a subscription period
+   * Allocate credits for a subscription period.
+   * SERVICE-CONTEXT: called from Stripe webhook and claim-offer handler; no user JWT available.
    */
   static async allocateCreditsForPeriod(
     userId: string,
@@ -148,7 +160,8 @@ export class SubscriptionService {
   }
 
   /**
-   * Reset credits for a new billing period
+   * Reset credits for a new billing period.
+   * SERVICE-CONTEXT: called from Stripe webhook and cron job; no user JWT available.
    */
   static async resetCreditsForNewPeriod(
     userId: string,
@@ -228,10 +241,13 @@ export class SubscriptionService {
   }
 
   /**
-   * Ensure a profile exists for the user (required for subscriptions FK constraint)
+   * Ensure a profile exists for the user (required for subscriptions FK constraint).
+   * SERVICE-CONTEXT: called only from syncWithStripe which has no user JWT.
    */
   private static async ensureProfileExists(userId: string, email: string): Promise<void> {
-    const supabase = getSupabaseClient();
+    // SECURITY: service-role required because this runs inside syncWithStripe which is called
+    // from the Stripe webhook handler (no user JWT context).
+    const supabase = getServiceClient();
 
     // Check if profile exists
     const { data: existingProfile, error: fetchError } = await supabase
@@ -266,7 +282,10 @@ export class SubscriptionService {
   }
 
   /**
-   * Sync subscription from Stripe using customer ID (BEST PRACTICE)
+   * Sync subscription from Stripe using customer ID (BEST PRACTICE).
+   * SERVICE-CONTEXT: called from Stripe webhook handler and admin diagnose page;
+   * no user JWT available.
+   *
    * This is a critical function that ensures local subscription data matches Stripe.
    * It handles:
    * - Both 'active' and 'trialing' subscription statuses
@@ -291,8 +310,9 @@ export class SubscriptionService {
     try {
       logger.info({ userId, email }, 'Attempting self-healing subscription sync');
 
-      // BEST PRACTICE: First, try to get customer_id from profiles table
-      const supabase = getSupabaseClient();
+      // SECURITY: service-role required because this is called from the Stripe webhook
+      // handler and admin diagnose page (no user JWT in either context).
+      const supabase = getServiceClient();
       const { data: profile } = await supabase
         .from('profiles')
         .select('stripe_customer_id')
@@ -321,7 +341,7 @@ export class SubscriptionService {
         //
         // The previous logic only blocked when
         //   `customer.metadata.supabase_user_id !== userId`.
-        // It accepted the customer if the metadata field was MISSING —
+        // It accepted the customer if the metadata field was MISSING -
         // which is exactly the case for legacy customers created before
         // metadata was attached. Combined with the email-fallback path,
         // a user who changed their Supabase email to one that previously
@@ -330,7 +350,7 @@ export class SubscriptionService {
         //
         // We now REQUIRE the metadata field to exist AND match. Customers
         // with no metadata are treated as "ownership unknown" and
-        // refused — operators can run a one-time backfill to attach
+        // refused - operators can run a one-time backfill to attach
         // metadata to legacy customers, after which the email fallback
         // becomes safe.
         const recordedUserId = customer.metadata?.['supabase_user_id'];
@@ -386,7 +406,7 @@ export class SubscriptionService {
           expand: ['data.items.data.price'],
         });
 
-        // Find the most recent valid subscription (past_due excluded — payment has failed)
+        // Find the most recent valid subscription (past_due excluded - payment has failed)
         const validStatusSet = new Set(['active', 'trialing']);
         stripeSubscription = recentSubs.data.find((sub) => validStatusSet.has(sub.status)) ?? null;
       }

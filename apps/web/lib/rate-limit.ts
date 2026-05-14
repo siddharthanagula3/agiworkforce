@@ -397,7 +397,7 @@ function getRateLimitIdentifier(request: NextRequest, identifier?: string): stri
   }
 
   // H4: Extract user ID from JWT Bearer token for authenticated rate limiting.
-  // This prevents bypass via IP rotation — authenticated users are tracked by sub claim.
+  // This prevents bypass via IP rotation - authenticated users are tracked by sub claim.
   // We only base64-decode the payload (no cryptographic verification needed here;
   // the route handler is responsible for full auth validation).
   const authHeader = request.headers.get('authorization');
@@ -408,7 +408,7 @@ function getRateLimitIdentifier(request: NextRequest, identifier?: string): stri
         return `user:${payload.sub}`;
       }
     } catch {
-      // Malformed token — fall through to IP-based limiting
+      // Malformed token - fall through to IP-based limiting
     }
   }
 
@@ -577,7 +577,7 @@ export async function withRateLimit(
 
     // Log to security audit table.
     // Extract userId from the JWT Bearer token sub claim for audit enrichment.
-    // This is only for audit metadata — the rate-limit identifier itself already
+    // This is only for audit metadata - the rate-limit identifier itself already
     // uses the JWT sub claim (see getRateLimitIdentifier).
     let userId: string | undefined;
     const auditAuthHeader = request.headers.get('authorization');
@@ -590,7 +590,7 @@ export async function withRateLimit(
           userId = payload.sub;
         }
       } catch {
-        // Malformed token — fall through to undefined
+        // Malformed token - fall through to undefined
       }
     }
     await logRateLimitExceeded(request, identifier || key, userId);

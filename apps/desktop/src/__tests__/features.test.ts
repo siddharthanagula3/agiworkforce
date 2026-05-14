@@ -26,6 +26,7 @@ describe('modelStore', () => {
         anthropic: null,
         google: null,
         ollama: null,
+        lmstudio: null,
         xai: null,
         deepseek: null,
         qwen: null,
@@ -83,10 +84,10 @@ describe('modelStore', () => {
       const { useModelStore } = await import('../stores/modelStore');
       const store = useModelStore.getState();
 
-      await store.selectModel('claude-opus-4.6', 'anthropic');
+      await store.selectModel('claude-opus-4.7', 'anthropic');
 
       const state = useModelStore.getState();
-      expect(state.recentModels).toContain('claude-opus-4.6');
+      expect(state.recentModels).toContain('claude-opus-4.7');
     });
 
     it('should handle selection errors gracefully', async () => {
@@ -1672,6 +1673,7 @@ describe('modelStore selectors', () => {
         anthropic: null,
         google: null,
         ollama: null,
+        lmstudio: null,
         xai: null,
         deepseek: null,
         qwen: null,

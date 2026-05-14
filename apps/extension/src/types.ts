@@ -66,9 +66,9 @@ export type NativeMessageType =
   | 'DELETE_SCHEDULED_TASK';
 
 /** Internal-only messages between extension contexts — NOT sent to native host. */
-export type InternalMessageType = 'CHAT_CHUNK';
+export type InternalMessageType = 'CHAT_CHUNK' | 'PAYWALL_HIT';
 
-export type InternalMessage = ChatChunkMessage;
+export type InternalMessage = ChatChunkMessage | PaywallHitMessage;
 
 // Base message structure
 export interface BaseMessage {
@@ -313,6 +313,12 @@ export interface JobApplicationProfile {
 export interface JobAutofillOptions {
   platform?: 'auto' | 'greenhouse' | 'workday' | 'generic';
   autoSubmit?: boolean;
+  /**
+   * Must be set to `true` alongside `autoSubmit: true` to actually trigger
+   * automatic form submission. Without this flag the autofill pipeline runs
+   * in fill-only mode even when `autoSubmit` is set (EXT-AUTOSUBMIT-NO-CONFIRM).
+   */
+  autoSubmitConfirmed?: boolean;
   allowSubmitWithMissingRequired?: boolean;
   includeOptionalFields?: boolean;
   delayMs?: number;
@@ -452,6 +458,18 @@ export interface ChatChunkMessage {
   text: string;
   done: boolean;
   error?: string;
+}
+
+/**
+ * Paywall hit — sent from background to all extension views (popup, side panel)
+ * when the API returns 429 + { kind:'paywall', feature, requiredTier, reason }.
+ * Mirrors PaywallFeature / PaywallRequiredTier from providerStreamClient.ts.
+ */
+export interface PaywallHitMessage {
+  type: 'PAYWALL_HIT';
+  feature: string;
+  requiredTier: string;
+  reason?: string;
 }
 
 export interface ChatMessageResponse {

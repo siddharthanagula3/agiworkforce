@@ -18,10 +18,10 @@ export default function BillingPage() {
         {/* Credit Balance */}
         <TokenBalanceDisplay />
 
-        {/* Billing — plan, features, invoices, payment methods */}
+        {/* Billing - plan, features, invoices, payment methods */}
         <BillingDashboard />
 
-        {/* Usage Analytics — token usage trends, per-session breakdown, costs */}
+        {/* Usage Analytics - token usage trends, per-session breakdown, costs */}
         <TokenAnalyticsDashboard />
       </div>
     </div>

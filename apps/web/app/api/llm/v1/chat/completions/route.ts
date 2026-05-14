@@ -8,6 +8,7 @@ import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { getUserClient } from '@/lib/supabase-server';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
@@ -16,12 +17,23 @@ import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-hel
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { MODEL_TIER_REQUIREMENTS, canAccessModel } from '@/lib/model-tiers';
-import { validateEgressUrl, EgressPolicyError } from '@/lib/egress-policy';
+import { validateEgressUrl, validateUserImageUrl, EgressPolicyError } from '@/lib/egress-policy';
 import {
   getEconomyFallbackModels,
+  getSlotForModel,
   normalizeModelId,
   resolveAutoModeModel,
 } from '@agiworkforce/types';
+import type { RoutingSlot } from '@agiworkforce/types';
+import {
+  applyConversationContext,
+  classifyTaskLocally,
+  detectIndicScript,
+  estimateTokens,
+} from '@agiworkforce/routing';
+import type { RoutingTaskType } from '@agiworkforce/routing';
+import { assertQuota, reconcileUsage } from '@/lib/assert-quota';
+import type { QuotaFeature, QuotaOutcome } from '@/lib/assert-quota';
 
 const TTFT_SLO_TARGET_MS = Number(process.env['LLM_TTFT_SLO_TARGET_MS'] ?? 2500);
 const TTFT_SLO_BREACH_MS = Number(process.env['LLM_TTFT_SLO_BREACH_MS'] ?? 5000);
@@ -66,8 +78,12 @@ const ChatCompletionRequestSchema = z.object({
   n: z.number().int().positive().optional(),
   stream: z.boolean().optional().default(false),
   stop: z.union([z.string(), z.array(z.string())]).optional(),
-  max_tokens: z.number().int().positive().optional(),
-  max_completion_tokens: z.number().int().positive().optional(),
+  // SECURITY: cap output token requests so a single hobbyist can't run
+  // multi-million-token cost bombs against the upstream provider. 64 000 is
+  // generous for current frontier models (Opus 4.7 / GPT-5.4 max output) and
+  // tier-aware ceilings are enforced separately in `resolveAutoModel`.
+  max_tokens: z.number().int().positive().max(64000).optional(),
+  max_completion_tokens: z.number().int().positive().max(64000).optional(),
   presence_penalty: z.number().min(-2).max(2).optional(),
   frequency_penalty: z.number().min(-2).max(2).optional(),
   logit_bias: z
@@ -88,12 +104,15 @@ const ChatCompletionRequestSchema = z.object({
   seed: z.number().int().optional(),
   // Extended parameters for AGI Workforce
   web_search: z.boolean().optional(),
+  web_fetch: z.boolean().optional(),
   code_execution: z.boolean().optional(),
   thinking_mode: z.boolean().optional(),
   thinking: z
     .object({
       type: z.string(),
-      budget_tokens: z.number().int().positive().optional(),
+      // SECURITY: same cost-bomb concern as max_tokens. Anthropic's
+      // documented max for extended thinking is 32 000.
+      budget_tokens: z.number().int().positive().max(32000).optional(),
     })
     .optional(),
   effort: z.string().optional(),
@@ -103,10 +122,20 @@ const ChatCompletionRequestSchema = z.object({
 /**
  * Resolve auto model names to actual LLM model names.
  * Handles 'auto-economy', 'auto-balanced', 'auto-premium' mappings.
- * Tier-aware: hobby users get downgraded to economy-tier models for balanced/premium.
+ * Tier-aware AND task-aware: Pro/Max users get *_pro slot routing
+ * (e.g. coding -> coding_premium_pro -> claude-sonnet-4.6).
+ *
+ * The taskType comes from the heuristic classifier (packages/routing
+ * classifyTaskLocally + applyConversationContext) earlier in the route handler.
+ * resolveAutoModeModel from @agiworkforce/types now accepts the 3rd arg
+ * directly; callers who pass undefined fall back to the legacy auto-mode path.
  */
-function resolveAutoModel(model: string, subscriptionTier?: string): string {
-  return resolveAutoModeModel(model, subscriptionTier) ?? model;
+function resolveAutoModel(
+  model: string,
+  subscriptionTier?: string,
+  taskType?: RoutingTaskType,
+): string {
+  return resolveAutoModeModel(model, subscriptionTier, taskType) ?? model;
 }
 
 /**
@@ -118,7 +147,7 @@ function checkModelTierAccess(model: string, subscriptionTier: string): boolean 
   if (!allowed && subscriptionTier.toLowerCase() !== 'free') {
     logger.warn(
       { model: model.toLowerCase(), tier: subscriptionTier.toLowerCase() },
-      'Model access denied — not in economy or tier requirements map',
+      'Model access denied - not in economy or tier requirements map',
     );
   }
   return allowed;
@@ -221,16 +250,23 @@ async function handleChatCompletions(request: NextRequest) {
 
   const token = authHeader.substring(7);
 
-  // Verify user with Supabase — use service role key for server-side JWT verification
+  // Verify user with Supabase using service role for server-side JWT verification ONLY.
+  // SECURITY (WEB-RLS-BYPASS mitigation per docs/plans/UNIFIED_LAUNCH_PLAN.md §1):
+  // The service-role client below MUST NOT be reused for downstream DB reads — it
+  // bypasses RLS. All downstream DB access goes through dedicated services
+  // (SubscriptionService, CreditService, etc.) that scope queries by userId.
+  // Linting: this `supabaseAdmin` reference must not appear after line ~`auth.getUser` below.
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
   const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
 
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 
   const {
     data: { user },
     error: authError,
-  } = await supabase.auth.getUser(token);
+  } = await supabaseAdmin.auth.getUser(token);
 
   if (authError || !user) {
     return NextResponse.json(
@@ -245,11 +281,14 @@ async function handleChatCompletions(request: NextRequest) {
     );
   }
 
+  // RLS-bound client for all downstream DB ops on behalf of this user.
+  const userClient = getUserClient(token);
+
   // Generate unique request ID for idempotency (prevents duplicate charges on retry)
   const requestId = randomUUID();
 
   // Get subscription
-  const subscription = await SubscriptionService.getSubscription(user.id);
+  const subscription = await SubscriptionService.getSubscription(userClient, user.id);
 
   if (!subscription) {
     return NextResponse.json(
@@ -297,7 +336,7 @@ async function handleChatCompletions(request: NextRequest) {
     );
   }
 
-  // SECURITY: Also enforce actual body size limit after reading — Content-Length can be
+  // SECURITY: Also enforce actual body size limit after reading - Content-Length can be
   // absent, spoofed, or omitted with chunked transfer encoding.
   let body: unknown;
   try {
@@ -343,15 +382,138 @@ async function handleChatCompletions(request: NextRequest) {
 
   const chatRequest = validationResult.data;
 
-  // Resolve auto model names (auto-economy, auto-balanced, auto-premium) to actual models
-  // Tier-aware: hobby users get economy models even for balanced/premium
+  // WEB-MULTIMODAL-IMAGE-SSRF (red-team finding 2026-05): validate every
+  // user-supplied `image_url` BEFORE forwarding to upstream providers.
+  // Anthropic / OpenAI / Google fetch these URLs server-side and surface
+  // the response in the model output — so a request with
+  //     image_url: { url: "http://169.254.169.254/latest/meta-data/" }
+  // would have provider infrastructure fetch IMDS on the attacker's behalf.
+  // We refuse non-https, internal IPs (any encoding), userinfo-bearing,
+  // and obvious internal-service-port URLs. `data:` URLs pass through.
+  for (let mi = 0; mi < chatRequest.messages.length; mi++) {
+    const msg = chatRequest.messages[mi]!;
+    if (!Array.isArray(msg.content)) continue;
+    for (let pi = 0; pi < msg.content.length; pi++) {
+      const part = msg.content[pi]!;
+      if (part.type !== 'image_url') continue;
+      const imageUrl = part.image_url?.url;
+      if (typeof imageUrl !== 'string') continue;
+      try {
+        validateUserImageUrl(imageUrl);
+      } catch (err) {
+        if (err instanceof EgressPolicyError) {
+          logger.warn(
+            { userId: user.id, messageIndex: mi, partIndex: pi },
+            'Blocked user-supplied image URL (egress policy)',
+          );
+          return NextResponse.json(
+            {
+              error: {
+                message:
+                  'Image URL not permitted: must be https with a non-internal hostname, or a data: URL',
+                type: 'invalid_request_error',
+                code: 'image_url_blocked',
+                param: `messages.${mi}.content.${pi}.image_url.url`,
+              },
+            },
+            { status: 400 },
+          );
+        }
+        throw err;
+      }
+    }
+  }
+
+  // ----- Task-aware classifier (sync - Vercel async-cheap-condition-before-await) -----
+  // Run the heuristic classifier NOW, before any downstream await, so we never
+  // pay async overhead for a pure-CPU operation. classifyTaskLocally is
+  // synchronous and reads only frozen module-scope state (no DB, no network).
+  //
+  // Classifier input: the last user message in the conversation (most recent
+  // turn is the highest-signal input for routing). History is passed for
+  // token estimation and the 5-turn sticky-pivot conversation context.
+  const lastUserMsg = chatRequest.messages
+    .slice()
+    .reverse()
+    .find((m) => m.role === 'user');
+  const lastUserText = lastUserMsg ? extractTextContent(lastUserMsg.content) : '';
+
+  // Build RoutingMessage history for token estimation and sticky-pivot context.
+  // js-early-exit: only build history when there is more than one message.
+  const routingHistory = chatRequest.messages
+    .filter(
+      (
+        m,
+      ): m is (typeof chatRequest.messages)[number] & {
+        role: 'user' | 'assistant' | 'system' | 'tool';
+      } => ['user', 'assistant', 'system', 'tool'].includes(m.role),
+    )
+    .map((m) => ({
+      role: m.role as 'user' | 'assistant' | 'system' | 'tool',
+      content: extractTextContent(m.content),
+    }));
+
+  // Run the local heuristic classifier. The result includes `type` and `confidence`.
+  let classifierResult = classifyTaskLocally(lastUserText, routingHistory);
+
+  // Apply conversation context (sticky-pivot + long-context guard) only when
+  // the conversation has prior turns worth inspecting.
+  if (routingHistory.length > 1) {
+    const cumulativeTokens = routingHistory.reduce(
+      (sum, m) => sum + estimateTokens(m.content),
+      estimateTokens(lastUserText),
+    );
+    // Prior turns have no saved taskType in this path; pass current type as
+    // placeholder so sticky-pivot boost fires for consistent conversations.
+    const recentTaskTypes = routingHistory
+      .filter((m) => m.role === 'user')
+      .map(() => classifierResult.type);
+    classifierResult = applyConversationContext(classifierResult, {
+      cumulativeTokens,
+      recentTaskTypes,
+    });
+  }
+
+  const resolvedTaskType: RoutingTaskType = classifierResult.type;
+
+  // Indic script detection (Pool C overlay gate). Sarvam-M integration is
+  // pending an API key (spec §13 cross-phase India launch); for now we
+  // detect + log so analytics + future routing decisions have the signal.
+  // The detection runs on the latest user message only — sticky pivot is
+  // handled at the model level once Sarvam-M is wired.
+  const indicResult = detectIndicScript(lastUserText);
+  if (indicResult.isIndic && indicResult.dominantScript) {
+    logger.info(
+      {
+        userId: user.id,
+        requestId,
+        indicRatio: indicResult.indicRatio,
+        dominantScript: indicResult.dominantScript,
+        // model: chatRequest.model — at this point still pre-resolution.
+      },
+      '[indic-detect] non-Latin Indic script detected — Pool C candidate',
+    );
+  }
+  // ---- end classifier ----
+
+  // Resolve auto model names (auto-economy, auto-balanced, auto-premium) to actual models.
+  // Task-aware (Phase 2): Pro/Max/Enterprise tiers route to *_pro slots via
+  // resolvedTaskType (e.g. Pro + coding -> coding_premium_pro -> claude-sonnet-4.6).
+  // Legacy callers using non-auto model IDs pass through unchanged.
   const requestedModel = chatRequest.model;
-  chatRequest.model = resolveAutoModel(chatRequest.model, subscription.plan_tier);
+  chatRequest.model = resolveAutoModel(chatRequest.model, subscription.plan_tier, resolvedTaskType);
 
   // Log if auto model was resolved
   if (requestedModel !== chatRequest.model) {
     logger.info(
-      { userId: user.id, requestedModel, resolvedModel: chatRequest.model },
+      {
+        userId: user.id,
+        requestedModel,
+        resolvedModel: chatRequest.model,
+        taskType: resolvedTaskType,
+        taskConfidence: classifierResult.confidence,
+        tier: subscription.plan_tier,
+      },
       'Auto model resolved to actual model',
     );
   }
@@ -384,6 +546,95 @@ async function handleChatCompletions(request: NextRequest) {
 
   // Determine provider
   let provider = LLMProviderFactory.getProviderFromModel(chatRequest.model);
+
+  // ── Tier-aware quota gate ─────────────────────────────────────────────
+  // assertQuota enforces tier paywalls + Pro+ flagship daily caps + video
+  // and computer-use sub-quotas. Runs alongside the legacy CreditService
+  // flow below: if assertQuota returns paywall, we short-circuit; if it
+  // returns downgrade, we swap chatRequest.model to the equivalent
+  // non-flagship slot model and let CreditService re-cost the request.
+  // The slot is reverse-derived from the resolved model so flagship_*
+  // requests are recognised even when the caller passed an explicit model
+  // ID rather than auto-* mode.
+  const resolvedSlot: RoutingSlot | null = getSlotForModel(chatRequest.model);
+  const isFlagshipRequest =
+    resolvedSlot === 'flagship_coding_pro_plus' || resolvedSlot === 'flagship_general_pro_plus';
+
+  // Heuristic: estimate tokens for the quota gate. Re-estimated below for
+  // the cost calculator; keeping a single number here for the gate is fine
+  // because monthly caps are coarse-grained and daily flagship cap is in
+  // tokens (15K), not cents.
+  const quotaEstimateTokens = chatRequest.messages.reduce((sum, msg) => {
+    return sum + estimateTokens(extractTextContent(msg.content));
+  }, 0);
+
+  // Map our internal slot/feature back to QuotaFeature so sub-quota checks
+  // (image/video/computer_use) fire when relevant.
+  let quotaFeature: QuotaFeature = 'chat';
+  if (resolvedSlot === 'image_generation') {
+    quotaFeature = 'image';
+  } else if (resolvedSlot === 'video_generation' || resolvedSlot === 'video_generation_pro_plus') {
+    quotaFeature = 'video';
+  } else if (resolvedSlot === 'computer_use' || resolvedSlot === 'computer_use_premium') {
+    quotaFeature = 'computer_use';
+  }
+
+  let quotaOutcome: QuotaOutcome = { kind: 'ok' };
+  let quotaWarningHeader: string | null = null;
+  try {
+    quotaOutcome = await assertQuota({
+      userId: user.id,
+      token,
+      tier: subscription.plan_tier,
+      requestedTokens: quotaEstimateTokens,
+      feature: quotaFeature,
+      slot: resolvedSlot ?? undefined,
+    });
+  } catch (gateError) {
+    // Fail-open: if the gate errors, fall back to the legacy CreditService
+    // path so we don't take the route down on a transient DB hiccup.
+    logger.warn(
+      { userId: user.id, error: gateError instanceof Error ? gateError.message : gateError },
+      '[assertQuota] gate errored, falling back to credit-only flow',
+    );
+  }
+
+  if (quotaOutcome.kind === 'paywall') {
+    return NextResponse.json(
+      {
+        error: {
+          message: quotaOutcome.reason,
+          type: 'paywall',
+          code: 'tier_quota_exceeded',
+          paywall: {
+            feature: quotaOutcome.feature,
+            requiredTier: quotaOutcome.requiredTier,
+            reason: quotaOutcome.reason,
+          },
+        },
+      },
+      { status: 429 },
+    );
+  }
+
+  if (quotaOutcome.kind === 'downgrade') {
+    logger.info(
+      {
+        userId: user.id,
+        from: chatRequest.model,
+        to: quotaOutcome.modelOverride,
+        reason: quotaOutcome.reason,
+      },
+      '[assertQuota] downgrade applied',
+    );
+    chatRequest.model = quotaOutcome.modelOverride;
+    provider = LLMProviderFactory.getProviderFromModel(chatRequest.model);
+    usedFallback = true;
+    fallbackReason = quotaOutcome.reason;
+  } else if (quotaOutcome.kind === 'warn') {
+    quotaWarningHeader = quotaOutcome.warning;
+  }
+  // ───────────────────────────────────────────────────────────────────────
 
   // Egress policy: validate custom base URLs from env vars before making external requests.
   // Standard provider URLs (api.openai.com, api.anthropic.com, etc.) are already in the
@@ -471,7 +722,7 @@ async function handleChatCompletions(request: NextRequest) {
 
   // Ensure credits are allocated for the user's subscription period
   // This handles cases where subscription was created but credits weren't allocated
-  let existingBalance = await CreditService.getBalance(user.id);
+  let existingBalance = await CreditService.getBalance(userClient, user.id);
 
   logger.debug(
     {
@@ -503,7 +754,7 @@ async function handleChatCompletions(request: NextRequest) {
       if (accountId) {
         logger.info({ userId: user.id, accountId }, 'Credits allocated successfully');
         // Re-fetch balance after allocation
-        existingBalance = await CreditService.getBalance(user.id);
+        existingBalance = await CreditService.getBalance(userClient, user.id);
         logger.debug(
           {
             userId: user.id,
@@ -527,7 +778,7 @@ async function handleChatCompletions(request: NextRequest) {
   }
 
   // Check credits with detailed logging
-  const hasCredits = await CreditService.checkAvailable(user.id, estimatedCostCents);
+  const hasCredits = await CreditService.checkAvailable(userClient, user.id, estimatedCostCents);
 
   logger.debug(
     {
@@ -557,7 +808,11 @@ async function handleChatCompletions(request: NextRequest) {
         maxTokens,
       );
 
-      const hasFallbackCredits = await CreditService.checkAvailable(user.id, fallbackCostCents);
+      const hasFallbackCredits = await CreditService.checkAvailable(
+        userClient,
+        user.id,
+        fallbackCostCents,
+      );
 
       if (hasFallbackCredits) {
         usedFallback = true;
@@ -576,6 +831,7 @@ async function handleChatCompletions(request: NextRequest) {
   // Reserve credits with idempotency key (prevents double-charging on retry)
   const reservationKey = CreditService.generateIdempotencyKey(user.id, 'reservation', requestId);
   const reserveResult = await CreditService.deductCredits(
+    userClient,
     user.id,
     estimatedCostCents,
     `Credit reservation: ${provider}/${chatRequest.model}`,
@@ -594,10 +850,11 @@ async function handleChatCompletions(request: NextRequest) {
     return handleCreditError(reserveResult);
   }
 
-  // Convert messages to internal format
+  // Convert messages to internal format; preserve multimodal parts (images) separately
   const internalMessages = chatRequest.messages.map((msg) => ({
     role: msg.role as 'system' | 'user' | 'assistant' | 'tool',
     content: extractTextContent(msg.content),
+    multimodal_content: Array.isArray(msg.content) ? msg.content : undefined,
     tool_calls: msg.tool_calls,
     tool_call_id: msg.tool_call_id,
   }));
@@ -606,7 +863,7 @@ async function handleChatCompletions(request: NextRequest) {
   let resolvedTools = chatRequest.tools;
   const providerLower = provider.toLowerCase();
 
-  // Web Search — each provider has a native search tool
+  // Web Search - each provider has a native search tool
   if (chatRequest.web_search) {
     if (providerLower === 'anthropic') {
       resolvedTools = [
@@ -620,7 +877,15 @@ async function handleChatCompletions(request: NextRequest) {
     }
   }
 
-  // Code Execution — sandboxed Python/code execution
+  // Web Fetch - Anthropic's URL content reading tool
+  if (chatRequest.web_fetch && providerLower === 'anthropic') {
+    resolvedTools = [
+      ...(resolvedTools ?? []),
+      { type: 'web_fetch_20260209', name: 'web_fetch', allowed_callers: ['direct'] },
+    ];
+  }
+
+  // Code Execution - sandboxed Python/code execution
   if (chatRequest.code_execution) {
     if (providerLower === 'anthropic') {
       resolvedTools = [
@@ -634,6 +899,11 @@ async function handleChatCompletions(request: NextRequest) {
     }
   }
 
+  // Resolve thinking config: boolean shorthand → Anthropic thinking object
+  const thinkingConfig =
+    chatRequest.thinking ??
+    (chatRequest.thinking_mode ? { type: 'enabled', budget_tokens: 10000 } : undefined);
+
   const llmRequest = {
     model: chatRequest.model,
     messages: internalMessages,
@@ -643,7 +913,7 @@ async function handleChatCompletions(request: NextRequest) {
     tools: resolvedTools,
     tool_choice: chatRequest.tool_choice,
     thinking_mode: chatRequest.thinking_mode,
-    thinking: chatRequest.thinking,
+    thinking: thinkingConfig,
     effort: chatRequest.effort,
     usePromptCache: chatRequest.use_prompt_cache,
   };
@@ -716,7 +986,7 @@ async function handleChatCompletions(request: NextRequest) {
                     event.delta?.type === 'input_json_delta'
                   ) {
                     // Skip input_json_delta for server-managed tools (web_search, code_execution)
-                    // — the server executes these, so the client doesn't need the tool input
+                    // - the server executes these, so the client doesn't need the tool input
                     const blockType = activeBlockTypes.get(event.index ?? -1);
                     if (blockType === 'server_tool_use') {
                       continue;
@@ -778,21 +1048,53 @@ async function handleChatCompletions(request: NextRequest) {
                     event.content_block?.type === 'server_tool_use'
                   ) {
                     // Anthropic server-managed tool execution (e.g., web_search).
-                    // The server executes the tool — no client-side action needed.
+                    // The server executes the tool - no client-side action needed.
                     // Track block type and skip (the search happens server-side).
                     if (event.index !== undefined) {
                       activeBlockTypes.set(event.index, 'server_tool_use');
                     }
-                    // Emit a status indicator so the client can show "Searching the web..."
+                    // Emit a status indicator for any server-managed tool.
+                    // Use tool-appropriate status label: web_search → 'searching',
+                    // code_execution → 'executing', anything else → 'running'.
+                    const toolName: string = event.content_block.name || 'web_search';
+                    const toolStatus =
+                      toolName === 'code_execution'
+                        ? 'executing'
+                        : toolName === 'web_search'
+                          ? 'searching'
+                          : toolName === 'web_fetch'
+                            ? 'fetching'
+                            : 'running';
                     transformedEvent = {
                       choices: [
                         {
                           delta: {
                             x_tool_status: {
                               type: 'server_tool_use',
-                              name: event.content_block.name || 'web_search',
-                              status: 'searching',
+                              name: toolName,
+                              status: toolStatus,
                             },
+                          },
+                          index: 0,
+                        },
+                      ],
+                      model: responseModelName,
+                    };
+                  } else if (
+                    event.type === 'content_block_start' &&
+                    event.content_block?.type === 'code_execution_tool_result'
+                  ) {
+                    // Anthropic code execution result - contains stdout, stderr, and
+                    // optional image outputs (e.g., matplotlib plots as base64 PNGs).
+                    if (event.index !== undefined) {
+                      activeBlockTypes.set(event.index, 'code_execution_tool_result');
+                    }
+                    // Forward the result block as x_code_result for the client to render
+                    transformedEvent = {
+                      choices: [
+                        {
+                          delta: {
+                            x_code_result: event.content_block,
                           },
                           index: 0,
                         },
@@ -803,7 +1105,7 @@ async function handleChatCompletions(request: NextRequest) {
                     event.type === 'content_block_start' &&
                     event.content_block?.type === 'web_search_tool_result'
                   ) {
-                    // Anthropic web search results block — contains the search results
+                    // Anthropic web search results block - contains the search results
                     // that the model will use to generate its response with citations.
                     if (event.index !== undefined) {
                       activeBlockTypes.set(event.index, 'web_search_tool_result');
@@ -1045,6 +1347,7 @@ async function handleChatCompletions(request: NextRequest) {
                   requestId,
                 );
                 await CreditService.deductCredits(
+                  userClient,
                   userId,
                   costDifference,
                   `Credit adjustment (streaming): ${providerUsed}/${modelUsed}`,
@@ -1081,24 +1384,50 @@ async function handleChatCompletions(request: NextRequest) {
             );
             // Stream continues - user already received response
           }
+
+          // Tier-quota counter update — fire-and-forget. Mirrors the credit
+          // reconciliation but feeds token_credits.flagship_daily_tokens so
+          // the next request's assertQuota can enforce the Pro+ daily cap.
+          // Recompute here because `totalTokens` is scoped to the try block above.
+          const finalTotalTokens = inputTokens + outputTokens;
+          if (finalTotalTokens > 0) {
+            void reconcileUsage({
+              userId,
+              token,
+              actualTokens: finalTotalTokens,
+              feature: quotaFeature,
+              isFlagship: isFlagshipRequest,
+            }).catch((err) => {
+              logger.warn(
+                { userId, requestId, error: err instanceof Error ? err.message : err },
+                '[reconcileUsage] streaming counter update failed',
+              );
+            });
+          }
         },
       });
 
       const reconciledStream = stream.pipeThrough(transformStream);
 
+      const streamHeaders: Record<string, string> = {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        ...getCorsHeaders(request),
+        ...getSecurityHeaders(),
+      };
+      if (quotaWarningHeader) {
+        streamHeaders['X-Quota-Warning'] = quotaWarningHeader;
+      }
+
       return new NextResponse(reconciledStream, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          Connection: 'keep-alive',
-          ...getCorsHeaders(request),
-          ...getSecurityHeaders(),
-        },
+        headers: streamHeaders,
       });
     } catch (error) {
       // Refund on failure with idempotency key to prevent duplicate refunds
       const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
       await CreditService.deductCredits(
+        userClient,
         user.id,
         -estimatedCostCents,
         `Refund for failed streaming request: ${provider}/${chatRequest.model}`,
@@ -1160,6 +1489,7 @@ async function handleChatCompletions(request: NextRequest) {
     // Refund on failure with idempotency key to prevent duplicate refunds
     const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
     await CreditService.deductCredits(
+      userClient,
       user.id,
       -estimatedCostCents,
       `Refund for failed request: ${provider}/${chatRequest.model}`,
@@ -1231,6 +1561,7 @@ async function handleChatCompletions(request: NextRequest) {
         requestId,
       );
       await CreditService.deductCredits(
+        userClient,
         user.id,
         costDifference,
         costDifference > 0
@@ -1296,6 +1627,30 @@ async function handleChatCompletions(request: NextRequest) {
   // This preserves compatibility when older aliases are normalized internally.
   const responseModel = usedFallback ? chatRequest.model : requestedModel;
 
+  // Tier-quota counter update for non-stream path (mirrors stream path).
+  if (llmResponse.totalTokens > 0) {
+    void reconcileUsage({
+      userId: user.id,
+      token,
+      actualTokens: llmResponse.totalTokens,
+      feature: quotaFeature,
+      isFlagship: isFlagshipRequest,
+    }).catch((err) => {
+      logger.warn(
+        { userId: user.id, requestId, error: err instanceof Error ? err.message : err },
+        '[reconcileUsage] non-stream counter update failed',
+      );
+    });
+  }
+
+  const responseHeaders: Record<string, string> = {
+    ...getCorsHeaders(request),
+    ...getSecurityHeaders(),
+  };
+  if (quotaWarningHeader) {
+    responseHeaders['X-Quota-Warning'] = quotaWarningHeader;
+  }
+
   return NextResponse.json(
     {
       id: responseId,
@@ -1329,6 +1684,19 @@ async function handleChatCompletions(request: NextRequest) {
       x_agi_workforce: {
         provider,
         cost_cents: actualCostCents,
+        routing: {
+          task_type: resolvedTaskType,
+          task_confidence: classifierResult.confidence,
+          resolved_model: chatRequest.model,
+          slot: resolvedSlot,
+          quota_warning: quotaWarningHeader,
+          ...(indicResult.isIndic && indicResult.dominantScript
+            ? {
+                indic_dominant_script: indicResult.dominantScript,
+                indic_ratio: indicResult.indicRatio,
+              }
+            : {}),
+        },
         ...(usedFallback && {
           fallback: {
             original_model: originalModel,
@@ -1342,10 +1710,7 @@ async function handleChatCompletions(request: NextRequest) {
       },
     },
     {
-      headers: {
-        ...getCorsHeaders(request),
-        ...getSecurityHeaders(),
-      },
+      headers: responseHeaders,
     },
   );
 }

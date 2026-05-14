@@ -17,6 +17,7 @@ import { ChatInput } from '@/components/chat/ChatInput';
 import { ModelPickerSheet } from '@/components/model-picker/ModelPickerSheet';
 import { streamChat, type StreamDelta } from '@/services/streaming';
 import { getModelById, getProviderById, getDisplayName } from '@/lib/models';
+import { getProviderDefaultModel } from '@agiworkforce/types';
 import { colors } from '@/lib/theme';
 
 // ---------------------------------------------------------------------------
@@ -50,8 +51,10 @@ const initialStreamState = (): CompareStreamState => ({
 // Defaults
 // ---------------------------------------------------------------------------
 
-const DEFAULT_MODEL_A = 'claude-sonnet-4.6';
-const DEFAULT_MODEL_B = 'gpt-5.4';
+// MOB-HARDCODED-MODELS fix: derive defaults from models.json via getProviderDefaultModel
+// so these survive era changes without a code edit.
+const DEFAULT_MODEL_A = getProviderDefaultModel('anthropic') ?? 'anthropic/default';
+const DEFAULT_MODEL_B = getProviderDefaultModel('openai') ?? 'openai/default';
 
 // ---------------------------------------------------------------------------
 // Main Screen

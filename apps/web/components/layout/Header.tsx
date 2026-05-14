@@ -1,161 +1,43 @@
 'use client';
 
-import {
-  Bot,
-  ChevronDown,
-  Menu,
-  MessageSquare,
-  MonitorSmartphone,
-  Plug,
-  Users,
-  X,
-} from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { getSupabaseClient } from '../../services/supabase';
-import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { AgiMark } from '../agi/AgiMark';
 
-const featureItems = [
-  {
-    name: 'Multi-Model Chat',
-    href: '/features/ai-chat',
-    icon: MessageSquare,
-    description: '25+ providers, switch models mid-conversation',
-  },
-  {
-    name: 'AI Skills',
-    href: '/features/ai-skills',
-    icon: Users,
-    description: '150+ specialists across 23 categories',
-  },
-  {
-    name: 'MCP Plugins',
-    href: '/features/plugins',
-    icon: Plug,
-    description: 'Unlimited MCP servers — stdio, SSE, HTTP',
-  },
-  {
-    name: 'Computer Use',
-    href: '/features/tools',
-    icon: MonitorSmartphone,
-    description: 'Browser, keyboard, screen, files, terminal automation',
-  },
-  {
-    name: 'Agents',
-    href: '/features/agents',
-    icon: Bot,
-    description: 'Parallel autonomous execution with mobile oversight',
-  },
+/*
+ * Site-wide marketing header. Same exports as the previous editorial
+ * version so every page that imports `Header` continues to work — only
+ * the rendered output changes. Auth wiring (Supabase session) preserved.
+ */
+
+const NAV = [
+  { href: '/providers', label: 'Providers' },
+  { href: '/pricing', label: 'Pricing' },
+  { href: '/compare', label: 'Compare' },
+  { href: '/about', label: 'About' },
 ];
 
 export function Header() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isFeaturesOpen, setIsFeaturesOpen] = useState(false);
-  const [isMobileFeaturesOpen, setIsMobileFeaturesOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [focusedItemIndex, setFocusedItemIndex] = useState<number>(-1);
-  const featuresTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const menuItemRefs = useRef<(HTMLAnchorElement | null)[]>([]);
-
-  const handleFeaturesMouseEnter = useCallback(() => {
-    if (featuresTimeoutRef.current) {
-      clearTimeout(featuresTimeoutRef.current);
-      featuresTimeoutRef.current = null;
-    }
-    setIsFeaturesOpen(true);
-  }, []);
-
-  const handleFeaturesMouseLeave = useCallback(() => {
-    featuresTimeoutRef.current = setTimeout(() => {
-      setIsFeaturesOpen(false);
-    }, 150);
-  }, []);
-
-  const closeFeaturesDropdown = useCallback(() => {
-    setIsFeaturesOpen(false);
-    setFocusedItemIndex(-1);
-  }, []);
-
-  const handleTriggerKeyDown = useCallback(
-    (e: ReactKeyboardEvent<HTMLButtonElement>) => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setIsFeaturesOpen(true);
-        setFocusedItemIndex(0);
-        // Focus the first item after state update
-        requestAnimationFrame(() => {
-          menuItemRefs.current[0]?.focus();
-        });
-      } else if (e.key === 'Escape') {
-        closeFeaturesDropdown();
-      }
-    },
-    [closeFeaturesDropdown],
-  );
-
-  const handleMenuItemKeyDown = useCallback(
-    (e: ReactKeyboardEvent<HTMLAnchorElement>, index: number) => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        const next = Math.min(index + 1, featureItems.length - 1);
-        setFocusedItemIndex(next);
-        menuItemRefs.current[next]?.focus();
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        if (index === 0) {
-          // Return focus to trigger button
-          closeFeaturesDropdown();
-          (featuresRef.current?.querySelector('button') as HTMLButtonElement | null)?.focus();
-        } else {
-          const prev = index - 1;
-          setFocusedItemIndex(prev);
-          menuItemRefs.current[prev]?.focus();
-        }
-      } else if (e.key === 'Escape') {
-        closeFeaturesDropdown();
-        (featuresRef.current?.querySelector('button') as HTMLButtonElement | null)?.focus();
-      } else if (e.key === 'Tab') {
-        closeFeaturesDropdown();
-      }
-    },
-    [closeFeaturesDropdown],
-  );
-
-  const featuresRef = useRef<HTMLDivElement>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
-
     async function getUser() {
       const supabase = getSupabaseClient();
       const {
         data: { session },
       } = await supabase.auth.getSession();
       if (mounted) {
-        setUserEmail(session?.user?.email || null);
+        setUserEmail(session?.user?.email ?? null);
       }
     }
     getUser();
-
     return () => {
       mounted = false;
-      if (featuresTimeoutRef.current) {
-        clearTimeout(featuresTimeoutRef.current);
-      }
     };
   }, []);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    if (!isFeaturesOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (featuresRef.current && !featuresRef.current.contains(e.target as Node)) {
-        closeFeaturesDropdown();
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [isFeaturesOpen, closeFeaturesDropdown]);
 
   const handleSignOut = async () => {
     const supabase = getSupabaseClient();
@@ -163,232 +45,106 @@ export function Header() {
     window.location.href = '/';
   };
 
-  const navItems = [
-    { name: 'Security', href: '/security' },
-    { name: 'Pricing', href: '/pricing' },
-    { name: 'About', href: '/about' },
-    { name: 'FAQ', href: '/faq' },
-    { name: 'Contact', href: '/contact' },
-  ];
-
   return (
-    <header className="fixed top-0 w-full border-b border-white/10 bg-black/50 backdrop-blur-xl z-50">
-      <div className="container mx-auto flex h-16 items-center justify-between px-4">
-        <Link href="/" className="flex items-center gap-2 font-bold text-xl tracking-tighter">
-          <Bot className="h-6 w-6 text-[#c8892a]" />
-          <span>AGI Workforce</span>
+    <div data-design="agi" className="agi-chrome-band">
+      <header
+        className="agi-top"
+        style={{ position: 'relative', maxWidth: 1180, margin: '0 auto', padding: '22px 28px' }}
+      >
+        <Link href="/" className="agi-mark" aria-label="AGI Workforce home">
+          <AgiMark size={20} />
+          <span style={{ marginLeft: 8 }}>
+            agi<span className="agi-mark-dot">.</span>workforce
+          </span>
         </Link>
 
-        {/* Desktop nav */}
-        <nav className="hidden md:flex gap-6 text-sm font-medium text-zinc-400">
-          {/* Features dropdown */}
-          <div
-            ref={featuresRef}
-            className="relative"
-            onMouseEnter={handleFeaturesMouseEnter}
-            onMouseLeave={handleFeaturesMouseLeave}
-          >
-            <button
-              className="flex items-center gap-1 hover:text-white transition-colors"
-              onClick={() => setIsFeaturesOpen((prev) => !prev)}
-              onKeyDown={handleTriggerKeyDown}
-              aria-haspopup="menu"
-              aria-expanded={isFeaturesOpen}
-              aria-controls="features-dropdown"
-            >
-              Features
-              <ChevronDown
-                className={`h-3.5 w-3.5 transition-transform duration-200 ${isFeaturesOpen ? 'rotate-180' : ''}`}
-              />
-            </button>
-
-            {isFeaturesOpen && (
-              <div
-                id="features-dropdown"
-                role="menu"
-                className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[420px] rounded-xl border border-zinc-800 bg-black/90 p-4 shadow-2xl backdrop-blur-xl"
-              >
-                <div className="grid gap-1">
-                  {featureItems.map((item, index) => (
-                    <Link
-                      key={item.name}
-                      href={item.href}
-                      role="menuitem"
-                      ref={(el) => {
-                        menuItemRefs.current[index] = el;
-                      }}
-                      tabIndex={focusedItemIndex === index ? 0 : -1}
-                      className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-zinc-800/50 transition-colors group focus:outline-none focus:bg-zinc-800/50"
-                      onClick={() => {
-                        if (featuresTimeoutRef.current) {
-                          clearTimeout(featuresTimeoutRef.current);
-                          featuresTimeoutRef.current = null;
-                        }
-                        closeFeaturesDropdown();
-                      }}
-                      onKeyDown={(e) => handleMenuItemKeyDown(e, index)}
-                    >
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#c8892a]/10">
-                        <item.icon className="h-4 w-4 text-[#c8892a]" />
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-white">{item.name}</div>
-                        <div className="text-xs text-zinc-400">{item.description}</div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {navItems.map((item) => (
-            <Link key={item.name} href={item.href} className="hover:text-white transition-colors">
-              {item.name}
-            </Link>
-          ))}
-          {userEmail && (
-            <Link href="/chat" className="hover:text-white transition-colors">
-              Chat
-            </Link>
-          )}
-        </nav>
-
-        <div className="hidden md:flex items-center gap-4">
-          {userEmail ? (
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-zinc-400 hidden lg:block">{userEmail}</span>
-              <button
-                onClick={handleSignOut}
-                className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
-              >
-                Sign Out
-              </button>
-              <Link
-                href="/chat"
-                className="rounded-md bg-[#c8892a] px-4 py-2 text-sm font-semibold text-[#09090b] hover:bg-[#d4993a] transition-colors"
-              >
-                Chat
-              </Link>
-            </div>
-          ) : (
-            <>
-              <Link
-                href="/login"
-                className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
-              >
-                Sign In
-              </Link>
-              <Link
-                href="/download"
-                className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200 transition-colors"
-              >
-                Download Free
-              </Link>
-            </>
-          )}
-        </div>
-
-        {/* Mobile menu toggle */}
-        <button
-          className="md:hidden text-zinc-400 hover:text-white"
-          onClick={() => setIsMenuOpen(!isMenuOpen)}
-          aria-label={isMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
-          aria-expanded={isMenuOpen}
-          aria-controls="mobile-menu"
+        <nav
+          className="agi-top-right"
+          aria-label="Primary"
+          style={{ display: 'flex', alignItems: 'center', gap: 24 }}
         >
-          {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-        </button>
-      </div>
-
-      {/* Mobile menu */}
-      {isMenuOpen && (
-        <div id="mobile-menu" className="md:hidden border-t border-white/10 bg-black p-4">
-          <nav className="flex flex-col gap-4 text-sm font-medium text-zinc-400">
-            {/* Mobile features expandable */}
-            <div>
-              <button
-                className="flex items-center gap-1 hover:text-white transition-colors w-full text-left"
-                onClick={() => setIsMobileFeaturesOpen((prev) => !prev)}
-                aria-expanded={isMobileFeaturesOpen}
-                aria-controls="mobile-features-menu"
-              >
-                Features
-                <ChevronDown
-                  className={`h-3.5 w-3.5 transition-transform duration-200 ${isMobileFeaturesOpen ? 'rotate-180' : ''}`}
-                />
-              </button>
-              {isMobileFeaturesOpen && (
-                <div id="mobile-features-menu" className="mt-2 ml-4 flex flex-col gap-2">
-                  {featureItems.map((item) => (
-                    <Link
-                      key={item.name}
-                      href={item.href}
-                      className="flex items-center gap-2 text-xs text-zinc-500 hover:text-white transition-colors py-1"
-                      onClick={() => {
-                        setIsMenuOpen(false);
-                        setIsMobileFeaturesOpen(false);
-                      }}
-                    >
-                      <item.icon className="h-3.5 w-3.5 text-blue-400" />
-                      {item.name}
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {navItems.map((item) => (
-              <Link
-                key={item.name}
-                href={item.href}
-                className="hover:text-white transition-colors"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                {item.name}
+          {/* Desktop nav links */}
+          <span className="agi-top-nav-desktop" style={{ display: 'inline-flex', gap: 24 }}>
+            {NAV.map((item) => (
+              <Link key={item.href} href={item.href} className="agi-top-link">
+                {item.label}
               </Link>
             ))}
-            {userEmail && (
-              <Link
-                href="/chat"
-                className="hover:text-white transition-colors"
-                onClick={() => setIsMenuOpen(false)}
-              >
+          </span>
+
+          {userEmail ? (
+            <>
+              <Link href="/chat" className="agi-top-link">
                 Chat
               </Link>
-            )}
-            <hr className="border-white/10 my-2" />
-            {userEmail ? (
-              <>
-                <span className="text-zinc-500">{userEmail}</span>
-                <button
-                  onClick={handleSignOut}
-                  className="text-left hover:text-white transition-colors"
-                >
-                  Sign Out
-                </button>
-              </>
-            ) : (
-              <>
-                <Link
-                  href="/login"
-                  className="hover:text-white transition-colors"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Sign In
-                </Link>
-                <Link
-                  href="/download"
-                  className="text-blue-400 hover:text-blue-300 transition-colors"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Download Free
-                </Link>
-              </>
-            )}
-          </nav>
-        </div>
-      )}
-    </header>
+              <button type="button" onClick={handleSignOut} className="agi-top-link">
+                Sign out
+              </button>
+            </>
+          ) : (
+            <Link href="/login" className="agi-top-link">
+              Sign in
+            </Link>
+          )}
+          <Link href="/download" className="agi-top-cta">
+            Install
+          </Link>
+
+          {/* Mobile menu toggle */}
+          <button
+            type="button"
+            className="agi-top-link agi-top-mobile-toggle"
+            aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={isMenuOpen}
+            onClick={() => setIsMenuOpen((v) => !v)}
+            style={{ display: 'none' }}
+          >
+            {isMenuOpen ? '×' : '☰'}
+          </button>
+        </nav>
+
+        {/* Mobile menu (hidden by default; shown when toggled) */}
+        {isMenuOpen && (
+          <div
+            className="agi-top-mobile-menu"
+            style={{
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              right: 0,
+              background: 'var(--agi-bg-2)',
+              borderTop: '1px solid var(--agi-rule)',
+              padding: '16px 28px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              zIndex: 50,
+            }}
+          >
+            {NAV.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="agi-top-link"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        )}
+
+        <style jsx>{`
+          @media (max-width: 760px) {
+            :global(.agi-top-nav-desktop) {
+              display: none !important;
+            }
+            :global(.agi-top-mobile-toggle) {
+              display: inline-flex !important;
+            }
+          }
+        `}</style>
+      </header>
+    </div>
   );
 }

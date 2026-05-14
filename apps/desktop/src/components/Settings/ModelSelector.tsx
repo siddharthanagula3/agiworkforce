@@ -142,6 +142,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       anthropic: [],
       google: [],
       ollama: [],
+      lmstudio: [],
       xai: [],
       deepseek: [],
       qwen: [],

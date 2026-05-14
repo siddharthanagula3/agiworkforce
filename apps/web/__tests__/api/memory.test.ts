@@ -31,17 +31,10 @@ vi.mock('@/utils/env', () => ({
   }),
 }));
 
-// Mock cookies
+// Mock cookies — reset implementation in beforeEach because vitest config
+// `mockReset: true` clears vi.fn() implementations between tests.
 vi.mock('next/headers', () => ({
-  cookies: vi.fn().mockResolvedValue({
-    get: vi.fn((name: string) => {
-      if (name === 'sb-test-auth-token') {
-        return { value: 'mock-cookie-token' };
-      }
-      return undefined;
-    }),
-    set: vi.fn(),
-  }),
+  cookies: vi.fn(),
 }));
 
 const mockUser = {
@@ -58,51 +51,86 @@ const mockMemoryRow = {
   updated_at: '2024-06-01T00:00:00Z',
 };
 
-// Mock Supabase SSR client (cookie-based auth)
-vi.mock('@supabase/ssr', () => ({
-  createServerClient: vi.fn(() => ({
-    auth: {
-      getUser: vi.fn().mockResolvedValue({
-        data: { user: mockUser },
-        error: null,
-      }),
-    },
-  })),
-}));
-
-// Mock Supabase JS client (Bearer token auth + service-role client)
+// Mock Supabase clients.
+// NOTE: vitest config sets `mockReset: true`, which resets `vi.fn()` instances
+// between every test. The mocks therefore need their implementations
+// re-applied in beforeEach so that each test starts from a known-good state
+// AND individual tests can still call `.mockReturnValueOnce(...)`.
 const mockSelect = vi.fn();
 const mockInsert = vi.fn();
 const mockFrom = vi.fn();
 
+vi.mock('@supabase/ssr', () => ({
+  createServerClient: vi.fn(),
+}));
+
 vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    auth: {
-      getUser: vi.fn().mockResolvedValue({
-        data: { user: mockUser },
-        error: null,
-      }),
-    },
+  createClient: vi.fn(),
+}));
+
+// Bypass the module-level cached _serviceClient in supabase-server. Without
+// this, the first test's createClient() result is cached forever and the
+// auth.getUser vi.fn inside it goes stale after `mockReset: true` clears
+// implementations between tests. Each helper returns a client whose
+// auth.getUser implementation is configurable in beforeEach so individual
+// tests can call `.mockResolvedValueOnce(...)` to simulate auth failures.
+const mockServiceGetUser = vi.fn();
+const mockUserClientGetUser = vi.fn();
+vi.mock('@/lib/supabase-server', () => ({
+  getServiceClient: () => ({
+    auth: { getUser: mockServiceGetUser },
     from: mockFrom,
-  })),
+  }),
+  getUserClient: () => ({
+    auth: { getUser: mockUserClientGetUser },
+    from: mockFrom,
+  }),
 }));
 
 // Import after all mocks are registered
 import { GET, POST } from '@/app/api/memory/route';
 
 describe('Memory API', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
 
+    // Re-establish default Supabase client impls (cleared by `mockReset: true`).
+    const { cookies } = await import('next/headers');
+    vi.mocked(cookies).mockResolvedValue({
+      get: vi.fn((name: string) =>
+        name === 'sb-test-auth-token' ? { value: 'mock-cookie-token' } : undefined,
+      ),
+      set: vi.fn(),
+    } as never);
+    const { createServerClient } = await import('@supabase/ssr');
+    const { createClient } = await import('@supabase/supabase-js');
+    vi.mocked(createServerClient).mockReturnValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: mockUser }, error: null }),
+      },
+      // Cookie-auth path returns the SSR client itself as `userDb`, so it
+      // must expose .from() the same way the JS client does.
+      from: mockFrom,
+    } as never);
+    vi.mocked(createClient).mockReturnValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: mockUser }, error: null }),
+      },
+      from: mockFrom,
+    } as never);
+    // Default: both supabase-server helpers authenticate the user successfully.
+    mockServiceGetUser.mockResolvedValue({ data: { user: mockUser }, error: null });
+    mockUserClientGetUser.mockResolvedValue({ data: { user: mockUser }, error: null });
+
     // Default: service-role client returns a list of memories for GET
+    // Route is RLS-bound, so it now does ONE .eq('is_deleted', false) — the
+    // user_id filter is enforced by Postgres RLS, not in code.
     mockSelect.mockReturnValue({
       eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          order: vi.fn().mockReturnValue({
-            range: vi.fn().mockResolvedValue({
-              data: [mockMemoryRow],
-              error: null,
-            }),
+        order: vi.fn().mockReturnValue({
+          range: vi.fn().mockResolvedValue({
+            data: [mockMemoryRow],
+            error: null,
           }),
         }),
       }),
@@ -157,12 +185,10 @@ describe('Memory API', () => {
     it('should return 200 with empty array when user has no memories', async () => {
       mockSelect.mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            order: vi.fn().mockReturnValue({
-              range: vi.fn().mockResolvedValue({
-                data: [],
-                error: null,
-              }),
+          order: vi.fn().mockReturnValue({
+            range: vi.fn().mockResolvedValue({
+              data: [],
+              error: null,
             }),
           }),
         }),
@@ -182,12 +208,10 @@ describe('Memory API', () => {
     it('should return 200 with empty array when data is null', async () => {
       mockSelect.mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            order: vi.fn().mockReturnValue({
-              range: vi.fn().mockResolvedValue({
-                data: null,
-                error: null,
-              }),
+          order: vi.fn().mockReturnValue({
+            range: vi.fn().mockResolvedValue({
+              data: null,
+              error: null,
             }),
           }),
         }),
@@ -224,16 +248,11 @@ describe('Memory API', () => {
     });
 
     it('should return 401 when Bearer token is invalid', async () => {
-      const { createClient } = await import('@supabase/supabase-js');
-      vi.mocked(createClient).mockReturnValueOnce({
-        auth: {
-          getUser: vi.fn().mockResolvedValue({
-            data: { user: null },
-            error: { message: 'Invalid token' },
-          }),
-        },
-        from: mockFrom,
-      } as never);
+      // Override the service client (used to verify the JWT in the Bearer path).
+      mockServiceGetUser.mockResolvedValueOnce({
+        data: { user: null },
+        error: { message: 'Invalid token' },
+      });
 
       const request = new NextRequest('http://localhost/api/memory', {
         method: 'GET',
@@ -246,7 +265,7 @@ describe('Memory API', () => {
       expect(response.status).toBe(401);
 
       const data = await response.json();
-      expect(data.error.message).toMatch(/Invalid token|[Uu]nauthorized/);
+      expect(data.error.message).toMatch(/Authentication required|UNAUTHORIZED/);
     });
 
     it('should authenticate with valid Bearer token', async () => {
@@ -264,12 +283,10 @@ describe('Memory API', () => {
     it('should return 500 when database query fails', async () => {
       mockSelect.mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            order: vi.fn().mockReturnValue({
-              range: vi.fn().mockResolvedValue({
-                data: null,
-                error: { message: 'DB connection failed' },
-              }),
+          order: vi.fn().mockReturnValue({
+            range: vi.fn().mockResolvedValue({
+              data: null,
+              error: { message: 'DB connection failed' },
             }),
           }),
         }),

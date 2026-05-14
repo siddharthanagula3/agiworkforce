@@ -21,6 +21,7 @@ use crate::skills;
 use crate::subagent;
 use crate::teams;
 use crate::tools;
+use futures_util::future::join_all;
 
 // ---------------------------------------------------------------------------
 // Tool definitions (native API JSON Schema)
@@ -113,6 +114,30 @@ pub struct AgentSession {
     pub max_turns: Option<usize>,
     /// Plan mode: only read-only tools allowed (read_file, search_files, list_directory, web_search, web_fetch).
     pub plan_mode: bool,
+    /// Sprint B4: tracked permission mode for the session. Mirrors
+    /// `--mode {plan|default|...}` from the CLI and the 3-state `/plan`
+    /// command at runtime. The mutating-tool gate uses this together
+    /// with `plan_approved` to decide whether to allow a tool call.
+    pub permission_mode: crate::cli_options::PermissionMode,
+    /// Sprint B4: real plan mode -- true once the user has approved the
+    /// current plan, unlocking mutating tools. Independent of `plan_mode`
+    /// (the read-only-tool gate) so headless flows can flip approval
+    /// without touching that gate.
+    pub plan_approved: bool,
+    /// Sprint B4: latest plan written by the model via `update_plan`.
+    /// Cleared on `/plan reject` and `/clear`.
+    pub current_plan: Option<crate::plan_mode::Plan>,
+    /// Sprint B4: path of the on-disk markdown rendering of the current
+    /// plan (`~/.agiworkforce/plans/<session-id>.md`). Set by the
+    /// `update_plan` tool handler.
+    pub current_plan_path: Option<std::path::PathBuf>,
+    /// Sprint B4: queued one-shot feedback string from `/plan reject`. The
+    /// next user-message send prepends this to the prompt so the model
+    /// sees why the plan was rejected, then clears the field.
+    pub plan_rejection_feedback: Option<String>,
+    /// Sprint B4: in headless mode, auto-approve the first complete plan
+    /// the model writes via `update_plan`. Set from `--auto-approve-plan`.
+    pub auto_approve_plan: bool,
     /// Skip all tool confirmation prompts.
     pub skip_permissions: bool,
     /// Auto-approve safe tools (reads, searches) — skip confirmation for them.
@@ -152,6 +177,14 @@ pub struct TurnResult {
     pub response: String,
     pub input_tokens: u32,
     pub output_tokens: u32,
+    /// Tokens read from prompt cache during this turn (Anthropic only).
+    /// Already counted inside `input_tokens` for billing — surface separately
+    /// for telemetry and the cost HUD.
+    pub cache_read_tokens: u32,
+    /// Tokens written to prompt cache during this turn (Anthropic only).
+    /// Already counted inside `input_tokens` for billing — surface separately
+    /// for telemetry and the cost HUD.
+    pub cache_creation_tokens: u32,
     /// True when the request was routed through a subscription (Copilot, ChatGPT Plus).
     pub via_subscription: bool,
 }
@@ -261,6 +294,12 @@ impl AgentSession {
             mcp_manager: None,
             max_turns: None,
             plan_mode: false,
+            permission_mode: crate::cli_options::PermissionMode::Default,
+            plan_approved: false,
+            current_plan: None,
+            current_plan_path: None,
+            plan_rejection_feedback: None,
+            auto_approve_plan: false,
             skip_permissions: false,
             auto_approve_safe: false,
             quiet: false,
@@ -386,6 +425,87 @@ impl AgentSession {
         self.turn_count = 0;
         self.recent_tool_calls.clear();
         self.loop_strike_count = 0;
+        // Sprint B4: a fresh conversation starts with a fresh plan.
+        self.reset_plan_state();
+    }
+
+    /// Sprint B4: clear all four plan-mode state fields. Called from
+    /// `/clear` and `/plan off`. Does NOT touch `plan_mode` (the read-only
+    /// tool gate) -- the slash command owns that.
+    pub fn reset_plan_state(&mut self) {
+        self.plan_approved = false;
+        self.current_plan = None;
+        self.current_plan_path = None;
+        self.plan_rejection_feedback = None;
+    }
+
+    /// Sprint B4: handle a model `update_plan` tool call. Parses the args,
+    /// stores the plan on the session, persists to disk under
+    /// `~/.agiworkforce/plans/<session-id>.md`, and -- if
+    /// `auto_approve_plan` is set -- flips the approval bit so headless
+    /// flows (`-p --mode plan --auto-approve-plan`) proceed end-to-end
+    /// without a prompt. Returns the JSON result the model should see.
+    pub fn handle_update_plan(&mut self, args: &serde_json::Value) -> serde_json::Value {
+        let parsed: Result<crate::plan_mode::Plan, _> = serde_json::from_value(args.clone());
+        let plan = match parsed {
+            Ok(p) => p,
+            Err(e) => {
+                return serde_json::json!({
+                    "ok": false,
+                    "error": "invalid_arguments",
+                    "message": format!("update_plan: failed to parse arguments: {e}")
+                });
+            }
+        };
+
+        let session_id = self
+            .managed_session_id()
+            .map(str::to_string)
+            .unwrap_or_else(|| "ephemeral".to_string());
+
+        // Persist to disk; non-fatal if the home dir is unavailable.
+        let path_result = plan.write_to_disk(&session_id);
+        match &path_result {
+            Ok(p) => self.current_plan_path = Some(p.clone()),
+            Err(e) => {
+                eprintln!(
+                    "  warning: could not persist plan to disk: {e:#}"
+                );
+            }
+        }
+
+        let was_approved = self.plan_approved;
+        self.current_plan = Some(plan);
+
+        // Headless auto-approval -- only on the first plan write so that
+        // explicit `/plan reject` from a follow-up still requires the
+        // model to revise.
+        if self.auto_approve_plan && !was_approved {
+            self.plan_approved = true;
+        }
+
+        let path_str = self
+            .current_plan_path
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "<unwritten>".to_string());
+
+        let message = if matches!(self.permission_mode, crate::cli_options::PermissionMode::Plan)
+            && !self.plan_approved
+        {
+            "plan written; awaiting user approval. Do not call mutating tools yet."
+        } else if was_approved {
+            "plan updated"
+        } else {
+            "plan written"
+        };
+
+        serde_json::json!({
+            "ok": true,
+            "message": message,
+            "path": path_str,
+            "plan_approved": self.plan_approved
+        })
     }
 
     /// Enable managed session persistence for this session.
@@ -561,6 +681,9 @@ impl AgentSession {
             self.fast_mode = false;
         } else {
             // Enable fast mode: save current model and switch
+            // Documented fast-mode fallback (rule-models-json exception): used only
+            // when the caller provides no explicit fast_model. Caller is expected to
+            // pass a catalog-resolved slug; this literal is the last-resort default.
             let target = fast_model
                 .unwrap_or("claude-haiku-4-5-20251001")
                 .to_string();
@@ -621,6 +744,32 @@ impl AgentSession {
         let usage = compaction::context_usage(&self.messages, &self.model);
         if usage.fraction > 0.90 {
             let target = usage.limit_tokens * 70 / 100;
+            // Sprint S4b: PreCompact hook — let handlers observe / annotate
+            // before the transcript shrinks. Currently advisory; future
+            // extensions may use `{"decision": "block"}` to skip compaction
+            // (with the caller responsible for handling near-overflow state).
+            let pre_hcfg = self.hooks_config.clone();
+            hooks::run_hooks(
+                &pre_hcfg,
+                hooks::HookEvent::PreCompact,
+                &hooks::HookInput {
+                    event: "PreCompact".to_string(),
+                    session_id: None,
+                    model: Some(self.model.clone()),
+                    tool_name: None,
+                    tool_args: None,
+                    tool_output: None,
+                    message: Some(format!(
+                        "context_usage_before_compact: {}/{} tokens ({}%)",
+                        usage.used_tokens,
+                        usage.limit_tokens,
+                        (usage.fraction * 100.0) as u32
+                    )),
+                    tool_execution: None,
+                },
+            )
+            .await;
+
             self.messages = compaction::compact_messages(&self.messages, target);
             let new_usage = compaction::context_usage(&self.messages, &self.model);
             eprintln!(
@@ -631,6 +780,29 @@ impl AgentSession {
                 )
                 .dimmed()
             );
+
+            // Sprint S4b: PostCompact hook — observe the new state for
+            // metrics / logging / persistence side effects.
+            hooks::run_hooks(
+                &pre_hcfg,
+                hooks::HookEvent::PostCompact,
+                &hooks::HookInput {
+                    event: "PostCompact".to_string(),
+                    session_id: None,
+                    model: Some(self.model.clone()),
+                    tool_name: None,
+                    tool_args: None,
+                    tool_output: None,
+                    message: Some(format!(
+                        "context_usage_after_compact: {}/{} tokens ({}%)",
+                        new_usage.used_tokens,
+                        new_usage.limit_tokens,
+                        (new_usage.fraction * 100.0) as u32
+                    )),
+                    tool_execution: None,
+                },
+            )
+            .await;
         } else if usage.near_limit {
             eprintln!(
                 "  {}",
@@ -638,8 +810,37 @@ impl AgentSession {
             );
         }
 
-        // Add user message
-        self.messages.push(Message::text("user", user_input));
+        // Add user message. Sprint B4: prepend two transient blocks when
+        // applicable -- (1) a one-shot rejection feedback if `/plan
+        // reject` queued one, (2) a per-turn plan-mode reminder so the
+        // model knows mutating tools require `update_plan` + approval.
+        // Both prepend to the user-visible input so the model sees them
+        // alongside the actual question. The reminder is re-added every
+        // turn (not baked into the system prompt) because plan mode and
+        // approval state can flip mid-conversation via `/plan`.
+        let mut prefix = String::new();
+        if let Some(feedback) = self.plan_rejection_feedback.take() {
+            prefix.push_str(&format!(
+                "USER REJECTED THE PREVIOUS PLAN. FEEDBACK: {feedback}\n\n"
+            ));
+        }
+        if matches!(self.permission_mode, crate::cli_options::PermissionMode::Plan)
+            && !self.plan_approved
+        {
+            prefix.push_str(
+                "[plan-mode] You must call the `update_plan` tool with a complete, ordered plan \
+of steps before any mutating action (run_command, edit_file, write_file, apply_patch, MCP tools, \
+task subagents). The user reviews and approves the plan; only then can you execute mutating \
+tools. If your plan is rejected, the rejection feedback will be prefixed to the next user \
+message -- revise and call `update_plan` again.\n\n"
+            );
+        }
+        let effective_input = if prefix.is_empty() {
+            user_input.to_string()
+        } else {
+            format!("{prefix}{user_input}")
+        };
+        self.messages.push(Message::text("user", &effective_input));
 
         // Save checkpoint for /rewind
         self.save_checkpoint();
@@ -668,6 +869,48 @@ impl AgentSession {
             .iter()
             .map(|tool_definition| tool_definition.name.as_str())
             .collect::<std::collections::HashSet<_>>();
+
+        // Sprint S4b: BeforePromptBuild + BeforeModelResolve.
+        // Run as a pair right before the first LLM call. BeforePromptBuild
+        // gives hooks a chance to inject context (logged for observation in
+        // v1; future versions can use `additional_context` to mutate
+        // self.messages). BeforeModelResolve is the latest deterministic
+        // override point for the model id before bytes leave the agent.
+        let pre_call_hcfg = self.hooks_config.clone();
+        hooks::run_hooks(
+            &pre_call_hcfg,
+            hooks::HookEvent::BeforePromptBuild,
+            &hooks::HookInput {
+                event: "BeforePromptBuild".to_string(),
+                session_id: None,
+                model: Some(self.model.clone()),
+                tool_name: None,
+                tool_args: None,
+                tool_output: None,
+                message: Some(format!(
+                    "messages_count={} tools_count={}",
+                    self.messages.len(),
+                    tool_defs.len()
+                )),
+                tool_execution: None,
+            },
+        )
+        .await;
+        hooks::run_hooks(
+            &pre_call_hcfg,
+            hooks::HookEvent::BeforeModelResolve,
+            &hooks::HookInput {
+                event: "BeforeModelResolve".to_string(),
+                session_id: None,
+                model: Some(self.model.clone()),
+                tool_name: None,
+                tool_args: None,
+                tool_output: None,
+                message: None,
+                tool_execution: None,
+            },
+        )
+        .await;
 
         // --- First LLM call (with user's streaming callback) ---
         // Demo hook: if the operator passed `--demo`, synthesize a 429 on the
@@ -778,6 +1021,8 @@ impl AgentSession {
                                         tool_calls: vec![],
                                         input_tokens: 0,
                                         output_tokens: 0,
+                                        cache_read_input_tokens: 0,
+                                        cache_creation_input_tokens: 0,
                                         via_subscription: true,
                                         stop_reason: Some("end_turn".to_string()),
                                     })
@@ -817,6 +1062,8 @@ impl AgentSession {
 
         let mut total_input = result.input_tokens;
         let mut total_output = result.output_tokens;
+        let mut total_cache_read = result.cache_read_input_tokens;
+        let mut total_cache_creation = result.cache_creation_input_tokens;
         let via_subscription = result.via_subscription;
         let mut final_response = result.text;
         let mut current_tool_calls = result.tool_calls;
@@ -901,9 +1148,44 @@ impl AgentSession {
             let hcfg = self.hooks_config.clone();
             let mut result_blocks = Vec::new();
 
-            // Partition tool calls: task tools run concurrently, others sequentially
-            let (task_calls, other_calls): (Vec<_>, Vec<_>) =
-                current_tool_calls.iter().partition(|tc| tc.name == "task");
+            // Phase 6/7: classify tools for the concurrent batch.
+            // A tool is eligible for the concurrent built-in batch when:
+            //   1. It's a built-in tool (not MCP, not team — those need
+            //      access to shared mutable session state).
+            //   2. Its `ToolDefinition.is_concurrency_safe` is true (currently
+            //      the read-only built-ins: read_file, search_files,
+            //      list_directory, web_search, web_fetch, grep_files, tool_search).
+            //   3. The session is in non-prompting mode (`skip_permissions`).
+            //      Otherwise the dialoguer confirmation prompts would
+            //      interleave on the terminal.
+            let concurrency_safe_names: std::collections::HashSet<String> = tool_defs
+                .iter()
+                .filter(|t| t.is_concurrency_safe)
+                .map(|t| t.name.clone())
+                .collect();
+            let concurrent_eligible = |name: &str| -> bool {
+                self.skip_permissions
+                    && concurrency_safe_names.contains(name)
+                    && !is_team_tool(name)
+                    && !name.starts_with("mcp_")
+                    && name != "task"
+            };
+
+            // Three-way partition: task tools (concurrent via SubagentManager),
+            // concurrent built-ins (parallel via join_all), everything else
+            // (sequential).
+            let task_calls: Vec<_> = current_tool_calls
+                .iter()
+                .filter(|tc| tc.name == "task")
+                .collect();
+            let concurrent_calls: Vec<_> = current_tool_calls
+                .iter()
+                .filter(|tc| tc.name != "task" && concurrent_eligible(&tc.name))
+                .collect();
+            let other_calls: Vec<_> = current_tool_calls
+                .iter()
+                .filter(|tc| tc.name != "task" && !concurrent_eligible(&tc.name))
+                .collect();
 
             // Spawn all task tool calls concurrently via subagent manager
             let mut task_spawn_results = Vec::new();
@@ -917,11 +1199,30 @@ impl AgentSession {
                     continue;
                 }
 
+                // Sprint B4: block subagent spawns in unapproved plan mode
+                // for the same reason we block bash/edit/write -- a task
+                // subagent has the full mutating tool surface.
+                if matches!(self.permission_mode, crate::cli_options::PermissionMode::Plan)
+                    && !self.plan_approved
+                {
+                    let payload = serde_json::json!({
+                        "ok": false,
+                        "error": "plan_mode_unapproved",
+                        "message": "Plan mode is active and the current plan has not been approved. Call `update_plan` first; subagent tasks are blocked until the user approves."
+                    });
+                    result_blocks.push(ContentBlock::ToolResult {
+                        tool_use_id: tc.id.clone(),
+                        content: payload.to_string(),
+                        is_error: true,
+                    });
+                    continue;
+                }
+
                 hooks::run_hooks(
                     &hcfg,
-                    hooks::HookEvent::BeforeToolUse,
+                    hooks::HookEvent::PreToolUse,
                     &hooks::HookInput {
-                        event: "BeforeToolUse".to_string(),
+                        event: "PreToolUse".to_string(),
                         session_id: None,
                         model: Some(self.model.clone()),
                         tool_name: Some(tc.name.clone()),
@@ -956,12 +1257,66 @@ impl AgentSession {
                     ));
                 }
 
+                // Sprint S13: SubagentStart fires before the spawn. Hook
+                // observers see the description + prompt (truncated) so
+                // dashboards can show "agent is spawning <task> for <prompt>"
+                // in real time. The hook is observation-only; blocking is
+                // already handled by the plan-mode gate above.
+                hooks::run_hooks(
+                    &hcfg,
+                    hooks::HookEvent::SubagentStart,
+                    &hooks::HookInput {
+                        event: "SubagentStart".to_string(),
+                        session_id: None,
+                        model: Some(self.model.clone()),
+                        tool_name: Some(tc.name.clone()),
+                        tool_args: Some(tc.arguments.clone()),
+                        tool_output: None,
+                        message: Some(format!(
+                            "subagent_spawn description={:?} prompt_len={}",
+                            description,
+                            prompt.len()
+                        )),
+                        tool_execution: None,
+                    },
+                )
+                .await;
+
                 // SAFETY: We just set subagent_manager above if it was None.
                 let mgr = self
                     .subagent_manager
                     .as_ref()
                     .expect("subagent_manager was just initialized above");
                 let id_result = mgr.spawn(&description, &prompt).await;
+
+                // Sprint S13: SubagentStop fires after the spawn call returns.
+                // For sync-spawn-then-poll managers, this signals the spawn
+                // completed (whether successful or errored); the underlying
+                // task may still be running async — observers wanting actual
+                // task-end should listen on PostToolUse for the wrapping
+                // task tool call (which fires when the result is collected).
+                hooks::run_hooks(
+                    &hcfg,
+                    hooks::HookEvent::SubagentStop,
+                    &hooks::HookInput {
+                        event: "SubagentStop".to_string(),
+                        session_id: None,
+                        model: Some(self.model.clone()),
+                        tool_name: Some(tc.name.clone()),
+                        tool_args: Some(tc.arguments.clone()),
+                        tool_output: id_result
+                            .as_ref()
+                            .ok()
+                            .map(|id| format!("subagent_id={}", id)),
+                        message: id_result
+                            .as_ref()
+                            .err()
+                            .map(|err| format!("spawn_error: {:#}", err)),
+                        tool_execution: None,
+                    },
+                )
+                .await;
+
                 task_spawn_results.push((
                     tc.id.clone(),
                     tc.name.clone(),
@@ -1049,9 +1404,28 @@ Files modified:
 
                 hooks::run_hooks(
                     &hcfg,
-                    hooks::HookEvent::AfterToolUse,
+                    hooks::HookEvent::PostToolUse,
                     &hooks::HookInput {
-                        event: "AfterToolUse".to_string(),
+                        event: "PostToolUse".to_string(),
+                        session_id: None,
+                        model: Some(self.model.clone()),
+                        tool_name: Some(tool_name.clone()),
+                        tool_args: Some(tool_args.clone()),
+                        tool_output: Some(tool_result.output.clone()),
+                        message: None,
+                        tool_execution: None,
+                    },
+                )
+                .await;
+
+                // Sprint S4b: ToolResultPersist — fires close to persistence
+                // so storage-affecting hooks (PII redaction, secret scrubbing)
+                // see the same payload that lands in the transcript.
+                hooks::run_hooks(
+                    &hcfg,
+                    hooks::HookEvent::ToolResultPersist,
+                    &hooks::HookInput {
+                        event: "ToolResultPersist".to_string(),
                         session_id: None,
                         model: Some(self.model.clone()),
                         tool_name: Some(tool_name),
@@ -1070,6 +1444,160 @@ Files modified:
                 });
             }
 
+            // Phase 7: execute the concurrent batch via join_all. Each tool
+            // runs its BeforeToolUse hook → exec → AfterToolUse hook in its
+            // own future; results come back in arbitrary order, then we
+            // append them to result_blocks. The original tool_call ordering
+            // is preserved by `result_blocks` insertion order — the API
+            // accepts tool_results in any order as long as tool_use_ids
+            // match.
+            if !concurrent_calls.is_empty() {
+                if !self.quiet {
+                    eprintln!(
+                        "  {} ({})",
+                        format!("running {} read-only tools in parallel", concurrent_calls.len())
+                            .dimmed(),
+                        concurrent_calls
+                            .iter()
+                            .map(|tc| tc.name.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    );
+                }
+
+                // Skip unavailable tools first (they don't get a future).
+                let mut runnable: Vec<&ToolCallResponse> = Vec::new();
+                for tc in &concurrent_calls {
+                    if !available_tool_names.contains(tc.name.as_str()) {
+                        result_blocks.push(ContentBlock::ToolResult {
+                            tool_use_id: tc.id.clone(),
+                            content: format!(
+                                "Tool '{}' is not available in this session.",
+                                tc.name
+                            ),
+                            is_error: true,
+                        });
+                        continue;
+                    }
+                    runnable.push(tc);
+                }
+
+                // BeforeToolUse hooks run serially to preserve hook stdout
+                // ordering. They're typically fast (subprocess startup is the
+                // dominant cost) so the gain from parallelizing them is
+                // small relative to the risk of interleaved log output.
+                for tc in &runnable {
+                    hooks::run_hooks(
+                        &hcfg,
+                        hooks::HookEvent::PreToolUse,
+                        &hooks::HookInput {
+                            event: "PreToolUse".to_string(),
+                            session_id: None,
+                            model: Some(self.model.clone()),
+                            tool_name: Some(tc.name.clone()),
+                            tool_args: Some(tc.arguments.clone()),
+                            tool_output: None,
+                            message: None,
+                            tool_execution: None,
+                        },
+                    )
+                    .await;
+                }
+
+                // The actual concurrent batch: read-only built-in tools.
+                let exec_opts = tools::ToolExecOptions {
+                    require_confirmation: !self.skip_permissions,
+                    auto_approve_safe: self.auto_approve_safe,
+                    quiet: self.quiet,
+                };
+                let futures = runnable.iter().map(|tc| {
+                    let legacy = tool_call_to_legacy(tc);
+                    let opts = exec_opts.clone();
+                    let id = tc.id.clone();
+                    let name = tc.name.clone();
+                    let args = tc.arguments.clone();
+                    async move {
+                        let result = tools::execute_tool_with_opts(&legacy, &opts).await;
+                        (id, name, args, result)
+                    }
+                });
+                let outcomes = join_all(futures).await;
+
+                // AfterToolUse hooks + result_blocks insertion (serial, to
+                // keep stdout ordering deterministic).
+                for (tool_use_id, tool_name, tool_args, exec_result) in outcomes {
+                    let tool_result = match exec_result {
+                        Ok(r) => r,
+                        Err(e) => tools::ToolResult {
+                            tool_name: tool_name.clone(),
+                            success: false,
+                            output: format!("tool error: {:#}", e),
+                        },
+                    };
+
+                    if !self.quiet {
+                        let status = if tool_result.success {
+                            "success".green().to_string()
+                        } else {
+                            "failed".red().to_string()
+                        };
+                        eprintln!(
+                            "  {} {} [{}]",
+                            "->".dimmed(),
+                            tool_name.bold(),
+                            status
+                        );
+                    }
+
+                    hooks::run_hooks(
+                        &hcfg,
+                        hooks::HookEvent::PostToolUse,
+                        &hooks::HookInput {
+                            event: "PostToolUse".to_string(),
+                            session_id: None,
+                            model: Some(self.model.clone()),
+                            tool_name: Some(tool_name.clone()),
+                            tool_args: Some(tool_args.clone()),
+                            tool_output: Some(tool_result.output.clone()),
+                            message: None,
+                            tool_execution: None,
+                        },
+                    )
+                    .await;
+
+                    // Sprint S4b: ToolResultPersist — runs after PostToolUse
+                    // so its observers see the same payload about to be
+                    // appended to result_blocks.
+                    hooks::run_hooks(
+                        &hcfg,
+                        hooks::HookEvent::ToolResultPersist,
+                        &hooks::HookInput {
+                            event: "ToolResultPersist".to_string(),
+                            session_id: None,
+                            model: Some(self.model.clone()),
+                            tool_name: Some(tool_name),
+                            tool_args: Some(tool_args),
+                            tool_output: Some(tool_result.output.clone()),
+                            message: None,
+                            tool_execution: None,
+                        },
+                    )
+                    .await;
+
+                    result_blocks.push(ContentBlock::ToolResult {
+                        tool_use_id,
+                        content: tool_result.output,
+                        is_error: !tool_result.success,
+                    });
+                }
+            }
+
+            // Phase 10: collect additional_context messages emitted by
+            // AfterToolUse hooks across this iteration. They're injected as a
+            // single system message after all tool results, before the next
+            // LLM call, so the model sees redaction notes etc. in order.
+            let mut hook_additional_contexts: Vec<String> = Vec::new();
+
             // Execute non-task tool calls sequentially (as before)
             for tc in &other_calls {
                 if !available_tool_names.contains(tc.name.as_str()) {
@@ -1081,11 +1609,36 @@ Files modified:
                     continue;
                 }
 
-                hooks::run_hooks(
+                // Sprint B4: plan-mode gate. When the session is in plan
+                // mode and the user has not approved the current plan,
+                // refuse mutating tools. Returns a structured error so the
+                // model knows to call `update_plan` first instead of
+                // looping or surfacing a confusing failure.
+                if matches!(self.permission_mode, crate::cli_options::PermissionMode::Plan)
+                    && !self.plan_approved
+                    && is_mutating_tool(&tc.name)
+                {
+                    let payload = serde_json::json!({
+                        "ok": false,
+                        "error": "plan_mode_unapproved",
+                        "message": "Plan mode is active and the current plan has not been approved. Call `update_plan` with a complete ordered plan, then await user approval. Do NOT call mutating tools yet."
+                    });
+                    result_blocks.push(ContentBlock::ToolResult {
+                        tool_use_id: tc.id.clone(),
+                        content: payload.to_string(),
+                        is_error: true,
+                    });
+                    continue;
+                }
+
+                // Phase 10: BeforeToolUse hooks may return updated_input to
+                // rewrite tool args before exec. Last hook in the chain wins
+                // (see aggregate_transformers).
+                let pre_results = hooks::run_hooks(
                     &hcfg,
-                    hooks::HookEvent::BeforeToolUse,
+                    hooks::HookEvent::PreToolUse,
                     &hooks::HookInput {
-                        event: "BeforeToolUse".to_string(),
+                        event: "PreToolUse".to_string(),
                         session_id: None,
                         model: Some(self.model.clone()),
                         tool_name: Some(tc.name.clone()),
@@ -1096,13 +1649,48 @@ Files modified:
                     },
                 )
                 .await;
+                let pre_t = hooks::aggregate_transformers(&pre_results);
+                let effective_args = pre_t.updated_input.clone().unwrap_or_else(|| tc.arguments.clone());
 
-                // Route: team tools -> MCP tools (mcp_*) -> built-in tools
-                let legacy = tool_call_to_legacy(tc);
-                let tool_result = if is_team_tool(&tc.name) {
+                // Route: update_plan -> team tools -> MCP tools (mcp_*) -> built-in tools
+                let legacy = ToolCall {
+                    name: tc.name.clone(),
+                    args: value_to_legacy_args(&effective_args),
+                };
+                let tool_result = if tc.name == "update_plan" {
+                    // Sprint B4: handled inside the session so we can
+                    // mutate `current_plan`, `current_plan_path`, and
+                    // (in --auto-approve-plan mode) `plan_approved`.
+                    let payload = self.handle_update_plan(&effective_args);
+                    let success = payload.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
+                    let message = payload
+                        .get("message")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("plan handled")
+                        .to_string();
+                    if !self.quiet {
+                        let path_disp = self
+                            .current_plan_path
+                            .as_ref()
+                            .map(|p| p.display().to_string())
+                            .unwrap_or_default();
+                        eprintln!(
+                            "  {} {} ({}{})",
+                            "->".dimmed(),
+                            "update_plan".bold(),
+                            message,
+                            if path_disp.is_empty() { String::new() } else { format!(" -> {path_disp}") }
+                        );
+                    }
+                    tools::ToolResult {
+                        tool_name: "update_plan".to_string(),
+                        success,
+                        output: payload.to_string(),
+                    }
+                } else if is_team_tool(&tc.name) {
                     execute_team_tool(&self.team_manager, &tc.name, &legacy.args).await?
                 } else if tc.name.starts_with("mcp_") {
-                    execute_mcp_tool(&mut self.mcp_manager, &tc.name, tc.arguments.clone()).await?
+                    execute_mcp_tool(&mut self.mcp_manager, &tc.name, effective_args.clone()).await?
                 } else {
                     let opts = tools::ToolExecOptions {
                         require_confirmation: !self.skip_permissions,
@@ -1121,16 +1709,45 @@ Files modified:
                     eprintln!("  {} {} [{}]", "->".dimmed(), tc.name.bold(), status);
                 }
 
-                hooks::run_hooks(
+                let post_results = hooks::run_hooks(
                     &hcfg,
-                    hooks::HookEvent::AfterToolUse,
+                    hooks::HookEvent::PostToolUse,
                     &hooks::HookInput {
-                        event: "AfterToolUse".to_string(),
+                        event: "PostToolUse".to_string(),
                         session_id: None,
                         model: Some(self.model.clone()),
                         tool_name: Some(tc.name.clone()),
-                        tool_args: Some(tc.arguments.clone()),
+                        tool_args: Some(effective_args.clone()),
                         tool_output: Some(tool_result.output.clone()),
+                        message: None,
+                        tool_execution: None,
+                    },
+                )
+                .await;
+
+                // Phase 10: AfterToolUse may rewrite the tool's output and
+                // append context messages. Last writer wins on the output
+                // override; additional_context accumulates.
+                let post_t = hooks::aggregate_transformers(&post_results);
+                let final_output = post_t.updated_mcp_tool_output.unwrap_or(tool_result.output);
+                if let Some(ctx) = post_t.additional_context {
+                    hook_additional_contexts.push(ctx);
+                }
+
+                // Sprint S4b: ToolResultPersist — fires *after* PostToolUse
+                // transformations so observers see the final-as-persisted
+                // payload (post-redaction etc.). This is the right place for
+                // append-only audit sinks.
+                hooks::run_hooks(
+                    &hcfg,
+                    hooks::HookEvent::ToolResultPersist,
+                    &hooks::HookInput {
+                        event: "ToolResultPersist".to_string(),
+                        session_id: None,
+                        model: Some(self.model.clone()),
+                        tool_name: Some(tc.name.clone()),
+                        tool_args: Some(effective_args.clone()),
+                        tool_output: Some(final_output.clone()),
                         message: None,
                         tool_execution: None,
                     },
@@ -1139,13 +1756,20 @@ Files modified:
 
                 result_blocks.push(ContentBlock::ToolResult {
                     tool_use_id: tc.id.clone(),
-                    content: tool_result.output,
+                    content: final_output,
                     is_error: !tool_result.success,
                 });
             }
 
             // Send tool results as a structured user message
             self.messages.push(Message::blocks("user", result_blocks));
+
+            // Phase 10: hook-injected advisory messages ride along after
+            // the tool results so the model sees them before its next reply.
+            if !hook_additional_contexts.is_empty() {
+                let merged = hook_additional_contexts.join("\n\n");
+                self.messages.push(Message::text("system", merged));
+            }
 
             // Re-send to LLM with tool results
             eprintln!();
@@ -1195,6 +1819,8 @@ Files modified:
 
             total_input += continuation.input_tokens;
             total_output += continuation.output_tokens;
+            total_cache_read += continuation.cache_read_input_tokens;
+            total_cache_creation += continuation.cache_creation_input_tokens;
             final_response = continuation.text;
             current_tool_calls = continuation.tool_calls;
 
@@ -1235,6 +1861,8 @@ Files modified:
         // Update session counters
         self.total_input_tokens += total_input;
         self.total_output_tokens += total_output;
+        self.total_cache_read_tokens += total_cache_read;
+        self.total_cache_creation_tokens += total_cache_creation;
         self.turn_count += 1;
 
         // --- Post-turn: memory extraction + skill learning (best-effort, non-blocking) ---
@@ -1304,6 +1932,8 @@ Files modified:
             response: final_response,
             input_tokens: total_input,
             output_tokens: total_output,
+            cache_read_tokens: total_cache_read,
+            cache_creation_tokens: total_cache_creation,
             via_subscription,
         })
     }
@@ -1415,10 +2045,22 @@ fn build_assistant_message(text: &str, tool_calls: &[ToolCallResponse]) -> Messa
 /// Convert a ToolCallResponse (from native API) to the legacy ToolCall
 /// struct used by tools::execute_tool.
 fn tool_call_to_legacy(tc: &ToolCallResponse) -> ToolCall {
-    let mut args = std::collections::HashMap::new();
-    if let Some(obj) = tc.arguments.as_object() {
+    ToolCall {
+        name: tc.name.clone(),
+        args: value_to_legacy_args(&tc.arguments),
+    }
+}
+
+/// Phase 10: convert a JSON args object into the flat HashMap<String, String>
+/// shape that `tools::execute_tool_with_opts` expects. Strings pass through
+/// verbatim; non-strings are JSON-stringified to preserve fidelity. Used by
+/// both the original `tool_call_to_legacy` and the BeforeToolUse hook
+/// transformer path that may rewrite args.
+fn value_to_legacy_args(args: &serde_json::Value) -> std::collections::HashMap<String, String> {
+    let mut out = std::collections::HashMap::new();
+    if let Some(obj) = args.as_object() {
         for (k, v) in obj {
-            args.insert(
+            out.insert(
                 k.clone(),
                 match v {
                     serde_json::Value::String(s) => s.clone(),
@@ -1427,10 +2069,7 @@ fn tool_call_to_legacy(tc: &ToolCallResponse) -> ToolCall {
             );
         }
     }
-    ToolCall {
-        name: tc.name.clone(),
-        args,
-    }
+    out
 }
 
 /// Execute an MCP tool via the manager, returning a ToolResult.
@@ -1472,6 +2111,28 @@ const TEAM_TOOL_NAMES: &[&str] = &[
     "list_teammates",
 ];
 
+/// Sprint B4: built-in tools considered mutating for the plan-mode gate.
+/// The dispatcher refuses to run these when `permission_mode == Plan` and
+/// `plan_approved == false`. MCP tools (`mcp_*`) are also treated as
+/// mutating by default -- their outward effects are unknown to the gate.
+const MUTATING_TOOL_NAMES: &[&str] = &[
+    "write_file",
+    "edit_file",
+    "run_command",
+    "apply_patch",
+    "multiedit",
+    "task",
+    "batch",
+    "todo_write",
+];
+
+/// True when the named tool is considered mutating for plan-mode gating.
+/// MCP tools are conservatively treated as mutating; built-in read-only
+/// tools and `update_plan` itself are not.
+fn is_mutating_tool(name: &str) -> bool {
+    MUTATING_TOOL_NAMES.contains(&name) || name.starts_with("mcp_")
+}
+
 /// Check if a tool name is a team tool.
 fn is_team_tool(name: &str) -> bool {
     TEAM_TOOL_NAMES.contains(&name)
@@ -1511,6 +2172,68 @@ async fn execute_team_tool(
 // System prompt
 // ---------------------------------------------------------------------------
 
+/// Assemble the full system prompt the way `AgentSession::new` does — loading
+/// memory, instructions, skills, and rules from disk — but with no
+/// side-effects (no shell_snapshot capture, no session-id allocation). Used by
+/// `--dump-system-prompt` and any tooling that wants to inspect what the model
+/// will see without instantiating a session.
+pub fn assemble_system_prompt(
+    sys_context: &SystemContext,
+    custom_system_prompt: Option<&str>,
+) -> String {
+    // Load project instruction files (AGENTS.md, CLAUDE.md, etc.)
+    let instructions = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| compaction::load_instructions(&cwd));
+
+    // Load hierarchical memory (global -> project -> local)
+    let memory_context = std::env::current_dir()
+        .ok()
+        .map(|cwd| {
+            let mgr = MemoryManager::new(&cwd);
+            mgr.get_context_prompt()
+        })
+        .unwrap_or_default();
+
+    // Load persistent memory from the memory pipeline
+    let persistent_memory = crate::config::CliConfig::config_dir()
+        .ok()
+        .map(|home| crate::memory_pipeline::MemoryPipeline::load_persistent_memory(&home))
+        .unwrap_or_default();
+
+    // Discover and format skills for system prompt injection
+    let discovered = skills::discover_skills();
+    let skill_refs: Vec<&skills::Skill> = discovered.iter().collect();
+    let skills_content = skills::format_skills_for_prompt(&skill_refs);
+
+    // Load glob-matched rules (.agiworkforce/rules/*.md) — always-active subset
+    let rules = std::env::current_dir()
+        .ok()
+        .map(|cwd| memory::load_rules(&cwd))
+        .unwrap_or_default();
+    let rules_context = if rules.is_empty() {
+        String::new()
+    } else {
+        memory::rules_context_prompt(&rules, &[])
+    };
+
+    // Combine memory context with persistent memory from the pipeline
+    let combined_memory = if persistent_memory.is_empty() {
+        memory_context
+    } else {
+        format!("{}\n{}", memory_context, persistent_memory)
+    };
+
+    build_system_prompt(
+        sys_context,
+        custom_system_prompt,
+        instructions.as_deref(),
+        &skills_content,
+        &combined_memory,
+        &rules_context,
+    )
+}
+
 fn build_system_prompt(
     sys_context: &SystemContext,
     custom_system_prompt: Option<&str>,
@@ -1519,6 +2242,12 @@ fn build_system_prompt(
     memory_context: &str,
     rules_context: &str,
 ) -> String {
+    // Cache-friendly ordering: STABLE content first (base instructions, memory,
+    // project instructions, rules, skills), VOLATILE content (cwd, git status,
+    // OS, shell, current time) wrapped in `<environment>` last. The Anthropic
+    // prompt cache (Phase 5) marks the boundary just before `<environment>`,
+    // so re-running the agent in the same project hits the cache for
+    // everything above and only re-evaluates the env block.
     let base = custom_system_prompt.unwrap_or(
         "You are AGI Workforce CLI, a powerful AI assistant running in the user's terminal.\n\
          You help users with coding, system administration, writing, analysis, and general tasks.\n\
@@ -1526,47 +2255,71 @@ fn build_system_prompt(
          You are direct, concise, and precise. When showing code, use fenced code blocks with the language specified.",
     );
 
-    let mut prompt = format!(
-        r#"{}
+    // Phase E (W2-W6): compute deferred tool names so we can inject a one-line
+    // hint telling the model which tools need to be loaded via tool_search.
+    let deferred_names: Vec<String> = crate::runtime::tool_catalog::all_builtin_tool_definitions()
+        .into_iter()
+        .filter(|t| t.should_defer)
+        .map(|t| t.name)
+        .collect();
 
-{}
-
-Important guidelines:
-- Be concise. Terminal users prefer short, actionable answers.
-- When asked to modify files or run commands, explain briefly what you'll do first.
-- If a task is ambiguous, ask a clarifying question.
-- Format output for terminal readability (not web).
-- You have access to tools for reading/writing files, running commands, and searching. Use them when needed.
-"#,
-        base, sys_context
+    let mut prompt = String::with_capacity(2048);
+    prompt.push_str(base);
+    prompt.push_str(
+        "\n\nImportant guidelines:\n\
+         - Be concise. Terminal users prefer short, actionable answers.\n\
+         - When asked to modify files or run commands, explain briefly what you'll do first.\n\
+         - If a task is ambiguous, ask a clarifying question.\n\
+         - Format output for terminal readability (not web).\n\
+         - You have access to tools for reading/writing files, running commands, and searching. Use them when needed.\n",
     );
 
-    // Hierarchical memory (global -> project -> local) — injected before
-    // project instructions so instructions can override memory defaults.
+    // Phase E: deferred-tool hint. Only injected when there are deferred tools
+    // (always true in normal mode; absent in plan mode where tool_catalog
+    // returns the read-only subset directly).
+    if !deferred_names.is_empty() {
+        prompt.push_str(&format!(
+            "- Additional tools available on demand (call `tool_search` to load their schemas): {}.\n",
+            deferred_names.join(", ")
+        ));
+    }
+
+    // Hierarchical memory (global -> project -> local) — stable across the session.
     if !memory_context.is_empty() {
         prompt.push('\n');
         prompt.push_str(memory_context);
         prompt.push('\n');
     }
 
+    // Project instructions — stable across the session.
     if let Some(instr) = instructions {
         prompt.push_str("\n<project-instructions>\n");
         prompt.push_str(instr);
         prompt.push_str("\n</project-instructions>\n");
     }
 
-    // Glob-matched rules (.agiworkforce/rules/*.md) — injected after
-    // instructions so rules have highest specificity.
+    // Glob-matched rules (.agiworkforce/rules/*.md) — stable. Rules have higher
+    // specificity than instructions because they're applied after.
     if !rules_context.is_empty() {
         prompt.push('\n');
         prompt.push_str(rules_context);
         prompt.push('\n');
     }
 
+    // Skills — stable.
     if !skills_content.is_empty() {
         prompt.push('\n');
         prompt.push_str(skills_content);
+        prompt.push('\n');
     }
+
+    // VOLATILE: environment block (cwd, git status, OS, shell). Goes LAST
+    // because it changes per-invocation; everything above is cacheable.
+    // SystemContext's Display impl already wraps the body in <environment>
+    // tags, so we just append it directly.
+    prompt.push('\n');
+    prompt.push_str(&sys_context.to_string());
+    prompt.push('\n');
 
     prompt
 }
@@ -1590,8 +2343,13 @@ mod tests {
     #[test]
     fn test_build_tool_definitions_count() {
         let defs = build_tool_definitions();
-        // 8 base tools + 1 task tool + 3 parity tools (apply_patch, grep_files, tool_search) = 12
-        assert_eq!(defs.len(), 12);
+        // Phase E (W2-W6): full catalog = 11 always-loaded + 9 deferred = 20.
+        // Always-loaded (11): read_file, write_file, edit_file, run_command,
+        //   search_files, list_directory, web_search, web_fetch, task,
+        //   grep_files, tool_search.
+        // Deferred (9): apply_patch, update_plan, glob, batch, multiedit,
+        //   todo_read, todo_write, ask_user, read_many_files.
+        assert_eq!(defs.len(), 20);
     }
 
     #[test]

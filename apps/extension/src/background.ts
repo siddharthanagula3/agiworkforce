@@ -8,6 +8,22 @@ import type {
 } from './types';
 import { logger, RateLimiter, withTimeout, storageUtils, sleep } from './utils';
 import { getPlatformPrompt } from './platform-prompts';
+import {
+  streamFromProvider,
+  type ProviderStreamProvider,
+  type StreamChunk as ProviderStreamChunk,
+} from './providerStreamClient';
+// Wires `@agiworkforce/browser-tool`'s canonical action shapes onto the
+// extension's existing `RunPageAction` machinery. The package's runtime
+// (Playwright-based) is NOT bundled — only types travel through this
+// import. See `browserTool.ts` for action-coverage notes (16 Computer Use
+// actions; 15 implementable in content-script context, `zoom` is N/A).
+import {
+  computerUseToPageActions,
+  browserActionToPageActions,
+  type ComputerUseAction,
+  type BrowserAction,
+} from './browserTool';
 
 interface BackgroundState {
   isNativeConnected: boolean;
@@ -593,11 +609,27 @@ async function executeScheduledTask(task: ScheduledTask): Promise<void> {
       shortcutId: task.shortcutId,
     } as import('./types').ReplayShortcutMessage);
   } else if (task.prompt) {
+    // CHROME-NEW-007 fix (2026-05-05): cap stored task prompt length before
+    // dispatching to the LLM. The prompt sits in `chrome.storage.local` which
+    // is per-extension and not directly attacker-writable from outside, but
+    // any code path with this extension's context that can write to local
+    // storage (a future bug, a corrupted import-tasks flow) could plant a
+    // multi-megabyte prompt. We cap at 10 000 chars — far above legitimate
+    // user input but small enough to bound LLM cost on the user's API key.
+    const TASK_PROMPT_MAX_CHARS = 10_000;
+    const safePrompt = String(task.prompt).slice(0, TASK_PROMPT_MAX_CHARS);
+    if (safePrompt.length < task.prompt.length) {
+      logger.warn('Scheduled task prompt truncated', {
+        taskId: task.id,
+        originalLength: task.prompt.length,
+        truncatedTo: TASK_PROMPT_MAX_CHARS,
+      });
+    }
     // Send as chat message via the same path as side panel
     const chatMsg: import('./types').ChatMessageMessage = {
       type: 'CHAT_MESSAGE',
       id: `task_${task.id}_${Date.now()}`,
-      text: task.prompt,
+      text: safePrompt,
       timestamp: Date.now(),
     };
     void handleChatMessage(chatMsg, {} as chrome.runtime.MessageSender);
@@ -684,7 +716,12 @@ async function restoreScheduledTaskAlarms(): Promise<void> {
 // `chrome.storage.local.agi_site_allowlist`. Extension pages (popup,
 // side panel, options) remain trusted; tab-originated messages are
 // trusted only if the tab's origin is on the list.
-const DISCOVERY_MESSAGE_TYPES = new Set<string>(['PING', 'GET_AGI_BRIDGE_URL']);
+// SECURITY (H-1): PING and GET_AGI_BRIDGE_URL previously bypassed origin checks.
+// Removed both from the discovery bypass set. Extension-origin senders (popup,
+// side panel) are already trusted via the `!sender.tab` branch in
+// isAllowlistedSender(). Content scripts on arbitrary pages must NOT receive
+// responses to fingerprinting probes.
+const DISCOVERY_MESSAGE_TYPES = new Set<string>();
 let siteAllowlistCache = new Set<string>();
 chrome.storage.local
   .get('agi_site_allowlist')
@@ -726,13 +763,57 @@ function isAllowlistedSender(
 // EXT-3 (audit 2026-05-03): same-tab restriction for DOM-mutation
 // commands. Even with an allowlisted origin, a malicious page must
 // not be able to drive DOM mutation in a different tab.
+// SECURITY (H-2): EVALUATE_SCRIPT removed. It had no handler in content.ts and
+// its presence in this set made a future accidental eval()-based handler look
+// "intentional" to reviewers. Do NOT re-add — content scripts must never
+// expose an eval() surface. Use EXECUTE_SCRIPT + ALLOWED_SCRIPT_OPERATIONS instead.
+//
+// CHROME-NEW-002 fix (2026-05-04 audit): the prior set covered only `TYPE`,
+// `CLICK`, storage, and `SUBMIT_FORM`. Every other content-script handler
+// in `content.ts:222-274` (`SELECT_OPTION`, `CHECK`, `UNCHECK`, `FOCUS`,
+// `BLUR`, `HOVER`, `SCROLL`, `DRAG_DROP`, `CLICK_AT_COORDINATES`) was
+// forwarded to any caller-supplied `tabId` with no same-tab check. An
+// allowlisted page (e.g., a compromised LinkedIn / Lever clone) could send
+// `{ type: 'SELECT_OPTION', tabId: <banking>, selector: '#amount',
+// value: '10000' }` and drive a different tab. We now gate every
+// DOM-mutation-class message through `senderTabAllowedToMutate`. Recording
+// types (`START_RECORDING` / `STOP_RECORDING`) read state and aren't
+// mutations, so they remain outside this set.
 const DOM_MUTATION_MESSAGE_TYPES = new Set<string>([
   'TYPE',
   'CLICK',
   'SET_LOCAL_STORAGE',
   'CLEAR_LOCAL_STORAGE',
   'SUBMIT_FORM',
-  'EVALUATE_SCRIPT',
+  // Added 2026-05-04 — every type below has a handler in content.ts that
+  // observably mutates the target tab's DOM or page state.
+  'SELECT_OPTION',
+  'CHECK',
+  'UNCHECK',
+  'FOCUS',
+  'BLUR',
+  'HOVER',
+  'SCROLL',
+  'DRAG_DROP',
+  'CLICK_AT_COORDINATES',
+  'EXECUTE_SCRIPT',
+  // CHROME-NEW-005 fix (2026-05-05): compound action types must also be
+  // gated by `senderTabAllowedToMutate`. `RUN_PAGE_ACTIONS` is a batch
+  // executor that internally invokes any of the simple types above —
+  // without this guard, an allowlisted origin could send
+  // `{ type: 'RUN_PAGE_ACTIONS', tabId: <other-tab>, actions: [...] }` and
+  // drive a different tab's DOM. `AUTO_FILL_JOB_APPLICATION` is the
+  // LinkedIn / Lever autofill entry point and writes to form fields.
+  'RUN_PAGE_ACTIONS',
+  'AUTO_FILL_JOB_APPLICATION',
+  // P0-D fix (2026-05-08): these three types have content-script handlers
+  // that mutate the target tab's DOM (dispatch MouseEvent/simulate context-menu/
+  // write form fields). Without this guard, an allowlisted origin could send
+  // `{ type: 'DOUBLE_CLICK', tabId: <other-tab>, selector: '#btn' }` and drive
+  // a different tab's DOM.
+  'DOUBLE_CLICK',
+  'RIGHT_CLICK',
+  'FILL_FORM',
 ]);
 
 function senderTabAllowedToMutate(
@@ -1231,6 +1312,26 @@ async function handleMessageAsync(
       }
     }
 
+    case 'IN_PAGE_PROMPT' as ExtensionMessage['type']: {
+      // Sent by the in-page chat panel (content-script) to run a prompt and
+      // return the full accumulated response text. Uses the same provider-stream
+      // / bridge / native fallback chain as CHAT_MESSAGE but resolves to a
+      // simple { success, text } rather than broadcasting chunks, since content
+      // scripts cannot receive chunked messages while the panel waits.
+      const promptPayload = message as unknown as { prompt?: string };
+      const promptText = typeof promptPayload.prompt === 'string' ? promptPayload.prompt : '';
+      if (!promptText) {
+        return { success: false, error: 'Missing prompt' } as ExtensionResponse;
+      }
+      try {
+        const responseText = await handleInPagePrompt(promptText);
+        return { success: true, text: responseText } as ExtensionResponse;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Prompt failed';
+        return { success: false, error: msg } as ExtensionResponse;
+      }
+    }
+
     case 'BRIDGE_URL_CHANGED': {
       // Validate the new URL before accepting it
       const newUrl = (message as import('./types').BridgeUrlChangedMessage).url?.trim();
@@ -1311,6 +1412,28 @@ const BLOCKED_COOKIE_DOMAINS: RegExp[] = [
   /twitter\.com$/i,
   /x\.com$/i,
   /instagram\.com$/i,
+  // CHROME-NEW-006 fix (2026-05-05): explicitly block the very platforms the
+  // extension *targets* for autofill / chat assistance. The agent only needs
+  // DOM-level read/write on these origins — not their session cookies. Without
+  // these entries, a malicious script running on an allowlisted page could
+  // call GET_COOKIES against `linkedin.com` / `slack.com` / `notion.so` /
+  // `figma.com` / `lever.co` and exfiltrate the user's session token, even
+  // though the regex `/health\.com/` and friends already cover unrelated
+  // categories.
+  /(^|\.)linkedin\.com$/i,
+  /(^|\.)slack\.com$/i,
+  /(^|\.)notion\.so$/i,
+  /(^|\.)figma\.com$/i,
+  /(^|\.)lever\.co$/i,
+  /(^|\.)greenhouse\.io$/i,
+  /(^|\.)workday\.com$/i,
+  // CHROME-NEW-003 fix (2026-05-04): the extension's own auth surfaces are
+  // sensitive too. An allowlisted page that calls GET_COOKIES against
+  // `https://<ref>.supabase.co` would receive Supabase auth cookies, and
+  // against `https://agiworkforce.com` would receive `agi_access_token` /
+  // `agi_refresh_token`. Block both at the cookie layer.
+  /\.supabase\.(co|io)$/i,
+  /(^|\.)agiworkforce\.com$/i,
 ];
 
 function isCookieDomainAllowed(urlOrDomain: string): boolean {
@@ -1963,11 +2086,14 @@ async function captureCurrentPage(): Promise<void> {
   }
 }
 
-/** Default AGI bridge base URL — overridden by chrome.storage.local `agi_bridge_url`. */
-const DEFAULT_AGI_BRIDGE_URL = 'http://localhost:8765';
+/** Default AGI bridge base URL — overridden by chrome.storage.local `agi_bridge_url`.
+ *  Port 8787 is the canonical AGI Workforce desktop bridge port (matches VS Code ext + desktop). */
+const DEFAULT_AGI_BRIDGE_URL = 'http://localhost:8787';
 
-/** Allowed bridge URL hostnames — only local connections to the desktop app are permitted. */
-const ALLOWED_BRIDGE_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '0.0.0.0']);
+/** Allowed bridge URL hostnames — only local connections to the desktop app are permitted.
+ *  `0.0.0.0` removed (SEV-CHEXT-09): on Linux it routes to LAN-bound services, defeating the
+ *  loopback-only contract. Use the explicit loopback addresses only. */
+const ALLOWED_BRIDGE_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 /** Maximum response body size for NLWEB probe requests (256 KB). */
 const MAX_PROBE_RESPONSE_BYTES = 262_144;
@@ -2075,11 +2201,320 @@ async function getAgiBridgeBaseUrl(): Promise<string> {
   });
 }
 
+/**
+ * Settings keys for the optional `/api/v1/providers/:id/stream` path that
+ * routes through the AGI Workforce api-gateway instead of the local desktop
+ * bridge. Default-off; enabled by setting `chrome.storage.local.agi_use_provider_stream = true`.
+ */
+const USE_PROVIDER_STREAM_KEY = 'agi_use_provider_stream';
+const GATEWAY_URL_KEY = 'agi_gateway_url';
+const PROVIDER_OVERRIDE_KEY = 'agi_provider_override';
+const SUPABASE_JWT_SESSION_KEY = 'agi_supabase_jwt';
+const DEFAULT_GATEWAY_URL = 'https://api.agiworkforce.com';
+const VALID_PROVIDER_IDS: ReadonlySet<ProviderStreamProvider> = new Set([
+  'anthropic',
+  'openai',
+  'google',
+  'ollama',
+]);
+
+// SECURITY (C-1): Gateway URL allowlist. The agi_gateway_url key in
+// chrome.storage.local is writable by any allowlisted page. We therefore
+// validate the stored value against a strict allowlist rather than trusting the
+// raw storage value. Only https://api.agiworkforce.com and its subdomains are
+// accepted. localhost is never accepted for the gateway (bridge URL is separate
+// and validated by validateBridgeUrl).
+const GATEWAY_URL_ALLOWLIST_EXACT = new Set<string>(['https://api.agiworkforce.com']);
+const GATEWAY_URL_SUBDOMAIN_SUFFIX = '.agiworkforce.com';
+
+/**
+ * Returns the validated gateway origin or null.
+ * Accepts: https://api.agiworkforce.com, https://<sub>.agiworkforce.com
+ * Rejects: http:// (JWT would be plaintext), any non-agiworkforce.com host.
+ */
+function validateGatewayUrl(raw: string): string | null {
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== 'https:') return null;
+    const origin = `https://${parsed.host}`;
+    if (GATEWAY_URL_ALLOWLIST_EXACT.has(origin)) return origin;
+    if (parsed.hostname.endsWith(GATEWAY_URL_SUBDOMAIN_SUFFIX)) return origin;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+interface ProviderStreamSettings {
+  enabled: boolean;
+  gatewayUrl: string;
+  providerOverride: 'auto' | ProviderStreamProvider;
+}
+
+async function getProviderStreamSettings(): Promise<ProviderStreamSettings> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(
+      [USE_PROVIDER_STREAM_KEY, GATEWAY_URL_KEY, PROVIDER_OVERRIDE_KEY],
+      (result) => {
+        if (chrome.runtime.lastError) {
+          resolve({ enabled: false, gatewayUrl: DEFAULT_GATEWAY_URL, providerOverride: 'auto' });
+          return;
+        }
+        const enabled = result[USE_PROVIDER_STREAM_KEY] === true;
+        const gatewayRaw = (result[GATEWAY_URL_KEY] as string | undefined)?.trim() ?? '';
+        const overrideRaw = (result[PROVIDER_OVERRIDE_KEY] as string | undefined)?.trim();
+        const providerOverride: 'auto' | ProviderStreamProvider =
+          overrideRaw && VALID_PROVIDER_IDS.has(overrideRaw as ProviderStreamProvider)
+            ? (overrideRaw as ProviderStreamProvider)
+            : 'auto';
+        // SECURITY (C-1): Allowlist-validate the stored gateway URL. If storage
+        // was tampered (e.g. evil.com written by a content script), fall back to
+        // the manifest-declared default silently. This prevents JWT exfiltration.
+        const gatewayUrl = validateGatewayUrl(gatewayRaw) ?? DEFAULT_GATEWAY_URL;
+        resolve({ enabled, gatewayUrl, providerOverride });
+      },
+    );
+  });
+}
+
+async function getSupabaseJwtFromStorage(): Promise<string | null> {
+  return new Promise((resolve) => {
+    try {
+      chrome.storage.session.get(SUPABASE_JWT_SESSION_KEY, (sessionResult) => {
+        if (chrome.runtime.lastError) {
+          resolve(null);
+          return;
+        }
+        const stored = (sessionResult[SUPABASE_JWT_SESSION_KEY] as string | undefined)?.trim();
+        resolve(stored && stored.startsWith('eyJ') ? stored : null);
+      });
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Tier cache — fetched from /api/me, stored in chrome.storage.local under
+// 'agi_user_tier'. Refreshed on demand and on a 30-minute alarm (Phase 3 #41).
+//
+// Bearer-token auth side-steps the BLOCKED_COOKIE_DOMAINS guard: cookies
+// would leak across origins, but a JWT pulled from session storage and sent
+// in the Authorization header is fine.
+// ---------------------------------------------------------------------------
+
+const TIER_CACHE_KEY = 'agi_user_tier';
+const TIER_CACHE_TIMESTAMP_KEY = 'agi_user_tier_fetched_at';
+const TIER_REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * Allowlist of /api/me hosts the extension may call. Mirrors the gateway
+ * allowlist but uses the marketing domain (agiworkforce.com) where /api/me
+ * lives in the Next.js app — the api.agiworkforce.com gateway proxies
+ * different routes.
+ */
+const ME_ENDPOINT_ALLOWLIST = new Set<string>([
+  'https://agiworkforce.com',
+  'https://www.agiworkforce.com',
+  'http://localhost:3000',
+  'http://localhost:3001',
+]);
+
+function deriveMeEndpoint(gatewayUrl: string): string | null {
+  // Default to agiworkforce.com unless the gateway is explicitly localhost
+  // (developer dev-stack pointing at next-dev directly).
+  try {
+    const u = new URL(gatewayUrl);
+    if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') {
+      const candidate = `${u.protocol}//${u.host}`;
+      if (ME_ENDPOINT_ALLOWLIST.has(candidate)) {
+        return `${candidate}/api/me`;
+      }
+    }
+  } catch {
+    /* fall through */
+  }
+  return 'https://agiworkforce.com/api/me';
+}
+
+interface ApiMeResponse {
+  plan?: { tier?: string };
+  routing_preferences?: { us_only?: boolean };
+  feature_flags?: Record<string, unknown>;
+}
+
+/**
+ * Fetch /api/me with Bearer auth and cache the tier locally. Silent on
+ * failure — the popup falls back to whatever was cached previously, or
+ * hides the tier badge if no cache exists yet.
+ */
+async function refreshUserTierFromApi(): Promise<void> {
+  try {
+    const jwt = await getSupabaseJwtFromStorage();
+    if (!jwt) return;
+
+    const settings = await getProviderStreamSettings();
+    const meUrl = deriveMeEndpoint(settings.gatewayUrl);
+    if (!meUrl) return;
+
+    const response = await fetch(meUrl, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        Accept: 'application/json',
+      },
+      credentials: 'omit',
+    });
+
+    if (!response.ok) {
+      return;
+    }
+
+    const body = (await response.json()) as ApiMeResponse;
+    const tier = body.plan?.tier;
+    if (typeof tier !== 'string' || tier.length === 0) {
+      return;
+    }
+
+    await chrome.storage.local.set({
+      [TIER_CACHE_KEY]: tier,
+      [TIER_CACHE_TIMESTAMP_KEY]: Date.now(),
+    });
+  } catch {
+    // Network errors, malformed JSON, storage failures — all silent.
+  }
+}
+
+// Schedule a periodic refresh while the service worker is alive. The
+// alarm survives SW restarts (Chrome restores alarms on startup).
+const TIER_REFRESH_ALARM_NAME = 'agi-user-tier-refresh';
+chrome.alarms.create(TIER_REFRESH_ALARM_NAME, {
+  periodInMinutes: TIER_REFRESH_INTERVAL_MS / 60_000,
+});
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === TIER_REFRESH_ALARM_NAME) {
+    void refreshUserTierFromApi();
+  }
+});
+
+// Also refresh on extension activation so a fresh install sees the tier
+// without waiting 30 minutes.
+void refreshUserTierFromApi();
+
+function inferProviderFromModel(modelId: string | undefined): ProviderStreamProvider {
+  if (!modelId) return 'anthropic';
+  const m = modelId.toLowerCase();
+  if (m.startsWith('claude-')) return 'anthropic';
+  if (m.startsWith('gpt-') || m.startsWith('o1-') || m.startsWith('codex-')) return 'openai';
+  if (m.startsWith('gemini-')) return 'google';
+  if (
+    m === 'ollama-local' ||
+    m.startsWith('llama') ||
+    m.startsWith('qwen') ||
+    m.startsWith('mistral')
+  ) {
+    return 'ollama';
+  }
+  return 'anthropic';
+}
+
+async function getSelectedModel(): Promise<string> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get('agi_model', (result) => {
+      if (chrome.runtime.lastError) {
+        resolve('claude-sonnet-4.6');
+        return;
+      }
+      const stored = (result['agi_model'] as string | undefined)?.trim();
+      resolve(stored && stored !== 'auto' ? stored : 'claude-sonnet-4.6');
+    });
+  });
+}
+
+/**
+ * Broadcast a PAYWALL_HIT message to all open extension views (popup, side panel).
+ * Views that are not open will silently ignore the rejected sendMessage.
+ */
+function broadcastPaywallHit(feature: string, requiredTier: string, reason?: string): void {
+  const msg: import('./types').PaywallHitMessage = {
+    type: 'PAYWALL_HIT',
+    feature,
+    requiredTier,
+    ...(reason ? { reason } : {}),
+  };
+  chrome.runtime.sendMessage(msg).catch(() => {
+    // No listeners open (popup / side panel closed) — silently ignore.
+  });
+}
+
+/**
+ * Stream a chat reply via the api-gateway's `/api/v1/providers/:id/stream`
+ * endpoint. Throws if the upstream returns an error chunk so the caller can
+ * fall back to the legacy bridge path.
+ *
+ * When a paywall chunk is received the function broadcasts PAYWALL_HIT to all
+ * extension views and returns normally (does NOT throw) — the caller must not
+ * fall back to the bridge in that case, as the cap is enforced server-side and
+ * retrying against the bridge won't help.
+ */
+async function streamChatViaProvider(params: {
+  gatewayUrl: string;
+  providerId: ProviderStreamProvider;
+  jwt: string;
+  model: string;
+  messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
+  broadcast: (text: string, done: boolean, error?: string) => void;
+}): Promise<{ paywalled: boolean }> {
+  const { gatewayUrl, providerId, jwt, model, messages, broadcast } = params;
+  const stream = streamFromProvider({
+    gatewayUrl,
+    providerId,
+    authToken: jwt,
+    request: { model, messages },
+  });
+  let sawError: { code?: string; message: string } | null = null;
+  for await (const chunk of stream as AsyncIterable<ProviderStreamChunk>) {
+    if (chunk.type === 'text-delta') {
+      if (chunk.delta) broadcast(chunk.delta, false);
+    } else if (chunk.type === 'paywall') {
+      // Tier cap hit — surface the paywall UI and stop streaming without
+      // triggering the legacy-bridge fallback.
+      broadcastPaywallHit(chunk.feature, chunk.requiredTier, chunk.reason);
+      broadcast('', true);
+      return { paywalled: true };
+    } else if (chunk.type === 'error') {
+      sawError = { ...(chunk.code ? { code: chunk.code } : {}), message: chunk.message };
+    } else if (chunk.type === 'stop') {
+      if (sawError) {
+        throw new Error(`provider-stream:${sawError.code ?? 'STREAM_ERROR'}:${sawError.message}`);
+      }
+      broadcast('', true);
+      return { paywalled: false };
+    }
+  }
+  if (sawError) {
+    throw new Error(`provider-stream:${sawError.code ?? 'STREAM_ERROR'}:${sawError.message}`);
+  }
+  broadcast('', true);
+  return { paywalled: false };
+}
+
 async function handleChatMessage(
   message: import('./types').ChatMessageMessage,
   _sender: chrome.runtime.MessageSender,
 ): Promise<void> {
-  const { id, text, pageContext, conversationHistory = [], apiKey } = message;
+  // SECURITY (chrome-HIGH-3, audit 2026-05-04): the previous implementation
+  // destructured an `apiKey` field straight off the inbound message and used
+  // it as the authoritative provider key. A malicious page (via a compromised
+  // allowlisted origin or via XSS on an allowlisted site) could craft a
+  // `CHAT_MESSAGE` carrying an attacker-controlled `apiKey` and force every
+  // outbound LLM request to authenticate against that key, or to a key the
+  // attacker wants the user to bill. The api key MUST come from the user's
+  // own session storage — written exclusively by the trusted side-panel UI
+  // — and never from the message wire. The `apiKey` destructure is gone;
+  // the resolution path below queries `chrome.storage.session.agi_api_key`.
+  const { id, text, pageContext, conversationHistory = [] } = message;
 
   const broadcastChunk = (chunkText: string, done: boolean, error?: string): void => {
     const chunk: import('./types').ChatChunkMessage = {
@@ -2114,24 +2549,70 @@ async function handleChatMessage(
 
   messages.push(...conversationHistory.map((h) => ({ role: h.role, content: h.content })));
 
-  // Append page context to the user message if provided
+  // Append page context to the user message if provided.
+  // SECURITY: The fixed `<page_context>` delimiter was trivially escapable —
+  // a hostile page (or a Slack DM / Gmail body that the user copies) could
+  // contain a literal `</page_context>` tag and break out of the fence,
+  // injecting attacker-controlled instructions into the model's user turn.
+  // Mitigation: bind the fence to a per-request random nonce so any injected
+  // closing tag the attacker chooses cannot match the actual fence string.
+  const fenceNonce = Array.from(crypto.getRandomValues(new Uint8Array(8)))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
   const userContent = pageContext
-    ? `${text}\n\n<page_context>\n${pageContext}\n</page_context>`
+    ? `${text}\n\n<page_context_${fenceNonce}>\n${pageContext}\n</page_context_${fenceNonce}>`
     : text;
 
   messages.push({ role: 'user', content: userContent });
 
+  // Optional: route via the AGI Workforce api-gateway provider-stream endpoint.
+  // Default-off; user opts in by setting `agi_use_provider_stream = true` in
+  // chrome.storage.local along with a Supabase JWT in chrome.storage.session.
+  const providerStreamSettings = await getProviderStreamSettings();
+  if (providerStreamSettings.enabled) {
+    const jwt = await getSupabaseJwtFromStorage();
+    if (jwt) {
+      try {
+        const model = await getSelectedModel();
+        const providerId =
+          providerStreamSettings.providerOverride === 'auto'
+            ? inferProviderFromModel(model)
+            : providerStreamSettings.providerOverride;
+        const streamResult = await streamChatViaProvider({
+          gatewayUrl: providerStreamSettings.gatewayUrl,
+          providerId,
+          jwt,
+          model,
+          messages: messages as Array<{
+            role: 'user' | 'assistant' | 'system';
+            content: string;
+          }>,
+          broadcast: broadcastChunk,
+        });
+        // If the API returned a paywall response, do not fall through to the
+        // legacy bridge — the cap is enforced server-side and the PAYWALL_HIT
+        // broadcast has already been sent to the popup/side-panel.
+        if (streamResult.paywalled) return;
+        return;
+      } catch (err) {
+        logger.warn('Provider-stream path failed, falling back to legacy bridge', err);
+        // fall through to legacy fetch + native fallback
+      }
+    } else {
+      logger.debug(
+        'Provider-stream enabled but no Supabase JWT in session storage — using legacy path',
+      );
+    }
+  }
+
   // Resolve the bridge URL at call time so it picks up any in-session changes.
   const AGI_API_BASE = await getAgiBridgeBaseUrl();
 
-  // Resolve the API key: prefer the value forwarded from the side panel,
-  // then check chrome.storage.session (where side_panel.ts persists keys).
-  // CRIT-004: Do NOT read from chrome.storage.local as an ongoing fallback.
+  // Resolve the API key strictly from chrome.storage.session — written only by
+  // the trusted side-panel UI. See chrome-HIGH-3 comment at the top of
+  // handleChatMessage for why message-body apiKey is no longer accepted.
+  // CRIT-004 still applies: do NOT fall back to chrome.storage.local.
   const resolvedApiKey: string | null = await new Promise((resolve) => {
-    if (apiKey) {
-      resolve(apiKey);
-      return;
-    }
     try {
       chrome.storage.session.get('agi_api_key', (sessionResult) => {
         if (chrome.runtime.lastError) {
@@ -2154,10 +2635,41 @@ async function handleChatMessage(
     // The desktop app may expose an HTTP endpoint; fall back to native if unavailable.
     let streamed = false;
 
-    // Build request headers — include Authorization if we have a key
+    // SECURITY (C-2): Never forward the provider API key to the local desktop
+    // bridge (http://localhost:8787). The desktop app authenticates bridge calls
+    // with its own pairing token, not with provider keys. Provider API keys must
+    // only be sent to the provider's own endpoint (api.openai.com, etc.).
+    // Bridge calls use X-Bridge-Token instead; if no bridge token is configured
+    // the request still goes through without a key (desktop supplies its own).
+    const bridgeBaseUrl = AGI_API_BASE ?? '';
+    const isBridgeRequest =
+      bridgeBaseUrl.includes('localhost') || bridgeBaseUrl.includes('127.0.0.1');
+
     const fetchHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (resolvedApiKey) {
+    if (!isBridgeRequest && resolvedApiKey) {
+      // Only attach provider API key when sending to a remote (non-bridge) endpoint.
       fetchHeaders['Authorization'] = `Bearer ${resolvedApiKey}`;
+    }
+    // Bridge-token attachment: read pairing token from session storage.
+    // This is set during the one-time popup pairing flow.
+    if (isBridgeRequest) {
+      const bridgeToken = await new Promise<string | null>((res) => {
+        try {
+          chrome.storage.session.get('agi_bridge_token', (r) => {
+            if (chrome.runtime.lastError) {
+              res(null);
+              return;
+            }
+            const t = (r['agi_bridge_token'] as string | undefined)?.trim();
+            res(t ?? null);
+          });
+        } catch {
+          res(null);
+        }
+      });
+      if (bridgeToken) {
+        fetchHeaders['X-Bridge-Token'] = bridgeToken;
+      }
     }
 
     try {
@@ -2274,6 +2786,101 @@ async function handleChatMessage(
   }
 }
 
+/**
+ * Handle an in-page prompt from the content-script overlay panel.
+ *
+ * Returns the full accumulated response text so the panel can render it
+ * without needing a chunked messaging protocol.
+ *
+ * Fallback chain (same as handleChatMessage):
+ *  1. Provider-stream via api-gateway (if enabled + JWT present)
+ *  2. HTTP fetch to AGI bridge (localhost:8787)
+ *  3. Native messaging to desktop app
+ *  4. Offline message
+ */
+async function handleInPagePrompt(prompt: string): Promise<string> {
+  const messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [
+    { role: 'user', content: prompt },
+  ];
+
+  // Path 1 — provider-stream via api-gateway
+  const providerStreamSettings = await getProviderStreamSettings();
+  if (providerStreamSettings.enabled) {
+    const jwt = await getSupabaseJwtFromStorage();
+    if (jwt) {
+      try {
+        const model = await getSelectedModel();
+        const providerId =
+          providerStreamSettings.providerOverride === 'auto'
+            ? inferProviderFromModel(model)
+            : providerStreamSettings.providerOverride;
+        let accumulated = '';
+        const streamResult = await streamChatViaProvider({
+          gatewayUrl: providerStreamSettings.gatewayUrl,
+          providerId,
+          jwt,
+          model,
+          messages,
+          broadcast: (chunk: string, _done: boolean) => {
+            accumulated += chunk;
+          },
+        });
+        if (streamResult.paywalled) {
+          throw new Error('Feature requires upgrade');
+        }
+        if (accumulated) return accumulated;
+      } catch (err) {
+        logger.warn('In-page prompt: provider-stream failed, falling back', err);
+      }
+    }
+  }
+
+  // Path 2 — HTTP bridge
+  const AGI_API_BASE = await getAgiBridgeBaseUrl();
+  try {
+    const resp = await fetch(`${AGI_API_BASE}/v1/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages, stream: false }),
+      signal: AbortSignal.timeout(45000),
+    });
+    if (resp.ok) {
+      const json = (await resp.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+        content?: string;
+      };
+      const text =
+        json.choices?.[0]?.message?.content ??
+        (typeof json.content === 'string' ? json.content : '');
+      if (text) return text;
+    }
+  } catch {
+    logger.debug('In-page prompt: bridge fetch failed, trying native');
+  }
+
+  // Path 3 — native messaging
+  if (state.isNativeConnected && state.nativePort) {
+    try {
+      const nativeResp = (await withTimeout(
+        sendNativeRequest({
+          type: 'chat_message',
+          id: `in_page_${Date.now()}`,
+          text: prompt,
+          conversationHistory: [],
+          timestamp: Date.now(),
+        }),
+        30000,
+      )) as unknown as { success?: boolean; reply?: string; error?: string };
+      if (nativeResp?.reply) return nativeResp.reply;
+    } catch (err) {
+      logger.warn('In-page prompt: native fallback failed', err);
+    }
+  }
+
+  // Path 4 — offline
+  return 'The AGI Workforce desktop app is not running or no provider is configured. Please start the desktop app or configure a provider in the extension popup.';
+}
+
 function isValidMessage(message: unknown): message is ExtensionMessage {
   if (typeof message !== 'object' || message === null) {
     return false;
@@ -2335,6 +2942,61 @@ chrome.runtime.onSuspend.addListener(() => {
     logger.debug('Native disconnect on suspend failed', error);
   }
 });
+
+/**
+ * Public bridge: translate an array of `@agiworkforce/browser-tool`
+ * `BrowserAction`s OR Anthropic Computer Use actions into the extension's
+ * native `RunPageAction[]` plan. Exposed for the side panel and external
+ * MCP-style entrypoints. Returns the planned step list; the caller is
+ * responsible for sending `RUN_PAGE_ACTIONS` to the active tab.
+ */
+export function planActionsFromBrowserTool(
+  actions: ReadonlyArray<BrowserAction | ComputerUseAction>,
+): RunPageAction[] {
+  const plan: RunPageAction[] = [];
+  for (const action of actions) {
+    const steps = isComputerUseKind(action.kind)
+      ? computerUseToPageActions(action as ComputerUseAction)
+      : browserActionToPageActions(action as BrowserAction);
+    for (const step of steps) {
+      plan.push({
+        id: step.id,
+        type: step.type,
+        selector: step.selector ?? null,
+        value: step.value ?? null,
+        delay: step.delay ?? null,
+      });
+    }
+  }
+  return plan;
+}
+
+const COMPUTER_USE_KINDS = new Set<string>([
+  'screenshot',
+  'left_click',
+  'right_click',
+  'middle_click',
+  'double_click',
+  'triple_click',
+  'mouse_move',
+  'key',
+  'type',
+  'scroll',
+  'hold_key',
+  'wait',
+  'left_mouse_down',
+  'left_mouse_up',
+  'cursor_position',
+  'zoom',
+]);
+
+function isComputerUseKind(kind: string): boolean {
+  // 'type' / 'wait' / 'screenshot' overlap between the two action sets;
+  // we treat them as Computer Use because that's the broader vocabulary
+  // (Computer Use's 'type' takes the same shape as the package's 'type'
+  // when no `coordinate` is supplied).
+  return COMPUTER_USE_KINDS.has(kind);
+}
 
 // Export for testing
 export { state, handleMessage, checkDesktopConnection };

@@ -16,6 +16,8 @@
  * - Rate limited to 5 requests per minute
  */
 
+export const runtime = 'nodejs';
+
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
@@ -142,7 +144,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           try {
             cookieStore.set({ name, value, ...options });
           } catch {
-            // ignore — read-only context
+            // ignore - read-only context
           }
         },
         remove(name: string, options: CookieOptions) {

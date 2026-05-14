@@ -26,7 +26,7 @@ async function handleGetStats(request: NextRequest, context: RouteContext) {
     throw createError.validation('Invalid platform. Must be one of: whatsapp, telegram, slack');
   }
 
-  // Return mock stats for now — actual message tracking comes in a later phase
+  // Return mock stats for now - actual message tracking comes in a later phase
   return NextResponse.json({
     messagesSent: 0,
     messagesReceived: 0,

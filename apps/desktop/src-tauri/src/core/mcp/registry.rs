@@ -2,10 +2,91 @@ use crate::core::agi::tools::{ParameterType, Tool, ToolCapability, ToolParameter
 use crate::core::mcp::client::McpTool;
 use crate::core::mcp::{McpClient, McpError, McpResult};
 use base64::Engine as _;
+use regex::Regex;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
+
+/// RT-03 fix: Maximum allowed length for MCP tool descriptions.
+const MCP_DESC_MAX_LEN: usize = 1024;
+
+/// RT-03 fix: Regex patterns to detect and strip prompt-injection markers in
+/// MCP tool descriptions.  The patterns are case-insensitive and cover the
+/// most common injection vectors observed in the wild.
+static INJECTION_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    let patterns = [
+        r"(?i)ignore\s+(previous|prior)\s+(instructions?|prompts?|context)",
+        r"(?i)you\s+are\s+now\b",
+        r"(?i)\bsystem\s*:",
+        r"(?i)\bassistant\s*:",
+        r"(?i)forget\s+(your|all|previous)",
+        r"(?i)\boverride\b",
+        r"(?i)</?tool_use>",
+        r"(?i)</?function_call>",
+        r"(?i)</?system>",
+        r"(?i)</?instructions?>",
+        r"(?i)</?prompt>",
+    ];
+    patterns
+        .iter()
+        .filter_map(|p| Regex::new(p).ok())
+        .collect()
+});
+
+/// RT-03 fix: Sanitise a raw MCP tool description before it is inserted into
+/// the LLM system prompt.
+///
+/// Steps:
+/// 1. Strip non-printable control characters (keep normal Unicode).
+/// 2. Truncate to `MCP_DESC_MAX_LEN` with a notice suffix.
+/// 3. Replace every detected injection marker with `[removed]`.
+/// 4. Wrap the result in `<mcp_tool_description>` delimiters.
+fn sanitize_mcp_description(raw: &str, server_name: &str) -> String {
+    // Step 1: strip non-printable control chars (keep tabs/newlines for readability).
+    let stripped: String = raw
+        .chars()
+        .filter(|&c| c == '\t' || c == '\n' || c == '\r' || (!c.is_control()))
+        .collect();
+
+    // Step 2: truncate with notice.
+    // I-mcp fix: previous code used `stripped[..MCP_DESC_MAX_LEN]` which
+    // panics with "byte index N is not a char boundary" when the cut falls
+    // mid-codepoint (UTF-8 chars are 1-4 bytes). Multi-byte descriptions
+    // (CJK, emoji) crashed the registration task. Iterate by char and stop
+    // when accumulated bytes would exceed the cap so the result remains
+    // valid UTF-8.
+    let truncated = if stripped.len() > MCP_DESC_MAX_LEN {
+        let mut s = String::with_capacity(MCP_DESC_MAX_LEN + 16);
+        for ch in stripped.chars() {
+            if s.len() + ch.len_utf8() > MCP_DESC_MAX_LEN {
+                break;
+            }
+            s.push(ch);
+        }
+        s.push_str(" [truncated]");
+        s
+    } else {
+        stripped
+    };
+
+    // Step 3: strip injection markers.
+    let mut sanitised = truncated;
+    for pat in INJECTION_PATTERNS.iter() {
+        sanitised = pat.replace_all(&sanitised, "[removed]").to_string();
+    }
+
+    // Step 4: wrap in delimiters.
+    // The server_name is HTML-escaped to prevent tag injection through the name.
+    let escaped_server = server_name
+        .replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;");
+    format!(
+        r#"<mcp_tool_description server="{escaped_server}">{sanitised}</mcp_tool_description>"#
+    )
+}
 
 /// Delimiter used to separate components in tool IDs.
 /// Format: mcp__<server_name>__<tool_name>
@@ -114,13 +195,18 @@ impl McpToolRegistry {
             ToolCapability::NetworkOperation,
         ];
 
+        // RT-03 fix: sanitise the MCP-supplied description before it reaches the LLM.
+        let raw_desc = mcp_tool
+            .description
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or("(no description)");
+        let safe_description = sanitize_mcp_description(raw_desc, server_name);
+
         Tool {
             id: tool_id,
             name: mcp_tool.name.clone(),
-            description: mcp_tool
-                .description
-                .clone()
-                .unwrap_or_else(|| format!("MCP tool from {} server", server_name)),
+            description: safe_description,
             capabilities,
             parameters,
             estimated_resources: crate::core::agi::ResourceUsage {
@@ -593,7 +679,15 @@ mod tests {
     }
 
     /// Benchmark: compare indexed lookup vs simulated linear scan for hashed IDs.
+    ///
+    /// Marked `#[ignore]` because absolute wall-clock comparisons flake on
+    /// shared CI runners. With only 100 entries and 1000 iters per side the
+    /// dominant cost can shift to allocator noise, rwlock acquisition, or
+    /// process scheduling. Run locally with `cargo test --lib
+    /// test_benchmark_index_vs_linear_scan -- --ignored --nocapture` when
+    /// validating the index path's micro-perf.
     #[test]
+    #[ignore = "timing-sensitive benchmark; run with --ignored for local perf checks"]
     fn test_benchmark_index_vs_linear_scan() {
         let registry = McpToolRegistry::new(Arc::new(McpClient::new()));
 

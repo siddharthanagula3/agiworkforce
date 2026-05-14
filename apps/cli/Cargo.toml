@@ -1,10 +1,14 @@
 [package]
 name = "agiworkforce-cli"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 authors = ["AGI Automation LLC"]
-description = "AGI Workforce CLI — multi-model AI agent in your terminal"
+description = "Multi-provider agentic CLI — 10+ providers (Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, Ollama, LM Studio, plus user-defined OpenAI-compatible) in one terminal"
 license = "Proprietary"
+repository = "https://github.com/siddharthanagula3/agiworkforce"
+readme = "README.md"
+keywords = ["ai", "agent", "cli", "mcp", "llm"]
+categories = ["command-line-utilities", "development-tools"]
 default-run = "agiworkforce"
 
 [[bin]]
@@ -21,7 +25,7 @@ unused_mut = "deny"
 dead_code = "deny"
 
 [lints.clippy]
-await_holding_lock = "allow"
+await_holding_lock = "warn"
 
 [dependencies]
 agiworkforce-protocol = { path = "../../crates/agiworkforce-protocol" }
@@ -40,6 +44,7 @@ rustyline = "14"
 futures-util = { version = "0.3", features = ["sink"] }
 dirs = "6"
 anyhow = "1"
+tracing = "0.1.44"
 chrono = { version = "0.4", features = ["serde"] }
 glob = "0.3"
 sha2 = "0.10"
@@ -64,64 +69,16 @@ syntect = "5"
 two-face = "0.4"
 pulldown-cmark = "0.12"
 arboard = "3"
+tempfile = "3"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.29", features = ["signal", "process"] }
+nix = { version = "0.29", features = ["signal", "process", "user", "fs"] }
 
 [features]
 default = []
-full = [
-  "agiworkforce-rollout-trace",
-  "agiworkforce-core-plugins",
-  "agiworkforce-core-skills",
-  "agiworkforce-memories-read",
-  "agiworkforce-memories-write",
-  "agiworkforce-thread-store",
-  "agiworkforce-model-provider",
-  "agiworkforce-models-manager",
-  "agiworkforce-agent-graph-store",
-  "agiworkforce-plugin",
-]
-
-[dependencies.agiworkforce-rollout-trace]
-path = "../../crates/agiworkforce-rollout-trace"
-optional = true
-
-[dependencies.agiworkforce-core-plugins]
-path = "../../crates/agiworkforce-core-plugins"
-optional = true
-
-[dependencies.agiworkforce-core-skills]
-path = "../../crates/agiworkforce-core-skills"
-optional = true
-
-[dependencies.agiworkforce-memories-read]
-path = "../../crates/agiworkforce-memories-read"
-optional = true
-
-[dependencies.agiworkforce-memories-write]
-path = "../../crates/agiworkforce-memories-write"
-optional = true
-
-[dependencies.agiworkforce-thread-store]
-path = "../../crates/agiworkforce-thread-store"
-optional = true
-
-[dependencies.agiworkforce-model-provider]
-path = "../../crates/agiworkforce-model-provider"
-optional = true
-
-[dependencies.agiworkforce-models-manager]
-path = "../../crates/agiworkforce-models-manager"
-optional = true
-
-[dependencies.agiworkforce-agent-graph-store]
-path = "../../crates/agiworkforce-agent-graph-store"
-optional = true
-
-[dependencies.agiworkforce-plugin]
-path = "../../crates/agiworkforce-plugin"
-optional = true
+# Note: previous "full" feature aggregated 10 optional path-deps to codex-rs port crates.
+# Those crates were deleted on 2026-05-03 (preserved at ~/Desktop/reference/codex-cli/).
+# No source under apps/cli/src/ references those features (verified via grep). If a
+# specific capability is needed in the future, port from reference/codex-cli/ as needed.
 
 [dev-dependencies]
-tempfile = "3"

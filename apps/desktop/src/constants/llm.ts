@@ -86,6 +86,8 @@ export interface ModelMetadata {
   qualityTier: 'fast' | 'balanced' | 'best';
   bestFor: string[];
   released?: string;
+  /** Mirrors the optional `deprecated` flag in models.json. */
+  deprecated?: boolean;
 }
 
 // ---- Derived data from JSON ----
@@ -130,6 +132,8 @@ const PRO_ADDITIONS = getCatalogAllowedModelsForTier('pro_additions');
 const FLAGSHIP_ADDITIONS = getCatalogAllowedModelsForTier('flagship_additions');
 
 export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
+  'local-only': [...ECONOMY_MODELS],
+  byok: [...ECONOMY_MODELS],
   free: [...ECONOMY_MODELS],
   hobby: [...ECONOMY_MODELS],
   pro: Array.from(new Set([...PRO_ADDITIONS, ...ECONOMY_MODELS])),
@@ -169,16 +173,10 @@ export function formatCost(inputCost?: number, outputCost?: number): string {
 }
 
 export function isModelAllowedForTier(modelId: string, tier: SubscriptionTier): boolean {
-  const tierKey =
-    tier === 'free'
-      ? 'economy'
-      : tier === 'hobby'
-        ? 'economy'
-        : tier === 'pro'
-          ? 'pro_additions'
-          : 'flagship_additions';
-
-  if (tier === 'free' || tier === 'hobby') {
+  // local-only and byok users only access models through their own keys / Ollama,
+  // not through tier-gated managed-cloud lists; treat them like 'free' for any
+  // managed-cloud gating logic that calls into this function.
+  if (tier === 'local-only' || tier === 'byok' || tier === 'free' || tier === 'hobby') {
     return isCatalogModelAllowedForTier(modelId, 'economy');
   }
   if (tier === 'pro') {
@@ -194,7 +192,7 @@ export function isModelAllowedForTier(modelId: string, tier: SubscriptionTier): 
       isCatalogModelAllowedForTier(modelId, 'flagship_additions')
     );
   }
-  return isCatalogModelAllowedForTier(modelId, tierKey);
+  return isCatalogModelAllowedForTier(modelId, 'economy');
 }
 
 export function getAllowedModelsForTier(tier: SubscriptionTier): string[] {

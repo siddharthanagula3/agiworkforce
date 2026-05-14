@@ -8,6 +8,8 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { getUserClient } from '@/lib/supabase-server';
+import { getModelMetadataById } from '@agiworkforce/types';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { CreditService } from '@/lib/services/credit-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
@@ -19,13 +21,13 @@ import { randomUUID } from 'crypto';
  * Endpoint: POST /api/media/video/generate
  *
  * Proxies video generation requests to Runway (Gen4 Turbo) or Google Veo3.
- * Video generation is async — this endpoint creates a task and returns a task_id
+ * Video generation is async - this endpoint creates a task and returns a task_id
  * for polling via GET /api/media/video/status?task_id=xxx.
  *
  * Requires Pro or Max subscription tier.
  */
 
-// Next.js route configuration — video task creation can take up to 30s
+// Next.js route configuration - video task creation can take up to 30s
 // (the actual generation is async, so we just need time for the task-creation call).
 export const maxDuration = 60;
 export const runtime = 'nodejs';
@@ -128,7 +130,7 @@ async function generateWithRunway(
     throw createError.serviceUnavailable('Runway API not configured');
   }
 
-  // Map resolution to Runway ratio — Gen4 supports 16:9 and 9:16
+  // Map resolution to Runway ratio - Gen4 supports 16:9 and 9:16
   // 4K is not yet available; fall back to 1080p
   const ratio = resolution === '9:16' ? '9:16' : '16:9';
   const clampedDuration = Math.max(2, Math.min(durationSecs, 10));
@@ -192,7 +194,7 @@ async function generateWithRunway(
  *
  * Current model (as of 2025-10): veo-3.1-generate-preview
  *   - Previous model veo-2.0-generate-001 is outdated
- * Duration: "4", "6", or "8" (string seconds — Veo does not accept arbitrary integers)
+ * Duration: "4", "6", or "8" (string seconds - Veo does not accept arbitrary integers)
  * Polling: GET /v1beta/{operation_name} until done === true
  */
 async function generateWithGoogleVeo(
@@ -226,7 +228,9 @@ async function generateWithGoogleVeo(
     veoResolution = '720p';
   }
 
-  const model = 'veo-3.1-generate-preview';
+  // Read the wire-protocol apiModelId from the catalog so the literal can
+  // shift in models.json without redeploying this route (rule-models-json.md).
+  const model = getModelMetadataById('veo-3')?.apiModelId ?? 'veo-3.1-generate-preview';
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predictLongRunning`;
 
   const response = await fetch(endpoint, {
@@ -289,7 +293,7 @@ async function generateWithGoogleVeo(
     throw createError.internal('Failed to start video generation: no operation name returned');
   }
 
-  // Operation name format: "operations/{id}" — extract the ID portion for storage
+  // Operation name format: "operations/{id}" - extract the ID portion for storage
   const operationId = result.name.split('/').pop() || result.name;
 
   // Estimated wait: ~90s base + 15s per second of video
@@ -343,8 +347,11 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     throw createError.unauthorized('Invalid authentication token');
   }
 
+  // RLS-bound client for all downstream DB ops on behalf of this user.
+  const userClient = getUserClient(token);
+
   // Get subscription and check tier
-  const subscription = await SubscriptionService.getSubscription(user.id);
+  const subscription = await SubscriptionService.getSubscription(userClient, user.id);
 
   if (!subscription) {
     throw createError.forbidden(
@@ -391,9 +398,9 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
 
   // Cost pre-check: verify the user has enough credits before starting the task
   const estimatedCostCents = VIDEO_COST_CENTS[provider];
-  const hasCredits = await CreditService.checkAvailable(user.id, estimatedCostCents);
+  const hasCredits = await CreditService.checkAvailable(userClient, user.id, estimatedCostCents);
   if (!hasCredits) {
-    const balance = await CreditService.getBalance(user.id);
+    const balance = await CreditService.getBalance(userClient, user.id);
     logger.warn(
       { userId: user.id, provider, estimatedCostCents, balance },
       'Insufficient credits for video generation',
@@ -407,6 +414,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
   const requestId = randomUUID();
   const reservationKey = CreditService.generateIdempotencyKey(user.id, 'reservation', requestId);
   const reserveResult = await CreditService.deductCredits(
+    userClient,
     user.id,
     estimatedCostCents,
     `Credit reservation: video generation (${provider})`,
@@ -453,6 +461,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     // Refund the reserved credits since the task was never created
     const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
     await CreditService.deductCredits(
+      userClient,
       user.id,
       -estimatedCostCents,
       `Refund: video generation failed (${provider})`,
@@ -461,7 +470,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     );
     logger.warn(
       { userId: user.id, provider, requestId },
-      'Video task creation failed — credits refunded',
+      'Video task creation failed - credits refunded',
     );
 
     // Re-throw AppError instances (from createError.*)

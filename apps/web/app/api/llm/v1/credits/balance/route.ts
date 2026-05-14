@@ -1,8 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { requireEnv } from '@/utils/env';
+import { getUserClient } from '@/lib/supabase-server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { CreditService } from '@/lib/services/credit-service';
@@ -52,10 +51,8 @@ async function handleGetBalance(request: NextRequest) {
 
   const token = authHeader.substring(7);
 
-  // Verify user with Supabase
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-
-  const supabase = createClient(supabaseUrl, requireEnv('SUPABASE_SERVICE_ROLE_KEY'));
+  // Verify user with Supabase (RLS-bound client, not service-role)
+  const supabase = getUserClient(token);
 
   const {
     data: { user },
@@ -77,9 +74,10 @@ async function handleGetBalance(request: NextRequest) {
 
   // Get subscription and credits with error isolation
   // Use Promise.allSettled to prevent one failure from blocking the other
+  const userClient = getUserClient(token);
   const [subscriptionResult, balanceResult] = await Promise.allSettled([
-    SubscriptionService.getSubscription(user.id),
-    CreditService.getBalance(user.id),
+    SubscriptionService.getSubscription(userClient, user.id),
+    CreditService.getBalance(userClient, user.id),
   ]);
 
   // Extract results, providing null for rejected promises

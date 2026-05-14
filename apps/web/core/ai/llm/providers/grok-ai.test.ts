@@ -140,12 +140,14 @@ describe('GrokProvider', () => {
       expect(models).toEqual([...SUPPORTED_GROK_IMAGE_MODELS]);
     });
 
-    it('should return agent models', () => {
+    it('should return agent models (post grok-4.x deprecation, 2026-05-15)', () => {
       const models = GrokProvider.getAgentModels();
 
-      expect(models).toContain('grok-4-1-fast-reasoning');
-      expect(models).toContain('grok-4-fast-non-reasoning');
-      expect(models).toContain('grok-4');
+      // Legacy IDs (grok-4-1-fast-*, grok-4-fast-*, grok-4) all deprecate
+      // 2026-05-15. Replacement: grok-4.3.
+      expect(models).toContain('grok-4.3');
+      expect(models).not.toContain('grok-4-1-fast-reasoning');
+      expect(models).not.toContain('grok-4-fast-non-reasoning');
       expect(models.length).toBeGreaterThan(0);
     });
   });
@@ -349,7 +351,7 @@ describe('GrokProvider', () => {
       );
 
       const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
-      expect(requestBody.model).toBe('grok-4');
+      expect(requestBody.model).toBe('grok-4.3');
       expect(requestBody.max_tokens).toBe(4000);
       expect(requestBody.temperature).toBe(0.7);
       expect(requestBody.stream).toBe(false);

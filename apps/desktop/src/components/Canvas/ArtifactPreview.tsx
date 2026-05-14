@@ -12,7 +12,7 @@
 import { AlertTriangle, Terminal, WrenchIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { cn } from '../../lib/utils';
-import type { CanvasArtifact } from '../../stores/canvasStore';
+import type { CanvasArtifact } from '../../stores/editingStore';
 import { sanitizeMarkdownHtml } from '../../utils/security';
 
 // ---------------------------------------------------------------------------

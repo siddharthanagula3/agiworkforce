@@ -1,52 +1,125 @@
 # AGI Workforce
 
-Multi-provider, local-first agentic workspace. One Tauri desktop app, one Next.js web mirror, one Expo mobile companion, one Rust CLI, plus VS Code and Chrome extensions — all wired into the same chat layer with 24+ LLM providers, MCP, browser automation, and computer-use.
+> **Beyond one model. Beyond one surface. AGI in your hands.**
 
-> **Status:** active development. The remediation plan at `~/.claude/plans/make-a-plan-to-purrfect-papert.md` is the single source of truth for what's blocking the next release. CI on `main` should always be green; if it isn't, that's the highest-priority bug.
+[![CLI Release](https://img.shields.io/github/v/release/siddharthanagula3/agiworkforce?filter=v-cli-*&label=cli&color=blue)](https://github.com/siddharthanagula3/agiworkforce/releases)
+[![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
+[![Homebrew](https://img.shields.io/badge/brew-siddharthanagula3%2Ftap%2Fagiworkforce-orange)](https://github.com/siddharthanagula3/homebrew-tap)
 
-## Repository layout
+Multi-provider, local-first AI agent platform. One Tauri desktop app, one Next.js web at agiworkforce.com/chat, one Expo mobile companion, one Rust CLI, plus VS Code and Chrome extensions — all wired into the same chat layer with **10+ Providers**, MCP, browser automation, and computer-use.
 
-```
-apps/
-  desktop/        Tauri v2 + Vite + React (apps/desktop/src-tauri is the Rust backend)
-  web/            Next.js mirror at agiworkforce.com/chat (Vite SPA bundled into /public/chat)
-  mobile/         Expo / React Native companion
-  cli/            agiworkforce CLI + ratatui TUI
-  extension/      Chrome extension (manifest v3)
-  extension-vscode/  VS Code extension
+> **CLI v1.0 SHIPPED** (2026-05-03). Install: `brew install siddharthanagula3/tap/agiworkforce` or see [Quick start](#quick-start) below.
+>
+> **Foundation Sprint shipped** at tag [`v0.7.0-foundation`](https://github.com/siddharthanagula3/agiworkforce/releases/tag/v0.7.0-foundation) (2026-05-13): central state pattern, message-queue priority lane, `packages/llm-runtime` (retry + stream watchdog + error classifier), outbound-worker direction inversion (`worker_registrations` + `work_units` live in Supabase), HKDF dispatch-key rotation (`rotate_dispatch_keys` RPC live), Stripe webhook idempotency RPC live in prod. All four tiers (Hobby / Pro / **Pro+** / Max) wired in Stripe.
+>
+> **For contributors and AI agents:** [AGI_WORKFORCE.md](AGI_WORKFORCE.md) is the single source of truth.
+> **For builds and deployment:** [BUILD.md](BUILD.md).
+> **For PR conventions:** [CONTRIBUTING.md](CONTRIBUTING.md).
 
-crates/           ~115 Rust crates ported from codex-rs (most are workspace dead-weight today;
-                  Sprint 5 of the remediation plan prunes the unused ones)
+## Why AGI Workforce
 
-packages/         Shared TS packages (api, chat, runtime, types, utils)
-services/         Node services (api-gateway, signaling-server)
-supabase/         Supabase migrations (us-east-2 region)
-```
+| You want                                  | Anthropic Claude | OpenAI ChatGPT | AGI Workforce              |
+| ----------------------------------------- | ---------------- | -------------- | -------------------------- |
+| One model family                          | ✅ Claude only   | ✅ GPT only    | ✅ Pick from 10+ Providers |
+| Bring your own API key                    | ❌               | ❌             | ✅                         |
+| Run local LLMs (Ollama / LM Studio)       | ❌               | ❌             | ✅                         |
+| Switch model mid-conversation             | ❌               | Limited        | ✅ Across providers        |
+| Desktop + Web + Mobile + CLI + extensions | ✅               | Partial        | ✅ All six                 |
+| Computer use, MCP, browser automation     | ✅ Cowork        | Limited        | ✅                         |
+| Mobile-to-desktop task dispatch           | ✅ Dispatch      | ❌             | ✅                         |
 
-See [BUILD.md](./BUILD.md) for prerequisites and build commands, and [CONTRIBUTING.md](./CONTRIBUTING.md) for the PR + branch-protection conventions.
+The unique slice: **multi-provider + BYOK + local LLM all in one app, on every surface**. No competitor offers all three.
+
+## Pricing
+
+| Tier                                                                   | Price         | Available now |
+| ---------------------------------------------------------------------- | ------------- | ------------- |
+| Local-only (run Ollama / LM Studio yourself)                           | Free forever  | ✅            |
+| BYOK (bring your own API keys)                                         | Free forever  | ✅            |
+| Hobby (managed cloud, limited credits)                                 | $10/mo        | ✅            |
+| Pro (full models, higher caps)                                         | $29.99/mo     | ✅            |
+| **Pro+** (Pro pool + Opus 4.7 + GPT-5.5 daily caps + 60s Runway Gen-4) | $49.99/mo     | ✅            |
+| Max (highest caps, computer use)                                       | $299.99/mo    | ✅            |
+| Enterprise (SSO, SCIM, custom retention)                               | Contact sales | Contact sales |
+
+See [docs/PRICING.md](docs/PRICING.md) for details.
 
 ## Quick start
 
+### Install the CLI
+
 ```bash
-# 1. Install Node 22 + pnpm 9.15.3 + Rust 1.94.0 (see BUILD.md for OS-specific deps)
-nvm use            # respects .nvmrc → Node 22
-corepack enable    # enables pnpm via packageManager
-pnpm install
+# Homebrew (macOS, Linux)
+brew install siddharthanagula3/tap/agiworkforce
 
-# 2. Run the desktop app in dev mode
-pnpm dev:desktop
+# cargo (any platform)
+cargo install agiworkforce-cli
 
-# 3. Or run the CLI
-cargo run -p agiworkforce-cli -- exec "Hello, world"
+# Universal installer (macOS, Linux, WSL)
+curl -fsSL https://agiworkforce.com/install.sh | bash
+
+# npm — coming soon (pending NPM_TOKEN)
+# npm install -g @agiworkforce/cli
+```
+
+Then:
+
+```bash
+agiworkforce login            # OAuth via Anthropic / OpenAI / Google, or BYOK
+agiworkforce exec "hello"     # one-shot
+agiworkforce                  # interactive TUI
+```
+
+### Use the desktop app
+
+Download from [agiworkforce.com/download](https://agiworkforce.com/download) — DMG (macOS), EXE (Windows), AppImage (Linux). Auto-update built in.
+
+### Use it on the web
+
+[agiworkforce.com/chat](https://agiworkforce.com/chat) — sign in with Google or email, choose Hobby tier or BYOK.
+
+### Use it on mobile
+
+iOS App Store + Google Play — see [agiworkforce.com/mobile](https://agiworkforce.com/mobile).
+
+### Add the Chrome extension
+
+[Chrome Web Store listing](https://agiworkforce.com/chrome).
+
+### Add the VS Code extension
+
+Search for "AGI Workforce" in VS Code Marketplace, or `code --install-extension agi-workforce`.
+
+## Build from source
+
+See [BUILD.md](BUILD.md) for prerequisites (Node 22, pnpm 9.15.3, Rust 1.94.0) and per-surface build commands.
+
+```bash
+git clone git@github.com:siddharthanagula3/agiworkforce.git
+cd agiworkforce
+nvm use && corepack enable && pnpm install
+pnpm dev:desktop                  # Tauri dev mode
+# Or:
+cargo run -p agiworkforce-cli -- exec "hello"
 ```
 
 ## Documentation
 
-- [BUILD.md](./BUILD.md) — prerequisites, build commands, signing requirements per platform
-- [CONTRIBUTING.md](./CONTRIBUTING.md) — PR conventions, branch protection, commit format, code review
-- [AUDIT_REPORT.md](./AUDIT_REPORT.md) — codebase-health audit (2026-05-01)
-- [FIX_QUEUE.md](./FIX_QUEUE.md) — queue of remediation fixes (FIX-001 .. FIX-047)
+- [AGI_WORKFORCE.md](AGI_WORKFORCE.md) — single source of truth (start here)
+- [docs/VISION.md](docs/VISION.md) — product vision (ONE chat layout, multi-provider)
+- [docs/ROADMAP.md](docs/ROADMAP.md) — live wave/sprint status
+- [docs/DESIGN.md](docs/DESIGN.md) — UI principles (Claude Desktop as north star)
+- [docs/PRICING.md](docs/PRICING.md) — tier model
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — cross-surface architecture
+- [apps/cli/ARCHITECTURE.md](apps/cli/ARCHITECTURE.md) — CLI deep-dive
+- [docs/audit/](docs/audit/) — security audits (P0/P1 status)
+- [docs/plans/](docs/plans/) — active sprint plans
+- [docs/api/](docs/api/) — Postman + OpenAPI 3.0
 
 ## License
 
-PROPRIETARY. See [LICENSE](./LICENSE) for terms.
+This is proprietary software. © 2026 AGI Workforce. All rights reserved.
+
+## Status
+
+Active development. Pre-v1.0 MVP. CI on `main` should always be green; if it isn't, that's the highest-priority bug.

@@ -28,13 +28,20 @@ vi.mock('@shared/stores/model-store', () => ({
     return selector(state);
   },
   AVAILABLE_MODELS: [
-    { id: 'gpt-5.4', name: 'GPT-5.4', provider: 'OpenAI' },
-    { id: 'claude-3-5-sonnet', name: 'Claude 3.5 Sonnet', provider: 'Anthropic' },
+    // ComposerFooter groups by `providerKey` (the lowercase models.json key);
+    // `provider` is the display label only.
+    { id: 'gpt-5.4', name: 'GPT-5.4', provider: 'OpenAI', providerKey: 'openai' },
+    {
+      id: 'claude-3-5-sonnet',
+      name: 'Claude 3.5 Sonnet',
+      provider: 'Anthropic',
+      providerKey: 'anthropic',
+    },
   ],
 }));
 
 // BudgetTrackerDisplay — lightweight stub
-vi.mock('@/components/UnifiedAgenticChat/BudgetTrackerDisplay', () => ({
+vi.mock('@/features/chat/components/Budget/BudgetTrackerDisplay', () => ({
   BudgetTrackerDisplay: () => <div data-testid="budget-tracker-display" />,
 }));
 

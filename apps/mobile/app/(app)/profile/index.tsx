@@ -1,11 +1,11 @@
 import { useCallback, useState, useEffect } from 'react';
-import { View, ScrollView, Pressable, Alert, Linking } from 'react-native';
+import { View, ScrollView, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import * as WebBrowser from 'expo-web-browser';
 import {
   ArrowLeft,
-  Mail,
   CreditCard,
   BarChart3,
   MessageSquare,
@@ -19,11 +19,15 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
+import { UpsellCard } from '@/components/billing/UpsellCard';
 import { useAuthStore } from '@/stores/authStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useAgentStore } from '@/stores/agentStore';
 import { api } from '@/services/api';
+import { fetchPortalSessionUrl } from '@/services/billing';
+import { isAllowedExternalUrl, openExternalUrl } from '@/lib/safeOpenURL';
 import { colors } from '@/lib/theme';
+import { normalizeBillingPlanTier } from '@agiworkforce/types';
 
 interface UsageStats {
   totalConversations: number;
@@ -51,10 +55,27 @@ export default function ProfileScreen() {
   });
   const [isLoadingStats, setIsLoadingStats] = useState(false);
 
-  // Attempt to load usage stats from the API
+  // Attempt to load usage stats from the API.
+  // Audit fix F8 (2026-05-05): /api/user/stats does not exist in apps/web.
+  // Gate behind EXPO_PUBLIC_FEATURE_USER_STATS (default false) until the
+  // endpoint is implemented. When the flag is off we use local-only data.
+  // TODO: implement GET /api/user/stats in apps/web returning
+  //   { conversationCount, messageCount, agentRunCount, plan, status }
+  const userStatsEnabled = process.env.EXPO_PUBLIC_FEATURE_USER_STATS === '1';
+  // Audit fix F2 (2026-05-05): deps changed from [conversations.length,
+  // agents.length] to [] — stats are best-effort informational; re-fetching
+  // on every conversation/agent change hammers the server unnecessarily.
   useEffect(() => {
     let cancelled = false;
     async function loadStats() {
+      if (!userStatsEnabled) {
+        setStats((prev) => ({
+          ...prev,
+          totalConversations: conversations.length,
+          totalAgentRuns: agents.length,
+        }));
+        return;
+      }
       setIsLoadingStats(true);
       try {
         const data = await api.get<{
@@ -89,7 +110,9 @@ export default function ProfileScreen() {
     return () => {
       cancelled = true;
     };
-  }, [conversations.length, agents.length]);
+    // Mount-only: stats are best-effort informational (audit fix F2).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -105,27 +128,50 @@ export default function ProfileScreen() {
 
   const handleManageSubscription = useCallback(async () => {
     try {
-      const data = await api.post<{ url: string }>('/api/portal');
-      if (data.url) {
-        await Linking.openURL(data.url);
+      const portalUrl = await fetchPortalSessionUrl();
+      // HIGH-MOB-02 allowlist: only https://stripe.com / *.stripe.com /
+      // agiworkforce.com / *.agiworkforce.com are accepted.
+      if (isAllowedExternalUrl(portalUrl)) {
+        await WebBrowser.openBrowserAsync(portalUrl);
         return;
       }
     } catch {
-      // Fall back to static URL
+      // Fall through to fallback below
     }
-    try {
-      await Linking.openURL('https://agiworkforce.com/billing');
-    } catch {
+    // Fallback: static billing page
+    const fallbackOpened = await openExternalUrl('https://agiworkforce.com/settings/billing');
+    if (!fallbackOpened) {
       Alert.alert(
         'Error',
-        'Could not open subscription management. Please visit agiworkforce.com/billing in your browser.',
+        "Couldn't open billing portal. Try again or visit agiworkforce.com/settings/billing",
       );
     }
+  }, []);
+
+  const handleUpgradePress = useCallback(async () => {
+    // Open Stripe checkout via system browser; portal-session doubles as
+    // the upgrade URL for free-plan users when no subscription exists.
+    try {
+      const portalUrl = await fetchPortalSessionUrl();
+      if (isAllowedExternalUrl(portalUrl)) {
+        await WebBrowser.openBrowserAsync(portalUrl);
+        return;
+      }
+    } catch {
+      // Fall through
+    }
+    await openExternalUrl('https://agiworkforce.com/pricing');
   }, []);
 
   const email = user?.email ?? 'Not signed in';
   const initial = email[0]?.toUpperCase() ?? 'U';
   const joinDate = user?.created_at ? formatDate(user.created_at) : null;
+
+  // Normalise the plan string from the API into a BillingPlanTier so we can
+  // decide whether to show the upsell. normalizeBillingPlanTier falls back to
+  // 'free' for null / unrecognised values — correct for new / unsubscribed users.
+  const planTier = normalizeBillingPlanTier(stats.subscriptionPlan);
+  const showUpsell = planTier === 'free' || planTier === 'byok' || planTier === 'local-only';
 
   return (
     <SafeAreaView className="flex-1 bg-surface-base">
@@ -169,6 +215,13 @@ export default function ProfileScreen() {
             </View>
           </Card>
         </Animated.View>
+
+        {/* Upsell card — only shown for free / byok / local-only plans */}
+        {showUpsell && (
+          <Animated.View entering={FadeInDown.duration(250).delay(50)}>
+            <UpsellCard onUpgradePress={handleUpgradePress} />
+          </Animated.View>
+        )}
 
         {/* Subscription */}
         <Animated.View entering={FadeInDown.duration(250).delay(60)}>
@@ -233,7 +286,9 @@ export default function ProfileScreen() {
               Account
             </Text>
             <Pressable
-              onPress={() => Linking.openURL('https://agiworkforce.com/account')}
+              onPress={() => {
+                void openExternalUrl('https://agiworkforce.com/account');
+              }}
               className="flex-row items-center gap-3 py-3 active:bg-white/5 rounded-lg"
               accessibilityLabel="Manage account online"
               accessibilityRole="link"

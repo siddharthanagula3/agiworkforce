@@ -1,0 +1,53 @@
+name: Actions pinned-SHA check
+
+# C3 (services red team 2026-05-04): Every third-party GitHub Action must
+# be pinned by full 40-char commit SHA, not a floating tag like @v1 / @main.
+# A compromise of an action's repo could otherwise leak every CI secret
+# (TAURI_SIGNING_PRIVATE_KEY, SUPABASE_SERVICE_ROLE_KEY, APPLE_*, NPM_TOKEN,
+# FLY_API_TOKEN, RAILWAY_TOKEN, …).
+#
+# Allowlist for unpinned uses: actions/*, github/*, microsoft/*, and any
+# `uses: ./...` (reusable workflows in this repo).
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+
+jobs:
+  check:
+    name: All third-party actions are SHA-pinned
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Scan for unpinned third-party actions
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Match `uses: <thing>@<ref>` lines that are NOT in the allowlist.
+          # Allowlist: actions/*, github/*, microsoft/* (first-party-trusted),
+          # `uses: ./...` (in-repo reusable workflows).
+          # Required form for everything else: @<40-hex-char SHA>.
+          unpinned=$(
+            grep -rEn '^[[:space:]]*-?[[:space:]]*uses:[[:space:]]+[^[:space:]]+@[^[:space:]]+' \
+              .github/workflows \
+              | grep -vE 'uses:[[:space:]]+(\./|actions/|github/|microsoft/)' \
+              | grep -vE '@[0-9a-f]{40}([[:space:]]|$|#)' \
+              || true
+          )
+          if [ -n "$unpinned" ]; then
+            echo "::error::Found third-party actions that are NOT pinned to a 40-char SHA:"
+            echo "$unpinned"
+            echo ""
+            echo "Fix: replace '@v1' / '@main' / '@latest' with '@<40-char-sha> # <version>'."
+            echo "Resolve a SHA via: gh api repos/<owner>/<repo>/git/refs/tags/<tag> --jq .object.sha"
+            exit 1
+          fi
+          echo "OK — all third-party actions are SHA-pinned."

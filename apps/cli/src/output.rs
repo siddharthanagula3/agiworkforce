@@ -126,8 +126,8 @@ pub fn create_progress_bar(total: u64, message: &str) -> ProgressBar {
 /// ```text
 /// Model             Provider   Cost
 /// ─────────────────────────────────
-/// claude-opus-4     anthropic  $15.00
-/// gpt-4o            openai     $2.50
+/// claude-opus-4-6   anthropic  $15.00
+/// gpt-5.5           openai     $1.25
 /// ```
 #[allow(dead_code)]
 pub fn format_table(headers: &[&str], rows: &[Vec<String>]) -> String {
@@ -396,6 +396,37 @@ pub fn print_divider() {
 // Splash / branding
 // ---------------------------------------------------------------------------
 
+/// Print a one-line compact header shown on every interactive launch.
+///
+/// Format: `agiworkforce 0.1.0 · provider: anthropic · ~/.agiworkforce/auth.json`
+pub fn print_compact_header(provider: &str) {
+    let version = env!("CARGO_PKG_VERSION");
+    // Resolve auth.json path — fall back to a tilde-prefixed literal if
+    // config_dir() is unavailable (e.g., $HOME not set).
+    let auth_path = crate::config::CliConfig::config_dir()
+        .map(|d| {
+            let p = d.join("auth.json");
+            // Prefer the tilde-abbreviated form for readability.
+            if let Ok(home) = std::env::var("HOME") {
+                let home_path = std::path::Path::new(&home);
+                if let Ok(rel) = p.strip_prefix(home_path) {
+                    return format!("~/{}", rel.display());
+                }
+            }
+            p.display().to_string()
+        })
+        .unwrap_or_else(|_| "~/.agiworkforce/auth.json".to_string());
+
+    eprintln!(
+        "{}",
+        format!(
+            "agiworkforce {} · provider: {} · {}",
+            version, provider, auth_path
+        )
+        .dimmed()
+    );
+}
+
 /// Print the CLI welcome banner.
 pub fn print_banner(model: &str, provider: &str) {
     let color_info = match detect_color_level() {
@@ -412,6 +443,17 @@ pub fn print_banner(model: &str, provider: &str) {
     );
     eprintln!("{}", "Type /help for commands, /exit to quit.".dimmed());
     eprintln!();
+}
+
+/// Print the user's tier and token usage to stderr if available from the
+/// on-disk cache.  This is a best-effort display — it is silently skipped when
+/// no cache entry exists (e.g. first-run, BYOK, or local mode).
+///
+/// Example output: `  Hobby · 1.3M/2.0M tokens`
+pub fn print_tier_status() {
+    if let Some(cached) = crate::tier_cache::read_tier_cache() {
+        eprintln!("{}", format!("  {}", cached.status_label()).dimmed());
+    }
 }
 
 // ---------------------------------------------------------------------------

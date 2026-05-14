@@ -12,6 +12,7 @@ import {
   Sparkles,
   Brain,
   BookOpen,
+  Code2,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { ChatAIService, type SkillInfo } from '@features/chat/services/chat-ai-service';
@@ -36,7 +37,13 @@ interface ChatComposerProps {
     content: string,
     attachments?: File[],
     skillId?: string,
-    meta?: { agentMode: ChatMode; folderId: string | null },
+    meta?: {
+      agentMode: ChatMode;
+      folderId: string | null;
+      webSearchEnabled?: boolean;
+      thinkingEnabled?: boolean;
+      codeExecutionEnabled?: boolean;
+    },
   ) => void;
   isLoading?: boolean;
   /**
@@ -61,6 +68,8 @@ interface ChatComposerProps {
   onDroppedFilesConsumed?: () => void;
   /** Fires when the input transitions between empty and non-empty (debounced 500ms on clear). */
   onTypingChange?: (isTyping: boolean) => void;
+  /** Called when the user clicks the stop button. Overrides the default ChatAIService.stopGeneration(). */
+  onStop?: () => void;
 }
 
 const TOOLS = [
@@ -68,6 +77,7 @@ const TOOLS = [
   { id: 'video', label: 'Generate Video', icon: Video, color: 'text-pink-400' },
   { id: 'document', label: 'Create Document', icon: FileText, color: 'text-blue-400' },
   { id: 'search', label: 'Web Search', icon: Globe, color: 'text-emerald-400' },
+  { id: 'code-execution', label: 'Run Code (Python)', icon: Code2, color: 'text-violet-400' },
 ];
 
 const FOCUS_MODE_TAGS: Record<NonNullable<FocusMode>, ModeTag[]> = {
@@ -98,6 +108,7 @@ const ChatComposerNewComponent = ({
   droppedFiles,
   onDroppedFilesConsumed,
   onTypingChange,
+  onStop,
 }: ChatComposerProps) => {
   const [message, setMessage] = useState('');
   const {
@@ -365,42 +376,55 @@ const ChatComposerNewComponent = ({
   }, []);
 
   const handleStop = useCallback(() => {
-    ChatAIService.stopGeneration();
-  }, []);
-
-  const handleSubmit = useCallback(() => {
-    if (!message.trim() && attachments.length === 0) return;
-    if (isLoading || disabled) return;
-
-    onSend(message, attachments.length > 0 ? attachments : undefined, selectedSkill?.id, {
-      agentMode,
-      folderId: selectedFolderId,
-    });
-
-    setMessage('');
-    clearAttachments();
-    setSelectedTools([]);
-    setSelectedSkill(null);
-    setWebSearchEnabled(false);
-    setThinkingEnabled(false);
-    setResearchEnabled(false);
-    clearSuggestion();
-
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
+    if (onStop) {
+      onStop();
+    } else {
+      ChatAIService.stopGeneration();
     }
-  }, [
-    message,
-    attachments,
-    selectedSkill,
-    isLoading,
-    disabled,
-    agentMode,
-    selectedFolderId,
-    onSend,
-    clearAttachments,
-    clearSuggestion,
-  ]);
+  }, [onStop]);
+
+  const handleSubmit = useCallback(
+    () => {
+      if (!message.trim() && attachments.length === 0) return;
+      if (isLoading || disabled) return;
+
+      onSend(message, attachments.length > 0 ? attachments : undefined, selectedSkill?.id, {
+        agentMode,
+        folderId: selectedFolderId,
+        webSearchEnabled,
+        thinkingEnabled,
+        codeExecutionEnabled: selectedTools.includes('code-execution'),
+      });
+
+      setMessage('');
+      clearAttachments();
+      setSelectedTools([]);
+      setSelectedSkill(null);
+      setWebSearchEnabled(false);
+      setThinkingEnabled(false);
+      setResearchEnabled(false);
+      clearSuggestion();
+
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+      // selectedTools/thinkingEnabled/webSearchEnabled are read at send-time only;
+      // including them would re-create the callback on every toggle and break
+      // child memoization without changing behavior.
+    }, // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      message,
+      attachments,
+      selectedSkill,
+      isLoading,
+      disabled,
+      agentMode,
+      selectedFolderId,
+      onSend,
+      clearAttachments,
+      clearSuggestion,
+    ],
+  );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

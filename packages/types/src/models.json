@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-03-27",
+  "lastUpdated": "2026-05-06",
   "providers": {
     "managed_cloud": {
       "label": "Managed Cloud",
@@ -15,14 +15,15 @@
       },
       "modelPrefixes": ["ideogram"],
       "aliases": ["managed_cloud", "managedcloud", "cloud"],
-      "defaultModel": "deepseek-chat",
+      "defaultModel": "gemini-3.1-flash-lite",
       "taskRouting": {
         "fast_completion": "gemini-3.1-flash-lite",
-        "code_generation": "deepseek-chat",
+        "code_generation": "deepseek-v4-flash",
         "complex_reasoning": "claude-sonnet-4.6",
-        "chat": "gpt-5.4-mini",
+        "chat": "gemini-3.1-flash-lite",
         "vision": "gemini-3.1-pro-preview",
-        "long_context": "gemini-3.1-pro-preview"
+        "long_context": "gemini-3.1-pro-preview",
+        "computer_use": "gpt-5.4-mini"
       },
       "canonicalization": {}
     },
@@ -39,24 +40,26 @@
       },
       "modelPrefixes": ["gpt-", "o1", "o3", "o4", "dall-e", "tts-", "whisper", "sora", "gpt-image"],
       "aliases": [],
-      "defaultModel": "gpt-5.4",
+      "defaultModel": "gpt-5.5",
       "taskRouting": {
         "fast_completion": "gpt-5.4-mini",
         "code_generation": "gpt-5.4-codex-medium",
-        "complex_reasoning": "gpt-5.4-pro",
-        "chat": "gpt-5.4",
-        "vision": "gpt-5.4",
-        "long_context": "gpt-5.4"
+        "complex_reasoning": "gpt-5.5",
+        "chat": "gpt-5.5",
+        "vision": "gpt-5.5",
+        "long_context": "gpt-5.5",
+        "computer_use": "gpt-5.4-mini"
       },
       "canonicalization": {
+        "gpt-5.5-2026-04-23": "gpt-5.5",
+        "gpt-5.5-latest": "gpt-5.5",
         "gpt-5.4-codex-low": "gpt-5.4-codex",
         "gpt-5.4-codex-medium": "gpt-5.4-codex",
         "gpt-5.4-codex-high": "gpt-5.4-codex",
         "gpt-5.4-codex-xhigh": "gpt-5.4-codex",
         "gpt-5.4-codex": "gpt-5.4-codex",
         "gpt-5-codex": "gpt-5.4-codex",
-        "gpt-5.4-nano": "gpt-5.4-mini",
-        "gpt-5-nano": "gpt-5.4-mini",
+        "gpt-5-nano": "gpt-5.4-nano",
         "gpt-5.4-low": "gpt-5.4",
         "gpt-5.4-medium": "gpt-5.4",
         "gpt-5.4-high": "gpt-5.4",
@@ -82,16 +85,19 @@
       "taskRouting": {
         "fast_completion": "claude-haiku-4.5",
         "code_generation": "claude-sonnet-4.6",
-        "complex_reasoning": "claude-opus-4.6",
+        "complex_reasoning": "claude-opus-4.7",
         "chat": "claude-sonnet-4.6",
         "vision": "claude-sonnet-4.6",
-        "long_context": "claude-sonnet-4.6"
+        "long_context": "claude-sonnet-4.6",
+        "computer_use": "claude-sonnet-4.6"
       },
       "canonicalization": {
         "claude-haiku-4-5": "claude-haiku-4.5",
-        "claude-sonnet-4-5": "claude-sonnet-4.5",
+        "claude-sonnet-4-5": "claude-sonnet-4.6",
+        "claude-sonnet-4.5": "claude-sonnet-4.6",
         "claude-sonnet-4-6": "claude-sonnet-4.6",
-        "claude-opus-4-6": "claude-opus-4.6"
+        "claude-opus-4-6": "claude-opus-4.6",
+        "claude-opus-4-7": "claude-opus-4.7"
       }
     },
     "google": {
@@ -137,19 +143,29 @@
       },
       "modelPrefixes": ["grok"],
       "aliases": ["xai", "grok"],
-      "defaultModel": "grok-4",
+      "defaultModel": "grok-4.3",
       "taskRouting": {
-        "fast_completion": "grok-4-1-fast-reasoning",
-        "code_generation": "grok-4-1-fast-reasoning",
-        "complex_reasoning": "grok-4-1-fast-reasoning",
-        "chat": "grok-4-1-fast-reasoning",
-        "vision": "grok-4",
-        "long_context": "grok-4-1-fast-reasoning"
+        "fast_completion": "grok-4.3",
+        "code_generation": "grok-4.3",
+        "complex_reasoning": "grok-4.3",
+        "chat": "grok-4.3",
+        "vision": "grok-4.3",
+        "long_context": "grok-4.3"
       },
       "canonicalization": {
-        "grok-4": "grok-4-0709",
-        "grok-4-fast-reasoning": "grok-4-1-fast-reasoning",
-        "grok-4-fast-non-reasoning": "grok-4-1-fast-reasoning"
+        "grok-4": "grok-4.3",
+        "grok-4-latest": "grok-4.3",
+        "grok-4.3-latest": "grok-4.3",
+        "grok-4-0709": "grok-4.3",
+        "grok-4-fast": "grok-4.3",
+        "grok-4-fast-reasoning": "grok-4.3",
+        "grok-4-fast-non-reasoning": "grok-4.3",
+        "grok-4-1-fast": "grok-4.3",
+        "grok-4-1-fast-reasoning": "grok-4.3",
+        "grok-4-1-fast-non-reasoning": "grok-4.3",
+        "grok-4-mini": "grok-4.3",
+        "grok-3": "grok-4.3",
+        "grok-code-fast-1": "grok-4.3"
       }
     },
     "deepseek": {
@@ -160,23 +176,27 @@
         "completion": 1.05
       },
       "defaultPricing": {
-        "inputPerMillion": 0.28,
-        "outputPerMillion": 0.42
+        "inputPerMillion": 0.14,
+        "outputPerMillion": 0.28
       },
       "modelPrefixes": ["deepseek"],
       "aliases": [],
-      "defaultModel": "deepseek-chat",
+      "defaultModel": "deepseek-v4-flash",
       "taskRouting": {
-        "fast_completion": "deepseek-chat",
-        "code_generation": "deepseek-chat",
-        "complex_reasoning": "deepseek-reasoner",
-        "chat": "deepseek-chat",
-        "vision": "deepseek-chat",
-        "long_context": "deepseek-chat"
+        "fast_completion": "deepseek-v4-flash",
+        "code_generation": "deepseek-v4-flash",
+        "complex_reasoning": "deepseek-v4-pro",
+        "chat": "deepseek-v4-flash",
+        "vision": "deepseek-v4-flash",
+        "long_context": "deepseek-v4-flash"
       },
       "canonicalization": {
-        "deepseek-r1": "deepseek-reasoner",
-        "deepseek-r1-zero": "deepseek-reasoner"
+        "deepseek-r1": "deepseek-v4-flash",
+        "deepseek-r1-zero": "deepseek-v4-flash",
+        "deepseek-v3": "deepseek-v4-flash",
+        "deepseek-v4": "deepseek-v4-flash",
+        "deepseek-chat": "deepseek-v4-flash",
+        "deepseek-reasoner": "deepseek-v4-flash"
       }
     },
     "qwen": {
@@ -211,21 +231,27 @@
         "completion": 1.0
       },
       "defaultPricing": {
-        "inputPerMillion": 0.6,
-        "outputPerMillion": 3.0
+        "inputPerMillion": 0.95,
+        "outputPerMillion": 4.0
       },
       "modelPrefixes": ["kimi", "moonshot"],
       "aliases": ["moonshot", "kimi"],
-      "defaultModel": "kimi-k2.5-thinking",
+      "defaultModel": "kimi-k2.6",
       "taskRouting": {
-        "fast_completion": "kimi-k2.5-thinking",
-        "code_generation": "kimi-k2.5-thinking",
-        "complex_reasoning": "kimi-k2.5-thinking",
-        "chat": "kimi-k2.5-thinking",
-        "vision": "kimi-k2.5-thinking",
-        "long_context": "kimi-k2.5-thinking"
+        "fast_completion": "kimi-k2.6",
+        "code_generation": "kimi-k2.6",
+        "complex_reasoning": "kimi-k2.6",
+        "chat": "kimi-k2.6",
+        "vision": "kimi-k2.6",
+        "long_context": "kimi-k2.6"
       },
-      "canonicalization": {}
+      "canonicalization": {
+        "kimi-k2.5": "kimi-k2.6",
+        "kimi-k2.5-thinking": "kimi-k2.6",
+        "kimi-k2.5-turbo": "kimi-k2.6",
+        "kimi-k2": "kimi-k2.6",
+        "kimi-k2-instruct": "kimi-k2.6"
+      }
     },
     "perplexity": {
       "label": "Perplexity",
@@ -259,21 +285,26 @@
         "completion": 1.0
       },
       "defaultPricing": {
-        "inputPerMillion": 0.14,
-        "outputPerMillion": 0.42
+        "inputPerMillion": 1.4,
+        "outputPerMillion": 4.4
       },
       "modelPrefixes": ["glm"],
-      "aliases": ["zhipu", "zhipuai", "bigmodel", "glm"],
-      "defaultModel": "glm-4.7",
+      "aliases": ["zhipu", "zhipuai", "bigmodel", "glm", "z.ai", "zai"],
+      "defaultModel": "glm-5.1",
       "taskRouting": {
-        "fast_completion": "glm-4.6v-flash",
-        "code_generation": "glm-4.7",
-        "complex_reasoning": "glm-4.7",
-        "chat": "glm-4.7",
-        "vision": "glm-4.6v",
-        "long_context": "glm-4.7"
+        "fast_completion": "glm-5.1",
+        "code_generation": "glm-5.1",
+        "complex_reasoning": "glm-5.1",
+        "chat": "glm-5.1",
+        "vision": "glm-5.1",
+        "long_context": "glm-5.1"
       },
-      "canonicalization": {}
+      "canonicalization": {
+        "glm-4.6v": "glm-5.1",
+        "glm-4.6v-flash": "glm-5.1",
+        "glm-4.5": "glm-5.1",
+        "glm-4": "glm-5.1"
+      }
     },
     "mistral": {
       "label": "Mistral AI",
@@ -610,6 +641,30 @@
         "long_context": ""
       },
       "canonicalization": {}
+    },
+    "runway": {
+      "label": "Runway",
+      "sseDelimiter": "\n\n",
+      "tokenMultiplier": {
+        "prompt": 1.0,
+        "completion": 1.0
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.0,
+        "outputPerMillion": 0.0
+      },
+      "modelPrefixes": ["runway", "gen4_"],
+      "aliases": ["runway-ml", "runwayml"],
+      "defaultModel": "runway-gen-4",
+      "taskRouting": {
+        "fast_completion": "",
+        "code_generation": "",
+        "complex_reasoning": "",
+        "chat": "",
+        "vision": "",
+        "long_context": ""
+      },
+      "canonicalization": {}
     }
   },
   "models": {
@@ -725,6 +780,42 @@
       "bestFor": ["Maximum Performance", "Complex Tasks", "Research"],
       "released": "January 2026"
     },
+    "gpt-5.5": {
+      "id": "gpt-5.5",
+      "apiModelId": "gpt-5.5",
+      "name": "GPT-5.5",
+      "provider": "openai",
+      "modelType": "reasoning",
+      "contextWindow": 1050000,
+      "inputCost": 5.0,
+      "outputCost": 30.0,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": true,
+        "codeExecution": true
+      },
+      "benchmarks": {
+        "swebench": 84.5,
+        "humaneval": 98.0,
+        "mmlu": 92.5,
+        "gpqa": 86.0,
+        "aime": 92.0
+      },
+      "speed": "medium",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Frontier Reasoning", "Complex Coding", "Agentic Tasks", "Research"],
+      "released": "April 2026"
+    },
     "gpt-5.4-codex": {
       "id": "gpt-5.4-codex",
       "apiModelId": "gpt-5.4-codex",
@@ -795,6 +886,43 @@
       "qualityTier": "best",
       "bestFor": ["Complex Reasoning", "Math", "Science", "Hard Problems"],
       "released": "January 2026"
+    },
+    "claude-opus-4.7": {
+      "id": "claude-opus-4.7",
+      "apiModelId": "claude-opus-4-7",
+      "name": "Claude 4.7 Opus",
+      "provider": "anthropic",
+      "modelType": "reasoning",
+      "contextWindow": 1000000,
+      "inputCost": 5.0,
+      "outputCost": 25.0,
+      "variantPartner": "claude-sonnet-4.6",
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": true,
+        "codeExecution": false
+      },
+      "benchmarks": {
+        "swebench": 84.0,
+        "humaneval": 98.5,
+        "mmlu": 91.0,
+        "gpqa": 91.0,
+        "aime": 95.0
+      },
+      "speed": "slow",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Frontier Coding", "Agentic Workflows", "Computer Use", "Long Documents"],
+      "released": "April 2026"
     },
     "claude-opus-4.6": {
       "id": "claude-opus-4.6",
@@ -904,7 +1032,8 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Coding", "Tool Use", "Computer Use"],
-      "released": "October 2025"
+      "released": "October 2025",
+      "deprecated": true
     },
     "claude-haiku-4.5": {
       "id": "claude-haiku-4.5",
@@ -992,8 +1121,8 @@
       "provider": "google",
       "modelType": "chat",
       "contextWindow": 1000000,
-      "inputCost": 0.5,
-      "outputCost": 3.0,
+      "inputCost": 0.25,
+      "outputCost": 1.5,
       "variantPartner": "gemini-3.1-pro-preview",
       "capabilities": {
         "streaming": true,
@@ -1078,7 +1207,8 @@
       "quality": "good",
       "qualityTier": "fast",
       "bestFor": ["Fast Inference", "Cost-Sensitive", "Long Context"],
-      "released": "January 2026"
+      "released": "January 2026",
+      "deprecated": true
     },
     "gemini-3-pro-preview": {
       "id": "gemini-3-pro-preview",
@@ -1107,7 +1237,8 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Long Context", "Research", "Multimodal"],
-      "released": "January 2026"
+      "released": "January 2026",
+      "deprecated": true
     },
     "gemini-3-ultra": {
       "id": "gemini-3-ultra",
@@ -1137,6 +1268,42 @@
       "qualityTier": "best",
       "bestFor": ["Complex Reasoning", "Research", "Enterprise"],
       "released": "January 2026"
+    },
+    "grok-4.3": {
+      "id": "grok-4.3",
+      "apiModelId": "grok-4.3",
+      "name": "Grok 4.3",
+      "provider": "xai",
+      "modelType": "reasoning",
+      "contextWindow": 1000000,
+      "inputCost": 1.25,
+      "outputCost": 2.5,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": true,
+        "search": true,
+        "research": true,
+        "codeExecution": true
+      },
+      "benchmarks": {
+        "swebench": 68.0,
+        "humaneval": 96.5,
+        "mmlu": 91.5,
+        "gpqa": 80.0,
+        "aime": 82.0
+      },
+      "speed": "fast",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Real-time Info", "Video Input", "Long Context (1M)", "Reasoning"],
+      "released": "April 2026"
     },
     "grok-4": {
       "id": "grok-4",
@@ -1172,7 +1339,8 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Real-time Info", "Reasoning", "X/Twitter Data"],
-      "released": "January 2026"
+      "released": "January 2026",
+      "deprecated": true
     },
     "grok-4-fast": {
       "id": "grok-4-fast",
@@ -1208,7 +1376,8 @@
       "quality": "good",
       "qualityTier": "fast",
       "bestFor": ["Long Context", "Real-time Data", "Cost-Effective", "Speed"],
-      "released": "January 2026"
+      "released": "January 2026",
+      "deprecated": true
     },
     "grok-4-fast-non-reasoning": {
       "id": "grok-4-fast-non-reasoning",
@@ -1244,7 +1413,8 @@
       "quality": "fair",
       "qualityTier": "fast",
       "bestFor": ["Quick Tasks", "Simple Queries", "Long Context", "Budget Usage"],
-      "released": "January 2026"
+      "released": "January 2026",
+      "deprecated": true
     },
     "grok-4-fast-reasoning": {
       "id": "grok-4-fast-reasoning",
@@ -1280,7 +1450,8 @@
       "quality": "good",
       "qualityTier": "balanced",
       "bestFor": ["Agentic Tasks", "Reasoning", "Real-time Data", "Long Context"],
-      "released": "January 2026"
+      "released": "January 2026",
+      "deprecated": true
     },
     "grok-4-1-fast-reasoning": {
       "id": "grok-4-1-fast-reasoning",
@@ -1309,7 +1480,8 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Agentic Tasks", "Reasoning", "Real-time Data", "Long Context", "Vision"],
-      "released": "March 2026"
+      "released": "March 2026",
+      "deprecated": true
     },
     "grok-4-mini": {
       "id": "grok-4-mini",
@@ -1345,7 +1517,8 @@
       "quality": "fair",
       "qualityTier": "fast",
       "bestFor": ["Quick Tasks", "Budget Usage", "Simple Queries"],
-      "released": "January 2026"
+      "released": "January 2026",
+      "deprecated": true
     },
     "deepseek-chat": {
       "id": "deepseek-chat",
@@ -1384,6 +1557,86 @@
       "bestFor": ["Coding", "Cost-Effective", "Technical Tasks", "Reasoning"],
       "released": "January 2026"
     },
+    "deepseek-v4-flash": {
+      "id": "deepseek-v4-flash",
+      "apiModelId": "deepseek-v4-flash",
+      "name": "DeepSeek V4 Flash",
+      "provider": "deepseek",
+      "modelType": "code",
+      "contextWindow": 1000000,
+      "inputCost": 0.14,
+      "outputCost": 0.28,
+      "variantPartner": "deepseek-v4-pro",
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false
+      },
+      "benchmarks": {
+        "swebench": 75.0,
+        "humaneval": 95.0,
+        "mmlu": 87.0,
+        "gpqa": 75.0,
+        "aime": 85.0
+      },
+      "speed": "very-fast",
+      "quality": "excellent",
+      "qualityTier": "fast",
+      "bestFor": ["Cost-Effective", "Coding", "Long Context", "Multimodal", "High Volume"],
+      "released": "April 2026"
+    },
+    "deepseek-v4-pro": {
+      "id": "deepseek-v4-pro",
+      "apiModelId": "deepseek-v4-pro",
+      "name": "DeepSeek V4 Pro",
+      "provider": "deepseek",
+      "modelType": "reasoning",
+      "contextWindow": 1000000,
+      "inputCost": 1.74,
+      "outputCost": 3.48,
+      "variantPartner": "deepseek-v4-flash",
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": true,
+        "codeExecution": false
+      },
+      "benchmarks": {
+        "swebench": 81.0,
+        "humaneval": 96.0,
+        "mmlu": 92.0,
+        "gpqa": 87.0,
+        "aime": 95.0
+      },
+      "speed": "fast",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": [
+        "Frontier Reasoning",
+        "Complex Coding",
+        "Long Context (1M)",
+        "Multimodal",
+        "Cost-Effective"
+      ],
+      "released": "April 2026"
+    },
     "qwen-max": {
       "id": "qwen-max",
       "apiModelId": "qwen-max",
@@ -1419,6 +1672,48 @@
       "qualityTier": "balanced",
       "bestFor": ["Complex Reasoning", "Multilingual", "Research"],
       "released": "January 2026"
+    },
+    "qwen-3.6-plus": {
+      "id": "qwen-3.6-plus",
+      "apiModelId": "qwen3.6-plus",
+      "name": "Qwen 3.6 Plus",
+      "provider": "qwen",
+      "modelType": "multimodal",
+      "contextWindow": 1000000,
+      "inputCost": 0.4,
+      "outputCost": 1.2,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": false,
+        "codeExecution": true
+      },
+      "benchmarks": {
+        "swebench": 70.0,
+        "humaneval": 94.0,
+        "mmlu": 90.0,
+        "gpqa": 78.0,
+        "aime": 88.0
+      },
+      "speed": "fast",
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": [
+        "Multilingual",
+        "Multimodal",
+        "Long Context (1M)",
+        "Cost-Effective",
+        "Agent Tasks"
+      ],
+      "released": "April 2026"
     },
     "qwen-flash": {
       "id": "qwen-flash",
@@ -1598,7 +1893,8 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Vision", "Math", "Reasoning", "Agent Tasks", "Multimodal"],
-      "released": "January 2026"
+      "released": "January 2026",
+      "deprecated": true
     },
     "kimi-k2.5-thinking": {
       "id": "kimi-k2.5-thinking",
@@ -1634,7 +1930,8 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Math", "Reasoning", "Complex Analysis", "Agent Tasks"],
-      "released": "January 2026"
+      "released": "January 2026",
+      "deprecated": true
     },
     "kimi-k2.5-turbo": {
       "id": "kimi-k2.5-turbo",
@@ -1663,7 +1960,50 @@
       "quality": "good",
       "qualityTier": "fast",
       "bestFor": ["Quick Tasks", "Budget Usage", "Multimodal"],
-      "released": "January 2026"
+      "released": "January 2026",
+      "deprecated": true
+    },
+    "kimi-k2.6": {
+      "id": "kimi-k2.6",
+      "apiModelId": "kimi-k2.6",
+      "name": "Kimi K2.6",
+      "provider": "moonshot",
+      "modelType": "multimodal",
+      "contextWindow": 262144,
+      "inputCost": 0.95,
+      "outputCost": 4.0,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": false,
+        "codeExecution": true
+      },
+      "benchmarks": {
+        "swebench": 80.2,
+        "humaneval": 96.0,
+        "mmlu": 89.0,
+        "gpqa": 86.0,
+        "aime": 99.0
+      },
+      "speed": "fast",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": [
+        "Agent Swarm",
+        "Long-Horizon Coding",
+        "Multi-Agent Orchestration",
+        "Vision",
+        "Video"
+      ],
+      "released": "April 2026"
     },
     "mistral-large-3": {
       "id": "mistral-large-3",
@@ -1863,7 +2203,50 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Coding", "Agent Workflows", "Open-Weight Alternative", "Chinese Language"],
-      "released": "December 2025"
+      "released": "December 2025",
+      "deprecated": true
+    },
+    "glm-5.1": {
+      "id": "glm-5.1",
+      "apiModelId": "glm-5.1",
+      "name": "GLM-5.1",
+      "provider": "zhipu",
+      "modelType": "reasoning",
+      "contextWindow": 200000,
+      "inputCost": 1.4,
+      "outputCost": 4.4,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": false,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": true,
+        "codeExecution": true
+      },
+      "benchmarks": {
+        "swebench": 79.0,
+        "humaneval": 92.0,
+        "mmlu": 90.0,
+        "gpqa": 84.0,
+        "aime": 92.0
+      },
+      "speed": "medium",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": [
+        "Long-Horizon Coding",
+        "Autonomous Agents",
+        "Bug Fixing",
+        "Open-Weight Alternative",
+        "Chinese Language"
+      ],
+      "released": "April 2026"
     },
     "glm-4.6v": {
       "id": "glm-4.6v",
@@ -1899,7 +2282,8 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Vision + Tool Use", "Image Analysis", "Frontend Automation", "Multimodal"],
-      "released": "December 2025"
+      "released": "December 2025",
+      "deprecated": true
     },
     "glm-4.6v-flash": {
       "id": "glm-4.6v-flash",
@@ -1935,7 +2319,8 @@
       "quality": "good",
       "qualityTier": "fast",
       "bestFor": ["FREE Model", "Vision Tasks", "Simple Queries", "High Volume", "Budget Usage"],
-      "released": "December 2025"
+      "released": "December 2025",
+      "deprecated": true
     },
     "sonar": {
       "id": "sonar",
@@ -2215,6 +2600,68 @@
       "bestFor": ["Photorealistic Images", "Creative Content"],
       "released": "January 2026"
     },
+    "imagen-4-fast": {
+      "id": "imagen-4-fast",
+      "apiModelId": "imagen-4.0-fast-generate-001",
+      "name": "Imagen 4 Fast",
+      "provider": "google",
+      "modelType": "image",
+      "contextWindow": 4000,
+      "inputCost": 0.0,
+      "outputCost": 20.0,
+      "imagePerImageCost": 0.02,
+      "capabilities": {
+        "streaming": false,
+        "tools": false,
+        "vision": false,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": true,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false
+      },
+      "speed": "fast",
+      "quality": "good",
+      "qualityTier": "economy",
+      "bestFor": ["Quick Images", "High Volume"],
+      "released": "2026",
+      "pricingNote": "Fast variant of Imagen 4 — $0.02/image at 1024x1024 (vs $0.04 for Imagen 4 standard, $0.06 for Ultra). Per auto-routing-spec.md §4 Pool B image slot."
+    },
+    "runway-gen-4": {
+      "id": "runway-gen-4",
+      "apiModelId": "gen4_turbo",
+      "name": "Runway Gen-4",
+      "provider": "runway",
+      "modelType": "video",
+      "contextWindow": 4000,
+      "inputCost": 0.0,
+      "outputCost": 0.0,
+      "videoPerSecondCost": 0.05,
+      "capabilities": {
+        "streaming": false,
+        "tools": false,
+        "vision": false,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": true,
+        "search": false,
+        "research": false,
+        "codeExecution": false
+      },
+      "speed": "medium",
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": ["AI Video Generation", "Pro+ / Max tiers"],
+      "released": "2025",
+      "pricingNote": "Per auto-routing-spec.md §4 Pool B video slot. ~$0.05/second at 720p. Pro+ caps at 60 sec/mo (~$3 COGS); Max caps at 5 min/mo. Sora-2 unavailable as of April 2026 — Runway Gen-4 is the chosen replacement."
+    },
     "imagen-4-ultra": {
       "id": "imagen-4-ultra",
       "apiModelId": "imagen-4.0-ultra-generate-001",
@@ -2330,6 +2777,35 @@
       "qualityTier": "best",
       "bestFor": ["Professional Video", "High Quality Clips"],
       "released": "January 2026"
+    },
+    "stable-diffusion-xl": {
+      "id": "stable-diffusion-xl",
+      "apiModelId": "stable-diffusion-xl-1024-v1-0",
+      "name": "Stable Diffusion XL",
+      "provider": "managed_cloud",
+      "modelType": "image",
+      "contextWindow": 4000,
+      "inputCost": 0.0,
+      "outputCost": 4.0,
+      "capabilities": {
+        "streaming": false,
+        "tools": false,
+        "vision": false,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": true,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false
+      },
+      "speed": "fast",
+      "quality": "good",
+      "qualityTier": "fast",
+      "bestFor": ["Open Source Image Gen", "Custom Style", "Self-Host Path"],
+      "released": "July 2023"
     },
     "tts-1": {
       "id": "tts-1",
@@ -2986,24 +3462,26 @@
   },
   "tierAllowedModels": {
     "economy": [
-      "gpt-5.4-mini",
       "gemini-3.1-flash-lite",
+      "gpt-5.4-nano",
+      "gpt-5.4-mini",
+      "deepseek-v4-flash",
       "claude-haiku-4.5",
-      "deepseek-chat",
-      "sonar",
-      "qwen-turbo"
+      "qwen-3.6-plus",
+      "kimi-k2.6",
+      "glm-4.7",
+      "sonar"
     ],
     "pro_additions": [
       "gpt-5.4",
       "claude-sonnet-4.6",
       "gemini-3.1-pro-preview",
+      "deepseek-v4-pro",
+      "glm-5.1",
       "qwen-max",
-      "deepseek-reasoner",
-      "kimi-k2.5-thinking",
-      "glm-4.7",
       "sonar-deep-research"
     ],
-    "flagship_additions": ["claude-opus-4.6", "gpt-5.4-pro", "o3", "grok-4", "gpt-5.4-codex"]
+    "flagship_additions": ["claude-opus-4.7", "gpt-5.5", "gpt-5.4-pro", "grok-4.3", "gpt-5.4-codex"]
   },
   "modelPresets": {
     "managed_cloud": [
@@ -3023,6 +3501,10 @@
     "ollama": [],
     "openai": [
       {
+        "value": "gpt-5.5",
+        "label": "GPT-5.5"
+      },
+      {
         "value": "gpt-5.4-pro",
         "label": "GPT-5.4 Pro"
       },
@@ -3035,14 +3517,18 @@
         "label": "GPT-5.4 Mini"
       },
       {
+        "value": "gpt-5.4-nano",
+        "label": "GPT-5.4 Nano"
+      },
+      {
         "value": "gpt-5.4-codex",
         "label": "GPT-5.4 Codex"
       }
     ],
     "anthropic": [
       {
-        "value": "claude-opus-4.6",
-        "label": "Claude 4.6 Opus"
+        "value": "claude-opus-4.7",
+        "label": "Claude 4.7 Opus"
       },
       {
         "value": "claude-sonnet-4.6",
@@ -3065,21 +3551,29 @@
     ],
     "xai": [
       {
-        "value": "grok-4",
-        "label": "Grok 4"
+        "value": "grok-4.3",
+        "label": "Grok 4.3"
+      },
+      {
+        "value": "grok-4-1-fast-reasoning",
+        "label": "Grok 4.1 Fast Reasoning"
       }
     ],
     "deepseek": [
       {
-        "value": "deepseek-chat",
-        "label": "DeepSeek Chat (V3)"
+        "value": "deepseek-v4-pro",
+        "label": "DeepSeek V4 Pro"
       },
       {
-        "value": "deepseek-reasoner",
-        "label": "DeepSeek Reasoner (V3.2)"
+        "value": "deepseek-v4-flash",
+        "label": "DeepSeek V4 Flash"
       }
     ],
     "qwen": [
+      {
+        "value": "qwen-3.6-plus",
+        "label": "Qwen 3.6 Plus"
+      },
       {
         "value": "qwen-max",
         "label": "Qwen Max"
@@ -3087,15 +3581,15 @@
     ],
     "moonshot": [
       {
-        "value": "kimi-k2.5-thinking",
-        "label": "Kimi K2.5 Thinking"
+        "value": "kimi-k2.6",
+        "label": "Kimi K2.6"
       }
     ],
     "perplexity": [],
     "zhipu": [
       {
-        "value": "glm-4.7",
-        "label": "GLM-4.7"
+        "value": "glm-5.1",
+        "label": "GLM-5.1"
       }
     ],
     "mistral": [],

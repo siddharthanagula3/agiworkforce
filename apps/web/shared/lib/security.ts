@@ -721,9 +721,9 @@ export class SecurityManager {
 /**
  * CSP helper for programmatic policy construction.
  *
- * The authoritative per-request CSP is set by middleware.ts via `buildCspWithNonce()`.
+ * The authoritative per-request CSP is set by proxy.ts via `buildCspWithNonce()`.
  * This class is provided for contexts that need to build a CSP string outside of
- * middleware (e.g., meta-tag fallback in non-Next.js environments).
+ * the proxy/middleware layer (e.g., meta-tag fallback in non-Next.js environments).
  *
  * script-src uses a per-request nonce instead of 'unsafe-inline'.
  * style-src keeps 'unsafe-inline' because Tailwind, Radix UI, and inline style

@@ -50,9 +50,12 @@ describe('xAI model routing', () => {
     expect(meta?.capabilities?.search).toBe(true);
   });
 
-  it('grok-4 has NO vision capability (vision requires separate model)', () => {
-    const meta = getModelMetadata('grok-4');
-    // Per architecture: Grok 4 requires separate grok-2-vision model for images
+  it('Perplexity Sonar has NO vision capability (text-only research model)', () => {
+    // Note: grok-4 used to be the canary here, but grok-4 is now aliased
+    // forward to grok-4.3 which has built-in vision (Phase 3 catalog refresh).
+    // sonar (Perplexity) is a stable non-vision research model and is not
+    // aliased to anything else, so it works as a canary here.
+    const meta = getModelMetadata('sonar');
     expect(meta?.capabilities?.vision).toBe(false);
   });
 

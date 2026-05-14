@@ -1,5 +1,8 @@
 pub mod agent;
+pub mod agent_context;
 pub mod agi;
+pub mod connector_permissions;
+pub mod dispatch_hmac;
 pub mod agi_checkpoint;
 pub mod ai_native;
 pub mod analytics;
@@ -123,7 +126,10 @@ mod path_validation_tests;
 mod window_tests;
 
 pub use agent::*;
+pub use agent_context::{CommandContext, COMMAND_CTX, try_get_request_id, try_get_conversation_id, try_get_command_name};
 pub use agi::*;
+pub use connector_permissions::*;
+pub use dispatch_hmac::*;
 pub use agi_checkpoint::*;
 pub use ai_native::*;
 pub use analytics::*;

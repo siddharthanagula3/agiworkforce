@@ -43,6 +43,10 @@
  *     Sambanova,
  *     Azure,
  *     Bedrock,
+ *     OllamaCloud,
+ *     Minimax,
+ *     Runway,
+ *     LmStudio,
  * }
  * ```
  *
@@ -95,4 +99,7 @@ export type Provider =
   | 'sambanova'
   | 'azure'
   | 'bedrock'
-  | 'ollama_cloud';
+  | 'ollama_cloud'
+  | 'minimax'
+  | 'runway'
+  | 'lmstudio';

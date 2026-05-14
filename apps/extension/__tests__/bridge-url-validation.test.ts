@@ -41,8 +41,8 @@ describe('validateBridgeUrl — localhost URLs pass validation', () => {
     expect(validateBridgeUrl('http://localhost')).toBe('http://localhost');
   });
 
-  it('accepts http://localhost:8765', () => {
-    expect(validateBridgeUrl('http://localhost:8765')).toBe('http://localhost:8765');
+  it('accepts http://localhost:8787', () => {
+    expect(validateBridgeUrl('http://localhost:8787')).toBe('http://localhost:8787');
   });
 
   it('accepts https://localhost:443', () => {
@@ -57,8 +57,8 @@ describe('validateBridgeUrl — 127.0.0.1 URLs pass validation', () => {
     expect(validateBridgeUrl('http://127.0.0.1')).toBe('http://127.0.0.1');
   });
 
-  it('accepts http://127.0.0.1:8765', () => {
-    expect(validateBridgeUrl('http://127.0.0.1:8765')).toBe('http://127.0.0.1:8765');
+  it('accepts http://127.0.0.1:8787', () => {
+    expect(validateBridgeUrl('http://127.0.0.1:8787')).toBe('http://127.0.0.1:8787');
   });
 });
 
@@ -69,8 +69,8 @@ describe('validateBridgeUrl — [::1] URLs pass validation', () => {
     expect(validateBridgeUrl('http://[::1]')).toBe('http://[::1]');
   });
 
-  it('accepts http://[::1]:8765', () => {
-    expect(validateBridgeUrl('http://[::1]:8765')).toBe('http://[::1]:8765');
+  it('accepts http://[::1]:8787', () => {
+    expect(validateBridgeUrl('http://[::1]:8787')).toBe('http://[::1]:8787');
   });
 });
 
@@ -98,7 +98,7 @@ describe('validateBridgeUrl — remote URLs are rejected', () => {
   });
 
   it('rejects attacker-controlled domain', () => {
-    expect(validateBridgeUrl('http://malicious-server.net:8765')).toBeNull();
+    expect(validateBridgeUrl('http://malicious-server.net:8787')).toBeNull();
   });
 
   it('rejects a domain containing localhost as a substring', () => {
@@ -110,11 +110,11 @@ describe('validateBridgeUrl — remote URLs are rejected', () => {
 
 describe('validateBridgeUrl — ws/wss schemes are normalized to http/https', () => {
   it('normalizes ws://localhost to http://localhost', () => {
-    expect(validateBridgeUrl('ws://localhost:8765')).toBe('http://localhost:8765');
+    expect(validateBridgeUrl('ws://localhost:8787')).toBe('http://localhost:8787');
   });
 
   it('normalizes wss://localhost to https://localhost', () => {
-    expect(validateBridgeUrl('wss://localhost:8765')).toBe('https://localhost:8765');
+    expect(validateBridgeUrl('wss://localhost:8787')).toBe('https://localhost:8787');
   });
 
   it('normalizes ws://127.0.0.1 to http://127.0.0.1', () => {
@@ -122,7 +122,7 @@ describe('validateBridgeUrl — ws/wss schemes are normalized to http/https', ()
   });
 
   it('still rejects ws:// with remote host', () => {
-    expect(validateBridgeUrl('ws://evil.com:8765')).toBeNull();
+    expect(validateBridgeUrl('ws://evil.com:8787')).toBeNull();
   });
 });
 
@@ -138,7 +138,7 @@ describe('validateBridgeUrl — invalid URLs return null', () => {
   });
 
   it('rejects a URL missing a scheme', () => {
-    expect(validateBridgeUrl('localhost:8765')).toBeNull();
+    expect(validateBridgeUrl('localhost:8787')).toBeNull();
   });
 
   it('rejects a completely malformed URL', () => {
@@ -150,7 +150,7 @@ describe('validateBridgeUrl — invalid URLs return null', () => {
 
 describe('validateBridgeUrl — URLs with paths are preserved', () => {
   it('preserves /api/v1 path', () => {
-    expect(validateBridgeUrl('http://localhost:8765/api/v1')).toBe('http://localhost:8765/api/v1');
+    expect(validateBridgeUrl('http://localhost:8787/api/v1')).toBe('http://localhost:8787/api/v1');
   });
 
   it('preserves a nested path', () => {
@@ -163,8 +163,8 @@ describe('validateBridgeUrl — URLs with paths are preserved', () => {
 // ── Trailing slashes are stripped ───────────────────────────────────────────
 
 describe('validateBridgeUrl — trailing slashes are stripped', () => {
-  it('strips trailing slash from http://localhost:8765/', () => {
-    expect(validateBridgeUrl('http://localhost:8765/')).toBe('http://localhost:8765');
+  it('strips trailing slash from http://localhost:8787/', () => {
+    expect(validateBridgeUrl('http://localhost:8787/')).toBe('http://localhost:8787');
   });
 
   it('strips trailing slash from http://127.0.0.1/', () => {
@@ -173,7 +173,7 @@ describe('validateBridgeUrl — trailing slashes are stripped', () => {
 
   it('does not strip a path that happens to end with a slash', () => {
     // The regex strips only the final trailing slash
-    expect(validateBridgeUrl('http://localhost:8765/api/')).toBe('http://localhost:8765/api');
+    expect(validateBridgeUrl('http://localhost:8787/api/')).toBe('http://localhost:8787/api');
   });
 });
 
@@ -201,15 +201,15 @@ describe('validateBridgeUrl — non-http schemes are rejected', () => {
 
 describe('validateBridgeUrl — non-localhost IPs are rejected', () => {
   it('rejects 192.168.1.1 (private network)', () => {
-    expect(validateBridgeUrl('http://192.168.1.1:8765')).toBeNull();
+    expect(validateBridgeUrl('http://192.168.1.1:8787')).toBeNull();
   });
 
   it('rejects 10.0.0.1 (private network)', () => {
-    expect(validateBridgeUrl('http://10.0.0.1:8765')).toBeNull();
+    expect(validateBridgeUrl('http://10.0.0.1:8787')).toBeNull();
   });
 
   it('rejects 172.16.0.1 (private network)', () => {
-    expect(validateBridgeUrl('http://172.16.0.1:8765')).toBeNull();
+    expect(validateBridgeUrl('http://172.16.0.1:8787')).toBeNull();
   });
 
   it('rejects 8.8.8.8 (public IP)', () => {

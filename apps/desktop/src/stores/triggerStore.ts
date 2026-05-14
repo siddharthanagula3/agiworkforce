@@ -1,3 +1,4 @@
+// TODO(task-1.3): migrate to packages/runtime/state (see AppStateStore.ts domain mapping)
 /**
  * Trigger Store — state management for event-triggered agent automation.
  *
@@ -85,6 +86,55 @@ export type CreateTriggerInput = Omit<
   'id' | 'createdAt' | 'updatedAt' | 'triggerCount' | 'lastTriggeredAt'
 >;
 
+// ── IPC Conversion Shims ──────────────────────────────────────────────────────
+//
+// Rust serializes timestamps as ISO 8601 strings and execution status as
+// 'completed' (canonical type).  This store uses Unix epoch milliseconds and
+// 'success' internally.  The shims below normalize at the IPC boundary so the
+// store internals remain consistent.
+//
+// TODO(types-agent): Once @agiworkforce/types EventTriggerDefinition and
+// TriggerExecution are adopted here, remove these shims and import from the
+// package directly.
+
+/** Normalize a timestamp that may be ISO 8601 (from Rust) or already a number. */
+function normalizeTimestamp(raw: string | number | null | undefined): number | null {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === 'number') return raw;
+  // ISO 8601 → Unix epoch ms
+  const ms = Date.parse(raw);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/** Normalize execution status: Rust sends 'completed', store expects 'success'. */
+function normalizeExecutionStatus(raw: string): TriggerExecutionStatus {
+  if (raw === 'completed') return 'success';
+  if (raw === 'success' || raw === 'failed' || raw === 'running') {
+    return raw as TriggerExecutionStatus;
+  }
+  return 'failed';
+}
+
+/** Normalize a raw IPC trigger response to the store's EventTriggerDefinition shape. */
+function normalizeTrigger(raw: Record<string, unknown>): EventTriggerDefinition {
+  return {
+    ...(raw as unknown as EventTriggerDefinition),
+    createdAt: normalizeTimestamp(raw['createdAt'] as string | number) ?? Date.now(),
+    updatedAt: normalizeTimestamp(raw['updatedAt'] as string | number) ?? Date.now(),
+    lastTriggeredAt: normalizeTimestamp(raw['lastTriggeredAt'] as string | number | null),
+  };
+}
+
+/** Normalize a raw IPC execution response to the store's TriggerExecution shape. */
+function normalizeExecution(raw: Record<string, unknown>): TriggerExecution {
+  return {
+    ...(raw as unknown as TriggerExecution),
+    status: normalizeExecutionStatus(raw['status'] as string),
+    startedAt: normalizeTimestamp(raw['startedAt'] as string | number) ?? Date.now(),
+    completedAt: normalizeTimestamp(raw['completedAt'] as string | number | null),
+  };
+}
+
 // ── Store ────────────────────────────────────────────────────────────────────
 
 interface TriggerState {
@@ -120,7 +170,8 @@ export const useTriggerStore = create<TriggerState>()(
             'trigger/fetchTriggers/start',
           );
           try {
-            const triggers = await invoke<EventTriggerDefinition[]>('list_triggers');
+            const rawTriggers = await invoke<Record<string, unknown>[]>('list_triggers');
+            const triggers = rawTriggers.map(normalizeTrigger);
             set(
               (state) => {
                 state.triggers = triggers;
@@ -151,7 +202,10 @@ export const useTriggerStore = create<TriggerState>()(
             'trigger/createTrigger/start',
           );
           try {
-            const created = await invoke<EventTriggerDefinition>('register_trigger', { trigger });
+            const rawCreated = await invoke<Record<string, unknown>>('register_trigger', {
+              trigger,
+            });
+            const created = normalizeTrigger(rawCreated);
             set(
               (state) => {
                 state.triggers.unshift(created);
@@ -251,9 +305,13 @@ export const useTriggerStore = create<TriggerState>()(
 
         fetchExecutions: async (triggerId) => {
           try {
-            const executions = await invoke<TriggerExecution[]>('get_trigger_executions', {
-              triggerId,
-            });
+            const rawExecutions = await invoke<Record<string, unknown>[]>(
+              'get_trigger_executions',
+              {
+                triggerId,
+              },
+            );
+            const executions = rawExecutions.map(normalizeExecution);
             set(
               (state) => {
                 state.executions[triggerId] = executions;

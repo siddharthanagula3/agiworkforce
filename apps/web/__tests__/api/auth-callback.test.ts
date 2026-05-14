@@ -1,6 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET } from '@/app/auth/callback/route';
 
+// Override the global setup.ts next/headers mock: by default no state cookie
+// is present (the common case — user did not initiate an OAuth flow from this
+// tab, or the cookie was already cleared). Tests that need a specific cookie
+// value set mockCookieGet directly.
+const mockCookieGet = vi.fn<() => { value: string } | undefined>(() => undefined);
+vi.mock('next/headers', () => ({
+  cookies: vi.fn(async () => ({
+    get: mockCookieGet,
+    getAll: vi.fn(() => []),
+    set: vi.fn(),
+    delete: vi.fn(),
+  })),
+}));
+
 // Mock logger
 vi.mock('@/lib/logger', () => ({
   logger: {
@@ -49,6 +63,8 @@ function createRequest(url: string): Request {
 describe('GET /auth/callback', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: no active OAuth state cookie (no server-initiated flow)
+    mockCookieGet.mockReturnValue(undefined);
     mockExchangeCodeForSession.mockResolvedValue({ error: null });
   });
 
@@ -130,5 +146,35 @@ describe('GET /auth/callback', () => {
     expect(location.pathname).toBe('/chat');
     // Should not attempt code exchange
     expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
+  });
+
+  it('rejects callback when server state cookie is present but state param is missing', async () => {
+    // Simulate an OAuth flow that set a state cookie server-side
+    mockCookieGet.mockReturnValue({ value: 'abc123' });
+
+    const request = createRequest('http://localhost:3000/auth/callback?code=some-code');
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(307);
+    const location = new URL(response.headers.get('location')!);
+    expect(location.pathname).toBe('/auth/error');
+    expect(location.searchParams.get('error')).toBe('state_mismatch');
+    expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
+  });
+
+  it('accepts callback when state param matches the server state cookie', async () => {
+    mockCookieGet.mockReturnValue({ value: 'abc123' });
+
+    const request = createRequest(
+      'http://localhost:3000/auth/callback?code=valid-code&state=abc123',
+    );
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(307);
+    expect(mockExchangeCodeForSession).toHaveBeenCalledWith('valid-code');
+    const location = new URL(response.headers.get('location')!);
+    expect(location.pathname).toBe('/chat');
   });
 });

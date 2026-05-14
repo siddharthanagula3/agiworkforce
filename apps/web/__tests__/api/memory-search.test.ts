@@ -31,17 +31,10 @@ vi.mock('@/utils/env', () => ({
   }),
 }));
 
-// Mock cookies
+// Mock cookies — implementation re-applied in beforeEach because the vitest
+// config sets `mockReset: true` (clears vi.fn() impls between tests).
 vi.mock('next/headers', () => ({
-  cookies: vi.fn().mockResolvedValue({
-    get: vi.fn((name: string) => {
-      if (name === 'sb-test-auth-token') {
-        return { value: 'mock-cookie-token' };
-      }
-      return undefined;
-    }),
-    set: vi.fn(),
-  }),
+  cookies: vi.fn(),
 }));
 
 const mockUser = {
@@ -58,54 +51,82 @@ const mockMemoryRow = {
   updated_at: '2024-03-15T12:00:00Z',
 };
 
-// Mock Supabase SSR client (cookie-based auth)
+// Mock Supabase SSR client (cookie-based auth). vi.fn() factories are reset
+// between tests by `mockReset: true`, so we declare them empty here and
+// configure them in beforeEach.
 vi.mock('@supabase/ssr', () => ({
-  createServerClient: vi.fn(() => ({
-    auth: {
-      getUser: vi.fn().mockResolvedValue({
-        data: { user: mockUser },
-        error: null,
-      }),
-    },
-  })),
+  createServerClient: vi.fn(),
 }));
 
-// Build chainable mock query for the search route
-// Pattern: .eq().eq().ilike().order().limit()
+// Build chainable mock query for the search route.
+// Route does (RLS-bound client): .select().eq('is_deleted', false).ilike(...).order(...).limit(...)
+// Single .eq() — RLS enforces the user_id filter.
 const mockLimit = vi.fn();
 const mockOrder = vi.fn();
 const mockIlike = vi.fn();
 const mockEqIsDeleted = vi.fn();
-const mockEqUserId = vi.fn();
 const mockSelectFn = vi.fn();
 const mockFrom = vi.fn();
 
 vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    auth: {
-      getUser: vi.fn().mockResolvedValue({
-        data: { user: mockUser },
-        error: null,
-      }),
-    },
+  createClient: vi.fn(),
+}));
+
+// Bypass the module-level _serviceClient cache — see memory.test.ts for the
+// rationale. Both helpers route through the same `mockFrom`.
+const mockServiceGetUser = vi.fn();
+const mockUserClientGetUser = vi.fn();
+vi.mock('@/lib/supabase-server', () => ({
+  getServiceClient: () => ({
+    auth: { getUser: mockServiceGetUser },
     from: mockFrom,
-  })),
+  }),
+  getUserClient: () => ({
+    auth: { getUser: mockUserClientGetUser },
+    from: mockFrom,
+  }),
 }));
 
 // Import after all mocks are registered
 import { GET } from '@/app/api/memory/search/route';
 
 describe('Memory Search API', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
 
-    // Wire up the Supabase query chain for a successful search result
+    // Re-establish next/headers + supabase impls cleared by `mockReset: true`.
+    const { cookies } = await import('next/headers');
+    vi.mocked(cookies).mockResolvedValue({
+      get: vi.fn((name: string) =>
+        name === 'sb-test-auth-token' ? { value: 'mock-cookie-token' } : undefined,
+      ),
+      set: vi.fn(),
+    } as never);
+
+    const { createServerClient } = await import('@supabase/ssr');
+    const { createClient } = await import('@supabase/supabase-js');
+    vi.mocked(createServerClient).mockReturnValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: mockUser }, error: null }),
+      },
+      from: mockFrom,
+    } as never);
+    vi.mocked(createClient).mockReturnValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: mockUser }, error: null }),
+      },
+      from: mockFrom,
+    } as never);
+
+    mockServiceGetUser.mockResolvedValue({ data: { user: mockUser }, error: null });
+    mockUserClientGetUser.mockResolvedValue({ data: { user: mockUser }, error: null });
+
+    // Wire up the Supabase query chain (one .eq() because RLS handles user_id).
     mockLimit.mockResolvedValue({ data: [mockMemoryRow], error: null });
     mockOrder.mockReturnValue({ limit: mockLimit });
     mockIlike.mockReturnValue({ order: mockOrder });
     mockEqIsDeleted.mockReturnValue({ ilike: mockIlike });
-    mockEqUserId.mockReturnValue({ eq: mockEqIsDeleted });
-    mockSelectFn.mockReturnValue({ eq: mockEqUserId });
+    mockSelectFn.mockReturnValue({ eq: mockEqIsDeleted });
 
     mockFrom.mockImplementation((table: string) => {
       if (table === 'user_memories') {
@@ -140,16 +161,11 @@ describe('Memory Search API', () => {
     });
 
     it('should return 401 when Bearer token is invalid', async () => {
-      const { createClient } = await import('@supabase/supabase-js');
-      vi.mocked(createClient).mockReturnValueOnce({
-        auth: {
-          getUser: vi.fn().mockResolvedValue({
-            data: { user: null },
-            error: { message: 'Invalid token' },
-          }),
-        },
-        from: mockFrom,
-      } as never);
+      // Override the service-client JWT verifier (Bearer auth path).
+      mockServiceGetUser.mockResolvedValueOnce({
+        data: { user: null },
+        error: { message: 'Invalid token' },
+      });
 
       const request = new NextRequest('http://localhost/api/memory/search?q=dark+mode', {
         method: 'GET',
@@ -160,7 +176,7 @@ describe('Memory Search API', () => {
       expect(response.status).toBe(401);
 
       const data = await response.json();
-      expect(data.error.message).toMatch(/Invalid token|[Uu]nauthorized/);
+      expect(data.error.message).toMatch(/Authentication required|UNAUTHORIZED/);
     });
 
     it('should succeed with valid Bearer token', async () => {

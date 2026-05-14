@@ -1,3 +1,4 @@
+// TODO(task-1.3): migrate to packages/runtime/state (see AppStateStore.ts domain mapping)
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
@@ -127,6 +128,12 @@ interface ComputerUseState {
       maxActions?: number;
       targetApplication?: string;
       successIndicators?: string[];
+      /** Stream 2: explicit catalog model id (e.g. `claude-opus-4.7`,
+       *  `gpt-5.5`, `gemini-3.1-pro-preview`, `grok-4.3-vision`). */
+      model?: string;
+      /** Stream 2: explicit provider name override (`anthropic`, `openai`,
+       *  `google`, `xai`). Resolved from `model` if omitted. */
+      provider?: string;
     },
   ) => Promise<OpaTaskResult | null>;
 }
@@ -488,6 +495,15 @@ export const useComputerUseStore = create<ComputerUseState>()(
           undefined,
           'computerUse/executeOpa/start',
         );
+        // Pull the persisted model/provider settings as defaults (set by the
+        // computer-use model picker in ComputerUseSettings.tsx). Caller can
+        // still override per-call via `options.model`.
+        const persistedModel =
+          typeof window !== 'undefined' ? window.localStorage.getItem('computerUse.model') : null;
+        const persistedProvider =
+          typeof window !== 'undefined'
+            ? window.localStorage.getItem('computerUse.provider')
+            : null;
         try {
           const result = await invoke<OpaTaskResult>('computer_use_execute_opa_task', {
             description,
@@ -495,6 +511,8 @@ export const useComputerUseStore = create<ComputerUseState>()(
             maxActions: options?.maxActions,
             targetApplication: options?.targetApplication,
             successIndicators: options?.successIndicators,
+            model: options?.model ?? persistedModel ?? null,
+            provider: options?.provider ?? persistedProvider ?? null,
           });
           set(
             (state) => {

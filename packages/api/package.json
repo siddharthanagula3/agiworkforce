@@ -8,10 +8,14 @@
   "types": "./src/index.ts",
   "scripts": {
     "build": "tsc --project tsconfig.json",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@agiworkforce/runtime": "workspace:*",
     "@agiworkforce/types": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^4.0.18"
   }
 }

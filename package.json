@@ -46,6 +46,7 @@
       "@xmldom/xmldom": ">=0.8.13",
       "postcss": ">=8.5.13",
       "brace-expansion": ">=5.0.5",
+      "fast-uri": ">=3.1.2",
       "typescript": "5.9.3",
       "@types/node": "^22.19.15"
     }
@@ -67,7 +68,8 @@
     "build:docs": "pnpm --filter @agiworkforce/docs build",
     "dev:desktop": "pnpm --filter @agiworkforce/desktop dev",
     "dev:docs": "pnpm --filter @agiworkforce/docs start",
-    "typecheck:all": "pnpm -r --if-present typecheck"
+    "typecheck:all": "pnpm -r --if-present typecheck",
+    "demo:multi-provider": "tsx examples/multi-provider-chat.ts"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",
@@ -97,5 +99,8 @@
     "**/*.{json,md,css,scss,html,yml,yaml}": [
       "prettier --write"
     ]
+  },
+  "dependencies": {
+    "simple-icons": "^16.18.1"
   }
 }

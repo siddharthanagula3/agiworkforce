@@ -32,37 +32,94 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::sync::{Arc, Mutex};
+use zeroize::Zeroize;
 
-// AUDIT-003-015 fix: Secure zeroization function that prevents compiler optimization
-// from eliding the memory clearing operation. Uses volatile write semantics and
-// memory barrier to ensure the zeroing actually happens.
-#[allow(unsafe_code)]
-fn secure_zeroize(data: &mut [u8]) {
-    // Use volatile write to prevent compiler optimization
-    for byte in data.iter_mut() {
-        // SAFETY: volatile_write ensures the write is not optimized away
-        unsafe {
-            std::ptr::write_volatile(byte, 0);
-        }
-    }
-    // Memory barrier to ensure all writes complete before returning
-    std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::SeqCst);
-}
+// SEV-DESK-16 fix: the previous hand-rolled `secure_zeroize` used
+// `unsafe { std::ptr::write_volatile }` plus a `compiler_fence(SeqCst)` to
+// stop the optimiser from eliding the writes. The `zeroize` crate (audited,
+// widely used by `argon2`/`aes-gcm`/`rsa`) gives us the same semantics
+// without the `#[allow(unsafe_code)]` block. Callers now invoke
+// `key.zeroize()` directly via the `Zeroize` trait below.
 
 /// Argon2id parameters following OWASP recommendations
 /// - Memory: 19 MiB (19456 KiB)
 /// - Iterations: 2
 /// - Parallelism: 1
+// SEV-DESK-04: bumped from t=2 to t=3 to meet OWASP 2025 high-value-secret
+// guidance. PHC strings store the parameters inline (`$argon2id$v=19$m=...,t=...,p=...$`),
+// so `Argon2::verify_password` uses the params from the *stored* hash —
+// this change does NOT invalidate existing user verifiers. New hashes
+// created via `hash_password` (signup, password change) get t=3.
+//
+// Memory is left at 19 MiB; raising it disproportionately hurts low-RAM
+// devices (older Macs, Linux laptops) without proportional security gain
+// against the realistic GPU-based threat model.
 const ARGON2_MEMORY_KIB: u32 = 19 * 1024; // 19 MiB
-const ARGON2_ITERATIONS: u32 = 2;
+const ARGON2_ITERATIONS: u32 = 3;
 const ARGON2_PARALLELISM: u32 = 1;
 const ARGON2_OUTPUT_LEN: usize = 32;
 
 /// HKDF output key size (256 bits for AES-256)
 const DERIVED_KEY_SIZE: usize = 32;
 
-/// Minimum password length for security
-const MIN_PASSWORD_LENGTH: usize = 8;
+/// Minimum password length for security.
+/// SEV-DESK-04: raised from 8 to 12. With Argon2id-19MiB-t=3, an 8-char
+/// password is still feasible for a sustained GPU attacker (months of compute);
+/// 12 chars + a basic complexity check (`enforce_password_complexity`) pushes
+/// the search space past 2^60 even with character-class assumptions.
+const MIN_PASSWORD_LENGTH: usize = 12;
+
+/// SEV-DESK-11 + SEV-DESK-13 KDF migration markers.
+///
+/// `KDF_VERSION_LEGACY` (1) reproduces the original derivation bit-for-bit:
+///   - Argon2 password key uses `salt.as_str().as_bytes()` (the base64 *string*
+///     of the salt, treated as bytes — incorrect interop but preserved so
+///     existing user verifiers + wrapped credentials continue to decrypt).
+///   - HKDF-Extract uses a static, install-independent salt
+///     `b"com.agiworkforce.desktop:master_password:v1"`.
+///
+/// `KDF_VERSION_CURRENT` (2) is the corrected derivation:
+///   - Argon2 password key uses the *decoded* salt bytes.
+///   - HKDF-Extract mixes the per-install `install_id` into the salt so the
+///     extracted PRK is per-installation rather than shared across the fleet.
+///
+/// **Migration policy**: `setup()` always writes `KDF_VERSION_CURRENT`.
+/// `change()` preserves the existing version — the wrapped-credentials
+/// (`MasterPasswordEncryption::encrypt`) ciphertext stored elsewhere in the
+/// DB was sealed with the original kdf_version, and re-encrypting every
+/// credential during a password change is out of scope for this fix.
+/// Existing v1 users keep working; new installs get v2.
+const KDF_VERSION_LEGACY: u32 = 1;
+const KDF_VERSION_CURRENT: u32 = 2;
+
+/// SEV-DESK-04: lightweight complexity gate. We deliberately keep this
+/// simple — modern guidance (NIST SP 800-63B-4) discourages overly complex
+/// rules that push users toward predictable transformations ("Password1!").
+/// Length is the dominant factor; we just require *some* mixture so the
+/// tail of weak inputs ("12345678901a") gets rejected. Anything stronger
+/// (HIBP check, breach scan) belongs in the onboarding UI, not here.
+fn enforce_password_complexity(password: &str) -> Result<(), MasterPasswordError> {
+    if password.chars().count() < MIN_PASSWORD_LENGTH {
+        return Err(MasterPasswordError::PasswordTooShort {
+            min_length: MIN_PASSWORD_LENGTH,
+        });
+    }
+    let has_lower = password.chars().any(|c| c.is_ascii_lowercase());
+    let has_upper = password.chars().any(|c| c.is_ascii_uppercase());
+    let has_digit = password.chars().any(|c| c.is_ascii_digit());
+    let has_other = password
+        .chars()
+        .any(|c| !c.is_ascii_alphanumeric() && !c.is_whitespace());
+    let class_count =
+        has_lower as u32 + has_upper as u32 + has_digit as u32 + has_other as u32;
+    if class_count < 3 {
+        return Err(MasterPasswordError::CryptoError(
+            "Password must contain at least three of: lowercase, uppercase, digit, symbol"
+                .to_string(),
+        ));
+    }
+    Ok(())
+}
 
 /// Error types for master password operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -166,18 +223,38 @@ impl MasterPasswordManager {
             MasterPasswordError::DatabaseError(format!("Failed to acquire lock: {}", e))
         })?;
 
+        // SEV-DESK-11/13: include `kdf_version` from the start. New tables
+        // begin at the current KDF version; this column is the source of
+        // truth that branches derive_password_key and hkdf_derive at
+        // runtime so v1 records continue decrypting correctly.
         conn.execute(
             "CREATE TABLE IF NOT EXISTS master_password (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 verifier_hash TEXT NOT NULL,
                 verifier_salt TEXT NOT NULL,
                 argon2_params TEXT NOT NULL,
+                kdf_version INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )",
             [],
         )
         .map_err(|e| MasterPasswordError::DatabaseError(e.to_string()))?;
+
+        // SEV-DESK-11/13: idempotent ADD COLUMN for installs that already
+        // have a master_password table from before kdf_version was
+        // introduced. SQLite's ALTER TABLE returns a "duplicate column"
+        // error if the column already exists — we swallow that one
+        // specifically and re-raise anything else.
+        if let Err(e) = conn.execute(
+            "ALTER TABLE master_password ADD COLUMN kdf_version INTEGER NOT NULL DEFAULT 1",
+            [],
+        ) {
+            let msg = e.to_string().to_lowercase();
+            if !msg.contains("duplicate column") && !msg.contains("already exists") {
+                return Err(MasterPasswordError::DatabaseError(e.to_string()));
+            }
+        }
 
         // Create migration tracking table
         conn.execute(
@@ -193,6 +270,24 @@ impl MasterPasswordManager {
         .map_err(|e| MasterPasswordError::DatabaseError(e.to_string()))?;
 
         Ok(())
+    }
+
+    /// SEV-DESK-11/13: read the stored `kdf_version` for the current
+    /// master-password row. Defaults to `KDF_VERSION_LEGACY` (1) so any
+    /// fault in the read path errs on the side of preserving ciphertext
+    /// access.
+    fn read_kdf_version(&self) -> Result<u32, MasterPasswordError> {
+        let conn = self.db_conn.lock().map_err(|e| {
+            MasterPasswordError::DatabaseError(format!("Failed to acquire lock: {}", e))
+        })?;
+        let v: i64 = conn
+            .query_row(
+                "SELECT kdf_version FROM master_password WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(KDF_VERSION_LEGACY as i64);
+        Ok(v as u32)
     }
 
     /// Check if a master password has been configured
@@ -257,12 +352,10 @@ impl MasterPasswordManager {
             return Err(MasterPasswordError::AlreadyConfigured);
         }
 
-        // Validate password length
-        if password.len() < MIN_PASSWORD_LENGTH {
-            return Err(MasterPasswordError::PasswordTooShort {
-                min_length: MIN_PASSWORD_LENGTH,
-            });
-        }
+        // SEV-DESK-04: validate length + complexity (3 of 4 character classes).
+        // Replaces the bare length check to push the bottom decile of users
+        // off trivially crackable inputs.
+        enforce_password_complexity(password)?;
 
         // Generate salt and hash password
         let salt = SaltString::generate(&mut OsRng);
@@ -286,21 +379,25 @@ impl MasterPasswordManager {
             MasterPasswordError::DatabaseError(format!("Failed to acquire lock: {}", e))
         })?;
 
+        // SEV-DESK-11/13: new installs always use the current KDF version.
         conn.execute(
-            "INSERT INTO master_password (id, verifier_hash, verifier_salt, argon2_params, created_at, updated_at)
-             VALUES (1, ?1, ?2, ?3, ?4, ?5)",
-            [
+            "INSERT INTO master_password (id, verifier_hash, verifier_salt, argon2_params, kdf_version, created_at, updated_at)
+             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![
                 password_hash.to_string(),
                 salt.to_string(),
                 params_json,
+                KDF_VERSION_CURRENT as i64,
                 now.clone(),
                 now,
             ],
         )
         .map_err(|e| MasterPasswordError::DatabaseError(e.to_string()))?;
+        drop(conn);
 
-        // Cache the derived key
-        let derived_key = self.derive_password_key(password, &salt)?;
+        // Cache the derived key using the KDF version we just stored.
+        let derived_key =
+            self.derive_password_key(password, &salt, KDF_VERSION_CURRENT)?;
         if let Ok(mut cache) = self.cached_key.lock() {
             *cache = Some(derived_key);
         }
@@ -341,25 +438,27 @@ impl MasterPasswordManager {
             return Err(MasterPasswordError::InvalidPassword);
         }
 
-        // Get the salt to derive the key
-        let conn = self.db_conn.lock().map_err(|e| {
-            MasterPasswordError::DatabaseError(format!("Failed to acquire lock: {}", e))
-        })?;
-
-        let stored_salt: String = conn
-            .query_row(
-                "SELECT verifier_salt FROM master_password WHERE id = 1",
+        // SEV-DESK-11/13: read the salt + kdf_version atomically. The
+        // version is the source of truth for whether the legacy
+        // base64-string-as-bytes path or the corrected raw-bytes path is
+        // used for derivation.
+        let (stored_salt, kdf_version): (String, i64) = {
+            let conn = self.db_conn.lock().map_err(|e| {
+                MasterPasswordError::DatabaseError(format!("Failed to acquire lock: {}", e))
+            })?;
+            conn.query_row(
+                "SELECT verifier_salt, kdf_version FROM master_password WHERE id = 1",
                 [],
-                |row| row.get(0),
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)),
             )
-            .map_err(|e| MasterPasswordError::DatabaseError(e.to_string()))?;
-
-        drop(conn); // Release lock before deriving key
+            .map_err(|e| MasterPasswordError::DatabaseError(e.to_string()))?
+        };
 
         let salt = SaltString::from_b64(&stored_salt)
             .map_err(|e| MasterPasswordError::CryptoError(format!("Invalid stored salt: {}", e)))?;
 
-        let derived_key = self.derive_password_key(password, &salt)?;
+        let derived_key =
+            self.derive_password_key(password, &salt, kdf_version as u32)?;
 
         if let Ok(mut cache) = self.cached_key.lock() {
             *cache = Some(derived_key);
@@ -371,11 +470,12 @@ impl MasterPasswordManager {
     /// Lock the app (clear cached key)
     pub fn lock(&self) {
         if let Ok(mut cache) = self.cached_key.lock() {
-            // AUDIT-003-015 fix: Securely clear the key using volatile write
-            // and memory barrier to prevent compiler optimization from eliding
-            // the zeroization.
+            // SEV-DESK-16: zeroize via the audited `zeroize` crate. The
+            // `Zeroize` trait emits volatile writes and the compiler is
+            // forbidden from eliding them — same guarantee as the previous
+            // hand-rolled implementation, no `unsafe` required.
             if let Some(ref mut key) = *cache {
-                secure_zeroize(key);
+                key.zeroize();
             }
             *cache = None;
         }
@@ -392,12 +492,8 @@ impl MasterPasswordManager {
             return Err(MasterPasswordError::InvalidPassword);
         }
 
-        // Validate new password length
-        if new_password.len() < MIN_PASSWORD_LENGTH {
-            return Err(MasterPasswordError::PasswordTooShort {
-                min_length: MIN_PASSWORD_LENGTH,
-            });
-        }
+        // SEV-DESK-04: same complexity rules as `setup` for password changes.
+        enforce_password_complexity(new_password)?;
 
         // Generate new salt and hash
         let salt = SaltString::generate(&mut OsRng);
@@ -416,14 +512,21 @@ impl MasterPasswordManager {
 
         let now = Utc::now().to_rfc3339();
 
-        // Update in database
+        // SEV-DESK-11/13: read the current `kdf_version` and PRESERVE it
+        // through the password change. Wrapped credentials elsewhere in
+        // the DB were sealed under the existing kdf_version's derive
+        // chain — bumping the version here without re-encrypting them
+        // would orphan the user's data.
+        let kdf_version = self.read_kdf_version()?;
+
+        // Update in database (kdf_version unchanged on rotate)
         let conn = self.db_conn.lock().map_err(|e| {
             MasterPasswordError::DatabaseError(format!("Failed to acquire lock: {}", e))
         })?;
 
         conn.execute(
             "UPDATE master_password SET verifier_hash = ?1, verifier_salt = ?2, argon2_params = ?3, updated_at = ?4 WHERE id = 1",
-            [
+            rusqlite::params![
                 password_hash.to_string(),
                 salt.to_string(),
                 params_json,
@@ -434,12 +537,13 @@ impl MasterPasswordManager {
 
         drop(conn);
 
-        // Update cached key
-        let derived_key = self.derive_password_key(new_password, &salt)?;
+        // Update cached key with the same kdf_version we read above so
+        // subsequent `derive_key` calls produce identical wrapping keys.
+        let derived_key = self.derive_password_key(new_password, &salt, kdf_version)?;
         if let Ok(mut cache) = self.cached_key.lock() {
-            // AUDIT-003-015 fix: Clear old key securely
+            // SEV-DESK-16: zeroize the old key before swapping in the new one.
             if let Some(ref mut key) = *cache {
-                secure_zeroize(key);
+                key.zeroize();
             }
             *cache = Some(derived_key);
         }
@@ -447,13 +551,20 @@ impl MasterPasswordManager {
         Ok(())
     }
 
-    /// Derive an encryption key using the master password and machine ID
+    /// Derive an encryption key using the master password and machine ID.
     ///
     /// Key derivation flow:
-    /// 1. password_key = Argon2id(password, stored_salt)
+    /// 1. password_key = Argon2id(password, stored_salt)  ← computed at unlock
     /// 2. combined = password_key || machine_id
     /// 3. final_key = HKDF-SHA256(combined, purpose_salt, 32)
+    ///
+    /// SEV-DESK-11/13: reads the persisted `kdf_version` so the HKDF salt +
+    /// info string match the version that produced the cached password key.
+    /// v1 records continue producing identical bytes to the pre-fix code;
+    /// v2 records use install-bound HKDF salts.
     pub fn derive_key(&self, purpose: KeyPurpose) -> Result<Vec<u8>, MasterPasswordError> {
+        let kdf_version = self.read_kdf_version()?;
+
         let cached_key = self.cached_key.lock().map_err(|e| {
             MasterPasswordError::CryptoError(format!("Failed to acquire lock: {}", e))
         })?;
@@ -467,8 +578,8 @@ impl MasterPasswordManager {
         let mut combined = password_key.clone();
         combined.extend_from_slice(machine_id.as_bytes());
 
-        // Use HKDF to derive the final key
-        self.hkdf_derive(&combined, purpose)
+        // Use HKDF to derive the final key, branching on kdf_version.
+        self.hkdf_derive(&combined, purpose, kdf_version)
     }
 
     /// Check if migration from machine-only keys is needed
@@ -580,40 +691,104 @@ impl MasterPasswordManager {
         ))
     }
 
-    /// Derive a key from the password using Argon2
+    /// Derive a key from the password using Argon2.
+    ///
+    /// SEV-DESK-11: branches on `kdf_version`. Legacy (v1) keeps the
+    /// `salt.as_str().as_bytes()` behaviour bit-for-bit so existing
+    /// vaults stay decryptable. Current (v2) decodes the salt into raw
+    /// bytes via `Salt::decode_b64` — the cryptographically correct form.
     fn derive_password_key(
         &self,
         password: &str,
         salt: &SaltString,
+        kdf_version: u32,
     ) -> Result<Vec<u8>, MasterPasswordError> {
         let argon2 = self.create_argon2()?;
 
         let mut output = vec![0u8; ARGON2_OUTPUT_LEN];
-        // SaltString stores base64-encoded salt, use as_str() to get the string representation
-        argon2
-            .hash_password_into(password.as_bytes(), salt.as_str().as_bytes(), &mut output)
-            .map_err(|e| {
-                MasterPasswordError::CryptoError(format!("Failed to derive key: {}", e))
-            })?;
+
+        match kdf_version {
+            KDF_VERSION_LEGACY => {
+                // PRESERVED: pass the base64 salt string as bytes. This is
+                // wrong-but-historical and must not change for v1 records.
+                argon2
+                    .hash_password_into(
+                        password.as_bytes(),
+                        salt.as_str().as_bytes(),
+                        &mut output,
+                    )
+                    .map_err(|e| {
+                        MasterPasswordError::CryptoError(format!(
+                            "Failed to derive key (v1): {}",
+                            e
+                        ))
+                    })?;
+            }
+            _ => {
+                // v2+: decode the salt into raw bytes. `Salt::decode_b64`
+                // writes into a caller buffer and returns a `&[u8]` view.
+                use argon2::password_hash::Salt;
+                let mut salt_buf = [0u8; Salt::MAX_LENGTH];
+                let raw_salt = salt
+                    .as_salt()
+                    .decode_b64(&mut salt_buf)
+                    .map_err(|e| {
+                        MasterPasswordError::CryptoError(format!(
+                            "Failed to decode salt (v2): {}",
+                            e
+                        ))
+                    })?;
+                argon2
+                    .hash_password_into(password.as_bytes(), raw_salt, &mut output)
+                    .map_err(|e| {
+                        MasterPasswordError::CryptoError(format!(
+                            "Failed to derive key (v2): {}",
+                            e
+                        ))
+                    })?;
+            }
+        }
 
         Ok(output)
     }
 
-    /// Use HKDF-SHA256 to derive a purpose-specific key
+    /// Use HKDF-SHA256 to derive a purpose-specific key.
+    ///
+    /// SEV-DESK-13: branches on `kdf_version`. Legacy (v1) uses a static,
+    /// install-independent salt. Current (v2) mixes the per-install
+    /// `install_id` into the HKDF salt so a leaked HKDF root from one
+    /// install cannot be used to attack another install.
     fn hkdf_derive(
         &self,
         input_key: &[u8],
         purpose: KeyPurpose,
+        kdf_version: u32,
     ) -> Result<Vec<u8>, MasterPasswordError> {
         use hmac::{Hmac, Mac};
 
-        // Create purpose-specific info string
-        let info = format!("agiworkforce:{}:v1", purpose.as_str());
+        // Create purpose-specific info string. Mirror the kdf_version into
+        // the HKDF info so v1 and v2 derive distinct keys even when the
+        // input_key is identical — this defends against v1↔v2 confusion
+        // attacks if a per-install upgrade mechanism is added later.
+        let info = format!("agiworkforce:{}:v{}", purpose.as_str(), kdf_version);
 
         // HKDF-Extract: PRK = HMAC(salt, IKM)
-        // Using a fixed salt derived from app identifier
-        let salt = b"com.agiworkforce.desktop:master_password:v1";
-        let mut extract_hmac = <Hmac<Sha256> as Mac>::new_from_slice(salt)
+        let salt: Vec<u8> = match kdf_version {
+            KDF_VERSION_LEGACY => b"com.agiworkforce.desktop:master_password:v1".to_vec(),
+            _ => {
+                // v2+: per-install salt so the extracted PRK is unique to
+                // this device installation, not the AGI Workforce binary.
+                // `get_manager()` is the singleton accessor returning a
+                // `&'static MachineKeyManager`.
+                let install_id = machine_key::get_manager().get_install_id();
+                format!(
+                    "com.agiworkforce.desktop:master_password:v2:{}",
+                    install_id
+                )
+                .into_bytes()
+            }
+        };
+        let mut extract_hmac = <Hmac<Sha256> as Mac>::new_from_slice(&salt)
             .map_err(|e| MasterPasswordError::CryptoError(format!("HMAC init failed: {}", e)))?;
         extract_hmac.update(input_key);
         let prk = extract_hmac.finalize().into_bytes();
@@ -642,21 +817,24 @@ pub fn derive_key_base64(
 mod tests {
     use super::*;
 
+    // SEV-DESK-04: test fixtures updated to satisfy the new
+    // `enforce_password_complexity` rule (>= 12 chars, 3-of-4 of
+    // {lowercase, uppercase, digit, symbol}).
     // gitleaks:allow (test fixture — not a real secret)
     fn valid_test_passphrase() -> &'static str {
-        "alpha-beta-unique-phrase"
+        "Alpha-Beta-Unique-Phrase-9"
     }
     // gitleaks:allow (test fixture — not a real secret)
     fn alternate_test_passphrase() -> &'static str {
-        "gamma-delta-alt-phrase"
+        "Gamma-Delta-Alt-Phrase-7"
     }
     // gitleaks:allow (test fixture — not a real secret)
     fn invalid_test_passphrase() -> &'static str {
-        "nonmatching-phrase"
+        "Nonmatching-Phrase-1"
     }
     // gitleaks:allow (test fixture — not a real secret)
     fn too_short_test_passphrase() -> &'static str {
-        "tiny"
+        "Tiny-1A"
     }
 
     fn create_test_manager() -> MasterPasswordManager {
@@ -665,6 +843,129 @@ mod tests {
         let manager = MasterPasswordManager::new(Arc::new(Mutex::new(conn)));
         manager.init_table().unwrap();
         manager
+    }
+
+    /// SEV-DESK-11/13: verify the v1 and v2 derive paths produce DIFFERENT
+    /// password keys (so they cannot be confused) AND that each path is
+    /// internally consistent (same input → same output) so existing v1
+    /// users can still decrypt their wrapped credentials forever.
+    #[test]
+    fn test_kdf_v1_v2_distinct_and_deterministic() {
+        let manager = create_test_manager();
+        let salt = SaltString::generate(&mut OsRng);
+        let pw = valid_test_passphrase();
+
+        let v1_a = manager.derive_password_key(pw, &salt, KDF_VERSION_LEGACY).unwrap();
+        let v1_b = manager.derive_password_key(pw, &salt, KDF_VERSION_LEGACY).unwrap();
+        let v2_a = manager.derive_password_key(pw, &salt, KDF_VERSION_CURRENT).unwrap();
+        let v2_b = manager.derive_password_key(pw, &salt, KDF_VERSION_CURRENT).unwrap();
+
+        // Determinism per version
+        assert_eq!(v1_a, v1_b, "v1 must be deterministic");
+        assert_eq!(v2_a, v2_b, "v2 must be deterministic");
+
+        // v1 and v2 must produce different bytes — proves the salt encoding
+        // branch is actually taken and confusion attacks (using the wrong
+        // path) yield a key that cannot decrypt the other version's data.
+        assert_ne!(v1_a, v2_a, "v1 and v2 must differ");
+
+        // Both must be 32 bytes (AES-256 key size).
+        assert_eq!(v1_a.len(), ARGON2_OUTPUT_LEN);
+        assert_eq!(v2_a.len(), ARGON2_OUTPUT_LEN);
+    }
+
+    /// SEV-DESK-11/13: end-to-end smoke test — a fresh `setup()` writes
+    /// the row at `KDF_VERSION_CURRENT`, and `derive_key` reads that
+    /// version back through `read_kdf_version`. This protects against a
+    /// regression where the column read returns the legacy default and
+    /// silently uses the wrong derive path on new installs.
+    #[test]
+    fn test_setup_writes_current_kdf_version() {
+        let manager = create_test_manager();
+        manager.setup(valid_test_passphrase()).unwrap();
+
+        let version = manager.read_kdf_version().unwrap();
+        assert_eq!(
+            version, KDF_VERSION_CURRENT,
+            "setup() must write the current KDF version"
+        );
+
+        // derive_key should succeed (we are unlocked since setup caches the key).
+        let k1 = manager.derive_key(KeyPurpose::McpCredentials).unwrap();
+        let k2 = manager.derive_key(KeyPurpose::McpCredentials).unwrap();
+        assert_eq!(k1, k2, "derive_key must be deterministic for fixed inputs");
+        assert_eq!(k1.len(), DERIVED_KEY_SIZE);
+    }
+
+    /// SEV-DESK-11/13: simulate an existing v1 install — manually flip the
+    /// stored version to legacy after setup and confirm derive_key continues
+    /// to work and produces a v1 byte stream (different from v2).
+    #[test]
+    fn test_legacy_v1_record_continues_working() {
+        let manager = create_test_manager();
+        manager.setup(valid_test_passphrase()).unwrap();
+
+        // Force the row to v1 to simulate an upgrade-from-old-binary.
+        {
+            let conn = manager.db_conn.lock().unwrap();
+            conn.execute(
+                "UPDATE master_password SET kdf_version = ?1 WHERE id = 1",
+                [KDF_VERSION_LEGACY as i64],
+            )
+            .unwrap();
+        }
+
+        // Re-unlock so the cached_key is regenerated under v1 rules.
+        manager.lock();
+        manager.unlock(valid_test_passphrase()).unwrap();
+
+        let v1_key = manager.derive_key(KeyPurpose::McpCredentials).unwrap();
+        assert_eq!(v1_key.len(), DERIVED_KEY_SIZE);
+
+        // Now switch back to v2 and confirm the derived key changes.
+        {
+            let conn = manager.db_conn.lock().unwrap();
+            conn.execute(
+                "UPDATE master_password SET kdf_version = ?1 WHERE id = 1",
+                [KDF_VERSION_CURRENT as i64],
+            )
+            .unwrap();
+        }
+        manager.lock();
+        manager.unlock(valid_test_passphrase()).unwrap();
+        let v2_key = manager.derive_key(KeyPurpose::McpCredentials).unwrap();
+        assert_ne!(
+            v1_key, v2_key,
+            "v1 and v2 derived purpose keys must differ"
+        );
+    }
+
+    /// SEV-DESK-11/13: verify `change()` preserves the existing kdf_version.
+    /// Bumping it on rotate would orphan wrapped credentials sealed under v1.
+    #[test]
+    fn test_change_preserves_kdf_version() {
+        let manager = create_test_manager();
+        manager.setup(valid_test_passphrase()).unwrap();
+
+        // Force v1 to mimic an existing user.
+        {
+            let conn = manager.db_conn.lock().unwrap();
+            conn.execute(
+                "UPDATE master_password SET kdf_version = ?1 WHERE id = 1",
+                [KDF_VERSION_LEGACY as i64],
+            )
+            .unwrap();
+        }
+
+        manager
+            .change(valid_test_passphrase(), alternate_test_passphrase())
+            .unwrap();
+
+        let version = manager.read_kdf_version().unwrap();
+        assert_eq!(
+            version, KDF_VERSION_LEGACY,
+            "change() must NOT auto-upgrade kdf_version"
+        );
     }
 
     #[test]

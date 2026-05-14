@@ -6,6 +6,16 @@ vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
 }));
 
+// Bypass model-tier gating in unit tests — fixtures use canonical IDs (deepseek-chat,
+// grok-4, etc.) that exist in the model catalog but are not in any tier allowlist
+// (economy/pro_additions/flagship_additions). The tier policy is integration-tested
+// elsewhere; here we just want to verify the route's auth/credit/response behavior.
+vi.mock('@/lib/model-tiers', () => ({
+  canAccessModel: () => true,
+  ECONOMY_MODELS: new Set<string>(),
+  MODEL_TIER_REQUIREMENTS: {},
+}));
+
 vi.mock('@/lib/logger', () => ({
   logger: {
     info: vi.fn(),
@@ -155,7 +165,7 @@ describe('POST /api/llm/completion', () => {
 
       expect(response.status).toBe(401);
       expect(data.error.code).toBe('UNAUTHORIZED');
-      expect(data.error.message).toContain('authorization');
+      expect(data.error.message).toContain('Authentication required');
     });
 
     it('should return 401 if authorization header does not start with Bearer', async () => {
@@ -199,7 +209,7 @@ describe('POST /api/llm/completion', () => {
 
       expect(response.status).toBe(401);
       expect(data.error.code).toBe('UNAUTHORIZED');
-      expect(data.error.message).toContain('authentication');
+      expect(data.error.message).toContain('Authentication required');
     });
 
     it('should return 403 if user has no subscription', async () => {
@@ -221,7 +231,7 @@ describe('POST /api/llm/completion', () => {
 
       expect(response.status).toBe(403);
       expect(data.error.code).toBe('FORBIDDEN');
-      expect(data.error.message).toContain('subscription');
+      expect(data.error.message).toContain('Access denied');
     });
 
     it('should return 403 if subscription is not active', async () => {
@@ -247,7 +257,7 @@ describe('POST /api/llm/completion', () => {
 
       expect(response.status).toBe(403);
       expect(data.error.code).toBe('FORBIDDEN');
-      expect(data.error.message).toContain('past_due');
+      expect(data.error.message).toContain('Access denied');
     });
 
     it('should allow trialing subscription status', async () => {
@@ -602,10 +612,12 @@ describe('POST /api/llm/completion', () => {
       const data = await response.json();
 
       expect(response.status).toBe(500);
-      expect(data.error.message).toContain('Streaming request failed');
+      expect(data.error.message).toContain('Internal server error');
 
-      // Check that refund was issued (negative amount)
+      // Check that refund was issued (negative amount). Signature:
+      // deductCredits(client, userId, amountCents, description, metadata, idempotencyKey)
       expect(mockDeductCredits).toHaveBeenCalledWith(
+        expect.anything(), // userClient
         'test-user-id',
         expect.any(Number), // First call is reservation (positive)
         expect.any(String),
@@ -613,7 +625,9 @@ describe('POST /api/llm/completion', () => {
         expect.any(String), // idempotency key
       );
       // Second call should be refund (negative)
-      const refundCall = mockDeductCredits.mock.calls.find((call) => call[1] < 0);
+      const refundCall = mockDeductCredits.mock.calls.find(
+        (call) => typeof call[2] === 'number' && (call[2] as number) < 0,
+      );
       expect(refundCall).toBeDefined();
     });
   });
@@ -800,8 +814,10 @@ describe('POST /api/llm/completion', () => {
 
       await POST(request);
 
-      // First deductCredits call should be reservation (with 5 args including idempotency key)
+      // First deductCredits call should be reservation. Signature:
+      // deductCredits(client, userId, amountCents, description, metadata, idempotencyKey)
       expect(mockDeductCredits).toHaveBeenCalledWith(
+        expect.anything(), // userClient (RLS-bound Supabase client)
         'test-user-id',
         expect.any(Number),
         expect.stringContaining('reservation'),
@@ -828,10 +844,13 @@ describe('POST /api/llm/completion', () => {
 
       expect(response.status).toBe(500);
 
-      // Check for refund call (negative amount)
-      const refundCall = mockDeductCredits.mock.calls.find((call) => call[1] < 0);
+      // Check for refund call (negative amount). Signature:
+      // deductCredits(client, userId, amountCents, description, metadata, idempotencyKey)
+      const refundCall = mockDeductCredits.mock.calls.find(
+        (call) => typeof call[2] === 'number' && (call[2] as number) < 0,
+      );
       expect(refundCall).toBeDefined();
-      expect(refundCall![2]).toContain('Refund');
+      expect(refundCall![3]).toContain('Refund');
     });
 
     it('should include credit info in successful response', async () => {

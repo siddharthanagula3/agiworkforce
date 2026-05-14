@@ -18,7 +18,7 @@
     "notifications",
     "tabGroups"
   ],
-  "_host_permissions_note": "Broad localhost/* is intentional: the bridge port is user-configurable via chrome.storage.local agi_bridge_url (default 8765). Restricting to a fixed port would break configurability. Runtime enforcement: validateBridgeUrl() in background.ts rejects any non-local URL.",
+  "_host_permissions_note": "Broad localhost/* is intentional: the bridge port is user-configurable via chrome.storage.local agi_bridge_url (default 8787, matches VS Code extension and desktop bridge). Restricting to a fixed port would break configurability. Runtime enforcement: validateBridgeUrl() in background.ts rejects any non-local URL.",
   "host_permissions": ["http://localhost/*", "http://127.0.0.1/*"],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'"
@@ -72,6 +72,12 @@
   "side_panel": {
     "default_path": "src/side_panel.html"
   },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/providers/*.svg"],
+      "matches": ["https://*.agiworkforce.com/*"]
+    }
+  ],
   "minimum_chrome_version": "132",
   "offline_enabled": false
 }
