@@ -989,6 +989,17 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
                 app.show_slash_popup = true;
                 app.slash_filter.clear();
                 app.slash_selected = 0;
+                // Also open the CommandPopup overlay for richer fuzzy-search UX.
+                use crate::tui::widgets::command_popup::{
+                    CommandPopup, RegistryCommand as PopupCmd,
+                };
+                let cmds: Vec<PopupCmd> = app
+                    .command_registry
+                    .commands()
+                    .iter()
+                    .map(|rc| PopupCmd::new(rc.slash_name().trim_start_matches('/'), rc.description.clone()))
+                    .collect();
+                app.open_overlay(Box::new(CommandPopup::new(cmds)));
             }
             InputAction::None
         }
@@ -1822,6 +1833,79 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             use crate::tui::widgets::screen_renderers::render_tasks;
             let summaries = crate::tools::session_task_summaries();
             SlashResult::SystemMessage(render_tasks(&summaries))
+        }
+
+        // ── New interactive overlays ──
+
+        "/memories" => {
+            use crate::tui::widgets::memories_settings::{MemoriesSettingsView, MemorySettings};
+            let view = MemoriesSettingsView::new(MemorySettings::default());
+            app.open_overlay(Box::new(view));
+            SlashResult::SystemMessage(
+                "Memory settings (\u{2191}\u{2193} navigate \u{00b7} Enter toggle \u{00b7} Esc close)".into(),
+            )
+        }
+
+        "/skills-toggle" => {
+            use crate::tui::widgets::skills_toggle::{Skill as ToggleSkill, SkillsToggleView};
+            let discovered = crate::skills::discover_skills();
+            let skills: Vec<ToggleSkill> = discovered
+                .into_iter()
+                .map(|s| ToggleSkill::new(s.name, s.description, true))
+                .collect();
+            let view = SkillsToggleView::new(skills);
+            app.open_overlay(Box::new(view));
+            SlashResult::SystemMessage(
+                "Skills (\u{2191}\u{2193} navigate \u{00b7} Space toggle \u{00b7} Enter save \u{00b7} Esc cancel)".into(),
+            )
+        }
+
+        "/statusline" => {
+            use crate::tui::widgets::statusline_setup::{StatusLineConfig, StatusLineSetupView};
+            let view = StatusLineSetupView::new(StatusLineConfig::default());
+            app.open_overlay(Box::new(view));
+            SlashResult::SystemMessage(
+                "Statusline setup (\u{2191}\u{2193} navigate \u{00b7} Space toggle \u{00b7} Enter save \u{00b7} Esc cancel)".into(),
+            )
+        }
+
+        "/title" => {
+            use crate::tui::widgets::terminal_title_setup::{
+                TerminalTitleConfig, TerminalTitleSetupView,
+            };
+            let view = TerminalTitleSetupView::new(TerminalTitleConfig::default());
+            app.open_overlay(Box::new(view));
+            SlashResult::SystemMessage(
+                "Terminal title setup (\u{2191}\u{2193} navigate \u{00b7} Space toggle \u{00b7} Enter save \u{00b7} Esc cancel)".into(),
+            )
+        }
+
+        "/diff-review" => {
+            use crate::tui::widgets::diff_review::{DiffReviewView, FileDiff};
+            // Gather changed files from `git status --porcelain` synchronously.
+            let files: Vec<FileDiff> = std::process::Command::new("git")
+                .args(["status", "--porcelain"])
+                .output()
+                .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+                .unwrap_or_default()
+                .lines()
+                .filter_map(|line| {
+                    let path = line.get(3..)?;
+                    if path.is_empty() {
+                        return None;
+                    }
+                    Some(FileDiff::new(path, vec![], 0, 0))
+                })
+                .collect();
+            if files.is_empty() {
+                SlashResult::SystemMessage("No changed files (working tree clean).".into())
+            } else {
+                let view = DiffReviewView::new(files);
+                app.open_overlay(Box::new(view));
+                SlashResult::SystemMessage(
+                    "Diff review (\u{2191}\u{2193} navigate \u{00b7} y approve \u{00b7} n reject \u{00b7} s skip \u{00b7} Enter done \u{00b7} Esc close)".into(),
+                )
+            }
         }
 
         _ => SlashResult::SendAsPrompt,
