@@ -33,12 +33,17 @@ import {
   applyOpenAIResponsesPayloadPolicy,
 } from '@agiworkforce/llm-normalize';
 
+import {
+  classifyError,
+  withStreamIdleWatchdog,
+  parseRetryAfterFromError,
+} from '@agiworkforce/llm-runtime';
+
 import { OPENAI_MODEL_CATALOG } from './catalog';
 import { translateChatRequest } from './translate';
 import { translateOpenAIStream } from './stream';
 import { translateChatRequestToResponses } from './translate-responses';
 import { translateOpenAIResponsesStream } from './stream-responses';
-import { parseRetryAfterFromError } from './retry-after';
 import type { OpenAIChatCompletionChunk } from './types';
 import type { ResponsesStreamEvent } from './responses-types';
 
@@ -145,22 +150,23 @@ export function createOpenAIAdapter(config: OpenAIAdapterConfig = {}): ProviderA
             responsesParams as unknown as Parameters<typeof sdk.responses.create>[0],
             { signal },
           );
-          for await (const chunk of translateOpenAIResponsesStream(
-            sdkStream as unknown as AsyncIterable<ResponsesStreamEvent>,
-          )) {
+          const watched = withStreamIdleWatchdog(
+            translateOpenAIResponsesStream(
+              sdkStream as unknown as AsyncIterable<ResponsesStreamEvent>,
+            ),
+          );
+          for await (const chunk of watched) {
             yield chunk;
           }
           return;
         } catch (err) {
-          const error = err as Error & { status?: number };
-          const retryable =
-            typeof error.status === 'number' && (error.status === 429 || error.status >= 500);
-          const retryAfterSeconds = retryable ? parseRetryAfterFromError(err) : undefined;
+          const classified = classifyError(err);
+          const retryAfterSeconds = classified.retryAfterSeconds ?? parseRetryAfterFromError(err);
           yield {
             type: 'error',
-            message: error.message ?? 'OpenAI Responses request failed',
-            ...(typeof error.status === 'number' ? { code: String(error.status) } : {}),
-            retryable,
+            message: classified.message,
+            ...(classified.status !== undefined ? { code: String(classified.status) } : {}),
+            retryable: classified.retryable,
             ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
           };
           yield { type: 'stop', reason: 'error' };
@@ -205,21 +211,20 @@ export function createOpenAIAdapter(config: OpenAIAdapterConfig = {}): ProviderA
           params as unknown as Parameters<typeof sdk.chat.completions.create>[0],
           { signal },
         );
-        for await (const chunk of translateOpenAIStream(
-          sdkStream as unknown as AsyncIterable<OpenAIChatCompletionChunk>,
-        )) {
+        const watched = withStreamIdleWatchdog(
+          translateOpenAIStream(sdkStream as unknown as AsyncIterable<OpenAIChatCompletionChunk>),
+        );
+        for await (const chunk of watched) {
           yield chunk;
         }
       } catch (err) {
-        const error = err as Error & { status?: number };
-        const retryable =
-          typeof error.status === 'number' && (error.status === 429 || error.status >= 500);
-        const retryAfterSeconds = retryable ? parseRetryAfterFromError(err) : undefined;
+        const classified = classifyError(err);
+        const retryAfterSeconds = classified.retryAfterSeconds ?? parseRetryAfterFromError(err);
         yield {
           type: 'error',
-          message: error.message ?? 'OpenAI request failed',
-          ...(typeof error.status === 'number' ? { code: String(error.status) } : {}),
-          retryable,
+          message: classified.message,
+          ...(classified.status !== undefined ? { code: String(classified.status) } : {}),
+          retryable: classified.retryable,
           ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
         };
         yield { type: 'stop', reason: 'error' };

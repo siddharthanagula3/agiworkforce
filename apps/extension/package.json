@@ -30,6 +30,8 @@
     "format": "prettier --write \"src/**/*.{js,html}\""
   },
   "dependencies": {
+    "@agiworkforce/browser-tool": "workspace:*",
+    "@agiworkforce/runtime": "workspace:*",
     "dompurify": "^3.3.3"
   },
   "devDependencies": {

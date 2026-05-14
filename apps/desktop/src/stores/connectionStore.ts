@@ -1,3 +1,4 @@
+// TODO(task-1.3): migrate to packages/runtime/state (see AppStateStore.ts domain mapping)
 import {
   SignalingClient,
   type SignalingClientOptions,
@@ -5,6 +6,11 @@ import {
 } from '@agiworkforce/utils';
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
+import {
+  initDispatchSession,
+  resetDispatchSession,
+  extractDispatchSalt,
+} from '../services/dispatch';
 
 const SIGNALING_HTTP_URL =
   (import.meta.env?.['VITE_SIGNALING_HTTP_URL'] as string | undefined) ?? 'http://localhost:4000';
@@ -121,10 +127,30 @@ export const useConnectionStore = create<MobileCompanionState>()(
               error: null,
             });
             break;
-          case 'peer_ready':
+          case 'peer_ready': {
             set({ peerConnected: true, status: 'pairing' });
+
+            // Initialise HMAC session key from the salt mobile sent in metadata.
+            const saltInfo = extractDispatchSalt(event.metadata);
+            if (saltInfo) {
+              const pairingCode = get().pairingCode;
+              if (pairingCode) {
+                initDispatchSession(pairingCode, saltInfo.salt, saltInfo.version).catch((err) => {
+                  console.warn('[dispatch] session init failed:', err);
+                });
+              } else {
+                console.warn('[dispatch] peer_ready received but pairingCode is null');
+              }
+            } else {
+              console.warn(
+                '[dispatch] peer_ready metadata missing dispatchSalt — ' +
+                  'mobile may need update before 2026-06-05 cutoff.',
+              );
+            }
+
             await establishPeerConnection();
             break;
+          }
           case 'signal':
             if (!peerConnection) {
               console.warn('[mobile-companion] received signal without peer connection');
@@ -143,11 +169,13 @@ export const useConnectionStore = create<MobileCompanionState>()(
             break;
           case 'peer_left':
             set({ peerConnected: false });
+            resetDispatchSession().catch(() => {});
             break;
           case 'session_expired':
           case 'terminated':
             resetConnection();
             set(IDLE_CONNECTION_STATE);
+            resetDispatchSession().catch(() => {});
             break;
           case 'error':
             set({ status: 'error', error: event.error });

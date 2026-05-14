@@ -1,7 +1,9 @@
 import { Alert } from 'react-native';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { QueueFullError } from '@agiworkforce/runtime';
 import { mmkvStorage } from '@/lib/mmkv';
+import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
 import { streamChat, type StreamDelta } from '@/services/streaming';
 import { useProjectStore } from '@/stores/projectStore';
@@ -301,6 +303,26 @@ export const useChatStore = create<ChatState>()(
       },
 
       sendMessage: async (conversationId, content, model, attachments) => {
+        // Route the prompt through the priority send queue first. The mobile
+        // queue persists `next` and `later` lanes to MMKV so a deferred
+        // send survives an OS-driven background process kill.
+        const queue = getMobileSendQueue();
+        try {
+          queue.enqueue({ value: content, mode: 'prompt' });
+        } catch (err) {
+          if (err instanceof QueueFullError) {
+            Alert.alert(
+              'Queue full',
+              `The "${err.lane}" lane is at capacity. Please wait for prior sends to drain.`,
+            );
+            return;
+          }
+          throw err;
+        }
+        // Drain immediately — current behavior is direct send. The queue
+        // captures the command for cancellation / replay; we don't defer it.
+        queue.dequeue();
+
         // Cancel any existing stream for this conversation
         const existingController = abortControllers.get(conversationId);
         if (existingController) {

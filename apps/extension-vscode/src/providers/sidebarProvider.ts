@@ -17,6 +17,7 @@
  */
 
 import * as vscode from 'vscode';
+import { QueueFullError } from '@agiworkforce/runtime';
 import {
   streamChatCompletion,
   setApiKey,
@@ -25,6 +26,7 @@ import {
   AgiWorkforceApiError,
   type LlmChatMessage,
 } from '../utils/api';
+import { getVSCodeSendQueue } from '../services/sendQueue';
 import { type ConversationStore } from '../storage/conversationStore';
 import { type ConversationTreeProvider } from './conversationTreeProvider';
 import { getContextBuilder } from '../services/contextBuilder';
@@ -1585,6 +1587,23 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   }
 
   private async _handleSendMessage(text: string, model?: string): Promise<void> {
+    // Route through the shared priority send queue for parity with other
+    // surfaces. The queue persists `next` and `later` lanes via the
+    // workspace Memento so deferred sends survive a window reload.
+    const sendQueue = getVSCodeSendQueue(this._context?.workspaceState ?? null);
+    try {
+      sendQueue.enqueue({ value: text, mode: 'prompt' });
+    } catch (err) {
+      if (err instanceof QueueFullError) {
+        void vscode.window.showWarningMessage(
+          `AGI Workforce queue lane "${err.lane}" is full. Please wait for prior sends to drain.`,
+        );
+        return;
+      }
+      throw err;
+    }
+    sendQueue.dequeue();
+
     // Cancel any in-flight request
     this._currentCancelSource?.cancel();
     this._currentCancelSource = new vscode.CancellationTokenSource();
