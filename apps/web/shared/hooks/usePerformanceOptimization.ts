@@ -99,35 +99,6 @@ export const useThrottle = <T extends (...args: unknown[]) => void>(
 };
 
 /**
- * Hook for memoizing expensive calculations
- * Uses useRef to store factory for stable reference while respecting deps
- *
- * Note: This hook wraps useMemo with performance tracking. The deps are passed
- * dynamically which requires disabling the exhaustive-deps rule.
- */
-export const useMemoizedValue = <T>(factory: () => T, deps: React.DependencyList): T => {
-  const factoryRef = useRef(factory);
-
-  // Keep factory ref up to date via useEffect to avoid ref access during render
-  useEffect(() => {
-    factoryRef.current = factory;
-  });
-
-  return useMemo(() => {
-    const startTime = performance.now();
-    const result = factoryRef.current();
-    const endTime = performance.now();
-
-    monitoringService.trackPerformance({
-      memoizedCalculation: endTime - startTime,
-    } as unknown as Parameters<(typeof monitoringService)['trackPerformance']>[0]);
-
-    return result;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-};
-
-/**
  * Hook for lazy loading components
  * Fixed: Added isMounted flag to prevent setState after unmount
  */

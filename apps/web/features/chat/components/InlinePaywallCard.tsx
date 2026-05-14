@@ -29,7 +29,17 @@
 import { memo, useCallback } from 'react';
 import Link from 'next/link';
 import { prefetchDNS } from 'react-dom';
-import { Video, Brain, Zap, Monitor, Search, Image, Database, Server, Globe } from 'lucide-react';
+import {
+  Video,
+  Brain,
+  Zap,
+  Monitor,
+  Search,
+  Image as ImageIcon,
+  Database,
+  Server,
+  Globe,
+} from 'lucide-react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@shared/ui/card';
 import { Button } from '@shared/components/ui/button';
 import { Badge } from '@shared/components/ui/badge';
@@ -126,7 +136,7 @@ const FeatureIcon = memo(function FeatureIcon({ feature, className }: FeatureIco
   ) : feature === 'deep_research' ? (
     <Search className={iconClass} aria-hidden="true" />
   ) : feature === 'image_quota' ? (
-    <Image className={iconClass} aria-hidden="true" />
+    <ImageIcon className={iconClass} aria-hidden="true" />
   ) : feature === 'token_cap' ? (
     <Database className={iconClass} aria-hidden="true" />
   ) : feature === 'mcp' ? (

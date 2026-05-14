@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback } from 'react';
-import { FileCode, Code2, FileText, Image, Globe, ChevronRight } from 'lucide-react';
+import { FileCode, Code2, FileText, Image as ImageIcon, Globe, ChevronRight } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import type { ArtifactData } from './ArtifactPreview';
@@ -44,7 +44,7 @@ function TypeIcon({ type, className }: { type: ArtifactData['type']; className?:
     case 'react':
       return <Code2 className={cls} aria-hidden="true" />;
     case 'svg':
-      return <Image className={cls} aria-hidden="true" />;
+      return <ImageIcon className={cls} aria-hidden="true" />;
     case 'mermaid':
       return <FileCode className={cls} aria-hidden="true" />;
     default:
