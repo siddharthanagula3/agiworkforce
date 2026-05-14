@@ -1604,7 +1604,10 @@ function showRecordingIndicator(): void {
   `;
   const badge = document.createElement('div');
   badge.className = 'agi-rec-dot';
-  badge.innerHTML = '<div class="agi-rec-circle"></div>REC';
+  const circle = document.createElement('div');
+  circle.className = 'agi-rec-circle';
+  badge.appendChild(circle);
+  badge.appendChild(document.createTextNode('REC'));
   shadow.appendChild(style);
   shadow.appendChild(badge);
   document.body.appendChild(host);
