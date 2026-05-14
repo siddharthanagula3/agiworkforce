@@ -14,6 +14,7 @@ import {
   Settings,
   LogOut,
   ChevronUp,
+  CheckSquare,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { useAuthStore } from '@shared/stores/authentication-store';
@@ -116,12 +117,18 @@ const SessionItem = React.memo(function SessionItem({
   onSelect,
   onDelete,
   onRename,
+  bulkMode = false,
+  isChecked = false,
+  onToggleCheck,
 }: {
   session: SessionLike;
   isActive: boolean;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onRename: (id: string, title: string) => void;
+  bulkMode?: boolean;
+  isChecked?: boolean;
+  onToggleCheck?: (id: string) => void;
 }) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(session.title);
@@ -163,12 +170,28 @@ const SessionItem = React.memo(function SessionItem({
       <div
         className={cn(
           'group relative flex items-center gap-2 px-2 py-1.5 rounded-lg mx-1 cursor-pointer transition-colors',
-          isActive
+          isActive && !bulkMode
             ? 'bg-black/[0.06] dark:bg-white/[0.08]'
             : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.05]',
+          bulkMode && isChecked && 'bg-primary/10',
         )}
-        onClick={() => !isRenaming && onSelect(session.id)}
+        onClick={() => {
+          if (bulkMode) {
+            onToggleCheck?.(session.id);
+          } else if (!isRenaming) {
+            onSelect(session.id);
+          }
+        }}
       >
+        {bulkMode && (
+          <input
+            type="checkbox"
+            checked={isChecked}
+            onChange={() => onToggleCheck?.(session.id)}
+            onClick={(e) => e.stopPropagation()}
+            className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-primary"
+          />
+        )}
         {isRenaming ? (
           <input
             ref={inputRef}
@@ -188,7 +211,7 @@ const SessionItem = React.memo(function SessionItem({
           </span>
         )}
 
-        {!isRenaming && (
+        {!isRenaming && !bulkMode && (
           <>
             <span className="shrink-0 text-[10px] text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity">
               {timestamp}
@@ -367,14 +390,51 @@ function ChatSidebarContent({
   collapsed = false,
 }: ChatSidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const exitBulkMode = useCallback(() => {
+    setBulkMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const toggleCheck = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(
+    (visibleSessions: SessionLike[]) => {
+      if (selectedIds.size === visibleSessions.length) {
+        setSelectedIds(new Set());
+      } else {
+        setSelectedIds(new Set(visibleSessions.map((s) => s.id)));
+      }
+    },
+    [selectedIds.size],
+  );
+
+  const handleBulkDelete = useCallback(() => {
+    for (const id of selectedIds) {
+      onDeleteSession(id);
+    }
+    exitBulkMode();
+  }, [selectedIds, onDeleteSession, exitBulkMode]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSearchQuery('');
+      if (e.key === 'Escape') {
+        if (bulkMode) exitBulkMode();
+        else setSearchQuery('');
+      }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, []);
+  }, [bulkMode, exitBulkMode]);
 
   const filteredSessions = useMemo(() => {
     if (!searchQuery.trim()) return sessions;
@@ -394,29 +454,63 @@ function ChatSidebarContent({
   return (
     <div className="flex h-full flex-col bg-[var(--chat-sidebar-bg)] border-r border-[var(--chat-border-strong)]">
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 pt-3 pb-2">
-        {onToggleSidebar && (
+      {bulkMode ? (
+        <div className="flex items-center gap-1.5 px-3 pt-3 pb-2 text-[12px]">
+          <span className="text-muted-foreground">{selectedIds.size} selected</span>
           <button
-            onClick={onToggleSidebar}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:text-foreground transition-colors"
-            aria-label="Close sidebar"
+            onClick={() => handleSelectAll(filteredSessions)}
+            className="ml-1 text-primary hover:underline"
           >
-            <PanelLeftClose className="h-4 w-4" />
+            {selectedIds.size === filteredSessions.length ? 'Deselect all' : 'Select all'}
           </button>
-        )}
-        <span className="text-[13px] font-semibold text-foreground">AGI Workforce</span>
-      </div>
+          <button
+            onClick={handleBulkDelete}
+            disabled={selectedIds.size === 0}
+            className="ml-1 text-destructive hover:underline disabled:opacity-40"
+          >
+            Delete
+          </button>
+          <button onClick={exitBulkMode} className="ml-auto text-muted-foreground hover:underline">
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 px-3 pt-3 pb-2">
+          {onToggleSidebar && (
+            <button
+              onClick={onToggleSidebar}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:text-foreground transition-colors"
+              aria-label="Close sidebar"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </button>
+          )}
+          <span className="text-[13px] font-semibold text-foreground">AGI Workforce</span>
+          {sessions.length > 0 && (
+            <button
+              onClick={() => setBulkMode(true)}
+              className="ml-auto flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:text-foreground transition-colors"
+              aria-label="Select conversations"
+              title="Select conversations"
+            >
+              <CheckSquare className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      )}
 
       {/* New Chat button */}
-      <div className="px-3 pb-1">
-        <button
-          onClick={onNewChat}
-          className="flex w-full items-center gap-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 text-sm font-medium transition-colors"
-        >
-          <Plus className="h-4 w-4 shrink-0" />
-          New Chat
-        </button>
-      </div>
+      {!bulkMode && (
+        <div className="px-3 pb-1">
+          <button
+            onClick={onNewChat}
+            className="flex w-full items-center gap-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 text-sm font-medium transition-colors"
+          >
+            <Plus className="h-4 w-4 shrink-0" />
+            New Chat
+          </button>
+        </div>
+      )}
 
       {/* Search */}
       <div className="mx-2 my-2 flex items-center gap-2 rounded-lg bg-black/5 dark:bg-white/5 px-3 py-2">
@@ -467,6 +561,9 @@ function ChatSidebarContent({
                   onSelect={onSelectSession}
                   onDelete={onDeleteSession}
                   onRename={onRenameSession}
+                  bulkMode={bulkMode}
+                  isChecked={selectedIds.has(session.id)}
+                  onToggleCheck={toggleCheck}
                 />
               ))}
             </div>

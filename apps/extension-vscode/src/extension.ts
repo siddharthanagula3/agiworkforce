@@ -611,6 +611,51 @@ export function activate(context: vscode.ExtensionContext): void {
       conversationTreeProvider.refresh();
     }),
 
+    // ── agi-workforce.showSessionsHistory ─────────────────────────────────────
+    // Matches reference PNG 09: searchable QuickPick with recent sessions,
+    // relative timestamps, and message counts.
+    vscode.commands.registerCommand('agi-workforce.showSessionsHistory', async () => {
+      const conversations = conversationStore.getAll();
+
+      if (conversations.length === 0) {
+        const choice = await vscode.window.showInformationMessage(
+          'AGI Workforce: No conversation history yet. Start a new chat!',
+          'New Chat',
+        );
+        if (choice === 'New Chat') {
+          await vscode.commands.executeCommand('agi-workforce.newConversation');
+        }
+        return;
+      }
+
+      const items: (vscode.QuickPickItem & { conversationId?: string })[] = conversations.map(
+        (conv) => {
+          const msgCount = conv.messages.filter((m) => m.role !== 'system').length;
+          const relativeTime = sessionHistoryRelativeTime(conv.updatedAt);
+          return {
+            label: `$(comment) ${conv.title}`,
+            description: relativeTime,
+            detail:
+              msgCount > 0
+                ? `${msgCount} message${msgCount !== 1 ? 's' : ''} · ${conv.model}`
+                : conv.model,
+            conversationId: conv.id,
+          };
+        },
+      );
+
+      const pick = await vscode.window.showQuickPick(items, {
+        title: 'AGI Workforce — Sessions History',
+        placeHolder: 'Search sessions…',
+        matchOnDescription: true,
+        matchOnDetail: true,
+      });
+
+      if (pick?.conversationId !== undefined) {
+        await vscode.commands.executeCommand('agi-workforce.openConversation', pick.conversationId);
+      }
+    }),
+
     // ── agi-workforce.sendToDesktop ─────────────────────────────────────────
     vscode.commands.registerCommand('agi-workforce.sendToDesktop', async () => {
       const bridge = getDesktopBridge();
@@ -1487,6 +1532,21 @@ export function deactivate(): void {
 
 // runInlineCommand + commandLabel extracted to ./lifecycle/runInlineCommand.ts
 // validateAdvancedFeatureFlags + bridge reachability extracted to ./lifecycle/advancedFeatures.ts
+
+// ─── Sessions history helper ───────────────────────────────────────────────────
+// Exported so tests can import it without activating the extension.
+export function sessionHistoryRelativeTime(timestamp: number): string {
+  const diff = Date.now() - timestamp;
+  const minutes = Math.floor(diff / 60_000);
+  const hours = Math.floor(diff / 3_600_000);
+  const days = Math.floor(diff / 86_400_000);
+
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  if (days < 7) return `${days}d ago`;
+  return new Date(timestamp).toLocaleDateString();
+}
 
 // ─── First-run helper ─────────────────────────────────────────────────────────
 
