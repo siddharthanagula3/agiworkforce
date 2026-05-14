@@ -51,7 +51,7 @@ describe('computerUseToPageActions — 16 Computer Use actions', () => {
       action: { kind: 'mouse_move', coordinate: [10, 20] },
       expectType: 'execute_script',
     },
-    { name: 'key', action: { kind: 'key', text: 'Enter' }, expectType: 'execute_script' },
+    { name: 'key', action: { kind: 'key', text: 'Enter' }, expectType: 'key' },
     { name: 'type', action: { kind: 'type', text: 'hello' }, expectType: 'type' },
     {
       name: 'scroll',
@@ -61,7 +61,7 @@ describe('computerUseToPageActions — 16 Computer Use actions', () => {
     {
       name: 'hold_key',
       action: { kind: 'hold_key', text: 'Shift', duration: 100 },
-      expectType: 'execute_script',
+      expectType: 'hold_key',
     },
     { name: 'wait', action: { kind: 'wait', duration: 250 }, expectType: 'wait' },
     {
