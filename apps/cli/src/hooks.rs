@@ -527,9 +527,7 @@ pub struct HookResult {
 // ---------------------------------------------------------------------------
 
 /// Aggregate outcome across multiple hook results.
-/// Will be wired into the agent loop to block/stop actions based on hook output.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum HookAggregateOutcome {
     /// All hooks passed — proceed normally.
     Continue,
@@ -542,7 +540,6 @@ pub enum HookAggregateOutcome {
 /// Aggregate a slice of hook results into a single outcome.
 ///
 /// Priority: Blocked > Stop > Continue.
-#[allow(dead_code)]
 pub fn aggregate_results(results: &[HookResult]) -> HookAggregateOutcome {
     let mut blocked_reasons: Vec<String> = Vec::new();
     let mut any_stop = false;

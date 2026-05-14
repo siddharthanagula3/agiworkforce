@@ -16,6 +16,16 @@
 
 ---
 
+## 2026-05-14 — CLI v1.7.1: Wire PreToolUse hook blocking in agent loop
+
+- Files: `apps/cli/src/agent.rs` (edited), `apps/cli/src/hooks.rs` (edited), `apps/cli/Cargo.toml` (version bump)
+- Change: `aggregate_results` was implemented and tested in hooks.rs but never called from the agent loop. PreToolUse hooks returning `{"decision":"block"}` were silently ignored. Wired `aggregate_results` check between `aggregate_transformers` and tool dispatch; removed 2 of 3 `#[allow(dead_code)]` annotations (`HookAggregateOutcome`, `aggregate_results`).
+- Cargo check: PASS
+- Tests: 1310/1310 pass (no delta — existing hook tests already covered the logic)
+- Last surface touched: apps/cli
+
+---
+
 ## 2026-05-14 — Desktop: Quick-chip labels aligned to reference
 
 - Files: `packages/unified-chat/src/stores/chatStore.ts`, `packages/unified-chat/src/components/QuickChips.tsx`, `packages/unified-chat/src/components/ChatInterface.tsx`
@@ -763,3 +773,15 @@ Last surface touched: apps/mobile
 **Tests:** 576/576 pass. Typecheck clean. Build green.
 
 Last surface touched: apps/extension
+
+---
+
+## 2026-05-14 — Web: Pricing page checkmark icons + cancellation note
+
+**Surface:** apps/web
+**Commit:** TBD
+**Change:** Replaced small dot pseudo-element bullets on tier feature lists with inline SVG checkmark icons (14x14, amber accent color), matching the claude.ai pricing/login reference captures. Added "No commitment. Cancel anytime." note below the Hobby Subscribe CTA. Removed em-dashes from page copy. Added `.agi-tier-check-icon`, `.agi-tier-cta-group`, `.agi-tier-cta-note` CSS classes.
+**Files:** `apps/web/app/pricing/page.tsx` (+72/-25 LOC), `apps/web/app/globals.css` (+21/-4 LOC)
+**Tests:** Typecheck clean (tsc --noEmit passes).
+
+Last surface touched: apps/web

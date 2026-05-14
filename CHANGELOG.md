@@ -2,6 +2,14 @@
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [cli-1.7.1] — 2026-05-14
+
+### Fixed
+
+- **PreToolUse hook blocking now enforced in agent loop.** `aggregate_results` (which processes `{"decision":"block"}` and `{"continue":false}` hook responses) was fully implemented and tested in `hooks.rs` but never called from `agent.rs`. Tools were always executed regardless of hook decision. The agent loop now calls `aggregate_results` after `aggregate_transformers` and short-circuits with an `is_error` tool result when a hook blocks or stops, feeding the reason back to the model. Removes 2 of 3 stale `#[allow(dead_code)]` annotations on `HookAggregateOutcome` and `aggregate_results`.
+
+---
+
 ## [cli-1.7.0] — 2026-05-14
 
 Honesty-pass release. A deep audit against `~/Desktop/reference/` found six items previously claimed shipped that were actually broken or missing. v1.7.0 closes them.
