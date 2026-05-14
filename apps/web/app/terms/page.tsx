@@ -50,10 +50,13 @@ export default function TermsPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">03 — Payment, refunds, and changes</p>
+          <p className="agi-section-eyebrow">03 — Payment, refunds, and auto-renewal</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
-            Paid tiers (Hobby and above) are billed in advance through Stripe. You can cancel any
-            time. Refund terms are at{' '}
+            Paid tiers (Hobby and above) are billed in advance through Stripe.{' '}
+            <strong>Auto-renewal:</strong> subscriptions auto-renew at the end of each billing
+            period (monthly or annual) until you cancel. You can cancel any time from your billing
+            portal; cancellation stops the next auto-renew but does not refund the current period.
+            Refund terms are at{' '}
             <Link href="/refund-policy" style={{ color: 'var(--agi-ink)' }}>
               /refund-policy
             </Link>
@@ -93,10 +96,17 @@ export default function TermsPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">07 — Warranties and liability</p>
+          <p className="agi-section-eyebrow">
+            07 — Warranty disclaimer and Limitation of Liability
+          </p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
-            AGI Workforce is provided &ldquo;as is.&rdquo; We disclaim implied warranties to the
-            maximum extent permitted by law. To the fullest extent permitted, our aggregate
+            <strong>Warranty disclaimer:</strong> AGI Workforce is provided &ldquo;AS IS&rdquo; and
+            &ldquo;AS-IS&rdquo; without warranty of any kind, express or implied. We disclaim all
+            implied warranties including merchantability, fitness for a particular purpose, and
+            non-infringement, to the maximum extent permitted by law.
+          </p>
+          <p className="agi-page-lede" style={{ marginTop: 16 }}>
+            <strong>Limitation of Liability:</strong> to the fullest extent permitted, our aggregate
             liability is limited to the fees you paid in the 12 months preceding the claim, or $100
             USD, whichever is greater. We are not liable for loss of profits, data, or consequential
             damages.
@@ -104,12 +114,33 @@ export default function TermsPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">08 — Governing law and disputes</p>
+          <p className="agi-section-eyebrow">08 — Governing law, arbitration, and disputes</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             These terms are governed by the laws of the State of Texas, USA, without regard to
-            conflict-of-laws principles. Any dispute will be resolved in the state or federal courts
-            located in Travis County, Texas, unless your jurisdiction&rsquo;s law requires
-            otherwise.
+            conflict-of-laws principles.
+          </p>
+          <p className="agi-page-lede" style={{ marginTop: 16 }}>
+            <strong>Arbitration:</strong> any dispute arising out of or relating to these terms or
+            your use of AGI Workforce will be resolved by binding individual arbitration
+            administered by the American Arbitration Association under its Commercial Arbitration
+            Rules, seated in Travis County, Texas. You waive any right to a jury trial or to
+            participate in a class action. You may opt out of arbitration within 30 days of first
+            accepting these terms by emailing contact@agiworkforce.com with subject
+            &ldquo;Arbitration opt-out.&rdquo; If arbitration is unavailable, disputes will be
+            resolved in the state or federal courts located in Travis County, Texas.
+          </p>
+        </section>
+
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">08a — Indemnification</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            <strong>Indemnification:</strong> you agree to indemnify, defend, and hold harmless AGI
+            Automation LLC, its officers, employees, and agents from any claims, damages, or
+            expenses (including reasonable attorneys&rsquo; fees) arising from (a) your use or
+            misuse of AGI Workforce, (b) content you submit through the service, (c) your violation
+            of these terms or applicable law, or (d) your infringement of any third-party right. We
+            reserve the right to assume the exclusive defense of any matter for which you owe us
+            indemnification.
           </p>
         </section>
 
