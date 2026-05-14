@@ -245,6 +245,188 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
             "Read multiple files at once. Returns concatenated contents with file boundaries.",
             serde_json::json!({"type":"object","properties":{"paths":{"type":"array","description":"Array of absolute file paths to read","items":{"type":"string"}}},"required":["paths"]}),
         ).read_only().with_size_cap(200_000).deferred(),
+        // -----------------------------------------------------------------------
+        // M18: Task lifecycle tools — backed by the session TaskRegistry.
+        // -----------------------------------------------------------------------
+        def(
+            "task_create",
+            "Create a new background task entry in the task registry. \
+             Records kind, optional command string, and allocates a file-backed output sink. \
+             Returns the new task ID.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "kind": {
+                        "type": "string",
+                        "enum": ["local_shell", "local_agent", "remote_agent", "in_process_teammate", "local_workflow", "monitor_mcp", "dream"],
+                        "description": "The kind of task being created."
+                    },
+                    "command": {
+                        "type": "string",
+                        "description": "Optional command string or description for this task."
+                    }
+                },
+                "required": ["kind"]
+            }),
+        ).with_size_cap(2_000).deferred(),
+        def(
+            "task_get",
+            "Retrieve full details of a task by its UUID, including status, kind, output path, \
+             start/end timestamps, exit code, and any error message.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "Task UUID returned by task_create."}
+                },
+                "required": ["id"]
+            }),
+        ).read_only().with_size_cap(5_000).deferred(),
+        def(
+            "task_list",
+            "List all tasks in the session registry with their current status and kind.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "enum": ["pending", "running", "completed", "failed", "stopped"],
+                        "description": "Filter by status (optional; omit to list all)."
+                    }
+                },
+                "required": []
+            }),
+        ).read_only().with_size_cap(20_000).deferred(),
+        def(
+            "task_update",
+            "Transition a task to a new status. Valid transitions: Pending→Running, \
+             Running→Completed, Running→Failed, Running→Stopped, Pending→Failed, Pending→Stopped. \
+             Optionally records an exit code and error message.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "Task UUID."},
+                    "status": {
+                        "type": "string",
+                        "enum": ["running", "completed", "failed", "stopped"],
+                        "description": "Target status."
+                    },
+                    "exit_code": {"type": "integer", "description": "Process exit code (optional)."},
+                    "error": {"type": "string", "description": "Error message if status is failed (optional)."}
+                },
+                "required": ["id", "status"]
+            }),
+        ).with_size_cap(2_000).deferred(),
+        def(
+            "task_stop",
+            "Mark a task as Stopped. The actual process kill (if any) must be performed \
+             separately; this only updates registry state.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "Task UUID to stop."}
+                },
+                "required": ["id"]
+            }),
+        ).with_size_cap(2_000).deferred(),
+        def(
+            "task_output",
+            "Read the file-backed output of a task (tail up to max_bytes). \
+             Useful for inspecting stdout/stderr of a running or completed background task.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "Task UUID."},
+                    "max_bytes": {"type": "integer", "description": "Maximum bytes to return from the tail (default 8192)."}
+                },
+                "required": ["id"]
+            }),
+        ).read_only().with_size_cap(50_000).deferred(),
+        // -----------------------------------------------------------------------
+        // M18: Team management tools — create/delete named agent teams.
+        // -----------------------------------------------------------------------
+        def(
+            "team_create",
+            "Register a named team of agents. Records the team name and optional member list \
+             for later coordination via send_message / read_messages.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Unique team name."},
+                    "members": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional list of member names to pre-register."
+                    }
+                },
+                "required": ["name"]
+            }),
+        ).with_size_cap(2_000).deferred(),
+        def(
+            "team_delete",
+            "Remove a registered team. Does not terminate any running tasks assigned to it.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Team name to delete."}
+                },
+                "required": ["name"]
+            }),
+        ).with_size_cap(2_000).deferred(),
+        // -----------------------------------------------------------------------
+        // M18: Cron / schedule management tools.
+        // -----------------------------------------------------------------------
+        def(
+            "cron_create",
+            "Register a new cron-style scheduled trigger. The schedule is a standard 5-field \
+             cron expression (minute hour day month weekday). Returns a trigger ID.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Human-readable trigger name."},
+                    "schedule": {"type": "string", "description": "5-field cron expression, e.g. \"0 9 * * *\" for 9 AM daily."},
+                    "prompt": {"type": "string", "description": "Prompt to run when the trigger fires."},
+                    "enabled": {"type": "boolean", "description": "Whether to enable immediately (default true)."}
+                },
+                "required": ["name", "schedule", "prompt"]
+            }),
+        ).with_size_cap(2_000).deferred(),
+        def(
+            "cron_delete",
+            "Remove a cron trigger by its ID or name. Any pending fire for that trigger is cancelled.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "Trigger ID (returned by cron_create) or name."}
+                },
+                "required": ["id"]
+            }),
+        ).with_size_cap(2_000).deferred(),
+        def(
+            "cron_list",
+            "List all registered cron triggers with their schedule, enabled status, and last-fired time.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {},
+                "required": []
+            }),
+        ).read_only().with_size_cap(10_000).deferred(),
+        // -----------------------------------------------------------------------
+        // M24: Advisor tool — consult a higher-tier model for a side question
+        // without polluting the main session context.
+        // -----------------------------------------------------------------------
+        def(
+            "advisor",
+            "Consult a higher-tier model for a side question without affecting session context. \
+             Returns a concise expert answer. Defaults to claude-opus-4-7 if available.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "question": {"type": "string", "description": "The question to ask the advisor model."},
+                    "model": {"type": "string", "description": "Optional model override; defaults to the highest-tier available."}
+                },
+                "required": ["question"]
+            }),
+        ).read_only().with_size_cap(10_000).deferred(),
     ]
 }
 
@@ -485,17 +667,24 @@ mod tests {
         // Sorted alphabetically to make the assertion stable.
         // Phase E: glob, read_many_files, todo_read are deferred but also
         // read-only (they never mutate state).
+        // M18: task_get, task_list, task_output, cron_list are also deferred + read-only.
+        // M24: advisor is deferred + read-only.
         let mut got = read_only.clone();
         got.sort();
         assert_eq!(
             got,
             vec![
+                "advisor",
+                "cron_list",
                 "glob",
                 "grep_files",
                 "list_directory",
                 "read_file",
                 "read_many_files",
                 "search_files",
+                "task_get",
+                "task_list",
+                "task_output",
                 "todo_read",
                 "tool_search",
                 "web_fetch",

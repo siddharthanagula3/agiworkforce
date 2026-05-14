@@ -167,6 +167,10 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
             | "ask_user"
             | "tool_search"
             | "grep_files"
+            | "task_get"
+            | "task_list"
+            | "task_output"
+            | "cron_list"
     );
     let require_confirm = opts.require_confirmation && !(opts.auto_approve_safe && is_safe_tool);
 
@@ -194,6 +198,22 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         // tool deleted in favor of "update_plan" (see crate::plan_mode). Tool dispatch
         // for "update_plan" is wired separately.
         "read_many_files" => execute_read_many_files(&call.args).await,
+        // --- M18: task lifecycle tools ---
+        "task_create" => execute_task_create(&call.args).await,
+        "task_get" => execute_task_get(&call.args).await,
+        "task_list" => execute_task_list(&call.args).await,
+        "task_update" => execute_task_update(&call.args).await,
+        "task_stop" => execute_task_stop(&call.args).await,
+        "task_output" => execute_task_output(&call.args).await,
+        // --- M18: team management tools ---
+        "team_create" => execute_team_create(&call.args).await,
+        "team_delete" => execute_team_delete(&call.args).await,
+        // --- M18: cron/schedule management tools ---
+        "cron_create" => execute_cron_create(&call.args).await,
+        "cron_delete" => execute_cron_delete(&call.args).await,
+        "cron_list" => execute_cron_list(&call.args).await,
+        // --- M24: advisor tool ---
+        "advisor" => execute_advisor(&call.args).await,
         _ => Ok(ToolResult {
             tool_name: call.name.clone(),
             success: false,
@@ -2896,6 +2916,448 @@ async fn execute_read_many_files(args: &HashMap<String, String>) -> Result<ToolR
             ),
         ),
     })
+}
+
+// ---------------------------------------------------------------------------
+// M18: Session-scoped task / team / cron registry
+// ---------------------------------------------------------------------------
+
+use std::sync::OnceLock;
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct SessionTask {
+    id: String,
+    kind: String,
+    status: String,
+    command: Option<String>,
+    output_path: String,
+    started_at: Option<String>,
+    ended_at: Option<String>,
+    exit_code: Option<i32>,
+    error: Option<String>,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct SessionTeam {
+    name: String,
+    members: Vec<String>,
+    created_at: String,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct SessionCron {
+    id: String,
+    name: String,
+    schedule: String,
+    prompt: String,
+    enabled: bool,
+    created_at: String,
+}
+
+struct SessionRegistry {
+    tasks: std::sync::RwLock<std::collections::HashMap<String, SessionTask>>,
+    teams: std::sync::RwLock<std::collections::HashMap<String, SessionTeam>>,
+    crons: std::sync::RwLock<std::collections::HashMap<String, SessionCron>>,
+}
+
+impl SessionRegistry {
+    fn new() -> Self {
+        Self {
+            tasks: std::sync::RwLock::new(std::collections::HashMap::new()),
+            teams: std::sync::RwLock::new(std::collections::HashMap::new()),
+            crons: std::sync::RwLock::new(std::collections::HashMap::new()),
+        }
+    }
+}
+
+static SESSION_REGISTRY: OnceLock<SessionRegistry> = OnceLock::new();
+
+fn session_registry() -> &'static SessionRegistry {
+    SESSION_REGISTRY.get_or_init(SessionRegistry::new)
+}
+
+/// Return human-readable summaries of all session tasks for the /tasks overlay.
+pub fn session_task_summaries() -> Vec<String> {
+    let guard = session_registry().tasks.read().unwrap();
+    let mut tasks: Vec<&SessionTask> = guard.values().collect();
+    tasks.sort_by(|a, b| a.id.cmp(&b.id));
+    tasks
+        .iter()
+        .map(|t| {
+            let cmd = t.command.as_deref().unwrap_or("(no command)");
+            format!("[{}] {} — {}", t.status, t.kind, cmd)
+        })
+        .collect()
+}
+
+fn task_output_path(id: &str) -> String {
+    let base = crate::config::CliConfig::config_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."))
+        .join("tasks");
+    let _ = std::fs::create_dir_all(&base);
+    base.join(format!("{}.out", id)).display().to_string()
+}
+
+fn now_iso() -> String {
+    chrono::Utc::now().to_rfc3339()
+}
+
+fn new_uuid() -> String {
+    uuid::Uuid::new_v4().to_string()
+}
+
+const VALID_TASK_KINDS: &[&str] = &[
+    "local_shell",
+    "local_agent",
+    "remote_agent",
+    "in_process_teammate",
+    "local_workflow",
+    "monitor_mcp",
+    "dream",
+];
+
+async fn execute_task_create(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let kind = match args.get("kind") {
+        Some(k) if VALID_TASK_KINDS.contains(&k.as_str()) => k.clone(),
+        Some(k) => {
+            return Ok(ToolResult {
+                tool_name: "task_create".into(),
+                success: false,
+                output: format!("Invalid kind '{}'. Valid: {}", k, VALID_TASK_KINDS.join(", ")),
+            });
+        }
+        None => {
+            return Ok(ToolResult {
+                tool_name: "task_create".into(),
+                success: false,
+                output: "Missing required argument: kind".into(),
+            });
+        }
+    };
+    let command = args.get("command").cloned();
+    let id = new_uuid();
+    let output_path = task_output_path(&id);
+    let _ = std::fs::File::create(&output_path);
+    let task = SessionTask {
+        id: id.clone(),
+        kind,
+        status: "pending".into(),
+        command,
+        output_path,
+        started_at: None,
+        ended_at: None,
+        exit_code: None,
+        error: None,
+    };
+    session_registry().tasks.write().unwrap().insert(id.clone(), task.clone());
+    print_tool_status("task_create", &format!("id={}", id));
+    Ok(ToolResult {
+        tool_name: "task_create".into(),
+        success: true,
+        output: serde_json::to_string_pretty(&task).unwrap_or_else(|_| id),
+    })
+}
+
+async fn execute_task_get(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let id = match args.get("id") {
+        Some(id) => id.clone(),
+        None => {
+            return Ok(ToolResult {
+                tool_name: "task_get".into(),
+                success: false,
+                output: "Missing required argument: id".into(),
+            });
+        }
+    };
+    let output = {
+        let guard = session_registry().tasks.read().unwrap();
+        guard.get(id.as_str()).map(|t| serde_json::to_string_pretty(t).unwrap_or_else(|_| format!("{:?}", t.id)))
+    };
+    match output {
+        Some(json) => Ok(ToolResult { tool_name: "task_get".into(), success: true, output: json }),
+        None => Ok(ToolResult { tool_name: "task_get".into(), success: false, output: format!("Task not found: {}", id) }),
+    }
+}
+
+async fn execute_task_list(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let status_filter = args.get("status").cloned();
+    let tasks_json = {
+        let guard = session_registry().tasks.read().unwrap();
+        let mut tasks: Vec<SessionTask> = guard
+            .values()
+            .filter(|t| status_filter.as_deref().is_none() || status_filter.as_deref() == Some(t.status.as_str()))
+            .cloned()
+            .collect();
+        tasks.sort_by(|a, b| a.id.cmp(&b.id));
+        tasks
+    };
+    if tasks_json.is_empty() {
+        return Ok(ToolResult { tool_name: "task_list".into(), success: true, output: "No tasks found.".into() });
+    }
+    Ok(ToolResult {
+        tool_name: "task_list".into(),
+        success: true,
+        output: serde_json::to_string_pretty(&tasks_json).unwrap_or_else(|_| format!("{} task(s)", tasks_json.len())),
+    })
+}
+
+async fn execute_task_update(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let id = match args.get("id") {
+        Some(id) => id.clone(),
+        None => return Ok(ToolResult { tool_name: "task_update".into(), success: false, output: "Missing required argument: id".into() }),
+    };
+    let new_status = match args.get("status") {
+        Some(s) => s.clone(),
+        None => return Ok(ToolResult { tool_name: "task_update".into(), success: false, output: "Missing required argument: status".into() }),
+    };
+    let exit_code: Option<i32> = args.get("exit_code").and_then(|s| s.parse().ok());
+    let error = args.get("error").cloned();
+
+    let result = {
+        let mut guard = session_registry().tasks.write().unwrap();
+        match guard.get_mut(id.as_str()) {
+            None => Err(format!("Task not found: {}", id)),
+            Some(task) => {
+                let valid = matches!(
+                    (task.status.as_str(), new_status.as_str()),
+                    ("pending", "running")
+                        | ("pending", "failed")
+                        | ("pending", "stopped")
+                        | ("running", "completed")
+                        | ("running", "failed")
+                        | ("running", "stopped")
+                );
+                if !valid {
+                    Err(format!("Invalid transition: {} → {}", task.status, new_status))
+                } else {
+                    if task.started_at.is_none() && new_status == "running" {
+                        task.started_at = Some(now_iso());
+                    }
+                    if matches!(new_status.as_str(), "completed" | "failed" | "stopped") {
+                        task.ended_at = Some(now_iso());
+                    }
+                    task.status = new_status;
+                    task.exit_code = exit_code;
+                    task.error = error;
+                    Ok(task.clone())
+                }
+            }
+        }
+    };
+    match result {
+        Err(msg) => Ok(ToolResult { tool_name: "task_update".into(), success: false, output: msg }),
+        Ok(snapshot) => {
+            print_tool_status("task_update", &format!("id={} → {}", id, snapshot.status));
+            Ok(ToolResult {
+                tool_name: "task_update".into(),
+                success: true,
+                output: serde_json::to_string_pretty(&snapshot).unwrap_or_else(|_| format!("Updated task {}", id)),
+            })
+        }
+    }
+}
+
+async fn execute_task_stop(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let id = match args.get("id") {
+        Some(id) => id.clone(),
+        None => return Ok(ToolResult { tool_name: "task_stop".into(), success: false, output: "Missing required argument: id".into() }),
+    };
+    let result = {
+        let mut guard = session_registry().tasks.write().unwrap();
+        match guard.get_mut(id.as_str()) {
+            None => Err(format!("Task not found: {}", id)),
+            Some(task) => {
+                if matches!(task.status.as_str(), "completed" | "failed" | "stopped") {
+                    Err(format!("Cannot stop task in terminal state: {}", task.status))
+                } else {
+                    task.status = "stopped".into();
+                    task.ended_at = Some(now_iso());
+                    Ok(task.clone())
+                }
+            }
+        }
+    };
+    match result {
+        Err(msg) => Ok(ToolResult { tool_name: "task_stop".into(), success: false, output: msg }),
+        Ok(snapshot) => {
+            print_tool_status("task_stop", &format!("id={}", id));
+            Ok(ToolResult {
+                tool_name: "task_stop".into(),
+                success: true,
+                output: serde_json::to_string_pretty(&snapshot).unwrap_or_else(|_| format!("Stopped task {}", id)),
+            })
+        }
+    }
+}
+
+async fn execute_task_output(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let id = match args.get("id") {
+        Some(id) => id.clone(),
+        None => return Ok(ToolResult { tool_name: "task_output".into(), success: false, output: "Missing required argument: id".into() }),
+    };
+    let max_bytes: usize = args.get("max_bytes").and_then(|s| s.parse().ok()).unwrap_or(8192);
+    let path = {
+        let guard = session_registry().tasks.read().unwrap();
+        match guard.get(id.as_str()) {
+            Some(t) => t.output_path.clone(),
+            None => return Ok(ToolResult { tool_name: "task_output".into(), success: false, output: format!("Task not found: {}", id) }),
+        }
+    };
+    match std::fs::read(&path) {
+        Ok(bytes) => {
+            let start = bytes.len().saturating_sub(max_bytes);
+            let tail = String::from_utf8_lossy(&bytes[start..]).into_owned();
+            Ok(ToolResult {
+                tool_name: "task_output".into(),
+                success: true,
+                output: if tail.is_empty() { "(no output yet)".into() } else { tail },
+            })
+        }
+        Err(e) => Ok(ToolResult { tool_name: "task_output".into(), success: false, output: format!("Could not read output file: {}", e) }),
+    }
+}
+
+async fn execute_team_create(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let name = match args.get("name").filter(|n| !n.is_empty()) {
+        Some(n) => n.clone(),
+        None => return Ok(ToolResult { tool_name: "team_create".into(), success: false, output: "Missing required argument: name".into() }),
+    };
+    let members: Vec<String> = args.get("members").and_then(|m| serde_json::from_str(m).ok()).unwrap_or_default();
+    let result = {
+        let mut guard = session_registry().teams.write().unwrap();
+        if guard.contains_key(&name) {
+            Err(format!("Team '{}' already exists.", name))
+        } else {
+            let team = SessionTeam { name: name.clone(), members, created_at: now_iso() };
+            guard.insert(name.clone(), team.clone());
+            Ok(team)
+        }
+    };
+    match result {
+        Err(msg) => Ok(ToolResult { tool_name: "team_create".into(), success: false, output: msg }),
+        Ok(team) => {
+            print_tool_status("team_create", &format!("name={}", name));
+            Ok(ToolResult {
+                tool_name: "team_create".into(),
+                success: true,
+                output: serde_json::to_string_pretty(&team).unwrap_or_else(|_| format!("Created team {}", name)),
+            })
+        }
+    }
+}
+
+async fn execute_team_delete(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let name = match args.get("name").filter(|n| !n.is_empty()) {
+        Some(n) => n.clone(),
+        None => return Ok(ToolResult { tool_name: "team_delete".into(), success: false, output: "Missing required argument: name".into() }),
+    };
+    let removed = session_registry().teams.write().unwrap().remove(&name).is_some();
+    if removed {
+        print_tool_status("team_delete", &format!("name={}", name));
+        Ok(ToolResult { tool_name: "team_delete".into(), success: true, output: format!("Deleted team '{}'.", name) })
+    } else {
+        Ok(ToolResult { tool_name: "team_delete".into(), success: false, output: format!("Team '{}' not found.", name) })
+    }
+}
+
+async fn execute_cron_create(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let name = match args.get("name").filter(|n| !n.is_empty()) {
+        Some(n) => n.clone(),
+        None => return Ok(ToolResult { tool_name: "cron_create".into(), success: false, output: "Missing required argument: name".into() }),
+    };
+    let schedule = match args.get("schedule").filter(|s| !s.is_empty()) {
+        Some(s) => s.clone(),
+        None => return Ok(ToolResult { tool_name: "cron_create".into(), success: false, output: "Missing required argument: schedule".into() }),
+    };
+    let prompt = match args.get("prompt").filter(|p| !p.is_empty()) {
+        Some(p) => p.clone(),
+        None => return Ok(ToolResult { tool_name: "cron_create".into(), success: false, output: "Missing required argument: prompt".into() }),
+    };
+    let enabled = args.get("enabled").map(|v| v != "false").unwrap_or(true);
+    let id = new_uuid();
+    let cron = SessionCron { id: id.clone(), name, schedule, prompt, enabled, created_at: now_iso() };
+    session_registry().crons.write().unwrap().insert(id.clone(), cron.clone());
+    print_tool_status("cron_create", &format!("id={}", id));
+    Ok(ToolResult {
+        tool_name: "cron_create".into(),
+        success: true,
+        output: serde_json::to_string_pretty(&cron).unwrap_or_else(|_| id),
+    })
+}
+
+async fn execute_cron_delete(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let id_or_name = match args.get("id").filter(|i| !i.is_empty()) {
+        Some(i) => i.clone(),
+        None => return Ok(ToolResult { tool_name: "cron_delete".into(), success: false, output: "Missing required argument: id".into() }),
+    };
+    let mut guard = session_registry().crons.write().unwrap();
+    let key = if guard.contains_key(&id_or_name) {
+        Some(id_or_name.clone())
+    } else {
+        guard.values().find(|c| c.name == id_or_name).map(|c| c.id.clone())
+    };
+    match key {
+        Some(k) => {
+            guard.remove(&k);
+            drop(guard);
+            print_tool_status("cron_delete", &format!("id={}", k));
+            Ok(ToolResult { tool_name: "cron_delete".into(), success: true, output: format!("Deleted cron trigger '{}'.", id_or_name) })
+        }
+        None => Ok(ToolResult { tool_name: "cron_delete".into(), success: false, output: format!("Cron trigger '{}' not found.", id_or_name) }),
+    }
+}
+
+async fn execute_cron_list(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let _ = args;
+    let guard = session_registry().crons.read().unwrap();
+    if guard.is_empty() {
+        return Ok(ToolResult { tool_name: "cron_list".into(), success: true, output: "No cron triggers registered.".into() });
+    }
+    let mut crons: Vec<SessionCron> = guard.values().cloned().collect();
+    crons.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+    Ok(ToolResult {
+        tool_name: "cron_list".into(),
+        success: true,
+        output: serde_json::to_string_pretty(&crons).unwrap_or_else(|_| format!("{} trigger(s)", crons.len())),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// M24: Advisor tool — side-consult a higher-tier model without polluting session
+// ---------------------------------------------------------------------------
+
+async fn execute_advisor(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let question = match args.get("question").filter(|q| !q.is_empty()) {
+        Some(q) => q.clone(),
+        None => {
+            return Ok(ToolResult {
+                tool_name: "advisor".into(),
+                success: false,
+                output: "Missing required argument: question".into(),
+            });
+        }
+    };
+    let model = args.get("model").cloned();
+    print_tool_status("advisor", &format!("model={}", model.as_deref().unwrap_or("default")));
+
+    let req = crate::runtime::advisor::AdvisorRequest { question, model };
+    match crate::runtime::advisor::consult(req).await {
+        Ok(resp) => Ok(ToolResult {
+            tool_name: "advisor".into(),
+            success: true,
+            output: serde_json::to_string_pretty(&serde_json::json!({
+                "answer": resp.answer,
+                "model_used": resp.model_used,
+                "tokens": resp.tokens,
+            }))
+            .unwrap_or(resp.answer),
+        }),
+        Err(e) => Ok(ToolResult {
+            tool_name: "advisor".into(),
+            success: false,
+            output: format!("Advisor error: {}", e),
+        }),
+    }
 }
 
 // ---------------------------------------------------------------------------
