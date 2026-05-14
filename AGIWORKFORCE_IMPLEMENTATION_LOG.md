@@ -779,9 +779,21 @@ Last surface touched: apps/extension
 ## 2026-05-14 — Web: Pricing page checkmark icons + cancellation note
 
 **Surface:** apps/web
-**Commit:** TBD
+**Commit:** 9c9f304ff
 **Change:** Replaced small dot pseudo-element bullets on tier feature lists with inline SVG checkmark icons (14x14, amber accent color), matching the claude.ai pricing/login reference captures. Added "No commitment. Cancel anytime." note below the Hobby Subscribe CTA. Removed em-dashes from page copy. Added `.agi-tier-check-icon`, `.agi-tier-cta-group`, `.agi-tier-cta-note` CSS classes.
 **Files:** `apps/web/app/pricing/page.tsx` (+72/-25 LOC), `apps/web/app/globals.css` (+21/-4 LOC)
 **Tests:** Typecheck clean (tsc --noEmit passes).
 
 Last surface touched: apps/web
+
+---
+
+## 2026-05-14 — VS Code ext: Refactor CodeLens + codeLensProvider test suite
+
+**Surface:** apps/extension-vscode
+**Commit:** 9c9f304ff
+**Change:** Added `$(edit) Refactor` CodeLens (triggering `agi-workforce.refactor`) to every function/class declaration in `codeLensProvider.ts`, closing the gap between the right-click code-action menu (which already had Refactor) and the inline lenses. Reference captures show claude-cursor surfaces refactor actions inline above declarations. Also added `codeLensProvider.test.ts` (35 tests, 8 language variants) — previously zero test coverage on this provider.
+**Files:** `apps/extension-vscode/src/providers/codeLensProvider.ts` (+8 LOC), `apps/extension-vscode/src/__tests__/codeLensProvider.test.ts` (+248 LOC new file)
+**Tests:** 496/496 pass (was 461 before). Typecheck clean.
+
+Last surface touched: apps/extension-vscode
