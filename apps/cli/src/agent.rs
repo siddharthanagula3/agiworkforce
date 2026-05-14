@@ -2359,7 +2359,7 @@ mod tests {
         //   Teams (2): team_create, team_delete
         //   Cron (3):  cron_create, cron_delete, cron_list
         // M24 (v1.2 wave 1): +1 advisor tool = 32.
-        assert_eq!(defs.len(), 32);
+        assert_eq!(defs.len(), 38);
     }
 
     #[test]

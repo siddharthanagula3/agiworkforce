@@ -1,0 +1,13 @@
+{
+  "name": "fixture-codex",
+  "version": "0.3.0",
+  "description": "Codex CLI interop manifest fixture",
+  "commands": [],
+  "agents": ["agents/coder.md"],
+  "mcpServers": {
+    "codex-demo": {
+      "command": "node",
+      "args": ["server.js"]
+    }
+  }
+}

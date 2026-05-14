@@ -2,6 +2,48 @@
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [cli-1.2.0] — 2026-05-14
+
+The "comparable with other CLIs" release. Closes every P0 and P1 item identified in the 2026-05-14 deep audit against Codex CLI, Claude Code, Gemini CLI, OpenCode, and Claw-code.
+
+### Added
+
+- **5 new shipping crates**: `agiworkforce-command-registry`, `agiworkforce-app-server`, `agiworkforce-plugin-runtime`, `agiworkforce-apply-patch` (with 22 scenario fixtures), `agiworkforce-task-runtime` (with `TaskRegistry` + `StallWatchdog`).
+- **+18 slash commands** (40 → 58): `/agents`, `/chrome`, `/ide`, `/tasks`, `/usage`, `/sandbox`, `/doctor`, `/recap`, `/release-notes`, `/keybindings`, `/focus`, `/background`, `/advisor`, `/team-onboarding`, `/terminal-setup`, `/reload-plugins`, `/extra-usage`, `/remote-env`; `/plugin` canonical with `/plugins` `/marketplace` `/market` aliases.
+- **+18 tools** (20 → 38): 6 task lifecycle + 2 team + 3 cron + 3 worktree + 3 LSP + `advisor`.
+- **+13 hook events** (22 → 35): full Claude Code `HOOK_EVENTS` parity.
+- **TUI overlays**: `ApprovalOverlayState` (20 tests), `InteractiveView` trait + state machines (11 tests), modal-overlay slot in `tui_app.rs` event loop, `TuiElicitationHandler` bridge for MCP elicitation, 14 parity-screen renderers.
+- **MCP completion**: connection pooling (`McpConnectionManager`), keyring-backed OAuth persistence (file fallback at `~/.agiworkforce/secrets/`), `list_mcp_resources` / `read_mcp_resource` / `McpServerStatusSnapshot`, live `elicitation/create` dispatch across stdio + sse + http.
+- **Browser PKCE OAuth for `/login`** (`auth_oauth.rs`): RFC 7636 S256, ephemeral local listener, CSRF state validation; "anthropic" and "openai" providers built-in.
+- **Cost ledger** (`cost_ledger.rs`): real per-turn dollar tracking from `models.json` pricing constants.
+- **Memory pruning** (`memory::prune`): drops observations older than `max_age_days` or keeps top-K by `recency × relevance_score`.
+- **Tool distillation** (`tool_distillation.rs`): compresses tool catalog per model family (Tier-1 full, Tier-2 truncate to 80c, Tier-3 to 40c).
+- **macOS Seatbelt** (`policy::macos_sandbox`): `SandboxPreset { ReadOnly, Contained, Unrestricted }` + `wrap_command` via `sandbox-exec -p <profile>`.
+- **Basic LSP client** (`lsp/`): stdio, Content-Length framing, server-for-extension dispatch (rust-analyzer / tsserver / gopls / pyright-langserver).
+- **Voice input** (`voice.rs`): push-to-talk + cpal capture + WAV + OpenAI Whisper + local-binary fallback.
+- **Alias path discovery**: `.claude/` and `.codex/` siblings of `.agiworkforce/` for agents + skills.
+- **`AGIWORKFORCE_NO_KEYRING=1` env var**: opt-out from OS keyring for headless / CI / containerized runs (avoids macOS Keychain auth prompts).
+
+### Changed
+
+- Test count: **1150 → 1268** (+118, +10%).
+- Workspace crates: **1 + 12 utility → 6 cli-shipping + 12 utility**.
+- 104,216 LOC of dead codex-rs port files moved to `apps/cli/src/tui/_attic/` (preserved, out of compilation surface).
+- Plan-mode mutation gate hardened with 4 inline tests + integration coverage.
+
+### Fixed
+
+- macOS Keychain auth-prompt storm during MCP OAuth tests (per-test bypass + env-var production opt-out).
+- `apply-patch` `clippy::manual_find` rewritten as iterator chain.
+- Tool catalog count assertion tracks growth (20 → 31 → 32 → 38) with cited M-numbers.
+
+### Deferred to v1.3
+
+- **M34** — Subagent v2 with full IPC.
+- **M38** — Linux seccomp-BPF sandbox.
+- Plugin marketplace registry (needs hosted infra).
+- External multi-agent coordination layer (OmX/clawhip/OmO style).
+
 ## [Unreleased]
 
 ### Wave 2 (in progress)

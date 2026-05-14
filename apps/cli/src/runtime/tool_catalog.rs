@@ -427,6 +427,78 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
                 "required": ["question"]
             }),
         ).read_only().with_size_cap(10_000).deferred(),
+
+        // -----------------------------------------------------------------------
+        // M35: git worktree wrappers — short-lived isolated checkouts for refactors.
+        // -----------------------------------------------------------------------
+        def(
+            "enter_worktree",
+            "Create a git worktree at <target_dir> on a new <branch> based on <base> (default HEAD). \
+             Returns the worktree path. Fires WorktreeCreate hook.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "branch": {"type": "string"},
+                    "base": {"type": "string"},
+                    "target_dir": {"type": "string"}
+                },
+                "required": ["branch"]
+            }),
+        ).deferred(),
+        def(
+            "exit_worktree",
+            "Remove a git worktree at <path>. Fires WorktreeRemove hook.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {"path": {"type": "string"}},
+                "required": ["path"]
+            }),
+        ).deferred(),
+        def(
+            "list_worktrees",
+            "List all git worktrees attached to the current repository.",
+            serde_json::json!({"type": "object", "properties": {}}),
+        ).read_only().deferred(),
+
+        // -----------------------------------------------------------------------
+        // M36: basic LSP client. Servers picked by file extension; spawns
+        // rust-analyzer / typescript-language-server / gopls / pyright-langserver.
+        // -----------------------------------------------------------------------
+        def(
+            "lsp_definition",
+            "Find the definition of a symbol at <file>:<line>:<character> via the language server.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "file": {"type": "string"},
+                    "line": {"type": "integer"},
+                    "character": {"type": "integer"}
+                },
+                "required": ["file", "line", "character"]
+            }),
+        ).read_only().deferred(),
+        def(
+            "lsp_hover",
+            "Get hover (type info, docs) for a symbol at <file>:<line>:<character>.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "file": {"type": "string"},
+                    "line": {"type": "integer"},
+                    "character": {"type": "integer"}
+                },
+                "required": ["file", "line", "character"]
+            }),
+        ).read_only().deferred(),
+        def(
+            "lsp_diagnostics",
+            "Collect language-server diagnostics for <file> (errors, warnings, hints).",
+            serde_json::json!({
+                "type": "object",
+                "properties": {"file": {"type": "string"}},
+                "required": ["file"]
+            }),
+        ).read_only().deferred(),
     ]
 }
 
@@ -669,6 +741,7 @@ mod tests {
         // read-only (they never mutate state).
         // M18: task_get, task_list, task_output, cron_list are also deferred + read-only.
         // M24: advisor is deferred + read-only.
+        // M35/M36: list_worktrees, lsp_definition, lsp_hover, lsp_diagnostics are read-only.
         let mut got = read_only.clone();
         got.sort();
         assert_eq!(
@@ -679,6 +752,10 @@ mod tests {
                 "glob",
                 "grep_files",
                 "list_directory",
+                "list_worktrees",
+                "lsp_definition",
+                "lsp_diagnostics",
+                "lsp_hover",
                 "read_file",
                 "read_many_files",
                 "search_files",

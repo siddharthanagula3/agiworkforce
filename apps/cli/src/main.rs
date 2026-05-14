@@ -4,6 +4,7 @@ mod agent;
 mod agent_events;
 mod agents;
 mod auth;
+mod auth_oauth;
 mod cli_options;
 mod command_registry;
 mod compaction;
@@ -14,6 +15,7 @@ mod daemon;
 mod errors;
 mod hooks;
 mod markdown;
+mod lsp;
 mod mcp;
 mod memory;
 #[allow(dead_code)] // FOUNDATION: cross-surface send-pipeline contract; CLI integrations wire through Sprint B (REPL drain + SDK headless)
@@ -55,6 +57,7 @@ mod sandbox;
 mod shell_snapshot;
 mod sync;
 mod tier_cache;
+mod cost_ledger;
 mod tool_search;
 
 // Phase-2 candidates — implementations exist but the user-facing surface is

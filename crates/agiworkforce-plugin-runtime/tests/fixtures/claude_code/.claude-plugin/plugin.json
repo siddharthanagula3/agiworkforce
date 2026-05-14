@@ -1,0 +1,13 @@
+{
+  "name": "fixture-claude",
+  "version": "0.2.0",
+  "description": "Claude Code interop manifest fixture",
+  "commands": ["commands/lint.md"],
+  "mcpServers": {
+    "claude-demo": {
+      "transport": "sse",
+      "url": "https://mcp.example.com/sse"
+    }
+  },
+  "marketplace": "https://marketplace.example.com/claude"
+}

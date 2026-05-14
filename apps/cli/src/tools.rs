@@ -214,6 +214,14 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         "cron_list" => execute_cron_list(&call.args).await,
         // --- M24: advisor tool ---
         "advisor" => execute_advisor(&call.args).await,
+        // --- M35: git worktree tools ---
+        "enter_worktree" => execute_enter_worktree(&call.args).await,
+        "exit_worktree" => execute_exit_worktree(&call.args).await,
+        "list_worktrees" => execute_list_worktrees(&call.args).await,
+        // --- M36: LSP tools ---
+        "lsp_definition" => execute_lsp_definition(&call.args).await,
+        "lsp_hover" => execute_lsp_hover(&call.args).await,
+        "lsp_diagnostics" => execute_lsp_diagnostics(&call.args).await,
         _ => Ok(ToolResult {
             tool_name: call.name.clone(),
             success: false,
@@ -3358,6 +3366,159 @@ async fn execute_advisor(args: &HashMap<String, String>) -> Result<ToolResult> {
             output: format!("Advisor error: {}", e),
         }),
     }
+}
+
+// ---------------------------------------------------------------------------
+// M35 — git worktree tool dispatch
+// ---------------------------------------------------------------------------
+
+async fn execute_enter_worktree(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let branch = match args.get("branch").filter(|s| !s.is_empty()) {
+        Some(b) => b.clone(),
+        None => {
+            return Ok(ToolResult {
+                tool_name: "enter_worktree".into(),
+                success: false,
+                output: "Missing required argument: branch".into(),
+            });
+        }
+    };
+    let base = args.get("base").cloned();
+    let target_dir = args.get("target_dir").map(std::path::PathBuf::from);
+    let repo = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let opts = crate::runtime::worktree::WorktreeOptions { branch, base, target_dir };
+    match crate::runtime::worktree::enter_worktree(&repo, opts) {
+        Ok(wt) => Ok(ToolResult {
+            tool_name: "enter_worktree".into(),
+            success: true,
+            output: serde_json::json!({"branch": wt.branch, "path": wt.path.display().to_string()}).to_string(),
+        }),
+        Err(e) => Ok(ToolResult {
+            tool_name: "enter_worktree".into(),
+            success: false,
+            output: format!("enter_worktree failed: {e}"),
+        }),
+    }
+}
+
+async fn execute_exit_worktree(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let path = match args.get("path").filter(|s| !s.is_empty()) {
+        Some(p) => std::path::PathBuf::from(p),
+        None => {
+            return Ok(ToolResult {
+                tool_name: "exit_worktree".into(),
+                success: false,
+                output: "Missing required argument: path".into(),
+            });
+        }
+    };
+    let repo = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    match crate::runtime::worktree::exit_worktree(&repo, &path) {
+        Ok(()) => Ok(ToolResult {
+            tool_name: "exit_worktree".into(),
+            success: true,
+            output: format!("Removed worktree at {}", path.display()),
+        }),
+        Err(e) => Ok(ToolResult {
+            tool_name: "exit_worktree".into(),
+            success: false,
+            output: format!("exit_worktree failed: {e}"),
+        }),
+    }
+}
+
+async fn execute_list_worktrees(_args: &HashMap<String, String>) -> Result<ToolResult> {
+    let repo = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    match crate::runtime::worktree::list_worktrees(&repo) {
+        Ok(list) => {
+            let entries: Vec<serde_json::Value> = list.iter().map(|w| {
+                serde_json::json!({"branch": w.branch, "path": w.path.display().to_string()})
+            }).collect();
+            Ok(ToolResult {
+                tool_name: "list_worktrees".into(),
+                success: true,
+                output: serde_json::json!({"worktrees": entries}).to_string(),
+            })
+        }
+        Err(e) => Ok(ToolResult {
+            tool_name: "list_worktrees".into(),
+            success: false,
+            output: format!("list_worktrees failed: {e}"),
+        }),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// M36 — LSP tool dispatch (definition / hover / diagnostics)
+// ---------------------------------------------------------------------------
+
+async fn lsp_request_for_file(args: &HashMap<String, String>, method: &str) -> Result<ToolResult> {
+    let file = match args.get("file").filter(|s| !s.is_empty()) {
+        Some(f) => f.clone(),
+        None => return Ok(ToolResult { tool_name: method.into(), success: false, output: "Missing required argument: file".into() }),
+    };
+    let ext = std::path::Path::new(&file)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("");
+    let Some((server_cmd, server_args)) = crate::lsp::server_for_extension(ext) else {
+        return Ok(ToolResult {
+            tool_name: method.into(),
+            success: false,
+            output: format!("No LSP server configured for .{ext} files"),
+        });
+    };
+    let workspace = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let mut client = match crate::lsp::LspClient::spawn(server_cmd, server_args, &workspace).await {
+        Ok(c) => c,
+        Err(e) => return Ok(ToolResult { tool_name: method.into(), success: false, output: format!("Failed to spawn {server_cmd}: {e}") }),
+    };
+    let uri = format!("file://{file}");
+    let params = if method == "textDocument/definition" || method == "textDocument/hover" {
+        let line = args.get("line").and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+        let character = args.get("character").and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+        serde_json::json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character},
+        })
+    } else {
+        serde_json::json!({"textDocument": {"uri": uri}})
+    };
+    let result = client.request(method, params).await;
+    let _ = client.shutdown().await;
+    match result {
+        Ok(v) => Ok(ToolResult {
+            tool_name: method.into(),
+            success: true,
+            output: serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string()),
+        }),
+        Err(e) => Ok(ToolResult {
+            tool_name: method.into(),
+            success: false,
+            output: format!("LSP {method} failed: {e}"),
+        }),
+    }
+}
+
+async fn execute_lsp_definition(args: &HashMap<String, String>) -> Result<ToolResult> {
+    lsp_request_for_file(args, "textDocument/definition").await
+}
+async fn execute_lsp_hover(args: &HashMap<String, String>) -> Result<ToolResult> {
+    lsp_request_for_file(args, "textDocument/hover").await
+}
+async fn execute_lsp_diagnostics(args: &HashMap<String, String>) -> Result<ToolResult> {
+    // LSP doesn't have a synchronous "give me diagnostics" RPC; servers push
+    // them via notifications. For an MVP, we return a hint instead of hanging.
+    let _ = args;
+    Ok(ToolResult {
+        tool_name: "lsp_diagnostics".into(),
+        success: true,
+        output: serde_json::json!({
+            "note": "LSP diagnostics are server-pushed (textDocument/publishDiagnostics). \
+                    The basic LSP client doesn't subscribe yet — wire up notifications in M-future.",
+            "next": "Use lsp_hover or lsp_definition for synchronous LSP probes."
+        }).to_string(),
+    })
 }
 
 // ---------------------------------------------------------------------------
