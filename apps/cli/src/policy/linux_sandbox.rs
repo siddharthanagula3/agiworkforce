@@ -93,6 +93,114 @@ pub fn is_available() -> bool {
     status.lines().any(|line| line.starts_with("Seccomp:"))
 }
 
+/// Compile the allow-list into a seccomp BPF program. Returns an
+/// architecture-aware `BpfProgram` that can be applied to the current thread.
+#[cfg(all(target_os = "linux", feature = "linux-seccomp"))]
+pub fn compile_bpf(opts: &LinuxSandboxOptions) -> anyhow::Result<seccompiler::BpfProgram> {
+    use seccompiler::{SeccompAction, SeccompFilter};
+    use std::collections::BTreeMap;
+
+    if matches!(opts.preset, LinuxSandboxPreset::Unrestricted) {
+        let filter = SeccompFilter::new(
+            BTreeMap::new(),
+            SeccompAction::Allow,
+            SeccompAction::Allow,
+            target_arch()?,
+        )?;
+        return Ok(seccompiler::BpfProgram::try_from(filter)?);
+    }
+
+    let mut rules: BTreeMap<i64, Vec<seccompiler::SeccompRule>> = BTreeMap::new();
+    for name in allowed_syscalls(opts.preset) {
+        let nr = syscall_number_for(name);
+        if nr >= 0 {
+            rules.insert(nr, vec![]);
+        }
+    }
+    let filter = SeccompFilter::new(
+        rules,
+        SeccompAction::Errno(libc::EACCES as u32),
+        SeccompAction::Allow,
+        target_arch()?,
+    )?;
+    Ok(seccompiler::BpfProgram::try_from(filter)?)
+}
+
+/// Install the compiled filter on the current thread. Calls
+/// `prctl(PR_SET_NO_NEW_PRIVS)` internally as required for unprivileged use.
+#[cfg(all(target_os = "linux", feature = "linux-seccomp"))]
+#[allow(unsafe_code)]
+pub fn install_filter(opts: &LinuxSandboxOptions) -> anyhow::Result<()> {
+    use seccompiler::apply_filter;
+    let rc = unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) };
+    if rc != 0 {
+        anyhow::bail!("prctl(PR_SET_NO_NEW_PRIVS) failed: {}", std::io::Error::last_os_error());
+    }
+    let program = compile_bpf(opts)?;
+    apply_filter(&program).map_err(|e| anyhow::anyhow!("seccomp apply_filter failed: {e}"))?;
+    Ok(())
+}
+
+#[cfg(all(target_os = "linux", feature = "linux-seccomp"))]
+fn target_arch() -> anyhow::Result<seccompiler::TargetArch> {
+    Ok(if cfg!(target_arch = "x86_64") {
+        seccompiler::TargetArch::x86_64
+    } else if cfg!(target_arch = "aarch64") {
+        seccompiler::TargetArch::aarch64
+    } else {
+        anyhow::bail!("unsupported architecture for seccomp");
+    })
+}
+
+#[cfg(all(target_os = "linux", feature = "linux-seccomp"))]
+fn syscall_number_for(name: &str) -> i64 {
+    match name {
+        "read" => libc::SYS_read,
+        "write" => libc::SYS_write,
+        "close" => libc::SYS_close,
+        "openat" => libc::SYS_openat,
+        "fstat" => libc::SYS_fstat,
+        "lseek" => libc::SYS_lseek,
+        "mmap" => libc::SYS_mmap,
+        "mprotect" => libc::SYS_mprotect,
+        "munmap" => libc::SYS_munmap,
+        "brk" => libc::SYS_brk,
+        "rt_sigaction" => libc::SYS_rt_sigaction,
+        "rt_sigprocmask" => libc::SYS_rt_sigprocmask,
+        "rt_sigreturn" => libc::SYS_rt_sigreturn,
+        "ioctl" => libc::SYS_ioctl,
+        "exit" => libc::SYS_exit,
+        "exit_group" => libc::SYS_exit_group,
+        "execve" => libc::SYS_execve,
+        "clone" => libc::SYS_clone,
+        "fork" => libc::SYS_fork,
+        "wait4" => libc::SYS_wait4,
+        "futex" => libc::SYS_futex,
+        "tgkill" => libc::SYS_tgkill,
+        "clock_gettime" => libc::SYS_clock_gettime,
+        "getpid" => libc::SYS_getpid,
+        "getuid" => libc::SYS_getuid,
+        "getgid" => libc::SYS_getgid,
+        _ => -1,
+    }
+}
+
+// Stub: install_filter is a no-op on Linux when the feature is disabled.
+#[cfg(all(target_os = "linux", not(feature = "linux-seccomp")))]
+pub fn install_filter(_opts: &LinuxSandboxOptions) -> anyhow::Result<()> {
+    Ok(())
+}
+
+#[cfg(all(target_os = "linux", not(feature = "linux-seccomp")))]
+pub fn compile_bpf_available() -> bool {
+    false
+}
+
+#[cfg(all(target_os = "linux", feature = "linux-seccomp"))]
+pub fn compile_bpf_available() -> bool {
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

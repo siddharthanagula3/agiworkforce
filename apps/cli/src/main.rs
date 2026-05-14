@@ -75,6 +75,8 @@ mod sdk_io;
 // Removed 2026-05-03 (dead): history, models_cache, shell_snapshot, tui_basic.
 #[allow(dead_code)] // PHASE2: expose `agiworkforce a2a serve/discover/delegate`
 mod a2a;
+#[allow(dead_code)] // PHASE2: WS transport for a2a — wraps jsonrpc::handle_request over persistent WS connections
+mod a2a_ws;
 #[allow(dead_code)] // PHASE2: hook into session-end lifecycle in daemon.rs
 mod memory_pipeline;
 #[allow(dead_code)] // PHASE2: wire into daemon background tick
