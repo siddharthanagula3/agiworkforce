@@ -35,7 +35,7 @@ import {
   useImageGalleryStore,
   type ImageEntry,
   type ImageStyleId,
-} from '../../stores/imageGalleryStore';
+} from '../../stores/editingStore';
 
 // =============================================================================
 // Sample Prompts
@@ -203,8 +203,14 @@ export function ImagesGallery() {
   const [isLoading, setIsLoading] = useState(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const { images, selectedStyle, isGenerating, addImage, removeImage, setGenerating } =
-    useImageGalleryStore();
+  const {
+    images,
+    selectedStyle,
+    isGeneratingGallery: isGenerating,
+    addImage,
+    removeImage,
+    setGenerating,
+  } = useImageGalleryStore();
 
   // Load images on mount
   useEffect(() => {

@@ -14,7 +14,7 @@
  */
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
-import { isTauri } from '../lib/tauri-mock';
+import { isTauri, invoke } from '../lib/tauri-mock';
 import { McpClient } from '../api/mcp';
 import type { ConnectorManifest } from '../api/mcp';
 import type {
@@ -1443,3 +1443,473 @@ export const selectToolsByServer = (serverName: string) => (state: McpState) =>
   state.tools.filter((tool) => tool.server === serverName);
 export const selectToolCount = (state: McpState) => state.tools.length;
 export const selectServerCount = (state: McpState) => state.servers.length;
+
+// ============================================================================
+// MCP App Store (absorbed from mcpAppStore.ts — task-w58)
+// ============================================================================
+
+export interface McpAppContent {
+  type: 'html' | 'url';
+  payload: string;
+  height?: number;
+  allowedOrigins?: string[];
+}
+
+export interface McpInteraction {
+  timestamp: number;
+  type: 'user_action' | 'data_update';
+  data: Record<string, unknown>;
+}
+
+export interface McpApp {
+  id: string;
+  toolName: string;
+  mcpServer: string;
+  content: McpAppContent;
+  timestamp: number;
+  interactionLog: McpInteraction[];
+}
+
+interface McpAppState {
+  apps: Record<string, McpApp>;
+  registerApp: (toolName: string, mcpServer: string, content: McpAppContent) => string;
+  updateApp: (id: string, content: Partial<McpAppContent>) => void;
+  recordInteraction: (id: string, interaction: McpInteraction) => void;
+  removeApp: (id: string) => void;
+  clearAll: () => void;
+  getAppsArray: () => McpApp[];
+}
+
+export const useMcpAppStore = create<McpAppState>()(
+  devtools(
+    (set, get) => ({
+      apps: {},
+      registerApp: (toolName, mcpServer, content) => {
+        const id = `mcp-app-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const app: McpApp = {
+          id,
+          toolName,
+          mcpServer,
+          content,
+          timestamp: Date.now(),
+          interactionLog: [],
+        };
+        set((state) => ({ apps: { ...state.apps, [id]: app } }), undefined, 'mcpApp/registerApp');
+        return id;
+      },
+      updateApp: (id, contentUpdate) => {
+        set(
+          (state) => {
+            const existing = state.apps[id];
+            if (!existing) return state;
+            return {
+              apps: {
+                ...state.apps,
+                [id]: { ...existing, content: { ...existing.content, ...contentUpdate } },
+              },
+            };
+          },
+          undefined,
+          'mcpApp/updateApp',
+        );
+      },
+      recordInteraction: (id, interaction) => {
+        set(
+          (state) => {
+            const existing = state.apps[id];
+            if (!existing) return state;
+            return {
+              apps: {
+                ...state.apps,
+                [id]: { ...existing, interactionLog: [...existing.interactionLog, interaction] },
+              },
+            };
+          },
+          undefined,
+          'mcpApp/recordInteraction',
+        );
+      },
+      removeApp: (id) => {
+        set(
+          (state) => {
+            const next = { ...state.apps };
+            delete next[id];
+            return { apps: next };
+          },
+          undefined,
+          'mcpApp/removeApp',
+        );
+      },
+      clearAll: () => set({ apps: {} }, undefined, 'mcpApp/clearAll'),
+      getAppsArray: () => Object.values(get().apps).sort((a, b) => b.timestamp - a.timestamp),
+    }),
+    { name: 'McpAppStore', enabled: import.meta.env.DEV },
+  ),
+);
+
+export const selectMcpApps = (state: McpAppState) => state.apps;
+export const selectMcpAppCount = (state: McpAppState) => Object.keys(state.apps).length;
+export const selectMcpAppById = (id: string) => (state: McpAppState) => state.apps[id];
+export const selectMcpAppsByServer = (server: string) => (state: McpAppState) =>
+  Object.values(state.apps).filter((app) => app.mcpServer === server);
+
+// ============================================================================
+// MCPB Bundle Store (absorbed from mcpbStore.ts — task-w58)
+// ============================================================================
+
+import { listen as mcpbListen } from '../lib/tauri-mock';
+import type {
+  McpBundle,
+  McpBundleCategory,
+  BundleInstallProgress,
+  BundleInstallStatus,
+} from '../types/mcp';
+
+interface McpbInstallProgressEvent {
+  bundleId: string;
+  phase: string;
+  progress: number;
+  message: string;
+}
+
+const mcpbApi = {
+  fetchRegistry: () => invoke<McpBundle[]>('mcpb_fetch_registry'),
+  searchBundles: (query: string) => invoke<McpBundle[]>('mcpb_search_bundles', { query }),
+  installBundle: (bundleId: string) => invoke<void>('mcpb_install_bundle', { bundleId }),
+  uninstallBundle: (bundleId: string) => invoke<void>('mcpb_uninstall_bundle', { bundleId }),
+  getBundleDetails: (bundleId: string) =>
+    invoke<McpBundle>('mcpb_get_bundle_details', { bundleId }),
+  checkUpdates: () => invoke<McpBundle[]>('mcpb_check_updates'),
+  updateBundle: (bundleId: string) => invoke<void>('mcpb_update_bundle', { bundleId }),
+  getInstalledBundles: () => invoke<McpBundle[]>('mcpb_get_installed_bundles'),
+  getCategories: () => invoke<McpBundleCategory[]>('mcpb_get_categories'),
+  getFeaturedBundles: () => invoke<McpBundle[]>('mcpb_get_featured'),
+};
+
+interface McpbState {
+  bundles: McpBundle[];
+  installedBundles: McpBundle[];
+  featuredBundles: McpBundle[];
+  categories: McpBundleCategory[];
+  selectedCategory: McpBundleCategory | null;
+  searchQuery: string;
+  isMcpbLoading: boolean;
+  isInstalling: boolean;
+  installProgress: BundleInstallProgress | null;
+  mcpbError: string | null;
+  fetchRegistry: () => Promise<void>;
+  searchBundles: (query: string) => Promise<void>;
+  filterByCategory: (category: McpBundleCategory | null) => void;
+  installBundle: (bundleId: string) => Promise<void>;
+  uninstallBundle: (bundleId: string) => Promise<void>;
+  getBundleDetails: (bundleId: string) => Promise<McpBundle | null>;
+  checkUpdates: () => Promise<void>;
+  updateBundle: (bundleId: string) => Promise<void>;
+  clearMcpbError: () => void;
+  setInstallProgress: (progress: BundleInstallProgress | null) => void;
+  resetOnLogout: () => void;
+}
+
+export const useMcpbStore = create<McpbState>()(
+  devtools(
+    subscribeWithSelector((set) => ({
+      bundles: [],
+      installedBundles: [],
+      featuredBundles: [],
+      categories: [],
+      selectedCategory: null,
+      searchQuery: '',
+      isMcpbLoading: false,
+      isInstalling: false,
+      installProgress: null,
+      mcpbError: null,
+
+      fetchRegistry: async () => {
+        set({ isMcpbLoading: true, mcpbError: null });
+        try {
+          const [bundles, categories, featuredBundles, installedBundles] = await Promise.all([
+            mcpbApi.fetchRegistry(),
+            mcpbApi.getCategories(),
+            mcpbApi.getFeaturedBundles(),
+            mcpbApi.getInstalledBundles(),
+          ]);
+          set({ bundles, categories, featuredBundles, installedBundles, isMcpbLoading: false });
+        } catch (err) {
+          set({
+            mcpbError: err instanceof Error ? err.message : String(err),
+            isMcpbLoading: false,
+          });
+        }
+      },
+
+      searchBundles: async (query: string) => {
+        set({ searchQuery: query, isMcpbLoading: true });
+        try {
+          const bundles = query.trim()
+            ? await mcpbApi.searchBundles(query)
+            : await mcpbApi.fetchRegistry();
+          set({ bundles, isMcpbLoading: false });
+        } catch (err) {
+          set({
+            mcpbError: err instanceof Error ? err.message : String(err),
+            isMcpbLoading: false,
+          });
+        }
+      },
+
+      filterByCategory: (category) => set({ selectedCategory: category }),
+
+      installBundle: async (bundleId: string) => {
+        set({ isInstalling: true, mcpbError: null });
+        try {
+          await mcpbApi.installBundle(bundleId);
+          const installedBundles = await mcpbApi.getInstalledBundles();
+          set({ installedBundles, isInstalling: false });
+        } catch (err) {
+          set({ mcpbError: err instanceof Error ? err.message : String(err), isInstalling: false });
+          throw err;
+        }
+      },
+
+      uninstallBundle: async (bundleId: string) => {
+        set({ isMcpbLoading: true, mcpbError: null });
+        try {
+          await mcpbApi.uninstallBundle(bundleId);
+          const installedBundles = await mcpbApi.getInstalledBundles();
+          set({ installedBundles, isMcpbLoading: false });
+        } catch (err) {
+          set({
+            mcpbError: err instanceof Error ? err.message : String(err),
+            isMcpbLoading: false,
+          });
+          throw err;
+        }
+      },
+
+      getBundleDetails: async (bundleId: string) => {
+        try {
+          return await mcpbApi.getBundleDetails(bundleId);
+        } catch {
+          return null;
+        }
+      },
+
+      checkUpdates: async () => {
+        set({ isMcpbLoading: true });
+        try {
+          const bundlesWithUpdates = await mcpbApi.checkUpdates();
+          set((state) => {
+            const updateMap = new Map(bundlesWithUpdates.map((b) => [b.id, b]));
+            return {
+              installedBundles: state.installedBundles.map((b) => updateMap.get(b.id) ?? b),
+              isMcpbLoading: false,
+            };
+          });
+        } catch (err) {
+          set({
+            mcpbError: err instanceof Error ? err.message : String(err),
+            isMcpbLoading: false,
+          });
+        }
+      },
+
+      updateBundle: async (bundleId: string) => {
+        set({ isInstalling: true, mcpbError: null });
+        try {
+          await mcpbApi.updateBundle(bundleId);
+          const installedBundles = await mcpbApi.getInstalledBundles();
+          set({ installedBundles, isInstalling: false });
+        } catch (err) {
+          set({ mcpbError: err instanceof Error ? err.message : String(err), isInstalling: false });
+          throw err;
+        }
+      },
+
+      clearMcpbError: () => set({ mcpbError: null }),
+      setInstallProgress: (progress) => set({ installProgress: progress }),
+
+      resetOnLogout: () =>
+        set({
+          bundles: [],
+          installedBundles: [],
+          featuredBundles: [],
+          categories: [],
+          selectedCategory: null,
+          searchQuery: '',
+          isMcpbLoading: false,
+          isInstalling: false,
+          installProgress: null,
+          mcpbError: null,
+        }),
+    })),
+    { name: 'McpbStore', enabled: import.meta.env.DEV },
+  ),
+);
+
+const KNOWN_PHASES = new Set<BundleInstallStatus>([
+  'pending',
+  'downloading',
+  'installing',
+  'configuring',
+  'completed',
+  'failed',
+]);
+
+function toInstallStatus(phase: string): BundleInstallStatus {
+  return KNOWN_PHASES.has(phase as BundleInstallStatus)
+    ? (phase as BundleInstallStatus)
+    : 'installing';
+}
+
+let mcpbInstallListenerInitialized = false;
+
+export async function initializeMcpbInstallListener(): Promise<void> {
+  if (mcpbInstallListenerInitialized) return;
+  mcpbInstallListenerInitialized = true;
+  try {
+    await mcpbListen<McpbInstallProgressEvent>('mcpb:install_progress', (event) => {
+      const { bundleId, phase, progress, message } = event.payload;
+      useMcpbStore
+        .getState()
+        .setInstallProgress({ bundleId, status: toInstallStatus(phase), progress, message });
+    });
+  } catch (error) {
+    mcpbInstallListenerInitialized = false;
+    console.error('[McpbStore] Failed to initialize mcpb:install_progress listener:', error);
+  }
+}
+
+export const selectMcpbBundles = (state: McpbState) => state.bundles;
+export const selectMcpbInstalled = (state: McpbState) => state.installedBundles;
+export const selectMcpbBundleById = (bundleId: string) => (state: McpbState) =>
+  state.bundles.find((b) => b.id === bundleId) ||
+  state.installedBundles.find((b) => b.id === bundleId);
+export const selectBundlesWithUpdates = (state: McpbState) =>
+  state.installedBundles.filter((bundle) => bundle.updateAvailable);
+
+// =============================================================================
+// MCP Server Store (absorbed from mcpServerStore.ts — task-w58)
+// =============================================================================
+
+interface McpServerToolEntry {
+  name: string;
+  description?: string;
+  [key: string]: unknown;
+}
+
+interface McpServerStore {
+  config: import('@/types/mcp').McpRuntimeServerConfig | null;
+  isRunning: boolean;
+  tools: McpServerToolEntry[];
+  loading: boolean;
+  error: string | null;
+  fetchConfig: () => Promise<void>;
+  fetchStatus: () => Promise<void>;
+  fetchTools: () => Promise<void>;
+  startServer: () => Promise<void>;
+  stopServer: () => Promise<void>;
+  updateConfig: (port?: number, enabledTools?: string[]) => Promise<void>;
+}
+
+export const useMcpServerStore = create<McpServerStore>()(
+  devtools(
+    (set, get) => ({
+      config: null,
+      isRunning: false,
+      tools: [],
+      loading: false,
+      error: null,
+
+      fetchConfig: async () => {
+        set({ loading: true, error: null }, undefined, 'mcpServer/fetchConfig/start');
+        try {
+          const config = await McpClient.getRuntimeServerConfig();
+          set(
+            { config, isRunning: config.running, error: null, loading: false },
+            undefined,
+            'mcpServer/fetchConfig/success',
+          );
+        } catch (error) {
+          set(
+            { error: error instanceof Error ? error.message : String(error), loading: false },
+            undefined,
+            'mcpServer/fetchConfig/error',
+          );
+        }
+      },
+
+      fetchStatus: async () => {
+        try {
+          const isRunning = await McpClient.getRuntimeServerStatus();
+          set({ isRunning, error: null }, undefined, 'mcpServer/fetchStatus');
+        } catch (error) {
+          set(
+            { error: error instanceof Error ? error.message : String(error) },
+            undefined,
+            'mcpServer/fetchStatus/error',
+          );
+        }
+      },
+
+      fetchTools: async () => {
+        try {
+          const result = await McpClient.listRuntimeServerTools();
+          const tools = (result.tools ?? []) as McpServerToolEntry[];
+          set({ tools, error: null }, undefined, 'mcpServer/fetchTools');
+        } catch (error) {
+          set(
+            { error: error instanceof Error ? error.message : String(error) },
+            undefined,
+            'mcpServer/fetchTools/error',
+          );
+        }
+      },
+
+      startServer: async () => {
+        set({ loading: true, error: null }, undefined, 'mcpServer/start/start');
+        try {
+          await McpClient.startRuntimeServer();
+          await get().fetchConfig();
+          await get().fetchTools();
+          set({ loading: false }, undefined, 'mcpServer/start/success');
+        } catch (error) {
+          set(
+            { error: error instanceof Error ? error.message : String(error), loading: false },
+            undefined,
+            'mcpServer/start/error',
+          );
+        }
+      },
+
+      stopServer: async () => {
+        set({ loading: true, error: null }, undefined, 'mcpServer/stop/start');
+        try {
+          await McpClient.stopRuntimeServer();
+          await get().fetchConfig();
+          set({ tools: [] }, undefined, 'mcpServer/stop/clearTools');
+        } catch (error) {
+          set(
+            { error: error instanceof Error ? error.message : String(error), loading: false },
+            undefined,
+            'mcpServer/stop/error',
+          );
+        }
+      },
+
+      updateConfig: async (port?: number, enabledTools?: string[]) => {
+        set({ loading: true, error: null }, undefined, 'mcpServer/updateConfig/start');
+        try {
+          await McpClient.updateRuntimeServerConfig(port, enabledTools);
+          await get().fetchConfig();
+        } catch (error) {
+          set(
+            { error: error instanceof Error ? error.message : String(error), loading: false },
+            undefined,
+            'mcpServer/updateConfig/error',
+          );
+        }
+      },
+    }),
+    { name: 'McpServerStore', enabled: import.meta.env.DEV },
+  ),
+);

@@ -25,7 +25,7 @@ import {
   useCanvasStore,
   type CanvasArtifact,
   type CanvasArtifactType,
-} from '../../stores/canvasStore';
+} from '../../stores/editingStore';
 import {
   AlertDialog,
   AlertDialogAction,

@@ -29,7 +29,7 @@ vi.mock('../../api/voice', async () => {
 
 import { voiceStartDeepgramStream, voiceStopDeepgramStream } from '../../api/voice';
 import { listen } from '../../lib/tauri-mock';
-import { useVoiceModeStore } from '../../stores/voiceModeStore';
+import { useVoiceModeStore } from '../../stores/settingsStore';
 
 describe('voiceModeStore Deepgram wiring', () => {
   beforeEach(() => {

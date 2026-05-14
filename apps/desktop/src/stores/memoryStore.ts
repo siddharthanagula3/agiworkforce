@@ -1048,3 +1048,127 @@ export function buildMemoryContext(memories: MemoryEntry[], maxTokens: number = 
   if (lines.length <= 1) return '';
   return lines.join('\n');
 }
+
+// ============================================================================
+// Project Memory Store (absorbed from projectMemoryStore.ts — task-w58)
+// ============================================================================
+
+export interface ProjectContext {
+  id: number;
+  project_folder: string;
+  tech_stack: string[];
+  main_language: string | null;
+  conventions: string | null;
+  frameworks: string[];
+  importance: number;
+  created_at: string;
+  updated_at: string;
+}
+
+import { invoke } from '../lib/tauri-mock';
+
+export interface ProjectMemory {
+  id: number;
+  project_folder: string;
+  memory_type: string;
+  content: string;
+  importance: number;
+  created_at: string;
+  updated_at: string;
+  last_accessed: string | null;
+}
+
+export interface SaveProjectContextRequest {
+  projectFolder: string;
+  techStack: string[];
+  mainLanguage?: string;
+  conventions?: string;
+  frameworks: string[];
+  importance?: number;
+}
+
+export interface SearchMemoriesRequest {
+  projectFolder: string;
+  query: string;
+  limit?: number;
+}
+
+interface ProjectMemoryState {
+  isProjLoading: boolean;
+  projError: string | null;
+  saveProjectContext: (request: SaveProjectContextRequest) => Promise<number>;
+  getProjectMemories: (projectFolder: string) => Promise<ProjectMemory[]>;
+  searchProjectMemories: (request: SearchMemoriesRequest) => Promise<ProjectMemory[]>;
+  clearProjError: () => void;
+}
+
+export const useProjectMemoryStore = create<ProjectMemoryState>()(
+  devtools(
+    (set) => ({
+      isProjLoading: false,
+      projError: null,
+
+      saveProjectContext: async (request: SaveProjectContextRequest) => {
+        set({ isProjLoading: true, projError: null });
+        try {
+          const id = await invoke<number>('save_project_context', {
+            request: {
+              projectFolder: request.projectFolder,
+              techStack: request.techStack,
+              mainLanguage: request.mainLanguage ?? null,
+              conventions: request.conventions ?? null,
+              frameworks: request.frameworks,
+              importance: request.importance ?? null,
+            },
+          });
+          set({ isProjLoading: false });
+          toast.success('Project context saved');
+          return id;
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          set({ projError: msg, isProjLoading: false });
+          toast.error(`Failed to save project context: ${msg}`);
+          throw error;
+        }
+      },
+
+      getProjectMemories: async (projectFolder: string) => {
+        set({ isProjLoading: true, projError: null });
+        try {
+          const memories = await invoke<ProjectMemory[]>('get_project_memories', { projectFolder });
+          set({ isProjLoading: false });
+          return memories;
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          set({ projError: msg, isProjLoading: false });
+          throw error;
+        }
+      },
+
+      searchProjectMemories: async (request: SearchMemoriesRequest) => {
+        set({ isProjLoading: true, projError: null });
+        try {
+          const results = await invoke<ProjectMemory[]>('search_project_memories', {
+            request: {
+              projectFolder: request.projectFolder,
+              query: request.query,
+              limit: request.limit ?? null,
+            },
+          });
+          set({ isProjLoading: false });
+          return results;
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          set({ projError: msg, isProjLoading: false });
+          throw error;
+        }
+      },
+
+      clearProjError: () => set({ projError: null }),
+    }),
+    { name: 'ProjectMemoryStore', enabled: import.meta.env.DEV },
+  ),
+);
+
+export const selectProjectMemoryLoading = (state: ProjectMemoryState) => state.isProjLoading;
+export const selectProjectMemoryError = (state: ProjectMemoryState) => state.projError;
