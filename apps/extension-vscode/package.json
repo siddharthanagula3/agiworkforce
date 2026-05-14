@@ -134,6 +134,11 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "agi-workforce.showSessionsHistory",
+        "title": "AGI Workforce: Show Sessions History",
+        "icon": "$(history)"
+      },
+      {
         "command": "agi-workforce.sendToDesktop",
         "title": "AGI Workforce: Send Code to Desktop Agent",
         "icon": "$(export)"

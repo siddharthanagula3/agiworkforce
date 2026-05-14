@@ -7,6 +7,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ConversationStore } from '../storage/conversationStore';
+import { sessionHistoryRelativeTime } from '../extension';
 import { ExtensionContext } from './__mocks__/vscode';
 
 describe('ConversationStore', () => {
@@ -279,5 +280,47 @@ describe('formatRelativeTime pattern', () => {
     // Should be a date string, not a relative time
     expect(result).not.toContain('ago');
     expect(result).not.toBe('just now');
+  });
+});
+
+describe('sessionHistoryRelativeTime (showSessionsHistory QuickPick — ref PNG 09)', () => {
+  it('returns "just now" for timestamps within the last minute', () => {
+    expect(sessionHistoryRelativeTime(Date.now())).toBe('just now');
+    expect(sessionHistoryRelativeTime(Date.now() - 30_000)).toBe('just now');
+  });
+
+  it('returns "Xm ago" for timestamps within the last hour', () => {
+    expect(sessionHistoryRelativeTime(Date.now() - 3 * 60_000)).toBe('3m ago');
+    expect(sessionHistoryRelativeTime(Date.now() - 59 * 60_000)).toBe('59m ago');
+  });
+
+  it('returns "Xh ago" for timestamps within the last 24 hours', () => {
+    expect(sessionHistoryRelativeTime(Date.now() - 2 * 3_600_000)).toBe('2h ago');
+    expect(sessionHistoryRelativeTime(Date.now() - 23 * 3_600_000)).toBe('23h ago');
+  });
+
+  it('returns "Xd ago" for timestamps within the last 7 days', () => {
+    expect(sessionHistoryRelativeTime(Date.now() - 1 * 86_400_000)).toBe('1d ago');
+    expect(sessionHistoryRelativeTime(Date.now() - 6 * 86_400_000)).toBe('6d ago');
+  });
+
+  it('returns a locale date string for timestamps older than 7 days', () => {
+    const twoWeeksAgo = Date.now() - 14 * 86_400_000;
+    const result = sessionHistoryRelativeTime(twoWeeksAgo);
+    expect(result).not.toContain('ago');
+    expect(result).not.toBe('just now');
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('boundary: exactly 1 minute ago shows "1m ago"', () => {
+    expect(sessionHistoryRelativeTime(Date.now() - 60_000)).toBe('1m ago');
+  });
+
+  it('boundary: exactly 1 hour ago shows "1h ago"', () => {
+    expect(sessionHistoryRelativeTime(Date.now() - 3_600_000)).toBe('1h ago');
+  });
+
+  it('boundary: exactly 1 day ago shows "1d ago"', () => {
+    expect(sessionHistoryRelativeTime(Date.now() - 86_400_000)).toBe('1d ago');
   });
 });
