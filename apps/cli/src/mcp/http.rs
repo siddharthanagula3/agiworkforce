@@ -30,8 +30,8 @@ use super::oauth_flow::{
 };
 use super::oauth_store::{McpOAuthStore, McpOAuthToken};
 use super::{
-    extract_matching_response, find_subsequence, JsonRpcRequest, McpConnection, McpOAuthConfig,
-    McpServerConfig, McpTimeouts, McpTransportConn,
+    elicitation::AutoDeclineHandler, extract_matching_response, find_subsequence, JsonRpcRequest,
+    McpConnection, McpOAuthConfig, McpServerConfig, McpTimeouts, McpTransportConn,
 };
 
 /// Connect to a Streamable-HTTP MCP server.
@@ -179,6 +179,7 @@ pub(super) async fn connect_http(
         request_id: 0,
         timeouts,
         stderr_buf: Arc::new(Mutex::new(Vec::new())),
+        elicitation_handler: Arc::new(AutoDeclineHandler),
     };
 
     conn.initialize().await?;
