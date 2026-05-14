@@ -4,9 +4,13 @@
 use anyhow::{anyhow, Context, Result};
 use image::{DynamicImage, RgbaImage};
 use serde::{Deserialize, Serialize};
-use xcap::{Monitor, Window};
+use xcap::Monitor;
+#[cfg(not(windows))]
+use xcap::Window;
 
 use super::dxgi::ScreenInfo;
+#[cfg(windows)]
+use super::dxgi::list_displays;
 use super::xcap_lock::lock_xcap;
 
 #[cfg(windows)]
