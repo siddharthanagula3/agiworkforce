@@ -12,7 +12,8 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 use super::{
-    find_subsequence, McpConnection, McpServerConfig, McpTimeouts, McpTransportConn,
+    elicitation::AutoDeclineHandler, find_subsequence, McpConnection, McpServerConfig,
+    McpTimeouts, McpTransportConn,
 };
 
 /// Connect to an SSE-based MCP server.
@@ -148,6 +149,7 @@ pub(super) async fn connect_sse(
         request_id: 0,
         timeouts,
         stderr_buf: Arc::new(Mutex::new(Vec::new())),
+        elicitation_handler: Arc::new(AutoDeclineHandler),
     };
 
     conn.initialize().await?;

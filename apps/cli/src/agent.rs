@@ -79,6 +79,8 @@ pub struct AgentSession {
     pub total_cache_read_tokens: u32,
     pub total_cache_creation_tokens: u32,
     pub turn_count: u32,
+    /// Accumulated real-dollar cost for this session. Updated via cost_ledger after each turn.
+    pub cost_ledger: crate::cost_ledger::CostLedger,
     /// Optional ordered list of fallback model IDs. If set and a turn fails
     /// with a transient error, the next model is tried before surfacing the
     /// failure. See `crate::routing::fallback`.
@@ -283,6 +285,7 @@ impl AgentSession {
             total_cache_read_tokens: 0,
             total_cache_creation_tokens: 0,
             turn_count: 0,
+            cost_ledger: crate::cost_ledger::CostLedger::default(),
             fallback_chain: None,
             demo_force_rate_limit: false,
             demo_mode: false,
@@ -1864,6 +1867,13 @@ Files modified:
         self.total_cache_read_tokens += total_cache_read;
         self.total_cache_creation_tokens += total_cache_creation;
         self.turn_count += 1;
+        self.cost_ledger.record_turn(
+            &self.model,
+            total_input,
+            total_output,
+            total_cache_read,
+            total_cache_creation,
+        );
 
         // --- Post-turn: memory extraction + skill learning (best-effort, non-blocking) ---
         if let Ok(home) = crate::config::CliConfig::config_dir() {
@@ -2343,13 +2353,13 @@ mod tests {
     #[test]
     fn test_build_tool_definitions_count() {
         let defs = build_tool_definitions();
-        // Phase E (W2-W6): full catalog = 11 always-loaded + 9 deferred = 20.
-        // Always-loaded (11): read_file, write_file, edit_file, run_command,
-        //   search_files, list_directory, web_search, web_fetch, task,
-        //   grep_files, tool_search.
-        // Deferred (9): apply_patch, update_plan, glob, batch, multiedit,
-        //   todo_read, todo_write, ask_user, read_many_files.
-        assert_eq!(defs.len(), 20);
+        // Phase E (W2-W6): 11 always-loaded + 9 deferred = 20 originals.
+        // M18 (v1.2 wave 1): +11 task/team/cron tools = 31.
+        //   Tasks (6): task_create, task_get, task_list, task_update, task_stop, task_output
+        //   Teams (2): team_create, team_delete
+        //   Cron (3):  cron_create, cron_delete, cron_list
+        // M24 (v1.2 wave 1): +1 advisor tool = 32.
+        assert_eq!(defs.len(), 32);
     }
 
     #[test]

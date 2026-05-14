@@ -21,10 +21,16 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::mpsc;
 
+use elicitation::{AutoDeclineHandler, ElicitationHandler, SharedElicitationHandler};
+
+pub mod connection_pool;
+pub mod elicitation;
 mod http;
 mod oauth_flow;
 mod oauth_store;
 mod sse;
+pub mod resources;
+pub mod status;
 
 use http::{connect_http, send_request_http};
 use sse::connect_sse;
@@ -32,6 +38,12 @@ use sse::connect_sse;
 pub use oauth_store::McpOAuthStore;
 #[allow(unused_imports)]
 pub use oauth_store::McpOAuthToken;
+#[allow(unused_imports)]
+pub use connection_pool::McpConnectionManager;
+#[allow(unused_imports)]
+pub use resources::{McpResource, McpResourceList};
+#[allow(unused_imports)]
+pub use status::{McpServerStatus, McpServerStatusSnapshot};
 
 // ---------------------------------------------------------------------------
 // Config types
@@ -346,6 +358,9 @@ pub struct McpConnection {
     /// Buffered lines from the child's stderr (stdio transport only).
     /// Empty for SSE/HTTP transports.
     pub(super) stderr_buf: Arc<Mutex<Vec<String>>>,
+    /// Handler for `elicitation/create` server-initiated requests.
+    /// Defaults to `AutoDeclineHandler` (safe for headless/CI runs).
+    elicitation_handler: SharedElicitationHandler,
 }
 
 /// Transport-specific connection state. Per-variant data is held inline
@@ -447,6 +462,7 @@ impl McpConnection {
                     request_id: 0,
                     timeouts,
                     stderr_buf,
+                    elicitation_handler: Arc::new(AutoDeclineHandler),
                 };
 
                 conn.initialize().await.map_err(|e| {
@@ -699,6 +715,61 @@ impl McpConnection {
         }
     }
 
+    /// Replace the elicitation handler used for `elicitation/create` server requests.
+    ///
+    /// The default is [`AutoDeclineHandler`] (safe for headless/CI). Swap to
+    /// [`elicitation::StdinPromptHandler`] for bare-REPL use or a future
+    /// `TuiElicitationHandler` for the TUI overlay.
+    #[allow(dead_code)]
+    pub fn set_elicitation_handler(&mut self, handler: Arc<dyn ElicitationHandler>) {
+        self.elicitation_handler = handler;
+    }
+
+    /// Build a JSON-RPC response frame for an `elicitation/create` request
+    /// and POST it back on the SSE transport.
+    async fn reply_elicitation_sse(
+        post_url: &str,
+        headers: &HashMap<String, String>,
+        client: &reqwest::Client,
+        session_id: Option<&str>,
+        request_id: &serde_json::Value,
+        response: &elicitation::ElicitationResponse,
+        server_name: &str,
+    ) {
+        let frame = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "result": response,
+        });
+        let mut req = client
+            .post(post_url)
+            .header("Content-Type", "application/json")
+            .json(&frame);
+        for (k, v) in headers {
+            req = req.header(k, v);
+        }
+        if let Some(sid) = session_id {
+            req = req.header("Mcp-Session-Id", sid);
+        }
+        if let Err(e) = req.send().await {
+            eprintln!("[{}] elicitation reply POST failed: {}", server_name, e);
+        }
+    }
+
+    /// Check whether a raw JSON frame is any server-initiated request (has both
+    /// `method` and `id` fields). Returns `(method, id, params)`.
+    fn as_server_request(
+        frame: &serde_json::Value,
+    ) -> Option<(&str, serde_json::Value, serde_json::Value)> {
+        let method = frame.get("method")?.as_str()?;
+        let id = frame.get("id")?.clone();
+        let params = frame
+            .get("params")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null);
+        Some((method, id, params))
+    }
+
     /// Check whether the MCP server is still alive and responsive.
     ///
     /// Sends a cheap `tools/list` request with a short timeout.
@@ -773,6 +844,8 @@ impl McpConnection {
                     self.config.clone(),
                 )
                 .await?;
+                // Preserve the elicitation handler across reconnect.
+                fresh.elicitation_handler = Arc::clone(&self.elicitation_handler);
                 // Swap in the fresh transport state without moving fields out
                 // of `fresh` (which would conflict with its Drop impl).
                 std::mem::swap(&mut self.inner, &mut fresh.inner);
@@ -791,6 +864,8 @@ impl McpConnection {
                     self.config.clone(),
                 )
                 .await?;
+                // Preserve the elicitation handler across reconnect.
+                fresh.elicitation_handler = Arc::clone(&self.elicitation_handler);
                 std::mem::swap(&mut self.inner, &mut fresh.inner);
                 self.request_id = 0;
                 Ok(())
@@ -838,6 +913,7 @@ impl McpConnection {
         let expected_id = self.request_id;
         let method_name = request.method.clone();
         let server_name = self.server_name.clone();
+        let elicitation_handler = Arc::clone(&self.elicitation_handler);
 
         match &mut self.inner {
             McpTransportConn::Stdio { child } => {
@@ -858,8 +934,19 @@ impl McpConnection {
                 let mut reader = BufReader::new(stdout);
                 let mut line = String::new();
 
-                match tokio::time::timeout(timeout, async {
+                // Channel to send elicitation replies back to the server.
+                // The async block below sends the frame JSON; the loop outside
+                // writes it to stdin after the borrow on stdout is released.
+                let (elicit_tx, mut elicit_rx) =
+                    mpsc::channel::<String>(4);
+
+                let result = match tokio::time::timeout(timeout, async {
                     loop {
+                        // Check for pending elicitation replies first (non-blocking).
+                        // These were produced in previous iterations by the handler.
+                        // We can't write them here (stdout borrow), so they queue up
+                        // in the channel and get drained below.
+
                         line.clear();
                         let bytes_read = reader.read_line(&mut line).await.context(format!(
                             "[{}] Failed to read from MCP server",
@@ -870,18 +957,44 @@ impl McpConnection {
                             bail!("[{}] MCP server closed connection", server_name);
                         }
 
-                        let response: JsonRpcResponse = match serde_json::from_str(line.trim()) {
-                            Ok(r) => r,
+                        let trimmed = line.trim();
+                        if trimmed.is_empty() {
+                            continue;
+                        }
+
+                        let frame: serde_json::Value = match serde_json::from_str(trimmed) {
+                            Ok(v) => v,
                             Err(_) => {
-                                let trimmed = line.trim();
-                                if !trimmed.is_empty() {
-                                    eprintln!(
-                                        "[{}] Skipped non-JSON line: {}",
-                                        server_name, trimmed
-                                    );
-                                }
+                                eprintln!("[{}] Skipped non-JSON line: {}", server_name, trimmed);
                                 continue;
                             }
+                        };
+
+                        // Detect server-initiated elicitation/create requests.
+                        if let Some((srv_method, req_id, params)) = Self::as_server_request(&frame) {
+                            if srv_method == "elicitation/create" {
+                                if let Ok(elicit_req) = serde_json::from_value::<elicitation::ElicitationRequest>(params) {
+                                    let resp = elicitation_handler.handle(&server_name, elicit_req).await;
+                                    let reply = serde_json::json!({
+                                        "jsonrpc": "2.0",
+                                        "id": req_id,
+                                        "result": resp,
+                                    });
+                                    if let Ok(mut json) = serde_json::to_string(&reply) {
+                                        json.push('\n');
+                                        let _ = elicit_tx.try_send(json);
+                                    }
+                                    continue;
+                                }
+                            }
+                            // Other server-initiated methods: log and skip.
+                            eprintln!("[{}] Unhandled server request method '{}'", server_name, srv_method);
+                            continue;
+                        }
+
+                        let response: JsonRpcResponse = match serde_json::from_value(frame) {
+                            Ok(r) => r,
+                            Err(_) => continue,
                         };
 
                         if response.id == Some(expected_id) {
@@ -901,7 +1014,21 @@ impl McpConnection {
                         timeout.as_millis(),
                         method_name,
                     )),
+                };
+
+                // Drain any pending elicitation replies. The read loop above
+                // queued them via the channel; now that the stdout borrow is
+                // released we can write them to stdin.
+                // Note: in the normal case the server won't send elicitations
+                // simultaneously with the response so this drain is usually empty.
+                while let Ok(reply_json) = elicit_rx.try_recv() {
+                    if let Some(stdin) = child.stdin.as_mut() {
+                        let _ = stdin.write_all(reply_json.as_bytes()).await;
+                        let _ = stdin.flush().await;
+                    }
                 }
+
+                result
             }
             McpTransportConn::Sse {
                 post_url,
@@ -952,13 +1079,41 @@ impl McpConnection {
                     }
                 }
 
+                // Clone SSE metadata for use inside the async block.
+                let post_url_clone = post_url.clone();
+                let headers_clone = headers.clone();
+                let client_clone = client.clone();
+                let session_id_clone = session_id.clone();
+
                 // Drain the SSE channel until we find a matching id.
+                // Elicitation requests from the server arrive here too and are
+                // dispatched inline before continuing the drain loop.
                 match tokio::time::timeout(timeout, async {
                     loop {
                         let frame = match rx.recv().await {
                             Some(f) => f,
                             None => bail!("[{}] SSE channel closed unexpectedly", server_name),
                         };
+
+                        // Handle server-initiated elicitation/create.
+                        if let Some((srv_method, req_id, params)) = Self::as_server_request(&frame) {
+                            if srv_method == "elicitation/create" {
+                                if let Ok(elicit_req) = serde_json::from_value::<elicitation::ElicitationRequest>(params) {
+                                    let elicit_resp = elicitation_handler.handle(&server_name, elicit_req).await;
+                                    Self::reply_elicitation_sse(
+                                        &post_url_clone,
+                                        &headers_clone,
+                                        &client_clone,
+                                        session_id_clone.as_deref(),
+                                        &req_id,
+                                        &elicit_resp,
+                                        &server_name,
+                                    ).await;
+                                }
+                            }
+                            continue;
+                        }
+
                         if let Some(matched) =
                             extract_matching_response(&frame, expected_id, &server_name)?
                         {
@@ -1374,6 +1529,44 @@ impl McpManager {
                 eprintln!("Warning: failed to shut down MCP server '{}': {}", name, e);
             }
         }
+    }
+
+    /// Dispatch an incoming `elicitation/create` server-side request through
+    /// the supplied handler and return the serialized JSON-RPC response.
+    ///
+    /// When an MCP server sends `elicitation/create` it is asking the client
+    /// for structured user input. This function deserializes the params,
+    /// delegates to the [`elicitation::SharedElicitationHandler`] (which may
+    /// open a TUI overlay or fall back to stdin), and wraps the
+    /// [`elicitation::ElicitationResponse`] in a JSON-RPC 2.0 result object.
+    ///
+    /// The caller writes the returned JSON back to the transport that delivered
+    /// the original server request (stdio write / SSE POST / HTTP POST).
+    #[allow(dead_code)]
+    pub async fn handle_elicitation(
+        server_name: &str,
+        request_id: serde_json::Value,
+        params: serde_json::Value,
+        handler: &elicitation::SharedElicitationHandler,
+    ) -> Result<serde_json::Value> {
+        let elicitation_request: elicitation::ElicitationRequest =
+            serde_json::from_value(params).context(format!(
+                "[{}] elicitation/create: invalid params",
+                server_name
+            ))?;
+
+        let response = handler.handle(server_name, elicitation_request).await;
+
+        let result = serde_json::json!({
+            "action": response.action,
+            "content": response.content,
+        });
+
+        Ok(serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "result": result,
+        }))
     }
 }
 
