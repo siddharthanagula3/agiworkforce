@@ -6,12 +6,27 @@ import { useChatStream } from '@/lib/hooks/useChatStream';
 import { useConversations } from '@/lib/hooks/useConversations';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@shared/stores/model-store';
+import { useAuthStore } from '@shared/stores/authentication-store';
 import { ChatSidebar } from '../components/Sidebar/ChatSidebar';
 import { MessageListNew } from '../components/messages/MessageListNew';
 import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
 import type { Message } from '@/stores/chatStore';
 import type { ChatMessage } from '../stores/chat-store';
 import { cn } from '@shared/lib/utils';
+
+function getTimeGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+const QUICK_ACTIONS: { label: string; prompt: string }[] = [
+  { label: 'Code', prompt: 'Help me write or review code' },
+  { label: 'Learn', prompt: 'Explain a concept to me' },
+  { label: 'Write', prompt: 'Help me write something' },
+  { label: 'Life stuff', prompt: 'Help me with a personal task or decision' },
+];
 
 function toChatMessage(m: Message, conversationId: string): ChatMessage {
   const thinkingContent = m.metadata?.thinkingContent;
@@ -46,6 +61,8 @@ export default function WebChatPage() {
   const urlConversationId = params?.['sessionId'] as string | undefined;
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { user } = useAuthStore();
+  const firstName = user?.name?.split(' ')[0] ?? user?.email?.split('@')[0] ?? null;
 
   // Streaming send + store state
   const { sendMessage, stopGeneration, isStreaming } = useChatStream();
@@ -269,25 +286,19 @@ export default function WebChatPage() {
           {chatMessages.length === 0 && !isLoading ? (
             <div className="flex h-full flex-col items-center justify-center gap-6 px-4">
               <div className="text-center">
-                <h1 className="text-2xl font-semibold text-foreground">What can I help with?</h1>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Ask anything — I support 10+ providers including Claude, GPT, Gemini, and local
-                  LLMs.
-                </p>
+                <h1 className="text-2xl font-semibold text-foreground">
+                  {firstName ? `${getTimeGreeting()}, ${firstName}` : getTimeGreeting()}
+                </h1>
+                <p className="mt-2 text-sm text-muted-foreground">How can I help you today?</p>
               </div>
-              <div className="grid grid-cols-2 gap-2 w-full max-w-lg">
-                {[
-                  'Explain a complex concept',
-                  'Help me write code',
-                  'Summarize a document',
-                  'Brainstorm ideas',
-                ].map((prompt) => (
+              <div className="flex flex-wrap justify-center gap-2">
+                {QUICK_ACTIONS.map((action) => (
                   <button
-                    key={prompt}
-                    onClick={() => handleSend(prompt)}
-                    className="rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                    key={action.label}
+                    onClick={() => handleSend(action.prompt)}
+                    className="rounded-full border border-border/60 bg-muted/30 px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                   >
-                    {prompt}
+                    {action.label}
                   </button>
                 ))}
               </div>
