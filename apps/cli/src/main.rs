@@ -59,6 +59,8 @@ mod shell_snapshot;
 mod sync;
 mod tier_cache;
 mod cost_ledger;
+mod notebook_edit;
+mod powershell_tool;
 mod tool_search;
 
 // Phase-2 candidates — implementations exist but the user-facing surface is
