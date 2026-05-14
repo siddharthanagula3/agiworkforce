@@ -204,6 +204,45 @@ pub async fn pkce_login(provider_name: &str) -> Result<OAuthTokens> {
     exchange_code(&provider, &code, &verifier, &redirect_uri).await
 }
 
+/// RFC 8414 / OpenID Connect Discovery response shape.
+#[derive(Debug, Clone, Deserialize)]
+pub struct DiscoveredEndpoints {
+    pub issuer: Option<String>,
+    pub authorization_endpoint: String,
+    pub token_endpoint: String,
+    #[serde(default)]
+    pub scopes_supported: Vec<String>,
+    #[serde(default)]
+    pub response_types_supported: Vec<String>,
+    #[serde(default)]
+    pub code_challenge_methods_supported: Vec<String>,
+}
+
+/// Fetch the well-known discovery document for an OAuth/OIDC issuer.
+/// Tries `/.well-known/openid-configuration` first (OIDC), then
+/// `/.well-known/oauth-authorization-server` (RFC 8414).
+pub async fn discover_endpoints(issuer_url: &str) -> Result<DiscoveredEndpoints> {
+    let base = issuer_url.trim_end_matches('/');
+    let client = reqwest::Client::new();
+    let candidates = [
+        format!("{base}/.well-known/openid-configuration"),
+        format!("{base}/.well-known/oauth-authorization-server"),
+    ];
+    for url in &candidates {
+        let resp = match client.get(url).send().await {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+        if !resp.status().is_success() {
+            continue;
+        }
+        if let Ok(endpoints) = resp.json::<DiscoveredEndpoints>().await {
+            return Ok(endpoints);
+        }
+    }
+    Err(anyhow!("could not discover endpoints from {issuer_url}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -264,5 +303,38 @@ mod tests {
         let (listener, port) = bind_ephemeral_listener().expect("bind");
         assert!(port > 1024);
         drop(listener);
+    }
+
+    #[tokio::test]
+    async fn discover_returns_error_for_unreachable_issuer() {
+        let result = discover_endpoints("https://127.0.0.1:1/nonexistent").await;
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn discovered_endpoints_serde_minimal() {
+        let json = r#"{
+            "authorization_endpoint": "https://x.example.com/oauth/authorize",
+            "token_endpoint": "https://x.example.com/oauth/token"
+        }"#;
+        let e: DiscoveredEndpoints = serde_json::from_str(json).expect("parse");
+        assert_eq!(e.authorization_endpoint, "https://x.example.com/oauth/authorize");
+        assert_eq!(e.token_endpoint, "https://x.example.com/oauth/token");
+        assert!(e.scopes_supported.is_empty());
+    }
+
+    #[test]
+    fn discovered_endpoints_serde_full() {
+        let json = r#"{
+            "issuer": "https://x.example.com",
+            "authorization_endpoint": "https://x.example.com/oauth/authorize",
+            "token_endpoint": "https://x.example.com/oauth/token",
+            "scopes_supported": ["read", "write"],
+            "response_types_supported": ["code"],
+            "code_challenge_methods_supported": ["S256", "plain"]
+        }"#;
+        let e: DiscoveredEndpoints = serde_json::from_str(json).expect("parse");
+        assert_eq!(e.scopes_supported, vec!["read", "write"]);
+        assert!(e.code_challenge_methods_supported.iter().any(|m| m == "S256"));
     }
 }
