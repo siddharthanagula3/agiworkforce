@@ -36,6 +36,10 @@ const AGENTS_REGISTRY_FILENAME: &str = "agents.json";
 /// Maximum concurrent A2A tasks processed simultaneously.
 const MAX_CONCURRENT_A2A_TASKS: usize = 4;
 
+/// Maximum number of completed tasks retained in the in-flight map before eviction.
+/// Prevents unbounded memory growth when the server receives many delegated tasks.
+const MAX_RETAINED_COMPLETED_TASKS: usize = 200;
+
 /// Tools that are safe for delegated A2A tasks. Restricts what external agents
 /// can execute to prevent privilege escalation.
 const DELEGATED_TASK_ALLOWED_TOOLS: &[&str] = &[
@@ -63,6 +67,11 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
         result |= x ^ y;
     }
     result == 0
+}
+
+/// Constant-time string comparison (pub for use by sibling modules such as `a2a_ws`).
+pub fn constant_time_eq_str(a: &str, b: &str) -> bool {
+    constant_time_eq(a.as_bytes(), b.as_bytes())
 }
 
 /// Generate a cryptographically random hex token of the given byte length.
@@ -212,7 +221,7 @@ struct InFlightTask {
     status: TaskResponseStatus,
     result: Option<String>,
     error: Option<String>,
-    started_at_ms: u64,
+    elapsed_ms: u64,
 }
 
 /// Shared state for the A2A server.
@@ -551,6 +560,9 @@ pub async fn serve_a2a(state: A2aState, port: u16) -> Result<()> {
 
 /// Handle a single HTTP connection by reading the request and dispatching
 /// to the appropriate handler.
+/// Maximum byte size for an A2A HTTP request (headers + body). Prevents DoS via huge uploads.
+const MAX_A2A_REQUEST_BYTES: usize = 2 * 1024 * 1024; // 2 MiB
+
 async fn handle_connection(
     mut stream: tokio::net::TcpStream,
     _addr: std::net::SocketAddr,
@@ -558,13 +570,52 @@ async fn handle_connection(
 ) -> Result<()> {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-    let mut buf = vec![0u8; 65536];
-    let n = stream.read(&mut buf).await?;
-    if n == 0 {
-        return Ok(());
+    // Read until we have the full HTTP headers + body, handling TCP short-reads.
+    // Strategy: accumulate bytes until we see \r\n\r\n (end of headers), then
+    // read exactly Content-Length more bytes for the body.
+    let mut buf = Vec::with_capacity(4096);
+    let mut tmp = [0u8; 4096];
+    let header_end = loop {
+        if buf.len() > MAX_A2A_REQUEST_BYTES {
+            let response = http_response(413, r#"{"error":"request too large"}"#);
+            stream.write_all(response.as_bytes()).await?;
+            return Ok(());
+        }
+        let n = stream.read(&mut tmp).await?;
+        if n == 0 {
+            if buf.is_empty() {
+                return Ok(());
+            }
+            break buf.len(); // connection closed before \r\n\r\n -- parse what we have
+        }
+        buf.extend_from_slice(&tmp[..n]);
+        if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+            break pos + 4;
+        }
+    };
+
+    // Parse Content-Length from headers and read remaining body bytes.
+    let header_bytes = &buf[..header_end.min(buf.len())];
+    let header_str = std::str::from_utf8(header_bytes).unwrap_or("");
+    let content_length: usize = header_str
+        .lines()
+        .find_map(|l| {
+            let lower = l.to_ascii_lowercase();
+            lower.strip_prefix("content-length:").and_then(|v| v.trim().parse::<usize>().ok())
+        })
+        .unwrap_or(0);
+
+    // Read any body bytes not yet in buf.
+    let body_already = buf.len().saturating_sub(header_end);
+    let body_remaining = content_length.saturating_sub(body_already);
+    if body_remaining > 0 {
+        let needed = body_remaining.min(MAX_A2A_REQUEST_BYTES.saturating_sub(buf.len()));
+        buf.resize(buf.len() + needed, 0);
+        let body_start = buf.len() - needed;
+        stream.read_exact(&mut buf[body_start..]).await?;
     }
 
-    let raw = String::from_utf8_lossy(&buf[..n]);
+    let raw = String::from_utf8_lossy(&buf);
 
     // Parse the first line: METHOD PATH HTTP/x.x
     let first_line = raw.lines().next().unwrap_or_default();
@@ -644,13 +695,26 @@ async fn handle_post_task(state: &A2aState, body: &str) -> String {
 
     let request_id = request.request_id.clone();
 
+    // Reject duplicate request_id to prevent overwriting a running task and
+    // the associated background-spawn race condition it causes.
+    {
+        let tasks_guard = state.tasks.read().await;
+        if tasks_guard.contains_key(&request_id) {
+            return http_json_response(
+                409,
+                &serde_json::json!({"error": "duplicate request_id", "request_id": request_id})
+                    .to_string(),
+            );
+        }
+    }
+
     // Store the task as in-flight
     let task = InFlightTask {
         request: request.clone(),
         status: TaskResponseStatus::Accepted,
         result: None,
         error: None,
-        started_at_ms: 0,
+        elapsed_ms: 0,
     };
 
     state.tasks.write().await.insert(request_id.clone(), task);
@@ -682,7 +746,7 @@ async fn handle_post_task(state: &A2aState, body: &str) -> String {
 
         let mut tasks_guard = tasks.write().await;
         if let Some(task) = tasks_guard.get_mut(&spawn_request_id) {
-            task.started_at_ms = duration_ms;
+            task.elapsed_ms = duration_ms;
             match result {
                 Ok(output) => {
                     task.status = TaskResponseStatus::Completed;
@@ -692,6 +756,23 @@ async fn handle_post_task(state: &A2aState, body: &str) -> String {
                     task.status = TaskResponseStatus::Failed;
                     task.error = Some(format!("{:#}", e));
                 }
+            }
+        }
+        // Evict completed/failed tasks when the map exceeds the retention cap.
+        // Keeps memory bounded without dropping tasks before callers can poll them.
+        if tasks_guard.len() > MAX_RETAINED_COMPLETED_TASKS {
+            let evict: Vec<String> = tasks_guard
+                .iter()
+                .filter(|(_, t)| {
+                    t.status == TaskResponseStatus::Completed
+                        || t.status == TaskResponseStatus::Failed
+                        || t.status == TaskResponseStatus::Rejected
+                })
+                .map(|(id, _)| id.clone())
+                .take(tasks_guard.len() - MAX_RETAINED_COMPLETED_TASKS)
+                .collect();
+            for id in evict {
+                tasks_guard.remove(&id);
             }
         }
     });
@@ -721,7 +802,7 @@ async fn handle_get_task(state: &A2aState, task_id: &str) -> String {
                 status: task.status.clone(),
                 result: task.result.clone(),
                 error: task.error.clone(),
-                duration_ms: task.started_at_ms,
+                duration_ms: task.elapsed_ms,
             };
             match serde_json::to_string(&response) {
                 Ok(json) => http_json_response(200, &json),
@@ -836,6 +917,8 @@ fn http_response(status: u16, body: &str) -> String {
         400 => "Bad Request",
         401 => "Unauthorized",
         404 => "Not Found",
+        409 => "Conflict",
+        413 => "Content Too Large",
         500 => "Internal Server Error",
         _ => "Unknown",
     };
