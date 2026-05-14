@@ -29,7 +29,6 @@ export {
   usePerformanceOptimization,
   useDebounce,
   useThrottle,
-  useMemoizedValue,
   useLazyComponent,
   useVirtualizedList,
   useOptimizedImage,
