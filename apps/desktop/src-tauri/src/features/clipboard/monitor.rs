@@ -406,7 +406,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("clipboard.db");
         let config = ClipboardMonitorConfig::default();
-        let monitor = ClipboardMonitor::new(config, db_path.clone()).unwrap();
+        let _monitor = ClipboardMonitor::new(config, db_path.clone()).unwrap();
 
         assert!(db_path.exists());
     }
