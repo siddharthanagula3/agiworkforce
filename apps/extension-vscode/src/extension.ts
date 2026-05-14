@@ -1270,6 +1270,101 @@ export function activate(context: vscode.ExtensionContext): void {
         await vscode.commands.executeCommand('agi-workforce.modelDashboard');
       }
     }),
+
+    // ── agi-workforce.setAgentMode ────────────────────────────────────────────
+    vscode.commands.registerCommand('agi-workforce.setAgentMode', async () => {
+      const currentMode = Config.agentMode();
+      function capMode(s: string): string {
+        return s.charAt(0).toUpperCase() + s.slice(1);
+      }
+      const modeItems: vscode.QuickPickItem[] = [
+        {
+          label: '$(comment-discussion) Ask before edits',
+          description: 'Claude will ask for approval before making each edit',
+          detail: 'ask',
+          picked: currentMode === 'ask',
+        },
+        {
+          label: '$(symbol-misc) Edit automatically',
+          description: 'Claude will edit your selected text or the whole file',
+          detail: 'auto',
+          picked: currentMode === 'auto',
+        },
+        {
+          label: '$(checklist) Plan mode',
+          description: 'Claude will explore the code and present a plan before editing',
+          detail: 'plan',
+          picked: currentMode === 'plan',
+        },
+        {
+          label: '$(warning) Bypass permissions',
+          description:
+            'Claude will not ask for approval before running potentially dangerous commands',
+          detail: 'bypass',
+          picked: currentMode === 'bypass',
+        },
+      ];
+      const modePick = await vscode.window.showQuickPick(modeItems, {
+        title: 'AGI Workforce — Modes',
+        placeHolder: `Current: ${capMode(currentMode)}  ·  Shift+Tab to switch`,
+        matchOnDescription: true,
+      });
+      if (modePick?.detail !== undefined) {
+        await vscode.workspace
+          .getConfiguration('agiWorkforce')
+          .update('agent.mode', modePick.detail, vscode.ConfigurationTarget.Global);
+        vscode.window.showInformationMessage(
+          `AGI Workforce agent mode set to: ${capMode(modePick.detail)}`,
+        );
+      }
+    }),
+
+    // ── agi-workforce.setAgentEffort ──────────────────────────────────────────
+    vscode.commands.registerCommand('agi-workforce.setAgentEffort', async () => {
+      const currentEffort = Config.agentEffort();
+      function capEffort(s: string): string {
+        return s.charAt(0).toUpperCase() + s.slice(1);
+      }
+      const effortItems: vscode.QuickPickItem[] = [
+        {
+          label: '$(circle-outline) Low',
+          description: 'Minimal reasoning — fastest, lowest cost',
+          detail: 'low',
+          picked: currentEffort === 'low',
+        },
+        {
+          label: '$(circle-filled) Medium',
+          description: 'Balanced reasoning — default',
+          detail: 'medium',
+          picked: currentEffort === 'medium',
+        },
+        {
+          label: '$(pulse) High',
+          description: 'Extended reasoning — slower, higher quality',
+          detail: 'high',
+          picked: currentEffort === 'high',
+        },
+        {
+          label: '$(sparkle) Max',
+          description: 'Maximum reasoning budget',
+          detail: 'max',
+          picked: currentEffort === 'max',
+        },
+      ];
+      const effortPick = await vscode.window.showQuickPick(effortItems, {
+        title: 'AGI Workforce — Effort',
+        placeHolder: `Current: ${capEffort(currentEffort)}`,
+        matchOnDescription: true,
+      });
+      if (effortPick?.detail !== undefined) {
+        await vscode.workspace
+          .getConfiguration('agiWorkforce')
+          .update('agent.effort', effortPick.detail, vscode.ConfigurationTarget.Global);
+        vscode.window.showInformationMessage(
+          `AGI Workforce effort set to: ${capEffort(effortPick.detail)}`,
+        );
+      }
+    }),
   );
 
   // ── Status bar item ──────────────────────────────────────────────────────

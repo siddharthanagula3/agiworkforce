@@ -347,6 +347,16 @@
         "command": "agi-workforce.showTierStatus",
         "title": "AGI Workforce: Show Tier Status",
         "icon": "$(account)"
+      },
+      {
+        "command": "agi-workforce.setAgentMode",
+        "title": "AGI Workforce: Set Agent Mode",
+        "icon": "$(robot)"
+      },
+      {
+        "command": "agi-workforce.setAgentEffort",
+        "title": "AGI Workforce: Set Reasoning Effort",
+        "icon": "$(brain)"
       }
     ],
     "chatParticipants": [
