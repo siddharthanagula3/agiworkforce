@@ -1655,6 +1655,43 @@ Files modified:
                 let pre_t = hooks::aggregate_transformers(&pre_results);
                 let effective_args = pre_t.updated_input.clone().unwrap_or_else(|| tc.arguments.clone());
 
+                // PreToolUse hooks may block or stop tool execution entirely.
+                match hooks::aggregate_results(&pre_results) {
+                    hooks::HookAggregateOutcome::Blocked { reasons } => {
+                        let reason_text = reasons.join("; ");
+                        if !self.quiet {
+                            eprintln!(
+                                "  {} {} blocked by hook: {}",
+                                "->".dimmed(),
+                                tc.name.bold(),
+                                reason_text.red()
+                            );
+                        }
+                        result_blocks.push(ContentBlock::ToolResult {
+                            tool_use_id: tc.id.clone(),
+                            content: format!("Tool execution blocked by hook: {reason_text}"),
+                            is_error: true,
+                        });
+                        continue;
+                    }
+                    hooks::HookAggregateOutcome::Stop => {
+                        if !self.quiet {
+                            eprintln!(
+                                "  {} {} stopped by hook",
+                                "->".dimmed(),
+                                tc.name.bold()
+                            );
+                        }
+                        result_blocks.push(ContentBlock::ToolResult {
+                            tool_use_id: tc.id.clone(),
+                            content: "Tool execution stopped by hook.".to_string(),
+                            is_error: true,
+                        });
+                        continue;
+                    }
+                    hooks::HookAggregateOutcome::Continue => {}
+                }
+
                 // Route: update_plan -> team tools -> MCP tools (mcp_*) -> built-in tools
                 let legacy = ToolCall {
                     name: tc.name.clone(),
