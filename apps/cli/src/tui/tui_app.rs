@@ -154,6 +154,8 @@ struct TuiApp {
     // Fallback rotation banner — shared with the agent send loop. The banner
     // self-clears after FALLBACK_BANNER_TTL seconds.
     fallback_banner: Arc<std::sync::Mutex<Option<FallbackBanner>>>,
+    // Modal overlay slot: intercepts all key events while active.
+    active_overlay: Option<Box<dyn crate::tui::widgets::interactive::InteractiveView>>,
 }
 
 /// Short-lived banner shown across the top of the chat area when the
@@ -227,6 +229,7 @@ impl TuiApp {
                 &[],
             ),
             fallback_banner: Arc::new(std::sync::Mutex::new(None)),
+            active_overlay: None,
         }
     }
 
@@ -290,6 +293,55 @@ impl TuiApp {
         // Token counts are already in tokens, context_window is in tokens — no conversion needed
         let used = self.total_input_tokens as u64 + self.total_output_tokens as u64;
         ((used * 100) / ctx_window).min(100) as u8
+    }
+
+    pub fn open_overlay(
+        &mut self,
+        view: Box<dyn crate::tui::widgets::interactive::InteractiveView>,
+    ) {
+        self.active_overlay = Some(view);
+    }
+
+    /// Route a key to the active overlay. Returns `true` when the overlay
+    /// consumed the key (caller must not forward it to the composer), `false`
+    /// when there is no active overlay.
+    fn dispatch_key_to_overlay(&mut self, key: crossterm::event::KeyEvent) -> bool {
+        let Some(ov) = self.active_overlay.as_mut() else {
+            return false;
+        };
+        let action = crossterm_to_keyaction(key);
+        use crate::tui::widgets::interactive::ViewAction;
+        match ov.handle_key(action) {
+            ViewAction::Continue => {}
+            ViewAction::Close | ViewAction::Submit(_) | ViewAction::SideAction(_) => {
+                self.active_overlay = None;
+            }
+        }
+        true
+    }
+}
+
+fn crossterm_to_keyaction(
+    key: crossterm::event::KeyEvent,
+) -> crate::tui::widgets::interactive::KeyAction {
+    use crossterm::event::KeyCode;
+    use crate::tui::widgets::interactive::KeyAction;
+    match key.code {
+        KeyCode::Up => KeyAction::Up,
+        KeyCode::Down => KeyAction::Down,
+        KeyCode::Left => KeyAction::Left,
+        KeyCode::Right => KeyAction::Right,
+        KeyCode::Enter => KeyAction::Enter,
+        KeyCode::Esc => KeyAction::Esc,
+        KeyCode::Tab => KeyAction::Tab,
+        KeyCode::BackTab => KeyAction::ShiftTab,
+        KeyCode::Backspace => KeyAction::Backspace,
+        KeyCode::Home => KeyAction::Home,
+        KeyCode::End => KeyAction::End,
+        KeyCode::PageUp => KeyAction::PageUp,
+        KeyCode::PageDown => KeyAction::PageDown,
+        KeyCode::Char(c) => KeyAction::Char(c),
+        _ => KeyAction::Char(' '),
     }
 }
 
@@ -371,6 +423,11 @@ fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &TuiApp) -> Re
             );
         } else if app.show_slash_popup {
             render_slash_popup(frame, chunks[1], app);
+        }
+
+        // Modal overlay drawn last so it sits on top of everything.
+        if let Some(ref ov) = app.active_overlay {
+            render_overlay(frame, chunks[1], ov.as_ref());
         }
     })?;
     Ok(())
@@ -818,6 +875,35 @@ fn render_slash_popup(frame: &mut ratatui::Frame, chat_area: Rect, app: &TuiApp)
     frame.render_widget(list, popup_area);
 }
 
+fn render_overlay(
+    frame: &mut ratatui::Frame,
+    area: Rect,
+    ov: &dyn crate::tui::widgets::interactive::InteractiveView,
+) {
+    let text = ov.render();
+    if text.is_empty() {
+        return;
+    }
+    let lines: Vec<Line> = text.lines().map(|l| Line::from(l.to_string())).collect();
+    let height = (lines.len() as u16 + 2).min(area.height);
+    let width = area.width.min(84);
+    let overlay_area = Rect {
+        x: area.x + area.width.saturating_sub(width) / 2,
+        y: area.y + area.height.saturating_sub(height) / 2,
+        width,
+        height,
+    };
+    frame.render_widget(ratatui::widgets::Clear, overlay_area);
+    let para = Paragraph::new(lines)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Yellow)),
+        )
+        .wrap(Wrap { trim: false });
+    frame.render_widget(para, overlay_area);
+}
+
 // render_model_picker was replaced by super::widgets::model_picker::render
 // (called directly from the render() fn above)
 
@@ -836,6 +922,11 @@ enum InputAction {
 }
 
 fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
+    // Overlay intercepts every key first.
+    if app.dispatch_key_to_overlay(key) {
+        return InputAction::None;
+    }
+
     // Model picker mode
     if app.model_picker.visible {
         return handle_model_picker_key(app, key);
@@ -1561,8 +1652,17 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/permissions" | "/perms" | "/approvals" => {
-            crate::repl::handle_permissions(arg);
-            SlashResult::SystemMessage("Permissions shown above.".to_string())
+            use crate::tui::widgets::approval_overlay::ApprovalOverlayState;
+            let mut overlay = ApprovalOverlayState::default();
+            overlay.open(
+                String::from("Approve action?"),
+                vec![String::from("The agent wants to run a tool.")],
+            );
+            app.open_overlay(Box::new(overlay));
+            SlashResult::SystemMessage(
+                "Approval overlay opened (\u{2190}/\u{2192} navigate, Enter select, Esc dismiss)"
+                    .into(),
+            )
         }
 
         "/init" => {
@@ -1701,6 +1801,27 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     )),
                 }
             }
+        }
+
+        "/usage" => {
+            use super::widgets::screen_renderers::{render_usage, UsageSummary};
+            let usage = UsageSummary {
+                input_tokens: app.session.total_input_tokens,
+                output_tokens: app.session.total_output_tokens,
+                cache_read_tokens: app.session.total_cache_read_tokens,
+                cache_write_tokens: app.session.total_cache_creation_tokens,
+                estimated_cost_usd: app.session.cost_ledger.total_usd,
+                turn_count: app.session.turn_count,
+                model: app.session.model.clone(),
+            };
+            SlashResult::SystemMessage(render_usage(&usage))
+        }
+
+        // M7+M18: /tasks — live background-tasks overlay from session registry.
+        "/tasks" => {
+            use crate::tui::widgets::screen_renderers::render_tasks;
+            let summaries = crate::tools::session_task_summaries();
+            SlashResult::SystemMessage(render_tasks(&summaries))
         }
 
         _ => SlashResult::SendAsPrompt,
@@ -2070,4 +2191,110 @@ async fn send_message(
     render(terminal, app)?;
 
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tui::widgets::interactive::{InteractiveView, KeyAction, ViewAction};
+
+    // Minimal stub view that tracks how many times handle_key was called.
+    struct StubView {
+        call_count: usize,
+        close_on_enter: bool,
+        last_key: Option<KeyAction>,
+    }
+
+    impl StubView {
+        fn new(close_on_enter: bool) -> Self {
+            Self { call_count: 0, close_on_enter, last_key: None }
+        }
+    }
+
+    impl InteractiveView for StubView {
+        fn render(&self) -> String {
+            format!("stub calls={}", self.call_count)
+        }
+
+        fn handle_key(&mut self, key: KeyAction) -> ViewAction {
+            self.call_count += 1;
+            self.last_key = Some(key);
+            if self.close_on_enter && key == KeyAction::Enter {
+                ViewAction::Submit(0)
+            } else if key == KeyAction::Esc {
+                ViewAction::Close
+            } else {
+                ViewAction::Continue
+            }
+        }
+    }
+
+    fn make_key(code: crossterm::event::KeyCode) -> crossterm::event::KeyEvent {
+        crossterm::event::KeyEvent::new(code, crossterm::event::KeyModifiers::NONE)
+    }
+
+    // Build the thinnest possible TuiApp without touching the filesystem or
+    // spawning terminals — we only test the overlay slot, not the TUI render.
+    fn minimal_app() -> TuiApp {
+        let sys_ctx = crate::context::SystemContext {
+            cwd: "/tmp".into(),
+            git_branch: None,
+            git_status_summary: None,
+            git_remote_url: None,
+            project_type: None,
+            project_language: None,
+            ci_providers: vec![],
+            monorepo_type: None,
+            package_manager: None,
+            containerization: vec![],
+            editor_configs: vec![],
+            os: "linux".into(),
+            shell: "bash".into(),
+        };
+        let session = crate::agent::AgentSession::new("claude-sonnet-4-6", &sys_ctx, None);
+        let config = crate::config::CliConfig::default();
+        TuiApp::new(session, config, true /* sandbox_disabled */)
+    }
+
+    #[test]
+    fn overlay_intercepts_keys_before_composer() {
+        let mut app = minimal_app();
+        let view = Box::new(StubView::new(true /* close_on_enter */));
+        app.open_overlay(view);
+        assert!(app.active_overlay.is_some());
+
+        // Down — consumed by overlay, not forwarded
+        let consumed = app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Down));
+        assert!(consumed);
+        assert!(app.active_overlay.is_some(), "overlay stays open on Down");
+
+        // Enter — overlay should close and slot cleared
+        let consumed = app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Enter));
+        assert!(consumed);
+        assert!(app.active_overlay.is_none(), "overlay cleared after Submit");
+    }
+
+    #[test]
+    fn closed_overlay_is_cleared_on_esc() {
+        let mut app = minimal_app();
+        app.open_overlay(Box::new(StubView::new(false)));
+        assert!(app.active_overlay.is_some());
+
+        let consumed = app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Esc));
+        assert!(consumed);
+        assert!(app.active_overlay.is_none());
+    }
+
+    #[test]
+    fn no_overlay_means_keys_fall_through() {
+        let mut app = minimal_app();
+        assert!(app.active_overlay.is_none());
+
+        let consumed = app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Enter));
+        assert!(!consumed, "no overlay → dispatch returns false");
+    }
 }
