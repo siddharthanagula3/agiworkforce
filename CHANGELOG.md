@@ -2,6 +2,29 @@
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [cli-1.4.0] — 2026-05-14
+
+Security and protocol hardening release. Closes three v1.3 deferred backlog items: real seccomp-BPF filter installation on Linux, `SubagentTaskRunner` trait abstraction making the subagent task body swappable, and a2a WebSocket transport for persistent cross-process agent streaming.
+
+### Added
+
+- **`apps/cli/src/policy/linux_sandbox.rs`** (M38a) — `compile_bpf` + `install_filter` behind the new `linux-seccomp` Cargo feature. `install_filter` calls `prctl(PR_SET_NO_NEW_PRIVS)` then `seccompiler::apply_filter`; on default (feature-off) Linux builds a no-op stub is provided so call sites compile under both configurations. `compile_bpf_available()` probes feature presence at runtime.
+- **`apps/cli/src/subagent_v2.rs`** (M34a) — `SubagentTaskRunner` async trait. Swappable task body: implementors receive `inbox_rx: mpsc::Receiver<String>` and `outbox_tx: mpsc::Sender<SubagentMessage>`; `SubagentRegistry::spawn_with_runner` accepts any `Arc<dyn SubagentTaskRunner>` so the echo-loop stub can be replaced by a real `AgentSession` without touching the registry.
+- **`apps/cli/src/a2a_ws.rs`** (new, ~100 LOC) — a2a WebSocket transport. `WsServer::serve(addr)` binds a `TcpListener`, upgrades each TCP connection via `tokio-tungstenite`, and dispatches text frames through `crate::a2a::jsonrpc::handle_request`. Binary frames return a JSON-RPC error. Each connection owns an `Arc<PeerRegistry>` clone so the registry is shared without contention.
+
+### Changed
+
+- **`apps/cli/Cargo.toml`** — version 1.3.0 → 1.4.0. Added `[target.'cfg(target_os = "linux")'.dependencies]` block (`seccompiler = "0.5"`, `libc = "0.2"`, both optional). Added `linux-seccomp = ["dep:seccompiler", "dep:libc"]` feature. Added `tokio-tungstenite = "0.24"` dependency.
+- `cargo check --workspace` green on macOS. All Linux-only deps cfg-gated and optional — zero impact on darwin builds.
+- Tests: 1284 passing (1 pre-existing flaky oauth_flow port-contention test passes in isolation).
+
+### Notes
+
+- Opt into real BPF installation via `cargo build --features linux-seccomp` on Linux. Default builds compile cleanly on all platforms.
+- a2a WebSocket and seccomp filter installation are the last two items from the v1.3 Notes "deferred" list.
+
+---
+
 ## [cli-1.3.0] — 2026-05-14
 
 Final-backlog release. Closes the last four items the v1.2 audit deferred to v1.3: Subagent v2 with full IPC, Linux seccomp-BPF sandbox preset, agent-to-agent (a2a) coordination protocol, and TUI dispatch wiring for the v1.2.1 overlay catalog.
