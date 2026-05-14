@@ -428,6 +428,26 @@ function injectStyles(): void {
     .sp-cmd-chip { display: inline-block; padding: 4px 10px; font-size: 11px; font-family: 'SF Mono', Monaco, monospace; background: #1e293b; color: #a5b4fc; border-radius: 12px; cursor: pointer; transition: background 0.15s; border: 1px solid #334155; }
     .sp-cmd-chip:hover { background: #334155; color: #c7d2fe; }
 
+    /* ── Blocked / restricted-site state ── */
+    #sp-blocked {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      text-align: center;
+      padding: 32px 20px;
+    }
+    #sp-blocked.visible { display: flex; }
+    #sp-blocked-shield {
+      width: 48px;
+      height: 48px;
+      opacity: 0.35;
+    }
+    #sp-blocked-title { font-size: 14px; font-weight: 600; color: #94a3b8; }
+    #sp-blocked-desc { font-size: 11px; color: #475569; line-height: 1.55; max-width: 200px; }
+
     /* ── Message bubbles ── */
     .sp-msg {
       display: flex;
@@ -2049,6 +2069,53 @@ function autoResizeInput(ta: HTMLTextAreaElement): void {
 }
 
 /**
+ * Returns true for URLs where content scripts cannot run and page context is
+ * unavailable: browser internal pages, extension pages, data: URIs, etc.
+ */
+function isRestrictedUrl(url: string): boolean {
+  if (!url) return false;
+  const RESTRICTED = ['chrome://', 'chrome-extension://', 'edge://', 'about:', 'data:', 'file:///'];
+  return RESTRICTED.some((prefix) => url.startsWith(prefix));
+}
+
+/**
+ * Toggles the blocked-site overlay.  When blocked the composer is disabled so
+ * the user can see that AGI cannot access the page content.
+ */
+function setBlockedState(blocked: boolean): void {
+  const blockedEl = document.getElementById('sp-blocked');
+  const emptyEl = document.getElementById('sp-empty');
+  const msgsEl = document.getElementById('sp-messages');
+  const inputEl = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+  const sendBtnEl = document.getElementById('sp-send-btn') as HTMLButtonElement | null;
+  const composerBar = document.getElementById('sp-composer-bar');
+
+  if (!blockedEl) return;
+
+  if (blocked) {
+    blockedEl.classList.add('visible');
+    if (emptyEl) emptyEl.style.display = 'none';
+    if (msgsEl) {
+      msgsEl.querySelectorAll('.sp-msg, .sp-thinking-wrap').forEach((n) => n.remove());
+    }
+    if (inputEl) {
+      inputEl.disabled = true;
+      inputEl.placeholder = "Can't access this page";
+    }
+    if (sendBtnEl) sendBtnEl.disabled = true;
+    if (composerBar) composerBar.style.opacity = '0.4';
+  } else {
+    blockedEl.classList.remove('visible');
+    if (inputEl) {
+      inputEl.disabled = false;
+      inputEl.placeholder = 'Ask anything... (/ for commands)';
+    }
+    if (sendBtnEl) sendBtnEl.disabled = false;
+    if (composerBar) composerBar.style.opacity = '';
+  }
+}
+
+/**
  * Queries the active tab URL and updates the persistent context chip label.
  * Safe to call multiple times; falls back gracefully when tab API is unavailable.
  */
@@ -2062,6 +2129,7 @@ function refreshPageHostname(): void {
       } catch {
         currentPageHostname = '';
       }
+      setBlockedState(isRestrictedUrl(url));
       updateContextButton();
     });
   } catch {
@@ -2518,6 +2586,19 @@ function buildUI(): void {
     </div>
   `;
   msgsArea.appendChild(emptyState);
+
+  const blockedState = el('div', { id: 'sp-blocked' });
+  blockedState.innerHTML = `
+    <svg id="sp-blocked-shield" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C16.5 22.15 20 17.25 20 12V6l-8-4z" stroke="#94a3b8" stroke-width="1.5" stroke-linejoin="round"/>
+      <line x1="12" y1="8" x2="12" y2="13" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="12" cy="16" r="0.75" fill="#94a3b8"/>
+    </svg>
+    <div id="sp-blocked-title">Can't access this page</div>
+    <div id="sp-blocked-desc">AGI Workforce cannot assist with the content on this page.</div>
+  `;
+  msgsArea.appendChild(blockedState);
+
   chatPanel.appendChild(msgsArea);
   document.body.appendChild(chatPanel);
 
