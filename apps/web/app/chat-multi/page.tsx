@@ -61,14 +61,23 @@ export default function MultiProviderChatPage(): ReactElement {
   });
   const [busy, setBusy] = useState(false);
 
-  const supabase = useMemo(() => {
+  const supabaseResult = useMemo(() => {
     try {
-      return createClient();
+      return { client: createClient(), error: null as string | null };
     } catch (err) {
-      setAuthError(err instanceof Error ? err.message : 'Supabase client unavailable');
-      return null;
+      return {
+        client: null,
+        error: err instanceof Error ? err.message : 'Supabase client unavailable',
+      };
     }
   }, []);
+  const supabase = supabaseResult.client;
+
+  useEffect(() => {
+    if (supabaseResult.error) {
+      setAuthError(supabaseResult.error);
+    }
+  }, [supabaseResult.error]);
 
   useEffect(() => {
     if (!supabase) return;
