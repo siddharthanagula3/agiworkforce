@@ -442,7 +442,10 @@ mod file_delete_tests {
     fn test_file_delete_symlink_handling() {
         let temp = TempDir::new().expect("Failed to create temp directory");
         let target_path = temp.path().join("symlink_target.txt");
-        let link_path = temp.path().join("symlink_link.txt");
+        // Only consumed inside the #[cfg(unix)] block below; underscored on Windows.
+        let _link_path = temp.path().join("symlink_link.txt");
+        #[cfg(unix)]
+        let link_path = _link_path.clone();
 
         // Create target file
         fs::write(&target_path, "target content").expect("Failed to write target file");
@@ -1037,7 +1040,10 @@ mod path_security_tests {
     fn test_symlink_resolution() {
         let temp = TempDir::new().expect("Failed to create temp directory");
         let target = temp.path().join("target.txt");
-        let link = temp.path().join("link.txt");
+        // Only consumed inside the #[cfg(unix)] block below; underscored on Windows.
+        let _link = temp.path().join("link.txt");
+        #[cfg(unix)]
+        let link = _link.clone();
 
         fs::write(&target, "target content").expect("Failed to write target");
 
