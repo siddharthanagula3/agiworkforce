@@ -16,6 +16,45 @@
 
 ---
 
+## v1.4.0 — RELEASED (2026-05-14)
+
+Security + protocol hardening release. Closes three v1.3 deferred items:
+
+1. **M34a** — `SubagentTaskRunner` trait abstraction (subagent task body is now swappable)
+2. **M38a** — real seccomp-BPF filter installation via `seccompiler` crate (gated behind `linux-seccomp` feature)
+3. **a2a WebSocket transport** — persistent streaming JSON-RPC over WS for cross-process agent coordination
+
+### Wave — `agi-cli-v1-4-0` team (3 teammates, all green)
+
+- **subagent-runner-engineer** → reworked `apps/cli/src/subagent_v2.rs` to introduce `SubagentTaskRunner` async trait with `run(id, model, inbox_rx, outbox_tx)` signature. Default `EchoRunner` preserves existing 6 tests' echo format. Added `MockRunner` with scripted_responses for deterministic test injection. `SubagentSpec::new(model)` convenience constructor; `runner` field is public so callers can swap. Registry `spawn` uses `tokio::select!` over `kill_rx` and `runner.run(...)`. **10 tests green** (6 existing + 4 new).
+- **seccomp-install-engineer** → added Linux-only optional deps in `apps/cli/Cargo.toml` (`seccompiler 0.5`, `libc 0.2`, both `optional = true`); new feature `linux-seccomp`. Extended `apps/cli/src/policy/linux_sandbox.rs` with `compile_bpf(opts)`, `install_filter(opts)` (calls `prctl(PR_SET_NO_NEW_PRIVS)` + `seccompiler::apply_filter`), `target_arch()`, `syscall_number_for()`. Feature-off stub returns Ok so call sites compile both ways. `cargo check -p agiworkforce-cli` on macOS PASS.
+- **a2a-ws-engineer** → new `apps/cli/src/a2a_ws.rs` (~100 LOC) — `WsServer::serve(addr)` binds a TcpListener, upgrades via `tokio-tungstenite::accept_async`, dispatches text frames through `a2a::jsonrpc::handle_request`. Binary frames return JSON-RPC error -32700. Pure `process_text_frame` helper for testing. **5 tests green** (4 process_text_frame + 1 construction smoke).
+
+### Files added
+
+- create `apps/cli/src/a2a_ws.rs` (5.6KB)
+- edit `apps/cli/src/subagent_v2.rs` — runner trait, EchoRunner, MockRunner, 4 new tests (+147 / -42)
+- edit `apps/cli/src/policy/linux_sandbox.rs` — `compile_bpf`, `install_filter`, helpers (+98 / -0)
+- edit `apps/cli/src/main.rs` — `mod a2a_ws;`
+- edit `apps/cli/Cargo.toml` — version 1.3.0 → 1.4.0, Linux deps block, `linux-seccomp` feature, `tokio-tungstenite = "0.24"`
+- edit `CHANGELOG.md` — `[cli-1.4.0]` entry
+
+### Tests run
+
+- `cargo check -p agiworkforce-cli` — Finished in 0.40s, green
+- `cargo test -p agiworkforce-cli subagent_v2` — 10 passed
+- `cargo test -p agiworkforce-cli a2a_ws` — 5 passed
+- `cargo test -p agiworkforce-cli` — **1285 passed, 0 failed, 0 ignored** (+9 from v1.3.0 baseline of 1276)
+
+### Backlog still open (v1.5+ candidates — non-shipping infrastructure)
+
+- Production wiring of subagent_v2 with `agent::run_turn` (trait abstraction is shipped; the bridge is one impl)
+- Plugin marketplace registry (needs hosted infra)
+- Real OAuth credentials for known providers (operations step, not code)
+- WebSocket E2E test against a live tokio-tungstenite client (pure-function tests cover handler logic; the live-bind path is exercised manually)
+
+---
+
 ## v1.3.0 — RELEASED (2026-05-14)
 
 Final-backlog release. Closes the four items v1.2 audit deferred to v1.3: M34 (Subagent v2 IPC), M38 (Linux seccomp-BPF), a2a multi-agent coordination protocol, and TUI dispatch arms for the v1.2.1 overlay catalog.
