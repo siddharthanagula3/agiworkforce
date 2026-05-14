@@ -901,37 +901,17 @@ async fn handle_get_task(state: &A2aState, task_id: &str) -> String {
 }
 
 /// POST /a2a/handoff -- receive a conversation handoff.
-async fn handle_post_handoff(state: &A2aState, body: &str) -> String {
-    let handoff: HandoffRequest = match serde_json::from_str(body) {
-        Ok(h) => h,
-        Err(e) => {
-            return http_json_response(
-                400,
-                &serde_json::json!({"error": format!("invalid handoff: {}", e)}).to_string(),
-            );
-        }
-    };
-
-    eprintln!(
-        "  {} Received conversation handoff from {} ({} messages)",
-        "[a2a]".cyan().bold(),
-        handoff.from_agent,
-        handoff.messages.len()
-    );
-
-    if let Some(ref instructions) = handoff.instructions {
-        eprintln!("  {} Instructions: {}", "[a2a]".dimmed(), instructions);
-    }
-
-    // Accept the handoff -- in a real implementation this would inject messages
-    // into an active session. For now, acknowledge receipt.
-    let _ = state.config.clone(); // reserved for future session injection
+async fn handle_post_handoff(_state: &A2aState, body: &str) -> String {
+    let messages_received = serde_json::from_str::<HandoffRequest>(body)
+        .map(|h| h.messages.len())
+        .unwrap_or(0);
 
     http_json_response(
-        200,
+        501,
         &serde_json::json!({
-            "status": "accepted",
-            "messages_received": handoff.messages.len()
+            "error": "handoff not yet implemented",
+            "status": "not-implemented",
+            "messages_received": messages_received
         })
         .to_string(),
     )
@@ -1004,6 +984,7 @@ fn http_response(status: u16, body: &str) -> String {
         409 => "Conflict",
         413 => "Content Too Large",
         500 => "Internal Server Error",
+        501 => "Not Implemented",
         _ => "Unknown",
     };
 
