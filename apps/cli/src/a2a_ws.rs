@@ -71,8 +71,10 @@ async fn handle_ws_connection(
         if let Some(expected) = auth_token.as_deref() {
             let provided = req.headers().get("Authorization")
                 .and_then(|v| v.to_str().ok())
-                .and_then(|s| s.strip_prefix("Bearer "));
-            if provided != Some(expected) {
+                .and_then(|s| s.strip_prefix("Bearer "))
+                .unwrap_or("");
+            // Use constant-time comparison to prevent timing-based token extraction.
+            if !crate::a2a::constant_time_eq_str(provided, expected) {
                 let mut err = ErrorResponse::new(Some("invalid bearer token".into()));
                 *err.status_mut() = StatusCode::UNAUTHORIZED;
                 return Err(err);
