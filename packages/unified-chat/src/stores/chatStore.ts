@@ -14,12 +14,15 @@ const noopStorage: Storage = {
   key: () => null,
 };
 
-export type ActiveMode = 'code' | 'write' | 'research' | 'web' | 'skills' | null;
+export type ActiveMode = 'code' | 'write' | 'learn' | 'life' | 'research' | 'web' | 'skills' | null;
 
 const MODE_SYSTEM_PROMPTS: Record<NonNullable<ActiveMode>, string> = {
   code: 'You are an expert coding assistant. Help the user write, debug, and explain code.',
   write:
     'You are a professional writing assistant. Help with drafting, editing, and improving text.',
+  learn:
+    'You are a knowledgeable tutor. Explain concepts clearly, use examples, and check for understanding.',
+  life: 'You are a helpful life assistant. Help with personal tasks, planning, advice, and everyday decisions.',
   research:
     'You are a research assistant. Provide thorough, well-sourced analysis. Use web search when available.',
   web: 'You are a research assistant. Provide thorough, well-sourced analysis. Use web search when available.',

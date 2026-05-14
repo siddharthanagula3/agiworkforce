@@ -1,8 +1,8 @@
-import { Code2, PenLine, BookOpen, Globe, Sparkles } from 'lucide-react';
+import { Code2, PenLine, GraduationCap, Coffee } from 'lucide-react';
 import { useChatStore } from '../stores/chatStore';
 import type { ActiveMode } from '../stores/chatStore';
 
-export type ChipType = ActiveMode & string;
+export type ChipType = NonNullable<ActiveMode>;
 
 interface QuickChipsProps {
   onChipClick: (chip: NonNullable<ActiveMode>) => void;
@@ -11,9 +11,8 @@ interface QuickChipsProps {
 const chips: { type: NonNullable<ActiveMode>; label: string; icon: React.ReactNode }[] = [
   { type: 'code', label: 'Code', icon: <Code2 size={13} /> },
   { type: 'write', label: 'Write', icon: <PenLine size={13} /> },
-  { type: 'research', label: 'Research', icon: <BookOpen size={13} /> },
-  { type: 'web', label: 'Web Search', icon: <Globe size={13} /> },
-  { type: 'skills', label: 'Skills', icon: <Sparkles size={13} /> },
+  { type: 'learn', label: 'Learn', icon: <GraduationCap size={13} /> },
+  { type: 'life', label: 'Life stuff', icon: <Coffee size={13} /> },
 ];
 
 export function QuickChips({ onChipClick }: QuickChipsProps) {
@@ -21,7 +20,6 @@ export function QuickChips({ onChipClick }: QuickChipsProps) {
   const setActiveMode = useChatStore((s) => s.setActiveMode);
 
   const handleClick = (type: NonNullable<ActiveMode>) => {
-    // Toggle off if already active
     const next = activeMode === type ? null : type;
     setActiveMode(next);
     if (next) onChipClick(next);

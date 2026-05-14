@@ -333,24 +333,17 @@ export function ChatInterface({
 
   const handleChipClick = useCallback(
     (chip: ChipType) => {
-      const prompts: Record<ChipType, string> = {
+      const prompts: Partial<Record<ChipType, string>> = {
         code: 'Help me write code for ',
         write: 'Help me write ',
+        learn: 'Explain this to me: ',
+        life: 'Help me with ',
         research: 'Research this topic in depth: ',
-        skills: '',
         web: 'Search the web for ',
       };
-      if (chip === 'skills') {
-        if (onNavigateView) {
-          onNavigateView('skills');
-        } else {
-          setActiveView('skills');
-        }
-        return;
-      }
       setDraftContent(prompts[chip] ?? '');
     },
-    [setDraftContent, setActiveView, onNavigateView],
+    [setDraftContent],
   );
 
   const handlePlusClick = useCallback(() => {
