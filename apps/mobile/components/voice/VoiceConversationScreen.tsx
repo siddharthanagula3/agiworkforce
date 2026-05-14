@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { View, Pressable, StatusBar } from 'react-native';
+import { View, Pressable, StatusBar, useWindowDimensions } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -14,10 +14,12 @@ import Animated, {
 import { X, MicOff, Mic, Phone } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Defs, RadialGradient, Stop, Rect, Circle } from 'react-native-svg';
 import { Text } from '@/components/ui/text';
 import { Waveform } from './Waveform';
 import { colors } from '@/lib/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useModelStore } from '@/stores/modelStore';
 import * as VoiceService from '@/services/voice';
 import * as TTS from '@/services/tts';
 
@@ -66,6 +68,27 @@ const PHASE_CONFIG: Record<ConversationPhase, { label: string; color: string; su
     },
   };
 
+function GradientBackground() {
+  const { width, height } = useWindowDimensions();
+  return (
+    <Svg
+      width={width}
+      height={height}
+      style={{ position: 'absolute', top: 0, left: 0 }}
+      pointerEvents="none"
+    >
+      <Defs>
+        <RadialGradient id="voiceBg" cx="50%" cy="45%" r="60%" fx="50%" fy="45%">
+          <Stop offset="0%" stopColor="#1a1040" stopOpacity="1" />
+          <Stop offset="40%" stopColor="#0d0d1a" stopOpacity="1" />
+          <Stop offset="100%" stopColor="#050508" stopOpacity="1" />
+        </RadialGradient>
+      </Defs>
+      <Rect width={width} height={height} fill="url(#voiceBg)" />
+    </Svg>
+  );
+}
+
 function CenterOrb({ phase, audioLevel }: { phase: ConversationPhase; audioLevel: number }) {
   const orbScale = useSharedValue(1);
   const orbGlow = useSharedValue(0.2);
@@ -100,7 +123,19 @@ function CenterOrb({ phase, audioLevel }: { phase: ConversationPhase; audioLevel
   const config = PHASE_CONFIG[phase];
 
   return (
-    <View className="items-center justify-center" style={{ width: 200, height: 200 }}>
+    <View className="items-center justify-center" style={{ width: 280, height: 280 }}>
+      {/* Outer thin-stroke ring — matches talk-mode.png reference */}
+      <Svg width={280} height={280} style={{ position: 'absolute' }} pointerEvents="none">
+        <Circle
+          cx={140}
+          cy={140}
+          r={130}
+          stroke="rgba(255,255,255,0.08)"
+          strokeWidth={1}
+          fill="none"
+        />
+      </Svg>
+
       {/* Outer glow */}
       <Animated.View
         style={[
@@ -152,6 +187,7 @@ export function VoiceConversationScreen({
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const selectedVoiceId = useSettingsStore((s) => s.selectedVoiceId);
   const speechRate = useSettingsStore((s) => s.speechRate);
+  const selectedModel = useModelStore((s) => s.selectedModel);
 
   const [phase, setPhase] = useState<ConversationPhase>('idle');
   const [muted, setMuted] = useState(false);
@@ -324,9 +360,12 @@ export function VoiceConversationScreen({
       entering={SlideInDown.springify().damping(18)}
       exiting={SlideOutDown.springify().damping(18)}
       className="absolute inset-0 z-50"
-      style={{ backgroundColor: colors.background }}
+      style={{ backgroundColor: '#050508' }}
     >
       <StatusBar barStyle="light-content" />
+
+      {/* Radial gradient background — matches talk-mode.png dark purple/blue glow */}
+      <GradientBackground />
 
       {/* Close button */}
       <Pressable
@@ -356,6 +395,11 @@ export function VoiceConversationScreen({
         <Text className="text-lg font-medium mt-6" style={{ color: config.color }}>
           {config.label}
         </Text>
+
+        {/* Active model name — mirrors "Bot: Main" label in talk-mode.png */}
+        <Animated.View entering={FadeIn.duration(400)} className="mt-2 items-center">
+          <Text className="text-white/40 text-xs tracking-wide">{selectedModel.toUpperCase()}</Text>
+        </Animated.View>
 
         {/* Transcript preview */}
         {transcriptPreview ? (
