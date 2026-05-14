@@ -1,3 +1,9 @@
+// This module is #[cfg(all(test, windows))]-gated (see automation/mod.rs); some
+// imports / helpers are only used by individual test cases whose bodies are
+// further-gated by feature flags or DE availability. Allow unused here so the
+// Windows test build doesn't fail on each iteration as test bodies evolve.
+#![allow(unused_imports, dead_code, unused_variables)]
+
 use super::*;
 use crate::automation::input::{KeyboardSimulator, MouseButton, MouseSimulator};
 use crate::automation::screen::{capture_primary_screen, capture_region};
