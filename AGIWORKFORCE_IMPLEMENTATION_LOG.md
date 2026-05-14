@@ -16,6 +16,44 @@
 
 ---
 
+## v1.6.0 — RELEASED (2026-05-14) — FINAL LOOP ITERATION
+
+Closes the last code seam in the subagent_v2 abstraction. The chain is now end-to-end wired:
+
+```
+SubagentRegistry::spawn
+  → SubagentTaskRunner.run
+    → AgentSessionRunner (history-aware)
+      → LlmCaller.call
+        → ProviderLlmCaller
+          → crate::models::stream_completion
+            → reqwest::Client → provider HTTP
+```
+
+### Wave — single-teammate close-out
+
+- **provider-bridge-engineer** → `apps/cli/src/subagent_v2.rs`. Added `ProviderLlmCaller { config, provider, max_tokens }` impl of `LlmCaller`, plus public conversion helpers `turn_to_message(&ConversationTurn) -> crate::models::Message` and `turns_to_messages(&[ConversationTurn])`. Discovered `Message.role: String` (not enum) and `MessageContent::Text(String)` variant; corrected the `StreamCallback` signature template (`Box<dyn FnMut(&str) + Send>`, no Result return). Accumulator uses `Arc<Mutex<String>>` so the FnMut closure can push streamed chunks. 4 new unit tests for the conversion helpers (no network), all green.
+
+### Files added
+
+- edit `apps/cli/src/subagent_v2.rs` — ProviderLlmCaller + helpers + 4 tests (+68 / -0)
+- edit `apps/cli/Cargo.toml` — version 1.5.0 → 1.6.0
+- edit `CHANGELOG.md` — `[cli-1.6.0]` entry
+
+### Tests run
+
+- `cargo check -p agiworkforce-cli` — green
+- `cargo test -p agiworkforce-cli subagent_v2` — 17 passed (13 prior + 4 new)
+- `cargo test -p agiworkforce-cli` — **1297 passed, 0 failed, 0 ignored**
+
+### Loop status: COMPLETE
+
+The v1 architecture is structurally complete. Every item in the original plan plus every audit-driven add has shipped. Remaining gaps (hosted plugin registry, production OAuth, cross-process a2a relay) are operational infrastructure rather than CLI code.
+
+Releases this session: **v1.2.0 → 1.2.1 → 1.3.0 → 1.4.0 → 1.5.0 → 1.6.0**. All committed locally. No pushes (per user directive). Test count trajectory: 1244 → 1276 → 1285 → 1293 → 1297.
+
+---
+
 ## v1.5.0 — RELEASED (2026-05-14)
 
 Final close-out release. Three architectural items the previous releases noted as deferred are now closed.
