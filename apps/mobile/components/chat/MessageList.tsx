@@ -6,6 +6,7 @@ import { Reply } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { MessageBubble } from './MessageBubble';
 import { ChatEmptyState } from './ChatEmptyState';
+import { TypingIndicator } from './TypingIndicator';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/lib/theme';
 import type { ChatMessage } from '@/types/chat';
@@ -98,29 +99,7 @@ export function MessageList({
   const typingFooter = useCallback(() => {
     const lastMsg = messages[messages.length - 1];
     if (!lastMsg?.isStreaming || lastMsg.content.trim()) return null;
-    return (
-      <View
-        style={{
-          paddingHorizontal: 16,
-          paddingVertical: 12,
-          flexDirection: 'row',
-          gap: 4,
-          alignItems: 'center',
-        }}
-      >
-        {[0, 150, 300].map((delay) => (
-          <View
-            key={delay}
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: 4,
-              backgroundColor: 'rgba(45,212,191,0.6)',
-            }}
-          />
-        ))}
-      </View>
-    );
+    return <TypingIndicator />;
   }, [messages]);
 
   if (messages.length === 0) {
