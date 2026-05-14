@@ -2,6 +2,39 @@
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [cli-1.7.0] — 2026-05-14
+
+Honesty-pass release. A deep audit against `~/Desktop/reference/` found six items previously claimed shipped that were actually broken or missing. v1.7.0 closes them.
+
+### Added
+
+- **`apps/cli/src/notebook_edit.rs`** (268 LOC) — Jupyter `.ipynb` cell manipulation. Modes: `insert` / `replace` / `delete` by `cell_id` (preferred) or `index` (fallback). Cell types: code/markdown/raw. Reads + writes the notebook JSON in-place via `serde_json`; assigns new uuids to inserted cells. 7 tests cover insert append, replace-by-id, delete-by-id, delete-by-index, and missing-id error.
+- **`apps/cli/src/powershell_tool.rs`** (163 LOC) — Windows shell execution distinct from generic `run_command`. `safety_check(command)` returns warnings for destructive verbs (`Remove-`, `Stop-`, `Format-`, …), registry paths (`HKLM:`, `HKCU:`), `Invoke-Expression`, and `-ExecutionPolicy Bypass`. `safe_mode = true` (default) blocks rather than executes when warnings fire. Detects `pwsh` / `powershell.exe` / `powershell` on PATH via `which` or `where`. 6 tests cover the safety matrix.
+- **`apps/cli/src/policy/windows_sandbox.rs`** (121 LOC, `#![cfg(target_os = "windows")]`) — AppContainer profile builder matching the macOS Seatbelt + Linux seccomp pattern. `WindowsSandboxPreset { ReadOnly, Contained, Unrestricted }`, `allowed_capabilities()` (internetClient + documentsLibrary for ReadOnly; +picturesLibrary/videosLibrary/musicLibrary/removableStorage for Contained), `describe_filter`, `is_available`. `install_filter` is a no-op stub by default and a feature-gated error path behind the (unwired) `windows-appcontainer` feature — real `CreateAppContainerProfile` integration is v1.8 work. 6 tests (Windows-gated).
+- **8 missing slash dispatch arms** in `apps/cli/src/tui/tui_app.rs`: `/focus`, `/background` (`/bg`), `/advisor`, `/team-onboarding` (`/onboarding`), `/terminal-setup` (`/shell-setup`), `/reload-plugins`, `/extra-usage` (`/pricing`), `/remote-env`. These were registered in `crates/agiworkforce-command-registry/src/lib.rs` since v1.2 but their dispatch arms had been omitted — the v1.2 implementation log overstated the work. `/reload-plugins` calls `PluginsManager::new().load_all(None)`; `/team-onboarding` reads `~/.claude/team-onboarding.md`; `/remote-env` dumps 5 proxy/base-URL env vars.
+
+### Changed
+
+- CLI version 1.6.0 → 1.7.0.
+- Tool catalog: 41 → **43** (added `notebook_edit`, `powershell`). `test_build_tool_definitions_count` updated with citation.
+- Tests: 1297 → **1310** (+13: 7 notebook_edit + 6 powershell_tool; Windows sandbox tests are cfg-gated to Windows).
+
+### Notes (honest)
+
+- `/voice` was kept as a help-text slash arm because `crate::voice::run_voice_mode` is async and requires `session` + `config` + `voice_lang` args that aren't reachable from the sync slash dispatcher. Actual voice capture works via `agiworkforce --no-tui --voice-lang en` (the REPL path). The slash arm now points users at that command, which is more honest than the v1.2 stub.
+- `HookEvent::TeammateIdle` doesn't exist in the enum yet, so `/background` doesn't fire a hook — it just acknowledges. Wire-up of that hook event was claimed but not delivered in v1.2; we leave the message-only arm rather than introduce a half-implementation.
+- `windows_sandbox::install_filter` is a stub (returns `Ok(())`); the real AppContainer integration is left to v1.8 + a `windows-appcontainer` Cargo feature once a Windows CI runner is available.
+
+### Items intentionally deferred (audit-confirmed; not v1.x scope)
+
+- **rollout-trace + analytics crates** (codex-rs 3K+ LOC) — deep session-replay/compaction infrastructure. Out of scope without a hosted indexer.
+- **Theme bundling** (Gemini's 14+ themes + `.tmTheme` loader) — our ratatui color model is simpler; can be expanded but is provider-specific polish.
+- **Gemini Live streaming voice** — provider-specific (Gemini-only) WebSocket model. Whisper batch already covers the cross-provider voice surface.
+- **Skill auto-extraction** (Gemini's `skill-extraction-agent.ts`) — by-design absent in Claude Code too; not a parity gap.
+- **MCP sampling API** (`sampling/createMessage`) — Claude Code's MCP implementation also omits this; defensible.
+
+---
+
 ## [cli-1.6.0] — 2026-05-14
 
 Final loop release. Closes the last code seam: bridges `LlmCaller` to the real provider HTTP stream. The chain `SubagentRegistry::spawn → SubagentTaskRunner → AgentSessionRunner → LlmCaller → ProviderLlmCaller → stream_completion → provider HTTP` is now end-to-end wired.

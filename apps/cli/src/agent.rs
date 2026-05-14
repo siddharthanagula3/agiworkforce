@@ -2360,7 +2360,8 @@ mod tests {
         //   Cron (3):  cron_create, cron_delete, cron_list
         // M24 (v1.2 wave 1): +1 advisor tool = 32.
         // M36 follow-up: +3 LSP tools (lsp_completion, lsp_document_symbols, lsp_format) = 41.
-        assert_eq!(defs.len(), 41);
+        // v1.7.0: +2 tools (notebook_edit, powershell) = 43.
+        assert_eq!(defs.len(), 43);
     }
 
     #[test]

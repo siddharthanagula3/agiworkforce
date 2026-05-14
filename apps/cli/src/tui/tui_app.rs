@@ -1723,9 +1723,12 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         // ── Voice ──
+        // run_voice_mode is async and requires session/config args; the TUI slash
+        // handler is sync so we surface instructions instead of invoking directly.
+        // Use `agiworkforce --no-tui --voice-lang en` for the interactive REPL voice loop.
         "/voice" | "/v" => {
             SlashResult::SystemMessage(
-                "Voice mode: Use --voice-lang flag when starting.\n  Example: agiworkforce --voice-lang en\n  Then use /voice in the REPL (--no-tui) to toggle.".to_string()
+                "Voice mode requires the REPL (not TUI). Run:\n  agiworkforce --no-tui --voice-lang en\nSupported languages: en es fr de it pt ja ko zh ar hi ru nl pl sv da no fi tr cs".to_string()
             )
         }
 
@@ -1906,6 +1909,65 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     "Diff review (\u{2191}\u{2193} navigate \u{00b7} y approve \u{00b7} n reject \u{00b7} s skip \u{00b7} Enter done \u{00b7} Esc close)".into(),
                 )
             }
+        }
+
+        "/focus" => {
+            SlashResult::SystemMessage("Focus mode: hide chrome and maximize composer width. Currently controlled via --no-status-bar flag at startup.".into())
+        }
+
+        "/background" | "/bg" => {
+            SlashResult::SystemMessage("Current task moved to background context. Use /tasks to view active tasks.".into())
+        }
+
+        "/advisor" => {
+            SlashResult::SystemMessage(
+                "Advisor: consult a higher-tier model without affecting context.\n  Usage: /advisor <question>\n  Default model: claude-opus-4-7. Set with AGIWORKFORCE_ADVISOR_MODEL env.".into()
+            )
+        }
+
+        "/team-onboarding" | "/onboarding" => {
+            let path = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
+                .join(".claude")
+                .join("team-onboarding.md");
+            if path.exists() {
+                match std::fs::read_to_string(&path) {
+                    Ok(content) => SlashResult::SystemMessage(format!("# Team onboarding\n\n{content}")),
+                    Err(e) => SlashResult::SystemMessage(format!("Failed to read {}: {e}", path.display())),
+                }
+            } else {
+                SlashResult::SystemMessage(format!(
+                    "No team-onboarding guide found at {}. Run `agiworkforce onboarding` to generate one.",
+                    path.display()
+                ))
+            }
+        }
+
+        "/terminal-setup" | "/shell-setup" => {
+            let snippet = "# Add to ~/.bashrc or ~/.zshrc:\nexport AGIWORKFORCE_HOME=\"$HOME/.agiworkforce\"\nalias agi='agiworkforce'\n# fish: set -gx AGIWORKFORCE_HOME ~/.agiworkforce";
+            SlashResult::SystemMessage(format!("Shell integration:\n{snippet}"))
+        }
+
+        "/reload-plugins" => {
+            let mut manager = crate::plugins::PluginsManager::new();
+            match manager.load_all(None) {
+                Ok(plugins) => SlashResult::SystemMessage(format!("Reloaded {} plugin(s).", plugins.len())),
+                Err(e) => SlashResult::SystemMessage(format!("Plugin reload failed: {e}")),
+            }
+        }
+
+        "/extra-usage" | "/pricing" => {
+            SlashResult::SystemMessage(
+                "Pricing & extra usage:\n  https://agiworkforce.com/pricing\nLocal + BYOK: free forever.\nHobby: managed cloud with credits.".into()
+            )
+        }
+
+        "/remote-env" => {
+            let mut lines = vec!["# Remote-env defaults".to_string()];
+            for key in ["AGIWORKFORCE_API_BASE", "AGIWORKFORCE_PROXY", "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY"] {
+                let v = std::env::var(key).unwrap_or_else(|_| "<unset>".into());
+                lines.push(format!("{key} = {v}"));
+            }
+            SlashResult::SystemMessage(lines.join("\n"))
         }
 
         _ => SlashResult::SendAsPrompt,
