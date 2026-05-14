@@ -365,19 +365,6 @@ jobs:
           cache-on-failure: true
           key: windows-smoke
 
-      # rusqlite ships with `bundled-sqlcipher` (apps/desktop/src-tauri/Cargo.toml:71)
-      # which requires OpenSSL at build time on Windows. The default Windows runner
-      # image has vcpkg available but not OpenSSL installed; without OPENSSL_DIR the
-      # libsqlite3-sys build.rs panics. Install via vcpkg (already pre-cached on the
-      # runner) and export OPENSSL_DIR for the subsequent cargo steps.
-      - name: Install OpenSSL (Windows, for bundled-sqlcipher)
-        shell: pwsh
-        run: |
-          vcpkg install openssl:x64-windows-static-md
-          $OpenSslDir = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows-static-md"
-          echo "OPENSSL_DIR=$OpenSslDir" >> $env:GITHUB_ENV
-          echo "OPENSSL_NO_VENDOR=1" >> $env:GITHUB_ENV
-
       - name: cargo check (default features, Windows)
         working-directory: apps/desktop/src-tauri
         run: cargo check --workspace

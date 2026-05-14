@@ -7,7 +7,8 @@
 # Chrome extension, VS Code extension, Express API gateway.
 
 # Model selection
-model = "o4-mini"
+model = "gpt-5.5"
+model_reasoning_effort = "medium"
 
 # History - persistent instructions applied to every session
 [history]
@@ -47,6 +48,11 @@ args = ["-y", "@modelcontextprotocol/server-sequential-thinking"]
 [mcp_servers.sequential-thinking.tools.sequentialthinking]
 approval_mode = "approve"
 
-[mcp_servers.supabase]
-command = "npx"
-args = ["-y", "supabase-mcp-server@latest", "--read-only"]
+# Supabase MCP server is disabled — `supabase-mcp-server@latest` is not
+# published on npm (404). The hosted URL transport at https://mcp.supabase.com/mcp
+# requires OAuth and Codex doesn't yet support it as a stdio target. Re-enable
+# when either (a) a real stdio package ships on npm, or (b) Codex adds
+# transport support for URL-based MCP servers with OAuth.
+# [mcp_servers.supabase]
+# command = "npx"
+# args = ["-y", "supabase-mcp-server@latest", "--read-only"]
