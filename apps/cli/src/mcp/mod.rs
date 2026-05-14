@@ -31,6 +31,7 @@ mod oauth_store;
 mod sse;
 pub mod resources;
 pub mod status;
+pub mod tui_handler;
 
 use http::{connect_http, send_request_http};
 use sse::connect_sse;

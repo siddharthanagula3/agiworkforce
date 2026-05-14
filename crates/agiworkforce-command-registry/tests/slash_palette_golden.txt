@@ -1,0 +1,58 @@
+/model [m]
+/plan
+/fast
+/compact
+/clear
+/review
+/diff
+/copy
+/init
+/new
+/resume [sessions]
+/fork [branch]
+/rename
+/save
+/history
+/export
+/rewind
+/mcp
+/skills
+/agents
+/permissions [perms, approvals]
+/hooks
+/chrome
+/ide
+/plugin [plugins, marketplace, market]
+/tasks
+/status
+/cost
+/usage
+/sandbox
+/doctor [diagnose, health]
+/recap
+/release-notes [changelog]
+/keybindings [keys]
+/output-style
+/fallback
+/replay
+/insights
+/context [ctx]
+/config
+/models [providers]
+/memory [mem]
+/btw
+/voice [v]
+/theme
+/login
+/logout
+/feedback [bug]
+/help [h, ?]
+/exit [quit, q]
+/focus
+/background [bg]
+/advisor
+/team-onboarding [onboarding]
+/terminal-setup [shell-setup]
+/reload-plugins
+/extra-usage [pricing]
+/remote-env

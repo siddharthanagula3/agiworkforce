@@ -1,0 +1,18 @@
+[package]
+name = "agiworkforce-apply-patch"
+version = "0.1.0"
+edition = "2021"
+license = "Proprietary"
+
+[lib]
+name = "agiworkforce_apply_patch"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2.0.17"
+
+[dev-dependencies]
+tempfile = "3"
