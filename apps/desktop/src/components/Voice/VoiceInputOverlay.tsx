@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CheckCheck, Loader2, Mic, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
-import { useVoiceInputStore } from '../../stores/voiceInputStore';
+import { useVoiceInputStore } from '../../stores/settingsStore';
 import { cn } from '../../lib/utils';
 
 /** How long (ms) the preview is shown before auto-inserting into the composer */
@@ -34,8 +34,8 @@ const isPermissionError = (err: unknown): boolean => {
 };
 
 export function VoiceInputOverlay() {
-  const mode = useVoiceInputStore((s) => s.mode);
-  const error = useVoiceInputStore((s) => s.error);
+  const mode = useVoiceInputStore((s) => s.voiceMode);
+  const error = useVoiceInputStore((s) => s.voiceError);
   const postProcessingMode = useVoiceInputStore((s) => s.postProcessingMode);
   const pendingTranscript = useVoiceInputStore((s) => s.pendingTranscript);
   const confirmTranscript = useVoiceInputStore((s) => s.confirmTranscript);

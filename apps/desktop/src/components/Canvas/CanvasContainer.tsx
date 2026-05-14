@@ -8,7 +8,7 @@
 
 import { Code2, X } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
-import { useCanvasStore } from '../../stores/canvasStore';
+import { useCanvasStore } from '../../stores/editingStore';
 import { ArtifactList } from './ArtifactList';
 import { CanvasPanel } from './CanvasPanel';
 
