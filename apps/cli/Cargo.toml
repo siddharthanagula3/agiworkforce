@@ -1,6 +1,6 @@
 [package]
 name = "agiworkforce-cli"
-version = "1.5.0"
+version = "1.6.0"
 edition = "2021"
 authors = ["AGI Automation LLC"]
 description = "Multi-provider agentic CLI — 10+ providers (Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, Ollama, LM Studio, plus user-defined OpenAI-compatible) in one terminal"

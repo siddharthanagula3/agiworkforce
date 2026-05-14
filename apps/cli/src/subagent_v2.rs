@@ -361,6 +361,71 @@ impl SubagentRegistry {
     }
 }
 
+/// Production LlmCaller that wraps `crate::models::stream_completion`. Use
+/// this in production subagent spawning to actually hit a provider's API.
+///
+/// This is the v1.6 close-out of the subagent_v2 abstraction: the chain
+/// `SubagentRegistry::spawn → SubagentTaskRunner → AgentSessionRunner →
+/// LlmCaller → ProviderLlmCaller → stream_completion → provider HTTP` is
+/// fully wired.
+pub struct ProviderLlmCaller {
+    pub config: crate::config::CliConfig,
+    pub provider: crate::models::Provider,
+    pub max_tokens: u32,
+}
+
+impl ProviderLlmCaller {
+    pub fn new(config: crate::config::CliConfig, provider: crate::models::Provider) -> Self {
+        Self { config, provider, max_tokens: 4096 }
+    }
+}
+
+/// Map a `ConversationTurn` from the subagent_v2 surface into a
+/// `crate::models::Message`. Exposed at module level so tests can verify
+/// the conversion without spinning up an LLM call.
+pub fn turn_to_message(turn: &ConversationTurn) -> crate::models::Message {
+    let role = match turn.role {
+        TurnRole::System => "system",
+        TurnRole::User => "user",
+        TurnRole::Assistant => "assistant",
+    };
+    crate::models::Message {
+        role: role.into(),
+        content: crate::models::MessageContent::Text(turn.content.clone()),
+    }
+}
+
+pub fn turns_to_messages(turns: &[ConversationTurn]) -> Vec<crate::models::Message> {
+    turns.iter().map(turn_to_message).collect()
+}
+
+#[async_trait]
+impl LlmCaller for ProviderLlmCaller {
+    async fn call(&self, model: &str, history: Vec<ConversationTurn>) -> Result<String> {
+        use std::sync::{Arc as StdArc, Mutex as StdMutex};
+        let messages = turns_to_messages(&history);
+        let accumulator: StdArc<StdMutex<String>> = StdArc::new(StdMutex::new(String::new()));
+        let acc_for_cb = accumulator.clone();
+        let on_chunk: crate::models::StreamCallback = Box::new(move |chunk: &str| {
+            if let Ok(mut s) = acc_for_cb.lock() {
+                s.push_str(chunk);
+            }
+        });
+        let _result = crate::models::stream_completion(
+            &self.config,
+            &self.provider,
+            model,
+            &messages,
+            self.max_tokens,
+            None,
+            on_chunk,
+        )
+        .await?;
+        let text = accumulator.lock().map(|s| s.clone()).unwrap_or_default();
+        Ok(text)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -520,6 +585,41 @@ mod tests {
         let msg = handle.recv_message().await.unwrap();
         assert_eq!(msg.kind, MessageKind::Error);
         assert!(msg.body.contains("rate limit"));
+    }
+
+    #[test]
+    fn turn_to_message_user_maps_to_user_role() {
+        let t = ConversationTurn { role: TurnRole::User, content: "hi".into() };
+        let m = turn_to_message(&t);
+        assert_eq!(m.role, "user");
+    }
+
+    #[test]
+    fn turn_to_message_system_maps_to_system_role() {
+        let t = ConversationTurn { role: TurnRole::System, content: "rules".into() };
+        let m = turn_to_message(&t);
+        assert_eq!(m.role, "system");
+    }
+
+    #[test]
+    fn turn_to_message_assistant_maps_to_assistant_role() {
+        let t = ConversationTurn { role: TurnRole::Assistant, content: "ok".into() };
+        let m = turn_to_message(&t);
+        assert_eq!(m.role, "assistant");
+    }
+
+    #[test]
+    fn turns_to_messages_preserves_order_and_count() {
+        let turns = vec![
+            ConversationTurn { role: TurnRole::System, content: "s".into() },
+            ConversationTurn { role: TurnRole::User, content: "u1".into() },
+            ConversationTurn { role: TurnRole::Assistant, content: "a1".into() },
+            ConversationTurn { role: TurnRole::User, content: "u2".into() },
+        ];
+        let msgs = turns_to_messages(&turns);
+        assert_eq!(msgs.len(), 4);
+        assert_eq!(msgs[0].role, "system");
+        assert_eq!(msgs[3].role, "user");
     }
 
     #[tokio::test]
