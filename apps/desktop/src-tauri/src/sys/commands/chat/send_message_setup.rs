@@ -813,8 +813,11 @@ mod tests {
 
     #[test]
     fn auto_detect_works_on_openai_o3_model() {
+        // Uses "o3" (canonical catalog entry with capabilities.thinking=true) rather
+        // than "o3-mini" which is no longer in models.json (deprecated by era 2026-05).
+        // The "think about" trigger phrase produces ThinkingBudget::Low = 10K tokens.
         let thinking = resolve_thinking_parameter(
-            "o3-mini",
+            "o3",
             None,
             None,
             false,
