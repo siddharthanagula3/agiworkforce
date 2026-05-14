@@ -64,7 +64,11 @@ export default function PrivacyPage() {
               </tr>
               <tr>
                 <td>Telemetry</td>
-                <td>Aggregated, anonymous usage counts. No prompt content. Opt-in.</td>
+                <td>
+                  Aggregated, anonymous usage counts via Sentry (error reporting), Google Analytics
+                  and Google Tag Manager (anonymous traffic + funnel analytics, IP-anonymized). No
+                  prompt content. Opt-in.
+                </td>
                 <td>Operational visibility.</td>
               </tr>
               <tr>
@@ -74,6 +78,12 @@ export default function PrivacyPage() {
               </tr>
             </tbody>
           </table>
+          <p className="agi-page-lede" style={{ marginTop: 16, fontSize: 14 }}>
+            <strong>Hosted AI providers we may route requests to (cloud mode, optional):</strong>{' '}
+            Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Moonshot, Groq, Mistral. BYOK mode
+            routes from your client directly to the provider; cloud mode (Hobby tier and above)
+            routes through our gateway. Local mode (Ollama, LM Studio) never contacts any of these.
+          </p>
         </section>
 
         <section className="agi-section">
@@ -169,14 +179,20 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">07 — International transfers</p>
+          <p className="agi-section-eyebrow">07 — International transfers and EU residency</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
-            Data is hosted in the United States (us-east-2) by default. For EU/UK personal data we
-            use Standard Contractual Clauses through our DPA — see{' '}
+            <strong>EU residency status:</strong> AGI Workforce data is hosted in the United States
+            (us-east-2) by default. We do not currently offer European residency for stored data;
+            European customers&rsquo; data is transferred to and processed in the US. For EU/UK
+            personal data we use Standard Contractual Clauses through our DPA — see{' '}
             <Link href="/dpa" style={{ color: 'var(--agi-ink)' }}>
               /dpa
             </Link>
-            .
+            . EU/UK residency hosting is on our roadmap; see{' '}
+            <Link href="/changelog" style={{ color: 'var(--agi-ink)' }}>
+              /changelog
+            </Link>{' '}
+            for updates.
           </p>
         </section>
 

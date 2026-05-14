@@ -125,8 +125,9 @@ vi.mock('@shared/stores/authentication-store', () => ({
   }),
 }));
 
-// Import the component from the support page
-import SupportPage from '../../../app/support/page';
+// The dashboard component is SupportCenter at features/pages/SupportCenter.tsx;
+// app/support/page.tsx is the public marketing route. Tests assert dashboard content.
+import SupportPage from '../../pages/SupportCenter';
 
 const MOCK_FAQS = [
   {
