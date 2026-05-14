@@ -2,6 +2,29 @@
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [cli-1.6.0] — 2026-05-14
+
+Final loop release. Closes the last code seam: bridges `LlmCaller` to the real provider HTTP stream. The chain `SubagentRegistry::spawn → SubagentTaskRunner → AgentSessionRunner → LlmCaller → ProviderLlmCaller → stream_completion → provider HTTP` is now end-to-end wired.
+
+### Added
+
+- **`apps/cli/src/subagent_v2.rs::ProviderLlmCaller`** — production `LlmCaller` impl wrapping `crate::models::stream_completion`. Each `call` converts the `ConversationTurn` history into `Vec<crate::models::Message>`, accumulates streamed chunks via an `Arc<Mutex<String>>` callback, and returns the final text. `ProviderLlmCaller::new(config, provider)` defaults `max_tokens = 4096`.
+- **`turn_to_message` / `turns_to_messages`** — pure conversion helpers, exposed at module level so unit tests can verify the mapping without spinning up an HTTP call. Three role variants (System/User/Assistant) map to the `crate::models::Message.role` string fields verbatim.
+- **4 new unit tests** covering all three role variants + order/count preservation across multi-turn histories.
+
+### Changed
+
+- CLI version 1.5.0 → 1.6.0.
+- Tests: 1293 → **1297** (+4 turn-mapping unit tests).
+- The subagent_v2 abstraction is structurally complete: the trait chain is fully wired, with a swappable mock layer for tests and a production impl that calls the real provider stream.
+
+### Notes
+
+- This is the **final code iteration** of the v1.x architecture. Subsequent improvements (hosted plugin marketplace, production OAuth credentials, cross-process a2a relay) require external infrastructure rather than additional Rust code.
+- `StreamCallback` signature is `Box<dyn FnMut(&str) + Send>` (no Result return); the bridge accumulator pushes into the shared Mutex unconditionally.
+
+---
+
 ## [cli-1.5.0] — 2026-05-14
 
 Final close-out release. Three architectural items the previous releases noted as deferred are now closed:
