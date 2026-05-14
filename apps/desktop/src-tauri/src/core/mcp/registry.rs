@@ -679,7 +679,15 @@ mod tests {
     }
 
     /// Benchmark: compare indexed lookup vs simulated linear scan for hashed IDs.
+    ///
+    /// Marked `#[ignore]` because absolute wall-clock comparisons flake on
+    /// shared CI runners. With only 100 entries and 1000 iters per side the
+    /// dominant cost can shift to allocator noise, rwlock acquisition, or
+    /// process scheduling. Run locally with `cargo test --lib
+    /// test_benchmark_index_vs_linear_scan -- --ignored --nocapture` when
+    /// validating the index path's micro-perf.
     #[test]
+    #[ignore = "timing-sensitive benchmark; run with --ignored for local perf checks"]
     fn test_benchmark_index_vs_linear_scan() {
         let registry = McpToolRegistry::new(Arc::new(McpClient::new()));
 
