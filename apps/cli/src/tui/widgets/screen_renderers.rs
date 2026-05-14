@@ -170,11 +170,13 @@ fn capitalize_first(s: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// /agents — Library + Running tabs (captures 619, 620)
+// /agents — Agents / Running / Library tabs (captures 619, 620)
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentsTab {
+    /// Overview: running count + library summary.
+    Agents,
     Running,
     Library,
 }
@@ -186,31 +188,74 @@ pub struct AgentSummary {
     pub source_label: String,
 }
 
-pub fn render_agents(tab: AgentsTab, agents: &[AgentSummary], project_root: Option<&Path>) -> String {
-    let title_line = match tab {
-        AgentsTab::Running => "Agents   Running   Library  (current: Running)",
-        AgentsTab::Library => "Agents   Running   Library  (current: Library)",
-    }
-    .to_string();
+/// Renders the three-tab strip with `[Active]` bracket notation for the
+/// selected tab, matching Claude Code v2.1.128 captures 619 and 620.
+fn agents_tab_strip(tab: AgentsTab) -> String {
+    let tabs = [
+        ("Agents", AgentsTab::Agents),
+        ("Running", AgentsTab::Running),
+        ("Library", AgentsTab::Library),
+    ];
+    tabs.iter()
+        .map(|(label, t)| {
+            if *t == tab {
+                format!("[{}]", label)
+            } else {
+                label.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("   ")
+}
+
+pub fn render_agents(
+    tab: AgentsTab,
+    agents: &[AgentSummary],
+    running: &[String],
+    project_root: Option<&Path>,
+) -> String {
+    let title_line = agents_tab_strip(tab);
+
+    let project: Vec<&AgentSummary> = agents
+        .iter()
+        .filter(|a| a.source_label.starts_with("project"))
+        .collect();
+    let builtin: Vec<&AgentSummary> = agents
+        .iter()
+        .filter(|a| !a.source_label.starts_with("project"))
+        .collect();
 
     let mut body: Vec<String> = Vec::new();
     match tab {
+        AgentsTab::Agents => {
+            body.push(format!(
+                "  Running subagents:  {}",
+                if running.is_empty() {
+                    "none".to_string()
+                } else {
+                    running.len().to_string()
+                }
+            ));
+            body.push(String::new());
+            body.push(format!("  Project agents:     {}", project.len()));
+            body.push(format!("  Built-in agents:    {}", builtin.len()));
+            body.push(String::new());
+            body.push("  Use ←/→ to switch to Running or Library tabs.".to_string());
+        }
         AgentsTab::Running => {
-            body.push("  No subagents are currently running.".to_string());
+            if running.is_empty() {
+                body.push("  No subagents are currently running.".to_string());
+            } else {
+                body.push(format!("  {} subagent(s) running", running.len()));
+                body.push(String::new());
+                for r in running {
+                    body.push(format!("    • {}", r));
+                }
+            }
         }
         AgentsTab::Library => {
             body.push("    Create new agent".to_string());
             body.push(String::new());
-
-            // Group by source
-            let project: Vec<&AgentSummary> = agents
-                .iter()
-                .filter(|a| a.source_label.starts_with("project"))
-                .collect();
-            let builtin: Vec<&AgentSummary> = agents
-                .iter()
-                .filter(|a| !a.source_label.starts_with("project"))
-                .collect();
 
             let project_label = project_root
                 .map(|p| {
@@ -848,7 +893,7 @@ mod tests {
 
     #[test]
     fn agents_running_tab_shows_empty_state() {
-        let s = render_agents(AgentsTab::Running, &[], None);
+        let s = render_agents(AgentsTab::Running, &[], &[], None);
         assert!(s.contains("Running"));
         assert!(s.contains("Library"));
         assert!(s.contains("No subagents are currently running."));
@@ -872,6 +917,7 @@ mod tests {
         let s = render_agents(
             AgentsTab::Library,
             &agents,
+            &[],
             Some(Path::new("/home/me/project")),
         );
         assert!(s.contains("Project agents (/home/me/project/.agiworkforce/agents)"));
@@ -879,6 +925,57 @@ mod tests {
         assert!(s.contains("Built-in agents (always available)"));
         assert!(s.contains("explorer · haiku"));
         assert!(s.contains("Create new agent"));
+    }
+
+    #[test]
+    fn agents_tab_strip_brackets_active_tab() {
+        let running_strip = agents_tab_strip(AgentsTab::Running);
+        assert!(running_strip.contains("[Running]"));
+        assert!(!running_strip.contains("[Agents]"));
+        assert!(!running_strip.contains("[Library]"));
+
+        let library_strip = agents_tab_strip(AgentsTab::Library);
+        assert!(library_strip.contains("[Library]"));
+        assert!(!library_strip.contains("[Running]"));
+
+        let agents_strip = agents_tab_strip(AgentsTab::Agents);
+        assert!(agents_strip.contains("[Agents]"));
+        assert!(!agents_strip.contains("[Running]"));
+    }
+
+    #[test]
+    fn agents_overview_tab_shows_counts() {
+        let agents = vec![
+            AgentSummary {
+                name: "cli-engineer".into(),
+                model: "sonnet".into(),
+                source_label: "project".into(),
+            },
+            AgentSummary {
+                name: "explore".into(),
+                model: "haiku".into(),
+                source_label: "builtin".into(),
+            },
+            AgentSummary {
+                name: "plan".into(),
+                model: "inherit".into(),
+                source_label: "builtin".into(),
+            },
+        ];
+        let running = vec!["subagent: explore".to_string()];
+        let s = render_agents(AgentsTab::Agents, &agents, &running, None);
+        assert!(s.contains("Running subagents:  1"));
+        assert!(s.contains("Project agents:     1"));
+        assert!(s.contains("Built-in agents:    2"));
+        assert!(s.contains("[Agents]"));
+    }
+
+    #[test]
+    fn agents_overview_tab_zero_state() {
+        let s = render_agents(AgentsTab::Agents, &[], &[], None);
+        assert!(s.contains("Running subagents:  none"));
+        assert!(s.contains("Project agents:     0"));
+        assert!(s.contains("Built-in agents:    0"));
     }
 
     #[test]
@@ -1024,7 +1121,7 @@ mod tests {
         let divider = divider_line();
         assert!(render_mcp_list(&[]).contains(&divider));
         assert!(render_mcp_detail("foo", McpStatus::Disabled, "", &[], "/p").contains(&divider));
-        assert!(render_agents(AgentsTab::Running, &[], None).contains(&divider));
+        assert!(render_agents(AgentsTab::Running, &[], &[], None).contains(&divider));
         assert!(render_skills(&[]).contains(&divider));
         assert!(
             render_permissions(PermissionsTab::Allow, &[], &[], &[], &[]).contains(&divider)
