@@ -83,6 +83,20 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
             }),
         ).with_size_cap(50_000),
         def(
+            "powershell",
+            "Execute a PowerShell command (Windows). Distinct from run_command because of safety checks for destructive verbs, registry paths, and ExecutionPolicy bypass.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "command": {"type": "string", "description": "PowerShell command to run"},
+                    "working_dir": {"type": "string"},
+                    "timeout_sec": {"type": "integer", "default": 30},
+                    "safe_mode": {"type": "boolean", "default": true}
+                },
+                "required": ["command"]
+            }),
+        ).with_size_cap(50_000),
+        def(
             "search_files",
             "Search for a regex pattern across files in a directory (like grep -rn).",
             serde_json::json!({
@@ -533,6 +547,22 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
                 "required": ["file"]
             }),
         ).read_only().deferred(),
+        def(
+            "notebook_edit",
+            "Edit a Jupyter .ipynb cell (insert / replace / delete by id or index).",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path to .ipynb file"},
+                    "mode": {"type": "string", "enum": ["insert", "replace", "delete"]},
+                    "cell_id": {"type": "string"},
+                    "index": {"type": "integer"},
+                    "kind": {"type": "string", "enum": ["code", "markdown", "raw"]},
+                    "content": {"type": "string"}
+                },
+                "required": ["path", "mode"]
+            }),
+        ).with_size_cap(5_000).deferred(),
     ]
 }
 

@@ -132,7 +132,7 @@ dependencies = [
 
 [[package]]
 name = "agiworkforce-cli"
-version = "1.6.0"
+version = "1.7.0"
 dependencies = [
  "agiworkforce-app-server",
  "agiworkforce-apply-patch",
