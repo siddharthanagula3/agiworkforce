@@ -1003,9 +1003,11 @@ mod tests {
         assert_eq!(input[1]["source"]["detail"], "low");
     }
 
-    // M21 — deepseek-reasoner canonicalization test
-    // Verifies that "deepseek-r1" is canonicalized to "deepseek-reasoner" by the
-    // DeepSeek adapter, which delegates to OpenAI format after canonicalization.
+    // M21 — DeepSeek adapter canonicalization test
+    // Verifies that the DeepSeek adapter delegates to models.json canonicalization
+    // (rather than passing the raw model ID through). Concrete target is sourced
+    // from `get_canonicalized_id` at runtime so tests track models.json changes
+    // without re-pinning a hardcoded ID (locked rule: never hardcode model IDs).
     #[test]
     fn test_deepseek_adapter_canonicalizes_r1_to_reasoner() {
         let adapter = ProviderAdapterFactory::create_adapter(Provider::DeepSeek);
@@ -1048,9 +1050,11 @@ mod tests {
         );
 
         let adapted = result.unwrap();
+        let expected = crate::core::llm::models_config::get_canonicalized_id("deepseek-r1");
         assert_eq!(
-            adapted["model"], "deepseek-reasoner",
-            "deepseek-r1 must be canonicalized to deepseek-reasoner"
+            adapted["model"], expected,
+            "deepseek-r1 must be canonicalized via models.json (got {} vs expected {})",
+            adapted["model"], expected
         );
     }
 
@@ -1093,9 +1097,11 @@ mod tests {
         assert!(result.is_ok());
 
         let adapted = result.unwrap();
+        let expected = crate::core::llm::models_config::get_canonicalized_id("deepseek-r1-zero");
         assert_eq!(
-            adapted["model"], "deepseek-reasoner",
-            "deepseek-r1-zero must be canonicalized to deepseek-reasoner"
+            adapted["model"], expected,
+            "deepseek-r1-zero must be canonicalized via models.json (got {} vs expected {})",
+            adapted["model"], expected
         );
     }
 
@@ -1138,9 +1144,11 @@ mod tests {
         assert!(result.is_ok());
 
         let adapted = result.unwrap();
+        let expected = crate::core::llm::models_config::get_canonicalized_id("deepseek-chat");
         assert_eq!(
-            adapted["model"], "deepseek-chat",
-            "Non-R1 model IDs must pass through unchanged"
+            adapted["model"], expected,
+            "deepseek-chat must be resolved via models.json canonicalization (got {} vs expected {})",
+            adapted["model"], expected
         );
     }
 
