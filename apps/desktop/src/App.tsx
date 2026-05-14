@@ -63,7 +63,7 @@ import {
   waitForAuthReady,
   waitForHydration,
 } from './stores/auth';
-import { initializeAuthOrchestrator } from './stores/connectionStore';
+import { initializeAuthOrchestrator } from './stores/authOrchestrator';
 import { initializeModelStoreFromSettings, useModelStore } from './stores/modelStore';
 import useErrorStore, { useSimpleModeStore, selectOnboardingCompleted } from './stores/ui';
 import { useAppModeStore } from './stores/appModeStore';
