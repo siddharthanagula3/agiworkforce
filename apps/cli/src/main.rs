@@ -31,6 +31,7 @@ mod safety;
 mod sessions;
 mod skills;
 mod subagent;
+mod subagent_v2;
 mod teams;
 mod tools;
 mod tui;
