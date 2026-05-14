@@ -1453,7 +1453,7 @@ async fn main() -> Result<()> {
             // --- Marketplace ---
             Command::Marketplace { action } => {
                 let home = config::CliConfig::config_dir()?;
-                let mp = marketplace::Marketplace::new();
+                let mp = marketplace::Marketplace::new_production();
                 match action {
                     MarketplaceSubcommand::Search { query } => {
                         let results = mp.search(query).await?;

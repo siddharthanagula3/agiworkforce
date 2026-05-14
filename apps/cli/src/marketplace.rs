@@ -73,6 +73,8 @@ impl InstalledPlugins {
 // ---------------------------------------------------------------------------
 
 const DEFAULT_REGISTRY_URL: &str = "https://registry.agiworkforce.com/plugins/v1";
+/// Placeholder URL used by `Marketplace::default()` — matches the v1.2.1 spec.
+const MARKETPLACE_PLACEHOLDER_URL: &str = "https://marketplace.agiworkforce.com";
 const CACHE_DIR: &str = "cache";
 
 // ---------------------------------------------------------------------------
@@ -105,28 +107,69 @@ struct RegistryResponse {
     plugins: Vec<MarketplacePlugin>,
 }
 
+/// Top-level registry index document (v1.2.1 format).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarketplaceIndex {
+    pub registry_version: String,
+    pub plugins: Vec<MarketplacePlugin>,
+}
+
 // ---------------------------------------------------------------------------
 // Marketplace client
 // ---------------------------------------------------------------------------
 
 /// Client for the AGI Workforce plugin marketplace.
 pub struct Marketplace {
-    registry_url: String,
+    pub registry_url: String,
+    client: reqwest::Client,
+}
+
+impl Default for Marketplace {
+    fn default() -> Self {
+        Self::new(MARKETPLACE_PLACEHOLDER_URL)
+    }
 }
 
 impl Marketplace {
-    pub fn new() -> Self {
+    /// Create a client targeting `registry_url`.
+    pub fn new(registry_url: impl Into<String>) -> Self {
         Self {
-            registry_url: DEFAULT_REGISTRY_URL.to_string(),
+            registry_url: registry_url.into(),
+            client: reqwest::Client::builder()
+                .user_agent(concat!("agiworkforce-cli/", env!("CARGO_PKG_VERSION")))
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .unwrap_or_default(),
         }
     }
 
-    /// Create a marketplace client with a custom registry URL.
+    /// Create a client pointing at the production registry URL.
+    pub fn new_production() -> Self {
+        Self::new(DEFAULT_REGISTRY_URL)
+    }
+
+    /// Create a marketplace client with a custom registry URL (compat alias).
     #[allow(dead_code)]
     pub fn with_url(url: &str) -> Self {
-        Self {
-            registry_url: url.to_string(),
+        Self::new(url)
+    }
+
+    /// Fetch and return the registry index document.
+    pub async fn list_plugins(&self) -> Result<Vec<MarketplacePlugin>> {
+        let url = format!("{}/registry.json", self.registry_url.trim_end_matches('/'));
+        let resp = match self.client.get(&url).send().await {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("[marketplace] registry unreachable: {e}");
+                return Ok(Vec::new());
+            }
+        };
+        if !resp.status().is_success() {
+            eprintln!("Marketplace list returned HTTP {}: results may be incomplete.", resp.status());
+            return Ok(Vec::new());
         }
+        let index: MarketplaceIndex = resp.json().await.context("parse registry.json")?;
+        Ok(index.plugins)
     }
 
     // -----------------------------------------------------------------------
@@ -140,9 +183,8 @@ impl Marketplace {
     pub async fn search(&self, query: &str) -> Result<Vec<MarketplacePlugin>> {
         let url = format!("{}/search?q={}", self.registry_url, urlencoded(query));
 
-        let result = reqwest::Client::new()
+        let result = self.client
             .get(&url)
-            .timeout(std::time::Duration::from_secs(10))
             .send()
             .await;
 
@@ -581,7 +623,7 @@ mod tests {
 
     #[test]
     fn test_marketplace_new() {
-        let m = Marketplace::new();
+        let m = Marketplace::new_production();
         assert_eq!(m.registry_url, DEFAULT_REGISTRY_URL);
     }
 
@@ -589,6 +631,91 @@ mod tests {
     fn test_marketplace_custom_url() {
         let m = Marketplace::with_url("https://custom.example.com/v1");
         assert_eq!(m.registry_url, "https://custom.example.com/v1");
+    }
+
+    #[test]
+    fn default_uses_placeholder_url() {
+        let m = Marketplace::default();
+        assert!(m.registry_url.contains("agiworkforce.com"));
+    }
+
+    #[test]
+    fn explicit_url_overrides_default() {
+        let m = Marketplace::new("https://internal.example.com");
+        assert_eq!(m.registry_url, "https://internal.example.com");
+    }
+
+    #[test]
+    fn marketplace_plugin_serde_roundtrip() {
+        let p = MarketplacePlugin {
+            name: "demo".into(),
+            version: "0.1.0".into(),
+            description: "Test plugin".into(),
+            author: "me".into(),
+            download_url: Some("https://example.com/demo-0.1.0.tar.gz".into()),
+            repository: None,
+            category: "test".into(),
+            keywords: vec!["test".into()],
+        };
+        let j = serde_json::to_string(&p).unwrap();
+        let back: MarketplacePlugin = serde_json::from_str(&j).unwrap();
+        assert_eq!(p.name, back.name);
+        assert_eq!(p.version, back.version);
+    }
+
+    #[test]
+    fn index_serde_roundtrip() {
+        let idx = MarketplaceIndex {
+            registry_version: "1.0".into(),
+            plugins: vec![MarketplacePlugin {
+                name: "demo".into(),
+                version: "0.1.0".into(),
+                description: "Test".into(),
+                author: String::new(),
+                download_url: Some("https://example.com/x.tar.gz".into()),
+                repository: None,
+                category: String::new(),
+                keywords: vec![],
+            }],
+        };
+        let j = serde_json::to_string(&idx).unwrap();
+        let back: MarketplaceIndex = serde_json::from_str(&j).unwrap();
+        assert_eq!(back.registry_version, "1.0");
+        assert_eq!(back.plugins.len(), 1);
+    }
+
+    #[test]
+    fn search_filters_by_name_description_or_keyword() {
+        let plugins = vec![
+            MarketplacePlugin {
+                name: "rust-helper".into(),
+                version: "1.0".into(),
+                description: "Helps with Rust".into(),
+                author: String::new(),
+                download_url: None,
+                repository: None,
+                category: String::new(),
+                keywords: vec!["rust".into()],
+            },
+            MarketplacePlugin {
+                name: "linter".into(),
+                version: "1.0".into(),
+                description: "Generic linter".into(),
+                author: String::new(),
+                download_url: None,
+                repository: None,
+                category: String::new(),
+                keywords: vec!["lint".into()],
+            },
+        ];
+        let q = "rust";
+        let filtered: Vec<_> = plugins.iter().filter(|p| {
+            p.name.to_lowercase().contains(q)
+                || p.description.to_lowercase().contains(q)
+                || p.keywords.iter().any(|t| t.to_lowercase().contains(q))
+        }).collect();
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].name, "rust-helper");
     }
 
     #[test]

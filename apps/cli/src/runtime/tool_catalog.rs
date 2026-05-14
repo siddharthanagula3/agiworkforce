@@ -499,6 +499,40 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
                 "required": ["file"]
             }),
         ).read_only().deferred(),
+        def(
+            "lsp_completion",
+            "Get language-server completion suggestions at <file>:<line>:<character>.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "file": {"type": "string"},
+                    "line": {"type": "integer"},
+                    "character": {"type": "integer"}
+                },
+                "required": ["file", "line", "character"]
+            }),
+        ).read_only().deferred(),
+        def(
+            "lsp_document_symbols",
+            "List all symbols (functions, structs, classes, etc.) defined in <file>.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {"file": {"type": "string"}},
+                "required": ["file"]
+            }),
+        ).read_only().deferred(),
+        def(
+            "lsp_format",
+            "Compute formatting edits for <file> via the language server.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "file": {"type": "string"},
+                    "tab_size": {"type": "integer"}
+                },
+                "required": ["file"]
+            }),
+        ).read_only().deferred(),
     ]
 }
 
@@ -742,6 +776,7 @@ mod tests {
         // M18: task_get, task_list, task_output, cron_list are also deferred + read-only.
         // M24: advisor is deferred + read-only.
         // M35/M36: list_worktrees, lsp_definition, lsp_hover, lsp_diagnostics are read-only.
+        // M36 follow-up: lsp_completion, lsp_document_symbols, lsp_format are read-only.
         let mut got = read_only.clone();
         got.sort();
         assert_eq!(
@@ -753,8 +788,11 @@ mod tests {
                 "grep_files",
                 "list_directory",
                 "list_worktrees",
+                "lsp_completion",
                 "lsp_definition",
                 "lsp_diagnostics",
+                "lsp_document_symbols",
+                "lsp_format",
                 "lsp_hover",
                 "read_file",
                 "read_many_files",

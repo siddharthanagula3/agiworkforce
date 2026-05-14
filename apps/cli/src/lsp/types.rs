@@ -37,6 +37,35 @@ pub struct Hover {
     pub range: Option<Range>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompletionItem {
+    pub label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub documentation: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub insert_text: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocumentSymbol {
+    pub name: String,
+    pub kind: u8,
+    pub range: Range,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub children: Vec<DocumentSymbol>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TextEdit {
+    pub range: Range,
+    pub new_text: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -64,5 +93,54 @@ mod tests {
         let j = serde_json::to_string(&d).unwrap();
         assert!(j.contains("\"severity\":1"));
         assert!(j.contains("rustc"));
+    }
+
+    #[test]
+    fn completion_item_roundtrip() {
+        let item = CompletionItem {
+            label: "println".to_string(),
+            kind: Some(3),
+            detail: Some("fn println(...)".to_string()),
+            documentation: None,
+            insert_text: Some("println!(\"$0\")".to_string()),
+        };
+        let j = serde_json::to_string(&item).unwrap();
+        let back: CompletionItem = serde_json::from_str(&j).unwrap();
+        assert_eq!(back.label, "println");
+        assert_eq!(back.kind, Some(3));
+        assert!(back.documentation.is_none());
+    }
+
+    #[test]
+    fn document_symbol_roundtrip() {
+        let sym = DocumentSymbol {
+            name: "MyStruct".to_string(),
+            kind: 23,
+            range: Range {
+                start: Position { line: 5, character: 0 },
+                end: Position { line: 20, character: 1 },
+            },
+            children: vec![],
+        };
+        let j = serde_json::to_string(&sym).unwrap();
+        let back: DocumentSymbol = serde_json::from_str(&j).unwrap();
+        assert_eq!(back.name, "MyStruct");
+        assert_eq!(back.kind, 23);
+        // children field omitted when empty due to skip_serializing_if
+        assert!(!j.contains("children"));
+    }
+
+    #[test]
+    fn text_edit_roundtrip() {
+        let edit = TextEdit {
+            range: Range {
+                start: Position { line: 1, character: 0 },
+                end: Position { line: 1, character: 4 },
+            },
+            new_text: "    ".to_string(),
+        };
+        let j = serde_json::to_string(&edit).unwrap();
+        let back: TextEdit = serde_json::from_str(&j).unwrap();
+        assert_eq!(back.new_text, "    ");
     }
 }
