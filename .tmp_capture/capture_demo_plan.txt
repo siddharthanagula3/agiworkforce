@@ -1,0 +1,2 @@
+# Capture demo
+This file is for UI capture and can be discarded.
