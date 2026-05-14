@@ -9,6 +9,8 @@
 //! - **A2A Client**: Functions to delegate tasks and hand off conversations.
 
 use std::collections::HashMap;
+use std::net::{IpAddr, ToSocketAddrs};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -19,6 +21,85 @@ use tokio::sync::{RwLock, Semaphore};
 
 use crate::config::CliConfig;
 use crate::models::Message;
+
+// ---------------------------------------------------------------------------
+// SSRF Protection
+// ---------------------------------------------------------------------------
+
+static PRIVATE_OVERRIDE_WARNED: AtomicBool = AtomicBool::new(false);
+
+/// Validate that an A2A endpoint URL is safe to contact.
+///
+/// Rejects RFC1918 private ranges, link-local, loopback, unique-local, and
+/// IMDS (169.254.169.254). Set `AGI_A2A_ALLOW_PRIVATE=1` to bypass for local
+/// development — a one-time warning is printed to stderr.
+fn validate_a2a_endpoint(url: &str) -> Result<()> {
+    let parsed = url
+        .parse::<reqwest::Url>()
+        .with_context(|| format!("invalid A2A endpoint URL: {url}"))?;
+
+    match parsed.scheme() {
+        "http" | "https" => {}
+        scheme => bail!("A2A endpoint scheme must be http or https, got: {scheme}"),
+    }
+
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| anyhow::anyhow!("A2A endpoint has no host: {url}"))?;
+
+    // Attempt DNS resolution to catch private IPs behind hostnames.
+    let port = parsed.port_or_known_default().unwrap_or(80);
+    let addrs: Vec<IpAddr> = format!("{host}:{port}")
+        .to_socket_addrs()
+        .with_context(|| format!("could not resolve A2A host: {host}"))?
+        .map(|s| s.ip())
+        .collect();
+
+    for ip in addrs {
+        if is_private_ip(&ip) {
+            if std::env::var("AGI_A2A_ALLOW_PRIVATE").as_deref() == Ok("1") {
+                if !PRIVATE_OVERRIDE_WARNED.swap(true, Ordering::Relaxed) {
+                    eprintln!(
+                        "  [a2a] WARNING: AGI_A2A_ALLOW_PRIVATE=1 — SSRF protection disabled (development only)"
+                    );
+                }
+                return Ok(());
+            }
+            bail!(
+                "A2A endpoint resolves to a private/restricted IP ({ip}), which is not allowed. \
+                 Set AGI_A2A_ALLOW_PRIVATE=1 to override for local development."
+            );
+        }
+    }
+
+    Ok(())
+}
+
+fn is_private_ip(ip: &IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            let octets = v4.octets();
+            // Loopback: 127.0.0.0/8
+            octets[0] == 127
+            // RFC1918: 10.0.0.0/8
+            || octets[0] == 10
+            // RFC1918: 172.16.0.0/12
+            || (octets[0] == 172 && (16..=31).contains(&octets[1]))
+            // RFC1918: 192.168.0.0/16
+            || (octets[0] == 192 && octets[1] == 168)
+            // Link-local / IMDS: 169.254.0.0/16 (includes 169.254.169.254)
+            || (octets[0] == 169 && octets[1] == 254)
+        }
+        IpAddr::V6(v6) => {
+            // Loopback: ::1
+            v6.is_loopback()
+            // Link-local: fe80::/10
+            || (v6.segments()[0] & 0xffc0) == 0xfe80
+            // Unique-local: fc00::/7
+            || (v6.segments()[0] & 0xfe00) == 0xfc00
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -344,6 +425,7 @@ pub async fn discover_agents(config: &CliConfig) -> Result<Vec<AgentCard>> {
 /// Fetch a single agent's card from its network endpoint.
 pub async fn fetch_agent_card(endpoint: &str) -> Result<AgentCard> {
     let url = format!("{}/a2a/card", endpoint.trim_end_matches('/'));
+    validate_a2a_endpoint(&url)?;
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()?;
@@ -383,12 +465,13 @@ pub async fn delegate_task(
     request: TaskRequest,
     auth_token: Option<&str>,
 ) -> Result<TaskResponse> {
+    let base = target.endpoint.trim_end_matches('/');
+    let submit_url = format!("{}/a2a/task", base);
+    validate_a2a_endpoint(&submit_url)?;
+
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()?;
-
-    let base = target.endpoint.trim_end_matches('/');
-    let submit_url = format!("{}/a2a/task", base);
 
     // Submit the task
     let mut req_builder = client.post(&submit_url).json(&request);
@@ -470,12 +553,13 @@ pub async fn handoff_conversation(
     instructions: Option<String>,
     auth_token: Option<&str>,
 ) -> Result<()> {
+    let base = target.endpoint.trim_end_matches('/');
+    let url = format!("{}/a2a/handoff", base);
+    validate_a2a_endpoint(&url)?;
+
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()?;
-
-    let base = target.endpoint.trim_end_matches('/');
-    let url = format!("{}/a2a/handoff", base);
 
     let handoff = HandoffRequest {
         from_agent: "self".to_string(),
@@ -1728,5 +1812,64 @@ mod tests {
         assert!(parsed.context.is_none());
         assert!(parsed.timeout_seconds.is_none());
         assert_eq!(parsed.priority, TaskPriority::Low);
+    }
+
+    // SSRF allowlist tests
+    #[test]
+    fn test_ssrf_deny_loopback_ipv4() {
+        let err = validate_a2a_endpoint("http://127.0.0.1:7892/a2a/card").unwrap_err();
+        assert!(err.to_string().contains("private/restricted"), "{err}");
+    }
+
+    #[test]
+    fn test_ssrf_deny_private_10_block() {
+        let err = validate_a2a_endpoint("http://10.0.0.1/a2a/task").unwrap_err();
+        assert!(err.to_string().contains("private/restricted"), "{err}");
+    }
+
+    #[test]
+    fn test_ssrf_deny_private_172_block() {
+        let err = validate_a2a_endpoint("http://172.16.5.20/a2a/task").unwrap_err();
+        assert!(err.to_string().contains("private/restricted"), "{err}");
+    }
+
+    #[test]
+    fn test_ssrf_deny_private_192_168() {
+        let err = validate_a2a_endpoint("http://192.168.1.100/a2a/task").unwrap_err();
+        assert!(err.to_string().contains("private/restricted"), "{err}");
+    }
+
+    #[test]
+    fn test_ssrf_deny_imds() {
+        let err = validate_a2a_endpoint("http://169.254.169.254/latest/meta-data/").unwrap_err();
+        assert!(err.to_string().contains("private/restricted"), "{err}");
+    }
+
+    #[test]
+    fn test_ssrf_deny_bad_scheme() {
+        let err = validate_a2a_endpoint("ftp://example.com/a2a/task").unwrap_err();
+        assert!(err.to_string().contains("scheme"), "{err}");
+    }
+
+    #[test]
+    fn test_ssrf_allow_public_ip() {
+        // 1.1.1.1 is Cloudflare's public DNS — resolves to itself, always public.
+        let result = validate_a2a_endpoint("https://1.1.1.1/a2a/card");
+        assert!(result.is_ok(), "expected public IP to be allowed: {result:?}");
+    }
+
+    // Test the is_private_ip helper directly for the override code path.
+    // Mutating std::env in a multi-threaded test harness is unsafe, so we
+    // verify the classification function itself instead.
+    #[test]
+    fn test_ssrf_private_ip_classification() {
+        use std::str::FromStr;
+        assert!(is_private_ip(&IpAddr::from_str("127.0.0.1").unwrap()));
+        assert!(is_private_ip(&IpAddr::from_str("10.1.2.3").unwrap()));
+        assert!(is_private_ip(&IpAddr::from_str("172.20.0.1").unwrap()));
+        assert!(is_private_ip(&IpAddr::from_str("192.168.0.1").unwrap()));
+        assert!(is_private_ip(&IpAddr::from_str("169.254.169.254").unwrap()));
+        assert!(!is_private_ip(&IpAddr::from_str("1.1.1.1").unwrap()));
+        assert!(!is_private_ip(&IpAddr::from_str("8.8.8.8").unwrap()));
     }
 }
