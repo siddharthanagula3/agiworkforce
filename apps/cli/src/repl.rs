@@ -1438,8 +1438,19 @@ pub fn handle_permissions(arg: &str) {
             }
             Err(e) => output::print_error(&format!("Failed to load: {:#}", e)),
         },
+        // /permissions allow|deny|session|workspace|recently-denied → show that tab
+        tab if matches!(
+            tab,
+            "allow" | "deny" | "session" | "workspace" | "recently-denied" | "recent"
+        ) =>
+        {
+            match crate::permissions::PermissionStore::load() {
+                Ok(store) => eprintln!("{}", store.display_tab(tab)),
+                Err(e) => output::print_error(&format!("Failed to load permissions: {:#}", e)),
+            }
+        }
         _ => match crate::permissions::PermissionStore::load() {
-            Ok(store) => eprintln!("{}", store.display()),
+            Ok(store) => eprintln!("{}", store.display_tab("allow")),
             Err(e) => output::print_error(&format!("Failed to load permissions: {:#}", e)),
         },
     }
