@@ -68,6 +68,33 @@ const PLATFORM_PROMPTS: Record<string, string> = {
 - Components: Cmd/Ctrl+Alt+K to create
 - Canvas is .fig-canvas, layers in .objects_panel
 - Zoom: Cmd/Ctrl+scroll, Shift+1 to fit all`,
+
+  'atlassian.net': `You are assisting on Atlassian (Jira or Confluence). Key patterns:
+Jira:
+- Create issue: press C anywhere in a project view
+- Search: / to focus the search bar; use JQL for advanced queries (e.g. assignee = currentUser() AND status != Done)
+- Board: drag cards between columns, click a card to open detail panel
+- Issues list in .ghx-column, sprint board in .ghx-work
+- Keyboard: E to edit inline, A to assign, L to label, S to set status
+- Bulk edit: select multiple rows with checkboxes then Actions menu
+Confluence:
+- Cmd/Ctrl+K: insert link
+- / to open the macro/element picker (code block, table, info panel, expand)
+- Page tree in left sidebar; breadcrumb at top shows space/page path
+- Page content in .ak-editor-content-area
+- Labels for pages in page metadata bar below the title
+- Restrict / share via the lock icon or "..." menu top-right`,
+
+  'teams.microsoft.com': `You are assisting on Microsoft Teams. Key patterns:
+- Ctrl+E (Windows) / Cmd+E (Mac): search across messages, files, people
+- Ctrl+Shift+M / Cmd+Shift+M: go to activity feed
+- Reply in thread: hover a message and click Reply (preserves threading context)
+- Reactions: hover a message then click the emoji icon
+- Messages are in .fui-ChatMessage containers, channels in the team sidebar
+- @ mentions autocomplete after typing @; @team notifies everyone
+- Files tab per channel links to SharePoint; "Open in SharePoint" for full management
+- Schedule a meeting from the Chat or Calendar tab — pre-fills attendees from the conversation
+- Mute/unmute during calls: Ctrl+Shift+M / Cmd+Shift+M (same shortcut toggles)`,
 };
 
 export function getPlatformPrompt(url: string): string | null {
