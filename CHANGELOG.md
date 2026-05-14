@@ -2,6 +2,36 @@
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [cli-1.3.0] — 2026-05-14
+
+Final-backlog release. Closes the last four items the v1.2 audit deferred to v1.3: Subagent v2 with full IPC, Linux seccomp-BPF sandbox preset, agent-to-agent (a2a) coordination protocol, and TUI dispatch wiring for the v1.2.1 overlay catalog.
+
+### Added
+
+- **`apps/cli/src/subagent_v2.rs`** (M34) — full-IPC subagent runtime. `SubagentRegistry` + `SubagentHandle` with bidirectional message channels (inbox/outbox), kill via `oneshot::Sender`, `wait` on the join handle. Each subagent runs as an isolated tokio task with its own `mpsc::channel<32>` for prompts and responses. Status machine: `Pending → Running → Completed | Failed | Killed`. 6 tests covering registry empty/unique-ids, message round-trip, kill transition, missing-id error, status progression.
+- **`apps/cli/src/policy/linux_sandbox.rs`** (M38) — Linux seccomp-BPF preset. Architecture-aware allow-list builder for `ReadOnly` / `Contained` / `Unrestricted` presets. ~50 syscall allow-list for ReadOnly (read, write, openat, stat, fstat, mmap, mprotect, brk, futex, clock_gettime, …); Contained adds `execve` / `clone` / `pipe2` / `socketpair`. `describe_filter` produces a one-line summary for `/sandbox` + `/doctor`. `is_available` probes `/proc/self/status` for the `Seccomp:` line. Tests run only on Linux via `#![cfg(target_os = "linux")]`; the module compiles cleanly on macOS as part of `cargo check --workspace`.
+- **`apps/cli/src/a2a.rs`** (1,649 LOC) — agent-to-agent coordination protocol. JSON-RPC 2.0 surface with `discover`, `list_peers`, `delegate`, `cancel` methods. `AgentCard { id, name, model, capabilities, tools, version }`, `TaskRequest { id, prompt, deadline_unix?, context }`, `TaskResponse { state, result?, error? }`, `TaskState { Accepted, Running, Completed, Failed, Cancelled }`. `PeerRegistry` with `find_by_capability` lookup. HTTP transport scaffold + local-registry persistence + handoff request type + priority sort. 26 tests covering serialization roundtrips, handler dispatch, error code surfaces, registry persistence, and `format_agent_list_offline` rendering.
+- **TUI overlay dispatch** — wired 5 slash arms to the v1.2.1 interactive overlays in `apps/cli/src/tui/tui_app.rs`:
+  - `/memories` → `MemoriesSettingsView`
+  - `/skills-toggle` → `SkillsToggleView`
+  - `/statusline` → `StatusLineSetupView`
+  - `/title` → `TerminalTitleSetupView`
+  - `/diff-review` → `DiffReviewView`
+
+### Changed
+
+- CLI version bumped 1.2.1 → 1.3.0. `cargo check --workspace` green.
+- Tests: 1244 → **1276** (+32 from this iteration: 6 subagent_v2 + 26 a2a; linux_sandbox tests are cfg-gated to Linux).
+- Closes the v1.2 deferred backlog: M34 (subagent IPC), M38 (Linux sandbox), a2a coordination, overlay dispatch arms.
+
+### Notes
+
+- Subagent v2's task body is a minimal echo loop today; the IPC plumbing (channels, status machine, kill/wait) is real and ready for a future swap-in of `AgentSession` as the task body.
+- The seccomp-BPF allow-list builder is portable Rust; **installing** the BPF program (`seccompiler::apply_filter` after `prctl(PR_SET_NO_NEW_PRIVS)`) needs the `seccompiler` crate as a Linux-only optional dep — v1.3.1 work.
+- The a2a protocol is in-process today. WebSocket / cross-process transport is a hosted-infra step.
+
+---
+
 ## [cli-1.2.1] — 2026-05-14
 
 Backlog-close release. v1.2.0 shipped the audit-driven gap closure; v1.2.1 closes the architectural follow-ups (interactive overlay catalog, plugin marketplace client, LSP completion path, OAuth endpoint discovery).

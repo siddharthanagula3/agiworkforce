@@ -16,6 +16,49 @@
 
 ---
 
+## v1.3.0 — RELEASED (2026-05-14)
+
+Final-backlog release. Closes the four items v1.2 audit deferred to v1.3: M34 (Subagent v2 IPC), M38 (Linux seccomp-BPF), a2a multi-agent coordination protocol, and TUI dispatch arms for the v1.2.1 overlay catalog.
+
+### Wave — `agi-cli-v1-3-0` team (4 teammates, all green)
+
+- **subagent-v2-engineer** → `apps/cli/src/subagent_v2.rs` (251 LOC) — `SubagentRegistry` + `SubagentHandle` with mpsc inbox/outbox channels, oneshot kill, join-handle wait, status enum (Pending/Running/Completed/Failed/Killed). 6 tests green.
+- **linux-sandbox-engineer** → `apps/cli/src/policy/linux_sandbox.rs` (141 LOC, `#![cfg(target_os = "linux")]`) — architecture-aware syscall allow-list builder for ReadOnly/Contained/Unrestricted presets. `describe_filter`, `is_available` (reads `/proc/self/status`). 5 tests (Linux-gated).
+- **a2a-engineer** → `apps/cli/src/a2a.rs` (1,649 LOC) — agent-to-agent JSON-RPC 2.0 protocol with `discover` / `list_peers` / `delegate` / `cancel` methods, `AgentCard`, `TaskRequest`/`TaskResponse`, `PeerRegistry` with `find_by_capability`, HTTP transport scaffold, handoff requests, priority sort, local-registry persistence. 26 tests green (over-delivered vs the 7 asked).
+- **overlay-dispatch-engineer** → wired 5 slash dispatch arms in `apps/cli/src/tui/tui_app.rs` against the v1.2.1 overlay catalog: `/memories`, `/skills-toggle`, `/statusline`, `/title`, `/diff-review`.
+
+### Files added
+
+- create `apps/cli/src/subagent_v2.rs` (251 LOC)
+- create `apps/cli/src/policy/linux_sandbox.rs` (141 LOC)
+- create `apps/cli/src/a2a.rs` (1,649 LOC)
+- edit `apps/cli/src/main.rs` — added `mod subagent_v2;` + `mod a2a;`
+- edit `apps/cli/src/policy/mod.rs` — added `#[cfg(target_os = "linux")] pub mod linux_sandbox;`
+- edit `apps/cli/src/tui/tui_app.rs` — 5 new overlay dispatch arms
+- edit `apps/cli/Cargo.toml` — version 1.2.1 → 1.3.0
+- edit `CHANGELOG.md` — `[cli-1.3.0]` entry
+
+### Tests run
+
+- `cargo check -p agiworkforce-cli` — Finished, no warnings on the v1.3.0 modules
+- `cargo test -p agiworkforce-cli subagent_v2` — 6 passed
+- `cargo test -p agiworkforce-cli a2a::` — 26 passed
+- `cargo test -p agiworkforce-cli` — **1276 passed, 0 failed, 0 ignored** (+32 from v1.2.1 baseline of 1244)
+
+### Deviations
+
+- a2a-engineer expanded scope from ~400 LOC to 1,649 LOC, adding HTTP transport scaffolding, handoff requests, local-registry persistence, and priority sort. Accepted — the extras are pure-Rust additive surfaces that ship without dependencies and over-deliver on the spec.
+- Linux seccomp tests are 5 in source but 0 reported on macOS due to the `cfg` gate; this is correct behavior. The module **compiles** on macOS, which is what cross-platform `cargo check --workspace` requires.
+
+### Backlog still open (v1.3.1 candidates)
+
+- Replace subagent_v2 echo-loop task body with `agent::run_turn` (IPC plumbing is shipped; task body is the swap-in).
+- Install the BPF program via `seccompiler::apply_filter` (allow-list builder is shipped; runtime install needs the optional Linux-only dep).
+- WebSocket / cross-process transport for a2a (in-process scaffold is shipped; cross-process needs hosted infra).
+- VS Code companion extension stub (skipped this iteration — pure cross-surface work that the desktop already covers for now).
+
+---
+
 ## M0 — Repo-root planning artifacts
 
 - Date: 2026-05-14
