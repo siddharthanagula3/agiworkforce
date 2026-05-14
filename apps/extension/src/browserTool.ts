@@ -163,8 +163,8 @@ export function computerUseToPageActions(action: ComputerUseAction): PageActionS
       return [
         {
           id: stepId('key'),
-          type: 'execute_script',
-          value: scriptForKey(action.text),
+          type: 'key',
+          value: action.text,
         },
       ];
     case 'type':
@@ -192,8 +192,9 @@ export function computerUseToPageActions(action: ComputerUseAction): PageActionS
       return [
         {
           id: stepId('hold'),
-          type: 'execute_script',
-          value: scriptForHoldKey(action.text, action.duration),
+          type: 'hold_key',
+          value: action.text,
+          delay: action.duration,
         },
       ];
     case 'wait':
@@ -280,8 +281,8 @@ export function browserActionToPageActions(action: BrowserAction): PageActionSte
       return [
         {
           id: stepId('press'),
-          type: 'execute_script',
-          value: scriptForKey(action.key),
+          type: 'key',
+          value: action.key,
         },
       ];
     case 'screenshot':
@@ -317,15 +318,16 @@ function scriptForMouseMove([x, y]: [number, number]): string {
   return `(()=>{const el=document.elementFromPoint(${x},${y});if(el)el.dispatchEvent(new MouseEvent('mousemove',{clientX:${x},clientY:${y},bubbles:true}));window.__agi_cursor__={x:${x},y:${y}};})()`;
 }
 
-function scriptForKey(key: string): string {
-  const safe = JSON.stringify(key);
-  return `(()=>{const el=document.activeElement||document.body;el.dispatchEvent(new KeyboardEvent('keydown',{key:${safe},bubbles:true}));el.dispatchEvent(new KeyboardEvent('keyup',{key:${safe},bubbles:true}));})()`;
-}
-
-function scriptForHoldKey(key: string, durationMs: number): string {
-  const safe = JSON.stringify(key);
-  return `(()=>{const el=document.activeElement||document.body;el.dispatchEvent(new KeyboardEvent('keydown',{key:${safe},bubbles:true}));setTimeout(()=>el.dispatchEvent(new KeyboardEvent('keyup',{key:${safe},bubbles:true})),${durationMs});})()`;
-}
+// Note: the previous scriptForKey / scriptForHoldKey helpers built JavaScript
+// source strings via template interpolation and emitted them as
+// `type: 'execute_script'` steps. content.ts has no `execute_script` switch
+// case, so those strings were dead-code producers — never eval'd — but
+// CodeQL `js/bad-code-sanitization` flagged the producer-side interpolation
+// (alerts #451-#454). Refactored: callers now emit `type: 'key'` /
+// `type: 'hold_key'` steps with the key string + optional durationMs as
+// structured fields, and content.ts dispatches KeyboardEvent natively with
+// the key string passed as data — no JavaScript string ever leaves this
+// process for downstream execution.
 
 function scriptForMouseDown([x, y]: [number, number]): string {
   return `(()=>{const el=document.elementFromPoint(${x},${y});if(el)el.dispatchEvent(new MouseEvent('mousedown',{clientX:${x},clientY:${y},bubbles:true,button:0}));})()`;
