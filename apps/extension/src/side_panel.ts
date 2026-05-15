@@ -348,6 +348,14 @@ function clearStoredApiKey(): void {
 function injectStyles(): void {
   const style = document.createElement('style');
   style.textContent = `
+    /* ── AGI design tokens (dark) ── */
+    :root {
+      --agi-ext-accent: #21808d;
+      --agi-ext-accent-secondary: #da7756;
+      --agi-ext-focus: #21808d;
+      --agi-ext-on-accent: #ffffff;
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
@@ -381,7 +389,7 @@ function injectStyles(): void {
     #sp-logo {
       width: 26px;
       height: 26px;
-      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      background: linear-gradient(135deg, var(--agi-ext-accent), var(--agi-ext-accent-secondary));
       border-radius: 6px;
       display: flex;
       align-items: center;
@@ -397,9 +405,9 @@ function injectStyles(): void {
     }
     #sp-model-badge {
       font-size: 10px;
-      color: #7c3aed;
-      background: #1e1b4b;
-      border: 1px solid #312e81;
+      color: var(--agi-ext-accent);
+      background: rgba(33, 128, 141, 0.12);
+      border: 1px solid rgba(33, 128, 141, 0.3);
       border-radius: 4px;
       padding: 1px 6px;
       white-space: nowrap;
@@ -453,7 +461,7 @@ function injectStyles(): void {
     #sp-empty-title { font-size: 14px; font-weight: 500; color: #64748b; }
     #sp-empty-hint { font-size: 11px; color: #334155; line-height: 1.5; }
     #sp-empty-cmds { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
-    .sp-cmd-chip { display: inline-block; padding: 4px 10px; font-size: 11px; font-family: 'SF Mono', Monaco, monospace; background: #1e293b; color: #a5b4fc; border-radius: 12px; cursor: pointer; transition: background 0.15s; border: 1px solid #334155; }
+    .sp-cmd-chip { display: inline-block; padding: 4px 10px; font-size: 11px; font-family: 'SF Mono', Monaco, monospace; background: rgba(33, 128, 141, 0.1); color: var(--agi-ext-accent); border-radius: 12px; cursor: pointer; transition: background 0.15s; border: 1px solid rgba(33, 128, 141, 0.25); }
     .sp-cmd-chip:hover { background: #334155; color: #c7d2fe; }
 
     /* ── Blocked / restricted-site state ── */
@@ -500,8 +508,8 @@ function injectStyles(): void {
       white-space: pre-wrap;
     }
     .sp-bubble-user {
-      background: #3730a3;
-      color: #e0e7ff;
+      background: rgba(33, 128, 141, 0.2);
+      color: #e8e4db;
       border-bottom-right-radius: 3px;
     }
     .sp-bubble-assistant {
@@ -566,7 +574,7 @@ function injectStyles(): void {
     .sp-bubble-assistant h2 { font-size: 14px; }
     .sp-bubble-assistant h3 { font-size: 13px; }
     .sp-bubble-assistant blockquote {
-      border-left: 3px solid #4338ca;
+      border-left: 3px solid var(--agi-ext-accent);
       padding-left: 8px;
       color: #94a3b8;
       margin: 4px 0;
@@ -581,7 +589,7 @@ function injectStyles(): void {
     .sp-cursor::after {
       content: '▋';
       animation: sp-blink 0.7s steps(1) infinite;
-      color: #6366f1;
+      color: var(--agi-ext-accent);
       font-size: 12px;
     }
     @keyframes sp-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
@@ -601,7 +609,7 @@ function injectStyles(): void {
       width: 6px;
       height: 6px;
       border-radius: 50%;
-      background: #6366f1;
+      background: var(--agi-ext-accent);
       animation: sp-bounce 1.2s infinite;
     }
     .sp-dot:nth-child(2) { animation-delay: 0.2s; }
@@ -633,7 +641,7 @@ function injectStyles(): void {
       white-space: nowrap;
       flex-shrink: 0;
     }
-    .sp-tool-btn:hover { color: #a5b4fc; border-color: #4338ca; background: #1a1a2e; }
+    .sp-tool-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: rgba(33, 128, 141, 0.08); }
     .sp-tool-btn.active { color: #a5f3fc; border-color: #0891b2; background: #0c1a2e; }
     .sp-tool-btn.has-context { color: #86efac; border-color: #166534; background: #052e16; }
 
@@ -765,10 +773,11 @@ function injectStyles(): void {
       padding: 4px 6px;
       outline: none;
     }
-    .sp-save-shortcut-input:focus { border-color: #4338ca; }
+    .sp-save-shortcut-input:focus { border-color: var(--agi-ext-focus); }
+    .sp-save-shortcut-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     .sp-save-shortcut-btn {
-      background: #4338ca;
-      color: white;
+      background: var(--agi-ext-accent);
+      color: var(--agi-ext-on-accent);
       border: none;
       border-radius: 4px;
       padding: 4px 8px;
@@ -776,7 +785,8 @@ function injectStyles(): void {
       cursor: pointer;
       white-space: nowrap;
     }
-    .sp-save-shortcut-btn:hover { background: #3730a3; }
+    .sp-save-shortcut-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); }
+    .sp-save-shortcut-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
 
     /* ── AI Tools dropdown ── */
     .sp-tools-wrapper {
@@ -862,11 +872,12 @@ function injectStyles(): void {
       overflow-y: auto;
       transition: border-color 0.15s;
     }
-    #sp-input:focus { border-color: #4338ca; }
+    #sp-input:focus { border-color: var(--agi-ext-focus); }
+    #sp-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     #sp-input::placeholder { color: #334155; }
     #sp-send-btn {
-      background: #4338ca;
-      color: white;
+      background: var(--agi-ext-accent);
+      color: var(--agi-ext-on-accent);
       border: none;
       border-radius: 8px;
       width: 34px;
@@ -879,7 +890,8 @@ function injectStyles(): void {
       flex-shrink: 0;
       transition: background 0.15s, transform 0.1s;
     }
-    #sp-send-btn:hover:not(:disabled) { background: #3730a3; transform: scale(1.05); }
+    #sp-send-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); transform: scale(1.05); }
+    #sp-send-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
     #sp-send-btn:disabled { background: #1e1e2e; color: #334155; cursor: not-allowed; transform: none; }
 
     /* ── Attachment + button and menu ── */
@@ -901,7 +913,7 @@ function injectStyles(): void {
       flex-shrink: 0;
       transition: color 0.15s, border-color 0.15s, background 0.15s;
     }
-    .sp-attach-btn:hover { color: #a5b4fc; border-color: #4338ca; background: #1a1a2e; }
+    .sp-attach-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: rgba(33, 128, 141, 0.08); }
     #sp-attach-menu {
       display: none;
       position: absolute;
@@ -1015,8 +1027,8 @@ function injectStyles(): void {
       background: #052e16;
     }
     .sp-context-chip.has-context::before { background: #22c55e; }
-    .sp-context-chip:hover { color: #a5b4fc; border-color: #4338ca; background: #1a1a2e; }
-    .sp-context-chip:hover::before { background: #6366f1; }
+    .sp-context-chip:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: rgba(33, 128, 141, 0.08); }
+    .sp-context-chip:hover::before { background: var(--agi-ext-accent); }
     .sp-context-chip.loading { opacity: 0.6; cursor: wait; }
 
     /* ── Settings bar ── */
@@ -1054,7 +1066,8 @@ function injectStyles(): void {
       transition: border-color 0.15s;
       min-width: 0;
     }
-    .sp-settings-input:focus { border-color: #4338ca; }
+    .sp-settings-input:focus { border-color: var(--agi-ext-focus); }
+    .sp-settings-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     .sp-settings-input::placeholder { color: #334155; }
     .sp-settings-btn {
       background: #1e1e2e;
@@ -1067,7 +1080,7 @@ function injectStyles(): void {
       transition: color 0.15s, border-color 0.15s;
       white-space: nowrap;
     }
-    .sp-settings-btn:hover { color: #e2e8f0; border-color: #4338ca; }
+    .sp-settings-btn:hover { color: #e2e8f0; border-color: var(--agi-ext-accent); }
 
     /* ── Auth bar ── */
     #sp-auth-bar {
@@ -1092,11 +1105,12 @@ function injectStyles(): void {
       transition: border-color 0.15s;
       min-width: 0;
     }
-    #sp-auth-input:focus { border-color: #4338ca; }
+    #sp-auth-input:focus { border-color: var(--agi-ext-focus); }
+    #sp-auth-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     #sp-auth-input::placeholder { color: #334155; }
     #sp-auth-save-btn {
-      background: #4338ca;
-      color: white;
+      background: var(--agi-ext-accent);
+      color: var(--agi-ext-on-accent);
       border: none;
       border-radius: 6px;
       padding: 5px 10px;
@@ -1106,7 +1120,8 @@ function injectStyles(): void {
       transition: background 0.15s;
       white-space: nowrap;
     }
-    #sp-auth-save-btn:hover { background: #3730a3; }
+    #sp-auth-save-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); }
+    #sp-auth-save-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
 
     /* ── Connection status pill ── */
     #sp-status-pill {
@@ -1161,7 +1176,7 @@ function injectStyles(): void {
       transition: color 0.15s, border-color 0.15s;
     }
     .sp-tab:hover { color: #94a3b8; }
-    .sp-tab.sp-tab-active { color: #6366f1; border-bottom-color: #6366f1; }
+    .sp-tab.sp-tab-active { color: var(--agi-ext-accent); border-bottom-color: var(--agi-ext-accent); }
     #sp-chat-panel { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
     #sp-chat-panel.sp-tab-hidden { display: none; }
     #sp-workflows { display: none; flex: 1; overflow-y: auto; padding: 12px 10px; flex-direction: column; gap: 16px; }
@@ -1180,37 +1195,40 @@ function injectStyles(): void {
     .sp-wf-shortcut-name { font-size: 12px; font-weight: 500; color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .sp-wf-shortcut-meta { font-size: 10px; color: #475569; margin-top: 1px; }
     .sp-wf-shortcut-btns { display: flex; gap: 4px; flex-shrink: 0; }
-    .sp-wf-btn-replay { background: #1e1b4b; border: 1px solid #312e81; color: #a5b4fc; font-size: 11px; padding: 3px 9px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
-    .sp-wf-btn-replay:hover { background: #312e81; }
+    .sp-wf-btn-replay { background: rgba(33, 128, 141, 0.12); border: 1px solid rgba(33, 128, 141, 0.3); color: var(--agi-ext-accent); font-size: 11px; padding: 3px 9px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
+    .sp-wf-btn-replay:hover { background: rgba(33, 128, 141, 0.22); }
     .sp-wf-btn-delete { background: none; border: 1px solid #1e1e2e; color: #64748b; font-size: 11px; padding: 3px 7px; border-radius: 5px; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
     .sp-wf-btn-delete:hover { color: #f87171; border-color: #7f1d1d; }
     .sp-wf-tasks-list { display: flex; flex-direction: column; gap: 6px; }
     .sp-wf-task-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: #0f0f14; border: 1px solid #1e1e2e; border-radius: 7px; }
     .sp-wf-task-info { flex: 1; min-width: 0; }
     .sp-wf-task-name { font-size: 12px; font-weight: 500; color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .sp-wf-task-schedule-badge { display: inline-block; font-size: 9px; color: #7c3aed; background: #1e1b4b; border: 1px solid #312e81; border-radius: 3px; padding: 1px 5px; margin-top: 2px; }
+    .sp-wf-task-schedule-badge { display: inline-block; font-size: 9px; color: var(--agi-ext-accent); background: rgba(33, 128, 141, 0.12); border: 1px solid rgba(33, 128, 141, 0.3); border-radius: 3px; padding: 1px 5px; margin-top: 2px; }
     .sp-wf-task-toggle { appearance: none; width: 30px; height: 16px; border-radius: 8px; background: #1e1e2e; position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; }
-    .sp-wf-task-toggle:checked { background: #4338ca; }
+    .sp-wf-task-toggle:checked { background: var(--agi-ext-accent); }
     .sp-wf-task-toggle::after { content: ''; position: absolute; width: 12px; height: 12px; border-radius: 50%; background: white; top: 2px; left: 2px; transition: transform 0.2s; }
     .sp-wf-task-toggle:checked::after { transform: translateX(14px); }
     .sp-wf-task-delete { background: none; border: 1px solid #1e1e2e; color: #64748b; font-size: 11px; padding: 3px 7px; border-radius: 5px; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
     .sp-wf-task-delete:hover { color: #f87171; border-color: #7f1d1d; }
-    .sp-wf-new-task-btn { background: #1e1b4b; border: 1px solid #312e81; color: #a5b4fc; font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
-    .sp-wf-new-task-btn:hover { background: #312e81; }
+    .sp-wf-new-task-btn { background: rgba(33, 128, 141, 0.12); border: 1px solid rgba(33, 128, 141, 0.3); color: var(--agi-ext-accent); font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
+    .sp-wf-new-task-btn:hover { background: rgba(33, 128, 141, 0.22); }
     .sp-wf-new-task-form { display: none; flex-direction: column; gap: 7px; padding: 10px; background: #0f0f14; border: 1px solid #1e1e2e; border-radius: 7px; }
     .sp-wf-new-task-form.open { display: flex; }
     .sp-wf-form-label { font-size: 10px; color: #64748b; margin-bottom: 1px; }
     .sp-wf-form-input { background: #13131a; border: 1px solid #1e1e2e; border-radius: 5px; color: #e2e8f0; font-size: 12px; padding: 5px 8px; outline: none; font-family: inherit; transition: border-color 0.15s; width: 100%; }
-    .sp-wf-form-input:focus { border-color: #4338ca; }
+    .sp-wf-form-input:focus { border-color: var(--agi-ext-focus); }
+    .sp-wf-form-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     .sp-wf-form-input::placeholder { color: #334155; }
     .sp-wf-form-select { background: #13131a; border: 1px solid #1e1e2e; border-radius: 5px; color: #e2e8f0; font-size: 12px; padding: 5px 8px; outline: none; font-family: inherit; width: 100%; }
-    .sp-wf-form-save-btn { background: #4338ca; color: white; border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; cursor: pointer; align-self: flex-end; transition: background 0.12s; }
-    .sp-wf-form-save-btn:hover { background: #3730a3; }
+    .sp-wf-form-select:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
+    .sp-wf-form-save-btn { background: var(--agi-ext-accent); color: var(--agi-ext-on-accent); border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; cursor: pointer; align-self: flex-end; transition: background 0.12s; }
+    .sp-wf-form-save-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); }
+    .sp-wf-form-save-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
     .sp-wf-form-cancel-btn { background: none; border: 1px solid #1e1e2e; color: #64748b; border-radius: 5px; padding: 6px 10px; font-size: 12px; cursor: pointer; align-self: flex-end; transition: color 0.12s; }
     .sp-wf-form-cancel-btn:hover { color: #e2e8f0; }
     .sp-wf-form-actions { display: flex; gap: 6px; justify-content: flex-end; }
-    .sp-wf-create-shortcut-btn { background: #1e1b4b; border: 1px solid #312e81; color: #a5b4fc; font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
-    .sp-wf-create-shortcut-btn:hover { background: #312e81; }
+    .sp-wf-create-shortcut-btn { background: rgba(33, 128, 141, 0.12); border: 1px solid rgba(33, 128, 141, 0.3); color: var(--agi-ext-accent); font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
+    .sp-wf-create-shortcut-btn:hover { background: rgba(33, 128, 141, 0.22); }
     .sp-create-shortcut-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; align-items: center; justify-content: center; }
     .sp-create-shortcut-overlay.open { display: flex; }
     .sp-create-shortcut-modal { background: #13131a; border: 1px solid #1e1e2e; border-radius: 10px; padding: 18px 18px 14px; width: 290px; max-width: 95vw; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
@@ -1221,26 +1239,30 @@ function injectStyles(): void {
     .sp-create-shortcut-field { display: flex; flex-direction: column; gap: 4px; }
     .sp-create-shortcut-label { font-size: 10px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; }
     .sp-create-shortcut-input { background: #0f0f14; border: 1px solid #1e1e2e; border-radius: 5px; color: #e2e8f0; font-size: 12px; padding: 6px 9px; outline: none; font-family: inherit; transition: border-color 0.15s; width: 100%; box-sizing: border-box; }
-    .sp-create-shortcut-input:focus { border-color: #4338ca; }
+    .sp-create-shortcut-input:focus { border-color: var(--agi-ext-focus); }
+    .sp-create-shortcut-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     .sp-create-shortcut-input::placeholder { color: #334155; }
     .sp-create-shortcut-textarea { background: #0f0f14; border: 1px solid #1e1e2e; border-radius: 5px; color: #e2e8f0; font-size: 12px; padding: 6px 9px; outline: none; font-family: inherit; transition: border-color 0.15s; width: 100%; box-sizing: border-box; resize: none; height: 70px; line-height: 1.4; }
-    .sp-create-shortcut-textarea:focus { border-color: #4338ca; }
+    .sp-create-shortcut-textarea:focus { border-color: var(--agi-ext-focus); }
+    .sp-create-shortcut-textarea:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     .sp-create-shortcut-textarea::placeholder { color: #334155; }
     .sp-create-shortcut-schedule-row { display: flex; align-items: center; justify-content: space-between; }
     .sp-create-shortcut-schedule-label { font-size: 12px; color: #94a3b8; }
     .sp-create-shortcut-toggle { appearance: none; width: 34px; height: 18px; border-radius: 9px; background: #1e1e2e; position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; border: none; outline: none; }
-    .sp-create-shortcut-toggle:checked { background: #4338ca; }
+    .sp-create-shortcut-toggle:checked { background: var(--agi-ext-accent); }
+    .sp-create-shortcut-toggle:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
     .sp-create-shortcut-toggle::after { content: ''; position: absolute; width: 13px; height: 13px; border-radius: 50%; background: white; top: 2.5px; left: 2.5px; transition: transform 0.2s; }
     .sp-create-shortcut-toggle:checked::after { transform: translateX(16px); }
     .sp-create-shortcut-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 2px; }
     .sp-create-shortcut-cancel { background: none; border: 1px solid #1e1e2e; color: #64748b; border-radius: 5px; padding: 6px 14px; font-size: 12px; cursor: pointer; transition: color 0.12s; }
     .sp-create-shortcut-cancel:hover { color: #e2e8f0; }
-    .sp-create-shortcut-save { background: #4338ca; color: white; border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; cursor: pointer; transition: background 0.12s; }
-    .sp-create-shortcut-save:hover { background: #3730a3; }
+    .sp-create-shortcut-save { background: var(--agi-ext-accent); color: var(--agi-ext-on-accent); border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; cursor: pointer; transition: background 0.12s; }
+    .sp-create-shortcut-save:hover { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); }
+    .sp-create-shortcut-save:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
     .sp-wf-group-desc { font-size: 11px; color: #64748b; line-height: 1.55; }
     .sp-wf-group-btns { display: flex; gap: 8px; flex-wrap: wrap; }
     .sp-wf-group-action-btn { display: flex; align-items: center; gap: 5px; background: #13131a; border: 1px solid #1e1e2e; border-radius: 6px; color: #94a3b8; font-size: 11px; padding: 5px 11px; cursor: pointer; transition: color 0.15s, border-color 0.15s, background 0.15s; }
-    .sp-wf-group-action-btn:hover { color: #a5b4fc; border-color: #4338ca; background: #1a1a2e; }
+    .sp-wf-group-action-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: rgba(33, 128, 141, 0.08); }
     .sp-wf-group-action-btn.active { color: #86efac; border-color: #166534; background: #052e16; }
     .sp-wf-record-bar { display: flex; align-items: center; gap: 8px; }
     .sp-wf-record-btn { display: flex; align-items: center; gap: 6px; background: #dc2626; border: none; color: white; font-size: 12px; font-weight: 600; padding: 8px 16px; border-radius: 8px; cursor: pointer; transition: background 0.15s, transform 0.1s; flex-shrink: 0; }
@@ -1252,20 +1274,21 @@ function injectStyles(): void {
     .sp-wf-record-btn.recording .sp-wf-record-dot { background: #ef4444; animation: sp-pulse 1s infinite; }
     .sp-wf-action-counter { font-size: 11px; color: #94a3b8; flex: 1; }
     .sp-wf-action-counter strong { color: #e2e8f0; }
-    .sp-wf-save-dialog { display: none; flex-direction: column; gap: 6px; padding: 10px; background: #0f0f14; border: 1px solid #312e81; border-radius: 8px; }
+    .sp-wf-save-dialog { display: none; flex-direction: column; gap: 6px; padding: 10px; background: #0f0f14; border: 1px solid rgba(33, 128, 141, 0.3); border-radius: 8px; }
     .sp-wf-save-dialog.open { display: flex; }
-    .sp-wf-save-dialog-title { font-size: 12px; font-weight: 600; color: #a5b4fc; }
-    .sp-wf-count-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; font-size: 10px; font-weight: 600; background: #312e81; color: #a5b4fc; border-radius: 9px; padding: 0 5px; }
+    .sp-wf-save-dialog-title { font-size: 12px; font-weight: 600; color: var(--agi-ext-accent); }
+    .sp-wf-count-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; font-size: 10px; font-weight: 600; background: rgba(33, 128, 141, 0.2); color: var(--agi-ext-accent); border-radius: 9px; padding: 0 5px; }
     .sp-model-selector-wrap { position: relative; }
-    #sp-model-selector-btn { display: flex; align-items: center; gap: 4px; background: #1e1b4b; border: 1px solid #312e81; border-radius: 5px; padding: 3px 8px; color: #a5b4fc; font-size: 10px; font-weight: 500; cursor: pointer; transition: background 0.12s, border-color 0.12s; white-space: nowrap; }
-    #sp-model-selector-btn:hover { background: #312e81; border-color: #4338ca; }
+    #sp-model-selector-btn { display: flex; align-items: center; gap: 4px; background: rgba(33, 128, 141, 0.12); border: 1px solid rgba(33, 128, 141, 0.3); border-radius: 5px; padding: 3px 8px; color: var(--agi-ext-accent); font-size: 10px; font-weight: 500; cursor: pointer; transition: background 0.12s, border-color 0.12s; white-space: nowrap; }
+    #sp-model-selector-btn:hover { background: rgba(33, 128, 141, 0.22); border-color: var(--agi-ext-accent); }
+    #sp-model-selector-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
     #sp-model-selector-btn .sp-chevron { font-size: 8px; transition: transform 0.15s; }
     #sp-model-selector-btn.open .sp-chevron { transform: rotate(180deg); }
     #sp-model-dropdown { display: none; position: absolute; top: 100%; right: 0; margin-top: 4px; min-width: 180px; max-height: 280px; overflow-y: auto; background: #13131a; border: 1px solid #1e1e2e; border-radius: 8px; padding: 4px; z-index: 200; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
     #sp-model-dropdown.open { display: block; }
     .sp-model-option { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 5px; cursor: pointer; transition: background 0.12s; font-size: 11px; color: #94a3b8; }
     .sp-model-option:hover { background: #1e1e2e; color: #e2e8f0; }
-    .sp-model-option.selected { color: #a5b4fc; background: #1e1b4b; }
+    .sp-model-option.selected { color: var(--agi-ext-accent); background: rgba(33, 128, 141, 0.12); }
     .sp-model-option-check { width: 14px; text-align: center; font-size: 10px; flex-shrink: 0; }
     .sp-model-option-label { flex: 1; }
 
@@ -1304,7 +1327,7 @@ function injectStyles(): void {
       color: #475569;
       white-space: nowrap;
     }
-    .sp-model-option.selected .sp-model-option-sublabel { color: #818cf8; }
+    .sp-model-option.selected .sp-model-option-sublabel { color: var(--agi-ext-accent); opacity: 0.7; }
     .sp-model-option:hover .sp-model-option-sublabel { color: #64748b; }
 
     /* "Best (auto)" option — visually distinct row */
@@ -1315,14 +1338,14 @@ function injectStyles(): void {
     }
     .sp-model-option-auto .sp-model-option-name {
       font-weight: 600;
-      color: #a5b4fc;
+      color: var(--agi-ext-accent);
     }
-    .sp-model-option-auto:hover .sp-model-option-name { color: #c7d2fe; }
+    .sp-model-option-auto:hover .sp-model-option-name { color: var(--agi-ext-accent); opacity: 0.85; }
     .sp-model-auto-dot {
       width: 16px;
       height: 16px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      background: linear-gradient(135deg, var(--agi-ext-accent), var(--agi-ext-accent-secondary));
       flex-shrink: 0;
     }
 
@@ -1385,7 +1408,7 @@ function injectStyles(): void {
       user-select: none;
       cursor: pointer;
     }
-    .sp-thinking-toggle-label.active { color: #a5b4fc; }
+    .sp-thinking-toggle-label.active { color: var(--agi-ext-accent); }
     .sp-thinking-toggle {
       appearance: none;
       width: 28px;
@@ -1399,7 +1422,8 @@ function injectStyles(): void {
       border: none;
       outline: none;
     }
-    .sp-thinking-toggle:checked { background: #4338ca; }
+    .sp-thinking-toggle:checked { background: var(--agi-ext-accent); }
+    .sp-thinking-toggle:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
     .sp-thinking-toggle::after {
       content: '';
       position: absolute;
