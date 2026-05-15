@@ -140,7 +140,7 @@ fn apply_chunks_to_file(
 
     let mut lines: Vec<String> = raw.split('\n').map(String::from).collect();
     // Drop the trailing empty string produced by a final newline.
-    if lines.last().is_some_and(|l| l.is_empty()) {
+    if lines.last().is_some_and(String::is_empty) {
         lines.pop();
     }
 
@@ -148,7 +148,7 @@ fn apply_chunks_to_file(
     let mut result = apply_replacements(lines, &replacements);
 
     // Ensure trailing newline.
-    if !result.last().is_some_and(|l| l.is_empty()) {
+    if !result.last().is_some_and(String::is_empty) {
         result.push(String::new());
     }
 
@@ -180,7 +180,7 @@ fn compute_replacements(
 
         if chunk.old_lines.is_empty() {
             // Pure insertion — add before the trailing empty line if present.
-            let insert_at = if original.last().is_some_and(|l| l.is_empty()) {
+            let insert_at = if original.last().is_some_and(String::is_empty) {
                 original.len() - 1
             } else {
                 original.len()
@@ -196,9 +196,9 @@ fn compute_replacements(
             seek_sequence(original, pattern, line_index, chunk.is_end_of_file);
 
         // Retry without trailing empty line (represents final-newline in file).
-        if found.is_none() && pattern.last().is_some_and(|l| l.is_empty()) {
+        if found.is_none() && pattern.last().is_some_and(String::is_empty) {
             pattern = &pattern[..pattern.len() - 1];
-            if new_slice.last().is_some_and(|l| l.is_empty()) {
+            if new_slice.last().is_some_and(String::is_empty) {
                 new_slice = &new_slice[..new_slice.len() - 1];
             }
             found = seek_sequence(original, pattern, line_index, chunk.is_end_of_file);

@@ -3,6 +3,9 @@ name = "agiworkforce-network-proxy"
 version = "0.1.0"
 edition = "2024"
 
+[lints]
+workspace = true
+
 [lib]
 name = "agiworkforce_network_proxy"
 path = "src/lib.rs"

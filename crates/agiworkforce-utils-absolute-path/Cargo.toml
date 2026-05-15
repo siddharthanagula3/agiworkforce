@@ -3,6 +3,9 @@ name = "agiworkforce-utils-absolute-path"
 version = "0.1.0"
 edition = "2024"
 
+[lints]
+workspace = true
+
 [lib]
 name = "agiworkforce_utils_absolute_path"
 path = "src/lib.rs"
