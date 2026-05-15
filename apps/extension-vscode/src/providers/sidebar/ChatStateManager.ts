@@ -71,7 +71,10 @@ export type ExtToWebviewMessage =
   | { type: 'addUserMessage'; payload: { text: string } }
   | { type: 'modeChanged'; payload: { mode: AgentMode } }
   | { type: 'effortChanged'; payload: { effort: Effort; supportsEffort: boolean } }
-  | { type: 'usageMeter'; payload: UsageMeterWebviewPayload };
+  | { type: 'usageMeter'; payload: UsageMeterWebviewPayload }
+  | { type: 'toolCallStart'; payload: { toolUseId: string; name: string } }
+  | { type: 'toolCallDelta'; payload: { toolUseId: string; deltaJson: string } }
+  | { type: 'toolCallEnd'; payload: { toolUseId: string } };
 
 export interface UsageMeterWebviewPayload {
   source: UsageMeter['source'];
@@ -504,6 +507,15 @@ export class ChatStateManager {
           onToken: (t) => {
             assistantTokens.push(t);
             this._post({ type: 'token', payload: { text: t } });
+          },
+          onToolUseStart: (toolUseId, name) => {
+            this._post({ type: 'toolCallStart', payload: { toolUseId, name } });
+          },
+          onToolUseDelta: (toolUseId, deltaJson) => {
+            this._post({ type: 'toolCallDelta', payload: { toolUseId, deltaJson } });
+          },
+          onToolUseEnd: (toolUseId) => {
+            this._post({ type: 'toolCallEnd', payload: { toolUseId } });
           },
           onDone: () => {
             const full = assistantTokens.join('');
