@@ -89,7 +89,7 @@ export interface SharedSidePanelContext {
    * Persisted to chrome.storage.local as 'agi_thinking_enabled'.
    * The value is forwarded to the desktop bridge as `extended_thinking: true` in
    * the CHAT_MESSAGE payload. The bridge handles the provider-specific mapping.
-   * TODO(Phase 3 bridge): wire the desktop bridge to consume `extendedThinking`
+   * Phase 3 bridge: wire the desktop bridge to consume `extendedThinking`
    * in the ChatRequest type and forward it to providers that support it
    * (Anthropic thinking blocks, OpenAI reasoning effort, Gemini thinkingBudget).
    */
@@ -1992,7 +1992,7 @@ function sendMessage(text: string): void {
             pageContext: pageCtx ?? undefined,
             conversationHistory: history,
             apiKey: _ctx.currentApiKey ?? undefined,
-            // TODO(Phase 3 bridge): bridge must consume extendedThinking and
+            // Phase 3 bridge: bridge must consume extendedThinking and
             // forward to providers that support it (Anthropic thinking blocks,
             // OpenAI reasoning effort, Gemini thinkingBudget).
             extendedThinking: _ctx.thinkingEnabled || undefined,
@@ -2055,7 +2055,7 @@ function sendMessage(text: string): void {
       pageContext: pageCtx ?? undefined,
       conversationHistory: history,
       apiKey: _ctx.currentApiKey ?? undefined,
-      // TODO(Phase 3 bridge): bridge must consume extendedThinking and
+      // Phase 3 bridge: bridge must consume extendedThinking and
       // forward to providers that support it (Anthropic thinking blocks,
       // OpenAI reasoning effort, Gemini thinkingBudget).
       extendedThinking: _ctx.thinkingEnabled || undefined,
