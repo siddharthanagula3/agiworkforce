@@ -10,7 +10,8 @@
     "build": "tsc --project tsconfig.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
-    "test:live": "AGIWORKFORCE_LIVE_TEST=1 vitest run --passWithNoTests"
+    "test:live": "AGIWORKFORCE_LIVE_TEST=1 vitest run --passWithNoTests",
+    "posttest": "pnpm build"
   },
   "dependencies": {
     "@agiworkforce/types": "workspace:*",
