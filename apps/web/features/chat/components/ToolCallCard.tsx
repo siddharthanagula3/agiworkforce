@@ -1,22 +1,11 @@
 'use client';
 
-/**
- * ToolCallCard - Web-compatible tool call display
- *
- * Renders individual tool invocations with 4 states:
- * pending | running | complete | error
- *
- * No Tauri or framer-motion dependencies — plain Tailwind + React.
- */
-
 import React, { useState, useMemo, memo } from 'react';
 import {
   ChevronRight,
   ChevronDown,
   Loader2,
-  CheckCircle2,
   XCircle,
-  Clock,
   AlertCircle,
   Copy,
   Check,
@@ -43,29 +32,18 @@ export type ToolCallStatus =
 
 export interface ToolCall {
   id: string;
-  /** Display name of the tool */
   name: string;
-  /** Short description of what the tool does */
   description?: string;
-  /** Key/value parameters passed to the tool */
   parameters?: Record<string, unknown>;
-  /** Current execution status */
+  result?: string;
   status: ToolCallStatus;
-  /** ISO timestamp when the call was created */
   createdAt?: string;
-  /** ISO timestamp when execution started */
   startedAt?: string;
-  /** ISO timestamp when execution finished */
   completedAt?: string;
-  /** Duration in milliseconds */
   durationMs?: number;
-  /** Whether the tool requires user approval */
   requiresApproval?: boolean;
-  /** Whether the user approved the action */
   approved?: boolean;
-  /** ISO timestamp of approval */
   approvedAt?: string;
-  /** Whether the card starts expanded */
   defaultExpanded?: boolean;
 }
 
@@ -74,7 +52,6 @@ interface ToolCallCardProps {
   onCancel?: (id: string) => void;
   onApprove?: (id: string) => void;
   onReject?: (id: string) => void;
-  /** Whether to show the parameters section */
   showParameters?: boolean;
   className?: string;
 }
@@ -113,69 +90,50 @@ function getToolIcon(name: string): React.ElementType {
 function formatDuration(ms?: number): string {
   if (!ms) return '';
   if (ms < 1000) return `${ms}ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(2)}s`;
-  return `${(ms / 60_000).toFixed(2)}m`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${(ms / 60_000).toFixed(1)}m`;
 }
 
-function formatTimestamp(iso?: string): string {
-  if (!iso) return '–';
-  try {
-    return new Date(iso).toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-  } catch {
-    return '–';
-  }
-}
+// ─── Status pill ──────────────────────────────────────────────────────────────
 
-// ─── Status config ────────────────────────────────────────────────────────────
-
-function getStatusConfig(status: ToolCallStatus) {
+function StatusPill({ status, durationMs }: { status: ToolCallStatus; durationMs?: number }) {
   switch (status) {
-    case 'pending':
-      return {
-        icon: <Clock className="h-4 w-4" />,
-        colorClass: 'text-muted-foreground',
-        label: 'Pending',
-      };
     case 'running':
-      return {
-        icon: <Loader2 className="h-4 w-4 animate-spin" />,
-        colorClass: 'text-blue-600 dark:text-blue-400',
-        label: 'Running',
-      };
+      return (
+        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Running
+        </span>
+      );
     case 'complete':
-      return {
-        icon: <CheckCircle2 className="h-4 w-4" />,
-        colorClass: 'text-green-600 dark:text-green-400',
-        label: 'Complete',
-      };
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs text-muted-foreground bg-muted/60">
+          Result
+          {durationMs != null && <span className="opacity-60">{formatDuration(durationMs)}</span>}
+        </span>
+      );
     case 'error':
-      return {
-        icon: <XCircle className="h-4 w-4" />,
-        colorClass: 'text-red-600 dark:text-red-400',
-        label: 'Error',
-      };
-    case 'cancelled':
-      return {
-        icon: <XCircle className="h-4 w-4" />,
-        colorClass: 'text-orange-600 dark:text-orange-400',
-        label: 'Cancelled',
-      };
+      return (
+        <span className="inline-flex items-center gap-1 text-xs text-red-500 dark:text-red-400">
+          <XCircle className="h-3 w-3" />
+          Error
+        </span>
+      );
     case 'awaiting_approval':
-      return {
-        icon: <AlertCircle className="h-4 w-4" />,
-        colorClass: 'text-yellow-600 dark:text-yellow-400',
-        label: 'Awaiting Approval',
-      };
+      return (
+        <span className="inline-flex items-center gap-1 text-xs text-yellow-600 dark:text-yellow-400">
+          <AlertCircle className="h-3 w-3" />
+          Approval needed
+        </span>
+      );
+    case 'cancelled':
+      return (
+        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground line-through">
+          Cancelled
+        </span>
+      );
     default:
-      return {
-        icon: <Clock className="h-4 w-4" />,
-        colorClass: 'text-muted-foreground',
-        label: status,
-      };
+      return <span className="text-xs text-muted-foreground/60">Pending</span>;
   }
 }
 
@@ -195,19 +153,13 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
   const [copied, setCopied] = useState(false);
 
   const ToolIcon = useMemo(() => getToolIcon(toolCall.name), [toolCall.name]);
-  const statusConfig = useMemo(() => getStatusConfig(toolCall.status), [toolCall.status]);
-  const hasParameters = toolCall.parameters && Object.keys(toolCall.parameters).length > 0;
   const needsApproval = toolCall.status === 'awaiting_approval';
   const canCancel = toolCall.status === 'running' && onCancel;
+  const hasParameters = toolCall.parameters && Object.keys(toolCall.parameters).length > 0;
 
   const handleCopy = async () => {
     const text = JSON.stringify(
-      {
-        tool: toolCall.name,
-        parameters: toolCall.parameters ?? {},
-        status: toolCall.status,
-        durationMs: toolCall.durationMs,
-      },
+      { tool: toolCall.name, parameters: toolCall.parameters ?? {}, status: toolCall.status },
       null,
       2,
     );
@@ -219,20 +171,22 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
   return (
     <div
       className={cn(
-        'border border-border rounded-lg overflow-hidden bg-muted/20',
-        needsApproval && 'ring-2 ring-yellow-400/50 dark:ring-yellow-500/40',
+        'group my-0.5',
+        needsApproval &&
+          'rounded-lg border border-yellow-300/40 dark:border-yellow-700/40 bg-yellow-50/30 dark:bg-yellow-950/10',
         className,
       )}
     >
-      {/* ── Header ─────────────────────────────────────────────────────── */}
+      {/* ── Header row ── */}
       <div
         role="button"
         tabIndex={0}
         aria-expanded={expanded}
-        aria-label={`${toolCall.name} – ${statusConfig.label}`}
+        aria-label={`${toolCall.name} tool call`}
         className={cn(
-          'flex items-center gap-3 px-3 py-2.5 bg-muted/40 cursor-pointer hover:bg-muted/60 transition-colors select-none',
-          needsApproval && 'bg-yellow-50 dark:bg-yellow-950/20',
+          'flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer select-none',
+          'hover:bg-muted/40 transition-colors duration-100',
+          needsApproval && 'px-3',
         )}
         onClick={() => setExpanded((prev) => !prev)}
         onKeyDown={(e) => {
@@ -242,94 +196,71 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
           }
         }}
       >
-        {/* Expand chevron */}
+        {/* Chevron */}
         {expanded ? (
-          <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/60 flex-shrink-0" />
         ) : (
-          <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60 flex-shrink-0" />
         )}
 
-        {/* Status icon */}
-        <span className={statusConfig.colorClass}>{statusConfig.icon}</span>
+        {/* Tool icon */}
+        <ToolIcon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
 
-        {/* Tool icon + name */}
-        {}
-        <ToolIcon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-sm truncate">{toolCall.name}</span>
-            {toolCall.status === 'running' && (
-              <span className="text-xs bg-blue-500/10 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded">
-                Running
-              </span>
-            )}
-          </div>
-          {toolCall.description && (
-            <p className="text-xs text-muted-foreground truncate">{toolCall.description}</p>
-          )}
-        </div>
+        {/* Tool name */}
+        <span className="flex-1 min-w-0 text-sm text-foreground/80 truncate font-medium">
+          {toolCall.name}
+        </span>
 
-        {/* Right: duration + status label + action buttons */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <span className={cn('text-xs', statusConfig.colorClass)}>
-            {statusConfig.label}
-            {toolCall.durationMs != null && (
-              <span className="ml-2 text-muted-foreground">
-                {formatDuration(toolCall.durationMs)}
-              </span>
-            )}
-          </span>
+        {/* Right side: status + action buttons */}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <StatusPill status={toolCall.status} durationMs={toolCall.durationMs} />
 
           {canCancel && (
             <button
               type="button"
-              aria-label="Cancel tool execution"
+              aria-label="Cancel"
               onClick={(e) => {
                 e.stopPropagation();
                 onCancel!(toolCall.id);
               }}
-              className="h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             >
-              <XIcon className="h-3.5 w-3.5" />
+              <XIcon className="h-3 w-3" />
             </button>
           )}
 
           <button
             type="button"
-            aria-label={copied ? 'Copied' : 'Copy tool call details'}
+            aria-label={copied ? 'Copied' : 'Copy'}
             onClick={(e) => {
               e.stopPropagation();
               handleCopy();
             }}
-            className="h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground hover:bg-muted transition-all"
           >
-            {copied ? (
-              <Check className="h-3.5 w-3.5 text-green-500" />
-            ) : (
-              <Copy className="h-3.5 w-3.5" />
-            )}
+            {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
           </button>
         </div>
       </div>
 
-      {/* ── Expanded Body ───────────────────────────────────────────────── */}
+      {/* ── Expanded body ── */}
       {expanded && (
-        <div className="p-3 space-y-3 border-t border-border bg-background/50">
+        <div className="px-2 pb-2 space-y-2">
           {/* Approval prompt */}
           {needsApproval && (onApprove || onReject) && (
-            <div className="flex items-center gap-3 p-3 bg-yellow-50 dark:bg-yellow-950/20 rounded border border-yellow-200 dark:border-yellow-900">
-              <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
-              <p className="flex-1 text-sm text-yellow-900 dark:text-yellow-100">
-                This tool requires your approval before execution.
+            <div className="flex items-center gap-2 p-2 rounded bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900">
+              <AlertCircle className="h-3.5 w-3.5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+              <p className="flex-1 text-xs text-yellow-900 dark:text-yellow-100">
+                This tool requires approval before execution.
               </p>
-              <div className="flex gap-2">
+              <div className="flex gap-1.5">
                 {onApprove && (
                   <button
                     type="button"
                     onClick={() => onApprove(toolCall.id)}
-                    className="flex items-center gap-1 h-7 px-3 text-xs font-medium rounded bg-green-600 hover:bg-green-700 text-white transition-colors"
+                    className="flex items-center gap-1 h-6 px-2 text-xs font-medium rounded bg-green-600 hover:bg-green-700 text-white transition-colors"
                   >
-                    <Play className="h-3 w-3" />
+                    <Play className="h-2.5 w-2.5" />
                     Approve
                   </button>
                 )}
@@ -337,7 +268,7 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
                   <button
                     type="button"
                     onClick={() => onReject(toolCall.id)}
-                    className="flex items-center gap-1 h-7 px-3 text-xs font-medium rounded border border-border bg-background hover:bg-muted transition-colors"
+                    className="h-6 px-2 text-xs font-medium rounded border border-border bg-background hover:bg-muted transition-colors"
                   >
                     Reject
                   </button>
@@ -346,66 +277,32 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
             </div>
           )}
 
-          {/* Timing info */}
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            {toolCall.createdAt && (
-              <div>
-                <span className="text-muted-foreground">Created:</span>
-                <span className="ml-2 font-mono">{formatTimestamp(toolCall.createdAt)}</span>
-              </div>
-            )}
-            {toolCall.startedAt && (
-              <div>
-                <span className="text-muted-foreground">Started:</span>
-                <span className="ml-2 font-mono">{formatTimestamp(toolCall.startedAt)}</span>
-              </div>
-            )}
-            {toolCall.completedAt && (
-              <div>
-                <span className="text-muted-foreground">Completed:</span>
-                <span className="ml-2 font-mono">{formatTimestamp(toolCall.completedAt)}</span>
-              </div>
-            )}
-            {toolCall.durationMs != null && (
-              <div>
-                <span className="text-muted-foreground">Duration:</span>
-                <span className="ml-2 font-mono">{formatDuration(toolCall.durationMs)}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Approval status */}
-          {toolCall.approved !== undefined && (
-            <div className="text-xs">
-              <span className="text-muted-foreground">Approved:</span>
-              <span
-                className={cn(
-                  'ml-2 font-medium',
-                  toolCall.approved ? 'text-green-600' : 'text-red-600',
-                )}
-              >
-                {toolCall.approved ? 'Yes' : 'No'}
-              </span>
-              {toolCall.approvedAt && (
-                <span className="ml-2 text-muted-foreground">
-                  at {formatTimestamp(toolCall.approvedAt)}
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Parameters */}
+          {/* Parameters / request */}
           {showParameters && hasParameters && (
             <div>
-              <div className="text-xs font-semibold text-muted-foreground mb-2">Parameters</div>
-              <pre className="overflow-auto max-h-48 rounded bg-muted/50 p-3 text-xs font-mono leading-relaxed">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1 ml-0.5">
+                Request
+              </p>
+              <pre className="overflow-auto max-h-40 rounded bg-muted/50 p-2.5 text-xs font-mono leading-relaxed scrollbar-thin">
                 {JSON.stringify(toolCall.parameters, null, 2)}
               </pre>
             </div>
           )}
 
-          {showParameters && !hasParameters && (
-            <p className="text-xs text-muted-foreground italic">No parameters</p>
+          {/* Result */}
+          {toolCall.result && (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1 ml-0.5">
+                Response
+              </p>
+              <pre className="overflow-auto max-h-48 rounded bg-muted/50 p-2.5 text-xs font-mono leading-relaxed scrollbar-thin">
+                {toolCall.result}
+              </pre>
+            </div>
+          )}
+
+          {showParameters && !hasParameters && !toolCall.result && (
+            <p className="text-xs text-muted-foreground/50 italic px-1">No parameters</p>
           )}
         </div>
       )}

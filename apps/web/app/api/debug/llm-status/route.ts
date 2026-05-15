@@ -1,11 +1,11 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { requireEnv, getOptionalEnv } from '@/utils/env';
+import { getOptionalEnv } from '@/utils/env';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { withErrorHandler } from '@/lib/error-handler';
+import { getAuthenticatedUser } from '@/lib/api-auth';
 
 /**
  * Debug endpoint to check LLM provider configuration
@@ -20,22 +20,14 @@ async function handleGetLlmStatus(request: NextRequest) {
   const isDev = process.env.NODE_ENV === 'development';
 
   if (!isDev) {
-    // In production, require admin authentication via app_metadata.role
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // In production, require admin authentication via app_metadata.role.
+    // getAuthenticatedUser handles Bearer + cookie flows and uses the service-role
+    // client only for JWT verification (never for DB ops).
+    let user;
+    try {
+      user = await getAuthenticatedUser(request);
+    } catch {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const token = authHeader.substring(7);
-    const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-    const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { persistSession: false },
-    });
-
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    if (error || !user) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
     // Verify admin via app_metadata (set by service role only, not user-editable)
