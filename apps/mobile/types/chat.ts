@@ -108,6 +108,10 @@ export interface ChatMessage extends Omit<CanonicalChatMessage, 'attachments'> {
   imageGenPrompt?: string;
   /** Citations from RAG or web search */
   citations?: Array<{ url: string; title?: string; snippet?: string }>;
+  /** True when the message is waiting in the offline queue to be sent */
+  isQueued?: boolean;
+  /** ID of the corresponding offlineQueue entry (cleared after successful send) */
+  offlineQueueId?: string;
 }
 
 export interface ConversationSummary {

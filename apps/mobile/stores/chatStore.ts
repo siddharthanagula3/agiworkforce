@@ -105,6 +105,13 @@ interface ChatState {
   pinConversation: (id: string) => Promise<void>;
   makeConversationPermanent: (id: string) => void;
   clearQueuedPlaceholders: (conversationId: string) => void;
+  enqueueOfflineMessage: (
+    conversationId: string,
+    content: string,
+    model: string,
+    queueId: string,
+  ) => void;
+  resolveOfflineMessage: (conversationId: string, queueId: string) => void;
   setChatMode: (mode: ChatMode) => void;
   setChatStyle: (style: ChatStyle) => void;
   setToolAccess: (access: ToolAccess) => void;
@@ -995,11 +1002,46 @@ export const useChatStore = create<ChatState>()(
         set((state) => {
           const msgs = state.messages[conversationId];
           if (!msgs) return state;
-          // Remove any streaming placeholder messages that were queued offline
+          // Remove streaming placeholders AND offline-queued messages before retry
           return {
             messages: {
               ...state.messages,
-              [conversationId]: msgs.filter((m) => !m.isStreaming),
+              [conversationId]: msgs.filter((m) => !m.isStreaming && !m.isQueued),
+            },
+          };
+        });
+      },
+
+      enqueueOfflineMessage: (conversationId, content, model, queueId) => {
+        const userMessage: ChatMessage = {
+          id: generateId(),
+          conversationId,
+          role: 'user',
+          content,
+          createdAt: new Date().toISOString(),
+          model,
+          isQueued: true,
+          offlineQueueId: queueId,
+        };
+        set((state) => {
+          const existing = state.messages[conversationId] ?? [];
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: [...existing, userMessage],
+            },
+          };
+        });
+      },
+
+      resolveOfflineMessage: (conversationId, queueId) => {
+        set((state) => {
+          const msgs = state.messages[conversationId];
+          if (!msgs) return state;
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: msgs.filter((m) => m.offlineQueueId !== queueId),
             },
           };
         });

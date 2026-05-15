@@ -208,7 +208,7 @@ const defaultProps = {
   onOpenVoiceMode: jest.fn(),
   onOpenAddToChat: jest.fn(),
   onOpenConnectors: jest.fn(),
-  disabled: false,
+  isOnline: true,
 };
 
 function renderInput(overrides: Partial<typeof defaultProps> = {}) {
@@ -298,12 +298,12 @@ describe('ChatInput', () => {
 
   // ---- Disabled state ----
 
-  describe('disabled state', () => {
-    it('shows "You\'re offline" placeholder when disabled', () => {
-      const { getByLabelText } = renderInput({ disabled: true });
+  describe('offline state', () => {
+    it('shows offline placeholder when isOnline is false', () => {
+      const { getByLabelText } = renderInput({ isOnline: false });
 
       const input = getByLabelText('Message input');
-      expect(input.props.placeholder).toBe("You're offline");
+      expect(input.props.placeholder).toContain('Offline');
     });
   });
 });

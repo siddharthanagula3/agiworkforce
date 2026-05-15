@@ -7,6 +7,7 @@ import {
   Platform,
 } from 'react-native';
 import { memo, useCallback, useMemo, useState } from 'react';
+import { Clock } from 'lucide-react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { TapGestureHandler, State } from 'react-native-gesture-handler';
 import type { TapGestureHandlerStateChangeEvent } from 'react-native-gesture-handler';
@@ -257,10 +258,29 @@ export const MessageBubble = memo(function MessageBubble({
 
           {/* Content column */}
           <View className="flex-1 gap-1">
-            {/* Role label */}
-            <Text className="text-xs text-white/40 font-medium">
-              {isUser ? 'You' : (message.model ?? 'Assistant')}
-            </Text>
+            {/* Role label + offline queued badge */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text className="text-xs text-white/40 font-medium">
+                {isUser ? 'You' : (message.model ?? 'Assistant')}
+              </Text>
+              {isUser && message.isQueued && (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 3,
+                    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                    paddingHorizontal: 5,
+                    paddingVertical: 2,
+                    borderRadius: 4,
+                  }}
+                  accessibilityLabel="Message queued offline"
+                >
+                  <Clock size={10} color="#f59e0b" />
+                  <Text style={{ fontSize: 10, color: '#f59e0b' }}>queued</Text>
+                </View>
+              )}
+            </View>
 
             {/* User attachments (images sent with the message) */}
             {isUser && message.attachments && message.attachments.length > 0 && (
