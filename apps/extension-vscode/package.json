@@ -835,6 +835,7 @@
     "test": "vitest run",
     "test:integration": "tsc -p tsconfig.test.json && node out/test/runTests.js",
     "typecheck": "tsc --noEmit",
+    "check:refs": "tsc -b tsconfig.build.json",
     "clean": "rimraf out",
     "prebuild": "pnpm run clean && pnpm run typecheck",
     "build": "pnpm run compile"

@@ -54,16 +54,25 @@ const getQualityTierLabel = (tier: 'fast' | 'balanced' | 'best') => {
 };
 
 export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorProps) => {
-  const { selectedModel, selectModel, thinkingModeEnabled, thinkingBudget, setThinkingBudget } =
-    useModelStore(
-      useShallow((state) => ({
-        selectedModel: state.selectedModel,
-        selectModel: state.selectModel,
-        thinkingModeEnabled: state.thinkingModeEnabled,
-        thinkingBudget: state.thinkingBudget,
-        setThinkingBudget: state.setThinkingBudget,
-      })),
-    );
+  const {
+    selectedModel,
+    selectModel,
+    thinkingModeEnabled,
+    thinkingBudget,
+    setThinkingBudget,
+    perTurnAdaptiveThinking,
+    togglePerTurnAdaptiveThinking,
+  } = useModelStore(
+    useShallow((state) => ({
+      selectedModel: state.selectedModel,
+      selectModel: state.selectModel,
+      thinkingModeEnabled: state.thinkingModeEnabled,
+      thinkingBudget: state.thinkingBudget,
+      setThinkingBudget: state.setThinkingBudget,
+      perTurnAdaptiveThinking: state.perTurnAdaptiveThinking,
+      togglePerTurnAdaptiveThinking: state.togglePerTurnAdaptiveThinking,
+    })),
+  );
 
   const { account, isTierLoading } = useAccountStore(
     useShallow((state) => ({
@@ -484,21 +493,43 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
                 isDisabled ? 'This model does not support Thinking Mode' : 'Set thinking budget'
               }
             >
-              <div className="flex items-center gap-2 mb-1.5">
-                <Brain
-                  size={12}
-                  className={thinkingModeEnabled ? 'text-amber-500' : 'text-muted-foreground'}
-                />
-                <span
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2">
+                  <Brain
+                    size={12}
+                    className={thinkingModeEnabled ? 'text-amber-500' : 'text-muted-foreground'}
+                  />
+                  <span
+                    className={cn(
+                      'text-[10px] font-medium',
+                      thinkingModeEnabled
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-muted-foreground',
+                    )}
+                  >
+                    Think
+                  </span>
+                </div>
+                {/* Per-turn adaptive thinking toggle — resets after each send */}
+                <button
+                  type="button"
+                  onClick={togglePerTurnAdaptiveThinking}
+                  title={
+                    perTurnAdaptiveThinking
+                      ? 'Adaptive thinking active for next turn. Click to disable.'
+                      : 'Enable adaptive thinking for this turn (model decides budget)'
+                  }
                   className={cn(
-                    'text-[10px] font-medium',
-                    thinkingModeEnabled
-                      ? 'text-amber-600 dark:text-amber-400'
-                      : 'text-muted-foreground',
+                    'flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors',
+                    perTurnAdaptiveThinking
+                      ? 'bg-purple-500/20 text-purple-600 dark:text-purple-400 ring-1 ring-purple-500/40'
+                      : 'text-muted-foreground hover:bg-[hsl(var(--accent))]',
                   )}
+                  aria-pressed={perTurnAdaptiveThinking}
                 >
-                  Think
-                </span>
+                  <Sparkles size={9} />
+                  <span>Adaptive</span>
+                </button>
               </div>
               <div className="flex items-center gap-1">
                 {budgetOptions.map((opt) => (
