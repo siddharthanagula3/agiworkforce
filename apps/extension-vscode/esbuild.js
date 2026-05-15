@@ -41,8 +41,10 @@ function copyCodiconAssets() {
   const codiconDst = path.join(__dirname, 'out', 'codicons');
   if (!fs.existsSync(codiconSrc)) return;
   fs.mkdirSync(codiconDst, { recursive: true });
-  for (const file of fs.readdirSync(codiconSrc)) {
-    fs.copyFileSync(path.join(codiconSrc, file), path.join(codiconDst, file));
+  // Only copy runtime assets (CSS + font); skip .html, .svg, .csv, .ts, .json reference files.
+  for (const file of ['codicon.css', 'codicon.ttf']) {
+    const src = path.join(codiconSrc, file);
+    if (fs.existsSync(src)) fs.copyFileSync(src, path.join(codiconDst, file));
   }
 }
 
