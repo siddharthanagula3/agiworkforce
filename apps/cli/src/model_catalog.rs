@@ -1507,13 +1507,17 @@ mod tests {
         // include_str! resolves at compile time relative to the source file.
         // We check chatwidget.rs and list_selection_view.rs — the two files
         // identified as violation sites in the CLI-GHOST-MODEL / CLI-FAST-STATUS-MODEL
-        // audit findings.
+        // audit findings. exec_cell/render.rs and history_cell.rs are added as
+        // they were modified in the icon render refactor and must stay clean.
         let chatwidget_src = include_str!("tui/chatwidget.rs");
         let list_sel_src = include_str!("tui/bottom_pane/list_selection_view.rs");
+        let exec_render_src = include_str!("tui/exec_cell/render.rs");
 
         // Patterns that would indicate a hardcoded model literal (not inside a comment).
         // We check for the known offenders specifically to avoid false positives from
         // legitimate display strings that contain model names for UI copy.
+        // Note: history_cell.rs is excluded because its #[cfg(test)] block uses model-name
+        // fixture strings in unit tests — those are not production hardcodings.
         let forbidden: &[&str] = &[
             "\"gpt-5.4\"",
             "\"gpt-5.5\"",
@@ -1523,16 +1527,17 @@ mod tests {
         ];
 
         for literal in forbidden {
-            assert!(
-                !chatwidget_src.contains(literal),
-                "chatwidget.rs contains hardcoded model literal {literal} — \
-                 use model_catalog::fast_completion_model() or model_catalog::find() instead"
-            );
-            assert!(
-                !list_sel_src.contains(literal),
-                "list_selection_view.rs contains hardcoded model literal {literal} — \
-                 populate the model picker from the catalog"
-            );
+            for (file, src) in [
+                ("chatwidget.rs", chatwidget_src),
+                ("list_selection_view.rs", list_sel_src),
+                ("exec_cell/render.rs", exec_render_src),
+            ] {
+                assert!(
+                    !src.contains(literal),
+                    "{file} contains hardcoded model literal {literal} — \
+                     use model_catalog::fast_completion_model() or model_catalog::find() instead"
+                );
+            }
         }
     }
 
