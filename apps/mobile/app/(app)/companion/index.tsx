@@ -34,9 +34,10 @@ import {
 import { setupCompanionNotifications } from '@/services/companionNotifications';
 import { startMobileHeartbeat, logApprovalDecision } from '@/services/heartbeat';
 import { supabase } from '@/services/supabase';
-import { colors } from '@/lib/theme';
+import { useThemeColors } from '@/hooks/useTheme';
 
 export default function CompanionScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
   // MOB-PAIRINGCODE-ORPHAN fix: read pairingCode pushed by deep-link handler
   // in _layout.tsx (`router.push('/(app)/companion?pairingCode=...')`).

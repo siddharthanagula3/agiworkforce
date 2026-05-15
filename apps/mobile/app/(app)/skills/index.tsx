@@ -4,13 +4,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Zap } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/lib/theme';
+import { useThemeColors } from '@/hooks/useTheme';
 
 /**
  * Skills browser — placeholder screen.
  * Will display 150+ AI skills organized by category in Phase C.
  */
 export default function SkillsScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
 
   const handleBack = useCallback(() => {
