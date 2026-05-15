@@ -17,6 +17,7 @@ interface BreadcrumbProps {
     | 'schedules'
     | 'artifacts'
     | 'reminders'
+    | 'cowork'
     | null;
   onNavigateHome: () => void;
   conversationTitle?: string | null;
@@ -37,6 +38,8 @@ const VIEW_LABELS: Record<string, string> = {
   skills: 'Skills',
   schedules: 'Schedules',
   artifacts: 'Artifacts Gallery',
+  reminders: 'Reminders',
+  cowork: 'Cowork',
 };
 
 export function Breadcrumb({
