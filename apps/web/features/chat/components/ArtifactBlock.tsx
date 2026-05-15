@@ -19,8 +19,19 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Copy, Check, ExternalLink, RefreshCw } from 'lucide-react';
 import DOMPurify from 'dompurify';
+import dynamic from 'next/dynamic';
 import { cn } from '@shared/lib/utils';
-import MermaidRenderer from './MermaidRenderer';
+
+// Mermaid is ~250KB. Only loaded when a message actually contains a `mermaid`
+// fenced code block — saves the cost on every chat session without diagrams.
+const MermaidRenderer = dynamic(() => import('./MermaidRenderer'), {
+  ssr: false,
+  loading: () => (
+    <div className="my-4 rounded-md border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+      Loading diagram…
+    </div>
+  ),
+});
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
