@@ -2,16 +2,20 @@
 
 Multi-provider AI coding assistant. 10+ providers (Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, Ollama, LMStudio, plus any OpenAI-compatible BYO endpoint). Switch mid-conversation. BYOK or managed cloud — your choice.
 
-## Features
+## Features (v0.3.0)
 
-- **`@agi` chat participant** with `/explain`, `/fix`, `/refactor`, `/tests`, `/docs`, `/model`.
+- **`@agi` chat participant** with `/explain`, `/fix`, `/refactor`, `/tests`, `/docs`, `/model` subcommands — type `@agi /fix` in GitHub Copilot Chat.
+- **Chat-in-editor panel** (`Cmd+Shift+A` or `agi-workforce.openChatInEditor`) — full chat as a VS Code editor tab.
 - **Sidebar chat** with multi-conversation history, context-file pinning, and code-action suggestions.
-- **Inline completions** (debounced, LRU-cached) — opt-in via `agiWorkforce.inlineCompletions.enabled`.
-- **CodeLens** "Ask AI / Tests / Docs" actions on every function or class.
-- **Agent mode** — multi-file edit with diff preview and one-click batch undo.
-- **Desktop bridge** (port 8787) for round-trips with the AGI Workforce desktop app — token-authenticated, allowlisted message types only.
+- **`@mention` file quickpick** — type `@` in the chat input to add any workspace file as context; content capped at 20 K chars.
+- **Inline completions** (debounced, LRU-cached, 16-entry) — opt-in via `agiWorkforce.inlineCompletions.enabled`.
+- **CodeLens** "Ask AI / Tests / Docs" actions on every function or class — cached by `(uri, version)` to avoid repeated rescans.
+- **Model picker** — `agi-workforce.selectModel` opens a QuickPick over the full provider catalog; no hardcoded model IDs.
+- **Agent mode** — multi-file edit with diff preview and one-click batch undo; workspace-trust gated.
+- **Desktop bridge** (port 8787) — token-authenticated WebSocket to the AGI Workforce desktop app; allowlisted message types only.
+- **56+ commands** covering chat, diff, patch, git, test, document, explain, refactor, and subsystem health.
 - **Multi-root workspace** support across git/test/patch operations.
-- **Workspace Trust** integration — sensitive settings (`apiEndpoint`, `gatewayUrl`, `cliPath`, `systemPrompt`, `agentMode.autoApply`) are restricted in untrusted workspaces.
+- **Workspace Trust** integration — endpoint, CLI path, system prompt, and agent-auto-apply settings are restricted in untrusted workspaces.
 
 ## Quick start
 
