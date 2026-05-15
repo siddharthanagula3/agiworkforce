@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 const EMPTY_TIMELINE: never[] = [];
 import { cn } from '../../../lib/utils';
 import { useUnifiedChatStore, uuidToDbId } from '../../../stores/unifiedChatStore';
-import { useChatStore } from '../../../stores/chat/chatStore';
+import { useChatStore, type ChatState } from '../../../stores/chat/chatStore';
 import { BranchNavigator } from '../BranchNavigator';
 import { useExecutionStore } from '../../../stores/executionStore';
 import { useToolStore } from '../../../stores/chat/toolStore';
@@ -246,10 +246,13 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   // IMPORTANT: Return stable references to avoid infinite re-render loop.
   // `?? []` creates a new array every call — use a module-level constant instead.
   const messageToolTimeline = useChatStore(
-    useCallback((state) => state.toolTimelineByMessage[message.id] ?? EMPTY_TIMELINE, [message.id]),
+    useCallback(
+      (state: ChatState) => state.toolTimelineByMessage[message.id] ?? EMPTY_TIMELINE,
+      [message.id],
+    ),
   );
   const messageThinkingContent = useChatStore(
-    useCallback((state) => state.thinkingByMessage[message.id] ?? '', [message.id]),
+    useCallback((state: ChatState) => state.thinkingByMessage[message.id] ?? '', [message.id]),
   );
 
   // Reactive settings (replaces getState() inside render functions)
