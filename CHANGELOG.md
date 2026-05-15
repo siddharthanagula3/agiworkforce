@@ -2,6 +2,59 @@
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased — launch-readiness wave 2] — 2026-05-15
+
+**25 commits** in a single parallel wave (`0fa1c7190..74b7f0255`) implementing `docs/design/design-spec-2026-05-15.md` across all 6 surfaces. Plan at `tasks/launch-readiness-wave2-plan.md`. Audit fire at `AUDIT_LOG.md` 2026-05-15T15:08Z.
+
+### Added
+
+- **`packages/unified-chat/src/components/InlineToolCall.tsx`** — shared React component matching design-spec §4 anatomy (borderless run-block, collapsible body, per-state styling). 19 RTL tests covering all 5 states + interaction. (`c800a5a9e`)
+- Chrome ext Lucide SVG sprite system at `apps/extension/src/assets/icons.ts` — CSP-friendly raw SVG strings for Terminal, FileText, FilePen, Search, Globe, CircleCheck, Loader2, Settings, MessageSquare, SquarePen. (`0f812a428`)
+- Mobile inline tool-call RN component at `apps/mobile/components/chat/InlineToolCall.tsx`. (`5cee5b174`)
+- VS Code webview inline tool-call rendering using native Codicons. (`a1af715c2`)
+- CLI ratatui tool-call rendering aligned with design-spec §4. (`99609f080`)
+- CLI no-hardcode guard now covers `exec_cell/render.rs`. (`74b7f0255`)
+
+### Changed
+
+- **Composer parity per design-spec §7** — soft-pill 16px border-radius, plus-menu, bottom-row controls, Cmd/Ctrl+Enter sends, auto-grow to 240px:
+  - Desktop (`f871d848b`)
+  - Web (`db77a2ee5`)
+  - Mobile (`9893b7184`)
+  - Chrome ext (`333ac7e14`)
+  - VS Code ext (`f2d3017ed`)
+- **Sidebar parity per design-spec §6** — 48px icon-only rail, 260px expanded:
+  - Desktop (`dff346a31`)
+  - Web (`08772e40e`)
+  - Mobile drawer-adapted (`823f843e9`)
+- **Empty state per design-spec §8** — composer-first, no welcome cards:
+  - Desktop (`2e0d47afc`)
+  - Web (`ced8e87c1`)
+  - Mobile (`cda369f34`)
+  - VS Code ext (`70c81ffbb`)
+  - Chrome ext (`333ac7e14`)
+- **Web ToolCallCard** migrated to wrap shared `InlineToolCall`. (`71b6bdda1`)
+- **Web RLS** — 3 more service-role routes migrated to canonical `getServiceClient` helper. (`3b8fd1f55`)
+- **CLI** further chatwidget split — guardian review handlers extracted. (`71d62675c`)
+
+### Fixed
+
+- **Web composer tests** — updated for Cmd+Enter send shortcut after the §7 refactor changed Enter→Cmd+Enter. (`785be9b98`)
+- **Web chat-completions test mocks** — updated to handle `getAuthenticatedUserWithClient` signature change from wave 1. (`ea110f6e2`, `2464337bf`)
+
+### Verified
+
+| Surface     | Tests             | Notes                                                                                                        |
+| ----------- | ----------------- | ------------------------------------------------------------------------------------------------------------ |
+| CLI         | 1,333             | cargo test -p agiworkforce-cli --lib                                                                         |
+| Desktop     | typecheck GREEN   | tsc clean                                                                                                    |
+| Web         | 3,231 + 1 skipped | 135 test files. One flake observed in initial verify (state-pollution under load); not reproduced on re-run. |
+| Mobile      | 789 (44 suites)   |                                                                                                              |
+| Chrome ext  | passed            |                                                                                                              |
+| VS Code ext | passed            |                                                                                                              |
+
+---
+
 ## [Unreleased — launch-readiness wave 1] — 2026-05-15
 
 **31 commits** in a single parallel wave (`079ae721f..759f6a977`) addressing user's launch-readiness mandate: zero dead code, zero half-done features, no onboarding friction, design parity with `~/Desktop/reference/`. Net **−1,879 LOC** across 86 files / all 6 surfaces. Plan at `tasks/launch-readiness-2026-05-15.md`. Audit fire entry at `AUDIT_LOG.md` 2026-05-15T14:50Z.

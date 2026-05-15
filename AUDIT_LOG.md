@@ -448,3 +448,50 @@ The source-comparison-report identified two cross-surface P0s — "no single sou
 **Pushed:** `git push origin main` at 14:50 — `079ae721f..759f6a977`. Working tree clean (untracked report PNGs intentionally retained).
 
 **Next rotation (Wave 2):** Implement the design spec across all 6 surfaces — InlineToolCall component per §4, composer parity per §7, sidebar parity per §6, empty-state polish per §8. Plan at `tasks/launch-readiness-wave2-plan.md`.
+
+---
+
+## 2026-05-15T15:08Z — Launch-Readiness Wave 2 — Design-spec implementation
+
+**Plan:** `tasks/launch-readiness-wave2-plan.md`. **Wave dispatch:** 7 parallel agents — desk/web/mob/cli/chr/vsc-launch2 + pkg-launch2 (shared InlineToolCall component).
+
+**Commits landed:** 25 (range `0fa1c7190..74b7f0255`). All 6 surfaces touched plus `packages/unified-chat`.
+
+**Per-surface implementation per design-spec §4-§8:**
+
+| Surface     | Composer §7           | Sidebar §6                   | Empty state §8 | Inline tool-call §4        |
+| ----------- | --------------------- | ---------------------------- | -------------- | -------------------------- |
+| Desktop     | `f871d848b`           | `dff346a31`                  | `2e0d47afc`    | (consumes shared)          |
+| Web         | `db77a2ee5`           | `08772e40e`                  | `ced8e87c1`    | `71b6bdda1` (wraps shared) |
+| Mobile      | `9893b7184`           | `823f843e9` (drawer-adapted) | `cda369f34`    | `5cee5b174` (RN port)      |
+| CLI         | n/a (composer is TUI) | n/a                          | n/a            | `99609f080` (ratatui)      |
+| Chrome ext  | `333ac7e14`           | n/a                          | `333ac7e14`    | `fa491bcc1`                |
+| VS Code ext | `f2d3017ed`           | n/a                          | `70c81ffbb`    | `a1af715c2`                |
+
+**Shared `InlineToolCall` component:** `c800a5a9e feat(unified-chat): export inlinetoolcall + add 19 rtl tests` — `packages/unified-chat/src/components/InlineToolCall.tsx` + 19 React Testing Library tests covering: collapse toggle, status states (pending/running/success/error/partial), icon mapping, ellipsis truncation, multi-step stack rendering, keyboard activation (Enter/Space). Web `ToolCallCard.tsx` migrated to wrap the shared component (`71b6bdda1`).
+
+**Icon system per design-spec §5:**
+
+- Web/Desktop/Mobile: continue using `lucide-react` / `lucide-react-native`.
+- Chrome ext: new `apps/extension/src/assets/icons.ts` Lucide raw SVG sprite system (`0f812a428`).
+- CLI: cli-launch2 deferred Unicode-mapping table for a follow-up; ratatui tool-call render shipped with default ASCII glyphs (`99609f080`).
+- VS Code ext: uses native VS Code Codicons in webview (`$(terminal)`, `$(file)`, `$(search)`, etc.) — chosen per design-spec §5 hybrid recommendation for native feel.
+
+**Web RLS continuation:** sec-launch1's wave 1 work extended in wave 2 — `3b8fd1f55 fix(web): migrate 3 service-role routes to canonical getServiceClient`. Plus test-mock fixes `ea110f6e2` + `2464337bf` + `785be9b98` to keep the suite green after auth-client signature changes.
+
+**CLI Phase B continuation:** `71d62675c refactor(cli): extract guardian review handlers from chatwidget` — further chatwidget split. `74b7f0255 fix(cli): extend no-hardcode guard to exec_cell/render.rs` — extends the production-code model-ID literal guard.
+
+**Verification:**
+
+| Surface     | Tests             | Notes                                                                                                                                                                                                                                            |
+| ----------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| CLI         | 1,333             | cargo check workspace + cargo test -p agiworkforce-cli --lib GREEN                                                                                                                                                                               |
+| Desktop     | typecheck GREEN   | tsc clean                                                                                                                                                                                                                                        |
+| Web         | 3,231 + 1 skipped | 135 test files. One flake observed in initial verify (ChatComposerNew "resets thinkingEnabled" — DOM state pollution in concurrent load); reproduced 0/2 times on re-run, full suite GREEN. Filed in MEMORY as flake to investigate post-launch. |
+| Mobile      | 789 (44 suites)   |                                                                                                                                                                                                                                                  |
+| Chrome ext  | passed            | vitest                                                                                                                                                                                                                                           |
+| VS Code ext | passed            | vitest                                                                                                                                                                                                                                           |
+
+**Pushed:** `git push origin main` at 15:08 — `0fa1c7190..74b7f0255`.
+
+**Next rotation (Wave 3):** Cross-surface polish + production builds (`bash scripts/launch-verify.sh --with-builds`) + tighter cross-surface integration tests + remaining RLS migrations + CLI Unicode-icon mapping + visual smoke screenshots if time permits.
