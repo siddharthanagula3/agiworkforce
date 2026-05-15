@@ -1748,7 +1748,12 @@ Any RED → `git stash` + failure report in `AUDIT_LOG.md` + exit without commit
 | Phase D — Cross-surface polish    | ✅ 7/12 shipped        | Web lint sweep ✓ (911bfd2ed), packages posttest=pnpm build ✓ (91fafd3cf), workspace clippy 33-deny lints ✓ (fceaee92f), vscode TS project refs ✓ (291bf6ccb), `exports` field shipped on all 23 packages, OpenClaw packages 117 tests shipped, 13 utility/leaf crates inherit workspace lints ✓ (1c1789eaa). Pending: composite workspace-wide, dark-mode parity (web pricing/login + mobile theme + desktop preview), a11y/ARIA audit, insta snapshot tests for cli TUI, domain-first reorg per `REFERENCE_STRUCTURE.md`                                                                                                                                                                                                                                                         |
 | Phase E — Steady-state audit loop | ⏳ pending             | Cloud routine `trig_01V2cYHrydfcy9ixqvRm2iwa` at 5:03 AM CDT daily                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
-**Last refresh:** 2026-05-14 night (fire #5 wave converged). **Next refresh:** after each fire updates `AUDIT_LOG.md`.
+### 10.2 Escalation closure log
+
+- **E2 closed 2026-05-14** (commit `948ceeb7f`): desktop bridge now exposes `POST /pair` HTTP endpoint on port 8787, with loopback-only enforcement, idempotent token rotation, and 7 new tests. Chrome ext pairing flow (`887a02b10`) is now end-to-end functional. Desktop backend tests: 3,938 → 3,945 (+7).
+- **E1 still open**: full per-event-hook split of `apps/desktop/src/hooks/useAgenticEvents.ts` blocked by 7 module-level mutable singletons. Requires `SharedListenerContext` refactor (~300 LOC net structural change). Documented at AUDIT_LOG.md E1.
+
+**Last refresh:** 2026-05-15 (fire #6 wave converged — E2 closed, vscode + cli Phase B splits landed, web C5 + light-mode shipped). **Next refresh:** after each fire updates `AUDIT_LOG.md`.
 
 ### 10.1 Surface-by-surface health snapshot (post-fire-5)
 
@@ -1763,9 +1768,9 @@ Any RED → `git stash` + failure report in `AUDIT_LOG.md` + exit without commit
 | Workspace + crates    | n/a       | clean  | 5,679+ cargo workspace tests   | D #3.9 33 clippy deny lints + 13 crates inherit ✓                       |
 | packages              | ✅ GREEN  | ✅ 0/0 | 1,103 tests across 12 packages | D #3.11 posttest=pnpm build on 19 packages ✓                            |
 
-Combined surface vitest/jest: ~7,716 (Desktop 1,653 + Web 3,240 + Mobile 778 + Chrome ext 607 + VS Code 512 + 926 other) plus cargo 5,679 plus packages 1,103 = **~14,498 tests green across the platform**.
+Combined surface vitest/jest: 6,796 (Desktop frontend 1,653 + Web 3,246 + Mobile 778 + Chrome ext 607 + VS Code 512) + Desktop backend cargo 3,945 + CLI cargo 1,326 + other cargo crates ~408 + packages 1,103 + services 155 = **~13,733+ tests green across the platform**.
 
-Net cumulative diff this campaign: ~107,000 LOC removed (dominated by `tui/_attic/` delete), ~5,000 LOC added (new features + tests + Codex agent definitions). 29 commits since `3fdda63b3`.
+Net cumulative diff this campaign: ~107,000 LOC removed (dominated by `tui/_attic/` delete), ~5,500 LOC added (new features + tests + Codex agent definitions). **35 commits since `3fdda63b3`**.
 
 ---
 
