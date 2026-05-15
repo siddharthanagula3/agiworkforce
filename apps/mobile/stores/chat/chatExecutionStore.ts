@@ -79,9 +79,10 @@ async function uploadWithRetry(
 
 /** Retrieve message store state lazily to avoid circular imports at module load time. */
 function getMsgStore() {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  /* eslint-disable @typescript-eslint/no-require-imports */
   const { useChatMessageStore } =
     require('@/stores/chat/chatMessageStore') as typeof import('@/stores/chat/chatMessageStore');
+  /* eslint-enable @typescript-eslint/no-require-imports */
   return useChatMessageStore;
 }
 
