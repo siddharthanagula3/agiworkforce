@@ -1,5 +1,20 @@
 #![allow(dead_code)]
 
+mod dangerous_commands;
+mod approval;
+
+pub use dangerous_commands::DANGEROUS_COMMANDS;
+
+use dangerous_commands::{
+    DANGEROUS_COMMANDS as DC, DANGEROUS_PIPE_SINKS, DANGEROUS_PIPE_SOURCES, DANGEROUS_PREFIXES,
+    SAFE_COMMANDS, SAFE_PREFIXES,
+};
+#[allow(unused_imports)]
+use approval::{
+    classify_base64, classify_find, classify_git, classify_git_branch, classify_mv, classify_rg,
+    classify_rm, classify_sed, is_sed_readonly_print, strip_path,
+};
+
 /// Safety classification for shell commands.
 ///
 /// Three-tier system that replaces the simple `is_dangerous_command()` boolean
@@ -15,180 +30,6 @@ pub enum CommandSafety {
     /// Dangerous commands that require explicit confirmation with warning.
     Dangerous,
 }
-
-// ---------------------------------------------------------------------------
-// Safe command list (read-only, non-destructive)
-// ---------------------------------------------------------------------------
-
-/// Standalone commands that are always safe (read-only, no side effects).
-const SAFE_COMMANDS: &[&str] = &[
-    "cat",
-    "ls",
-    "pwd",
-    "head",
-    "tail",
-    "grep",
-    "wc",
-    "stat",
-    "which",
-    "echo",
-    "file",
-    // SEV-CLI-LOW-1 fix: `env` and `printenv` previously auto-approved as
-    // read-only. They aren't — both dump every environment variable in the
-    // process, including ANTHROPIC_API_KEY / OPENAI_API_KEY etc., into the
-    // tool output that is then fed back to the model and may be persisted in
-    // logs. Downgraded to Unknown so the user is prompted before running.
-    "whoami",
-    "uname",
-    "date",
-    "tree",
-    "less",
-    "more",
-    "diff",
-    "sort",
-    "uniq",
-    "cut",
-    "tr",
-    "tee",
-    // Data inspection
-    "jq",
-    "awk",
-    "od",
-    "hexdump",
-    "strings",
-    // Binary inspection
-    "ldd",
-    "nm",
-    "readelf",
-    // System info
-    "ps",
-    "top",
-    "df",
-    "du",
-    "free",
-    "uptime",
-    // Network info (read-only)
-    "ifconfig",
-    "ip",
-    "hostname",
-    "dig",
-    "nslookup",
-    "traceroute",
-    "ss",
-    "lsof",
-    "netstat",
-];
-
-/// Multi-word command prefixes that are safe (e.g. "cargo check").
-const SAFE_PREFIXES: &[&str] = &[
-    "cargo check",
-    "cargo test",
-    "npm test",
-    "python -c",
-    "node -e",
-];
-
-// ---------------------------------------------------------------------------
-// Dangerous command list
-// ---------------------------------------------------------------------------
-
-/// Standalone commands that are dangerous (destructive, privileged).
-pub(crate) const DANGEROUS_COMMANDS: &[&str] = &[
-    "sudo",
-    "chown",
-    "chgrp",
-    "kill",
-    "killall",
-    "pkill",
-    "mkfs",
-    "dd",
-    "fdisk",
-    "mount",
-    "umount",
-    "reboot",
-    "shutdown",
-    "rmdir",
-    "eval",
-    "exec",
-    "mv",
-    // Firewall / system services / kernel modules
-    "iptables",
-    "ufw",
-    "systemctl",
-    "service",
-    "insmod",
-    "modprobe",
-    "rmmod",
-];
-
-/// Multi-word command prefixes that are dangerous.
-const DANGEROUS_PREFIXES: &[&str] = &[
-    "chmod 777",
-    "launchctl unload",
-    "git push --force",
-    "git reset --hard",
-    // Package manager installs (system-level side effects)
-    "apt install",
-    "apt remove",
-    "dnf install",
-    "brew install",
-    "pip install",
-    "npm install -g",
-    "cargo install",
-];
-
-/// Commands that, when piped to a shell, make the pipeline dangerous.
-const DANGEROUS_PIPE_SOURCES: &[&str] = &["curl", "wget", "nc", "ncat", "socat"];
-/// Shell commands that are dangerous when receiving piped input.
-const DANGEROUS_PIPE_SINKS: &[&str] = &[
-    "sh", "bash", "zsh", "dash", "fish", "csh", "tcsh", "ksh", "python", "python3", "perl", "ruby",
-    "node", "eval", "source",
-];
-
-// ---------------------------------------------------------------------------
-// Tool-specific dangerous options
-// ---------------------------------------------------------------------------
-
-/// `find` options that execute or delete (not read-only).
-const FIND_DANGEROUS_OPTIONS: &[&str] = &[
-    "-exec", "-execdir", "-ok", "-okdir", "-delete", "-fls", "-fprint", "-fprint0", "-fprintf",
-];
-
-/// `rg` (ripgrep) options that execute external programs or access compressed data.
-const RG_DANGEROUS_OPTIONS: &[&str] = &["--pre", "--hostname-bin", "--search-zip", "-z"];
-
-/// `base64` options that write to files.
-const BASE64_DANGEROUS_OPTIONS: &[&str] = &["-o", "--output"];
-
-/// Read-only git subcommands.
-const GIT_SAFE_SUBCOMMANDS: &[&str] = &["status", "log", "diff", "show"];
-
-/// Read-only git branch flags.
-const GIT_BRANCH_READONLY_FLAGS: &[&str] = &[
-    "--list",
-    "-l",
-    "--show-current",
-    "-a",
-    "-r",
-    "-v",
-    "--verbose",
-];
-
-/// Git global options that take a value and should be skipped to find the subcommand.
-const GIT_GLOBAL_OPTIONS_WITH_VALUE: &[&str] = &["-C", "--git-dir", "--work-tree", "--namespace"];
-
-// ---------------------------------------------------------------------------
-// System paths — `mv` targeting these is dangerous
-// ---------------------------------------------------------------------------
-
-const SYSTEM_PATHS: &[&str] = &[
-    "/bin", "/sbin", "/usr", "/etc", "/var", "/System", "/Library", "/boot", "/dev", "/proc",
-    "/sys", "/opt",
-];
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
 
 /// Classify a shell command string into a safety tier.
 ///
@@ -208,7 +49,7 @@ pub fn classify_command(command: &str) -> CommandSafety {
     if trimmed.contains("$(") || trimmed.contains('`') {
         let first_word = trimmed.split_whitespace().next().unwrap_or("");
         let base_cmd = strip_path(first_word);
-        if DANGEROUS_COMMANDS.contains(&base_cmd) {
+        if DC.contains(&base_cmd) {
             return CommandSafety::Dangerous;
         }
         // Otherwise, subshell/backtick can hide arbitrary commands inside
@@ -257,10 +98,6 @@ pub fn classify_command(command: &str) -> CommandSafety {
         CommandSafety::Unknown
     }
 }
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
 
 /// Split a command line on `|`, `;`, and `&&`, trimming each segment.
 /// Respects single and double quotes — operators inside quotes are literal.
@@ -388,8 +225,8 @@ fn classify_single_segment(segment: &str, prev_was_safe: bool) -> CommandSafety 
     }
 
     // Check dangerous single-word commands (exact match or prefix like mkfs.ext4).
-    let is_dangerous = DANGEROUS_COMMANDS.contains(&base_cmd)
-        || DANGEROUS_COMMANDS
+    let is_dangerous = DC.contains(&base_cmd)
+        || DC
             .iter()
             .any(|&dc| base_cmd.starts_with(&format!("{}.", dc)));
     if is_dangerous {
@@ -417,214 +254,6 @@ fn classify_single_segment(segment: &str, prev_was_safe: bool) -> CommandSafety 
         return CommandSafety::Safe;
     }
 
-    CommandSafety::Unknown
-}
-
-/// Strip leading path from a command name (e.g. `/usr/bin/rm` -> `rm`).
-fn strip_path(word: &str) -> &str {
-    word.rsplit('/').next().unwrap_or(word)
-}
-
-/// Classify `rm` — force flags make it Dangerous, otherwise Unknown.
-/// `-r`/`-R`/`--recursive` alone is Unknown (prompts user), but combined with
-/// `-f` (e.g. `-rf`, `-fr`, `-rfv`) it becomes Dangerous.
-fn classify_rm(command: &str) -> CommandSafety {
-    let args: Vec<&str> = command.split_whitespace().collect();
-    for arg in &args[1..] {
-        if *arg == "-f" || *arg == "--force" || *arg == "-rf" || *arg == "-fr" {
-            return CommandSafety::Dangerous;
-        }
-        // Combined short flags like -rfv, -fv — dangerous only if 'f' is present.
-        if arg.starts_with('-') && !arg.starts_with("--") {
-            let flag_chars = &arg[1..];
-            if flag_chars.contains('f') {
-                return CommandSafety::Dangerous;
-            }
-        }
-    }
-    // rm without force flags is Unknown — prompts user.
-    CommandSafety::Unknown
-}
-
-/// Classify `find` — dangerous if any exec/delete options are present.
-fn classify_find(command: &str) -> CommandSafety {
-    let args: Vec<&str> = command.split_whitespace().collect();
-    for arg in &args[1..] {
-        if FIND_DANGEROUS_OPTIONS.contains(arg) {
-            return CommandSafety::Dangerous;
-        }
-    }
-    CommandSafety::Safe
-}
-
-/// Classify `rg` — dangerous if any execution/compressed-search options are present.
-fn classify_rg(command: &str) -> CommandSafety {
-    let args: Vec<&str> = command.split_whitespace().collect();
-    for arg in &args[1..] {
-        if RG_DANGEROUS_OPTIONS.contains(arg) {
-            return CommandSafety::Dangerous;
-        }
-    }
-    CommandSafety::Safe
-}
-
-/// Classify `sed` — only safe if it matches the read-only print pattern `sed -n {N|M,N}p`.
-fn classify_sed(command: &str) -> CommandSafety {
-    let args: Vec<&str> = command.split_whitespace().collect();
-    // Safe pattern: `sed -n <range>p [file...]`
-    // where <range> is digits or digits,digits followed by 'p'
-    if args.len() >= 3 && args[1] == "-n" {
-        // Strip surrounding single/double quotes from the expression
-        let expr = args[2]
-            .trim_start_matches('\'')
-            .trim_end_matches('\'')
-            .trim_start_matches('"')
-            .trim_end_matches('"');
-        if is_sed_readonly_print(expr) {
-            return CommandSafety::Safe;
-        }
-    }
-    CommandSafety::Unknown
-}
-
-/// Check if a sed expression is a read-only print: `Np`, `M,Np`, `$p`.
-fn is_sed_readonly_print(expr: &str) -> bool {
-    if !expr.ends_with('p') {
-        return false;
-    }
-    let body = &expr[..expr.len() - 1];
-    if body.is_empty() {
-        return false;
-    }
-    // Single number: "5p" or "$p"
-    if body == "$" || body.chars().all(|c| c.is_ascii_digit()) {
-        return true;
-    }
-    // Range: "5,10p" or "$,10p" or "5,$p"
-    if let Some((left, right)) = body.split_once(',') {
-        let left_ok = left == "$" || (!left.is_empty() && left.chars().all(|c| c.is_ascii_digit()));
-        let right_ok =
-            right == "$" || (!right.is_empty() && right.chars().all(|c| c.is_ascii_digit()));
-        return left_ok && right_ok;
-    }
-    false
-}
-
-/// Classify `base64` — dangerous if output file options are present.
-fn classify_base64(command: &str) -> CommandSafety {
-    let args: Vec<&str> = command.split_whitespace().collect();
-    for arg in &args[1..] {
-        if BASE64_DANGEROUS_OPTIONS.contains(arg) {
-            return CommandSafety::Dangerous;
-        }
-    }
-    CommandSafety::Safe
-}
-
-/// Classify `git` — enhanced validation that skips global options, blocks `-c`,
-/// and validates subcommands with their flags.
-fn classify_git(command: &str) -> CommandSafety {
-    let args: Vec<&str> = command.split_whitespace().collect();
-    let mut i = 1; // skip "git"
-
-    // Block `git -c` (config override injection) — all forms.
-    for arg in &args[1..] {
-        if *arg == "-c" || arg.starts_with("-c=") || arg.starts_with("-c ") {
-            return CommandSafety::Dangerous;
-        }
-        // Also block --config and --config= (long form)
-        if *arg == "--config" || arg.starts_with("--config=") {
-            return CommandSafety::Dangerous;
-        }
-    }
-
-    // Skip global options to find the actual subcommand.
-    while i < args.len() {
-        let arg = args[i];
-        if GIT_GLOBAL_OPTIONS_WITH_VALUE.contains(&arg) {
-            i += 2; // skip the option and its value
-            continue;
-        }
-        // Skip --git-dir=value style
-        if GIT_GLOBAL_OPTIONS_WITH_VALUE
-            .iter()
-            .any(|opt| arg.starts_with(&format!("{}=", opt)))
-        {
-            i += 1;
-            continue;
-        }
-        break;
-    }
-
-    if i >= args.len() {
-        // Just `git` with no subcommand — Unknown.
-        return CommandSafety::Unknown;
-    }
-
-    let subcommand = args[i];
-    let sub_args = &args[i + 1..];
-
-    // Dangerous prefixes that the multi-word check may have missed due to global opts.
-    let normalized_sub = std::iter::once(subcommand)
-        .chain(sub_args.iter().copied())
-        .collect::<Vec<_>>()
-        .join(" ");
-
-    if normalized_sub.starts_with("push --force") || normalized_sub.starts_with("reset --hard") {
-        return CommandSafety::Dangerous;
-    }
-
-    // Safe read-only subcommands.
-    if GIT_SAFE_SUBCOMMANDS.contains(&subcommand) {
-        return CommandSafety::Safe;
-    }
-
-    // `git remote -v` is safe.
-    if subcommand == "remote" && sub_args.contains(&"-v") {
-        return CommandSafety::Safe;
-    }
-
-    // `git tag -l` is safe.
-    if subcommand == "tag"
-        && (sub_args.is_empty() || sub_args.contains(&"-l") || sub_args.contains(&"--list"))
-    {
-        return CommandSafety::Safe;
-    }
-
-    // `git branch` is safe only with read-only flags (or no flags at all listing branches).
-    if subcommand == "branch" {
-        return classify_git_branch(sub_args);
-    }
-
-    CommandSafety::Unknown
-}
-
-/// Classify `git branch` — safe only with read-only flags.
-fn classify_git_branch(args: &[&str]) -> CommandSafety {
-    if args.is_empty() {
-        return CommandSafety::Safe;
-    }
-    // Every argument must be a known read-only flag.
-    for arg in args {
-        if !GIT_BRANCH_READONLY_FLAGS.contains(arg) {
-            return CommandSafety::Unknown;
-        }
-    }
-    CommandSafety::Safe
-}
-
-/// Classify an `mv` command — dangerous only when the target is a system path.
-fn classify_mv(command: &str) -> CommandSafety {
-    let args: Vec<&str> = command.split_whitespace().collect();
-    // `mv` with a target: last positional arg (skip flags starting with '-').
-    if let Some(target) = args.iter().rev().find(|a| !a.starts_with('-')) {
-        for sys_path in SYSTEM_PATHS {
-            if target.starts_with(sys_path) {
-                return CommandSafety::Dangerous;
-            }
-        }
-    }
-    // mv to a non-system path is just Unknown (still asks user, no warning).
     CommandSafety::Unknown
 }
 
