@@ -13,7 +13,9 @@
  */
 
 // Export all stores
-export { useChatStore } from './chatStore';
+export { useChatStore, useChatMessageStore } from './chatStore';
+export { useChatViewStore } from './chatViewStore';
+export { useChatExecutionStore } from './chatExecutionStore';
 export {
   useAgentStore,
   initializeAgentStatusListener,
