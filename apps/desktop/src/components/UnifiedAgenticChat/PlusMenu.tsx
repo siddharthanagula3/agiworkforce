@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import {
   Bookmark,
+  ChevronRight,
   Folder,
   FolderOpen,
   Plus,
@@ -11,6 +12,7 @@ import {
   Check,
   X,
   ListChecks,
+  Puzzle,
 } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { toast } from 'sonner';
@@ -51,6 +53,7 @@ export function PlusMenu({
 }: PlusMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showStashPanel, setShowStashPanel] = useState(false);
+  const [showToolsPanel, setShowToolsPanel] = useState(false);
   const openSettings = useSettingsDialogStore((s) => s.openSettings);
 
   // Folder selection
@@ -111,10 +114,13 @@ export function PlusMenu({
     [onPromptStashLoad],
   );
 
-  // When popover closes, also close stash sub-panel
+  // When popover closes, also close sub-panels
   const handleOpenChange = useCallback((open: boolean) => {
     setIsOpen(open);
-    if (!open) setShowStashPanel(false);
+    if (!open) {
+      setShowStashPanel(false);
+      setShowToolsPanel(false);
+    }
   }, []);
 
   return (
@@ -144,8 +150,58 @@ export function PlusMenu({
           'bg-popover shadow-xl',
         )}
       >
-        {/* Stash sub-panel */}
-        {showStashPanel ? (
+        {/* Tools & Extensions sub-panel */}
+        {showToolsPanel ? (
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowToolsPanel(false)}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--popover-foreground))] transition-colors"
+            >
+              <span>&larr;</span>
+              <span>Back</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                setShowToolsPanel(false);
+                openSettings('mcp-skills');
+              }}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[hsl(var(--popover-foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
+            >
+              <Brain className="h-4 w-4 shrink-0" />
+              <span>Skills</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                setShowToolsPanel(false);
+                openSettings('connectors');
+              }}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[hsl(var(--popover-foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
+            >
+              <Link className="h-4 w-4 shrink-0" />
+              <span>Connectors</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                setShowToolsPanel(false);
+                openSettings('connectors');
+              }}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[hsl(var(--popover-foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
+            >
+              <Puzzle className="h-4 w-4 shrink-0" />
+              <span>Plugins</span>
+            </button>
+          </div>
+        ) : /* Stash sub-panel */ showStashPanel ? (
           <div>
             <button
               type="button"
@@ -315,30 +371,15 @@ export function PlusMenu({
               )}
             </button>
 
-            {/* Connectors */}
+            {/* Tools & Extensions submenu entry */}
             <button
               type="button"
-              onClick={() => {
-                setIsOpen(false);
-                openSettings('connectors');
-              }}
+              onClick={() => setShowToolsPanel(true)}
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[hsl(var(--popover-foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
             >
-              <Link className="h-4 w-4 shrink-0" />
-              <span>Connectors</span>
-            </button>
-
-            {/* Skills */}
-            <button
-              type="button"
-              onClick={() => {
-                setIsOpen(false);
-                openSettings('mcp');
-              }}
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[hsl(var(--popover-foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
-            >
-              <Brain className="h-4 w-4 shrink-0" />
-              <span>Skills</span>
+              <Puzzle className="h-4 w-4 shrink-0" />
+              <span className="flex-1 text-left">Tools &amp; Extensions</span>
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[hsl(var(--muted-foreground))]" />
             </button>
 
             {/* Plan */}
