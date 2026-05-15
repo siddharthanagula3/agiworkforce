@@ -1,11 +1,9 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { requireEnv } from '@/utils/env';
-import { getUserClient } from '@/lib/supabase-server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
+import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { getCorsHeaders } from '@/lib/cors';
 import {
@@ -112,25 +110,19 @@ async function handleListModels(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  // Unauthenticated callers get the free-tier model list. Authenticated
+  // callers get the model list for their actual subscription tier.
+  let user;
+  let userClient;
+  try {
+    const auth = await getAuthenticatedUserWithClient(request);
+    user = auth.user;
+    userClient = auth.userDb;
+  } catch {
     return listModelsForRequest(request, 'free');
   }
 
-  const token = authHeader.substring(7);
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabase = createClient(supabaseUrl, requireEnv('SUPABASE_SERVICE_ROLE_KEY'));
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser(token);
-
-  if (authError || !user) {
-    return listModelsForRequest(request, 'free');
-  }
-
-  const subscription = await SubscriptionService.getSubscription(getUserClient(token), user.id);
+  const subscription = await SubscriptionService.getSubscription(userClient, user.id);
   return listModelsForRequest(request, subscription?.plan_tier || 'free');
 }
 
