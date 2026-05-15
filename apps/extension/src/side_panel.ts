@@ -19,6 +19,19 @@ import {
 } from './conversation-history';
 import { sanitizeHtml, renderMarkdown } from './side_panel/markdown';
 import { setupVoiceInput } from './side_panel/voice';
+import {
+  Terminal,
+  FileText,
+  FilePen,
+  Search,
+  Globe,
+  CircleCheck,
+  Loader2,
+  Folder,
+  Plug,
+  ChevronRight,
+  renderIcon,
+} from './assets/icons';
 
 const extensionSendQueue = getExtensionSendQueue();
 
@@ -518,6 +531,86 @@ function injectStyles(): void {
       font-size: 12px;
     }
     @keyframes sp-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+    /* ── Inline tool-call UI (design-spec §4) ── */
+    .tool-call {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      font-size: 13px;
+      color: #8b8680;
+    }
+    .tool-call__bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 28px;
+      padding: 0 4px;
+      cursor: pointer;
+      user-select: none;
+      border-radius: 5px;
+      transition: background 120ms ease;
+    }
+    .tool-call__bar:hover { background: rgba(255,235,205,0.06); }
+    .tool-call__icon {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      color: #5c5955;
+    }
+    .tool-call__icon svg { width: 14px; height: 14px; }
+    .tool-call__label { color: #8b8680; font-weight: 400; font-size: 12px; }
+    .tool-call__summary {
+      color: #5c5955;
+      font-size: 11px;
+      margin-left: 4px;
+      max-width: 260px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .tool-call__chevron {
+      width: 12px;
+      height: 12px;
+      color: #5c5955;
+      margin-left: auto;
+      transition: transform 160ms ease;
+      flex-shrink: 0;
+    }
+    .tool-call__chevron svg { width: 12px; height: 12px; }
+    .tool-call--open .tool-call__chevron { transform: rotate(90deg); }
+    .tool-call__body {
+      display: none;
+      background: rgba(17,16,13,0.9);
+      border: 1px solid rgba(255,235,205,0.08);
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-family: 'SF Mono','Cascadia Code',Consolas,monospace;
+      font-size: 11px;
+      color: #c9d1d9;
+      overflow-x: auto;
+      max-height: 320px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .tool-call--open .tool-call__body { display: block; }
+    /* multi-step vertical guideline */
+    .tool-call-stack {
+      border-left: 1px solid rgba(255,235,205,0.08);
+      padding-left: 10px;
+      margin-left: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    /* spinner rotation for pending/running state */
+    .tool-call--running .tool-call__icon { color: #8b8680; }
+    .tool-call--running .tool-call__icon svg { animation: sp-spin 0.8s linear infinite; }
+    @keyframes sp-spin { to { transform: rotate(360deg); } }
+    .tool-call--error .tool-call__label { color: #ef4444; }
+    .tool-call--error .tool-call__icon { color: #ef4444; }
+    .tool-call--success .tool-call__icon { color: #22c55e; }
 
     /* ── Thinking dots ── */
     .sp-thinking {
@@ -1475,6 +1568,158 @@ function buildBubble(msg: ChatMessage): HTMLElement {
   return wrapper;
 }
 
+/** Map tool name to its Lucide SVG string. */
+function toolIcon(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes('bash') || n.includes('shell') || n.includes('terminal') || n.includes('run'))
+    return Terminal;
+  if (n.includes('write') || n.includes('create')) return FilePen;
+  if (n.includes('edit') || n.includes('patch') || n.includes('apply')) return FilePen;
+  if (n.includes('read') || n.includes('view') || n.includes('file')) return FileText;
+  if (n.includes('search') || n.includes('find')) return Search;
+  if (n.includes('fetch') || n.includes('url') || n.includes('web')) return Globe;
+  if (n.includes('list') || n.includes('ls') || n.includes('dir') || n.includes('folder'))
+    return Folder;
+  if (n.includes('mcp') || n.includes('plug') || n.includes('tool')) return Plug;
+  if (n.includes('done') || n.includes('check') || n.includes('success')) return CircleCheck;
+  if (n.includes('load') || n.includes('pending') || n.includes('running')) return Loader2;
+  return Plug;
+}
+
+interface ToolCallBlock {
+  name: string;
+  summary: string;
+  body: string;
+  state: 'pending' | 'running' | 'success' | 'error';
+}
+
+/**
+ * Parse tool-call fences from message content.
+ * Format: [TOOL:name:state] summary\nbody\n[/TOOL]
+ * Returns segments: plain text strings or ToolCallBlock objects.
+ */
+function parseToolCalls(content: string): Array<string | ToolCallBlock> {
+  const segments: Array<string | ToolCallBlock> = [];
+  // Regex: [TOOL:name:state] summary\nbody\n[/TOOL]
+  const re = /\[TOOL:([^:\]]+):?(pending|running|success|error)?\]([\s\S]*?)\[\/TOOL\]/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    if (m.index > last) segments.push(content.slice(last, m.index));
+    const name = m[1]!.trim();
+    const state = (m[2] ?? 'success') as ToolCallBlock['state'];
+    const inner = m[3] ?? '';
+    const newline = inner.indexOf('\n');
+    const summary = newline >= 0 ? inner.slice(0, newline).trim() : inner.trim();
+    const body = newline >= 0 ? inner.slice(newline + 1).trim() : '';
+    segments.push({ name, summary, body, state });
+    last = m.index + m[0].length;
+  }
+  if (last < content.length) segments.push(content.slice(last));
+  return segments;
+}
+
+function buildToolCallEl(block: ToolCallBlock): HTMLElement {
+  const wrapper = document.createElement('div');
+  wrapper.className = `tool-call tool-call--${block.state}`;
+
+  const bar = document.createElement('div');
+  bar.className = 'tool-call__bar';
+  bar.setAttribute('role', 'button');
+  bar.setAttribute('aria-expanded', 'false');
+  bar.setAttribute('tabindex', '0');
+
+  const iconEl = renderIcon(
+    block.state === 'pending' || block.state === 'running' ? Loader2 : toolIcon(block.name),
+    14,
+    'tool-call__icon',
+  );
+  bar.appendChild(iconEl);
+
+  const label = document.createElement('span');
+  label.className = 'tool-call__label';
+  label.textContent = block.name;
+  bar.appendChild(label);
+
+  if (block.summary) {
+    const summary = document.createElement('span');
+    summary.className = 'tool-call__summary';
+    summary.textContent = block.summary;
+    bar.appendChild(summary);
+  }
+
+  const chevron = renderIcon(ChevronRight, 12, 'tool-call__chevron');
+  bar.appendChild(chevron);
+
+  const body = document.createElement('div');
+  body.className = 'tool-call__body';
+  body.textContent = block.body;
+
+  const toggle = (): void => {
+    const open = wrapper.classList.toggle('tool-call--open');
+    bar.setAttribute('aria-expanded', String(open));
+  };
+  bar.addEventListener('click', toggle);
+  bar.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggle();
+    }
+  });
+
+  wrapper.appendChild(bar);
+  wrapper.appendChild(body);
+  return wrapper;
+}
+
+function buildBubbleWithTools(msg: ChatMessage): HTMLElement {
+  const segments = parseToolCalls(msg.content);
+  const hasTools = segments.some((s) => typeof s !== 'string');
+  if (!hasTools) return buildBubble(msg);
+
+  const wrapper = document.createElement('div');
+  wrapper.className = `sp-msg sp-msg-${msg.role}`;
+  wrapper.setAttribute('data-id', msg.id);
+
+  const textParts: string[] = [];
+  const toolBlocks: ToolCallBlock[] = [];
+
+  for (const seg of segments) {
+    if (typeof seg === 'string') {
+      textParts.push(seg);
+    } else {
+      toolBlocks.push(seg);
+    }
+  }
+
+  if (textParts.join('').trim()) {
+    const bubble = document.createElement('div');
+    bubble.className = `sp-bubble sp-bubble-${msg.role}${msg.error ? ' sp-bubble-error' : ''}${msg.streaming ? ' sp-cursor' : ''}`;
+    bubble.id = `sp-bubble-${msg.id}`;
+    bubble.innerHTML = sanitizeHtml(renderMarkdown(textParts.join('')));
+    wrapper.appendChild(bubble);
+  }
+
+  if (toolBlocks.length > 0) {
+    if (toolBlocks.length === 1) {
+      wrapper.appendChild(buildToolCallEl(toolBlocks[0]!));
+    } else {
+      const stack = document.createElement('div');
+      stack.className = 'tool-call-stack';
+      for (const block of toolBlocks) {
+        stack.appendChild(buildToolCallEl(block));
+      }
+      wrapper.appendChild(stack);
+    }
+  }
+
+  const ts = document.createElement('span');
+  ts.className = 'sp-timestamp';
+  ts.textContent = formatTime(msg.timestamp);
+  wrapper.appendChild(ts);
+  return wrapper;
+}
+
 function renderMessages(): void {
   const container = document.getElementById('sp-messages')!;
   const chips = document.getElementById('sp-prompt-chips');
@@ -1499,7 +1744,7 @@ function renderMessages(): void {
 
   for (let i = _ctx.lastRenderedCount; i < _ctx.messages.length; i++) {
     const msg = _ctx.messages[i];
-    if (msg) container.appendChild(buildBubble(msg));
+    if (msg) container.appendChild(buildBubbleWithTools(msg));
   }
   _ctx.lastRenderedCount = _ctx.messages.length;
 
