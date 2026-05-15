@@ -155,6 +155,17 @@ export { ToolTimeline } from './components/ToolTimeline';
 export type { ToolTimelineProps } from './components/ToolTimeline';
 export { ToolCallCard } from './components/ToolCallCard';
 export type { ToolCallCardProps, ToolCallStatus } from './components/ToolCallCard';
+export {
+  InlineToolCall,
+  InlineToolCallStack,
+  inferKindFromLabel,
+} from './components/InlineToolCall';
+export type {
+  InlineToolCallProps,
+  InlineToolCallStackProps,
+  InlineToolCallStatus,
+  InlineToolKind,
+} from './components/InlineToolCall';
 export { RewindTimeline } from './components/RewindTimeline';
 export type { RewindTimelineProps, CodingCheckpoint } from './components/RewindTimeline';
 export {
