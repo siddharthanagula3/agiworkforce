@@ -18,7 +18,7 @@ import { ModelPickerSheet } from '@/components/model-picker/ModelPickerSheet';
 import { streamChat, type StreamDelta } from '@/services/streaming';
 import { getModelById, getProviderById, getDisplayName } from '@/lib/models';
 import { getProviderDefaultModel } from '@agiworkforce/types';
-import { colors } from '@/lib/theme';
+import { useThemeColors } from '@/hooks/useTheme';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -65,6 +65,7 @@ const DEFAULT_MODEL_B = getProviderDefaultModel('openai') ?? 'openai/default';
  * both responses side-by-side (stacked on narrow screens).
  */
 export default function CompareScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
 
   const [modelA, setModelA] = useState(DEFAULT_MODEL_A);
@@ -340,6 +341,7 @@ interface ModelPillProps {
 }
 
 function ModelPill({ slot, modelId, isActive, winner, onPress }: ModelPillProps) {
+  const colors = useThemeColors();
   const model = getModelById(modelId);
   const provider = model ? getProviderById(model.provider) : undefined;
   const displayName = getDisplayName(modelId);
@@ -406,6 +408,7 @@ interface ResponsePanelProps {
 }
 
 function ResponsePanel({ slot, modelId, state, winner }: ResponsePanelProps) {
+  const colors = useThemeColors();
   const displayName = getDisplayName(modelId);
   const slotColor = slot === 'A' ? colors.teal : colors.terraCotta;
 
