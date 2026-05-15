@@ -5,11 +5,9 @@
  * Returns a token, URL, expiry, and message count.
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { z } from 'zod';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -49,12 +47,14 @@ async function handleCreateShare(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'share-create');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // Auth via SSR client (cookie-based)
-  const supabaseServer = await createServerClient();
+  // Auth via SSR client (cookie-based) — the SSR client is already RLS-bound
+  // via the user's session, so we can use it for the insert too. RLS policy on
+  // shared_sessions enforces owner_id = auth.uid().
+  const supabase = await createServerClient();
   const {
     data: { user },
     error: authError,
-  } = await supabaseServer.auth.getUser();
+  } = await supabase.auth.getUser();
   if (authError || !user) {
     throw createError.unauthorized();
   }
@@ -78,11 +78,6 @@ async function handleCreateShare(request: NextRequest) {
 
   const sanitizedMessages = sanitizeMessages(messages);
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-
-  // Use service role client for the insert (bypasses RLS owner_id check on server)
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   const { data, error } = await supabase
     .from('shared_sessions')
