@@ -52,17 +52,39 @@ vi.mock('@supabase/supabase-js', () => ({
 }));
 
 // Route was migrated from direct service-role JWT verification to the
-// getAuthenticatedUserWithClient helper. Mock it to return a user shape that
-// matches what the rest of the test expects.
+// getAuthenticatedUserWithClient helper. Route is Bearer-only — replicate that
+// in the mock by inspecting the Authorization header and forwarding to
+// mockSupabaseClient.auth.getUser so individual tests can still control auth
+// outcomes via that mock.
 vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUser: vi.fn(async () => ({
-    id: 'user-123',
-    email: 'user@example.com',
-  })),
-  getAuthenticatedUserWithClient: vi.fn(async () => ({
-    user: { id: 'user-123', email: 'user@example.com' },
-    userDb: {},
-  })),
+  getAuthenticatedUser: vi.fn(async (req: Request) => {
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      const { createError } = await import('@/lib/errors');
+      throw createError.unauthorized();
+    }
+    const token = authHeader.substring(7);
+    const { data, error } = await mockSupabaseClient.auth.getUser(token);
+    if (error || !data?.user) {
+      const { createError } = await import('@/lib/errors');
+      throw createError.unauthorized('Invalid token');
+    }
+    return data.user;
+  }),
+  getAuthenticatedUserWithClient: vi.fn(async (req: Request) => {
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      const { createError } = await import('@/lib/errors');
+      throw createError.unauthorized();
+    }
+    const token = authHeader.substring(7);
+    const { data, error } = await mockSupabaseClient.auth.getUser(token);
+    if (error || !data?.user) {
+      const { createError } = await import('@/lib/errors');
+      throw createError.unauthorized('Invalid token');
+    }
+    return { user: data.user, userDb: {} };
+  }),
 }));
 
 // Mock services
