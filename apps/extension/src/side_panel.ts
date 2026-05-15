@@ -10,6 +10,13 @@ import {
 } from '@agiworkforce/types';
 import { getExtensionSendQueue } from './sendQueue';
 import { clearChildren, setText, createElementWith, setChild } from './dom-helpers';
+import {
+  saveConversation,
+  listConversations,
+  deleteConversation,
+  type HistoryMessage,
+  type ConversationEntry,
+} from './conversation-history';
 
 const extensionSendQueue = getExtensionSendQueue();
 
@@ -1385,6 +1392,71 @@ function injectStyles(): void {
       transition: transform 0.2s;
     }
     .sp-thinking-toggle:checked::after { transform: translateX(13px); }
+
+    /* ── History dropdown ── */
+    .sp-history-wrapper { position: relative; }
+    #sp-history-dropdown {
+      display: none;
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 4px;
+      width: 260px;
+      max-height: 320px;
+      overflow-y: auto;
+      background: #13131a;
+      border: 1px solid #1e1e2e;
+      border-radius: 8px;
+      padding: 4px;
+      z-index: 200;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    }
+    #sp-history-dropdown.open { display: block; }
+    #sp-history-dropdown::-webkit-scrollbar { width: 4px; }
+    #sp-history-dropdown::-webkit-scrollbar-track { background: transparent; }
+    #sp-history-dropdown::-webkit-scrollbar-thumb { background: #1e2030; border-radius: 4px; }
+    .sp-history-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 5px 8px 4px;
+      border-bottom: 1px solid #1e1e2e;
+      margin-bottom: 2px;
+    }
+    .sp-history-title { font-size: 9px; font-weight: 600; color: #334155; text-transform: uppercase; letter-spacing: 0.08em; }
+    .sp-history-empty { padding: 12px 8px; color: #475569; font-size: 11px; text-align: center; }
+    .sp-history-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 8px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .sp-history-item:hover { background: #1e1e2e; }
+    .sp-history-item-text { flex: 1; min-width: 0; }
+    .sp-history-item-title {
+      font-size: 11px;
+      color: #e2e8f0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .sp-history-item-date { font-size: 9px; color: #475569; margin-top: 1px; }
+    .sp-history-item-del {
+      background: none;
+      border: none;
+      color: #475569;
+      font-size: 12px;
+      cursor: pointer;
+      padding: 2px 4px;
+      border-radius: 3px;
+      line-height: 1;
+      flex-shrink: 0;
+      transition: color 0.12s, background 0.12s;
+    }
+    .sp-history-item-del:hover { color: #f87171; background: #1c0505; }
   `;
   document.head.appendChild(style);
 }
@@ -2399,6 +2471,112 @@ function buildUI(): void {
   });
   headerRight.appendChild(summarizeBtn);
 
+  // ── History button + dropdown ──────────────────────────────────────────────
+  const historyWrapper = el('div', { class: 'sp-history-wrapper' });
+  const historyBtn = el(
+    'button',
+    { class: 'sp-icon-btn', id: 'sp-history-btn', title: 'Conversation history' },
+    '🕐',
+  );
+  const historyDropdown = el('div', { id: 'sp-history-dropdown' });
+
+  function formatHistoryDate(ts: number): string {
+    const d = new Date(ts);
+    const now = new Date();
+    const sameDay =
+      d.getFullYear() === now.getFullYear() &&
+      d.getMonth() === now.getMonth() &&
+      d.getDate() === now.getDate();
+    return sameDay
+      ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  }
+
+  function renderHistoryDropdown(entries: ConversationEntry[]): void {
+    clearChildren(historyDropdown);
+    const hdr = el('div', { class: 'sp-history-header' });
+    hdr.appendChild(el('span', { class: 'sp-history-title' }, 'History'));
+    historyDropdown.appendChild(hdr);
+
+    if (entries.length === 0) {
+      historyDropdown.appendChild(
+        el('div', { class: 'sp-history-empty' }, 'No saved conversations'),
+      );
+      return;
+    }
+
+    for (const entry of entries) {
+      const item = el('div', { class: 'sp-history-item' });
+      const textCol = el('div', { class: 'sp-history-item-text' });
+      textCol.appendChild(el('div', { class: 'sp-history-item-title' }, entry.title));
+      textCol.appendChild(
+        el('div', { class: 'sp-history-item-date' }, formatHistoryDate(entry.savedAt)),
+      );
+      item.appendChild(textCol);
+
+      const delBtn = el('button', { class: 'sp-history-item-del', title: 'Delete' }, '✕');
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteConversation(entry.id)
+          .then(() => listConversations())
+          .then((updated) => renderHistoryDropdown(updated))
+          .catch((err) => console.warn('[SidePanel] history delete failed:', err));
+      });
+      item.appendChild(delBtn);
+
+      item.addEventListener('click', () => {
+        historyDropdown.classList.remove('open');
+        historyBtn.classList.remove('active');
+        if (isStreaming) return;
+        if (streamTimeoutHandle) {
+          clearTimeout(streamTimeoutHandle);
+          streamTimeoutHandle = null;
+        }
+        messages.length = 0;
+        lastRenderedCount = 0;
+        isStreaming = false;
+        currentStreamId = null;
+        pendingPageContext = null;
+        for (const hm of entry.messages) {
+          messages.push({
+            id: `h-${hm.timestamp}-${Math.random().toString(36).slice(2, 5)}`,
+            role: hm.role,
+            content: hm.content,
+            timestamp: hm.timestamp,
+          });
+        }
+        saveMessages();
+        updateContextButton();
+        updateSendButton();
+        renderMessages();
+        scrollToBottom();
+      });
+      historyDropdown.appendChild(item);
+    }
+  }
+
+  historyBtn.addEventListener('click', () => {
+    const isOpen = historyDropdown.classList.toggle('open');
+    historyBtn.classList.toggle('active', isOpen);
+    if (isOpen) {
+      listConversations()
+        .then((entries) => renderHistoryDropdown(entries))
+        .catch((err) => console.warn('[SidePanel] history list failed:', err));
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!historyWrapper.contains(e.target as Node)) {
+      historyDropdown.classList.remove('open');
+      historyBtn.classList.remove('active');
+    }
+  });
+
+  historyWrapper.appendChild(historyBtn);
+  historyWrapper.appendChild(historyDropdown);
+  headerRight.appendChild(historyWrapper);
+  // ─────────────────────────────────────────────────────────────────────────
+
   const clearBtn = el(
     'button',
     { class: 'sp-icon-btn', id: 'sp-clear-btn', title: 'Clear conversation' },
@@ -2408,6 +2586,16 @@ function buildUI(): void {
     if (streamTimeoutHandle) {
       clearTimeout(streamTimeoutHandle);
       streamTimeoutHandle = null;
+    }
+    if (messages.length > 0) {
+      const toSave: HistoryMessage[] = messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        timestamp: m.timestamp,
+      }));
+      saveConversation(toSave).catch((err) =>
+        console.warn('[SidePanel] failed to save conversation to history:', err),
+      );
     }
     messages.length = 0;
     lastRenderedCount = 0;
