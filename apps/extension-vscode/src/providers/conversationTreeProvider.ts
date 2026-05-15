@@ -15,6 +15,10 @@ export class ConversationTreeItem extends vscode.TreeItem {
     this.description = formatRelativeTime(conversation.updatedAt);
     this.tooltip = conversation.messages[0]?.content.slice(0, 120) ?? 'Empty conversation';
     this.iconPath = new vscode.ThemeIcon('comment');
+    this.accessibilityInformation = {
+      label: conversation.title,
+      role: 'treeitem',
+    };
     this.contextValue = 'conversation';
 
     // Clicking a conversation item will open it (command registered in extension.ts)
