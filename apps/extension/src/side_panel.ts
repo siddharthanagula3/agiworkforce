@@ -4,6 +4,7 @@ import {
   normalizeModelId,
   PROVIDER_DISPLAY,
   CAPABILITY_LABEL,
+  getModelMetadataById,
   type ProviderId,
   type CapabilityTier,
 } from '@agiworkforce/types';
@@ -88,86 +89,25 @@ function createSharedSidePanelContext(): SharedSidePanelContext {
 
 const _ctx: SharedSidePanelContext = createSharedSidePanelContext();
 
-/**
- * Capability tier mapping for model-picker sub-labels.
- * Keys are canonical model IDs as stored in models.json / MANUAL_OVERRIDE_MODEL_IDS.
- * Mirrors the quality-tier data from the model catalog, expressed as the
- * three-tier vocabulary the design system uses in every picker.
- */
-/* eslint-disable no-restricted-syntax -- FIXME: P1-CHROMEEXT-MODELID-MIGRATION: lookup-table mirror of models.json fields used for UI sub-labels. Migrate to derive from `getModelCatalog()` once it exposes capability+provider tiers per model. Tracked as Phase D follow-up. */
-const MODEL_CAPABILITY: Record<string, CapabilityTier> = {
-  // Anthropic
-  'claude-opus-4.6': 'most-capable',
-  'claude-opus-4-7': 'most-capable',
-  'claude-sonnet-4.6': 'balanced',
-  'claude-sonnet-4-6': 'balanced',
-  'claude-haiku-4.5': 'fastest',
-  'claude-haiku-4-5': 'fastest',
-  // OpenAI
-  'gpt-5.4-pro': 'most-capable',
-  'gpt-5.4': 'most-capable',
-  'gpt-5.4-mini': 'balanced',
-  'gpt-5.4-codex': 'balanced',
-  'gpt-5.4-codex-medium': 'balanced',
-  // Google
-  'gemini-3.1-pro-preview': 'balanced',
-  'gemini-3.1-flash-lite': 'fastest',
-  // DeepSeek
-  'deepseek-chat': 'balanced',
-  'deepseek-reasoner': 'most-capable',
-  'deepseek-r1': 'most-capable',
-  // Qwen
-  'qwen-max': 'balanced',
-  // Moonshot
-  'kimi-k2.5-thinking': 'most-capable',
-  // Zhipu
-  'glm-4.7': 'balanced',
-  // xAI
-  'grok-4': 'most-capable',
-  // Perplexity
-  'sonar-pro': 'most-capable',
-  // Mistral
-  'mistral-large-3': 'balanced',
-};
+function getModelCapabilityTier(modelId: string): CapabilityTier | undefined {
+  const meta = getModelMetadataById(modelId);
+  if (!meta) return undefined;
+  switch (meta.qualityTier) {
+    case 'fast':
+      return 'fastest';
+    case 'balanced':
+      return 'balanced';
+    case 'best':
+      return 'most-capable';
+    default:
+      return undefined;
+  }
+}
 
-/**
- * Maps each canonical model ID to its provider identifier.
- * Used to group models in the picker and resolve provider logos.
- */
-const MODEL_PROVIDER: Record<string, ProviderId> = {
-  // Anthropic
-  'claude-opus-4.6': 'anthropic',
-  'claude-opus-4-7': 'anthropic',
-  'claude-sonnet-4.6': 'anthropic',
-  'claude-sonnet-4-6': 'anthropic',
-  'claude-haiku-4.5': 'anthropic',
-  'claude-haiku-4-5': 'anthropic',
-  // OpenAI
-  'gpt-5.4-pro': 'openai',
-  'gpt-5.4': 'openai',
-  'gpt-5.4-mini': 'openai',
-  'gpt-5.4-codex': 'openai',
-  'gpt-5.4-codex-medium': 'openai',
-  // Google
-  'gemini-3.1-pro-preview': 'google',
-  'gemini-3.1-flash-lite': 'google',
-  // DeepSeek
-  'deepseek-chat': 'deepseek',
-  'deepseek-reasoner': 'deepseek',
-  'deepseek-r1': 'deepseek',
-  // Qwen
-  'qwen-max': 'qwen',
-  // Moonshot
-  'kimi-k2.5-thinking': 'moonshot',
-  // Zhipu
-  'glm-4.7': 'zhipu',
-  // xAI
-  'grok-4': 'xai',
-  // Perplexity
-  'sonar-pro': 'perplexity',
-  // Mistral
-  'mistral-large-3': 'mistral' as ProviderId,
-};
+function getModelProvider(modelId: string): ProviderId | undefined {
+  const meta = getModelMetadataById(modelId);
+  return meta?.provider as ProviderId | undefined;
+}
 
 // Provider display order in the grouped picker.
 const PROVIDER_GROUP_ORDER: ProviderId[] = [
@@ -198,33 +138,22 @@ const SIDE_PANEL_MODEL_OPTIONS: SidePanelModelOption[] = [
   ...getCoreManualModelOptions().map((option) => ({
     value: option.id,
     label: option.label,
-    provider: MODEL_PROVIDER[option.id] as ProviderId | undefined,
-    capability: MODEL_CAPABILITY[option.id] as CapabilityTier | undefined,
+    provider: getModelProvider(option.id),
+    capability: getModelCapabilityTier(option.id),
   })),
 ];
 
-const SIDE_PANEL_MODEL_BADGES: Record<string, string> = {
-  auto: 'Best (auto)',
-  'claude-sonnet-4.6': 'Sonnet 4.6',
-  'claude-sonnet-4-6': 'Sonnet 4.6',
-  'claude-opus-4.6': 'Opus 4.6',
-  'claude-opus-4-7': 'Opus 4.7',
-  'claude-haiku-4.5': 'Haiku 4.5',
-  'claude-haiku-4-5': 'Haiku 4.5',
-  'gpt-5.4-pro': 'GPT-5.4 Pro',
-  'gpt-5.4': 'GPT-5.4',
-  'gpt-5.4-mini': 'GPT-5.4 Mini',
-  'gemini-3.1-pro-preview': 'Gemini 3.1 Pro',
-  'gemini-3.1-flash-lite': 'Gemini 3.1 Flash Lite',
-  'deepseek-r1': 'DeepSeek R1',
-  'deepseek-chat': 'DeepSeek',
-  'deepseek-reasoner': 'DeepSeek R1',
-  'sonar-pro': 'Sonar Pro',
-  'grok-4': 'Grok 4',
-  'mistral-large-3': 'Mistral',
-};
-/* eslint-enable no-restricted-syntax */
+const _modelBadgeCache: Record<string, string> = (() => {
+  const cache: Record<string, string> = { auto: 'Best (auto)' };
+  for (const opt of getCoreManualModelOptions()) {
+    cache[opt.id] = opt.label;
+  }
+  return cache;
+})();
 
+function getModelBadgeLabel(modelId: string): string {
+  return _modelBadgeCache[modelId] ?? modelId;
+}
 interface WebMCPToolEntry {
   name: string;
   description: string;
@@ -1911,7 +1840,7 @@ function updateModelBadge(modelId: string): void {
   const badge = document.getElementById('sp-model-badge');
   if (!badge) return;
   const normalizedModelId = normalizeModelId(modelId) ?? modelId;
-  badge.textContent = SIDE_PANEL_MODEL_BADGES[normalizedModelId] ?? normalizedModelId;
+  badge.textContent = getModelBadgeLabel(normalizedModelId);
 }
 
 function updateSendButton(): void {
