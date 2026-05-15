@@ -16,11 +16,13 @@ import {
   ExternalLink,
   ArrowUpRight,
   CheckCircle2,
+  Terminal,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { AppearanceSettings } from '@/components/settings/AppearanceSettings';
 import { ChatSettings } from '@/components/settings/ChatSettings';
 import { CustomModelsSettings } from '@/components/settings/CustomModelsSettings';
+import { CustomCommandsSettings } from '@/components/settings/CustomCommandsSettings';
 import {
   useSettingsStore,
   type ChatFont,
@@ -326,6 +328,27 @@ function AccountTab() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Commands Tab
+// ---------------------------------------------------------------------------
+
+function CommandsTab() {
+  return (
+    <Card className="border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
+      <CardHeader>
+        <CardTitle className="text-lg">Custom Commands</CardTitle>
+        <CardDescription>
+          Create slash commands that expand into prompt templates in the chat composer. Type{' '}
+          <code className="rounded bg-muted px-1 text-xs">/</code> to open the command menu.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <CustomCommandsSettings />
+      </CardContent>
+    </Card>
   );
 }
 
@@ -655,6 +678,7 @@ const TABS = [
   { value: 'appearance', label: 'Appearance', icon: Palette },
   { value: 'chat', label: 'Chat', icon: MessageSquare },
   { value: 'models', label: 'Models', icon: Server },
+  { value: 'commands', label: 'Commands', icon: Terminal },
   { value: 'privacy', label: 'Privacy & Data', icon: Shield },
   { value: 'billing', label: 'Billing', icon: CreditCard },
   { value: 'notifications', label: 'Notifications', icon: Bell },
@@ -691,7 +715,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)}>
-        <TabsList className="grid w-full grid-cols-6 text-xs sm:text-sm">
+        <TabsList className="grid w-full grid-cols-7 text-xs sm:text-sm">
           {TABS.map(({ value, label, icon: Icon }) => (
             <TabsTrigger key={value} value={value} className="flex items-center gap-1 text-xs">
               <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -710,6 +734,10 @@ export default function SettingsPage() {
 
         <TabsContent value="models" className="mt-6">
           <ModelsTab />
+        </TabsContent>
+
+        <TabsContent value="commands" className="mt-6">
+          <CommandsTab />
         </TabsContent>
 
         <TabsContent value="privacy" className="mt-6">

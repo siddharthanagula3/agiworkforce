@@ -1,17 +1,19 @@
 'use client';
 
-import React, { useState, useCallback, useImperativeHandle, forwardRef } from 'react';
-import { Globe, Brain, Image, FileText, Code } from 'lucide-react';
+import React, { useState, useCallback, useImperativeHandle, forwardRef, useMemo } from 'react';
+import { Globe, Brain, Image, FileText, Code, Terminal } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
+import { useSettingsStore } from '@/stores/settingsStore';
 
 interface SlashCommand {
   id: string;
   label: string;
   description: string;
   icon: React.ElementType;
+  isCustom?: boolean;
 }
 
-const COMMANDS: SlashCommand[] = [
+const BUILT_IN_COMMANDS: SlashCommand[] = [
   { id: 'search', label: '/search', description: 'Search the web', icon: Globe },
   { id: 'think', label: '/think', description: 'Extended reasoning', icon: Brain },
   { id: 'image', label: '/image', description: 'Generate an image', icon: Image },
@@ -32,6 +34,22 @@ interface SlashCommandMenuProps {
 
 export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandMenuProps>(
   function SlashCommandMenu({ query, onSelect, onClose }, ref) {
+    const customCommands = useSettingsStore((s) => s.customCommands);
+
+    const COMMANDS = useMemo<SlashCommand[]>(
+      () => [
+        ...BUILT_IN_COMMANDS,
+        ...customCommands.map((c) => ({
+          id: c.id,
+          label: `/${c.name}`,
+          description: c.description || c.template.slice(0, 60),
+          icon: Terminal,
+          isCustom: true as const,
+        })),
+      ],
+      [customCommands],
+    );
+
     const filtered = COMMANDS.filter(
       (cmd) =>
         query === '' ||
