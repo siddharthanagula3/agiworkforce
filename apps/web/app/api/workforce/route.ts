@@ -1,12 +1,12 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { requireEnv } from '@/utils/env';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
 import { AI_EMPLOYEES } from '@/data/marketplace-employees';
 
 /**
@@ -22,61 +22,21 @@ import { AI_EMPLOYEES } from '@/data/marketplace-employees';
 export const runtime = 'nodejs';
 
 /**
- * Authenticate the request and return the user ID.
- * Supports both Bearer token and cookie-based auth.
+ * Authenticate the request and return the user ID + RLS-bound DB client.
+ *
+ * The returned client is bound to the user's JWT, so RLS policies enforce
+ * tenant isolation on hired_employees and credit_transactions. The
+ * .eq('user_id', userId) filters in callers remain as defense-in-depth.
  */
-async function authenticateRequest(request: NextRequest): Promise<string> {
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-
-  const authHeader = request.headers.get('authorization');
-
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser(token);
-
-    if (error || !user) {
-      throw new Error('UNAUTHORIZED');
-    }
-    return user.id;
-  }
-
-  // Cookie-based auth for browser requests
-  const { createServerClient } = await import('@supabase/ssr');
-  const ssrClient = createServerClient(supabaseUrl, requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY'), {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll() {
-        // Read-only for this route
-      },
-    },
-  });
-
-  const {
-    data: { user },
-    error,
-  } = await ssrClient.auth.getUser();
-
-  if (error || !user) {
+async function authenticateRequest(
+  request: NextRequest,
+): Promise<{ userId: string; supabase: SupabaseClient }> {
+  try {
+    const { user, userDb } = await getAuthenticatedUserWithClient(request);
+    return { userId: user.id, supabase: userDb };
+  } catch {
     throw new Error('UNAUTHORIZED');
   }
-
-  return user.id;
-}
-
-/**
- * Get a Supabase admin client for database operations
- */
-function getAdminClient() {
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  return createClient(supabaseUrl, supabaseServiceKey);
 }
 
 export async function OPTIONS(request: NextRequest): Promise<NextResponse> {
@@ -91,8 +51,7 @@ export async function OPTIONS(request: NextRequest): Promise<NextResponse> {
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
-    const userId = await authenticateRequest(request);
-    const supabase = getAdminClient();
+    const { userId, supabase } = await authenticateRequest(request);
     const corsHeaders = getCorsHeaders(request);
 
     // Fetch hired employees
@@ -212,8 +171,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
     if (rateLimitResponse) return rateLimitResponse;
 
-    const userId = await authenticateRequest(request);
-    const supabase = getAdminClient();
+    const { userId, supabase } = await authenticateRequest(request);
     const corsHeaders = getCorsHeaders(request);
 
     const body = (await request.json()) as { employeeId?: string };
@@ -310,8 +268,7 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
     const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
     if (rateLimitResponse) return rateLimitResponse;
 
-    const userId = await authenticateRequest(request);
-    const supabase = getAdminClient();
+    const { userId, supabase } = await authenticateRequest(request);
     const corsHeaders = getCorsHeaders(request);
 
     const { searchParams } = new URL(request.url);
