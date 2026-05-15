@@ -129,7 +129,7 @@ export function FeaturesPrivacySettings() {
           completely unavailable to agents regardless of approval mode.
         </p>
 
-        <div className="rounded-lg border border-border bg-[#242424] divide-y divide-border">
+        <div className="rounded-lg border border-border bg-card divide-y divide-border">
           {CAPABILITIES.map((cap) => (
             <div key={cap.key} className="flex items-start justify-between gap-4 px-5 py-4">
               <div className="space-y-0.5 flex-1">
