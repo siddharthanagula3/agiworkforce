@@ -306,6 +306,7 @@ use self::realtime::RealtimeConversationUiState;
 use self::realtime::RenderedUserMessageEvent;
 mod status_surfaces;
 use self::status_surfaces::CachedProjectRootName;
+mod quit_shortcuts;
 mod notifications;
 use self::notifications::Notification;
 use self::notifications::PLACEHOLDERS;
@@ -4781,100 +4782,6 @@ impl ChatWidget {
         ));
     }
 
-    fn open_status_line_setup(&mut self) {
-        let configured_status_line_items = self.configured_status_line_items();
-        let view = StatusLineSetupView::new(
-            Some(configured_status_line_items.as_slice()),
-            StatusLinePreviewData::from_iter(StatusLineItem::iter().filter_map(|item| {
-                self.status_line_value_for_item(&item)
-                    .map(|value| (item, value))
-            })),
-            self.app_event_tx.clone(),
-        );
-        self.bottom_pane.show_view(Box::new(view));
-    }
-
-    fn open_theme_picker(&mut self) {
-        let agiworkforce_home = agiworkforce_core::config::find_agiworkforce_home().ok();
-        let terminal_width = self
-            .last_rendered_width
-            .get()
-            .and_then(|width| u16::try_from(width).ok());
-        let params = crate::theme_picker::build_theme_picker_params(
-            self.config.tui_theme.as_deref(),
-            agiworkforce_home.as_deref(),
-            terminal_width,
-        );
-        self.bottom_pane.show_selection_view(params);
-    }
-
-    fn open_terminal_title_setup(&mut self) {
-        let configured_terminal_title_items = self.configured_terminal_title_items();
-        self.terminal_title_setup_original_items = Some(self.config.tui_terminal_title.clone());
-        let view = TerminalTitleSetupView::new(
-            Some(configured_terminal_title_items.as_slice()),
-            self.app_event_tx.clone(),
-        );
-        self.bottom_pane.show_view(Box::new(view));
-    }
-
-    fn status_line_context_window_size(&self) -> Option<i64> {
-        self.token_info
-            .as_ref()
-            .and_then(|info| info.model_context_window)
-            .or(self.config.model_context_window)
-    }
-
-    fn status_line_context_remaining_percent(&self) -> Option<i64> {
-        let Some(context_window) = self.status_line_context_window_size() else {
-            return Some(100);
-        };
-        let default_usage = TokenUsage::default();
-        let usage = self
-            .token_info
-            .as_ref()
-            .map(|info| &info.last_token_usage)
-            .unwrap_or(&default_usage);
-        Some(
-            usage
-                .percent_of_context_window_remaining(context_window)
-                .clamp(0, 100),
-        )
-    }
-
-    fn status_line_context_used_percent(&self) -> Option<i64> {
-        let remaining = self.status_line_context_remaining_percent().unwrap_or(100);
-        Some((100 - remaining).clamp(0, 100))
-    }
-
-    fn status_line_total_usage(&self) -> TokenUsage {
-        self.token_info
-            .as_ref()
-            .map(|info| info.total_token_usage.clone())
-            .unwrap_or_default()
-    }
-
-    fn status_line_limit_display(
-        &self,
-        window: Option<&RateLimitWindowDisplay>,
-        label: &str,
-    ) -> Option<String> {
-        let window = window?;
-        let remaining = (100.0f64 - window.used_percent).clamp(0.0f64, 100.0f64);
-        Some(format!("{label} {remaining:.0}%"))
-    }
-
-    fn status_line_reasoning_effort_label(effort: Option<ReasoningEffortConfig>) -> &'static str {
-        match effort {
-            Some(ReasoningEffortConfig::Minimal) => "minimal",
-            Some(ReasoningEffortConfig::Low) => "low",
-            Some(ReasoningEffortConfig::Medium) => "medium",
-            Some(ReasoningEffortConfig::High) => "high",
-            Some(ReasoningEffortConfig::XHigh) => "xhigh",
-            None | Some(ReasoningEffortConfig::None) => "default",
-        }
-    }
-
     fn clean_background_terminals(&mut self) {
         self.submit_op(Op::CleanBackgroundTerminals);
         self.add_info_message(
@@ -7086,109 +6993,6 @@ impl ChatWidget {
     ///
     /// If the same quit shortcut is pressed again before expiry, this requests a shutdown-first
     /// quit.
-    fn on_ctrl_c(&mut self) {
-        let key = key_hint::ctrl(KeyCode::Char('c'));
-        if self.realtime_conversation.is_live() {
-            self.bottom_pane.clear_quit_shortcut_hint();
-            self.quit_shortcut_expires_at = None;
-            self.quit_shortcut_key = None;
-            self.stop_realtime_conversation_from_ui();
-            return;
-        }
-        let modal_or_popup_active = !self.bottom_pane.no_modal_or_popup_active();
-        if self.bottom_pane.on_ctrl_c() == CancellationEvent::Handled {
-            if DOUBLE_PRESS_QUIT_SHORTCUT_ENABLED {
-                if modal_or_popup_active {
-                    self.quit_shortcut_expires_at = None;
-                    self.quit_shortcut_key = None;
-                    self.bottom_pane.clear_quit_shortcut_hint();
-                } else {
-                    self.arm_quit_shortcut(key);
-                }
-            }
-            return;
-        }
-
-        if !DOUBLE_PRESS_QUIT_SHORTCUT_ENABLED {
-            if self.is_cancellable_work_active() {
-                self.submit_op(Op::Interrupt);
-            } else {
-                self.request_quit_without_confirmation();
-            }
-            return;
-        }
-
-        if self.quit_shortcut_active_for(key) {
-            self.quit_shortcut_expires_at = None;
-            self.quit_shortcut_key = None;
-            self.request_quit_without_confirmation();
-            return;
-        }
-
-        self.arm_quit_shortcut(key);
-
-        if self.is_cancellable_work_active() {
-            self.submit_op(Op::Interrupt);
-        }
-    }
-
-    /// Handles a Ctrl+D press at the chat-widget layer.
-    ///
-    /// Ctrl-D only participates in quit when the composer is empty and no modal/popup is active.
-    /// Otherwise it should be routed to the active view and not attempt to quit.
-    fn on_ctrl_d(&mut self) -> bool {
-        let key = key_hint::ctrl(KeyCode::Char('d'));
-        if !DOUBLE_PRESS_QUIT_SHORTCUT_ENABLED {
-            if !self.bottom_pane.composer_is_empty() || !self.bottom_pane.no_modal_or_popup_active()
-            {
-                return false;
-            }
-
-            self.request_quit_without_confirmation();
-            return true;
-        }
-
-        if self.quit_shortcut_active_for(key) {
-            self.quit_shortcut_expires_at = None;
-            self.quit_shortcut_key = None;
-            self.request_quit_without_confirmation();
-            return true;
-        }
-
-        if !self.bottom_pane.composer_is_empty() || !self.bottom_pane.no_modal_or_popup_active() {
-            return false;
-        }
-
-        self.arm_quit_shortcut(key);
-        true
-    }
-
-    /// True if `key` matches the armed quit shortcut and the window has not expired.
-    fn quit_shortcut_active_for(&self, key: KeyBinding) -> bool {
-        self.quit_shortcut_key == Some(key)
-            && self
-                .quit_shortcut_expires_at
-                .is_some_and(|expires_at| Instant::now() < expires_at)
-    }
-
-    /// Arm the double-press quit shortcut and show the footer hint.
-    ///
-    /// This keeps the state machine (`quit_shortcut_*`) in `ChatWidget`, since
-    /// it is the component that interprets Ctrl+C vs Ctrl+D and decides whether
-    /// quitting is currently allowed, while delegating rendering to `BottomPane`.
-    fn arm_quit_shortcut(&mut self, key: KeyBinding) {
-        self.quit_shortcut_expires_at = Instant::now()
-            .checked_add(QUIT_SHORTCUT_TIMEOUT)
-            .or_else(|| Some(Instant::now()));
-        self.quit_shortcut_key = Some(key);
-        self.bottom_pane.show_quit_shortcut_hint(key);
-    }
-
-    // Review mode counts as cancellable work so Ctrl+C interrupts instead of quitting.
-    fn is_cancellable_work_active(&self) -> bool {
-        self.bottom_pane.is_task_running() || self.is_review_mode
-    }
-
     fn is_plan_streaming_in_tui(&self) -> bool {
         self.plan_stream_controller.is_some()
     }
