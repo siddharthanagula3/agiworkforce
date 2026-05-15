@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 description = "AGI Workforce exec policy: prefix-based Starlark rules for command decisions."
 
+[lints]
+workspace = true
+
 [lib]
 name = "agiworkforce_execpolicy"
 path = "src/lib.rs"
