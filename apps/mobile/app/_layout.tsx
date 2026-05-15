@@ -264,6 +264,14 @@ export default function RootLayout() {
       } else {
         router.replace('/(app)');
       }
+    } else if (session && inOnboarding) {
+      // User landed in onboarding with an active session (e.g. OAuth callback).
+      // If they already completed onboarding on a prior launch, go straight to
+      // the app so they never see the welcome carousel again.
+      const onboardingDone = storage.getString('onboarding-done');
+      if (onboardingDone) {
+        router.replace('/(app)');
+      }
     } else if (session && !inAuthGroup && !inOnboarding) {
       const onboardingDone = storage.getString('onboarding-done');
       if (!onboardingDone) {
