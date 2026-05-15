@@ -6,27 +6,12 @@ import { useChatStream } from '@/lib/hooks/useChatStream';
 import { useConversations } from '@/lib/hooks/useConversations';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@shared/stores/model-store';
-import { useAuthStore } from '@shared/stores/authentication-store';
 import { ChatSidebar } from '../components/Sidebar/ChatSidebar';
 import { MessageListNew } from '../components/messages/MessageListNew';
 import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
 import type { Message } from '@/stores/chatStore';
 import type { ChatMessage } from '../stores/chat-store';
 import { cn } from '@shared/lib/utils';
-
-function getTimeGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
-}
-
-const QUICK_ACTIONS: { label: string; prompt: string }[] = [
-  { label: 'Code', prompt: 'Help me write or review code' },
-  { label: 'Learn', prompt: 'Explain a concept to me' },
-  { label: 'Write', prompt: 'Help me write something' },
-  { label: 'Life stuff', prompt: 'Help me with a personal task or decision' },
-];
 
 function toChatMessage(m: Message, conversationId: string): ChatMessage {
   const thinkingContent = m.metadata?.thinkingContent;
@@ -61,8 +46,6 @@ export default function WebChatPage() {
   const urlConversationId = params?.['sessionId'] as string | undefined;
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const { user } = useAuthStore();
-  const firstName = user?.name?.split(' ')[0] ?? user?.email?.split('@')[0] ?? null;
 
   // Streaming send + store state
   const { sendMessage, stopGeneration, isStreaming } = useChatStream();
@@ -281,36 +264,14 @@ export default function WebChatPage() {
 
       {/* Main area */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Message list or welcome state */}
+        {/* Message list */}
         <div className="flex-1 overflow-hidden">
-          {chatMessages.length === 0 && !isLoading ? (
-            <div className="flex h-full flex-col items-center justify-center gap-6 px-4">
-              <div className="text-center">
-                <h1 className="text-2xl font-semibold text-foreground">
-                  {firstName ? `${getTimeGreeting()}, ${firstName}` : getTimeGreeting()}
-                </h1>
-                <p className="mt-2 text-sm text-muted-foreground">How can I help you today?</p>
-              </div>
-              <div className="flex flex-wrap justify-center gap-2">
-                {QUICK_ACTIONS.map((action) => (
-                  <button
-                    key={action.label}
-                    onClick={() => handleSend(action.prompt)}
-                    className="rounded-full border border-border/60 bg-muted/30 px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-                  >
-                    {action.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <MessageListNew
-              messages={chatMessages}
-              isLoading={isLoading && !isStreaming}
-              onRegenerate={handleRegenerateMessage}
-              onDelete={handleDeleteMessage}
-            />
-          )}
+          <MessageListNew
+            messages={chatMessages}
+            isLoading={isLoading && !isStreaming}
+            onRegenerate={handleRegenerateMessage}
+            onDelete={handleDeleteMessage}
+          />
         </div>
 
         {/* Composer */}
