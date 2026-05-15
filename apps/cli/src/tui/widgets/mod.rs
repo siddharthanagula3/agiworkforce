@@ -12,3 +12,6 @@ pub mod skills_toggle;
 pub mod statusline_setup;
 pub mod terminal_title_setup;
 pub mod theme_picker;
+
+#[cfg(test)]
+mod snapshot_smoke;
