@@ -26,7 +26,7 @@ import { useAgentStore } from '@/stores/agentStore';
 import { api } from '@/services/api';
 import { fetchPortalSessionUrl } from '@/services/billing';
 import { isAllowedExternalUrl, openExternalUrl } from '@/lib/safeOpenURL';
-import { colors } from '@/lib/theme';
+import { useThemeColors } from '@/hooks/useTheme';
 import { normalizeBillingPlanTier } from '@agiworkforce/types';
 
 interface UsageStats {
@@ -41,6 +41,7 @@ interface UsageStats {
  * ProfileScreen -- User profile, subscription status, usage stats.
  */
 export default function ProfileScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
   const { user, signOut } = useAuthStore();
   const conversations = useChatStore((s) => s.conversations);

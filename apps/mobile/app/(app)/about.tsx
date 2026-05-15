@@ -7,7 +7,7 @@ import { ArrowLeft, Sparkles, ExternalLink, MessageCircle, Mail, Info } from 'lu
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { colors } from '@/lib/theme';
+import { useThemeColors } from '@/hooks/useTheme';
 // Metro's default config supports importing package.json — read versions from
 // the manifest so the About screen never drifts from the actual installed deps.
 import pkg from '../../package.json';
@@ -37,6 +37,7 @@ function LinkRow({
   label: string;
   onPress: () => void;
 }) {
+  const c = useThemeColors();
   return (
     <Pressable
       className="flex-row items-center justify-between py-3 px-1 active:bg-white/5 rounded-lg"
@@ -45,10 +46,10 @@ function LinkRow({
       accessibilityRole="button"
     >
       <View className="flex-row items-center gap-3">
-        <Icon size={18} color={colors.textSecondary} />
+        <Icon size={18} color={c.textSecondary} />
         <Text className="text-sm text-white">{label}</Text>
       </View>
-      <ExternalLink size={14} color={colors.textMuted} />
+      <ExternalLink size={14} color={c.textMuted} />
     </Pressable>
   );
 }
@@ -71,6 +72,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 // ---------------------------------------------------------------------------
 
 export default function AboutScreen() {
+  const c = useThemeColors();
   const router = useRouter();
 
   const handleBack = useCallback(() => {
@@ -103,7 +105,7 @@ export default function AboutScreen() {
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
-          <ArrowLeft size={20} color={colors.textSecondary} />
+          <ArrowLeft size={20} color={c.textSecondary} />
         </Pressable>
         <Text variant="subheading" className="ml-2">
           About
@@ -115,9 +117,9 @@ export default function AboutScreen() {
         <View className="items-center pt-4 pb-2 gap-3">
           <View
             className="w-20 h-20 rounded-full items-center justify-center"
-            style={{ backgroundColor: `${colors.teal}22` }}
+            style={{ backgroundColor: `${c.teal}22` }}
           >
-            <Sparkles size={36} color={colors.teal} />
+            <Sparkles size={36} color={c.teal} />
           </View>
           <View className="items-center gap-1">
             <Text className="text-2xl font-bold text-white">AGI Workforce</Text>
@@ -131,7 +133,7 @@ export default function AboutScreen() {
         {/* Build info */}
         <Card>
           <View className="flex-row items-center gap-2 mb-3">
-            <Info size={14} color={colors.textMuted} />
+            <Info size={14} color={c.textMuted} />
             <Text variant="caption" className="uppercase tracking-wider">
               Build Info
             </Text>
@@ -185,10 +187,10 @@ export default function AboutScreen() {
             accessibilityRole="button"
           >
             <View className="flex-row items-center gap-3">
-              <MessageCircle size={18} color={colors.textSecondary} />
+              <MessageCircle size={18} color={c.textSecondary} />
               <Text className="text-sm text-white">Send Feedback</Text>
             </View>
-            <ExternalLink size={14} color={colors.textMuted} />
+            <ExternalLink size={14} color={c.textMuted} />
           </Pressable>
           <Separator />
           <LinkRow

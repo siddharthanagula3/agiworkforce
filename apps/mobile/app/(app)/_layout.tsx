@@ -1,7 +1,7 @@
 import { useWindowDimensions } from 'react-native';
 import { Drawer } from 'expo-router/drawer';
 import { DrawerContent } from '@/components/drawer/DrawerContent';
-import { colors } from '@/lib/theme';
+import { useThemeColors } from '@/hooks/useTheme';
 
 /**
  * App layout -- Drawer navigator wrapping the entire authenticated section.
@@ -28,6 +28,7 @@ const HIDDEN = { drawerItemStyle: { display: 'none' as const } };
 
 export default function AppLayout() {
   const { width } = useWindowDimensions();
+  const colors = useThemeColors();
   const isTablet = width >= 768;
 
   return (
