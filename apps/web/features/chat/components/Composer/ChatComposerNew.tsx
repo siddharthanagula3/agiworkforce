@@ -99,7 +99,7 @@ const ChatComposerNewComponent = ({
   onSend,
   isLoading = false,
   isGenerating = false,
-  placeholder = 'Message AGI Workforce...',
+  placeholder = 'Ask anything',
   disabled = false,
   initialAgentMode = 'solo',
   promptCompletionEnabled = true,
@@ -241,7 +241,7 @@ const ChatComposerNewComponent = ({
     const textarea = textareaRef.current;
     if (!textarea) return;
     textarea.style.height = 'auto';
-    const newHeight = Math.min(Math.max(textarea.scrollHeight, 52), 200);
+    const newHeight = Math.min(Math.max(textarea.scrollHeight, 52), 240);
     textarea.style.height = `${newHeight}px`;
   }, [message]);
 
@@ -449,7 +449,7 @@ const ChatComposerNewComponent = ({
         }
       }
 
-      if (e.key === 'Enter' && !e.shiftKey && !showMentions) {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !showMentions) {
         e.preventDefault();
         handleSubmit();
       }
@@ -483,8 +483,8 @@ const ChatComposerNewComponent = ({
   const footerHint = showSlashMenu
     ? 'Tab to accept · Esc to dismiss'
     : suggestion
-      ? 'Tab to accept suggestion · Enter to send'
-      : 'Enter to send · Shift+Enter for newline';
+      ? 'Tab to accept suggestion · Cmd+Enter to send'
+      : 'Cmd+Enter to send · Enter for newline';
 
   const handleFileDrop = useCallback(
     (files: File[]) => {
@@ -806,7 +806,7 @@ const ChatComposerNewComponent = ({
               placeholder={placeholder}
               disabled={isLoading || disabled}
               // bg-transparent so the ghost-text overlay behind shows through
-              className="relative z-10 min-h-[52px] w-full resize-none border-0 bg-transparent px-2 py-3 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50 md:text-[15px]"
+              className="relative z-10 min-h-[52px] max-h-[240px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 py-3 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50 md:text-[15px]"
               rows={1}
               aria-label="Message input"
               aria-describedby={suggestion ? 'ghost-text-hint' : undefined}

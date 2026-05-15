@@ -113,7 +113,7 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      const newHeight = Math.min(Math.max(textareaRef.current.scrollHeight, 52), 200);
+      const newHeight = Math.min(Math.max(textareaRef.current.scrollHeight, 52), 240);
       textareaRef.current.style.height = `${newHeight}px`;
     }
   }, [message]);
@@ -245,7 +245,7 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey && !showMentions) {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !showMentions) {
       e.preventDefault();
       handleSubmit();
     }
@@ -613,13 +613,13 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
         </span>
         <span className="hidden sm:inline">
           <kbd className="rounded border border-border bg-muted px-1 font-mono text-[10px]">
-            Enter
+            Cmd+Enter
           </kbd>{' '}
           to send
         </span>
         <span className="hidden sm:inline">
           <kbd className="rounded border border-border bg-muted px-1 font-mono text-[10px]">
-            Shift+Enter
+            Enter
           </kbd>{' '}
           for newline
         </span>
