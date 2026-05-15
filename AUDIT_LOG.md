@@ -495,3 +495,86 @@ The source-comparison-report identified two cross-surface P0s — "no single sou
 **Pushed:** `git push origin main` at 15:08 — `0fa1c7190..74b7f0255`.
 
 **Next rotation (Wave 3):** Cross-surface polish + production builds (`bash scripts/launch-verify.sh --with-builds`) + tighter cross-surface integration tests + remaining RLS migrations + CLI Unicode-icon mapping + visual smoke screenshots if time permits.
+
+---
+
+## 2026-05-15T22:00Z — Launch-Readiness Wave 3 + Voice Patch + Doc Reconciliation
+
+**Plan**: extend wave 1+2 by closing production-build verification, CLI Unicode icons + binary size investigation, more RLS, integration tests, and brand identity foundation. Plus a strategy lock per user direction: product positioning, billing model, v1 scope, voice paradigm, brand approach.
+
+**Wave 3 dispatch**: 8 parallel agents — desk-launch3, web-launch3, mob-launch3, cli-launch3, chr-launch3, vsc-launch3, integ-launch3, docs-launch3.
+
+**Commits landed**: 27 (range `98ed9ef1c..01e56f2a3`). Breakdown:
+
+- 21 wave-3 agent commits + 1 self-audit fix (`172884f1d`) + 3 follow-ups (voice patch + docs reconciliation + brand-mark proposals).
+
+**Wave 3 per-agent outcomes:**
+
+| Agent         | Commits | Headline                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| desk-launch3  | 4       | Tauri 2.10.3→2.11.0 version-align + embedding command registration fix (`c53048041`), empty-state hero polish (`1d620b5e6`), dead-TODO sweep (`d13034af8`), cfg-gate ssl bypass for release lint (`ee317c714`). Tauri release build green: 33MB binary, 37MB .app bundle, code-signed `D2PR62RLT4`. **Notarization 403** — Apple Developer Program Agreement expired in portal (account action). |
+| web-launch3   | 4       | `@next/bundle-analyzer` wired (`f90519eac`), 3 user-scoped routes migrated to `getUserClient` (`3849a3906`), production build green + node:async_hooks browser stub for client chunks (`0da0cd24a`), markdown pipeline `next/dynamic` code-split (`c8d8bb5d7`).                                                                                                                                  |
+| mob-launch3   | 3       | 7 more screens migrated to `useThemeColors` (`4c1db310a`), expo prebuild fix via `@xmldom/xmldom` override tightening (`859b053e4`), dispatch round-trip e2e smoke test (`0a35492a5`).                                                                                                                                                                                                           |
+| cli-launch3   | 3       | icons.rs wiring into exec_cell + status_surfaces (`3fa1e2880`), binary-size doc with cargo-bloat output (`725d2108d`), turn_lifecycle chunk extraction from chatwidget (`ec2c357ce`).                                                                                                                                                                                                            |
+| chr-launch3   | 2       | Lucide sprite icons applied throughout side-panel UI (`e9ff5bd82`), remaining TODO sweep (`474782c14`). Production package build: 139,161-byte extension.zip, 35 files, no source maps.                                                                                                                                                                                                          |
+| vsc-launch3   | 2       | Codicon consistency audit + minimal copy (`c4bd8fbf1`), activation events minimal verification (`19b5b833e`).                                                                                                                                                                                                                                                                                    |
+| integ-launch3 | 3       | Chrome ext ↔ desktop bridge :8787 pairing e2e test (`dde2cc56a`), web `/api/llm/v1/chat/completions` auth contract test (`0c1739d16`), mobile dispatch payload schema test (`feff4965f`).                                                                                                                                                                                                        |
+| docs-launch3  | 2       | MASTER_PLAN §10 status refresh (`ff47b1ba3`), README launch-readiness section (`addf33b8b`).                                                                                                                                                                                                                                                                                                     |
+
+**Self-audit catches** (`172884f1d` — done by team lead, not an agent):
+
+- Commit `5cee5b174` from wave 2 mislabeled `feat(mobile)` actually contains CLI `icons.rs` + web RLS test — lint-staged cross-surface race. Pushed and live; benign but noted.
+- `apps/mobile/{android,ios}` directories untracked from mob-launch3's `expo prebuild` — removed + added to `apps/mobile/.gitignore` (canonical iOS lives at top-level `/ios`, not under apps/mobile).
+- Web typecheck regression — 20+ `toBeInTheDocument` / `toHaveAttribute` assertion failures across `shared/ui/toast.test.tsx`, `app/__tests__/animations.test.tsx`, etc. Fixed with `apps/web/test/jest-dom.d.ts` triple-slash reference (Vitest's `Assertion` interface needs explicit type augmentation; runtime import in `test/setup.ts` is insufficient).
+- `MessageBubble.test.tsx` unused `React` import from web-launch3's markdown split — removed.
+
+**Strategy lock — user-decided in this session 2026-05-15:**
+
+1. **Stack**: Next.js 16 web (now uses `proxy.ts` not `middleware.ts` per Next 16.x), Tauri 2 desktop, Expo RN mobile, Rust + Ratatui CLI, MV3 chrome ext, VSCE vscode ext. **No framework rewrite.** Decided based on Web research (PkgPulse 2026 Tauri vs Electron, Next.js 16.2 AI agentic focus, indie AI tool adoption patterns).
+2. **Positioning**: General AI productivity workforce (not coding-agent-first).
+3. **Billing**: Hobby cloud $10/mo at launch alongside BYOK + Local free forever. Pro $29.99 / Pro+ $49.99 / Max $299.99 (all monthly), annual ≈ 17% off (Hobby ≈ 50%).
+4. **v1 75%-parity bench**: Computer use + image gen + video gen + Wispr-Flow voice all in v1. "If competitors ship it and we don't, no one downloads us."
+5. **Voice = Wispr-Flow pattern, NOT Gemini Live duplex**: system-wide push-to-talk hotkey → Whisper-1 STT → Gemini Flash-Lite rewrite → paste at cursor in any text field. Hobby+ only.
+6. **Brand mark**: design new (not mimicry); 3 SVG proposals at `docs/design/brand-mark-proposals/`; pick on next session.
+7. **Mobile is a first-class chat peer** to Perplexity/Claude/ChatGPT/Gemini, NOT a Dispatch companion. Drawer nav: Chat first / Skills / Projects / Dispatch / Connectors / Settings.
+
+**Voice patch (`a8c5c92c7`):**
+
+- Added `allowVoice: boolean` + `voiceMinutesPerMonth: number | null` to `TierPolicy` interface in `packages/types/src/model-catalog.ts`.
+- `voice_transcription` (`whisper-1`) + `voice_rewrite` (`gemini-3.1-flash-lite`) slots added to `allowedSlots` of Hobby/Pro/Pro+/Max/Enterprise.
+- Per-tier minute caps: Hobby 60, Pro 300, Pro+ 1500, Max+Enterprise unlimited. Free stays text-only.
+- Test assertions updated: Free explicitly asserts `allowVoice: falsy` + no voice slots; Hobby explicitly asserts `allowVoice: true` + `voiceMinutesPerMonth: 60` + both slots present. Removed the now-stale "Round 14 dropped voice slots" assertion from Pro tier negative-list.
+- Verification: 163/163 `@agiworkforce/types` tests pass.
+
+**Doc reconciliation (`b4af6fa55`):**
+
+- `tasks/auto-routing-spec.md` §1: Hobby $5 → $10, Pro $20 → $29.99, Pro+ $40 → $49.99 to match canonical `packages/types/src/billing-catalog.ts` SSOT. Added in-tools column voice minutes per tier.
+- `tasks/auto-routing-spec.md` §6 (Capability Gating): replaced `Voice features (TTS/STT/voice mode) | — | — | — | — | — (deferred from v1)` with `Voice (Wispr-Flow: Whisper STT + AI rewrite) | — | 60 min/mo | 300 min/mo | 1500 min/mo | unlimited`.
+- `docs/PRICING.md`: full rewrite of tier table to match billing-catalog. Added per-tier yearly column (Hobby $59.88 = 50% off; Pro $299.88, Pro+ $499.88, Max $2,999.88 = ~17% off). Added per-slot provider/API map table listing modelId + provider + pricing per slot.
+
+**Brand-mark proposals (`01e56f2a3`):**
+
+- `docs/design/brand-mark-proposals/mark-a-nodes.svg` — 4 connected nodes (workforce graph).
+- `docs/design/brand-mark-proposals/mark-b-monogram.svg` — angular A monogram with terracotta crossbar.
+- `docs/design/brand-mark-proposals/mark-c-prism.svg` — stacked layers prism.
+- `docs/design/brand-mark-proposals/preview.html` — renders all 3 at 5 sizes on dark + light backgrounds + wordmark pair preview.
+
+**Verification:**
+
+| Surface         | Status                                             | Notes                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CLI             | 1,337 tests                                        | cargo check workspace green                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Desktop         | typecheck green                                    | Tauri release build green; macOS notarization 403 (Apple account action)                                                                                                                                                                                                                                                                                                                                                    |
+| Web             | typecheck green, **31 pre-existing test failures** | `core/integrations/*`, `core/security/gradual-rollout`, `shared/stores/artifact-store`, `__tests__/security/rt-09-audit-idor`. Pattern: tests expect specific error messages ("Forbidden", etc.) but get empty strings after sec-launch1's RLS migrations changed error paths. Pre-existing on `main` per web-launch3 commit note "10 failed / 126 passed unchanged from pre-split." Mock-expectation fix needed; deferred. |
+| Mobile          | 804 tests                                          | Jest                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Chrome ext      | 614 tests                                          | vitest                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| VS Code ext     | 513 tests                                          | vitest                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Packages: types | 163 tests                                          | including new voice assertions                                                                                                                                                                                                                                                                                                                                                                                              |
+
+**Pushed**: `git push origin main` at 22:00 — `98ed9ef1c..01e56f2a3`.
+
+**Operational blockers (account-side, not code):**
+
+- macOS notarization needs developer agreement re-acceptance at developer.apple.com.
+
+**Next rotation (Wave 4 — speculative)**: brand-mark pick → asset pack generation (favicon ICO + PNG sizes + iOS icon + Android adaptive icon + monochrome tray variant + social-card cover). Fix the 31 pre-existing web test failures (mock-expectation updates). Sora 2 deprecation playbook (Sept 24, 2026 EOL) → multi-provider video router insulation. Voice implementation surfaces: desktop global hotkey + web composer mic + mobile Command Mode + chrome ext content-script + CLI hold-to-talk verification.
