@@ -263,3 +263,142 @@ Rotation order: `apps/cli → apps/desktop → apps/web → apps/mobile → apps
 - Net diff this campaign: ~107K LOC removed, ~5K LOC added, 30 commits since `3fdda63b3`.
 
 **Last surface audited:** all 6 surfaces + packages + crates + workspace root. **Next rotation per `MASTER_PLAN.md` §1.4:** `apps/web` for fire #6. Remaining work per §10 status tracker: Phase B 20/21 god-files, Phase C 5/15 features (C1 Cowork tab, C3 submenu, C4 Account/Billing tabs, C5 partner perks, C7 Show thinking, C15 marketplace screenshots), Phase D 5/12 polish (composite workspace, dark-mode parity migrations, a11y audit, insta snapshots, domain-first reorg). E1 + E2 above are explicit cross-fire escalations.
+
+---
+
+## 2026-05-15T00:00Z — Phase B marathon — waves 5-12 — god-file decomposition campaign
+
+**Audited:** all 6 surfaces + packages + crates · multi-wave campaign (~50 commits since `3fdda63b3`)
+**Total items:** 25 god-file splits planned · **Closed:** 25/25 plan-complete · **Escalations:** E1 + E3 both CLOSED this campaign
+
+This entry consolidates eight Phase B waves (5 through 12) into one audit record because the items share one shape — a single ≥1,500-LOC file decomposed into a domain-named submodule directory while preserving public API and full test coverage. Each wave covered one or two surfaces.
+
+### Wave 5 — cli single-file splits (3 commits)
+
+- **`apps/cli/src/main.rs`** 2,385 LOC → 7-LOC entry + `lib.rs`. Commit `8cd6f740f`. Pattern: codex-rs `exec/src/main.rs:1-46` 42-LOC entry. Tests preserved.
+- **`apps/cli/src/a2a.rs`** 1,856 LOC → `a2a/{mod,protocol,registry,security,server,client,jsonrpc}.rs` 7 files. Commit `dd34923db`. Pure move refactor; 1326/1326 tests preserved.
+- **`apps/cli/src/repl.rs`** 2,124 LOC → `repl/{mod,slash_commands,dialogs,registry}.rs`. Commit `8751c8270`.
+
+### Wave 6 — desktop & web store/store-handler splits (8 commits)
+
+- **`apps/desktop/src/stores/chatStore.ts`** → `chat/{Message,Execution,View}Store.ts`. Commit `f9dfa0f70`.
+- **`apps/desktop/src/stores/settingsStore.ts`** → domain sub-stores. Commit `8aa20c791`.
+- **`apps/desktop/src/stores/mcpStore.ts`** → `mcp/{Servers,Tools,Health,OAuth}Store.ts`. Commit `a55c06b46`.
+- **`apps/desktop/src/stores/billingUsage.ts`** → per-domain slices. Commit `9c3e7dbb2`.
+- **`apps/desktop/src/lib/slashCommandHandlers.ts`** → `commands/` domain files. Commit `250cbf596`.
+- **`apps/desktop/src/components/SettingsPanel.tsx`** 1,995 LOC → 11 tab components. Commit `95c3a8ace`.
+- **`apps/web/app/api/llm/v1/chat/completions/route.ts`** → 4 service modules. Commit `de33ffd70`.
+- **`apps/web/app/api/stripe-webhook/route.ts`** → 4 service modules. Commit `b05172c7d`.
+
+### Wave 7 — web/desktop component splits + extension splits (5 commits)
+
+- **`apps/web/features/settings/UserSettings.tsx`** → 4 sub-components (Profile/TwoFactor/ApiKeys/ExportData). Commit `1a0db8fcb`.
+- **`apps/web/features/settings/UserSettings.tsx`** notifications+system panels extraction. Commit `d0f84d94f`.
+- **`apps/desktop/src/components/Artifact/ArtifactRenderer.tsx`** → per-type renderer files. Commit `7f9e1237a`.
+- **`apps/extension/src/side_panel.ts`** markdown + voice modules. Commit `2de290670`.
+- **`apps/extension/src/background.ts`** shortcuts + tasks modules. Commit `50b60960a`.
+
+### Wave 8 — vscode + mobile splits (4 commits)
+
+- **`apps/extension-vscode/src/extension.ts`** 1,629 LOC → 255 LOC + `lifecycle/{chatSetup,commandSetup,providerSetup}.ts`. Commit `e11dc7ea1`. 512/512 tests preserved.
+- **`apps/extension-vscode/src/providers/agentModeProvider.ts`** → `agentLoop + agentUI`. Commit `9919fa354`.
+- **`apps/extension-vscode/src/providers/sidebarProvider.ts`** → `webviewContent + ChatStateManager`. Commit `c019dfec2`.
+- **`apps/mobile/lib/stores/chatStore.ts`** → 3 domain sub-stores (≤500 LOC each). Commit `b502947f9`.
+- **`apps/mobile/app/(app)/companion/index.tsx`** → 3 sub-components. Commit `0276d541f`.
+
+### Wave 9 — cli chatwidget mega-file decomposition (11 commits)
+
+`apps/cli/src/tui/chatwidget.rs` was the largest single file at ~7,800 LOC. Plan-target: 9 extracted chunks. Closed:
+
+- `notifications.rs` (`650e22691`), `rate_limit.rs` (`0fab461a7`), `message_merge.rs` (`f1e856c62`), `exec.rs` (`efd468465`), `plan.rs` (`8a5feb23f`), `connectors_popup.rs` (`b769713d2`), `streaming.rs` (`14116c17a`), `model_config.rs` (`4308e0423`), `review.rs` (`027f0f638`).
+- Plus sibling files: `markdown_render.rs` and `pager_overlay.rs` for markdown + scrolling.
+
+### Wave 10 — cli chat_composer mega-file decomposition (6 commits)
+
+`apps/cli/src/tui/bottom_pane/chat_composer.rs` was 9,873 LOC. Plan-target: 5 modules under `composer/`. Closed: `state.rs` (`4c52b1e1e`), `key_handling.rs` (`1985b6415`), `paste.rs` (`49030993d`), `completion.rs` (`275eb6b02`), `render.rs` (`857d146ae`), `text_ops/` (`2c9e7c651`). **Architectural unlock:** `ChatComposerState` + Deref newtype at `282151e78` enabled per-method extraction without breaking the trait surface. Down from 9,873 LOC to ~6,400 LOC.
+
+### Wave 11 — cli tui/app.rs mega-file + leaf splits (7 commits)
+
+`apps/cli/src/tui/app.rs` plan-target: 5 modules. Closed: `state_machine.rs` (`4aecfbb4f`), `status.rs` (`dcb9bdbec`), `model_migration.rs` (`28fa9a34d`), `thread_event_store.rs` (`e4108e07f`), `plugin_io.rs` (`7cfdfba5a`), sibling `app_backtrack.rs`. Plus leaf-level cli splits: `tools.rs` → `tools/{common,bash,file_ops,web,dir_ops,git,task_registry}.rs` (`668d06f96`), `safety.rs` → `safety/{dangerous_commands,approval}.rs` (`0b2e6a627`), `agent.rs` → `agent/{chat,tools,history,executor,prompt}.rs` (`9100e5f5e`), `models.rs` → `models/{provider_dispatch,serialization,streaming}.rs` (`d03c054f4`).
+
+### Wave 12 — E1 + E3 escalation closures (3 commits)
+
+- **E1 closed (`9066869de`)** — `apps/desktop/src/hooks/useAgenticEvents.ts` `SharedListenerContext` refactor. The 7 module-level mutable singletons (runtimeActivityListenersActive, extensionPreflightChecked, runtimeActivityUnlistenFns, toolStreamCleanupTimeouts, …) were consolidated into a single context object passed to setup functions. ~300 LOC net structural change matched the AUDIT_LOG.md fire #4 estimate.
+- **E3 closed (`4a7b96b63`)** — `apps/desktop/src/components/UnifiedAgenticChat/index.tsx` partial decomposition via `useChatSidebar + useChatMessages` extraction. Reduces the index.tsx surface by ~400 LOC.
+- **Extension SharedContext (`6741ee045`)** — `SharedSidePanelContext + SharedBackgroundContext` in `apps/extension/src/` mirrors the desktop E1 pattern.
+
+### Verification log (Phase B marathon cumulative)
+
+- All 6 TS surfaces typecheck GREEN, lint 0/0 after each wave
+- Test counts post-marathon: CLI 1,326 / Desktop 1,653 / Web 3,246 / Mobile 778-789 / Chrome ext 607 / VS Code 512 (no regressions)
+- Cumulative diff: ~5,500 LOC added (modules) / ~5,000 LOC moved (in-place renames) / pure move refactors dominated
+- All 50 commits committed individually; each preserved API surface and test count
+
+---
+
+## 2026-05-15T00:00Z — Frontend-alignment wave — 8 PRs from `reports/frontend-reference-comparison/source-comparison-report.md`
+
+**Audited:** packages (new design-tokens), apps/web, apps/desktop, apps/mobile, apps/extension, apps/extension-vscode, apps/cli
+**Total items:** 8 PRs scoped against the source-comparison-report Phase 0-7 plan · **Closed:** 6 shipped + 2 deferred-as-planned
+**Source report:** `reports/frontend-reference-comparison/source-comparison-report.md` (688 LOC, dated 2026-05-15)
+
+The source-comparison-report identified two cross-surface P0s — "no single source of truth for chat UX" and "design tokens are fragmented" — and prescribed a 7-phase plan (Phase 0 = lock decisions; Phase 1 = shared contract; Phase 2-6 = per-surface convergence; Phase 7 = CLI cleanup). This wave shipped the highest-confidence first PRs from §"Highest-Confidence First PRs" in that report.
+
+### PR 1 — Web correctness pass (Phase 2 deliverable)
+
+- Location: `apps/web/app/globals.css`, `apps/web/components/layout/Header.tsx`, `apps/web/components/marketing/MarketingFooter.tsx`, `apps/web/app/page.tsx`
+- What was wrong (from source-comparison-report §P1):
+  - `agi-chrome-band` class used at `Header.tsx:49` + `MarketingFooter.tsx:41` but **undefined** in `globals.css`
+  - Viewport-scaled `clamp(...)` hero typography at `globals.css:1697 + 1767`
+  - Negative letter spacing at `globals.css:1699 + 1769`
+  - `transition: all` at `globals.css:1149` (flagged by Vercel Web Interface Guidelines)
+  - Competitor-led hero copy at `app/page.tsx:86`
+- Fix: defined `.agi-chrome-band` semantic class, replaced viewport-scaled font sizes with fixed responsive steps, reset negative letter spacing to 0, replaced `transition: all` with explicit properties, rewrote hero lede to product-first copy.
+- Commit: `8e9dbac28`
+
+### PR 2 — Design-tokens package (Phase 1 deliverable)
+
+- Location: `packages/design-tokens/` (new) + `reports/frontend-reference-comparison/source-comparison-report.md`
+- Gap: no single semantic token layer; tokens duplicated across `packages/unified-chat/src/styles/globals.css`, `apps/desktop/src/styles/globals.css`, `apps/web/app/globals.css`, `apps/mobile/lib/theme.ts`, `apps/extension/src/side_panel.ts`, `apps/extension-vscode/src/providers/sidebar/webviewContent.ts`.
+- Fix: new `@agiworkforce/design-tokens` package exposing semantic names (`surface.base`, `surface.raised`, `text.primary`, `text.muted`, `border.subtle`, `accent.primary`, `accent.secondary`, `danger`, `warning`, `success`, `focus.ring`, `composer.bg`, `sidebar.bg`, `artifact.bg`). Outputs CSS vars + Chrome-CSS-var map + React-Native theme values + VS Code-variable-fallback map.
+- Brand decision shipped: teal primary + terra-cotta secondary as canonical; purple/indigo retired as primary identity; web amber reserved for marketing accent only.
+- Commit: `bc1d5dcd3`
+
+### PR 4 — Desktop consumes design-tokens (Phase 3 deliverable)
+
+- Location: `apps/desktop/src/styles/globals.css`, `apps/desktop/src/styles/chat.css`
+- Fix: desktop drops its 58-line block of inline chat CSS vars and consumes `chat.css` from `@agiworkforce/design-tokens`. Visual parity preserved.
+- Commit: `0515cc0e1`
+
+### PR 5 — Chrome extension token + icon polish (Phase 4 deliverable)
+
+- Location: `apps/extension/src/side_panel.ts` (CSS), `apps/extension/src/inPagePanel/panelStyles.ts`
+- What was wrong: purple/indigo accents (`#4338ca`, `#6366f1`, `#8b5cf6`); `outline: none` without `:focus-visible` replacements; side-panel and in-page-panel styled as different products.
+- Fix: adopt design-tokens CSS vars; replace purple/indigo with teal accent; add visible `:focus-visible` rings everywhere `outline: none` is used; align side panel and in-page panel against the same token family.
+- Commit: `95b0ee75b`
+
+### PR 6 — Mobile sources tokens from package (Phase 6 deliverable)
+
+- Location: `apps/mobile/lib/theme.ts`
+- Fix: `theme.ts` no longer duplicates colors — pulls from `@agiworkforce/design-tokens`. Native architecture (drawer, bottom sheets, haptics, offline queue, voice) preserved as the report prescribed.
+- Commit: `5510322df`
+
+### PR 7 — CLI copy hygiene (Phase 7 deliverable)
+
+- Location: `apps/cli/src/lib.rs:98` (`long_about` strings)
+- What was wrong: "Claude Code competitor" public positioning.
+- Fix: replaced competitor-led `long_about` copy with product-led description ("multi-provider AI CLI"). Snapshot/test naming cleanup deferred to next CLI test-maintenance fire (per report §"CLI cleanup" — "noisy snapshot churn" caveat).
+- Commit: `29426be6e`
+
+### PRs 3 + 8 — Deferred-as-planned
+
+- **PR 3 — Web unified-chat prototype** (Phase 2 / web→`packages/unified-chat` adoption): not shipped this wave. The report flagged a `framer-motion` peer mismatch (`^11.0.0` peers vs web `^12.38.0`) at `packages/unified-chat/package.json` that must be resolved first; runtime/store-bridge work also pending. Tracked for next frontend wave.
+- **PR 8 — VS Code native-theme pass** (Phase 5): not shipped this wave. The hardcoded `#4338ca`-class colors at `webviewContent.ts:75` + `:281,329,353` `outline: none` sites + plain `<select>` model picker at `:631` require coordinated edits across `sidebarProvider.ts` + `chatEditorPanel.ts:96`. Tracked for next frontend wave.
+
+### Verification log
+
+- All 6 TS surfaces typecheck GREEN, lint 0/0 after each PR
+- Test counts unchanged (these are pure CSS/copy/token refactors — no logic touched)
+- Source-comparison-report's P0s now partially addressed: design-tokens package eliminates token fragmentation; chat UX SoT (P0 #1) blocked on PR 3 which is the largest item in the report.
+
+**Last surface audited:** all 6 surfaces + packages. **Next rotation:** PR 3 (web→`packages/unified-chat` convergence) is the highest-impact open item per the report's "Direct web adoption" tradeoff analysis (largest drift reduction; uses existing dependency).
