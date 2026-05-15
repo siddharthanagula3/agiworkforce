@@ -18,3 +18,9 @@ export type { UseClickOutsideOptions } from './useClickOutside';
 
 export { useAutoResize } from './useAutoResize';
 export type { UseAutoResizeOptions } from './useAutoResize';
+
+export { useChatSidebar } from './useChatSidebar';
+export type { UseChatSidebarReturn } from './useChatSidebar';
+
+export { useChatMessages } from './useChatMessages';
+export type { UseChatMessagesReturn } from './useChatMessages';
