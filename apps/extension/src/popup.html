@@ -408,6 +408,111 @@
         background: #e9ecef;
       }
 
+      /* Pairing section */
+      .pairing-section {
+        margin-top: 0;
+      }
+
+      .pairing-status-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 12px;
+        border-radius: 6px;
+        font-size: 13px;
+      }
+
+      .pairing-status-label {
+        font-weight: 600;
+        color: #495057;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .pairing-fingerprint {
+        font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+        font-size: 11px;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        color: #495057;
+        padding: 3px 7px;
+        border-radius: 4px;
+        letter-spacing: 1px;
+      }
+
+      .pairing-fingerprint.paired {
+        background: #d4edda;
+        border-color: #c3e6cb;
+        color: #155724;
+      }
+
+      .pairing-error {
+        font-size: 11px;
+        color: #721c24;
+        background: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 4px;
+        padding: 6px 10px;
+        margin: 0 12px 8px;
+        display: none;
+        word-break: break-word;
+      }
+
+      .pairing-error.visible {
+        display: block;
+      }
+
+      .pairing-btn-row {
+        display: flex;
+        gap: 8px;
+        padding: 4px 12px 8px;
+      }
+
+      .pairing-btn {
+        flex: 1;
+        padding: 8px 12px;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background: #f8f9fa;
+        color: #495057;
+      }
+
+      .pairing-btn:hover:not(:disabled) {
+        background: #e9ecef;
+        border-color: #adb5bd;
+      }
+
+      .pairing-btn:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      .pairing-btn.primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+      }
+
+      .pairing-btn.primary:hover:not(:disabled) {
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      }
+
+      .pairing-btn.danger {
+        color: #721c24;
+        border-color: #f5c6cb;
+        background: #f8d7da;
+      }
+
+      .pairing-btn.danger:hover:not(:disabled) {
+        background: #f1b0b7;
+      }
+
       /* Toggle switch */
       .toggle-switch {
         position: relative;
@@ -531,6 +636,22 @@
             <input type="checkbox" id="inPagePanelToggle" checked />
             <span class="toggle-slider"></span>
           </label>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Desktop Pairing -->
+      <div class="info-section pairing-section">
+        <div class="section-title">Desktop Pairing</div>
+        <div class="pairing-status-row">
+          <span class="pairing-status-label" id="pairingStatusLabel">Not paired</span>
+          <span class="pairing-fingerprint" id="pairingFingerprint" hidden></span>
+        </div>
+        <p class="pairing-error" id="pairingError"></p>
+        <div class="pairing-btn-row">
+          <button class="pairing-btn primary" id="pairBtn">Pair with Desktop</button>
+          <button class="pairing-btn danger" id="unpairBtn" hidden>Unpair</button>
         </div>
       </div>
 

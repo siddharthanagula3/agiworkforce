@@ -6,6 +6,8 @@ import type {
   PaywallHitMessage,
 } from './types';
 import { logger, storageUtils } from './utils';
+import { loadPairingState, requestPairing, unpair } from './pairing';
+import type { PairingState } from './pairing';
 
 // UI feedback durations
 const UI_FEEDBACK_DURATION_MS = 2000;
@@ -29,6 +31,7 @@ async function initializePopup(): Promise<void> {
     setupEventListeners();
     startSessionTimer();
     await initInPagePanelToggle();
+    await initPairingUI();
   } catch (error) {
     logger.error('Failed to initialize popup', error);
   }
@@ -541,6 +544,88 @@ function showPaywallCard(feature: string, requiredTier: string, reason?: string)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Desktop pairing UI
+// ─────────────────────────────────────────────────────────────────────────────
+
+function applyPairingState(state: PairingState): void {
+  const labelEl = document.getElementById('pairingStatusLabel');
+  const fpEl = document.getElementById('pairingFingerprint');
+  const errorEl = document.getElementById('pairingError');
+  const pairBtn = document.getElementById('pairBtn') as HTMLButtonElement | null;
+  const unpairBtn = document.getElementById('unpairBtn') as HTMLButtonElement | null;
+
+  if (!labelEl || !fpEl || !errorEl || !pairBtn || !unpairBtn) return;
+
+  errorEl.classList.remove('visible');
+
+  switch (state.phase) {
+    case 'idle':
+      labelEl.textContent = 'Not paired';
+      fpEl.setAttribute('hidden', '');
+      fpEl.classList.remove('paired');
+      pairBtn.textContent = 'Pair with Desktop';
+      pairBtn.disabled = false;
+      pairBtn.removeAttribute('hidden');
+      unpairBtn.setAttribute('hidden', '');
+      break;
+
+    case 'requesting':
+      labelEl.textContent = 'Pairing...';
+      fpEl.setAttribute('hidden', '');
+      pairBtn.textContent = 'Pairing...';
+      pairBtn.disabled = true;
+      unpairBtn.setAttribute('hidden', '');
+      break;
+
+    case 'paired':
+      labelEl.textContent = 'Paired';
+      if (state.fingerprint) {
+        fpEl.textContent = state.fingerprint;
+        fpEl.classList.add('paired');
+        fpEl.removeAttribute('hidden');
+      }
+      pairBtn.setAttribute('hidden', '');
+      unpairBtn.removeAttribute('hidden');
+      break;
+
+    case 'error':
+      labelEl.textContent = 'Pairing failed';
+      fpEl.setAttribute('hidden', '');
+      fpEl.classList.remove('paired');
+      if (state.error) {
+        errorEl.textContent = state.error;
+        errorEl.classList.add('visible');
+      }
+      pairBtn.textContent = 'Retry Pairing';
+      pairBtn.disabled = false;
+      pairBtn.removeAttribute('hidden');
+      unpairBtn.setAttribute('hidden', '');
+      break;
+  }
+}
+
+async function initPairingUI(): Promise<void> {
+  const pairBtn = document.getElementById('pairBtn') as HTMLButtonElement | null;
+  const unpairBtn = document.getElementById('unpairBtn') as HTMLButtonElement | null;
+
+  if (!pairBtn || !unpairBtn) return;
+
+  const state = await loadPairingState();
+  applyPairingState(state);
+
+  pairBtn.addEventListener('click', async () => {
+    applyPairingState({ phase: 'requesting', fingerprint: null, error: null });
+    const next = await requestPairing();
+    applyPairingState(next);
+  });
+
+  unpairBtn.addEventListener('click', async () => {
+    const next = await unpair();
+    applyPairingState(next);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // In-page panel toggle
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -581,6 +666,8 @@ export {
   updateTierDisplay,
   showPaywallCard,
   initInPagePanelToggle,
+  initPairingUI,
+  applyPairingState,
   TIER_LABELS,
   PAYWALL_FEATURE_LABELS,
   REQUIRED_TIER_LABELS,
