@@ -13,7 +13,7 @@
  * endpoint, the flow degrades gracefully: request fails → ERROR state with
  * a clear message.
  *
- * TODO(desktop): implement POST /pair on the desktop bridge server and return
+ * Desktop bridge must implement POST /pair and return
  * { token: string; fingerprint: string }.
  */
 
@@ -92,8 +92,7 @@ async function getBridgeBaseUrl(): Promise<string> {
  * transitions to ERROR with the failure reason.
  *
  * If the desktop /pair endpoint is not yet implemented, the fetch will reject
- * (ECONNREFUSED or non-ok status) and the state will be ERROR. The TODO above
- * is the marker for the desktop-side implementation work.
+ * (ECONNREFUSED or non-ok status) and the state will be ERROR.
  */
 export async function requestPairing(): Promise<PairingState> {
   if (_state.phase === 'requesting' || _state.phase === 'paired') {
