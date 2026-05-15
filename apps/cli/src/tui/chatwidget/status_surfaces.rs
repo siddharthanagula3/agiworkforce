@@ -6,8 +6,6 @@
 use super::*;
 
 pub(super) const DEFAULT_TERMINAL_TITLE_ITEMS: [&str; 2] = ["spinner", "project"];
-pub(super) const TERMINAL_TITLE_SPINNER_FRAMES: [&str; 10] =
-    ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 pub(super) const TERMINAL_TITLE_SPINNER_INTERVAL: Duration = Duration::from_millis(100);
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -599,7 +597,7 @@ impl ChatWidget {
         let elapsed = now.saturating_duration_since(self.terminal_title_animation_origin);
         let frame_index =
             (elapsed.as_millis() / TERMINAL_TITLE_SPINNER_INTERVAL.as_millis()) as usize;
-        TERMINAL_TITLE_SPINNER_FRAMES[frame_index % TERMINAL_TITLE_SPINNER_FRAMES.len()]
+        crate::tui::icons::BRAILLE_FRAMES[frame_index % crate::tui::icons::BRAILLE_FRAMES.len()]
     }
 
     fn terminal_title_uses_spinner(&self) -> bool {

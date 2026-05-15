@@ -236,7 +236,7 @@ impl HistoryCell for ExecCell {
                     .map(format_duration)
                     .unwrap_or_else(|| "unknown".to_string());
                 let mut result: Line = if output.exit_code == 0 {
-                    Line::from("✓".green().bold())
+                    Line::from(icons::glyph(ToolIcon::CircleCheck).green().bold())
                 } else {
                     Line::from(vec![
                         "✗".red().bold(),
