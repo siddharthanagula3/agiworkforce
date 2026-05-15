@@ -126,3 +126,5 @@ This is proprietary software. © 2026 AGI Workforce. All rights reserved.
 ## Status
 
 Active development. Pre-v1.0 MVP. CI on `main` should always be green; if it isn't, that's the highest-priority bug.
+
+Launch-readiness wave 1+2 complete (2026-05-15): all six surfaces (CLI, Desktop, Web, Mobile, Chrome ext, VS Code ext) verified green via `scripts/launch-verify.sh`. See [MASTER_PLAN.md §10.4–§10.6](MASTER_PLAN.md#104-launch-readiness-wave-1-2026-05-15-31-commits-range-079ae721f759f6a977) for the wave-level audit closure.
