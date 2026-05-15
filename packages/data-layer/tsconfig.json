@@ -6,6 +6,8 @@
     "composite": true,
     "declaration": true,
     "declarationMap": true,
+    "noEmit": false,
+    "allowImportingTsExtensions": false,
     "lib": ["ES2020"]
   },
   "include": ["src/**/*"],
