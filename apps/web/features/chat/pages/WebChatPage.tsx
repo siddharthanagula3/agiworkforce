@@ -46,6 +46,7 @@ export default function WebChatPage() {
   const urlConversationId = params?.['sessionId'] as string | undefined;
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [composerPrefill, setComposerPrefill] = useState<string | undefined>(undefined);
 
   // Streaming send + store state
   const { sendMessage, stopGeneration, isStreaming } = useChatStream();
@@ -271,6 +272,7 @@ export default function WebChatPage() {
             isLoading={isLoading && !isStreaming}
             onRegenerate={handleRegenerateMessage}
             onDelete={handleDeleteMessage}
+            onSendMessage={(text) => setComposerPrefill(text)}
           />
         </div>
 
@@ -283,6 +285,8 @@ export default function WebChatPage() {
             onStop={stopGeneration}
             isLoading={isLoading}
             isGenerating={isStreaming}
+            prefillText={composerPrefill}
+            onPrefillConsumed={() => setComposerPrefill(undefined)}
           />
         </div>
       </div>
