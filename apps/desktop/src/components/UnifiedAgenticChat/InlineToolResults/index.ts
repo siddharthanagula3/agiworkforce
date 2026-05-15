@@ -444,7 +444,7 @@ export const TOOL_RENDERERS: Record<
   template_fetch: InlineMarketplaceCard,
 
   // ============================================
-  // PLANNING / TODO
+  // TASK / PLANNING
   // ============================================
   todo_write: InlineTodoList,
 
