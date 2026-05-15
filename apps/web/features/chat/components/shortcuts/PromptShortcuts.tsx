@@ -277,8 +277,9 @@ export function PromptShortcuts({ onSelectPrompt, className }: PromptShortcutsPr
                     onClick={() => handleDeleteShortcut(shortcut.id)}
                     className="h-8 w-8 p-0 opacity-0 transition-opacity group-hover:opacity-100"
                     title="Delete shortcut"
+                    aria-label={`Delete shortcut ${shortcut.label}`}
                   >
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    <Trash2 className="h-3.5 w-3.5 text-destructive" aria-hidden="true" />
                   </Button>
                 )}
               </div>

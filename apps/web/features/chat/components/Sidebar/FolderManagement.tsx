@@ -214,8 +214,9 @@ export function FolderManagement({
           className="h-6 w-6"
           onClick={openCreateDialog}
           title="Create folder"
+          aria-label="Create folder"
         >
-          <FolderPlus className="h-3.5 w-3.5" />
+          <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
       </div>
 
@@ -296,8 +297,9 @@ export function FolderManagement({
                         variant="ghost"
                         size="icon"
                         className="h-6 w-6 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                        aria-label={`Actions for folder ${folder.name}`}
                       >
-                        <MoreVertical className="h-3 w-3" />
+                        <MoreVertical className="h-3 w-3" aria-hidden="true" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">

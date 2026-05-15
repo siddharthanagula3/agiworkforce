@@ -17,26 +17,12 @@ import {
   Wrench,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { Badge } from '@/components/ui/badge';
-import { colors } from '@/lib/theme';
+import { useThemeColors } from '@/hooks/useTheme';
 import type { ToolCall } from '@/types/chat';
 
 interface ToolCallCardProps {
   toolCall: ToolCall;
 }
-
-const STATUS_BORDER_COLOR: Record<ToolCall['status'], string> = {
-  running: colors.agentActive,
-  completed: colors.agentSuccess,
-  failed: colors.agentError,
-};
-
-const STATUS_BADGE: Record<ToolCall['status'], { label: string; color: 'blue' | 'green' | 'red' }> =
-  {
-    running: { label: 'Running', color: 'blue' },
-    completed: { label: 'Completed', color: 'green' },
-    failed: { label: 'Failed', color: 'red' },
-  };
 
 /** Map tool name patterns to a representative lucide icon. */
 function getToolIcon(toolName: string): typeof Terminal {
@@ -65,14 +51,32 @@ function getToolIcon(toolName: string): typeof Terminal {
 }
 
 function StatusIcon({ status }: { status: ToolCall['status'] }) {
+  const colors = useThemeColors();
   switch (status) {
     case 'running':
-      return <Loader2 size={14} color={colors.agentActive} />;
+      return <Loader2 size={13} color={colors.agentActive} />;
     case 'completed':
-      return <CheckCircle2 size={14} color={colors.agentSuccess} />;
+      return <CheckCircle2 size={13} color={colors.agentSuccess} />;
     case 'failed':
-      return <XCircle size={14} color={colors.agentError} />;
+      return <XCircle size={13} color={colors.agentError} />;
   }
+}
+
+function StatusPill({ status }: { status: ToolCall['status'] }) {
+  const colors = useThemeColors();
+  const config = {
+    running: { label: 'Running', bg: `${colors.agentActive}18`, fg: colors.agentActive },
+    completed: { label: 'Done', bg: `${colors.agentSuccess}18`, fg: colors.agentSuccess },
+    failed: { label: 'Failed', bg: `${colors.agentError}18`, fg: colors.agentError },
+  }[status] ?? { label: status, bg: 'rgba(255,255,255,0.08)', fg: colors.textMuted };
+
+  return (
+    <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: config.bg }}>
+      <Text className="text-[10px] font-medium" style={{ color: config.fg }}>
+        {config.label}
+      </Text>
+    </View>
+  );
 }
 
 function formatDuration(ms: number): string {
@@ -85,22 +89,14 @@ function formatDuration(ms: number): string {
 }
 
 export function ToolCallCard({ toolCall }: ToolCallCardProps) {
+  const colors = useThemeColors();
   const [expanded, setExpanded] = useState(false);
 
-  const borderColor = STATUS_BORDER_COLOR[toolCall.status] ?? colors.textMuted;
-  const badgeConfig = STATUS_BADGE[toolCall.status] ?? {
-    label: toolCall.status,
-    color: 'blue' as const,
-  };
-
   const hasIO = Boolean(toolCall.input || toolCall.output);
-
   const ToolIcon = getToolIcon(toolCall.name);
 
   const toggleExpanded = useCallback(() => {
-    if (hasIO) {
-      setExpanded((prev) => !prev);
-    }
+    if (hasIO) setExpanded((prev) => !prev);
   }, [hasIO]);
 
   return (
@@ -109,35 +105,40 @@ export function ToolCallCard({ toolCall }: ToolCallCardProps) {
         className="rounded-xl overflow-hidden my-1"
         style={{
           backgroundColor: colors.surfaceOverlay,
-          borderLeftWidth: 3,
-          borderLeftColor: borderColor,
+          borderWidth: 1,
+          borderColor: 'rgba(255,255,255,0.07)',
         }}
       >
-        {/* Header */}
+        {/* Header row */}
         <Pressable
           onPress={toggleExpanded}
-          className="flex-row items-center justify-between px-3 py-2.5"
+          className="flex-row items-center px-3 py-2.5"
           accessible={true}
-          accessibilityLabel={`Tool call: ${toolCall.name}, status: ${badgeConfig.label}`}
+          accessibilityLabel={`Tool call: ${toolCall.name}`}
           accessibilityRole="button"
           accessibilityHint={hasIO ? 'Double tap to expand details' : undefined}
         >
-          <View className="flex-row items-center gap-2 flex-1 mr-2">
-            <StatusIcon status={toolCall.status} />
-            {/* Tool-type icon */}
-            <ToolIcon size={13} color={colors.textMuted} />
-            <Text className="text-[13px] font-semibold text-white flex-shrink" numberOfLines={1}>
-              {toolCall.name}
-            </Text>
-            <Badge label={badgeConfig.label} color={badgeConfig.color} />
-          </View>
+          {/* Status dot */}
+          <StatusIcon status={toolCall.status} />
 
+          {/* Tool-type icon */}
+          <ToolIcon size={13} color={colors.textMuted} style={{ marginLeft: 6 }} />
+
+          {/* Tool name */}
+          <Text className="text-[13px] font-medium text-white flex-1 mx-2" numberOfLines={1}>
+            {toolCall.name}
+          </Text>
+
+          {/* Status pill */}
+          <StatusPill status={toolCall.status} />
+
+          {/* Expand chevron */}
           {hasIO && (
-            <View className="flex-row items-center">
+            <View style={{ marginLeft: 6 }}>
               {expanded ? (
-                <ChevronDown size={14} color={colors.textMuted} />
+                <ChevronDown size={13} color={colors.textMuted} />
               ) : (
-                <ChevronRight size={14} color={colors.textMuted} />
+                <ChevronRight size={13} color={colors.textMuted} />
               )}
             </View>
           )}
@@ -145,11 +146,14 @@ export function ToolCallCard({ toolCall }: ToolCallCardProps) {
 
         {/* Command line (monospace green) */}
         {toolCall.command ? (
-          <View className="px-3 pb-2">
-            <View className="bg-black/30 rounded-md px-2.5 py-1.5">
+          <View className="px-3 pb-2.5">
+            <View
+              className="rounded-lg px-2.5 py-2"
+              style={{ backgroundColor: 'rgba(0,0,0,0.25)' }}
+            >
               <Text
                 variant="mono"
-                className="text-[12px] text-emerald-400"
+                className="text-[11px] text-emerald-400"
                 numberOfLines={expanded ? undefined : 2}
               >
                 $ {toolCall.command}
@@ -160,9 +164,9 @@ export function ToolCallCard({ toolCall }: ToolCallCardProps) {
 
         {/* File path */}
         {toolCall.filePath ? (
-          <View className="flex-row items-center gap-1.5 px-3 pb-2">
-            <FileCode size={12} color={colors.textMuted} />
-            <Text variant="caption" className="text-white/50" numberOfLines={1}>
+          <View className="flex-row items-center gap-1.5 px-3 pb-2.5">
+            <FileCode size={11} color={colors.textMuted} />
+            <Text variant="caption" className="text-white/40 text-[11px]" numberOfLines={1}>
               {toolCall.filePath}
             </Text>
           </View>
@@ -170,36 +174,37 @@ export function ToolCallCard({ toolCall }: ToolCallCardProps) {
 
         {/* Expandable I/O section */}
         {expanded && hasIO ? (
-          <View className="px-3 pb-3 gap-2">
+          <View
+            className="mx-3 mb-3 rounded-lg overflow-hidden"
+            style={{
+              backgroundColor: 'rgba(0,0,0,0.2)',
+              borderWidth: 1,
+              borderColor: 'rgba(255,255,255,0.05)',
+            }}
+          >
             {toolCall.input ? (
-              <View>
-                <Text
-                  variant="caption"
-                  className="text-white/40 mb-1 uppercase tracking-wider text-[10px]"
-                >
+              <View className="px-3 py-2.5">
+                <Text className="text-[10px] font-semibold uppercase tracking-wider text-white/30 mb-1.5">
                   Input
                 </Text>
-                <View className="bg-black/30 rounded-md px-2.5 py-2 max-h-[200px]">
-                  <Text variant="mono" className="text-[11px] text-white/70">
-                    {toolCall.input}
-                  </Text>
-                </View>
+                <Text variant="mono" className="text-[11px] text-white/60">
+                  {toolCall.input}
+                </Text>
               </View>
             ) : null}
 
+            {toolCall.input && toolCall.output ? (
+              <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.05)' }} />
+            ) : null}
+
             {toolCall.output ? (
-              <View>
-                <Text
-                  variant="caption"
-                  className="text-white/40 mb-1 uppercase tracking-wider text-[10px]"
-                >
+              <View className="px-3 py-2.5">
+                <Text className="text-[10px] font-semibold uppercase tracking-wider text-white/30 mb-1.5">
                   Output
                 </Text>
-                <View className="bg-black/30 rounded-md px-2.5 py-2 max-h-[200px]">
-                  <Text variant="mono" className="text-[11px] text-white/70">
-                    {toolCall.output}
-                  </Text>
-                </View>
+                <Text variant="mono" className="text-[11px] text-white/60">
+                  {toolCall.output}
+                </Text>
               </View>
             ) : null}
           </View>
@@ -209,9 +214,7 @@ export function ToolCallCard({ toolCall }: ToolCallCardProps) {
         {toolCall.duration != null && toolCall.status !== 'running' ? (
           <View className="flex-row items-center gap-1 px-3 pb-2">
             <Clock size={10} color={colors.textMuted} />
-            <Text variant="caption" className="text-white/40 text-[10px]">
-              {formatDuration(toolCall.duration)}
-            </Text>
+            <Text className="text-[10px] text-white/30">{formatDuration(toolCall.duration)}</Text>
           </View>
         ) : null}
       </View>
