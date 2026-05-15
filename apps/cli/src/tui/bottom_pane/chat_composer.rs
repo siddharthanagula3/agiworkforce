@@ -125,6 +125,9 @@
 //! - If repeated space events are seen before timeout, we proceed with hold-to-talk.
 //! - While recording, repeated space events keep the recording alive; if they stop for a short
 //!   window, we stop and transcribe.
+use crate::bottom_pane::composer::text_ops;
+use crate::bottom_pane::composer::text_ops::PromptSelectionAction;
+use crate::bottom_pane::composer::text_ops::PromptSelectionMode;
 use crate::bottom_pane::footer::mode_indicator_line;
 use crate::key_hint;
 use crate::key_hint::KeyBinding;
@@ -235,15 +238,9 @@ use std::time::Duration;
 use std::time::Instant;
 #[cfg(not(target_os = "linux"))]
 use tokio::runtime::Handle;
-/// If the pasted content exceeds this number of characters, replace it with a
-/// placeholder in the UI.
-const LARGE_PASTE_CHAR_THRESHOLD: usize = 1000;
-
-fn user_input_too_large_message(actual_chars: usize) -> String {
-    format!(
-        "Message exceeds the maximum length of {MAX_USER_INPUT_TEXT_CHARS} characters ({actual_chars} provided)."
-    )
-}
+use text_ops::LARGE_PASTE_CHAR_THRESHOLD;
+use text_ops::expand_pending_pastes;
+use text_ops::user_input_too_large_message;
 
 /// Result returned when the user interacts with the text area.
 #[derive(Debug, PartialEq)]
@@ -265,22 +262,6 @@ pub enum InputResult {
 struct AttachedImage {
     placeholder: String,
     path: PathBuf,
-}
-
-enum PromptSelectionMode {
-    Completion,
-    Submit,
-}
-
-enum PromptSelectionAction {
-    Insert {
-        text: String,
-        cursor: Option<usize>,
-    },
-    Submit {
-        text: String,
-        text_elements: Vec<TextElement>,
-    },
 }
 
 /// Feature flags for reusing the chat composer in other bottom-pane surfaces.
@@ -1436,7 +1417,7 @@ impl ChatComposer {
                         }
                         CommandItem::UserPrompt(idx) => {
                             if let Some(prompt) = popup.prompt(idx) {
-                                match prompt_selection_action(
+                                match text_ops::prompt_selection_action(
                                     prompt,
                                     first_line,
                                     PromptSelectionMode::Completion,
@@ -1471,7 +1452,7 @@ impl ChatComposer {
                 let mut text_elements = self.textarea.text_elements();
                 if !self.pending_pastes.is_empty() {
                     let (expanded, expanded_elements) =
-                        Self::expand_pending_pastes(&text, text_elements, &self.pending_pastes);
+                        expand_pending_pastes(&text, text_elements, &self.pending_pastes);
                     text = expanded;
                     text_elements = expanded_elements;
                 }
@@ -1505,7 +1486,7 @@ impl ChatComposer {
                         }
                         CommandItem::UserPrompt(idx) => {
                             if let Some(prompt) = popup.prompt(idx) {
-                                match prompt_selection_action(
+                                match text_ops::prompt_selection_action(
                                     prompt,
                                     first_line,
                                     PromptSelectionMode::Submit,
@@ -1546,20 +1527,6 @@ impl ChatComposer {
             }
             input => self.handle_input_basic(input),
         }
-    }
-
-    #[inline]
-    fn clamp_to_char_boundary(text: &str, pos: usize) -> usize {
-        let mut p = pos.min(text.len());
-        if p < text.len() && !text.is_char_boundary(p) {
-            p = text
-                .char_indices()
-                .map(|(i, _)| i)
-                .take_while(|&i| i <= p)
-                .last()
-                .unwrap_or(0);
-        }
-        p
     }
 
     /// Handle non-ASCII character input (often IME) while still supporting paste-burst detection.
@@ -1615,7 +1582,7 @@ impl ChatComposer {
                         // inserted prefix from the textarea before buffering the burst.
                         let cur = self.textarea.cursor();
                         let txt = self.textarea.text();
-                        let safe_cur = Self::clamp_to_char_boundary(txt, cur);
+                        let safe_cur = text_ops::clamp_to_char_boundary(txt, cur);
                         let before = &txt[..safe_cur];
                         if let Some(grab) =
                             self.paste_burst
@@ -1717,7 +1684,7 @@ impl ChatComposer {
 
                 let sel_path = sel.to_string_lossy().to_string();
                 // If selected path looks like an image (png/jpeg), attach as image instead of inserting text.
-                let is_image = Self::is_image_path(&sel_path);
+                let is_image = text_ops::is_image_path(&sel_path);
                 if is_image {
                     // Determine dimensions; if that fails fall back to normal path insertion.
                     let path_buf = PathBuf::from(&sel_path);
@@ -1729,7 +1696,7 @@ impl ChatComposer {
                             let cursor_offset = self.textarea.cursor();
                             let text = self.textarea.text();
                             // Clamp to a valid char boundary to avoid panics when slicing.
-                            let safe_cursor = Self::clamp_to_char_boundary(text, cursor_offset);
+                            let safe_cursor = text_ops::clamp_to_char_boundary(text, cursor_offset);
                             let before_cursor = &text[..safe_cursor];
                             let after_cursor = &text[safe_cursor..];
 
@@ -1841,120 +1808,6 @@ impl ChatComposer {
         }
 
         result
-    }
-
-    fn is_image_path(path: &str) -> bool {
-        let lower = path.to_ascii_lowercase();
-        lower.ends_with(".png")
-            || lower.ends_with(".jpg")
-            || lower.ends_with(".jpeg")
-            || lower.ends_with(".gif")
-            || lower.ends_with(".webp")
-    }
-
-    fn trim_text_elements(
-        original: &str,
-        trimmed: &str,
-        elements: Vec<TextElement>,
-    ) -> Vec<TextElement> {
-        if trimmed.is_empty() || elements.is_empty() {
-            return Vec::new();
-        }
-        let trimmed_start = original.len().saturating_sub(original.trim_start().len());
-        let trimmed_end = trimmed_start.saturating_add(trimmed.len());
-
-        elements
-            .into_iter()
-            .filter_map(|elem| {
-                let start = elem.byte_range.start;
-                let end = elem.byte_range.end;
-                if end <= trimmed_start || start >= trimmed_end {
-                    return None;
-                }
-                let new_start = start.saturating_sub(trimmed_start);
-                let new_end = end.saturating_sub(trimmed_start).min(trimmed.len());
-                if new_start >= new_end {
-                    return None;
-                }
-                let placeholder = trimmed.get(new_start..new_end).map(str::to_string);
-                Some(TextElement::new(
-                    ByteRange {
-                        start: new_start,
-                        end: new_end,
-                    },
-                    placeholder,
-                ))
-            })
-            .collect()
-    }
-
-    /// Expand large-paste placeholders using element ranges and rebuild other element spans.
-    pub(crate) fn expand_pending_pastes(
-        text: &str,
-        mut elements: Vec<TextElement>,
-        pending_pastes: &[(String, String)],
-    ) -> (String, Vec<TextElement>) {
-        if pending_pastes.is_empty() || elements.is_empty() {
-            return (text.to_string(), elements);
-        }
-
-        // Stage 1: index pending paste payloads by placeholder for deterministic replacements.
-        let mut pending_by_placeholder: HashMap<&str, VecDeque<&str>> = HashMap::new();
-        for (placeholder, actual) in pending_pastes {
-            pending_by_placeholder
-                .entry(placeholder.as_str())
-                .or_default()
-                .push_back(actual.as_str());
-        }
-
-        // Stage 2: walk elements in order and rebuild text/spans in a single pass.
-        elements.sort_by_key(|elem| elem.byte_range.start);
-
-        let mut rebuilt = String::with_capacity(text.len());
-        let mut rebuilt_elements = Vec::with_capacity(elements.len());
-        let mut cursor = 0usize;
-
-        for elem in elements {
-            let start = elem.byte_range.start.min(text.len());
-            let end = elem.byte_range.end.min(text.len());
-            if start > end {
-                continue;
-            }
-            if start > cursor {
-                rebuilt.push_str(&text[cursor..start]);
-            }
-            let elem_text = &text[start..end];
-            let placeholder = elem.placeholder(text).map(str::to_string);
-            let replacement = placeholder
-                .as_deref()
-                .and_then(|ph| pending_by_placeholder.get_mut(ph))
-                .and_then(VecDeque::pop_front);
-            if let Some(actual) = replacement {
-                // Stage 3: inline actual paste payloads and drop their placeholder elements.
-                rebuilt.push_str(actual);
-            } else {
-                // Stage 4: keep non-paste elements, updating their byte ranges for the new text.
-                let new_start = rebuilt.len();
-                rebuilt.push_str(elem_text);
-                let new_end = rebuilt.len();
-                let placeholder = placeholder.or_else(|| Some(elem_text.to_string()));
-                rebuilt_elements.push(TextElement::new(
-                    ByteRange {
-                        start: new_start,
-                        end: new_end,
-                    },
-                    placeholder,
-                ));
-            }
-            cursor = end;
-        }
-
-        // Stage 5: append any trailing text that followed the last element.
-        if cursor < text.len() {
-            rebuilt.push_str(&text[cursor..]);
-        }
-
-        (rebuilt, rebuilt_elements)
     }
 
     pub fn skills(&self) -> Option<&Vec<SkillMetadata>> {
@@ -2123,7 +1976,7 @@ impl ChatComposer {
         let cursor_offset = self.textarea.cursor();
         let text = self.textarea.text();
         // Clamp to a valid char boundary to avoid panics when slicing.
-        let safe_cursor = Self::clamp_to_char_boundary(text, cursor_offset);
+        let safe_cursor = text_ops::clamp_to_char_boundary(text, cursor_offset);
 
         let before_cursor = &text[..safe_cursor];
         let after_cursor = &text[safe_cursor..];
@@ -2163,7 +2016,7 @@ impl ChatComposer {
     fn insert_selected_mention(&mut self, insert_text: &str, path: Option<&str>) {
         let cursor_offset = self.textarea.cursor();
         let text = self.textarea.text();
-        let safe_cursor = Self::clamp_to_char_boundary(text, cursor_offset);
+        let safe_cursor = text_ops::clamp_to_char_boundary(text, cursor_offset);
 
         let before_cursor = &text[..safe_cursor];
         let after_cursor = &text[safe_cursor..];
@@ -2308,7 +2161,7 @@ impl ChatComposer {
         if !self.pending_pastes.is_empty() {
             // Expand placeholders so element byte ranges stay aligned.
             let (expanded, expanded_elements) =
-                Self::expand_pending_pastes(&text, text_elements, &self.pending_pastes);
+                expand_pending_pastes(&text, text_elements, &self.pending_pastes);
             text = expanded;
             text_elements = expanded_elements;
         }
@@ -2317,7 +2170,7 @@ impl ChatComposer {
 
         // If there is neither text nor attachments, suppress submission entirely.
         text = text.trim().to_string();
-        text_elements = Self::trim_text_elements(&expanded_input, &text, text_elements);
+        text_elements = text_ops::trim_text_elements(&expanded_input, &text, text_elements);
 
         if self.slash_commands_enabled()
             && let Some((name, _rest, _rest_offset)) = parse_slash_name(&text)
@@ -2577,7 +2430,7 @@ impl ChatComposer {
         let mut args_elements =
             Self::slash_command_args_elements(rest, rest_offset, &self.textarea.text_elements());
         let trimmed_rest = rest.trim();
-        args_elements = Self::trim_text_elements(rest, trimmed_rest, args_elements);
+        args_elements = text_ops::trim_text_elements(rest, trimmed_rest, args_elements);
         Some(InputResult::CommandWithArgs(
             cmd,
             trimmed_rest.to_string(),
@@ -2603,7 +2456,7 @@ impl ChatComposer {
             &prepared_elements,
         );
         let trimmed_rest = prepared_rest.trim();
-        args_elements = Self::trim_text_elements(prepared_rest, trimmed_rest, args_elements);
+        args_elements = text_ops::trim_text_elements(prepared_rest, trimmed_rest, args_elements);
         Some((trimmed_rest.to_string(), args_elements))
     }
 
@@ -3037,7 +2890,7 @@ impl ChatComposer {
                     CharDecision::BeginBuffer { retro_chars } => {
                         let cur = self.textarea.cursor();
                         let txt = self.textarea.text();
-                        let safe_cur = Self::clamp_to_char_boundary(txt, cur);
+                        let safe_cur = text_ops::clamp_to_char_boundary(txt, cur);
                         let before = &txt[..safe_cur];
                         if let Some(grab) =
                             self.paste_burst
@@ -4439,62 +4292,6 @@ impl ChatComposer {
                 let placeholder = Span::from(text).dim();
                 Line::from(vec![placeholder])
                     .render_ref(textarea_rect.inner(Margin::new(0, 0)), buf);
-            }
-        }
-    }
-}
-
-fn prompt_selection_action(
-    prompt: &CustomPrompt,
-    first_line: &str,
-    mode: PromptSelectionMode,
-    text_elements: &[TextElement],
-) -> PromptSelectionAction {
-    let named_args = prompt_argument_names(&prompt.content);
-    let has_numeric = prompt_has_numeric_placeholders(&prompt.content);
-
-    match mode {
-        PromptSelectionMode::Completion => {
-            if !named_args.is_empty() {
-                let (text, cursor) =
-                    prompt_command_with_arg_placeholders(&prompt.name, &named_args);
-                return PromptSelectionAction::Insert {
-                    text,
-                    cursor: Some(cursor),
-                };
-            }
-            if has_numeric {
-                let text = format!("/{PROMPTS_CMD_PREFIX}:{} ", prompt.name);
-                return PromptSelectionAction::Insert { text, cursor: None };
-            }
-            let text = format!("/{PROMPTS_CMD_PREFIX}:{}", prompt.name);
-            PromptSelectionAction::Insert { text, cursor: None }
-        }
-        PromptSelectionMode::Submit => {
-            if !named_args.is_empty() {
-                let (text, cursor) =
-                    prompt_command_with_arg_placeholders(&prompt.name, &named_args);
-                return PromptSelectionAction::Insert {
-                    text,
-                    cursor: Some(cursor),
-                };
-            }
-            if has_numeric {
-                if let Some(expanded) =
-                    expand_if_numeric_with_positional_args(prompt, first_line, text_elements)
-                {
-                    return PromptSelectionAction::Submit {
-                        text: expanded.text,
-                        text_elements: expanded.text_elements,
-                    };
-                }
-                let text = format!("/{PROMPTS_CMD_PREFIX}:{} ", prompt.name);
-                return PromptSelectionAction::Insert { text, cursor: None };
-            }
-            PromptSelectionAction::Submit {
-                text: prompt.content.clone(),
-                // By now we know this custom prompt has no args, so no text elements to preserve.
-                text_elements: Vec::new(),
             }
         }
     }
@@ -9175,7 +8972,7 @@ mod tests {
             argument_hint: None,
         };
 
-        let action = prompt_selection_action(
+        let action = text_ops::prompt_selection_action(
             &prompt,
             "/prompts:my-prompt foo bar",
             PromptSelectionMode::Submit,
