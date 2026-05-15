@@ -4,7 +4,7 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
 
 ## [Unreleased — cross-surface] — 2026-05-14 → 2026-05-15
 
-Cross-surface campaign fire #1 through #6 per `MASTER_PLAN.md` §10. 37+ commits, all 6 surfaces touched, ~13,733 platform tests green.
+Cross-surface campaign fire #1 through fire #12+ per `MASTER_PLAN.md` §10. **115+ commits** since `3fdda63b3`, all 6 surfaces touched, ~13,744 platform tests green. Includes Phase B god-file marathon (waves 5-12, ~50 refactor commits) and a frontend-alignment wave (8 PRs from `reports/frontend-reference-comparison/source-comparison-report.md`).
 
 ### Added (Phase C — PNG-grounded features)
 
@@ -60,6 +60,43 @@ Cross-surface campaign fire #1 through #6 per `MASTER_PLAN.md` §10. 37+ commits
 - **E2 closed** — Desktop bridge `POST /pair` endpoint shipped; chrome ext pairing is now end-to-end functional.
 - **E1 open** — Desktop `useAgenticEvents.ts` full per-event-hook split blocked by 7 module-level mutable singletons. Requires `SharedListenerContext` refactor (~300 LOC structural change). Documented in `AUDIT_LOG.md` for next-fire pickup.
 
+### Refactored (Phase B marathon — god-file decomposition, waves 5-12)
+
+~50 refactor commits since `3fdda63b3` decomposed 25 of 25 plan-target god-files across all 6 surfaces. Each commit is a pure-move refactor preserving public API and full test coverage.
+
+- **CLI mega-files** (3 of 3 plan-target hit):
+  - `apps/cli/src/tui/chatwidget.rs` (~7,800 LOC) — 9 chunks extracted to `chatwidget/{notifications,rate_limit,message_merge,exec,plan,connectors_popup,streaming,model_config,review}.rs` plus sibling `markdown_render.rs` + `pager_overlay.rs`. Commits `650e22691`, `0fab461a7`, `f1e856c62`, `efd468465`, `8a5feb23f`, `b769713d2`, `14116c17a`, `4308e0423`, `027f0f638`.
+  - `apps/cli/src/tui/bottom_pane/chat_composer.rs` (9,873 → ~6,400 LOC) — 5 modules under `composer/`: `state.rs` (`4c52b1e1e`), `key_handling.rs` (`1985b6415`), `paste.rs` (`49030993d`), `completion.rs` (`275eb6b02`), `render.rs` (`857d146ae`), `text_ops/` (`2c9e7c651`). Architectural unlock: `ChatComposerState + Deref` newtype at `282151e78`.
+  - `apps/cli/src/tui/app.rs` — 5 modules: `state_machine.rs` (`4aecfbb4f`), `status.rs` (`dcb9bdbec`), `model_migration.rs` (`28fa9a34d`), `thread_event_store.rs` (`e4108e07f`), `plugin_io.rs` (`7cfdfba5a`), sibling `app_backtrack.rs`.
+- **CLI single-file splits**: `main.rs` 2,385 LOC → `lib.rs` + 7-LOC entry (`8cd6f740f`); `a2a.rs` 1,856 LOC → 7-file submodule directory (`dd34923db`); `repl.rs` 2,124 LOC → `repl/{slash_commands,dialogs,registry}.rs` (`8751c8270`); `tools.rs` → `tools/{common,bash,file_ops,web,dir_ops,git,task_registry}.rs` (`668d06f96`); `safety.rs` → `safety/{dangerous_commands,approval}.rs` (`0b2e6a627`); `agent.rs` → `agent/{chat,tools,history,executor,prompt}.rs` (`9100e5f5e`); `models.rs` → `models/{provider_dispatch,serialization,streaming}.rs` (`d03c054f4`).
+- **Desktop**: `chatStore.ts` → `chat/{Message,Execution,View}Store.ts` (`f9dfa0f70`); `settingsStore.ts` → domain sub-stores (`8aa20c791`); `mcpStore.ts` → `mcp/{Servers,Tools,Health,OAuth}Store.ts` (`a55c06b46`); `billingUsage.ts` → per-domain slices (`9c3e7dbb2`); `slashCommandHandlers.ts` → `commands/` domain files (`250cbf596`); `SettingsPanel.tsx` 1,995 LOC → 11 tab components (`95c3a8ace`); `ArtifactRenderer.tsx` → per-type renderer files (`7f9e1237a`).
+- **Web**: `app/api/llm/v1/chat/completions/route.ts` → 4 service modules (`de33ffd70`); `app/api/stripe-webhook/route.ts` → 4 service modules (`b05172c7d`); `features/settings/UserSettings.tsx` → 4 sub-components (`1a0db8fcb`) + notifications/system panels extraction (`d0f84d94f`).
+- **VS Code**: `extension.ts` 1,629 LOC → 255 LOC + `lifecycle/{chatSetup,commandSetup,providerSetup}.ts` (`e11dc7ea1`); `agentModeProvider.ts` → `agentLoop + agentUI` (`9919fa354`); `sidebarProvider.ts` → `webviewContent + ChatStateManager` (`c019dfec2`).
+- **Chrome extension**: `side_panel.ts` markdown + voice modules (`2de290670`); `background.ts` shortcuts + tasks modules (`50b60960a`).
+- **Mobile**: `chatStore.ts` → 3 domain sub-stores ≤500 LOC each (`b502947f9`); `companion/index.tsx` → 3 sub-components (`0276d541f`).
+
+### Escalations closed (Phase B marathon)
+
+- **E1 closed** (`9066869de`) — Desktop `useAgenticEvents.ts` `SharedListenerContext` refactor consolidates 7 module-level mutable singletons into one passed-context object. Closes the fire-#4 estimate of ~300 LOC net structural change.
+- **E3 closed** (`4a7b96b63`) — Desktop `UnifiedAgenticChat/index.tsx` partial decomposition via `useChatSidebar + useChatMessages` extraction (-400 LOC from index.tsx).
+- **Extension SharedContext** (`6741ee045`) — `SharedSidePanelContext + SharedBackgroundContext` mirrors the desktop E1 pattern.
+
+### Added (Frontend-alignment wave — 8 PRs from `reports/frontend-reference-comparison/source-comparison-report.md`)
+
+New 688-LOC source-comparison-report dated 2026-05-15 identified two cross-surface P0s (no SoT for chat UX, design tokens fragmented) and prescribed a 7-phase plan. This wave shipped 6 of 8 highest-confidence-first PRs.
+
+- **PR 1 Web correctness pass** (`8e9dbac28`) — defined `.agi-chrome-band` (used in `Header.tsx:49 + MarketingFooter.tsx:41` but previously undefined in `app/globals.css`); replaced viewport-scaled hero `clamp(...)` typography at `globals.css:1697 + 1767` with fixed responsive steps; reset negative letter spacing at `:1699 + 1769` to 0; replaced `transition: all` at `:1149` with explicit properties; rewrote competitor-led hero copy at `app/page.tsx:86` to product-first.
+- **PR 2 Design-tokens package** (`bc1d5dcd3`) — new `@agiworkforce/design-tokens` package + semantic names (`surface.base`, `surface.raised`, `text.primary`, `accent.primary`, `accent.secondary`, `danger`, `warning`, `success`, `focus.ring`, `composer.bg`, `sidebar.bg`, `artifact.bg`). Outputs CSS vars + Chrome-CSS-var map + React Native theme values + VS Code-variable-fallback map. Brand decision shipped: teal primary + terra-cotta secondary canonical; purple/indigo retired as primary identity.
+- **PR 4 Desktop consumes design-tokens** (`0515cc0e1`) — drops the 58-line inline chat-CSS-var block; consumes `chat.css` from `@agiworkforce/design-tokens`. Visual parity preserved.
+- **PR 5 Chrome extension token + icon polish** (`95b0ee75b`) — adopts design-tokens CSS vars; replaces purple/indigo (`#4338ca`, `#6366f1`, `#8b5cf6`) with teal accent; adds `:focus-visible` rings everywhere `outline: none` was used; aligns side panel + in-page panel against the same token family.
+- **PR 6 Mobile sources tokens from package** (`5510322df`) — `lib/theme.ts` pulls from `@agiworkforce/design-tokens`. Native architecture preserved (drawer, bottom sheets, haptics, offline queue, voice).
+- **PR 7 CLI copy hygiene** (`29426be6e`) — `apps/cli/src/lib.rs:98` `long_about` replaced "Claude Code competitor" with product-led description. Snapshot/test renaming deferred per report §"CLI cleanup" caveat about noisy snapshot churn.
+
+### Deferred (Frontend-alignment wave)
+
+- **PR 3 Web `unified-chat` adoption** (Phase 2 / largest item in report) — `framer-motion` peer mismatch (`packages/unified-chat/package.json` peers `^11.0.0`; web depends `^12.38.0`) must be resolved first; runtime/store-bridge work also pending. Next frontend wave.
+- **PR 8 VS Code native-theme pass** (Phase 5) — hardcoded `#4338ca`-class colors at `webviewContent.ts:75` + 3× `outline: none` sites + plain `<select>` model picker at `:631` need coordinated edits across `sidebarProvider.ts` + `chatEditorPanel.ts:96`. Next frontend wave.
+
 ### Test counts (post-campaign)
 
 | Surface                            | Tests passing           |
@@ -68,13 +105,13 @@ Cross-surface campaign fire #1 through #6 per `MASTER_PLAN.md` §10. 37+ commits
 | apps/desktop frontend (vitest)     | 1,653                   |
 | apps/desktop backend (Tauri cargo) | 3,945                   |
 | apps/web (vitest)                  | 3,246                   |
-| apps/mobile (jest)                 | 778                     |
+| apps/mobile (jest)                 | 789                     |
 | apps/extension Chrome (vitest)     | 607                     |
 | apps/extension-vscode              | 512                     |
-| packages (12 enumerated)           | 1,103                   |
+| packages (12 enumerated + tokens)  | 1,103                   |
 | services (api-gateway + signaling) | 155                     |
 | other cargo crates                 | ~408                    |
-| **Platform total**                 | **≥13,733 tests green** |
+| **Platform total**                 | **≥13,744 tests green** |
 
 ---
 
