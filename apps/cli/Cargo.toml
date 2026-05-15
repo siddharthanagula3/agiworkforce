@@ -100,3 +100,4 @@ linux-seccomp = ["dep:seccompiler", "dep:libc"]
 # specific capability is needed in the future, port from reference/codex-cli/ as needed.
 
 [dev-dependencies]
+insta = "1"
