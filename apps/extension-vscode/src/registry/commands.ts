@@ -57,14 +57,9 @@ export function registerCommands(
  * the parity test catches any handler that goes missing.
  *
  * Keep this list grouped + alphabetized within group for diff review.
+ *
+ * NOTE: agi-workforce.showSubsystemHealth is NOT listed here. Its handler
+ * lives in services/subsystemHealth.ts and is registered by initSubsystemHealth().
+ * Adding a dummy stub here would cause a double-registration when both paths run.
  */
-export const REGISTRY_COMMANDS: readonly Command[] = [
-  // ── Diagnostics / health ─────────────────────────────────────────────────
-  {
-    id: 'agi-workforce.showSubsystemHealth',
-    // Implemented in services/subsystemHealth.ts; declared here so the
-    // parity test sees it. The actual registration happens in
-    // initSubsystemHealth(context).
-    handler: () => () => undefined,
-  },
-];
+export const REGISTRY_COMMANDS: readonly Command[] = [];
