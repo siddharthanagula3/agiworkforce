@@ -16,13 +16,14 @@ import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { ProjectCard } from '@/components/projects/ProjectCard';
 import { useProjectStore, type Project } from '@/stores/projectStore';
-import { colors } from '@/lib/theme';
+import { useThemeColors } from '@/hooks/useTheme';
 
 /**
  * Projects tab -- manage project contexts that apply instructions to chat.
  * Tap a project to set it active, long-press for edit/delete.
  */
 export default function ProjectsTabScreen() {
+  const colors = useThemeColors();
   const projects = useProjectStore((s) => s.projects);
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const createProject = useProjectStore((s) => s.createProject);

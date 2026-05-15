@@ -6,7 +6,8 @@ import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Sparkles, Cpu, Smartphone, Monitor, ArrowLeftRight } from 'lucide-react-native';
 import { storage } from '@/lib/mmkv';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/lib/theme';
+import { useThemeColors } from '@/hooks/useTheme';
+import type { ColorScheme } from '@/lib/theme';
 
 // ---------------------------------------------------------------------------
 // Slide definitions — 3 screens per spec
@@ -47,6 +48,7 @@ const SLIDES: Slide[] = [
 // ---------------------------------------------------------------------------
 
 export default function OnboardingScreen() {
+  const colors = useThemeColors();
   const [slide, setSlide] = useState(0);
   const router = useRouter();
 
@@ -80,11 +82,11 @@ export default function OnboardingScreen() {
         exiting={FadeOut.duration(200)}
         className="flex-1 items-center justify-center px-8"
       >
-        <SlideContent slide={SLIDES[slide]!} />
+        <SlideContent slide={SLIDES[slide]!} colors={colors} />
       </Reanimated.View>
 
       {/* Dot indicators */}
-      <DotIndicator count={SLIDES.length} active={slide} />
+      <DotIndicator count={SLIDES.length} active={slide} colors={colors} />
 
       {/* Action buttons */}
       <View className="mx-6 mb-8 gap-3">
@@ -120,7 +122,7 @@ export default function OnboardingScreen() {
 // Slide content
 // ---------------------------------------------------------------------------
 
-function SlideContent({ slide }: { slide: Slide }) {
+function SlideContent({ slide, colors }: { slide: Slide; colors: ColorScheme }) {
   const IconComponent = slide.icon;
   const SecondaryIcon = slide.secondaryIcon;
 
@@ -161,7 +163,15 @@ function SlideContent({ slide }: { slide: Slide }) {
 // Animated dot indicator
 // ---------------------------------------------------------------------------
 
-function DotIndicator({ count, active }: { count: number; active: number }) {
+function DotIndicator({
+  count,
+  active,
+  colors,
+}: {
+  count: number;
+  active: number;
+  colors: ColorScheme;
+}) {
   const widths = useRef(
     Array.from({ length: count }, (_, i) => new Animated.Value(i === 0 ? 1 : 0)),
   ).current;

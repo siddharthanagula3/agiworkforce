@@ -17,7 +17,7 @@ import { Text } from '@/components/ui/text';
 import { DesktopCompanionWidget } from '@/components/shared/DesktopCompanionWidget';
 import { useChatStore } from '@/stores/chatStore';
 import { useAuthStore } from '@/stores/authStore';
-import { colors } from '@/lib/theme';
+import { useThemeColors } from '@/hooks/useTheme';
 
 /**
  * 6 primary navigation items for the drawer.
@@ -47,6 +47,7 @@ const NAV_ITEMS: {
  *   User profile card at bottom
  */
 export function DrawerContent(_props: DrawerContentComponentProps) {
+  const colors = useThemeColors();
   const router = useRouter();
   const pathname = usePathname();
   const conversations = useChatStore((s) => s.conversations);
