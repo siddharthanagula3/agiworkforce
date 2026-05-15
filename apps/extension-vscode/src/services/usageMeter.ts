@@ -73,7 +73,7 @@ export async function resolveUsageMeter(
 
   // Managed plan (hobby / pro / max) — use stub data until billing API is wired
   const MANAGED_LIMIT = 50_000;
-  const used = sessionTokens; // TODO: replace with real cumulative from billing API
+  const used = sessionTokens;
   const remaining = Math.max(0, MANAGED_LIMIT - used) / MANAGED_LIMIT;
 
   const resetsAt = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString();

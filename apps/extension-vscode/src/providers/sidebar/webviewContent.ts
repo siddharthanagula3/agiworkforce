@@ -633,7 +633,7 @@ export function getWebviewContent(
 
   <!-- ── Messages ── -->
   <div id="messages">
-    <div class="message system">Ask anything about your code. Use @agi in VS Code Chat for richer context.</div>
+    <div class="message system">Type a message — use /explain, /fix, /refactor, /tests, or /docs to invoke slash commands. Use @ to reference files.</div>
   </div>
 
   <!-- ── Input ── -->
@@ -1100,7 +1100,7 @@ export function getWebviewContent(
 
       else if (msg.type === 'conversationCleared') {
         messagesEl.innerHTML =
-          '<div class="message system">New conversation. Ask anything about your code.</div>';
+          '<div class="message system">New conversation. Type a message or use /explain, /fix, /refactor, /tests, /docs.</div>';
         streaming = false;
         currentAssistantEl = null;
         setStreaming(false);
