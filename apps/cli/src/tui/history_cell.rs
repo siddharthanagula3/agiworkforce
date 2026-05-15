@@ -27,6 +27,8 @@ use crate::render::line_utils::push_owned_lines;
 use crate::render::renderable::Renderable;
 use crate::style::proposed_plan_style;
 use crate::style::user_message_style;
+use crate::tui::icons;
+use crate::tui::icons::ToolIcon;
 use crate::text_formatting::format_and_truncate_tool_result;
 use crate::text_formatting::truncate_text;
 use crate::tooltips;
@@ -1610,10 +1612,14 @@ impl HistoryCell for McpToolCallCell {
         } else {
             "Calling"
         };
+        // Leading tool icon per design-spec §4.6: Plug for MCP custom tools
+        let tool_icon = Span::from(icons::glyph(ToolIcon::Plug)).dim();
         let provenance = mcp_provenance_badge(&self.invocation);
 
         let invocation_line = line_to_static(&format_mcp_invocation(self.invocation.clone()));
         let mut compact_spans = vec![
+            tool_icon,
+            " ".into(),
             bullet.clone(),
             " ".into(),
             provenance,
@@ -1687,16 +1693,28 @@ impl HistoryCell for McpToolCallCell {
         }
 
         if !detail_lines.is_empty() {
-            let initial_prefix: Span<'static> = if inline_invocation {
-                "  └ ".dim()
-            } else {
-                "    ".into()
-            };
+            // Design-spec §4.2: vertical guideline (│ U+2502) runs down the left of the
+            // expanded body, connecting the bar header to the recessed content block.
+            let guideline_prefix: Span<'static> = "│ ".dim();
+            let guideline_cont: Span<'static> = "│ ".dim();
             if let Some(detail_badge) = detail_badge {
+                let initial_prefix: Span<'static> = if inline_invocation {
+                    "  └ ".dim()
+                } else {
+                    "    ".into()
+                };
                 lines.push(Line::from(vec![initial_prefix, detail_badge]));
-                lines.extend(prefix_lines(detail_lines, "    ".into(), "    ".into()));
+                lines.extend(prefix_lines(
+                    detail_lines,
+                    guideline_prefix,
+                    guideline_cont,
+                ));
             } else {
-                lines.extend(prefix_lines(detail_lines, initial_prefix, "    ".into()));
+                lines.extend(prefix_lines(
+                    detail_lines,
+                    guideline_prefix,
+                    guideline_cont,
+                ));
             }
         }
 
