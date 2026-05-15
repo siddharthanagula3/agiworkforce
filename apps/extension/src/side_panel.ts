@@ -27,10 +27,19 @@ import {
   Globe,
   CircleCheck,
   Loader2,
+  Settings,
   Folder,
   Plug,
   ChevronRight,
   ArrowUp,
+  Clock,
+  Trash2,
+  Monitor,
+  Mic,
+  Camera,
+  FileImage,
+  Zap,
+  FileEdit,
   renderIcon,
 } from './assets/icons';
 
@@ -2496,11 +2505,12 @@ function buildUI(): void {
   header.appendChild(headerLeft);
 
   const headerRight = el('div', { id: 'sp-header-right' });
-  const summarizeBtn = el(
-    'button',
-    { class: 'sp-icon-btn', id: 'sp-summarize-btn', title: 'Summarize current page' },
-    '📝',
-  );
+  const summarizeBtn = el('button', {
+    class: 'sp-icon-btn',
+    id: 'sp-summarize-btn',
+    title: 'Summarize current page',
+  });
+  summarizeBtn.appendChild(renderIcon(FileEdit, 16));
   summarizeBtn.addEventListener('click', () => {
     if (_ctx.isStreaming) return;
     sendMessage('/summarize');
@@ -2509,11 +2519,12 @@ function buildUI(): void {
 
   // ── History button + dropdown ──────────────────────────────────────────────
   const historyWrapper = el('div', { class: 'sp-history-wrapper' });
-  const historyBtn = el(
-    'button',
-    { class: 'sp-icon-btn', id: 'sp-history-btn', title: 'Conversation history' },
-    '🕐',
-  );
+  const historyBtn = el('button', {
+    class: 'sp-icon-btn',
+    id: 'sp-history-btn',
+    title: 'Conversation history',
+  });
+  historyBtn.appendChild(renderIcon(Clock, 16));
   const historyDropdown = el('div', { id: 'sp-history-dropdown' });
 
   function formatHistoryDate(ts: number): string {
@@ -2613,11 +2624,12 @@ function buildUI(): void {
   headerRight.appendChild(historyWrapper);
   // ─────────────────────────────────────────────────────────────────────────
 
-  const clearBtn = el(
-    'button',
-    { class: 'sp-icon-btn', id: 'sp-clear-btn', title: 'Clear conversation' },
-    '🗑',
-  );
+  const clearBtn = el('button', {
+    class: 'sp-icon-btn',
+    id: 'sp-clear-btn',
+    title: 'Clear conversation',
+  });
+  clearBtn.appendChild(renderIcon(Trash2, 16));
   clearBtn.addEventListener('click', () => {
     if (_ctx.streamTimeoutHandle) {
       clearTimeout(_ctx.streamTimeoutHandle);
@@ -2643,20 +2655,22 @@ function buildUI(): void {
     updateSendButton();
     renderMessages();
   });
-  const settingsToggleBtn = el(
-    'button',
-    { class: 'sp-icon-btn', id: 'sp-settings-btn', title: 'Settings' },
-    '⚙',
-  );
+  const settingsToggleBtn = el('button', {
+    class: 'sp-icon-btn',
+    id: 'sp-settings-btn',
+    title: 'Settings',
+  });
+  settingsToggleBtn.appendChild(renderIcon(Settings, 16));
   settingsToggleBtn.addEventListener('click', () => {
     const bar = document.getElementById('sp-settings-bar');
     if (bar) bar.classList.toggle('open');
   });
-  const consoleToggleBtn = el(
-    'button',
-    { class: 'sp-icon-btn', id: 'sp-console-toggle-btn', title: 'Toggle console logs' },
-    '🖥',
-  );
+  const consoleToggleBtn = el('button', {
+    class: 'sp-icon-btn',
+    id: 'sp-console-toggle-btn',
+    title: 'Toggle console logs',
+  });
+  consoleToggleBtn.appendChild(renderIcon(Monitor, 16));
   consoleToggleBtn.addEventListener('click', () => {
     const panel = document.getElementById('sp-console-panel');
     if (panel) {
@@ -3355,7 +3369,7 @@ function buildUI(): void {
   // The toolbar slot is intentionally empty for context; the chip is built inside inputArea.
 
   const micBtn = el('button', { class: 'sp-tool-btn', id: 'sp-mic-btn', title: 'Voice input' });
-  setText(micBtn, '🎤');
+  micBtn.appendChild(renderIcon(Mic, 16));
   toolbar.appendChild(micBtn);
 
   const groupBtn = el('button', {
@@ -3363,7 +3377,9 @@ function buildUI(): void {
     id: 'sp-group-btn',
     title: 'Add current tab to AGI Workforce group',
   });
-  setText(groupBtn, '📂 Group');
+  groupBtn.appendChild(renderIcon(Folder, 14));
+  const groupBtnLabel = document.createTextNode(' Group');
+  groupBtn.appendChild(groupBtnLabel);
   let isGrouped = false;
   groupBtn.addEventListener('click', () => {
     const msgType = isGrouped ? 'REMOVE_TAB_FROM_GROUP' : 'ADD_TAB_TO_GROUP';
@@ -3372,7 +3388,7 @@ function buildUI(): void {
       (response: { success?: boolean; grouped?: boolean } | undefined) => {
         if (chrome.runtime.lastError || !response?.success) return;
         isGrouped = response.grouped ?? false;
-        setText(groupBtn, isGrouped ? '📂 Ungroup' : '📂 Group');
+        groupBtnLabel.textContent = isGrouped ? ' Ungroup' : ' Group';
         groupBtn.classList.toggle('has-context', isGrouped);
       },
     );
@@ -3385,7 +3401,8 @@ function buildUI(): void {
     id: 'sp-shortcuts-btn',
     title: 'Saved shortcuts',
   });
-  setText(shortcutsBtn, '⚡ Shortcuts');
+  shortcutsBtn.appendChild(renderIcon(Zap, 14));
+  shortcutsBtn.appendChild(document.createTextNode(' Shortcuts'));
 
   const shortcutsDropdown = el('div', { id: 'sp-shortcuts-dropdown' });
   setChild(shortcutsDropdown, {
@@ -3483,9 +3500,7 @@ function buildUI(): void {
   const attachMenu = el('div', { id: 'sp-attach-menu' });
 
   const screenshotItem = el('div', { class: 'sp-attach-menu-item' });
-  screenshotItem.appendChild(
-    createElementWith({ tag: 'span', className: 'sp-attach-icon', text: '📷' }),
-  );
+  screenshotItem.appendChild(renderIcon(Camera, 16));
   screenshotItem.appendChild(document.createTextNode('Take a screenshot'));
   screenshotItem.addEventListener('click', () => {
     attachMenu.classList.remove('open');
@@ -3500,7 +3515,7 @@ function buildUI(): void {
   });
 
   const fileItem = el('div', { class: 'sp-attach-menu-item' });
-  fileItem.appendChild(createElementWith({ tag: 'span', className: 'sp-attach-icon', text: '🗄' }));
+  fileItem.appendChild(renderIcon(FileImage, 16));
   fileItem.appendChild(document.createTextNode('Add an image'));
   const fileInput = el('input', {
     type: 'file',
@@ -3763,7 +3778,13 @@ function refreshWorkflowsShortcuts(): void {
       for (const sc of shortcuts) {
         const item = el('div', { class: 'sp-wf-shortcut-item' });
         const isPromptBased = sc.prompt && Array.isArray(sc.actions) && sc.actions.length === 0;
-        item.appendChild(el('div', { class: 'sp-wf-shortcut-icon' }, isPromptBased ? '/' : '⚡'));
+        const shortcutIcon = el('div', { class: 'sp-wf-shortcut-icon' });
+        if (isPromptBased) {
+          shortcutIcon.textContent = '/';
+        } else {
+          shortcutIcon.appendChild(renderIcon(Zap, 14));
+        }
+        item.appendChild(shortcutIcon);
         const info = el('div', { class: 'sp-wf-shortcut-info' });
         info.appendChild(el('div', { class: 'sp-wf-shortcut-name' }, sc.name));
         const actionsCount = Array.isArray(sc.actions) ? sc.actions.length : 0;
