@@ -142,23 +142,35 @@ const NATIVE_CONNECT_POLL_INTERVAL_MS = 100;
 // are now owned by background/shortcuts.ts and background/tasks.ts respectively.
 const TAB_GROUP_NAME = 'AGI Workforce';
 
-let nativeReconnectTimer: ReturnType<typeof setTimeout> | null = null;
-let nativeReconnectAttempt = 0;
-let nativeHandshakeInFlight = false;
-// Set to true when max reconnect attempts exhausted or host is permanently unavailable.
-// Prevents infinite permission popup loops on macOS.
-let nativeReconnectGaveUp = false;
+export interface SharedBackgroundContext {
+  nativeReconnectTimer: ReturnType<typeof setTimeout> | null;
+  nativeReconnectAttempt: number;
+  nativeHandshakeInFlight: boolean;
+  /** True when max reconnect attempts exhausted. Prevents macOS permission popup loops. */
+  nativeReconnectGaveUp: boolean;
+}
+
+function createSharedBackgroundContext(): SharedBackgroundContext {
+  return {
+    nativeReconnectTimer: null,
+    nativeReconnectAttempt: 0,
+    nativeHandshakeInFlight: false,
+    nativeReconnectGaveUp: false,
+  };
+}
+
+const _bgCtx: SharedBackgroundContext = createSharedBackgroundContext();
 
 function clearNativeReconnectTimer(): void {
-  if (nativeReconnectTimer) {
-    clearTimeout(nativeReconnectTimer);
-    nativeReconnectTimer = null;
+  if (_bgCtx.nativeReconnectTimer) {
+    clearTimeout(_bgCtx.nativeReconnectTimer);
+    _bgCtx.nativeReconnectTimer = null;
   }
 }
 
 function resetNativeReconnectState(): void {
-  nativeReconnectAttempt = 0;
-  nativeReconnectGaveUp = false;
+  _bgCtx.nativeReconnectAttempt = 0;
+  _bgCtx.nativeReconnectGaveUp = false;
   clearNativeReconnectTimer();
 }
 
@@ -194,31 +206,34 @@ function scheduleNativeReconnect(trigger: string): void {
   // The attempt counter only increments when a new timer is actually scheduled,
   // which is the correct behavior — duplicate disconnect events should not
   // accelerate the backoff.
-  if (nativeReconnectTimer) {
+  if (_bgCtx.nativeReconnectTimer) {
     return;
   }
 
-  nativeReconnectAttempt = Math.min(nativeReconnectAttempt + 1, NATIVE_RECONNECT_MAX_ATTEMPTS);
+  _bgCtx.nativeReconnectAttempt = Math.min(
+    _bgCtx.nativeReconnectAttempt + 1,
+    NATIVE_RECONNECT_MAX_ATTEMPTS,
+  );
 
   // Stop retrying once max attempts are exhausted. Without this guard the
   // reconnect loop runs indefinitely, launching the native host binary on
   // every attempt and triggering repeated macOS permission prompts.
-  if (nativeReconnectAttempt >= NATIVE_RECONNECT_MAX_ATTEMPTS) {
+  if (_bgCtx.nativeReconnectAttempt >= NATIVE_RECONNECT_MAX_ATTEMPTS) {
     logger.warn('Max native reconnect attempts reached; giving up until user action', { trigger });
-    nativeReconnectGaveUp = true;
+    _bgCtx.nativeReconnectGaveUp = true;
     state.connectionStatus = 'disconnected';
     void notifyConnectionStatusChange();
     return;
   }
 
   const delay = Math.min(
-    NATIVE_RECONNECT_BASE_DELAY_MS * 2 ** Math.max(nativeReconnectAttempt - 1, 0),
+    NATIVE_RECONNECT_BASE_DELAY_MS * 2 ** Math.max(_bgCtx.nativeReconnectAttempt - 1, 0),
     NATIVE_RECONNECT_MAX_DELAY_MS,
   );
 
   logger.info('Scheduling native reconnect', {
     trigger,
-    attempt: nativeReconnectAttempt,
+    attempt: _bgCtx.nativeReconnectAttempt,
     delayMs: delay,
   });
 
@@ -227,8 +242,8 @@ function scheduleNativeReconnect(trigger: string): void {
     void notifyConnectionStatusChange();
   }
 
-  nativeReconnectTimer = setTimeout(() => {
-    nativeReconnectTimer = null;
+  _bgCtx.nativeReconnectTimer = setTimeout(() => {
+    _bgCtx.nativeReconnectTimer = null;
     connectToNativeHost();
   }, delay);
 }
@@ -253,7 +268,7 @@ function initialize(): void {
 }
 
 function connectToNativeHost(): void {
-  if (state.nativePort || nativeHandshakeInFlight || nativeReconnectGaveUp) {
+  if (state.nativePort || _bgCtx.nativeHandshakeInFlight || _bgCtx.nativeReconnectGaveUp) {
     return;
   }
 
@@ -270,7 +285,7 @@ function connectToNativeHost(): void {
     state.nativePort = port;
     state.isNativeConnected = false; // Not connected until handshake succeeds
     state.lastNativeError = null;
-    nativeHandshakeInFlight = true;
+    _bgCtx.nativeHandshakeInFlight = true;
 
     void (async () => {
       try {
@@ -291,8 +306,8 @@ function connectToNativeHost(): void {
 
         // Handshake succeeded — only now mark as connected
         state.isNativeConnected = true;
-        nativeReconnectAttempt = 0;
-        nativeReconnectGaveUp = false; // Reset so future disconnects can retry
+        _bgCtx.nativeReconnectAttempt = 0;
+        _bgCtx.nativeReconnectGaveUp = false; // Reset so future disconnects can retry
         clearNativeReconnectTimer();
         state.connectionStatus = 'connected';
         void notifyConnectionStatusChange();
@@ -325,12 +340,12 @@ function connectToNativeHost(): void {
         void notifyConnectionStatusChange();
         scheduleNativeReconnect('handshake_failed');
       } finally {
-        nativeHandshakeInFlight = false;
+        _bgCtx.nativeHandshakeInFlight = false;
       }
     })();
   } catch (error) {
     logger.error('Failed to connect to native host', error);
-    nativeHandshakeInFlight = false;
+    _bgCtx.nativeHandshakeInFlight = false;
     state.isNativeConnected = false;
     state.nativePort = null;
     state.connectionStatus = 'disconnected';
@@ -348,9 +363,9 @@ function sendNativeRequest(message: Record<string, unknown>): Promise<ExtensionR
   return new Promise((resolve, reject) => {
     void (async () => {
       // Allow sending during handshake (port exists but isNativeConnected not yet true)
-      const portReadyForHandshake = !!state.nativePort && nativeHandshakeInFlight;
+      const portReadyForHandshake = !!state.nativePort && _bgCtx.nativeHandshakeInFlight;
       if (!portReadyForHandshake && (!state.nativePort || !state.isNativeConnected)) {
-        if (!nativeReconnectGaveUp) {
+        if (!_bgCtx.nativeReconnectGaveUp) {
           connectToNativeHost();
         }
         const connected = await waitForNativeConnection(NATIVE_CONNECT_MAX_WAIT_MS);
@@ -431,7 +446,7 @@ function handleNativeDisconnect(): void {
     error.includes('not allowed');
   if (isPermanentError) {
     logger.warn('Native host permanently unavailable; halting reconnect', { error });
-    nativeReconnectGaveUp = true;
+    _bgCtx.nativeReconnectGaveUp = true;
     return;
   }
 
@@ -756,7 +771,11 @@ async function handleMessageAsync(
 
   switch (message.type) {
     case 'GET_CONNECTION_STATUS':
-      if (!state.isNativeConnected && !nativeHandshakeInFlight && !nativeReconnectGaveUp) {
+      if (
+        !state.isNativeConnected &&
+        !_bgCtx.nativeHandshakeInFlight &&
+        !_bgCtx.nativeReconnectGaveUp
+      ) {
         connectToNativeHost();
       }
       if (state.isNativeConnected) {
@@ -1647,7 +1666,7 @@ async function forwardToContentScript(
 
 async function checkDesktopConnection(): Promise<void> {
   if (!state.nativePort || !state.isNativeConnected) {
-    if (!nativeReconnectGaveUp && !nativeHandshakeInFlight) {
+    if (!_bgCtx.nativeReconnectGaveUp && !_bgCtx.nativeHandshakeInFlight) {
       connectToNativeHost();
       // A connection attempt was initiated — don't also schedule a reconnect below
       return;
@@ -2761,7 +2780,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'keep-alive') {
     logger.debug('Keeping service worker alive');
     // Periodic connection check (replaces setInterval which is lost on MV3 suspension)
-    if (!nativeReconnectGaveUp && !state.isNativeConnected) {
+    if (!_bgCtx.nativeReconnectGaveUp && !state.isNativeConnected) {
       void connectToNativeHost();
     }
     return;
