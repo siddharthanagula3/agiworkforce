@@ -252,7 +252,7 @@ export function ChatInput({
       <View
         style={{
           backgroundColor: themeColors.surfaceElevated,
-          borderRadius: 20,
+          borderRadius: 16,
           borderWidth: 1,
           borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
           paddingHorizontal: 12,
@@ -268,7 +268,7 @@ export function ChatInput({
             paddingVertical: 6,
             paddingHorizontal: 4,
             minHeight: 24,
-            maxHeight: 120,
+            maxHeight: 200,
           }}
           placeholder={placeholder}
           placeholderTextColor={themeColors.textMuted}
