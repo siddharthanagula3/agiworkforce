@@ -33,7 +33,7 @@ import { useVoicePlayback } from '@/hooks/useVoicePlayback';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { offlineQueue } from '@/services/offlineQueue';
 import { generateImage } from '@/services/imagegen';
-import { colors } from '@/lib/theme';
+import { useThemeColors } from '@/hooks/useTheme';
 import type { ChatMessage } from '@/types/chat';
 
 /**
@@ -41,6 +41,7 @@ import type { ChatMessage } from '@/types/chat';
  * Loads messages for the given conversation ID, renders MessageList + ChatInput.
  */
 export default function ChatScreen() {
+  const colors = useThemeColors();
   const params = useLocalSearchParams<{ id: string }>();
   // useLocalSearchParams can return string | string[] -- narrow to string
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
