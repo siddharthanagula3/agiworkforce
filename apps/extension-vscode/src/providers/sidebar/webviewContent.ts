@@ -741,6 +741,47 @@ export function getWebviewContent(
       margin-left: 8px;
       opacity: 0.8;
     }
+
+    /* ── Empty state (design-spec §8) ── */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 24px 12px 12px;
+      text-align: center;
+    }
+
+    .empty-state-headline {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--text-primary);
+      line-height: 1.4;
+    }
+
+    .prompt-chips {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .prompt-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      height: 30px;
+      padding: 0 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      font-size: 11px;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+    }
+    .prompt-chip:hover { background: var(--bg-overlay); color: var(--text-primary); }
   </style>
 </head>
 <body>
@@ -791,7 +832,14 @@ export function getWebviewContent(
 
   <!-- ── Messages ── -->
   <div id="messages">
-    <div class="message system">Type a message — use /explain, /fix, /refactor, /tests, or /docs to invoke slash commands. Use @ to reference files.</div>
+    <div class="empty-state" id="emptyState">
+      <div class="empty-state-headline">Ask about your code</div>
+      <div class="prompt-chips">
+        <button class="prompt-chip" data-prompt="/explain selected code">&lt;/&gt; Explain</button>
+        <button class="prompt-chip" data-prompt="/fix ">&gt;_ Fix</button>
+        <button class="prompt-chip" data-prompt="/tests ">&#10003; Tests</button>
+      </div>
+    </div>
   </div>
 
   <!-- ── Input ── -->
@@ -1140,6 +1188,7 @@ export function getWebviewContent(
       const text = userInput.value.trim();
       if (!text) return;
 
+      hideEmptyState();
       addMessage('user', text);
       userInput.value = '';
       userInput.style.height = 'auto';
@@ -1342,8 +1391,24 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'conversationCleared') {
-        messagesEl.innerHTML =
-          '<div class="message system">New conversation. Type a message or use /explain, /fix, /refactor, /tests, /docs.</div>';
+        messagesEl.innerHTML = '';
+        var freshEmpty = document.createElement('div');
+        freshEmpty.className = 'empty-state';
+        freshEmpty.id = 'emptyState';
+        freshEmpty.innerHTML = '<div class="empty-state-headline">Ask about your code</div>' +
+          '<div class="prompt-chips">' +
+          '<button class="prompt-chip" data-prompt="/explain selected code">&lt;/&gt; Explain</button>' +
+          '<button class="prompt-chip" data-prompt="/fix ">&gt;_ Fix</button>' +
+          '<button class="prompt-chip" data-prompt="/tests ">&#10003; Tests</button>' +
+          '</div>';
+        freshEmpty.querySelectorAll('.prompt-chip').forEach(function(chip) {
+          chip.addEventListener('click', function() {
+            var p = chip.dataset.prompt || '';
+            if (p) { userInput.value = p; userInput.focus(); autoResize(); freshEmpty.style.display = 'none'; }
+          });
+        });
+        messagesEl.appendChild(freshEmpty);
+        emptyStateEl = freshEmpty;
         streaming = false;
         currentAssistantEl = null;
         toolCallStack = null;
@@ -1520,6 +1585,22 @@ export function getWebviewContent(
       toolCallStack = null;
       toolCallMap = {};
     }
+
+    // ── Empty-state prompt chips (design-spec §8) ────────────────────────────
+    var emptyStateEl = document.getElementById('emptyState');
+    function hideEmptyState() {
+      if (emptyStateEl) { emptyStateEl.style.display = 'none'; }
+    }
+    document.querySelectorAll('.prompt-chip').forEach(function(chip) {
+      chip.addEventListener('click', function() {
+        var prompt = chip.dataset.prompt || '';
+        if (!prompt) return;
+        userInput.value = prompt;
+        userInput.focus();
+        autoResize();
+        hideEmptyState();
+      });
+    });
 
     // ── Signal ready ──────────────────────────────────────────────────────────
     vscode.postMessage({ type: 'ready' });
