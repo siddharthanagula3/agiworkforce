@@ -327,70 +327,95 @@ impl VoiceState {
     }
 }
 
-pub(crate) struct ChatComposer {
-    textarea: TextArea,
-    textarea_state: RefCell<TextAreaState>,
-    active_popup: ActivePopup,
-    app_event_tx: AppEventSender,
-    history: ChatComposerHistory,
-    quit_shortcut_expires_at: Option<Instant>,
-    quit_shortcut_key: KeyBinding,
-    esc_backtrack_hint: bool,
-    use_shift_enter_hint: bool,
-    dismissed_file_popup_token: Option<String>,
-    current_file_query: Option<String>,
-    pending_pastes: Vec<(String, String)>,
-    large_paste_counters: HashMap<usize, usize>,
-    has_focus: bool,
-    frame_requester: Option<FrameRequester>,
+/// All mutable state owned by the composer, factored out so per-domain methods can
+/// take `&mut ChatComposerState` instead of `&mut ChatComposer`.  `ChatComposer` is
+/// a thin newtype wrapper that `Deref`s to this struct, so every existing `self.field`
+/// or `self.method()` call continues to compile unchanged.
+pub(crate) struct ChatComposerState {
+    pub(crate) textarea: TextArea,
+    pub(crate) textarea_state: RefCell<TextAreaState>,
+    pub(crate) active_popup: ActivePopup,
+    pub(crate) app_event_tx: AppEventSender,
+    pub(crate) history: ChatComposerHistory,
+    pub(crate) quit_shortcut_expires_at: Option<Instant>,
+    pub(crate) quit_shortcut_key: KeyBinding,
+    pub(crate) esc_backtrack_hint: bool,
+    pub(crate) use_shift_enter_hint: bool,
+    pub(crate) dismissed_file_popup_token: Option<String>,
+    pub(crate) current_file_query: Option<String>,
+    pub(crate) pending_pastes: Vec<(String, String)>,
+    pub(crate) large_paste_counters: HashMap<usize, usize>,
+    pub(crate) has_focus: bool,
+    pub(crate) frame_requester: Option<FrameRequester>,
     /// Invariant: attached images are labeled in vec order as
     /// `[Image #M+1]..[Image #N]`, where `M` is the number of remote images.
-    attached_images: Vec<AttachedImage>,
-    placeholder_text: String,
-    voice_state: VoiceState,
+    pub(crate) attached_images: Vec<AttachedImage>,
+    pub(crate) placeholder_text: String,
+    pub(crate) voice_state: VoiceState,
     // Spinner control flags keyed by placeholder id; set to true to stop.
-    spinner_stop_flags: HashMap<String, Arc<AtomicBool>>,
-    is_task_running: bool,
+    pub(crate) spinner_stop_flags: HashMap<String, Arc<AtomicBool>>,
+    pub(crate) is_task_running: bool,
     /// When false, the composer is temporarily read-only (e.g. during sandbox setup).
-    input_enabled: bool,
-    input_disabled_placeholder: Option<String>,
+    pub(crate) input_enabled: bool,
+    pub(crate) input_disabled_placeholder: Option<String>,
     /// Non-bracketed paste burst tracker (see `bottom_pane/paste_burst.rs`).
-    paste_burst: PasteBurst,
+    pub(crate) paste_burst: PasteBurst,
     // When true, disables paste-burst logic and inserts characters immediately.
-    disable_paste_burst: bool,
-    custom_prompts: Vec<CustomPrompt>,
-    footer_mode: FooterMode,
-    footer_hint_override: Option<Vec<(String, String)>>,
-    remote_image_urls: Vec<String>,
+    pub(crate) disable_paste_burst: bool,
+    pub(crate) custom_prompts: Vec<CustomPrompt>,
+    pub(crate) footer_mode: FooterMode,
+    pub(crate) footer_hint_override: Option<Vec<(String, String)>>,
+    pub(crate) remote_image_urls: Vec<String>,
     /// Tracks keyboard selection for the remote-image rows so Up/Down + Delete/Backspace
     /// can highlight and remove remote attachments from the composer UI.
-    selected_remote_image_index: Option<usize>,
-    footer_flash: Option<FooterFlash>,
-    context_window_percent: Option<i64>,
+    pub(crate) selected_remote_image_index: Option<usize>,
+    pub(crate) footer_flash: Option<FooterFlash>,
+    pub(crate) context_window_percent: Option<i64>,
     // Monotonically increasing identifier for textarea elements we insert.
     #[cfg(not(target_os = "linux"))]
-    next_element_id: u64,
-    context_window_used_tokens: Option<i64>,
-    skills: Option<Vec<SkillMetadata>>,
-    plugins: Option<Vec<PluginCapabilitySummary>>,
-    connectors_snapshot: Option<ConnectorsSnapshot>,
-    dismissed_mention_popup_token: Option<String>,
-    mention_bindings: HashMap<u64, ComposerMentionBinding>,
-    recent_submission_mention_bindings: Vec<MentionBinding>,
-    collaboration_modes_enabled: bool,
-    config: ChatComposerConfig,
-    collaboration_mode_indicator: Option<CollaborationModeIndicator>,
-    connectors_enabled: bool,
-    plugins_command_enabled: bool,
-    fast_command_enabled: bool,
-    personality_command_enabled: bool,
-    realtime_conversation_enabled: bool,
-    audio_device_selection_enabled: bool,
-    windows_degraded_sandbox_active: bool,
-    status_line_value: Option<Line<'static>>,
-    status_line_enabled: bool,
+    pub(crate) next_element_id: u64,
+    pub(crate) context_window_used_tokens: Option<i64>,
+    pub(crate) skills: Option<Vec<SkillMetadata>>,
+    pub(crate) plugins: Option<Vec<PluginCapabilitySummary>>,
+    pub(crate) connectors_snapshot: Option<ConnectorsSnapshot>,
+    pub(crate) dismissed_mention_popup_token: Option<String>,
+    pub(crate) mention_bindings: HashMap<u64, ComposerMentionBinding>,
+    pub(crate) recent_submission_mention_bindings: Vec<MentionBinding>,
+    pub(crate) collaboration_modes_enabled: bool,
+    pub(crate) config: ChatComposerConfig,
+    pub(crate) collaboration_mode_indicator: Option<CollaborationModeIndicator>,
+    pub(crate) connectors_enabled: bool,
+    pub(crate) plugins_command_enabled: bool,
+    pub(crate) fast_command_enabled: bool,
+    pub(crate) personality_command_enabled: bool,
+    pub(crate) realtime_conversation_enabled: bool,
+    pub(crate) audio_device_selection_enabled: bool,
+    pub(crate) windows_degraded_sandbox_active: bool,
+    pub(crate) status_line_value: Option<Line<'static>>,
+    pub(crate) status_line_enabled: bool,
     // Agent label injected into the footer's contextual row when multi-agent mode is active.
-    active_agent_label: Option<String>,
+    pub(crate) active_agent_label: Option<String>,
+}
+
+/// Thin newtype wrapper around [`ChatComposerState`].
+///
+/// `Deref`/`DerefMut` to `ChatComposerState` means all existing `self.field` accesses
+/// in the 8 000+ LOC impl blocks continue to compile without modification.  New
+/// per-domain methods added during the refactor take `&mut ChatComposerState`
+/// directly, keeping their surface area minimal.
+pub(crate) struct ChatComposer(pub(crate) ChatComposerState);
+
+impl std::ops::Deref for ChatComposer {
+    type Target = ChatComposerState;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for ChatComposer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -460,7 +485,7 @@ impl ChatComposer {
     ) -> Self {
         let use_shift_enter_hint = enhanced_keys_supported;
 
-        let mut this = Self {
+        let state = ChatComposerState {
             textarea: TextArea::new(),
             textarea_state: RefCell::new(TextAreaState::default()),
             active_popup: ActivePopup::None,
@@ -515,6 +540,7 @@ impl ChatComposer {
             status_line_enabled: false,
             active_agent_label: None,
         };
+        let mut this = Self(state);
         // Apply configuration via the setter to keep side-effects centralized.
         this.set_disable_paste_burst(disable_paste_burst);
         this
