@@ -1,8 +1,6 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -10,6 +8,7 @@ import { logger } from '@/lib/logger';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+import { getAuthenticatedUser } from '@/lib/api-auth';
 import { getProviderProbeModel, normalizeModelId, type Provider } from '@agiworkforce/types';
 
 /**
@@ -34,24 +33,9 @@ async function handleTestProvider(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // Auth
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    throw createError.unauthorized('Missing or invalid authorization header');
-  }
-  const token = authHeader.substring(7);
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabase = createClient(supabaseUrl, requireEnv('SUPABASE_SERVICE_ROLE_KEY'));
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser(token);
-
-  if (authError || !user) {
-    throw createError.unauthorized('Invalid authentication token');
-  }
+  // Auth — getAuthenticatedUser handles Bearer + cookie flows and uses the
+  // service-role client only for JWT verification (never for DB ops).
+  const user = await getAuthenticatedUser(request);
 
   // Parse body
   const body = (await request.json()) as { provider?: string };
