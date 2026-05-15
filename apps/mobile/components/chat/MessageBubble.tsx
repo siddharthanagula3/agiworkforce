@@ -19,7 +19,7 @@ import { StreamingIndicator } from './StreamingIndicator';
 import { ThinkingLine } from './ThinkingLine';
 import { InlineArtifactCard } from './InlineArtifactCard';
 import { ArtifactFullScreen } from './ArtifactFullScreen';
-import { ToolCallCard } from './ToolCallCard';
+import { InlineToolCall } from './InlineToolCall';
 import { ApprovalCard } from './ApprovalCard';
 import { StatusStep as StatusStepComponent } from './StatusStep';
 import { GeneratedImage } from './GeneratedImage';
@@ -333,11 +333,19 @@ export const MessageBubble = memo(function MessageBubble({
               </View>
             ) : null}
 
-            {/* Tool calls */}
+            {/* Tool calls — borderless inline bars per design-spec §4 */}
             {isAssistant && message.toolCalls && message.toolCalls.length > 0 ? (
-              <View style={{ gap: 4 }}>
+              <View
+                style={{
+                  borderLeftWidth: 1,
+                  borderLeftColor: colors.borderLight,
+                  paddingLeft: 12,
+                  marginLeft: 8,
+                  gap: 4,
+                }}
+              >
                 {message.toolCalls.map((tool) => (
-                  <ToolCallCard key={tool.id} toolCall={tool} />
+                  <InlineToolCall key={tool.id} toolCall={tool} />
                 ))}
               </View>
             ) : null}

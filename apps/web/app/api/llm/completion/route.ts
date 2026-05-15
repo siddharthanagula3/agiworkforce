@@ -1,15 +1,13 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
-import { requireEnv } from '@/utils/env';
 import { LLMCompletionRequestSchema } from '@/lib/validations/llm';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getUserClient } from '@/lib/supabase-server';
+import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
 import { CreditService, type CreditBalance } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
@@ -140,26 +138,19 @@ async function handleLLMCompletion(request: NextRequest) {
     throw createError.unauthorized('Missing or invalid authorization header');
   }
 
-  const token = authHeader.substring(7);
-
-  // Verify user with Supabase using service role key for reliable JWT verification
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-
-  const supabase = createClient(supabaseUrl, requireEnv('SUPABASE_SERVICE_ROLE_KEY'));
-
-  // Verify the JWT token by calling getUser with the token
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser(token);
-
-  if (authError || !user) {
-    logger.warn({ error: authError }, 'Authentication failed');
+  // getAuthenticatedUserWithClient handles JWT verification via the documented
+  // service-role exception and returns an RLS-bound client for all downstream
+  // DB access.
+  let user;
+  let userClient;
+  try {
+    const auth = await getAuthenticatedUserWithClient(request);
+    user = auth.user;
+    userClient = auth.userDb;
+  } catch (err) {
+    logger.warn({ error: err }, 'Authentication failed');
     throw createError.unauthorized('Invalid authentication token');
   }
-
-  // RLS-bound client for all downstream DB ops on behalf of this user.
-  const userClient = getUserClient(token);
 
   // Generate unique request ID for idempotency (prevents duplicate charges on retry)
   const requestId = randomUUID();
