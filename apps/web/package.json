@@ -15,7 +15,8 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "a11y:audit": "node scripts/a11y-audit.mjs"
+    "a11y:audit": "node scripts/a11y-audit.mjs",
+    "analyze": "ANALYZE=true pnpm build:next-only"
   },
   "dependencies": {
     "@agiworkforce/api": "workspace:*",
@@ -23,12 +24,12 @@
     "@agiworkforce/data-layer": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/mcp": "workspace:*",
-    "@agiworkforce/skills": "workspace:*",
-    "@agiworkforce/unified-chat": "workspace:*",
     "@agiworkforce/routing": "workspace:*",
     "@agiworkforce/runtime": "workspace:*",
+    "@agiworkforce/skills": "workspace:*",
     "@agiworkforce/stores": "workspace:*",
     "@agiworkforce/types": "workspace:*",
+    "@agiworkforce/unified-chat": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
     "@ai-sdk/anthropic": "^3.0.64",
     "@ai-sdk/google": "^3.0.53",
@@ -122,6 +123,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.0",
+    "@next/bundle-analyzer": "^16.2.6",
     "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4.2.2",
     "@testing-library/jest-dom": "^6.9.1",
