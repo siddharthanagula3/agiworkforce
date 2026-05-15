@@ -9,6 +9,7 @@ import {
   type CapabilityTier,
 } from '@agiworkforce/types';
 import { getExtensionSendQueue } from './sendQueue';
+import { clearChildren, setText, createElementWith, setChild } from './dom-helpers';
 
 const extensionSendQueue = getExtensionSendQueue();
 
@@ -1717,7 +1718,7 @@ function setupVoiceInput(micBtn: HTMLButtonElement, inputEl: HTMLTextAreaElement
     recognition.onstart = () => {
       listening = true;
       micBtn.classList.add('active');
-      micBtn.innerHTML = '<span class="sp-mic-pulse"></span>';
+      setChild(micBtn, { tag: 'span', className: 'sp-mic-pulse' });
       micBtn.title = 'Listening… click to stop';
     };
 
@@ -1738,7 +1739,7 @@ function setupVoiceInput(micBtn: HTMLButtonElement, inputEl: HTMLTextAreaElement
       // Memory-leak guard: only update DOM if document is still active
       if (document.body) {
         micBtn.classList.remove('active');
-        micBtn.innerHTML = '🎤';
+        setText(micBtn, '🎤');
         micBtn.title = 'Voice input';
       }
       recognition = null;
@@ -1978,10 +1979,14 @@ function updateConnectionStatus(): void {
   if (!pill) return;
   if (isConnected) {
     pill.className = 'connected';
-    pill.innerHTML = '<span class="sp-status-dot"></span>Connected';
+    const dot = document.createElement('span');
+    dot.className = 'sp-status-dot';
+    pill.replaceChildren(dot, 'Connected');
   } else {
     pill.className = 'disconnected';
-    pill.innerHTML = '<span class="sp-status-dot"></span>Not Connected';
+    const dot = document.createElement('span');
+    dot.className = 'sp-status-dot';
+    pill.replaceChildren(dot, 'Not Connected');
   }
 }
 
@@ -2030,7 +2035,7 @@ function updateSendButton(): void {
 function updateAttachmentPreview(): void {
   const bar = document.getElementById('sp-attachment-bar');
   if (!bar) return;
-  bar.innerHTML = '';
+  clearChildren(bar);
   if (pendingAttachments.length === 0) {
     bar.style.display = 'none';
     return;
@@ -2062,16 +2067,20 @@ function updateToolsButton(): void {
   if (!btn || !dropdown) return;
 
   const count = discoveredTools.length;
-  btn.innerHTML = `\uD83D\uDD27 AI Tools (${count})`;
+  setText(btn, `\uD83D\uDD27 AI Tools (${count})`);
 
   if (count === 0) {
     btn.classList.remove('has-context');
-    dropdown.innerHTML = '<div class="sp-tools-empty">No tools discovered on this page</div>';
+    setChild(dropdown, {
+      tag: 'div',
+      className: 'sp-tools-empty',
+      text: 'No tools discovered on this page',
+    });
     return;
   }
 
   btn.classList.add('has-context');
-  dropdown.innerHTML = '';
+  clearChildren(dropdown);
   for (const tool of discoveredTools) {
     const item = el('div', { class: 'sp-tool-item' });
     item.appendChild(el('div', { class: 'sp-tool-item-name' }, tool.name));
@@ -2166,7 +2175,7 @@ function refreshPageHostname(): void {
 }
 
 function buildUI(): void {
-  document.body.innerHTML = '';
+  clearChildren(document.body);
 
   const header = el('div', { id: 'sp-header' });
   const headerLeft = el('div', { id: 'sp-header-left' });
@@ -2177,8 +2186,13 @@ function buildUI(): void {
 
   const modelSelectorWrap = el('div', { class: 'sp-model-selector-wrap' });
   const modelSelectorBtn = el('button', { id: 'sp-model-selector-btn' });
-  modelSelectorBtn.innerHTML =
-    '<span id="sp-model-badge">AI Assistant</span><span class="sp-chevron">▾</span>';
+  const modelBadge = document.createElement('span');
+  modelBadge.id = 'sp-model-badge';
+  modelBadge.textContent = 'AI Assistant';
+  const chevron = document.createElement('span');
+  chevron.className = 'sp-chevron';
+  chevron.textContent = '▾';
+  modelSelectorBtn.replaceChildren(modelBadge, chevron);
   const modelDropdownEl = el('div', { id: 'sp-model-dropdown' });
   let currentModelValue = 'auto';
 
@@ -2265,7 +2279,7 @@ function buildUI(): void {
   }
 
   function renderModelDropdown(): void {
-    modelDropdownEl.innerHTML = '';
+    clearChildren(modelDropdownEl);
 
     // 0. Provider count badge header
     const pickerHeader = el('div', { class: 'sp-model-picker-header' });
@@ -2463,7 +2477,7 @@ function buildUI(): void {
     chrome.runtime.sendMessage({ type: 'CLEAR_CONSOLE_LOGS' }, () => {
       if (chrome.runtime.lastError) return;
       const entries = consolePanel.querySelector('.sp-console-entries');
-      if (entries) entries.innerHTML = '';
+      if (entries) clearChildren(entries);
     });
   });
   const consoleRefreshBtn = el('button', { class: 'sp-console-clear' }, 'Refresh');
@@ -2543,7 +2557,9 @@ function buildUI(): void {
   const authSaveBtn = el('button', { id: 'sp-auth-save-btn' }, 'Save');
 
   const statusPill = el('div', { id: 'sp-status-pill', class: 'disconnected' });
-  statusPill.innerHTML = '<span class="sp-status-dot"></span>Not Connected';
+  const statusDot0 = document.createElement('span');
+  statusDot0.className = 'sp-status-dot';
+  statusPill.replaceChildren(statusDot0, 'Not Connected');
 
   authBar.appendChild(authInput);
   authBar.appendChild(authSaveBtn);
@@ -2600,31 +2616,64 @@ function buildUI(): void {
 
   const msgsArea = el('div', { id: 'sp-messages' });
   const emptyState = el('div', { id: 'sp-empty' });
-  emptyState.innerHTML = `
-    <div id="sp-empty-icon">🤖</div>
-    <div id="sp-empty-title">AGI Workforce Assistant</div>
-    <div id="sp-empty-hint">Ask anything about the current page,<br>or try a slash command:</div>
-    <div id="sp-empty-cmds">
-      <span class="sp-cmd-chip">/summarize</span>
-      <span class="sp-cmd-chip">/explain</span>
-      <span class="sp-cmd-chip">/translate</span>
-      <span class="sp-cmd-chip">/extract</span>
-      <span class="sp-cmd-chip">/tldr</span>
-      <span class="sp-cmd-chip">/code</span>
-    </div>
-  `;
+  emptyState.appendChild(createElementWith({ tag: 'div', id: 'sp-empty-icon', text: '🤖' }));
+  emptyState.appendChild(
+    createElementWith({ tag: 'div', id: 'sp-empty-title', text: 'AGI Workforce Assistant' }),
+  );
+  const emptyHint = createElementWith({ tag: 'div', id: 'sp-empty-hint' });
+  emptyHint.appendChild(document.createTextNode('Ask anything about the current page,'));
+  emptyHint.appendChild(document.createElement('br'));
+  emptyHint.appendChild(document.createTextNode('or try a slash command:'));
+  emptyState.appendChild(emptyHint);
+  const emptyCmds = createElementWith({ tag: 'div', id: 'sp-empty-cmds' });
+  for (const cmd of ['/summarize', '/explain', '/translate', '/extract', '/tldr', '/code']) {
+    emptyCmds.appendChild(createElementWith({ tag: 'span', className: 'sp-cmd-chip', text: cmd }));
+  }
+  emptyState.appendChild(emptyCmds);
   msgsArea.appendChild(emptyState);
 
   const blockedState = el('div', { id: 'sp-blocked' });
-  blockedState.innerHTML = `
-    <svg id="sp-blocked-shield" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C16.5 22.15 20 17.25 20 12V6l-8-4z" stroke="#94a3b8" stroke-width="1.5" stroke-linejoin="round"/>
-      <line x1="12" y1="8" x2="12" y2="13" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round"/>
-      <circle cx="12" cy="16" r="0.75" fill="#94a3b8"/>
-    </svg>
-    <div id="sp-blocked-title">Can't access this page</div>
-    <div id="sp-blocked-desc">AGI Workforce cannot assist with the content on this page.</div>
-  `;
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const shield = document.createElementNS(svgNS, 'svg');
+  shield.id = 'sp-blocked-shield';
+  shield.setAttribute('viewBox', '0 0 24 24');
+  shield.setAttribute('fill', 'none');
+  shield.setAttribute('aria-hidden', 'true');
+  const shieldPath = document.createElementNS(svgNS, 'path');
+  shieldPath.setAttribute(
+    'd',
+    'M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C16.5 22.15 20 17.25 20 12V6l-8-4z',
+  );
+  shieldPath.setAttribute('stroke', '#94a3b8');
+  shieldPath.setAttribute('stroke-width', '1.5');
+  shieldPath.setAttribute('stroke-linejoin', 'round');
+  const shieldLine = document.createElementNS(svgNS, 'line');
+  shieldLine.setAttribute('x1', '12');
+  shieldLine.setAttribute('y1', '8');
+  shieldLine.setAttribute('x2', '12');
+  shieldLine.setAttribute('y2', '13');
+  shieldLine.setAttribute('stroke', '#94a3b8');
+  shieldLine.setAttribute('stroke-width', '1.5');
+  shieldLine.setAttribute('stroke-linecap', 'round');
+  const shieldCircle = document.createElementNS(svgNS, 'circle');
+  shieldCircle.setAttribute('cx', '12');
+  shieldCircle.setAttribute('cy', '16');
+  shieldCircle.setAttribute('r', '0.75');
+  shieldCircle.setAttribute('fill', '#94a3b8');
+  shield.appendChild(shieldPath);
+  shield.appendChild(shieldLine);
+  shield.appendChild(shieldCircle);
+  blockedState.appendChild(shield);
+  blockedState.appendChild(
+    createElementWith({ tag: 'div', id: 'sp-blocked-title', text: "Can't access this page" }),
+  );
+  blockedState.appendChild(
+    createElementWith({
+      tag: 'div',
+      id: 'sp-blocked-desc',
+      text: 'AGI Workforce cannot assist with the content on this page.',
+    }),
+  );
   msgsArea.appendChild(blockedState);
 
   chatPanel.appendChild(msgsArea);
@@ -2648,9 +2697,19 @@ function buildUI(): void {
   recordSection.appendChild(recordHeader);
   const recordBar = el('div', { class: 'sp-wf-record-bar' });
   const recordBtn = el('button', { class: 'sp-wf-record-btn', id: 'sp-wf-record-btn' });
-  recordBtn.innerHTML = '<span class="sp-wf-record-dot"></span> Record';
   const actionCounter = el('div', { class: 'sp-wf-action-counter', id: 'sp-wf-action-counter' });
   actionCounter.style.display = 'none';
+  function setRecordBtnLabel(label: string): void {
+    const dot = document.createElement('span');
+    dot.className = 'sp-wf-record-dot';
+    recordBtn.replaceChildren(dot, ` ${label}`);
+  }
+  function setActionCounterLabel(count: number): void {
+    const strong = document.createElement('strong');
+    strong.textContent = String(count);
+    actionCounter.replaceChildren(strong, ' actions recorded');
+  }
+  setRecordBtnLabel('Record');
   recordBar.appendChild(recordBtn);
   recordBar.appendChild(actionCounter);
   recordSection.appendChild(recordBar);
@@ -2680,9 +2739,7 @@ function buildUI(): void {
         (resp: { success?: boolean; actions?: unknown[] } | undefined) => {
           if (chrome.runtime.lastError || !resp?.success) return;
           recordingActionCount = resp.actions?.length ?? 0;
-          const counter = document.getElementById('sp-wf-action-counter');
-          if (counter)
-            counter.innerHTML = `<strong>${recordingActionCount}</strong> actions recorded`;
+          setActionCounterLabel(recordingActionCount);
         },
       );
     }, 1500);
@@ -2697,17 +2754,14 @@ function buildUI(): void {
     if (isRecording) {
       chrome.runtime.sendMessage({ type: 'STOP_RECORDING' }, () => {
         if (chrome.runtime.lastError) {
-          const origText = recordBtn.innerHTML;
-          recordBtn.innerHTML = '<span class="sp-wf-record-dot"></span> Error';
-          setTimeout(() => {
-            recordBtn.innerHTML = origText;
-          }, 1500);
+          setRecordBtnLabel('Error');
+          setTimeout(() => setRecordBtnLabel('Stop'), 1500);
           return;
         }
         isRecording = false;
         stopRecordingPoll();
         recordBtn.classList.remove('recording');
-        recordBtn.innerHTML = '<span class="sp-wf-record-dot"></span> Record';
+        setRecordBtnLabel('Record');
         actionCounter.style.display = 'none';
         saveDialog.classList.add('open');
         saveNameInput.value = '';
@@ -2716,19 +2770,16 @@ function buildUI(): void {
     } else {
       chrome.runtime.sendMessage({ type: 'START_RECORDING' }, () => {
         if (chrome.runtime.lastError) {
-          const origText = recordBtn.innerHTML;
-          recordBtn.innerHTML = '<span class="sp-wf-record-dot"></span> Error';
-          setTimeout(() => {
-            recordBtn.innerHTML = origText;
-          }, 1500);
+          setRecordBtnLabel('Error');
+          setTimeout(() => setRecordBtnLabel('Record'), 1500);
           return;
         }
         isRecording = true;
         recordingActionCount = 0;
         recordBtn.classList.add('recording');
-        recordBtn.innerHTML = '<span class="sp-wf-record-dot"></span> Stop';
+        setRecordBtnLabel('Stop');
         actionCounter.style.display = '';
-        actionCounter.innerHTML = '<strong>0</strong> actions recorded';
+        setActionCounterLabel(0);
         saveDialog.classList.remove('open');
         startRecordingPoll();
       });
@@ -2787,8 +2838,15 @@ function buildUI(): void {
   const shortcutsSection = el('div', { class: 'sp-wf-section' });
   const shortcutsSectionHeader = el('div', { class: 'sp-wf-section-header' });
   const shortcutsTitle = el('div', { class: 'sp-wf-section-title' });
-  shortcutsTitle.innerHTML =
-    'Saved Shortcuts <span class="sp-wf-count-badge" id="sp-wf-shortcuts-count">0</span>';
+  shortcutsTitle.appendChild(document.createTextNode('Saved Shortcuts '));
+  shortcutsTitle.appendChild(
+    createElementWith({
+      tag: 'span',
+      className: 'sp-wf-count-badge',
+      id: 'sp-wf-shortcuts-count',
+      text: '0',
+    }),
+  );
   shortcutsSectionHeader.appendChild(shortcutsTitle);
   const createShortcutBtn = el(
     'button',
@@ -2798,8 +2856,11 @@ function buildUI(): void {
   shortcutsSectionHeader.appendChild(createShortcutBtn);
   shortcutsSection.appendChild(shortcutsSectionHeader);
   const wfShortcutsList = el('div', { class: 'sp-wf-shortcuts-list', id: 'sp-wf-shortcuts-list' });
-  wfShortcutsList.innerHTML =
-    '<div class="sp-wf-empty">Record your first workflow or create a prompt shortcut</div>';
+  setChild(wfShortcutsList, {
+    tag: 'div',
+    className: 'sp-wf-empty',
+    text: 'Record your first workflow or create a prompt shortcut',
+  });
   shortcutsSection.appendChild(wfShortcutsList);
   workflowsPanel.appendChild(shortcutsSection);
 
@@ -2933,8 +2994,15 @@ function buildUI(): void {
   const tasksSection = el('div', { class: 'sp-wf-section' });
   const tasksSectionHeader = el('div', { class: 'sp-wf-section-header' });
   const tasksTitle = el('div', { class: 'sp-wf-section-title' });
-  tasksTitle.innerHTML =
-    'Scheduled Tasks <span class="sp-wf-count-badge" id="sp-wf-tasks-count">0</span>';
+  tasksTitle.appendChild(document.createTextNode('Scheduled Tasks '));
+  tasksTitle.appendChild(
+    createElementWith({
+      tag: 'span',
+      className: 'sp-wf-count-badge',
+      id: 'sp-wf-tasks-count',
+      text: '0',
+    }),
+  );
   tasksSectionHeader.appendChild(tasksTitle);
   const newTaskBtn = el(
     'button',
@@ -2944,7 +3012,7 @@ function buildUI(): void {
   tasksSectionHeader.appendChild(newTaskBtn);
   tasksSection.appendChild(tasksSectionHeader);
   const wfTasksList = el('div', { class: 'sp-wf-tasks-list', id: 'sp-wf-tasks-list' });
-  wfTasksList.innerHTML = '<div class="sp-wf-empty">No scheduled tasks</div>';
+  setChild(wfTasksList, { tag: 'div', className: 'sp-wf-empty', text: 'No scheduled tasks' });
   tasksSection.appendChild(wfTasksList);
 
   const newTaskForm = el('div', { class: 'sp-wf-new-task-form', id: 'sp-wf-new-task-form' });
@@ -3085,7 +3153,7 @@ function buildUI(): void {
   // The toolbar slot is intentionally empty for context; the chip is built inside inputArea.
 
   const micBtn = el('button', { class: 'sp-tool-btn', id: 'sp-mic-btn', title: 'Voice input' });
-  micBtn.innerHTML = '🎤';
+  setText(micBtn, '🎤');
   toolbar.appendChild(micBtn);
 
   const groupBtn = el('button', {
@@ -3093,7 +3161,7 @@ function buildUI(): void {
     id: 'sp-group-btn',
     title: 'Add current tab to AGI Workforce group',
   });
-  groupBtn.innerHTML = '📂 Group';
+  setText(groupBtn, '📂 Group');
   let isGrouped = false;
   groupBtn.addEventListener('click', () => {
     const msgType = isGrouped ? 'REMOVE_TAB_FROM_GROUP' : 'ADD_TAB_TO_GROUP';
@@ -3102,7 +3170,7 @@ function buildUI(): void {
       (response: { success?: boolean; grouped?: boolean } | undefined) => {
         if (chrome.runtime.lastError || !response?.success) return;
         isGrouped = response.grouped ?? false;
-        groupBtn.innerHTML = isGrouped ? '📂 Ungroup' : '📂 Group';
+        setText(groupBtn, isGrouped ? '📂 Ungroup' : '📂 Group');
         groupBtn.classList.toggle('has-context', isGrouped);
       },
     );
@@ -3115,10 +3183,14 @@ function buildUI(): void {
     id: 'sp-shortcuts-btn',
     title: 'Saved shortcuts',
   });
-  shortcutsBtn.innerHTML = '⚡ Shortcuts';
+  setText(shortcutsBtn, '⚡ Shortcuts');
 
   const shortcutsDropdown = el('div', { id: 'sp-shortcuts-dropdown' });
-  shortcutsDropdown.innerHTML = '<div class="sp-shortcuts-empty">No saved shortcuts</div>';
+  setChild(shortcutsDropdown, {
+    tag: 'div',
+    className: 'sp-shortcuts-empty',
+    text: 'No saved shortcuts',
+  });
 
   shortcutsBtn.addEventListener('click', () => {
     const isOpen = shortcutsDropdown.classList.toggle('open');
@@ -3141,10 +3213,14 @@ function buildUI(): void {
     id: 'sp-tools-btn',
     title: 'WebMCP tools discovered on this page',
   });
-  toolsBtn.innerHTML = '\uD83D\uDD27 AI Tools (0)';
+  setText(toolsBtn, '\uD83D\uDD27 AI Tools (0)');
 
   const toolsDropdown = el('div', { id: 'sp-tools-dropdown' });
-  toolsDropdown.innerHTML = '<div class="sp-tools-empty">No tools discovered on this page</div>';
+  setChild(toolsDropdown, {
+    tag: 'div',
+    className: 'sp-tools-empty',
+    text: 'No tools discovered on this page',
+  });
 
   toolsBtn.addEventListener('click', () => {
     toolsDropdown.classList.toggle('open');
@@ -3183,7 +3259,7 @@ function buildUI(): void {
   });
 
   const sendBtn = el('button', { id: 'sp-send-btn', title: 'Send (Enter)' });
-  sendBtn.innerHTML = '↑';
+  setText(sendBtn, '↑');
   sendBtn.addEventListener('click', () => {
     const text = inputEl.value;
     inputEl.value = '';
@@ -3199,12 +3275,15 @@ function buildUI(): void {
     id: 'sp-attach-btn',
     title: 'Add attachment',
   });
-  attachBtn.innerHTML = '+';
+  setText(attachBtn, '+');
 
   const attachMenu = el('div', { id: 'sp-attach-menu' });
 
   const screenshotItem = el('div', { class: 'sp-attach-menu-item' });
-  screenshotItem.innerHTML = '<span class="sp-attach-icon">&#128247;</span>Take a screenshot';
+  screenshotItem.appendChild(
+    createElementWith({ tag: 'span', className: 'sp-attach-icon', text: '📷' }),
+  );
+  screenshotItem.appendChild(document.createTextNode('Take a screenshot'));
   screenshotItem.addEventListener('click', () => {
     attachMenu.classList.remove('open');
     chrome.runtime.sendMessage(
@@ -3218,7 +3297,8 @@ function buildUI(): void {
   });
 
   const fileItem = el('div', { class: 'sp-attach-menu-item' });
-  fileItem.innerHTML = '<span class="sp-attach-icon">&#128444;</span>Add an image';
+  fileItem.appendChild(createElementWith({ tag: 'span', className: 'sp-attach-icon', text: '🗄' }));
+  fileItem.appendChild(document.createTextNode('Add an image'));
   const fileInput = el('input', {
     type: 'file',
     accept: 'image/*',
@@ -3318,11 +3398,15 @@ function refreshConsoleLogs(): void {
       if (chrome.runtime.lastError || !response?.success) return;
       const entries = document.querySelector('.sp-console-entries');
       if (!entries) return;
-      entries.innerHTML = '';
+      clearChildren(entries);
       const logs = response.logs ?? [];
       if (logs.length === 0) {
-        entries.innerHTML =
-          '<div style="padding:10px 8px;color:#475569;font-size:11px;text-align:center">No console logs captured</div>';
+        const noLogs = createElementWith({ tag: 'div', text: 'No console logs captured' });
+        noLogs.style.padding = '10px 8px';
+        noLogs.style.color = '#475569';
+        noLogs.style.fontSize = '11px';
+        noLogs.style.textAlign = 'center';
+        entries.appendChild(noLogs);
         return;
       }
       for (const log of logs) {
@@ -3356,10 +3440,14 @@ function refreshShortcuts(): void {
       if (chrome.runtime.lastError || !response?.success) return;
       const dropdown = document.getElementById('sp-shortcuts-dropdown');
       if (!dropdown) return;
-      dropdown.innerHTML = '';
+      clearChildren(dropdown);
       const shortcuts = response.shortcuts ?? [];
       if (shortcuts.length === 0) {
-        dropdown.innerHTML = '<div class="sp-shortcuts-empty">No saved shortcuts</div>';
+        setChild(dropdown, {
+          tag: 'div',
+          className: 'sp-shortcuts-empty',
+          text: 'No saved shortcuts',
+        });
       } else {
         for (const sc of shortcuts) {
           const item = el('div', { class: 'sp-shortcut-item' });
@@ -3447,12 +3535,15 @@ function refreshWorkflowsShortcuts(): void {
       const list = document.getElementById('sp-wf-shortcuts-list');
       const countBadge = document.getElementById('sp-wf-shortcuts-count');
       if (!list) return;
-      list.innerHTML = '';
+      clearChildren(list);
       const shortcuts = response.shortcuts ?? [];
       if (countBadge) countBadge.textContent = String(shortcuts.length);
       if (shortcuts.length === 0) {
-        list.innerHTML =
-          '<div class="sp-wf-empty">Record your first workflow or create a prompt shortcut</div>';
+        setChild(list, {
+          tag: 'div',
+          className: 'sp-wf-empty',
+          text: 'Record your first workflow or create a prompt shortcut',
+        });
         return;
       }
       for (const sc of shortcuts) {
@@ -3522,11 +3613,11 @@ function refreshWorkflowsTasks(): void {
       const list = document.getElementById('sp-wf-tasks-list');
       const countBadge = document.getElementById('sp-wf-tasks-count');
       if (!list) return;
-      list.innerHTML = '';
+      clearChildren(list);
       const tasks = response.tasks ?? [];
       if (countBadge) countBadge.textContent = String(tasks.length);
       if (tasks.length === 0) {
-        list.innerHTML = '<div class="sp-wf-empty">No scheduled tasks</div>';
+        setChild(list, { tag: 'div', className: 'sp-wf-empty', text: 'No scheduled tasks' });
         return;
       }
       for (const task of tasks) {
