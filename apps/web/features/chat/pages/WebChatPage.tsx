@@ -7,7 +7,7 @@ import { useConversations } from '@/lib/hooks/useConversations';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@shared/stores/model-store';
 import { ChatSidebar } from '../components/Sidebar/ChatSidebar';
-import { MessageListNew } from '../components/messages/MessageListNew';
+import { ChatMessageList } from '../components/messages/ChatMessageList';
 import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
 import type { Message } from '@/stores/chatStore';
 import type { ChatMessage } from '../stores/chat-store';
@@ -266,7 +266,7 @@ export default function WebChatPage() {
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Message list */}
         <div className="flex-1 overflow-hidden">
-          <MessageListNew
+          <ChatMessageList
             messages={chatMessages}
             isLoading={isLoading && !isStreaming}
             onRegenerate={handleRegenerateMessage}
