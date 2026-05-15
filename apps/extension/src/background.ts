@@ -2771,7 +2771,7 @@ function isValidMessage(message: unknown): message is ExtensionMessage {
 initialize();
 
 // Handle service worker keep-alive and periodic connection checks
-chrome.alarms.create('keep-alive', { periodInMinutes: 0.5 }, () => {
+chrome.alarms.create('keep-alive', { periodInMinutes: 1.0 }, () => {
   if (chrome.runtime.lastError) {
     logger.warn('Failed to create keep-alive alarm', chrome.runtime.lastError.message);
   }

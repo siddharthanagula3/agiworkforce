@@ -312,13 +312,8 @@ export interface JobApplicationProfile {
 
 export interface JobAutofillOptions {
   platform?: 'auto' | 'greenhouse' | 'workday' | 'generic';
+  /** When true, a browser confirm() dialog is shown before submitting. */
   autoSubmit?: boolean;
-  /**
-   * Must be set to `true` alongside `autoSubmit: true` to actually trigger
-   * automatic form submission. Without this flag the autofill pipeline runs
-   * in fill-only mode even when `autoSubmit` is set (EXT-AUTOSUBMIT-NO-CONFIRM).
-   */
-  autoSubmitConfirmed?: boolean;
   allowSubmitWithMissingRequired?: boolean;
   includeOptionalFields?: boolean;
   delayMs?: number;

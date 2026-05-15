@@ -331,8 +331,9 @@ export const AudioPlayer = React.memo(function AudioPlayer({
               className={cn(config.buttonSize, 'text-muted-foreground hover:text-foreground')}
               onClick={onReRecord}
               title="Re-record"
+              aria-label="Re-record voice message"
             >
-              <RotateCcw className={config.iconSize} />
+              <RotateCcw className={config.iconSize} aria-hidden="true" />
             </Button>
           )}
 
@@ -343,8 +344,9 @@ export const AudioPlayer = React.memo(function AudioPlayer({
               className={cn(config.buttonSize, 'text-destructive hover:text-destructive')}
               onClick={onDiscard}
               title="Discard recording"
+              aria-label="Discard voice recording"
             >
-              <Trash2 className={config.iconSize} />
+              <Trash2 className={config.iconSize} aria-hidden="true" />
             </Button>
           )}
 
@@ -355,8 +357,9 @@ export const AudioPlayer = React.memo(function AudioPlayer({
               className={config.buttonSize}
               onClick={handleSend}
               title="Send voice message"
+              aria-label="Send voice message"
             >
-              <Send className={config.iconSize} />
+              <Send className={config.iconSize} aria-hidden="true" />
             </Button>
           )}
         </div>
