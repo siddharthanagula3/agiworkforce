@@ -1109,9 +1109,15 @@ export const UnifiedAgenticChat: React.FC<{
             enableTools: true,
             conversationMode,
             taskMetadata,
-            thinkingMode: useModelStore.getState().thinkingModeEnabled,
-            enableThinking: useModelStore.getState().thinkingModeEnabled,
-            thinkingBudget: useModelStore.getState().thinkingBudget ?? 0,
+            thinkingMode:
+              useModelStore.getState().perTurnAdaptiveThinking ||
+              useModelStore.getState().thinkingModeEnabled,
+            enableThinking:
+              useModelStore.getState().perTurnAdaptiveThinking ||
+              useModelStore.getState().thinkingModeEnabled,
+            thinkingBudget: useModelStore.getState().perTurnAdaptiveThinking
+              ? 0
+              : (useModelStore.getState().thinkingBudget ?? 0),
             temperature: useSettingsStore.getState().llmConfig?.temperature,
             maxOutputTokens: useSettingsStore.getState().llmConfig?.maxTokens,
             isExplicitModelSelection,
@@ -1139,6 +1145,9 @@ export const UnifiedAgenticChat: React.FC<{
             incognito: isIncognito ? true : undefined,
           },
         });
+
+        // Reset per-turn adaptive thinking after each send
+        useModelStore.getState().clearPerTurnAdaptiveThinking();
 
         // Link backend ID to frontend UUID (if conversation was created)
         if (response.conversation?.id && activeConversationId) {

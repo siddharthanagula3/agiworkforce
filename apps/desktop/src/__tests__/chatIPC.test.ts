@@ -6,6 +6,8 @@
  *   - thinkingBudget > 0 + thinkingModeEnabled → Budget thinking
  *   - thinkingModeEnabled without budget (budget == 0) → Enabled(true) / Adaptive
  *   - thinkingBudget = 0 + thinkingModeEnabled = false → thinking disabled
+ *   - perTurnAdaptiveThinking = true → thinkingMode/enableThinking true, budget 0
+ *   - perTurnAdaptiveThinking resets to false after clearPerTurnAdaptiveThinking
  *
  * We test the store state directly (the shape that index.tsx reads via getState())
  * and the IPC payload construction logic.
@@ -31,9 +33,9 @@ interface ThinkingPayload {
 function buildThinkingPayload(): ThinkingPayload {
   const state = useModelStore.getState();
   return {
-    thinkingMode: state.thinkingModeEnabled,
-    enableThinking: state.thinkingModeEnabled,
-    thinkingBudget: state.thinkingBudget ?? 0,
+    thinkingMode: state.perTurnAdaptiveThinking || state.thinkingModeEnabled,
+    enableThinking: state.perTurnAdaptiveThinking || state.thinkingModeEnabled,
+    thinkingBudget: state.perTurnAdaptiveThinking ? 0 : (state.thinkingBudget ?? 0),
   };
 }
 
@@ -47,6 +49,7 @@ describe('Thinking budget IPC wiring', () => {
     useModelStore.setState({
       thinkingModeEnabled: false,
       thinkingBudget: 0,
+      perTurnAdaptiveThinking: false,
     });
   });
 
@@ -124,5 +127,64 @@ describe('Thinking budget IPC wiring', () => {
     const state = useModelStore.getState();
     expect(state.thinkingBudget).toBe(0);
     expect(state.thinkingModeEnabled).toBe(false);
+  });
+});
+
+describe('Per-turn adaptive thinking IPC wiring', () => {
+  beforeEach(() => {
+    useModelStore.setState({
+      thinkingModeEnabled: false,
+      thinkingBudget: 0,
+      perTurnAdaptiveThinking: false,
+    });
+  });
+
+  it('perTurnAdaptiveThinking ON → payload has thinkingMode true and budget 0', () => {
+    useModelStore.setState({ perTurnAdaptiveThinking: true });
+    const payload = buildThinkingPayload();
+
+    expect(payload.thinkingMode).toBe(true);
+    expect(payload.enableThinking).toBe(true);
+    expect(payload.thinkingBudget).toBe(0);
+  });
+
+  it('perTurnAdaptiveThinking overrides thinkingBudget from modelStore', () => {
+    useModelStore.setState({
+      perTurnAdaptiveThinking: true,
+      thinkingModeEnabled: true,
+      thinkingBudget: 8192,
+    });
+    const payload = buildThinkingPayload();
+
+    // Adaptive thinking forces budget to 0 regardless of stored budget
+    expect(payload.thinkingBudget).toBe(0);
+    expect(payload.thinkingMode).toBe(true);
+  });
+
+  it('togglePerTurnAdaptiveThinking flips the flag', () => {
+    expect(useModelStore.getState().perTurnAdaptiveThinking).toBe(false);
+    useModelStore.getState().togglePerTurnAdaptiveThinking();
+    expect(useModelStore.getState().perTurnAdaptiveThinking).toBe(true);
+    useModelStore.getState().togglePerTurnAdaptiveThinking();
+    expect(useModelStore.getState().perTurnAdaptiveThinking).toBe(false);
+  });
+
+  it('clearPerTurnAdaptiveThinking resets flag to false after send', () => {
+    useModelStore.setState({ perTurnAdaptiveThinking: true });
+    useModelStore.getState().clearPerTurnAdaptiveThinking();
+    expect(useModelStore.getState().perTurnAdaptiveThinking).toBe(false);
+  });
+
+  it('perTurnAdaptiveThinking OFF → payload matches normal thinkingModeEnabled', () => {
+    useModelStore.setState({
+      perTurnAdaptiveThinking: false,
+      thinkingModeEnabled: false,
+      thinkingBudget: 0,
+    });
+    const payload = buildThinkingPayload();
+
+    expect(payload.thinkingMode).toBe(false);
+    expect(payload.enableThinking).toBe(false);
+    expect(payload.thinkingBudget).toBe(0);
   });
 });
