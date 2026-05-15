@@ -4,6 +4,7 @@
 #[allow(dead_code, unused_imports)]
 mod color;
 mod cost_hud;
+pub(crate) mod icons;
 #[allow(dead_code, unused_imports)]
 mod shimmer;
 #[allow(dead_code, unused_imports)]

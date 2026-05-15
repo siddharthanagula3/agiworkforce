@@ -51,6 +51,20 @@ vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => mockSupabaseClient),
 }));
 
+// Route was migrated from direct service-role JWT verification to the
+// getAuthenticatedUserWithClient helper. Mock it to return a user shape that
+// matches what the rest of the test expects.
+vi.mock('@/lib/api-auth', () => ({
+  getAuthenticatedUser: vi.fn(async () => ({
+    id: 'user-123',
+    email: 'user@example.com',
+  })),
+  getAuthenticatedUserWithClient: vi.fn(async () => ({
+    user: { id: 'user-123', email: 'user@example.com' },
+    userDb: {},
+  })),
+}));
+
 // Mock services
 const mockGetSubscription = vi.fn();
 const mockCheckAvailable = vi.fn();
