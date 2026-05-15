@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* global console */
 /**
  * vendor-provider-icons.mjs
  *
