@@ -8,6 +8,8 @@
 
 Multi-provider, local-first AI agent platform. One Tauri desktop app, one Next.js web at agiworkforce.com/chat, one Expo mobile companion, one Rust CLI, plus VS Code and Chrome extensions — all wired into the same chat layer with **10+ Providers**, MCP, browser automation, and computer-use.
 
+> **Launch-readiness wave 1+2 complete** — 57 commits, all surfaces verified green (2026-05-15). All six surfaces (CLI / Desktop / Web / Mobile / Chrome ext / VS Code ext) are launch-ready. See [docs/design/design-spec-2026-05-15.md](docs/design/design-spec-2026-05-15.md) for the canonical UI spec the wave was driven from.
+>
 > **CLI v1.0 SHIPPED** (2026-05-03). Install: `brew install siddharthanagula3/tap/agiworkforce` or see [Quick start](#quick-start) below.
 >
 > **Foundation Sprint shipped** at tag [`v0.7.0-foundation`](https://github.com/siddharthanagula3/agiworkforce/releases/tag/v0.7.0-foundation) (2026-05-13): central state pattern, message-queue priority lane, `packages/llm-runtime` (retry + stream watchdog + error classifier), outbound-worker direction inversion (`worker_registrations` + `work_units` live in Supabase), HKDF dispatch-key rotation (`rotate_dispatch_keys` RPC live), Stripe webhook idempotency RPC live in prod. All four tiers (Hobby / Pro / **Pro+** / Max) wired in Stripe.
@@ -109,6 +111,7 @@ cargo run -p agiworkforce-cli -- exec "hello"
 - [docs/VISION.md](docs/VISION.md) — product vision (ONE chat layout, multi-provider)
 - [docs/ROADMAP.md](docs/ROADMAP.md) — live wave/sprint status
 - [docs/DESIGN.md](docs/DESIGN.md) — UI principles (Claude Desktop as north star)
+- [docs/design/design-spec-2026-05-15.md](docs/design/design-spec-2026-05-15.md) — canonical 2026-05-15 design spec (composer, sidebar, inline tool-call, icons) shipped across all 6 surfaces
 - [docs/PRICING.md](docs/PRICING.md) — tier model
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — cross-surface architecture
 - [apps/cli/ARCHITECTURE.md](apps/cli/ARCHITECTURE.md) — CLI deep-dive
