@@ -26,6 +26,10 @@ export class ContextItem extends vscode.TreeItem {
     this.tooltip = `${vscode.workspace.asRelativePath(filePath)} (${languageId}, ${sizeLabel})`;
     this.contextValue = isPinned ? 'pinnedFile' : 'autoFile';
     this.iconPath = new vscode.ThemeIcon(isPinned ? 'pinned' : isActive ? 'circle-filled' : 'file');
+    this.accessibilityInformation = {
+      label: `${path.basename(filePath)} — ${isPinned ? 'pinned' : isActive ? 'active' : 'context'} file`,
+      role: 'treeitem',
+    };
     this.command = {
       command: 'vscode.open',
       title: 'Open',
@@ -43,6 +47,10 @@ class ContextGroupItem extends vscode.TreeItem {
     super(label, vscode.TreeItemCollapsibleState.Expanded);
     this.contextValue = `group-${groupId}`;
     this.iconPath = new vscode.ThemeIcon(groupId === GROUP_PINNED ? 'pin' : 'search');
+    this.accessibilityInformation = {
+      label,
+      role: 'treeitem',
+    };
   }
 }
 
