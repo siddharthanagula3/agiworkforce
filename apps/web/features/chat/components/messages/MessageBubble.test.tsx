@@ -2,8 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MessageBubble, messageListVariants, messageBubbleVariants } from './MessageBubble';
 
-import React from 'react';
-
 // Inline stub for the dynamically-imported markdown renderer so tests don't
 // depend on next/dynamic async resolution.
 vi.mock('./MarkdownContent', () => ({
