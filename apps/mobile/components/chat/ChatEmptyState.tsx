@@ -1,51 +1,42 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Pressable } from 'react-native';
+import { View, Pressable, ScrollView } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import { Sparkles, Monitor, X } from 'lucide-react-native';
+import { Monitor, X, Code, PenLine, Search } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { ConversationStarters } from './ConversationStarters';
 import { storage } from '@/lib/mmkv';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/lib/theme';
 
 const MMKV_PAIRING_BANNER_KEY = 'dismissedDesktopPairingBanner';
 
-/**
- * Returns a time-aware greeting string.
- */
-function getGreeting(name?: string): string {
-  const hour = new Date().getHours();
-  let timeOfDay: string;
-  if (hour < 12) {
-    timeOfDay = 'morning';
-  } else if (hour < 17) {
-    timeOfDay = 'afternoon';
-  } else {
-    timeOfDay = 'evening';
-  }
-  const displayName = name?.trim() || '';
-  return displayName ? `Good ${timeOfDay}, ${displayName}` : `Good ${timeOfDay}`;
+interface PromptChip {
+  icon: React.ComponentType<{ size: number; color: string; strokeWidth?: number }>;
+  label: string;
+  prompt: string;
 }
+
+const PROMPT_CHIPS: PromptChip[] = [
+  { icon: Code, label: 'Code', prompt: 'Help me write a function that...' },
+  { icon: PenLine, label: 'Write', prompt: 'Write a professional email about...' },
+  { icon: Search, label: 'Research', prompt: 'Research and summarize the latest on...' },
+];
 
 interface ChatEmptyStateProps {
   /** Whether to show the desktop pairing banner (first launch). */
   showPairingBanner?: boolean;
   onPairDesktop?: () => void;
+  /** Called when a prompt chip is tapped — prefills the composer */
+  onSelectPrompt?: (prompt: string) => void;
 }
 
-/**
- * Minimal empty state matching the spec:
- * - AGI Workforce logo with subtle animation
- * - Time-aware greeting
- * - "How can I help you?" subtitle
- * - NO suggestion chips
- * - Dismissible desktop pairing banner on first launch
- */
-export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptyStateProps) {
+export function ChatEmptyState({
+  showPairingBanner,
+  onPairDesktop,
+  onSelectPrompt,
+}: ChatEmptyStateProps) {
   const nickname = useSettingsStore((s) => s.personalization.nickname);
   const fullName = useSettingsStore((s) => s.personalization.fullName);
   const displayName = nickname || fullName?.split(' ')[0] || '';
-  const greeting = getGreeting(displayName);
 
   const [bannerVisible, setBannerVisible] = useState(false);
 
@@ -61,8 +52,12 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
     setBannerVisible(false);
   }, []);
 
+  const headline = displayName ? `Hi, ${displayName}` : 'Ask anything';
+
   return (
-    <View className="flex-1 items-center justify-center px-8">
+    <View
+      style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}
+    >
       {/* Desktop pairing banner (first launch only) */}
       {bannerVisible && (
         <Animated.View
@@ -70,8 +65,8 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
           style={{
             position: 'absolute',
             top: 16,
-            left: 16,
-            right: 16,
+            left: 0,
+            right: 0,
             flexDirection: 'row',
             alignItems: 'center',
             backgroundColor: 'rgba(33, 128, 141, 0.12)',
@@ -108,33 +103,83 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
         </Animated.View>
       )}
 
-      {/* Logo with subtle entrance animation */}
+      {/* Display headline */}
       <Animated.View entering={FadeIn.duration(500)}>
-        <View
-          style={{ backgroundColor: 'rgba(33, 128, 141, 0.12)' }}
-          className="w-16 h-16 rounded-full items-center justify-center mb-6"
+        <Text
+          style={{
+            fontSize: 28,
+            fontWeight: '400',
+            color: colors.textPrimary,
+            textAlign: 'center',
+            marginBottom: 8,
+          }}
         >
-          <Sparkles size={32} color={colors.teal} />
-        </View>
+          {headline}
+        </Text>
       </Animated.View>
 
-      {/* Time-aware greeting */}
-      <Animated.View entering={FadeIn.duration(500).delay(150)}>
-        <Text className="text-white text-2xl font-semibold text-center mb-2">{greeting}</Text>
-      </Animated.View>
+      {/* Subtitle — only shown when no display name, otherwise headline is already personal */}
+      {!displayName && (
+        <Animated.View entering={FadeIn.duration(500).delay(150)}>
+          <Text
+            style={{
+              fontSize: 15,
+              color: colors.textMuted,
+              textAlign: 'center',
+              marginBottom: 0,
+            }}
+          >
+            How can I help you?
+          </Text>
+        </Animated.View>
+      )}
 
-      {/* Subtitle */}
-      <Animated.View entering={FadeIn.duration(500).delay(300)}>
-        <Text className="text-white/40 text-base text-center">How can I help you?</Text>
-      </Animated.View>
-
-      {/* Conversation starters grid */}
+      {/* Horizontal prompt chips — 3 stateless one-tap shortcuts, no header label */}
       <Animated.View
-        entering={FadeIn.duration(500).delay(450)}
+        entering={FadeIn.duration(500).delay(300)}
         style={{ marginTop: 32, width: '100%' }}
       >
-        <ConversationStarters title="Start a conversation" />
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}
+        >
+          {PROMPT_CHIPS.map((chip) => (
+            <PromptChipButton key={chip.label} chip={chip} onPress={onSelectPrompt} />
+          ))}
+        </ScrollView>
       </Animated.View>
     </View>
+  );
+}
+
+interface PromptChipButtonProps {
+  chip: PromptChip;
+  onPress?: (prompt: string) => void;
+}
+
+function PromptChipButton({ chip, onPress }: PromptChipButtonProps) {
+  const IconComponent = chip.icon;
+  return (
+    <Pressable
+      onPress={() => onPress?.(chip.prompt)}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        height: 34,
+        paddingHorizontal: 12,
+        borderWidth: 1,
+        borderColor: pressed ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.1)',
+        borderRadius: 999,
+        backgroundColor: pressed ? colors.surfaceHover : 'transparent',
+      })}
+      accessibilityLabel={`${chip.label} prompt`}
+      accessibilityRole="button"
+      accessibilityHint={`Pre-fills: ${chip.prompt}`}
+    >
+      <IconComponent size={14} color={colors.textSecondary} strokeWidth={1.75} />
+      <Text style={{ fontSize: 13, color: colors.textSecondary }}>{chip.label}</Text>
+    </Pressable>
   );
 }
