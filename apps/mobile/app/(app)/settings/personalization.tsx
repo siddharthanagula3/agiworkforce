@@ -172,7 +172,7 @@ function ThemeSegmentedControl({
         })}
       </View>
       <Text className="text-[11px] leading-4" style={{ color: c.textMuted }}>
-        Light mode is coming soon — preference is saved but UI is currently dark only.
+        System follows your device appearance setting.
       </Text>
     </View>
   );
