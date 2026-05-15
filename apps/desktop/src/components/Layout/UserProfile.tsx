@@ -127,10 +127,18 @@ export const UserProfile: React.FC<UserProfileProps> = ({ collapsed = false }) =
           <div className="border-b border-[hsl(var(--border))] py-2">
             {/* Appearance toggle */}
             <div className="flex items-center justify-between px-4 py-2">
-              <span className="text-xs text-[hsl(var(--muted-foreground))]">Appearance</span>
-              <div className="flex rounded-lg bg-[hsl(var(--muted))] p-0.5">
+              <span id="appearance-label" className="text-xs text-[hsl(var(--muted-foreground))]">
+                Appearance
+              </span>
+              <div
+                className="flex rounded-lg bg-[hsl(var(--muted))] p-0.5"
+                role="radiogroup"
+                aria-labelledby="appearance-label"
+              >
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={theme === 'light'}
                   onClick={() => handleThemeChange('light')}
                   className={cn(
                     'px-2 py-1 rounded-md transition-colors',
@@ -139,11 +147,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({ collapsed = false }) =
                       : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]',
                   )}
                   title="Light"
+                  aria-label="Light theme"
                 >
-                  <Sun className="h-3.5 w-3.5" />
+                  <Sun className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={theme === 'dark'}
                   onClick={() => handleThemeChange('dark')}
                   className={cn(
                     'px-2 py-1 rounded-md transition-colors',
@@ -152,11 +163,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({ collapsed = false }) =
                       : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]',
                   )}
                   title="Dark"
+                  aria-label="Dark theme"
                 >
-                  <Moon className="h-3.5 w-3.5" />
+                  <Moon className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={theme === 'system'}
                   onClick={() => handleThemeChange('system')}
                   className={cn(
                     'px-2 py-1 rounded-md transition-colors',
@@ -165,8 +179,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({ collapsed = false }) =
                       : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]',
                   )}
                   title="System"
+                  aria-label="System theme"
                 >
-                  <Monitor className="h-3.5 w-3.5" />
+                  <Monitor className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
               </div>
             </div>

@@ -286,8 +286,9 @@ function McpServersSection() {
                 onClick={() => void handleRemove(name)}
                 className="shrink-0 p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                 title="Remove server"
+                aria-label={`Remove MCP server ${name}`}
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             </div>
           ))}

@@ -562,7 +562,10 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       <Dialog open={open} onOpenChange={handleDialogOpenChange}>
         <DialogContent className="max-w-5xl w-full p-0 overflow-hidden bg-background">
           <div className="flex h-[85vh]">
-            <div className="w-52 border-r border-border bg-muted py-4 px-2 space-y-1 shrink-0 overflow-y-auto">
+            <nav
+              className="w-52 border-r border-border bg-muted py-4 px-2 space-y-1 shrink-0 overflow-y-auto"
+              aria-label="Settings sections"
+            >
               <DialogHeader className="px-3 pb-4">
                 <DialogTitle className="text-lg font-bold">Settings</DialogTitle>
                 <DialogDescription className="text-xs">
@@ -576,22 +579,26 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                   type="button"
                   onClick={() => setActiveTab(item.key)}
                   disabled={isBusy}
-                  className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors ${
+                  aria-current={activeTab === item.key ? 'page' : undefined}
+                  className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                     activeTab === item.key
                       ? 'bg-background text-foreground font-medium'
                       : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
                   } ${isBusy ? 'opacity-60 cursor-not-allowed' : ''}`}
                 >
-                  <item.icon className="h-4 w-4 shrink-0" />
+                  <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                   <span className="truncate flex-1 text-left">{item.label}</span>
                   {item.key === 'connectors' && connectedConnectorCount > 0 && (
-                    <span className="ml-auto shrink-0 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-green-500/15 px-1.5 text-[10px] font-semibold text-green-500">
+                    <span
+                      className="ml-auto shrink-0 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-green-500/15 px-1.5 text-[10px] font-semibold text-green-500"
+                      aria-label={`${connectedConnectorCount} connected`}
+                    >
                       {connectedConnectorCount}
                     </span>
                   )}
                 </button>
               ))}
-            </div>
+            </nav>
 
             <div className="flex-1 flex flex-col min-w-0">
               <div
