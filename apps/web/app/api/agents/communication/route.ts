@@ -1,16 +1,14 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
 
 /**
  * Agent Communication API
@@ -43,7 +41,9 @@ async function handleGetCommunication(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-bound client: agent_messages + agent_delegations are user-scoped tables.
+  // The .eq('user_id', ...) filters remain as defense-in-depth; RLS is the boundary.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
 
   const url = new URL(request.url);
   const agentId = url.searchParams.get('agentId');
@@ -52,10 +52,6 @@ async function handleGetCommunication(request: NextRequest) {
   if (!agentId) {
     throw createError.validation('agentId query parameter is required');
   }
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   if (type === 'delegations') {
     // Fetch delegations where this agent is the delegate
@@ -145,7 +141,9 @@ async function handleSendMessage(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-bound client: agent_messages.user_id RLS policy ensures only the owner
+  // can insert/read their own rows.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
 
   let body: unknown;
   try {
@@ -160,10 +158,6 @@ async function handleSendMessage(request: NextRequest) {
   }
 
   const { from, to, content, priority, taskId, messageType } = validationResult.data;
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   const { data, error } = await supabase
     .from('agent_messages')

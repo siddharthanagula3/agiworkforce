@@ -1,15 +1,13 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
 
 /**
  * Agent Delegation Response API
@@ -33,7 +31,9 @@ async function handleRespondToDelegation(request: NextRequest, context: RouteCon
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-bound client: agent_delegations.user_id RLS policy enforces tenant
+  // isolation; the .eq('user_id', ...) filter remains as defense-in-depth.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
   const { id } = await context.params;
 
   let body: unknown;
@@ -49,10 +49,6 @@ async function handleRespondToDelegation(request: NextRequest, context: RouteCon
   }
 
   const { response, accepted } = validationResult.data;
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   const newStatus = accepted ? 'accepted' : 'rejected';
 
