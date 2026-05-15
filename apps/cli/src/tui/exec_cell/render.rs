@@ -9,6 +9,8 @@ use crate::render::highlight::highlight_bash_to_lines;
 use crate::render::line_utils::prefix_lines;
 use crate::render::line_utils::push_owned_lines;
 use crate::shimmer::shimmer_spans;
+use crate::tui::icons;
+use crate::tui::icons::ToolIcon;
 use crate::wrapping::RtOptions;
 use crate::wrapping::adaptive_wrap_line;
 use crate::wrapping::adaptive_wrap_lines;
@@ -294,7 +296,8 @@ impl ExecCell {
                 .iter()
                 .all(|parsed| matches!(parsed, ParsedCommand::Read { .. }));
 
-            let call_lines: Vec<(&str, Vec<Span<'static>>)> = if reads_only {
+            // icon + label pairs per design-spec §4 / §4.6
+            let call_lines: Vec<(&'static str, &str, Vec<Span<'static>>)> = if reads_only {
                 let names = call
                     .parsed
                     .iter()
@@ -304,6 +307,7 @@ impl ExecCell {
                     })
                     .unique();
                 vec![(
+                    icons::glyph(ToolIcon::FileText),
                     "Read",
                     Itertools::intersperse(names.into_iter().map(Into::into), ", ".dim()).collect(),
                 )]
@@ -312,10 +316,18 @@ impl ExecCell {
                 for parsed in &call.parsed {
                     match parsed {
                         ParsedCommand::Read { name, .. } => {
-                            lines.push(("Read", vec![name.clone().into()]));
+                            lines.push((
+                                icons::glyph(ToolIcon::FileText),
+                                "Read",
+                                vec![name.clone().into()],
+                            ));
                         }
                         ParsedCommand::ListFiles { cmd, path } => {
-                            lines.push(("List", vec![path.clone().unwrap_or(cmd.clone()).into()]));
+                            lines.push((
+                                icons::glyph(ToolIcon::Folder),
+                                "List",
+                                vec![path.clone().unwrap_or(cmd.clone()).into()],
+                            ));
                         }
                         ParsedCommand::Search { cmd, query, path } => {
                             let spans = match (query, path) {
@@ -325,19 +337,28 @@ impl ExecCell {
                                 (Some(q), None) => vec![q.clone().into()],
                                 _ => vec![cmd.clone().into()],
                             };
-                            lines.push(("Search", spans));
+                            lines.push((icons::glyph(ToolIcon::Search), "Search", spans));
                         }
                         ParsedCommand::Unknown { cmd } => {
-                            lines.push(("Run", vec![cmd.clone().into()]));
+                            lines.push((
+                                icons::glyph(ToolIcon::Terminal),
+                                "Run",
+                                vec![cmd.clone().into()],
+                            ));
                         }
                     }
                 }
                 lines
             };
 
-            for (title, line) in call_lines {
+            for (icon, title, line) in call_lines {
                 let line = Line::from(line);
-                let initial_indent = Line::from(vec![title.cyan(), " ".into()]);
+                let initial_indent = Line::from(vec![
+                    icon.dim(),
+                    " ".into(),
+                    title.cyan(),
+                    " ".into(),
+                ]);
                 let subsequent_indent = " ".repeat(initial_indent.width()).into();
                 let wrapped = adaptive_wrap_line(
                     &line,
@@ -365,6 +386,8 @@ impl ExecCell {
             None => spinner(call.start_time, self.animations_enabled()),
         };
         let is_interaction = call.is_unified_exec_interaction();
+        // Leading icon: Terminal glyph per design-spec §4.6
+        let tool_icon = Span::from(icons::glyph(ToolIcon::Terminal)).dim();
         let title = if is_interaction {
             ""
         } else if self.is_active() {
@@ -378,7 +401,14 @@ impl ExecCell {
         let mut header_line = if is_interaction {
             Line::from(vec![bullet.clone(), " ".into()])
         } else {
-            Line::from(vec![bullet.clone(), " ".into(), title.bold(), " ".into()])
+            Line::from(vec![
+                tool_icon,
+                " ".into(),
+                bullet.clone(),
+                " ".into(),
+                title.bold(),
+                " ".into(),
+            ])
         };
         let header_prefix_width = header_line.width();
 
