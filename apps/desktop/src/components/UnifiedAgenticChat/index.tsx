@@ -11,7 +11,7 @@
  */
 import { isTauri } from '../../lib/tauri-mock';
 import { invoke as ipcInvoke } from '../../utils/ipc';
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { EyeOff, Loader2 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -47,16 +47,14 @@ import {
 import { useBillingUsageStore } from '../../stores/billingUsage';
 import { useModelStore } from '../../stores/modelStore';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { useUnifiedChatStore, type SidecarMode, uuidToDbId } from '../../stores/unifiedChatStore';
+import { useUnifiedChatStore, uuidToDbId } from '../../stores/unifiedChatStore';
 import {
   useChatStore,
   selectAgenticLoopStatus,
   selectPendingMessages,
-  selectTokenUsage,
 } from '../../stores/chat/chatStore';
 import type { PendingUserMessage } from '../../stores/chat/types';
 import { useBillingStore } from '../../stores/auth';
-import { selectIsSimpleMode, useSimpleModeStore } from '../../stores/ui';
 import { useCustomInstructionsStore } from '../../stores/customInstructionsStore';
 import { useMemoryStore, buildMemoryContext } from '../../stores/memoryStore';
 import { readMemoryPanelSettings } from '../Memory/MemoryPanel';
@@ -120,13 +118,14 @@ import { ConnectorDiscoveryBar } from './ConnectorDiscoveryBar';
 import { BrandedGreeting } from './BrandedGreeting';
 import { QuickStartPills } from './QuickStartPills';
 import { ArtifactsView } from './ArtifactsView';
-import { AgentStepTimeline, type AgentStep } from './AgentStepTimeline';
+import { AgentStepTimeline } from './AgentStepTimeline';
 import { TokenCounter } from './TokenCounter';
 import { DragDropOverlay } from './DragDropOverlay';
 import { CouncilView } from './CouncilView';
 // import { ChatInputToolbar } from './ChatInputToolbar';
-import { BriefStatus, type BriefStatusState } from './BriefStatus';
-import { usePromptSuggestions } from '../../hooks/usePromptSuggestions';
+import { BriefStatus } from './BriefStatus';
+import { useChatSidebar } from './hooks/useChatSidebar';
+import { useChatMessages } from './hooks/useChatMessages';
 import {
   executeTerminalCommand,
   executeBrowserCommand,
@@ -308,7 +307,6 @@ export const UnifiedAgenticChat: React.FC<{
   // Using useShallow for object selections prevents unnecessary re-renders
   const {
     setSidecarOpen,
-    openSidecar: openSidecarStore,
     addMessage,
     updateMessage,
     setIsLoading,
@@ -320,7 +318,6 @@ export const UnifiedAgenticChat: React.FC<{
   } = useUnifiedChatStore(
     useShallow((state) => ({
       setSidecarOpen: state.setSidecarOpen,
-      openSidecar: state.openSidecar,
       addMessage: state.addMessage,
       updateMessage: state.updateMessage,
       setIsLoading: state.setIsLoading,
@@ -1356,78 +1353,23 @@ export const UnifiedAgenticChat: React.FC<{
     return () => window.removeEventListener(NEW_CHAT_ABORT_EVENT, handleNewConversation);
   }, [clearQueuedStreamUpdates, setIsLoading, setStreamingMessage, updateMessage]);
 
-  const openSidecar = (panel: SidecarMode, payload?: Record<string, unknown>) => {
-    openSidecarStore(panel, payload?.['contextId'] as string | undefined, payload);
-  };
+  // ── Extracted hooks ─────────────────────────────────────────────────────
 
-  // ── Wired component state ───────────────────────────────────────────────
+  const { artifactsPanelOpen, setArtifactsPanelOpen, councilOpen, setCouncilOpen, openSidecar } =
+    useChatSidebar();
 
-  // TokenCounter: read live token usage from chat store
-  const tokenUsage = useChatStore(selectTokenUsage);
-  const showTokenCounter = useSettingsStore((s) => s.chatPreferences.compactMode !== true);
-
-  // PromptSuggestionsDropdown: surface suggestions when input is non-empty
-  const draftContent = useUnifiedChatStore((s) => s.draftContent);
-  const messages = useChatStore((s) => s.messages);
-  const promptSuggestions = usePromptSuggestions(draftContent);
-  const [suggestionIndex, setSuggestionIndex] = useState(0);
-  const isEmptyConversation = messages.length === 0;
-  const showPromptSuggestions =
-    isEmptyConversation && promptSuggestions.length > 0 && draftContent.length >= 3;
-  const isSimpleMode = useSimpleModeStore(selectIsSimpleMode);
-  const showEmptyStateUI = isEmptyConversation && !isSimpleMode;
-
-  // ArtifactsView: toggleable side panel
-  const [artifactsPanelOpen, setArtifactsPanelOpen] = useState(false);
-
-  // AgentStepTimeline: derive steps from actionTrail
-  const actionTrail = useUnifiedChatStore((s) => s.actionTrail);
-  const agenticLoopStatus = useChatStore(selectAgenticLoopStatus);
-  const agentSteps: AgentStep[] = actionTrail.map((entry) => ({
-    id: entry.id,
-    agentType:
-      entry.type === 'thinking'
-        ? 'planner'
-        : entry.type === 'coding'
-          ? 'executor'
-          : entry.type === 'searching'
-            ? 'executor'
-            : entry.type === 'running'
-              ? 'executor'
-              : entry.type === 'completed'
-                ? 'reviewer'
-                : entry.type === 'error'
-                  ? 'executor'
-                  : 'coordinator',
-    label: entry.message,
-    status:
-      entry.type === 'completed'
-        ? 'complete'
-        : entry.type === 'error'
-          ? 'error'
-          : entry.type === 'running' || entry.type === 'searching' || entry.type === 'coding'
-            ? 'running'
-            : 'pending',
-    startedAt: entry.timestamp instanceof Date ? entry.timestamp.getTime() : undefined,
-    completedAt:
-      entry.type === 'completed' && entry.timestamp instanceof Date
-        ? entry.timestamp.getTime()
-        : undefined,
-    details: entry.metadata?.['details'] as string | undefined,
-  }));
-
-  // CouncilView: multi-model council panel
-  const [councilOpen, setCouncilOpen] = useState(false);
-
-  // BriefStatus: derive from action trail
-  const latestAction = actionTrail.length > 0 ? actionTrail[actionTrail.length - 1] : null;
-  const briefStatusState: BriefStatusState = latestAction
-    ? {
-        message: latestAction.message,
-        isComplete: latestAction.type === 'completed',
-        isError: latestAction.type === 'error',
-      }
-    : { message: null, isComplete: false, isError: false };
+  const {
+    tokenUsage,
+    showTokenCounter,
+    agenticLoopStatus,
+    agentSteps,
+    briefStatusState,
+    showEmptyStateUI,
+    promptSuggestions,
+    showPromptSuggestions,
+    suggestionIndex,
+    setSuggestionIndex,
+  } = useChatMessages();
 
   // DragDropOverlay: handle files dropped onto the chat
   const handleDragDropFiles = useCallback((files: File[]) => {
