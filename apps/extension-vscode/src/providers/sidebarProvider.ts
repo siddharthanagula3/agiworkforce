@@ -101,7 +101,7 @@ interface UsageMeterWebviewPayload {
 
 // ─── HTML template ────────────────────────────────────────────────────────────
 
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
@@ -117,7 +117,7 @@ function escapeHtml(value: string): string {
  *   - Accent: #21808d (teal)
  *   - Send button: #da7756 (terra cotta)
  */
-function getWebviewContent(
+export function getWebviewContent(
   webview: vscode.Webview,
   extensionUri: vscode.Uri,
   nonce: string,
@@ -1253,7 +1253,7 @@ function getWebviewContent(
 
 // ─── Nonce generator ──────────────────────────────────────────────────────────
 
-function getNonce(): string {
+export function getNonce(): string {
   // SECURITY: must be cryptographically random — this nonce is the sole token
   // allowlisted in the webview CSP `script-src 'nonce-${nonce}'`. Math.random()
   // is a deterministic PRNG seeded at process start; an attacker who can run

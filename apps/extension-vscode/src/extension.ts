@@ -49,6 +49,7 @@ import {
   type GroupedQuickPickItem,
 } from './services/modelConstants';
 import { ContextPanelProvider, setContextPanelInstance } from './providers/contextPanelProvider';
+import { ChatEditorPanel } from './providers/chatEditorPanel';
 import { DiffDecorationProvider } from './providers/diffDecorationProvider';
 import { showOriginalContext, getPatchOutputChannel } from './services/patchEngine';
 import { initCheckpointManager, getCheckpointManager } from './services/checkpointManager';
@@ -366,6 +367,11 @@ export function activate(context: vscode.ExtensionContext): void {
           await vscode.commands.executeCommand('agi-workforce.sidebar.focus');
         }
       }
+    }),
+
+    // ── agi-workforce.openChatInEditor ───────────────────────────────────────
+    vscode.commands.registerCommand('agi-workforce.openChatInEditor', () => {
+      ChatEditorPanel.createOrShow(context.extensionUri, context.secrets, context);
     }),
 
     // ── agi-workforce.agentMode ──────────────────────────────────────────────
