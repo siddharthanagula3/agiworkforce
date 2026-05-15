@@ -74,6 +74,42 @@ export const ArrowUp = svg(
   '<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>',
 );
 
+/** Clock — conversation history */
+export const Clock = svg('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>');
+
+/** Trash2 — clear conversation */
+export const Trash2 = svg(
+  '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>',
+);
+
+/** Monitor — console/debug panel */
+export const Monitor = svg(
+  '<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',
+);
+
+/** Mic — voice input */
+export const Mic = svg(
+  '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>',
+);
+
+/** Camera — screenshot/image attach */
+export const Camera = svg(
+  '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
+);
+
+/** FileImage — image file attach */
+export const FileImage = svg(
+  '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><circle cx="10" cy="13" r="2"/><path d="m20 17-1.09-1.09a2 2 0 0 0-2.82 0L10 22"/>',
+);
+
+/** Zap — workflow shortcut */
+export const Zap = svg('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>');
+
+/** FileEdit — summarize / notes action */
+export const FileEdit = svg(
+  '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>',
+);
+
 /**
  * Render a Lucide SVG string as an inline SVG element with the given size.
  * The element uses currentColor so it inherits its parent's color.
