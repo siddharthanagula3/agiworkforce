@@ -13,6 +13,49 @@ members = [
 exclude = []
 resolver = "2"
 
+# Workspace-wide clippy lints (codex-rs `Cargo.toml#[workspace.lints.clippy]`
+# pattern per MASTER_PLAN.md Appendix C). Conservative subset: omits
+# `unwrap_used` and `expect_used` (the codebase currently has 2,409 such
+# sites; flagging them all at once would block every build). Phase B+
+# fires reduce that number; we'll re-add those two rules when the count
+# is small enough to gate per-PR.
+#
+# Per-crate Cargo.toml files inherit via `[lints] workspace = true`.
+[workspace.lints.clippy]
+await_holding_invalid_type = "deny"
+await_holding_lock = "deny"
+identity_op = "deny"
+manual_clamp = "deny"
+manual_filter = "deny"
+manual_find = "deny"
+manual_flatten = "deny"
+manual_map = "deny"
+manual_memcpy = "deny"
+manual_non_exhaustive = "deny"
+manual_ok_or = "deny"
+manual_range_contains = "deny"
+manual_retain = "deny"
+manual_strip = "deny"
+manual_try_fold = "deny"
+manual_unwrap_or = "deny"
+needless_borrow = "deny"
+needless_borrowed_reference = "deny"
+needless_collect = "deny"
+needless_late_init = "deny"
+needless_option_as_deref = "deny"
+needless_question_mark = "deny"
+needless_update = "deny"
+redundant_clone = "deny"
+redundant_closure = "deny"
+redundant_closure_for_method_calls = "deny"
+redundant_static_lifetimes = "deny"
+trivially_copy_pass_by_ref = "deny"
+uninlined_format_args = "deny"
+unnecessary_filter_map = "deny"
+unnecessary_lazy_evaluations = "deny"
+unnecessary_sort_by = "deny"
+unnecessary_to_owned = "deny"
+
 [profile.release]
 codegen-units = 1
 lto = true
