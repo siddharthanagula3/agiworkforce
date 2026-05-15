@@ -93,6 +93,21 @@ vi.mock('@supabase/supabase-js', () => ({
 
 vi.mock('@/lib/supabase-server', () => ({
   getUserClient: vi.fn().mockReturnValue({}),
+  getServiceClient: vi.fn(() => mockSupabaseClient),
+}));
+
+// auth-gate now calls getAuthenticatedUserWithClient (api-auth.ts) which wraps
+// the service-role JWT-verify + getUserClient pattern previously inlined.
+// Mock it to return the same shape so the route handler keeps working.
+vi.mock('@/lib/api-auth', () => ({
+  getAuthenticatedUser: vi.fn(async () => ({
+    id: 'pro-user-id',
+    email: 'pro@example.com',
+  })),
+  getAuthenticatedUserWithClient: vi.fn(async () => ({
+    user: { id: 'pro-user-id', email: 'pro@example.com' },
+    userDb: {},
+  })),
 }));
 
 // Mock subscription + credit services
