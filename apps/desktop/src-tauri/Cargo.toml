@@ -30,11 +30,11 @@ await_holding_lock = "warn"
 [dependencies]
 agiworkforce-sandbox-policy = { path = "../../../crates/sandbox-policy" }
 
-tauri = { version = "2.10.3", features = ["tray-icon"] }
+tauri = { version = "2.11.0", features = ["tray-icon"] }
 tauri-plugin-shell = { version = "2.3.5", optional = true }
 tauri-plugin-process = "2.3.1"
-tauri-plugin-fs = "2.4.5"
-tauri-plugin-dialog = "2.6.0"
+tauri-plugin-fs = "2.5.1"
+tauri-plugin-dialog = "2.7.1"
 tauri-plugin-updater = { version = "2.10.0", optional = true }
 tauri-plugin-notification = "2.3.3"
 tauri-plugin-clipboard-manager = "2.3.2"
@@ -279,7 +279,7 @@ tauri-build = { version = "2.5.6", features = [] }
 tempfile = "3.10"
 mockall = "0.12"
 serial_test = "3.0"
-tauri = { version = "2.10.3", features = ["test"] }
+tauri = { version = "2.11.0", features = ["test"] }
 criterion = "0.5"
 proptest = "1.4"
 
