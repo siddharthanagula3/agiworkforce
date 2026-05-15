@@ -1,22 +1,33 @@
 /**
- * MCP Store
+ * MCP Store — thin barrel
  *
- * Manages Model Context Protocol (MCP) servers, tools, and configurations.
+ * The four domain sub-stores live in stores/mcp/:
+ *   mcpServersStore  — server registry, lifecycle, config, connectors, runtime
+ *   mcpToolsStore    — tool catalog, search, execution, history
+ *   mcpHealthStore   — health-check loop, per-server health, stats
+ *   mcpOAuthStore    — OAuth flow, extensions
  *
- * Updated to Zustand v5 best practices:
- * - Middleware composition: devtools(subscribeWithSelector(...))
- * - TypeScript: Using create<State>()() pattern for type inference
- * - Better devtools integration with store name
- * - subscribeWithSelector for granular subscriptions
- *
- * Note: This store doesn't need persistence since MCP state is ephemeral
- * and should be refreshed from the backend on each app start.
+ * useMcpStore is a facade that merges all four domains into the original
+ * flat interface so that existing consumers need no changes.
  */
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
-import { isTauri, invoke } from '../lib/tauri-mock';
+import { isTauri } from '../lib/tauri-mock';
 import { McpClient } from '../api/mcp';
-import type { ConnectorManifest } from '../api/mcp';
+
+// Re-export everything from the sub-stores so that any import of a named
+// export from 'stores/mcpStore' continues to resolve.
+export * from './mcp/mcpServersStore';
+export * from './mcp/mcpToolsStore';
+export * from './mcp/mcpHealthStore';
+export * from './mcp/mcpOAuthStore';
+
+// Re-export the absorbed sub-stores so that any import of their named
+// exports from 'stores/mcpStore' resolves (task-w58 placed them here).
+export * from './mcpAppStore';
+export * from './mcpbStore';
+export * from './mcpServerStore';
+
 import type {
   McpConfigLocation,
   McpExecutionHistoryEntry,
@@ -35,6 +46,7 @@ import type {
   McpToolInfo,
   McpServersConfig,
 } from '../types/mcp';
+import type { ConnectorManifest } from '../api/mcp';
 
 interface McpState {
   servers: McpServerInfo[];
@@ -52,13 +64,11 @@ interface McpState {
   connectedProviders: string[];
   isInitialized: boolean;
   activeOperations: number;
-  /** Derived from activeOperations > 0. Do not set directly. */
   isLoading: boolean;
   error: string | null;
   selectedServer: string | null;
   searchQuery: string;
 
-  // Core lifecycle methods
   initialize: () => Promise<void>;
   refreshServers: () => Promise<void>;
   refreshTools: () => Promise<void>;
@@ -69,38 +79,22 @@ interface McpState {
   refreshToolExecutionStats: () => Promise<void>;
   refreshRuntimeTelemetry: () => Promise<void>;
   upsertServerHealth: (health: McpServerHealth) => void;
-
-  // Server connection management
   connectServer: (name: string) => Promise<void>;
   disconnectServer: (name: string) => Promise<void>;
-
-  // Configuration management
   loadConfig: () => Promise<void>;
   updateConfig: (config: McpServersConfig) => Promise<void>;
   refreshConfigLocation: () => Promise<void>;
-
-  // Credential management
   storeCredential: (serverName: string, key: string, value: string) => Promise<void>;
   setCredential: (serverName: string, key: string, value: string) => Promise<void>;
   deleteCredential: (serverName: string, key: string) => Promise<void>;
-
-  // Server enable/disable
   enableServer: (name: string) => Promise<void>;
   disableServer: (name: string) => Promise<void>;
-
-  // Tool operations
   searchTools: (query: string) => Promise<void>;
   callTool: (toolId: string, args: Record<string, unknown>) => Promise<unknown>;
   refreshToolSchemas: () => Promise<void>;
-
-  // Registry/Install
   refreshRegistry: () => Promise<void>;
   installServer: (serverId: string) => Promise<void>;
-
-  // Server logs
   getServerLogs: (serverName: string, lines?: number) => Promise<string[]>;
-
-  // OAuth
   oauthStart: (provider: McpOAuthProvider) => Promise<McpOAuthStartResponse>;
   oauthCallback: (
     provider: McpOAuthProvider,
@@ -110,8 +104,6 @@ interface McpState {
   oauthStatus: (provider: McpOAuthProvider) => Promise<McpOAuthConnectionStatus>;
   oauthDisconnect: (provider: McpOAuthProvider) => Promise<void>;
   oauthRefresh: (provider: McpOAuthProvider) => Promise<McpOAuthTokenResponse>;
-
-  // Extensions
   refreshExtensions: () => Promise<void>;
   installExtension: (filePath: string) => Promise<McpExtensionInfo>;
   uninstallExtension: (extensionId: string) => Promise<void>;
@@ -120,13 +112,9 @@ interface McpState {
   validateExtensionPackage: (filePath: string) => Promise<McpExtensionPackageInfo>;
   startAllExtensions: () => Promise<void>;
   stopAllExtensions: () => Promise<void>;
-
-  // Connectors
   refreshConnectedProviders: () => Promise<void>;
   connectConnector: (connectorId: string) => Promise<void>;
   refreshConnectorManifests: () => Promise<void>;
-
-  // Runtime server management
   runtimeServerConfig: McpRuntimeServerConfig | null;
   runtimeServerStatus: boolean;
   runtimeServerTools: unknown[];
@@ -136,14 +124,8 @@ interface McpState {
   updateRuntimeServerConfig: (port?: number, enabledTools?: string[]) => Promise<void>;
   refreshRuntimeServerStatus: () => Promise<void>;
   refreshRuntimeServerTools: () => Promise<void>;
-
-  // Filesystem directories
   updateFilesystemDirectories: (directories: string[]) => Promise<void>;
-
-  // API key management
   saveApiKey: (provider: string, key: string) => Promise<void>;
-
-  // OAuth credentials management
   oauthSetCredentials: (
     provider: McpOAuthProvider,
     clientId: string,
@@ -152,33 +134,25 @@ interface McpState {
   oauthGetAllStatuses: () => Promise<Record<McpOAuthProvider, McpOAuthConnectionStatus>>;
   oauthNeedsRefresh: (provider: McpOAuthProvider) => Promise<boolean>;
   getOAuthProviders: () => McpOAuthProviderConfig[];
-
-  // Extension detail operations
   getExtension: (extensionId: string) => Promise<McpExtensionInfo>;
   selectExtensionPackage: () => Promise<string | null>;
   listExtensionsByStatus: (status: string) => Promise<McpExtensionInfo[]>;
   getExtensionsDirectory: () => Promise<string>;
   getExtensionConfig: (extensionId: string) => Promise<Record<string, unknown>>;
   setExtensionConfig: (extensionId: string, config: Record<string, unknown>) => Promise<void>;
-
-  // UI state management
   setSelectedServer: (name: string | null) => void;
   setSearchQuery: (query: string) => void;
   clearError: () => void;
-
-  // AUDIT-006-019: Cleanup function for logout
   resetOnLogout: () => void;
 }
 
 export const useMcpStore = create<McpState>()(
   devtools(
     subscribeWithSelector((set, get) => {
-      /** Increment the active-operation counter; derives isLoading. */
       function startOp(): void {
         const next = (get().activeOperations ?? 0) + 1;
         set({ activeOperations: next, isLoading: true });
       }
-      /** Decrement the active-operation counter; derives isLoading. */
       function endOp(): void {
         const next = Math.max(0, (get().activeOperations ?? 1) - 1);
         set({ activeOperations: next, isLoading: next > 0 });
@@ -385,7 +359,7 @@ export const useMcpStore = create<McpState>()(
             await get().refreshServers();
             await get().refreshTools();
             await get().refreshRuntimeTelemetry();
-            endOp(); // mcp/connectServer/success
+            endOp();
           } catch (error) {
             endOp();
             set(
@@ -407,7 +381,7 @@ export const useMcpStore = create<McpState>()(
             await get().refreshServers();
             await get().refreshTools();
             await get().refreshRuntimeTelemetry();
-            endOp(); // mcp/disconnectServer/success
+            endOp();
           } catch (error) {
             endOp();
             set(
@@ -428,7 +402,7 @@ export const useMcpStore = create<McpState>()(
             await McpClient.enableServer(name);
             await get().refreshServers();
             await get().refreshHealth();
-            endOp(); // mcp/enableServer/success
+            endOp();
           } catch (error) {
             endOp();
             set(
@@ -449,7 +423,7 @@ export const useMcpStore = create<McpState>()(
             await McpClient.disableServer(name);
             await get().refreshServers();
             await get().refreshHealth();
-            endOp(); // mcp/disableServer/success
+            endOp();
           } catch (error) {
             endOp();
             set(
@@ -507,7 +481,7 @@ export const useMcpStore = create<McpState>()(
           set({ error: null }, undefined, 'mcp/storeCredential/start');
           try {
             await McpClient.storeCredential(serverName, key, value);
-            endOp(); // mcp/storeCredential/success
+            endOp();
           } catch (error) {
             endOp();
             set(
@@ -534,7 +508,7 @@ export const useMcpStore = create<McpState>()(
           set({ error: null }, undefined, 'mcp/setCredential/start');
           try {
             await McpClient.setCredential(serverName, key, value);
-            endOp(); // mcp/setCredential/success
+            endOp();
           } catch (error) {
             endOp();
             set(
@@ -561,7 +535,7 @@ export const useMcpStore = create<McpState>()(
           set({ error: null }, undefined, 'mcp/deleteCredential/start');
           try {
             await McpClient.deleteCredential(serverName, key);
-            endOp(); // mcp/deleteCredential/success
+            endOp();
           } catch (error) {
             endOp();
             set(
@@ -609,8 +583,6 @@ export const useMcpStore = create<McpState>()(
           }
         },
 
-        // --- Tool execution ---
-
         callTool: async (toolId: string, args: Record<string, unknown>) => {
           if (!isTauri) return undefined;
           try {
@@ -619,7 +591,9 @@ export const useMcpStore = create<McpState>()(
             return result;
           } catch (error) {
             set(
-              { error: error instanceof Error ? error.message : `Failed to call tool '${toolId}'` },
+              {
+                error: error instanceof Error ? error.message : `Failed to call tool '${toolId}'`,
+              },
               undefined,
               'mcp/callTool/error',
             );
@@ -640,8 +614,6 @@ export const useMcpStore = create<McpState>()(
             );
           }
         },
-
-        // --- Registry/Install ---
 
         refreshRegistry: async () => {
           if (!isTauri) return;
@@ -665,7 +637,7 @@ export const useMcpStore = create<McpState>()(
             await McpClient.installServer(serverId);
             await get().refreshServers();
             await get().refreshRegistry();
-            endOp(); // mcp/installServer/success
+            endOp();
           } catch (error) {
             endOp();
             set(
@@ -678,8 +650,6 @@ export const useMcpStore = create<McpState>()(
             );
           }
         },
-
-        // --- Server logs ---
 
         getServerLogs: async (serverName: string, lines?: number) => {
           if (!isTauri) return [];
@@ -697,8 +667,6 @@ export const useMcpStore = create<McpState>()(
             return [];
           }
         },
-
-        // --- OAuth ---
 
         oauthStart: async (provider: McpOAuthProvider) => {
           if (!isTauri) throw new Error('OAuth not available outside Tauri');
@@ -755,7 +723,7 @@ export const useMcpStore = create<McpState>()(
           try {
             await McpClient.oauthDisconnect(provider);
             await get().refreshConnectedProviders();
-            endOp(); // mcp/oauthDisconnect/success
+            endOp();
           } catch (error) {
             endOp();
             set(
@@ -790,8 +758,6 @@ export const useMcpStore = create<McpState>()(
           }
         },
 
-        // --- Extensions ---
-
         refreshExtensions: async () => {
           if (!isTauri) return;
           try {
@@ -813,7 +779,7 @@ export const useMcpStore = create<McpState>()(
           try {
             const info = await McpClient.installExtension(filePath);
             await get().refreshExtensions();
-            endOp(); // mcp/installExtension/success
+            endOp();
             return info;
           } catch (error) {
             endOp();
@@ -835,7 +801,7 @@ export const useMcpStore = create<McpState>()(
           try {
             await McpClient.uninstallExtension(extensionId);
             await get().refreshExtensions();
-            endOp(); // mcp/uninstallExtension/success
+            endOp();
           } catch (error) {
             endOp();
             set(
@@ -858,7 +824,7 @@ export const useMcpStore = create<McpState>()(
           try {
             await McpClient.enableExtension(extensionId);
             await get().refreshExtensions();
-            endOp(); // mcp/enableExtension/success
+            endOp();
           } catch (error) {
             endOp();
             set(
@@ -881,7 +847,7 @@ export const useMcpStore = create<McpState>()(
           try {
             await McpClient.disableExtension(extensionId);
             await get().refreshExtensions();
-            endOp(); // mcp/disableExtension/success
+            endOp();
           } catch (error) {
             endOp();
             set(
@@ -918,7 +884,7 @@ export const useMcpStore = create<McpState>()(
           try {
             await McpClient.startAllExtensions();
             await get().refreshExtensions();
-            endOp(); // mcp/startAllExtensions/success
+            endOp();
           } catch (error) {
             endOp();
             set(
@@ -938,7 +904,7 @@ export const useMcpStore = create<McpState>()(
           try {
             await McpClient.stopAllExtensions();
             await get().refreshExtensions();
-            endOp(); // mcp/stopAllExtensions/success
+            endOp();
           } catch (error) {
             endOp();
             set(
@@ -950,8 +916,6 @@ export const useMcpStore = create<McpState>()(
             );
           }
         },
-
-        // --- Connectors ---
 
         refreshConnectedProviders: async () => {
           if (!isTauri) return;
@@ -979,7 +943,7 @@ export const useMcpStore = create<McpState>()(
             await get().refreshServers();
             await get().refreshTools();
             await get().refreshConnectedProviders();
-            endOp(); // mcp/connectConnector/success
+            endOp();
           } catch (error) {
             endOp();
             set(
@@ -1010,8 +974,6 @@ export const useMcpStore = create<McpState>()(
             );
           }
         },
-
-        // --- Runtime server management ---
 
         getRuntimeServerConfig: async () => {
           if (!isTauri) throw new Error('Runtime server not available outside Tauri');
@@ -1079,7 +1041,7 @@ export const useMcpStore = create<McpState>()(
           try {
             await McpClient.updateRuntimeServerConfig(port, enabledTools);
             await get().getRuntimeServerConfig();
-            endOp(); // mcp/updateRuntimeServerConfig/success
+            endOp();
           } catch (error) {
             endOp();
             set(
@@ -1131,8 +1093,6 @@ export const useMcpStore = create<McpState>()(
           }
         },
 
-        // --- Filesystem directories ---
-
         updateFilesystemDirectories: async (directories: string[]) => {
           if (!isTauri) return;
           startOp();
@@ -1140,7 +1100,7 @@ export const useMcpStore = create<McpState>()(
           try {
             await McpClient.updateFilesystemDirectories(directories);
             await get().refreshServers();
-            endOp(); // mcp/updateFilesystemDirectories/success
+            endOp();
           } catch (error) {
             endOp();
             set(
@@ -1156,15 +1116,13 @@ export const useMcpStore = create<McpState>()(
           }
         },
 
-        // --- API key management ---
-
         saveApiKey: async (provider: string, key: string) => {
           if (!isTauri) return;
           startOp();
           set({ error: null }, undefined, 'mcp/saveApiKey/start');
           try {
             await McpClient.saveApiKey(provider, key);
-            endOp(); // mcp/saveApiKey/success
+            endOp();
           } catch (error) {
             endOp();
             set(
@@ -1180,8 +1138,6 @@ export const useMcpStore = create<McpState>()(
           }
         },
 
-        // --- OAuth credentials management ---
-
         oauthSetCredentials: async (
           provider: McpOAuthProvider,
           clientId: string,
@@ -1192,7 +1148,7 @@ export const useMcpStore = create<McpState>()(
           set({ error: null }, undefined, 'mcp/oauthSetCredentials/start');
           try {
             await McpClient.oauthSetCredentials(provider, clientId, clientSecret);
-            endOp(); // mcp/oauthSetCredentials/success
+            endOp();
           } catch (error) {
             endOp();
             set(
@@ -1239,8 +1195,6 @@ export const useMcpStore = create<McpState>()(
         getOAuthProviders: () => {
           return McpClient.getOAuthProviders();
         },
-
-        // --- Extension detail operations ---
 
         getExtension: async (extensionId: string) => {
           if (!isTauri) throw new Error('Extensions not available outside Tauri');
@@ -1342,7 +1296,7 @@ export const useMcpStore = create<McpState>()(
           try {
             await McpClient.setExtensionConfig(extensionId, config);
             await get().refreshExtensions();
-            endOp(); // mcp/setExtensionConfig/success
+            endOp();
           } catch (error) {
             endOp();
             set(
@@ -1358,8 +1312,6 @@ export const useMcpStore = create<McpState>()(
           }
         },
 
-        // --- UI state ---
-
         setSelectedServer: (name: string | null) => {
           set({ selectedServer: name }, undefined, 'mcp/setSelectedServer');
         },
@@ -1372,7 +1324,6 @@ export const useMcpStore = create<McpState>()(
           set({ error: null }, undefined, 'mcp/clearError');
         },
 
-        // AUDIT-006-019 fix: Add resetOnLogout function for cleanup
         resetOnLogout: () => {
           set(
             {
@@ -1409,507 +1360,8 @@ export const useMcpStore = create<McpState>()(
   ),
 );
 
-// Selectors
-export const selectMcpServers = (state: McpState) => state.servers;
-export const selectMcpTools = (state: McpState) => state.tools;
-export const selectMcpToolSchemas = (state: McpState) => state.toolSchemas;
-export const selectMcpConfig = (state: McpState) => state.config;
-export const selectMcpConfigLocation = (state: McpState) => state.configLocation;
-export const selectMcpStats = (state: McpState) => state.stats;
-export const selectMcpHealth = (state: McpState) => state.health;
-export const selectMcpExecutionHistory = (state: McpState) => state.executionHistory;
-export const selectMcpToolExecutionStats = (state: McpState) => state.toolExecutionStats;
-export const selectMcpRegistry = (state: McpState) => state.registry;
-export const selectMcpExtensions = (state: McpState) => state.extensions;
-export const selectMcpConnectorManifests = (state: McpState) => state.connectorManifests;
-export const selectMcpConnectedProviders = (state: McpState) => state.connectedProviders;
-export const selectMcpRuntimeServerConfig = (state: McpState) => state.runtimeServerConfig;
-export const selectMcpRuntimeServerStatus = (state: McpState) => state.runtimeServerStatus;
-export const selectMcpRuntimeServerTools = (state: McpState) => state.runtimeServerTools;
+// Legacy selectors (re-exported from sub-stores where possible; kept here for
+// consumers that import directly from 'stores/mcpStore').
 export const selectMcpIsInitialized = (state: McpState) => state.isInitialized;
 export const selectMcpIsLoading = (state: McpState) => state.isLoading;
 export const selectMcpError = (state: McpState) => state.error;
-export const selectMcpSelectedServer = (state: McpState) => state.selectedServer;
-export const selectMcpSearchQuery = (state: McpState) => state.searchQuery;
-
-// Derived selectors
-export const selectConnectedServers = (state: McpState) =>
-  state.servers.filter((server) => server.connected);
-export const selectDisconnectedServers = (state: McpState) =>
-  state.servers.filter((server) => !server.connected);
-export const selectServerByName = (name: string) => (state: McpState) =>
-  state.servers.find((server) => server.name === name);
-export const selectToolsByServer = (serverName: string) => (state: McpState) =>
-  state.tools.filter((tool) => tool.server === serverName);
-export const selectToolCount = (state: McpState) => state.tools.length;
-export const selectServerCount = (state: McpState) => state.servers.length;
-
-// ============================================================================
-// MCP App Store (absorbed from mcpAppStore.ts — task-w58)
-// ============================================================================
-
-export interface McpAppContent {
-  type: 'html' | 'url';
-  payload: string;
-  height?: number;
-  allowedOrigins?: string[];
-}
-
-export interface McpInteraction {
-  timestamp: number;
-  type: 'user_action' | 'data_update';
-  data: Record<string, unknown>;
-}
-
-export interface McpApp {
-  id: string;
-  toolName: string;
-  mcpServer: string;
-  content: McpAppContent;
-  timestamp: number;
-  interactionLog: McpInteraction[];
-}
-
-interface McpAppState {
-  apps: Record<string, McpApp>;
-  registerApp: (toolName: string, mcpServer: string, content: McpAppContent) => string;
-  updateApp: (id: string, content: Partial<McpAppContent>) => void;
-  recordInteraction: (id: string, interaction: McpInteraction) => void;
-  removeApp: (id: string) => void;
-  clearAll: () => void;
-  getAppsArray: () => McpApp[];
-}
-
-export const useMcpAppStore = create<McpAppState>()(
-  devtools(
-    (set, get) => ({
-      apps: {},
-      registerApp: (toolName, mcpServer, content) => {
-        const id = `mcp-app-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        const app: McpApp = {
-          id,
-          toolName,
-          mcpServer,
-          content,
-          timestamp: Date.now(),
-          interactionLog: [],
-        };
-        set((state) => ({ apps: { ...state.apps, [id]: app } }), undefined, 'mcpApp/registerApp');
-        return id;
-      },
-      updateApp: (id, contentUpdate) => {
-        set(
-          (state) => {
-            const existing = state.apps[id];
-            if (!existing) return state;
-            return {
-              apps: {
-                ...state.apps,
-                [id]: { ...existing, content: { ...existing.content, ...contentUpdate } },
-              },
-            };
-          },
-          undefined,
-          'mcpApp/updateApp',
-        );
-      },
-      recordInteraction: (id, interaction) => {
-        set(
-          (state) => {
-            const existing = state.apps[id];
-            if (!existing) return state;
-            return {
-              apps: {
-                ...state.apps,
-                [id]: { ...existing, interactionLog: [...existing.interactionLog, interaction] },
-              },
-            };
-          },
-          undefined,
-          'mcpApp/recordInteraction',
-        );
-      },
-      removeApp: (id) => {
-        set(
-          (state) => {
-            const next = { ...state.apps };
-            delete next[id];
-            return { apps: next };
-          },
-          undefined,
-          'mcpApp/removeApp',
-        );
-      },
-      clearAll: () => set({ apps: {} }, undefined, 'mcpApp/clearAll'),
-      getAppsArray: () => Object.values(get().apps).sort((a, b) => b.timestamp - a.timestamp),
-    }),
-    { name: 'McpAppStore', enabled: import.meta.env.DEV },
-  ),
-);
-
-export const selectMcpApps = (state: McpAppState) => state.apps;
-export const selectMcpAppCount = (state: McpAppState) => Object.keys(state.apps).length;
-export const selectMcpAppById = (id: string) => (state: McpAppState) => state.apps[id];
-export const selectMcpAppsByServer = (server: string) => (state: McpAppState) =>
-  Object.values(state.apps).filter((app) => app.mcpServer === server);
-
-// ============================================================================
-// MCPB Bundle Store (absorbed from mcpbStore.ts — task-w58)
-// ============================================================================
-
-import { listen as mcpbListen } from '../lib/tauri-mock';
-import type {
-  McpBundle,
-  McpBundleCategory,
-  BundleInstallProgress,
-  BundleInstallStatus,
-} from '../types/mcp';
-
-interface McpbInstallProgressEvent {
-  bundleId: string;
-  phase: string;
-  progress: number;
-  message: string;
-}
-
-const mcpbApi = {
-  fetchRegistry: () => invoke<McpBundle[]>('mcpb_fetch_registry'),
-  searchBundles: (query: string) => invoke<McpBundle[]>('mcpb_search_bundles', { query }),
-  installBundle: (bundleId: string) => invoke<void>('mcpb_install_bundle', { bundleId }),
-  uninstallBundle: (bundleId: string) => invoke<void>('mcpb_uninstall_bundle', { bundleId }),
-  getBundleDetails: (bundleId: string) =>
-    invoke<McpBundle>('mcpb_get_bundle_details', { bundleId }),
-  checkUpdates: () => invoke<McpBundle[]>('mcpb_check_updates'),
-  updateBundle: (bundleId: string) => invoke<void>('mcpb_update_bundle', { bundleId }),
-  getInstalledBundles: () => invoke<McpBundle[]>('mcpb_get_installed_bundles'),
-  getCategories: () => invoke<McpBundleCategory[]>('mcpb_get_categories'),
-  getFeaturedBundles: () => invoke<McpBundle[]>('mcpb_get_featured'),
-};
-
-interface McpbState {
-  bundles: McpBundle[];
-  installedBundles: McpBundle[];
-  featuredBundles: McpBundle[];
-  categories: McpBundleCategory[];
-  selectedCategory: McpBundleCategory | null;
-  searchQuery: string;
-  isMcpbLoading: boolean;
-  isInstalling: boolean;
-  installProgress: BundleInstallProgress | null;
-  mcpbError: string | null;
-  fetchRegistry: () => Promise<void>;
-  searchBundles: (query: string) => Promise<void>;
-  filterByCategory: (category: McpBundleCategory | null) => void;
-  installBundle: (bundleId: string) => Promise<void>;
-  uninstallBundle: (bundleId: string) => Promise<void>;
-  getBundleDetails: (bundleId: string) => Promise<McpBundle | null>;
-  checkUpdates: () => Promise<void>;
-  updateBundle: (bundleId: string) => Promise<void>;
-  clearMcpbError: () => void;
-  setInstallProgress: (progress: BundleInstallProgress | null) => void;
-  resetOnLogout: () => void;
-}
-
-export const useMcpbStore = create<McpbState>()(
-  devtools(
-    subscribeWithSelector((set) => ({
-      bundles: [],
-      installedBundles: [],
-      featuredBundles: [],
-      categories: [],
-      selectedCategory: null,
-      searchQuery: '',
-      isMcpbLoading: false,
-      isInstalling: false,
-      installProgress: null,
-      mcpbError: null,
-
-      fetchRegistry: async () => {
-        set({ isMcpbLoading: true, mcpbError: null });
-        try {
-          const [bundles, categories, featuredBundles, installedBundles] = await Promise.all([
-            mcpbApi.fetchRegistry(),
-            mcpbApi.getCategories(),
-            mcpbApi.getFeaturedBundles(),
-            mcpbApi.getInstalledBundles(),
-          ]);
-          set({ bundles, categories, featuredBundles, installedBundles, isMcpbLoading: false });
-        } catch (err) {
-          set({
-            mcpbError: err instanceof Error ? err.message : String(err),
-            isMcpbLoading: false,
-          });
-        }
-      },
-
-      searchBundles: async (query: string) => {
-        set({ searchQuery: query, isMcpbLoading: true });
-        try {
-          const bundles = query.trim()
-            ? await mcpbApi.searchBundles(query)
-            : await mcpbApi.fetchRegistry();
-          set({ bundles, isMcpbLoading: false });
-        } catch (err) {
-          set({
-            mcpbError: err instanceof Error ? err.message : String(err),
-            isMcpbLoading: false,
-          });
-        }
-      },
-
-      filterByCategory: (category) => set({ selectedCategory: category }),
-
-      installBundle: async (bundleId: string) => {
-        set({ isInstalling: true, mcpbError: null });
-        try {
-          await mcpbApi.installBundle(bundleId);
-          const installedBundles = await mcpbApi.getInstalledBundles();
-          set({ installedBundles, isInstalling: false });
-        } catch (err) {
-          set({ mcpbError: err instanceof Error ? err.message : String(err), isInstalling: false });
-          throw err;
-        }
-      },
-
-      uninstallBundle: async (bundleId: string) => {
-        set({ isMcpbLoading: true, mcpbError: null });
-        try {
-          await mcpbApi.uninstallBundle(bundleId);
-          const installedBundles = await mcpbApi.getInstalledBundles();
-          set({ installedBundles, isMcpbLoading: false });
-        } catch (err) {
-          set({
-            mcpbError: err instanceof Error ? err.message : String(err),
-            isMcpbLoading: false,
-          });
-          throw err;
-        }
-      },
-
-      getBundleDetails: async (bundleId: string) => {
-        try {
-          return await mcpbApi.getBundleDetails(bundleId);
-        } catch {
-          return null;
-        }
-      },
-
-      checkUpdates: async () => {
-        set({ isMcpbLoading: true });
-        try {
-          const bundlesWithUpdates = await mcpbApi.checkUpdates();
-          set((state) => {
-            const updateMap = new Map(bundlesWithUpdates.map((b) => [b.id, b]));
-            return {
-              installedBundles: state.installedBundles.map((b) => updateMap.get(b.id) ?? b),
-              isMcpbLoading: false,
-            };
-          });
-        } catch (err) {
-          set({
-            mcpbError: err instanceof Error ? err.message : String(err),
-            isMcpbLoading: false,
-          });
-        }
-      },
-
-      updateBundle: async (bundleId: string) => {
-        set({ isInstalling: true, mcpbError: null });
-        try {
-          await mcpbApi.updateBundle(bundleId);
-          const installedBundles = await mcpbApi.getInstalledBundles();
-          set({ installedBundles, isInstalling: false });
-        } catch (err) {
-          set({ mcpbError: err instanceof Error ? err.message : String(err), isInstalling: false });
-          throw err;
-        }
-      },
-
-      clearMcpbError: () => set({ mcpbError: null }),
-      setInstallProgress: (progress) => set({ installProgress: progress }),
-
-      resetOnLogout: () =>
-        set({
-          bundles: [],
-          installedBundles: [],
-          featuredBundles: [],
-          categories: [],
-          selectedCategory: null,
-          searchQuery: '',
-          isMcpbLoading: false,
-          isInstalling: false,
-          installProgress: null,
-          mcpbError: null,
-        }),
-    })),
-    { name: 'McpbStore', enabled: import.meta.env.DEV },
-  ),
-);
-
-const KNOWN_PHASES = new Set<BundleInstallStatus>([
-  'pending',
-  'downloading',
-  'installing',
-  'configuring',
-  'completed',
-  'failed',
-]);
-
-function toInstallStatus(phase: string): BundleInstallStatus {
-  return KNOWN_PHASES.has(phase as BundleInstallStatus)
-    ? (phase as BundleInstallStatus)
-    : 'installing';
-}
-
-let mcpbInstallListenerInitialized = false;
-
-export async function initializeMcpbInstallListener(): Promise<void> {
-  if (mcpbInstallListenerInitialized) return;
-  mcpbInstallListenerInitialized = true;
-  try {
-    await mcpbListen<McpbInstallProgressEvent>('mcpb:install_progress', (event) => {
-      const { bundleId, phase, progress, message } = event.payload;
-      useMcpbStore
-        .getState()
-        .setInstallProgress({ bundleId, status: toInstallStatus(phase), progress, message });
-    });
-  } catch (error) {
-    mcpbInstallListenerInitialized = false;
-    console.error('[McpbStore] Failed to initialize mcpb:install_progress listener:', error);
-  }
-}
-
-export const selectMcpbBundles = (state: McpbState) => state.bundles;
-export const selectMcpbInstalled = (state: McpbState) => state.installedBundles;
-export const selectMcpbBundleById = (bundleId: string) => (state: McpbState) =>
-  state.bundles.find((b) => b.id === bundleId) ||
-  state.installedBundles.find((b) => b.id === bundleId);
-export const selectBundlesWithUpdates = (state: McpbState) =>
-  state.installedBundles.filter((bundle) => bundle.updateAvailable);
-
-// =============================================================================
-// MCP Server Store (absorbed from mcpServerStore.ts — task-w58)
-// =============================================================================
-
-interface McpServerToolEntry {
-  name: string;
-  description?: string;
-  [key: string]: unknown;
-}
-
-interface McpServerStore {
-  config: import('@/types/mcp').McpRuntimeServerConfig | null;
-  isRunning: boolean;
-  tools: McpServerToolEntry[];
-  loading: boolean;
-  error: string | null;
-  fetchConfig: () => Promise<void>;
-  fetchStatus: () => Promise<void>;
-  fetchTools: () => Promise<void>;
-  startServer: () => Promise<void>;
-  stopServer: () => Promise<void>;
-  updateConfig: (port?: number, enabledTools?: string[]) => Promise<void>;
-}
-
-export const useMcpServerStore = create<McpServerStore>()(
-  devtools(
-    (set, get) => ({
-      config: null,
-      isRunning: false,
-      tools: [],
-      loading: false,
-      error: null,
-
-      fetchConfig: async () => {
-        set({ loading: true, error: null }, undefined, 'mcpServer/fetchConfig/start');
-        try {
-          const config = await McpClient.getRuntimeServerConfig();
-          set(
-            { config, isRunning: config.running, error: null, loading: false },
-            undefined,
-            'mcpServer/fetchConfig/success',
-          );
-        } catch (error) {
-          set(
-            { error: error instanceof Error ? error.message : String(error), loading: false },
-            undefined,
-            'mcpServer/fetchConfig/error',
-          );
-        }
-      },
-
-      fetchStatus: async () => {
-        try {
-          const isRunning = await McpClient.getRuntimeServerStatus();
-          set({ isRunning, error: null }, undefined, 'mcpServer/fetchStatus');
-        } catch (error) {
-          set(
-            { error: error instanceof Error ? error.message : String(error) },
-            undefined,
-            'mcpServer/fetchStatus/error',
-          );
-        }
-      },
-
-      fetchTools: async () => {
-        try {
-          const result = await McpClient.listRuntimeServerTools();
-          const tools = (result.tools ?? []) as McpServerToolEntry[];
-          set({ tools, error: null }, undefined, 'mcpServer/fetchTools');
-        } catch (error) {
-          set(
-            { error: error instanceof Error ? error.message : String(error) },
-            undefined,
-            'mcpServer/fetchTools/error',
-          );
-        }
-      },
-
-      startServer: async () => {
-        set({ loading: true, error: null }, undefined, 'mcpServer/start/start');
-        try {
-          await McpClient.startRuntimeServer();
-          await get().fetchConfig();
-          await get().fetchTools();
-          set({ loading: false }, undefined, 'mcpServer/start/success');
-        } catch (error) {
-          set(
-            { error: error instanceof Error ? error.message : String(error), loading: false },
-            undefined,
-            'mcpServer/start/error',
-          );
-        }
-      },
-
-      stopServer: async () => {
-        set({ loading: true, error: null }, undefined, 'mcpServer/stop/start');
-        try {
-          await McpClient.stopRuntimeServer();
-          await get().fetchConfig();
-          set({ tools: [] }, undefined, 'mcpServer/stop/clearTools');
-        } catch (error) {
-          set(
-            { error: error instanceof Error ? error.message : String(error), loading: false },
-            undefined,
-            'mcpServer/stop/error',
-          );
-        }
-      },
-
-      updateConfig: async (port?: number, enabledTools?: string[]) => {
-        set({ loading: true, error: null }, undefined, 'mcpServer/updateConfig/start');
-        try {
-          await McpClient.updateRuntimeServerConfig(port, enabledTools);
-          await get().fetchConfig();
-        } catch (error) {
-          set(
-            { error: error instanceof Error ? error.message : String(error), loading: false },
-            undefined,
-            'mcpServer/updateConfig/error',
-          );
-        }
-      },
-    }),
-    { name: 'McpServerStore', enabled: import.meta.env.DEV },
-  ),
-);
