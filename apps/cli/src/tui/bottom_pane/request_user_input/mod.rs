@@ -22,6 +22,7 @@ use crate::app_event_sender::AppEventSender;
 use crate::bottom_pane::CancellationEvent;
 use crate::bottom_pane::ChatComposer;
 use crate::bottom_pane::ChatComposerConfig;
+use crate::bottom_pane::composer::text_ops;
 use crate::bottom_pane::InputResult;
 use crate::bottom_pane::bottom_pane_view::BottomPaneView;
 use crate::bottom_pane::scroll_state::ScrollState;
@@ -76,7 +77,7 @@ impl ComposerDraft {
             !self.text_elements.is_empty(),
             "pending pastes should always have matching text elements"
         );
-        let (expanded, _) = ChatComposer::expand_pending_pastes(
+        let (expanded, _) = text_ops::expand_pending_pastes(
             &self.text,
             self.text_elements.clone(),
             &self.pending_pastes,
