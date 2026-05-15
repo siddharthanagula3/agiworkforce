@@ -137,4 +137,23 @@ describe('package.json ↔ runtime command parity', () => {
     }
     expect(dupes, `duplicate command registrations: ${dupes.join(', ')}`).toEqual([]);
   });
+
+  it('parity holds on second activate after reset (module-state isolation)', () => {
+    // First activation
+    activate(makeMockContext());
+    const firstIds = [...registeredIds];
+    expect(firstIds.length).toBeGreaterThan(0);
+
+    // Simulate reload: reset subsystem health module-level state then re-activate
+    __resetSubsystemHealthForTests();
+    registeredIds = [];
+    activate(makeMockContext());
+
+    const declared = readDeclaredCommands().map((c) => c.command);
+    const missing = declared.filter((id) => !registeredIds.includes(id));
+    expect(
+      missing,
+      `after re-activation, ${missing.length} command(s) missing (likely module-level state not reset)`,
+    ).toEqual([]);
+  });
 });
