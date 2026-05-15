@@ -77,6 +77,7 @@ let thinkingEnabled = false;
  * Mirrors the quality-tier data from the model catalog, expressed as the
  * three-tier vocabulary the design system uses in every picker.
  */
+/* eslint-disable no-restricted-syntax -- FIXME: P1-CHROMEEXT-MODELID-MIGRATION: lookup-table mirror of models.json fields used for UI sub-labels. Migrate to derive from `getModelCatalog()` once it exposes capability+provider tiers per model. Tracked as Phase D follow-up. */
 const MODEL_CAPABILITY: Record<string, CapabilityTier> = {
   // Anthropic
   'claude-opus-4.6': 'most-capable',
@@ -205,6 +206,7 @@ const SIDE_PANEL_MODEL_BADGES: Record<string, string> = {
   'grok-4': 'Grok 4',
   'mistral-large-3': 'Mistral',
 };
+/* eslint-enable no-restricted-syntax */
 
 interface WebMCPToolEntry {
   name: string;
