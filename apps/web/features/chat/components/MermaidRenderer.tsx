@@ -361,6 +361,7 @@ function ToolbarButton({ children, onClick, title }: ToolbarButtonProps) {
       type="button"
       onClick={onClick}
       title={title}
+      aria-label={title}
       className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
     >
       {children}

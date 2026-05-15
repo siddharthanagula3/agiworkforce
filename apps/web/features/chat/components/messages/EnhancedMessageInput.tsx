@@ -563,8 +563,9 @@ export const EnhancedMessageInput = React.memo(function EnhancedMessageInput({
               className="h-7 w-7 p-0"
               onClick={() => insertMarkdown('**')}
               title="Bold (Ctrl+B)"
+              aria-label="Bold text"
             >
-              <Bold className="h-4 w-4" />
+              <Bold className="h-4 w-4" aria-hidden="true" />
             </Button>
             <Button
               variant="ghost"
@@ -572,8 +573,9 @@ export const EnhancedMessageInput = React.memo(function EnhancedMessageInput({
               className="h-7 w-7 p-0"
               onClick={() => insertMarkdown('*')}
               title="Italic (Ctrl+I)"
+              aria-label="Italic text"
             >
-              <Italic className="h-4 w-4" />
+              <Italic className="h-4 w-4" aria-hidden="true" />
             </Button>
             <Button
               variant="ghost"
@@ -581,8 +583,9 @@ export const EnhancedMessageInput = React.memo(function EnhancedMessageInput({
               className="h-7 w-7 p-0"
               onClick={() => insertMarkdown('`')}
               title="Code (Ctrl+K)"
+              aria-label="Inline code"
             >
-              <Code className="h-4 w-4" />
+              <Code className="h-4 w-4" aria-hidden="true" />
             </Button>
             <Button
               variant="ghost"
@@ -590,8 +593,9 @@ export const EnhancedMessageInput = React.memo(function EnhancedMessageInput({
               className="h-7 w-7 p-0"
               onClick={() => insertMarkdown('```\n', '\n```')}
               title="Code block"
+              aria-label="Code block"
             >
-              <Code className="h-4 w-4" />
+              <Code className="h-4 w-4" aria-hidden="true" />
             </Button>
 
             <Separator orientation="vertical" className="mx-1 h-5" />
@@ -602,8 +606,9 @@ export const EnhancedMessageInput = React.memo(function EnhancedMessageInput({
               className="h-7 w-7 p-0"
               onClick={() => fileInputRef.current?.click()}
               title="Attach file"
+              aria-label="Attach file"
             >
-              <Paperclip className="h-4 w-4" />
+              <Paperclip className="h-4 w-4" aria-hidden="true" />
             </Button>
 
             {enablePreview && (
@@ -613,8 +618,14 @@ export const EnhancedMessageInput = React.memo(function EnhancedMessageInput({
                 className="h-7 w-7 p-0"
                 onClick={() => setShowPreview(!showPreview)}
                 title={showPreview ? 'Hide preview' : 'Show preview'}
+                aria-label={showPreview ? 'Hide preview' : 'Show preview'}
+                aria-pressed={showPreview}
               >
-                {showPreview ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {showPreview ? (
+                  <EyeOff className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <Eye className="h-4 w-4" aria-hidden="true" />
+                )}
               </Button>
             )}
 

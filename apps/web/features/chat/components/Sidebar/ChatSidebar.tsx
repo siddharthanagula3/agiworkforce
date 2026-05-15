@@ -301,7 +301,11 @@ const UserProfileArea = React.memo(function UserProfileArea() {
     <div className="border-t border-[var(--chat-border-strong)]">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="flex w-full items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none">
+          <button
+            type="button"
+            aria-label={`Account menu for ${displayName}`}
+            className="flex w-full items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
               {initial}
             </div>
@@ -311,7 +315,10 @@ const UserProfileArea = React.memo(function UserProfileArea() {
                 <p className="truncate text-[11px] text-muted-foreground">{user.email}</p>
               )}
             </div>
-            <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+            <ChevronUp
+              className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
+              aria-hidden="true"
+            />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="start" className="w-52 mb-1">
@@ -514,12 +521,13 @@ function ChatSidebarContent({
 
       {/* Search */}
       <div className="mx-2 my-2 flex items-center gap-2 rounded-lg bg-black/5 dark:bg-white/5 px-3 py-2">
-        <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+        <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" aria-hidden="true" />
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search conversations..."
+          aria-label="Search conversations"
           className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 outline-none"
         />
         {searchQuery && (

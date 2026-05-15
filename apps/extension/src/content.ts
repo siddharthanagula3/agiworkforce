@@ -575,7 +575,6 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
         profile: {},
         options: {
           autoSubmit: true,
-          autoSubmitConfirmed: true,
           allowSubmitWithMissingRequired: false,
         },
       })) as unknown as ActionExecutionResult;
@@ -1250,17 +1249,17 @@ async function handleAutoFillJobApplication(
   const options =
     typeof message.options === 'object' && message.options !== null ? message.options : {};
 
-  // Safety gate: autoSubmit requires an explicit confirmation flag.
-  // Without autoSubmitConfirmed === true the call proceeds in fill-only mode.
-  // This prevents remote-controlled automatic form submission without user
-  // awareness (EXT-AUTOSUBMIT-NO-CONFIRM).
+  // Safety gate: autoSubmit always requires explicit user confirmation via a
+  // browser confirm() dialog — ignoring any payload-supplied confirmation flags,
+  // which cannot be trusted (EXT-AUTOSUBMIT-NO-CONFIRM).
   const safeOptions = { ...options };
-  if (safeOptions.autoSubmit === true && safeOptions.autoSubmitConfirmed !== true) {
-    console.warn(
-      '[AGI] autoSubmit blocked: caller must set options.autoSubmitConfirmed = true ' +
-        'to confirm the user has been notified before submission.',
+  if (safeOptions.autoSubmit === true) {
+    const confirmed = window.confirm(
+      'AGI Workforce: Auto-submit the job application form?\n\nClick OK to submit, or Cancel to fill only.',
     );
-    safeOptions.autoSubmit = false;
+    if (!confirmed) {
+      safeOptions.autoSubmit = false;
+    }
   }
 
   try {
