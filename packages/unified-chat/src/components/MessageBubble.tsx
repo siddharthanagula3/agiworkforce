@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy } from 'lucide-react';
+import { Copy, Wrench } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from './ui/Button';
 import { ActionBar } from './ActionBar';
@@ -372,8 +372,9 @@ function ToolCallRow({ toolCall }: { toolCall: ToolCall }) {
 
   return (
     <div className="rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] px-3 py-2">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
+      <div className="flex items-center gap-2">
+        <Wrench className="h-3.5 w-3.5 shrink-0 text-[var(--chat-text-muted)]" />
+        <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-[var(--chat-text-primary)]">
             {toolCall.name}
           </p>
