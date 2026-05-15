@@ -5,14 +5,13 @@
  * DELETE /api/share/[token] - revoke a shared session (owner only)
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { getServiceClient } from '@/lib/supabase-server';
 import { createClient as createServerClient } from '@/utils/supabase/server';
 
 const TOKEN_REGEX = /^[A-Za-z0-9_-]{24}$/;
@@ -29,9 +28,7 @@ async function handleGetShare(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'share-view');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const supabase = getServiceClient();
 
   const { data, error } = await supabase
     .from('shared_sessions')
@@ -68,9 +65,7 @@ async function handleDeleteShare(request: NextRequest, context: RouteContext) {
     throw createError.unauthorized();
   }
 
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const supabase = getServiceClient();
 
   const { error } = await supabase
     .from('shared_sessions')

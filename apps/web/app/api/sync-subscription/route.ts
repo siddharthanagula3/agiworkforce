@@ -1,10 +1,8 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
 import { createSupabaseServerClient } from '@/services/supabase-server';
-import { requireEnv } from '@/utils/env';
+import { getServiceClient } from '@/lib/supabase-server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -22,8 +20,6 @@ async function handleSyncSubscription(request: NextRequest): Promise<Response> {
   if (rateLimitResponse) return rateLimitResponse;
 
   try {
-    const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-
     let userId: string | null = null;
     let email: string | null = null;
 
@@ -31,10 +27,7 @@ async function handleSyncSubscription(request: NextRequest): Promise<Response> {
     const authHeader = request.headers.get('authorization');
     if (authHeader?.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
-      // Use service role key for server-side JWT verification
-      const supabase = createClient(supabaseUrl, requireEnv('SUPABASE_SERVICE_ROLE_KEY'));
-
-      const { data, error } = await supabase.auth.getUser(token);
+      const { data, error } = await getServiceClient().auth.getUser(token);
       if (error || !data.user) {
         logger.warn({ error }, 'sync-subscription: bearer token auth failed');
         throw createError.unauthorized('Invalid authentication token');

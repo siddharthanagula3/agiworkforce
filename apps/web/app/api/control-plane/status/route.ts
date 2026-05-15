@@ -1,10 +1,10 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
 import { requireEnv } from '@/utils/env';
+import { getServiceClient } from '@/lib/supabase-server';
 
 /**
  * GET /api/control-plane/status
@@ -16,23 +16,6 @@ import { requireEnv } from '@/utils/env';
  */
 
 export const runtime = 'nodejs';
-
-// ---------------------------------------------------------------------------
-// Singleton service-role client - stateless, safe to reuse across requests
-// ---------------------------------------------------------------------------
-
-let _serviceClient: ReturnType<typeof createClient> | null = null;
-
-function getServiceClient() {
-  if (!_serviceClient) {
-    const url = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-    const key = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-    _serviceClient = createClient(url, key, {
-      auth: { persistSession: false },
-    });
-  }
-  return _serviceClient;
-}
 
 type SurfaceId = 'desktop' | 'mobile' | 'extension' | 'cli';
 type SurfaceStatus = 'online' | 'offline' | 'unknown';
