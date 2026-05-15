@@ -35,13 +35,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 14 test files / **278 → 326 tests** (+48). New suites: `workspaceFolders.test.ts` (21), `telemetryRedaction.test.ts` (14), `shellQuote.test.ts` (10), `patchEngine.test.ts` (3, starter coverage).
 
-## [0.3.0] - 2026-04-22
+## [0.3.0] - 2026-05-15
 
-- Initial multi-provider release (10+ providers).
-- @agi chat participant with `/explain /fix /refactor /tests /docs /model`.
-- Sidebar webview, History tree, Context Files tree.
-- Inline completions, code lens, hover.
-- Desktop bridge over port 8787.
+### Added
+
+- **Chat-in-editor panel** (`agi-workforce.openChatInEditor`) — full-featured chat as a VS Code editor tab; supports all providers, model picker, and session history.
+- **56+ commands** — full command palette coverage including `showSubsystemHealth`, `selectModel`, `sendFeedback`, `openChatInEditor`, and 52 others.
+- **Model picker** (`agi-workforce.selectModel`) — QuickPick over the full `MANUAL_MODEL_OPTIONS` catalog from `@agiworkforce/types`; no hardcoded IDs.
+- **Context Files tree** — sidebar view for pinning `@file` context into chat; content capped at 20 K chars, binary files rejected.
+- **23 configurable settings** including `agiWorkforce.inlineCompletions.enabled`, `agiWorkforce.codeActions.enabled`, `agiWorkforce.agentMode.autoApply`, `agiWorkforce.desktopBridge.port` (default 8787), and `agiWorkforce.telemetryEnabled`.
+- **13 keybindings** — default shortcuts for open-chat, explain, fix, refactor, agent mode, and more.
+
+### Changed
+
+- Provider tagline updated to "Multi-provider AI coding assistant — 10+ providers" (drops model version names that rot each era).
+- `@agi` chat participant description no longer pins model names.
+
+### Security
+
+- Workspace-trust gating for endpoint/CLI/systemPrompt settings.
+- Desktop bridge token auth (port 8787); message type allowlisting.
+- Webview link sanitizer — only `https?:` and `mailto:` survive; `javascript:`, `data:`, `command:` stripped.
+- Telemetry redactor scrubs JWTs and API keys before any network call.
+
+### Tests
+
+- **352 tests across 20 suites** — all green.
 
 [Unreleased]: https://github.com/agiworkforce/agiworkforce/compare/vscode-v0.3.0...HEAD
 [0.3.0]: https://github.com/agiworkforce/agiworkforce/releases/tag/vscode-v0.3.0
