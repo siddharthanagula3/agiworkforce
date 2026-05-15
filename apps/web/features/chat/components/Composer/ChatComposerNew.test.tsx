@@ -284,4 +284,60 @@ describe('ChatComposerNew', () => {
     const footer = screen.getByTestId('input-footer');
     expect(footer.getAttribute('data-hint')).toContain('Tab to accept');
   });
+
+  it('renders the thinking toggle button', () => {
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    expect(screen.getByRole('button', { name: /toggle extended thinking/i })).toBeInTheDocument();
+  });
+
+  it('thinking toggle starts off (aria-pressed=false)', () => {
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    const btn = screen.getByRole('button', { name: /toggle extended thinking/i });
+    expect(btn).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('clicking thinking toggle sets aria-pressed=true', () => {
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    const btn = screen.getByRole('button', { name: /toggle extended thinking/i });
+    fireEvent.click(btn);
+    expect(btn).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('passes thinkingEnabled=true in meta when toggle is on and message is sent', async () => {
+    const onSendMock = vi.fn();
+    render(<ChatComposerNew onSend={onSendMock} />);
+
+    const thinkingBtn = screen.getByRole('button', { name: /toggle extended thinking/i });
+    fireEvent.click(thinkingBtn);
+
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    await userEvent.type(textarea, 'think hard');
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(onSendMock).toHaveBeenCalledWith(
+        'think hard',
+        undefined,
+        undefined,
+        expect.objectContaining({ thinkingEnabled: true }),
+      );
+    });
+  });
+
+  it('resets thinkingEnabled to false after send', async () => {
+    const onSendMock = vi.fn();
+    render(<ChatComposerNew onSend={onSendMock} />);
+
+    const thinkingBtn = screen.getByRole('button', { name: /toggle extended thinking/i });
+    fireEvent.click(thinkingBtn);
+    expect(thinkingBtn).toHaveAttribute('aria-pressed', 'true');
+
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    await userEvent.type(textarea, 'hello');
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(thinkingBtn).toHaveAttribute('aria-pressed', 'false');
+    });
+  });
 });
