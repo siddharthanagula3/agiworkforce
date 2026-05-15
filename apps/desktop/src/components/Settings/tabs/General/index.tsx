@@ -1,7 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { Cloud, Loader2, Shield } from 'lucide-react';
 import { isTauri, isCloudWeb } from '@/lib/tauri-mock';
-import { toast } from 'sonner';
 import { Button } from '../../../ui/Button';
 import { Label } from '../../../ui/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/Select';
@@ -94,7 +93,13 @@ function AppModeSection() {
           </p>
           <button
             type="button"
-            onClick={() => toast.info('Sign-in flow coming soon.')}
+            onClick={() =>
+              window.dispatchEvent(
+                new CustomEvent('chat:action', {
+                  detail: { type: 'open-settings', tab: 'account' },
+                }),
+              )
+            }
             className="shrink-0 px-3 py-1.5 rounded-md text-xs font-medium bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/50 hover:bg-blue-500/30 transition-colors"
           >
             Sign in to enable Cloud Mode
@@ -110,7 +115,11 @@ function AppModeSection() {
           </p>
           <button
             type="button"
-            onClick={() => toast.info('Billing portal coming soon.')}
+            onClick={() =>
+              window.dispatchEvent(
+                new CustomEvent('chat:action', { detail: { type: 'open-plans-modal' } }),
+              )
+            }
             className="shrink-0 px-3 py-1.5 rounded-md text-xs font-medium bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/50 hover:bg-blue-500/30 transition-colors"
           >
             Manage Billing &rarr;
