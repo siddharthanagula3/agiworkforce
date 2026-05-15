@@ -2,6 +2,82 @@
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased — cross-surface] — 2026-05-14 → 2026-05-15
+
+Cross-surface campaign fire #1 through #6 per `MASTER_PLAN.md` §10. 37+ commits, all 6 surfaces touched, ~13,733 platform tests green.
+
+### Added (Phase C — PNG-grounded features)
+
+- **Desktop**: per-turn `adaptiveThinking` toggle in `QuickModelSelector` (C2, `291bf6ccb`) — Sparkles "Adaptive" icon-button wired to ephemeral `perTurnAdaptiveThinking` state in `modelStore`; IPC payload override; auto-clears after send. 5 new tests.
+- **Web**: custom slash-commands create/edit/delete modal in Settings (C6, `07844d4b8`) — `CustomCommand` type + CRUD actions in settingsStore + new "Commands" tab + SlashCommandMenu merge of built-in + custom. 8 new tests.
+- **Web**: `/partner-perks` marketing page + 5 sample partner perks data module (C5, `cb16170b9`). 5 data-integrity tests.
+- **Mobile**: offline outbound queue wired into chat send path (C9, `798a25ac1`) — offline messages queue with optimistic UI (amber Clock badge); flushes on reconnect via existing `useNetworkStatus` hook.
+- **Mobile**: theme-mode segmented control in personalization (C10, `720a7fd95`) — preference layer + `useTheme` hook + Light/Dark/System toggle. Light-mode component migration deferred to a separate fire. 9 new tests.
+- **Chrome ext**: conversation history persistence + UI (C12, `75e86d545`) — `chrome.storage.local` with 100-conversation cap, 30-day TTL, History dropdown in side panel header. 11 new tests.
+- **Chrome ext**: desktop pairing flow (C11, `887a02b10`) — IDLE→REQUESTING→PAIRED state machine in `pairing.ts`, popup UI with status/fingerprint/error display. 15 new tests.
+- **VS Code**: chat-in-main-editor `WebviewPanel` (C13, `ad196dca0` + `5ae8cfefd` wiring) — singleton `ChatEditorPanel` class, `agi-workforce.openChatInEditor` command, reuses sidebar webview HTML. 4 new tests.
+- **VS Code**: sidebar @mention-file → @agi chat-participant wiring (C14, `c90359068`) — `agi-workforce.mentionFileInChat` command opens chat with `@agi #file:<relpath>` query. 4 new tests.
+
+### Added (Phase A — Security/correctness)
+
+- **CLI**: SSRF allowlist for A2A endpoints (`ceda1ad10`) — `validate_a2a_endpoint` blocks RFC1918, loopback, link-local, IMDS (169.254.169.254). `AGI_A2A_ALLOW_PRIVATE=1` env override. 8 new tests.
+- **Mobile**: deploy-time guard against empty-pin TLS enforcement (`9ca369c03`) — `assertPinningReadyIfEnforced()` + `requiresPin(host)` + `REQUIRED_PINNED_HOSTS` constant. Pin-capture runbook added in `pinning.ts` header. 26 new tests.
+- **Chrome ext**: 47-site `innerHTML` → safe DOM construction sweep in `side_panel.ts` (`069b17bb6`) — new `dom-helpers.ts` (`setText`, `clearChildren`, `createElementWith`, `setChild`). 2 sanitized user-content paths preserved. 5 new tests.
+- **Chrome ext**: recording-indicator badge `innerHTML` fix at `content.ts:1607` (`0536969c2`).
+- **Desktop**: `POST /pair` HTTP endpoint on bridge port 8787 (`948ceeb7f`, E2 closure) — loopback-only, idempotent 32-byte token rotation, returns `{token, fingerprint}` JSON. 7 new tests. Closes the chrome ext pairing flow end-to-end.
+- **CLI**: `handle_post_handoff` returns HTTP 501 Not Implemented (`a618d13ef`) instead of misleading 200 "accepted" that silently discarded messages.
+
+### Refactored (Phase B — God-file splits)
+
+- **CLI** `apps/cli/src/main.rs` 2,385 LOC → 7-LOC entry + `lib.rs` (89 KB) (`8cd6f740f`). Canonical codex-rs `exec/src/main.rs:1-46` 42-LOC pattern.
+- **CLI** `apps/cli/src/a2a.rs` 1,856 LOC → `a2a/{mod,protocol,registry,security,server,client,jsonrpc}.rs` 7 files (`dd34923db`). Pure move refactor, 1326/1326 tests preserved.
+- **VS Code** `apps/extension-vscode/src/extension.ts` 1,629 LOC → 255 LOC + `lifecycle/{chatSetup,commandSetup,providerSetup}.ts` (`e11dc7ea1`, commit subject mislabeled by lint-staged race). 512/512 tests preserved.
+- **Desktop** `apps/desktop/src/hooks/useAgenticEvents.ts` -86 LOC dedup against `agenticEventUtils.ts` (`1bc2be696`). Full per-event-hook split blocked by shared singletons (E1 documented in `AUDIT_LOG.md`).
+
+### Removed
+
+- **CLI** `apps/cli/src/tui/_attic/` — 344 dead-duplicate files, ~107K LOC (`0e81d1546`). Verified zero references via grep. Build + 1326 tests stayed green.
+- **Web** `apps/web/test-simple.tsx` — unused scratch file that would crash on import (`911bfd2ed`).
+- **Web** unused `useMemoizedValue` hook (zero consumers, tripped `react-hooks/use-memo`).
+
+### Fixed (Phase D — Cross-surface polish)
+
+- **Web** lint: 2 errors + 13 warnings → 0/0 (`911bfd2ed`) — setState-in-useMemo bug, lucide `Image` → `ImageIcon`, eslint-disable cleanup.
+- **CLI** workspace `Cargo.toml` adopts 33 codex-rs clippy deny lints (`fceaee92f`) — omits `unwrap_used` + `expect_used` (2,409 sites pending future cleanup). 13 utility/leaf crates inherit via `[lints] workspace = true` (`1c1789eaa`).
+- **Packages** `posttest=pnpm build` hook on 19 workspace packages (`91fafd3cf`) — catches the case where a test-only fix leaves the package un-buildable (Gemini-CLI pattern).
+- **VS Code** TypeScript project references via new `tsconfig.build.json` (`291bf6ccb`) — `composite: true` + `noEmit: false` on `packages/types` + `packages/runtime`. `pnpm --filter agi-workforce check:refs` enforces DAG at compile time.
+- **Web** light-mode token overrides in `globals.css` (`cb16170b9`) — `[data-theme='light'][data-design='agi']` block defines light-mode values for all `--agi-*` CSS custom properties. Activates by setting `data-theme="light"` on `<html>` or any ancestor.
+
+### Documentation
+
+- New `MASTER_PLAN.md` §10 live status tracker + §10.1 surface health snapshot + §10.2 escalation closure log.
+- New `AGENTS.md` + `.codex/agents/*.toml` — Codex CLI agent definitions mirroring `.claude/agents/` (`76a4d8e88`).
+- `AUDIT_LOG.md` entries for fires #1 through #6 with full structured findings + 2 escalation points (E1 + E2; E2 now closed).
+- `apps/web/docs/light-theme.md` — light-mode strategy note.
+
+### Escalations
+
+- **E2 closed** — Desktop bridge `POST /pair` endpoint shipped; chrome ext pairing is now end-to-end functional.
+- **E1 open** — Desktop `useAgenticEvents.ts` full per-event-hook split blocked by 7 module-level mutable singletons. Requires `SharedListenerContext` refactor (~300 LOC structural change). Documented in `AUDIT_LOG.md` for next-fire pickup.
+
+### Test counts (post-campaign)
+
+| Surface                            | Tests passing           |
+| ---------------------------------- | ----------------------- |
+| apps/cli (cargo)                   | 1,326                   |
+| apps/desktop frontend (vitest)     | 1,653                   |
+| apps/desktop backend (Tauri cargo) | 3,945                   |
+| apps/web (vitest)                  | 3,246                   |
+| apps/mobile (jest)                 | 778                     |
+| apps/extension Chrome (vitest)     | 607                     |
+| apps/extension-vscode              | 512                     |
+| packages (12 enumerated)           | 1,103                   |
+| services (api-gateway + signaling) | 155                     |
+| other cargo crates                 | ~408                    |
+| **Platform total**                 | **≥13,733 tests green** |
+
+---
+
 ## [cli-1.7.1] — 2026-05-14
 
 ### Fixed
