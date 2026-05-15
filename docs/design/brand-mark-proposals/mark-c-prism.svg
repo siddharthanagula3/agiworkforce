@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Mark C — Stacked layers prism (orchestrated stack of models) -->
+  <!-- Three rounded rectangles offset diagonally, suggesting 'multiple models in one stack' -->
+  <rect x="10" y="40" width="40" height="12" rx="2.5" fill="#21808d"/>
+  <rect x="14" y="26" width="40" height="12" rx="2.5" fill="#7ea9ad"/>
+  <rect x="18" y="12" width="40" height="12" rx="2.5" fill="#da7756"/>
+</svg>

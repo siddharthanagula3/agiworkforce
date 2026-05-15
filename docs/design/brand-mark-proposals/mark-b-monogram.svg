@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Mark B — Angular monogram (geometric 'A' with workforce crossbar) -->
+  <!-- Outer A shape, two converging teal strokes -->
+  <path d="M 12 52 L 32 12 L 52 52" stroke="#21808d" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Inner crossbar in terracotta — 'workforce' bar that ties the two strokes -->
+  <line x1="22" y1="38" x2="42" y2="38" stroke="#da7756" stroke-width="6" stroke-linecap="round"/>
+</svg>
