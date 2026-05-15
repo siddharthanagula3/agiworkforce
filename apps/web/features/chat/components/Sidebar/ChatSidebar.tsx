@@ -3,13 +3,12 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Plus,
+  SquarePen,
   Search,
   MessageSquare,
   MoreHorizontal,
   Pencil,
   Trash2,
-  PanelLeftClose,
   X,
   Settings,
   LogOut,
@@ -341,7 +340,7 @@ const UserProfileArea = React.memo(function UserProfileArea() {
 });
 
 // ---------------------------------------------------------------------------
-// Collapsed Sidebar (icon strip — 64px)
+// Collapsed Sidebar (icon-only rail — 48px per design-spec §6.1)
 // ---------------------------------------------------------------------------
 
 function CollapsedSidebar({
@@ -352,22 +351,16 @@ function CollapsedSidebar({
   onToggleSidebar?: () => void;
 }) {
   return (
-    <div className="flex w-16 h-full flex-col items-center gap-1 bg-[var(--chat-sidebar-bg)] border-r border-[var(--chat-border-strong)] py-3">
-      {onToggleSidebar && (
-        <button
-          onClick={onToggleSidebar}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:text-foreground transition-colors"
-          aria-label="Expand sidebar"
-        >
-          <PanelLeftClose className="h-4 w-4" />
-        </button>
-      )}
+    <div
+      className="flex w-12 h-full flex-col items-center gap-2 bg-[var(--chat-sidebar-bg)] border-r border-[var(--chat-border-strong)] py-3"
+      onMouseEnter={onToggleSidebar}
+    >
       <button
         onClick={onNewChat}
         className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:text-foreground transition-colors"
         aria-label="New chat"
       >
-        <Plus className="h-4 w-4" />
+        <SquarePen className="h-4 w-4" />
       </button>
       <button
         className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:text-foreground transition-colors"
@@ -375,9 +368,12 @@ function CollapsedSidebar({
       >
         <Search className="h-4 w-4" />
       </button>
-      <div className="mt-2">
-        <MessageSquare className="h-3.5 w-3.5 text-muted-foreground/30" />
-      </div>
+      <button
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:text-foreground transition-colors"
+        aria-label="Chats"
+      >
+        <MessageSquare className="h-4 w-4" />
+      </button>
     </div>
   );
 }
@@ -459,7 +455,10 @@ function ChatSidebarContent({
   }
 
   return (
-    <div className="flex h-full flex-col bg-[var(--chat-sidebar-bg)] border-r border-[var(--chat-border-strong)]">
+    <div
+      className="flex h-full w-[260px] flex-col bg-[var(--chat-sidebar-bg)] border-r border-[var(--chat-border-strong)]"
+      onMouseLeave={onToggleSidebar}
+    >
       {/* Header */}
       {bulkMode ? (
         <div className="flex items-center gap-1.5 px-3 pt-3 pb-2 text-[12px]">
@@ -483,15 +482,13 @@ function ChatSidebarContent({
         </div>
       ) : (
         <div className="flex items-center gap-2 px-3 pt-3 pb-2">
-          {onToggleSidebar && (
-            <button
-              onClick={onToggleSidebar}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:text-foreground transition-colors"
-              aria-label="Close sidebar"
-            >
-              <PanelLeftClose className="h-4 w-4" />
-            </button>
-          )}
+          <button
+            onClick={onNewChat}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:text-foreground transition-colors"
+            aria-label="New chat"
+          >
+            <SquarePen className="h-4 w-4" />
+          </button>
           <span className="text-[13px] font-semibold text-foreground">AGI Workforce</span>
           {sessions.length > 0 && (
             <button
@@ -503,19 +500,6 @@ function ChatSidebarContent({
               <CheckSquare className="h-3.5 w-3.5" />
             </button>
           )}
-        </div>
-      )}
-
-      {/* New Chat button */}
-      {!bulkMode && (
-        <div className="px-3 pb-1">
-          <button
-            onClick={onNewChat}
-            className="flex w-full items-center gap-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 text-sm font-medium transition-colors"
-          >
-            <Plus className="h-4 w-4 shrink-0" />
-            New Chat
-          </button>
         </div>
       )}
 
@@ -578,6 +562,16 @@ function ChatSidebarContent({
           ))
         )}
       </ScrollArea>
+
+      {/* Free plan upgrade pill per design-spec §6.4 */}
+      <div className="px-3 pb-2">
+        <div className="flex items-center justify-between rounded-full bg-black/[0.04] dark:bg-white/[0.04] px-3 py-1.5 text-xs text-muted-foreground">
+          <span>Free plan</span>
+          <a href="/pricing" className="font-medium text-primary hover:underline">
+            Upgrade
+          </a>
+        </div>
+      </div>
 
       {/* User profile */}
       <UserProfileArea />
