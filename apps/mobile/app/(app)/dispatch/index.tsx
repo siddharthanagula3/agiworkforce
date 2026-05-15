@@ -19,7 +19,7 @@ import {
   ArrowLeft,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/lib/theme';
+import { useThemeColors } from '@/hooks/useTheme';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useDispatchStore } from '@/stores/dispatchStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -30,6 +30,7 @@ import type { DispatchMessage } from '@/stores/dispatchStore';
 // ---------------------------------------------------------------------------
 
 function DispatchHeader({ onBack, onMenuPress }: { onBack: () => void; onMenuPress: () => void }) {
+  const colors = useThemeColors();
   const status = useConnectionStore((s) => s.status);
   const desktopName = useConnectionStore((s) => s.desktopName);
   const connectionQuality = useConnectionStore((s) => s.connectionQuality);
@@ -100,6 +101,7 @@ function DispatchHeader({ onBack, onMenuPress }: { onBack: () => void; onMenuPre
 // ---------------------------------------------------------------------------
 
 function TaskResultCard({ message }: { message: DispatchMessage }) {
+  const colors = useThemeColors();
   const taskStatus = message.taskStatus;
   const result = message.taskResult;
 
@@ -208,6 +210,7 @@ function TaskResultCard({ message }: { message: DispatchMessage }) {
 // ---------------------------------------------------------------------------
 
 function MessageBubble({ message }: { message: DispatchMessage }) {
+  const colors = useThemeColors();
   const isUser = message.role === 'user';
 
   return (
@@ -244,6 +247,7 @@ function MessageBubble({ message }: { message: DispatchMessage }) {
 // ---------------------------------------------------------------------------
 
 function DispatchInput({ onSend }: { onSend: (text: string) => void }) {
+  const colors = useThemeColors();
   const [text, setText] = useState('');
   const inputRef = useRef<TextInput>(null);
   const status = useConnectionStore((s) => s.status);
@@ -328,6 +332,7 @@ function DispatchInput({ onSend }: { onSend: (text: string) => void }) {
 // ---------------------------------------------------------------------------
 
 function PairingPrompt() {
+  const colors = useThemeColors();
   const router = useRouter();
 
   const handleScanPress = useCallback(() => {
@@ -391,6 +396,7 @@ function ThreadMenu({
   onClose: () => void;
   onClear: () => void;
 }) {
+  const colors = useThemeColors();
   if (!visible) return null;
 
   return (
@@ -464,6 +470,7 @@ function formatTime(isoString: string): string {
 // ---------------------------------------------------------------------------
 
 export default function DispatchScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
   const listRef = useRef<FlashListRef<DispatchMessage>>(null);
   const [menuVisible, setMenuVisible] = useState(false);

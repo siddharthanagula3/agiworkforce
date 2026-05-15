@@ -6,7 +6,7 @@ import { ArrowLeft, Send, Bug, Lightbulb, MessageCircle } from 'lucide-react-nat
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { api } from '@/services/api';
-import { colors } from '@/lib/theme';
+import { useThemeColors } from '@/hooks/useTheme';
 
 type FeedbackType = 'bug' | 'feature' | 'general';
 
@@ -17,6 +17,7 @@ const FEEDBACK_TYPES: Array<{ type: FeedbackType; label: string; icon: typeof Bu
 ];
 
 export default function FeedbackScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
   const [type, setType] = useState<FeedbackType>('general');
   const [message, setMessage] = useState('');

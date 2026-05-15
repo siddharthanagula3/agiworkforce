@@ -22,7 +22,7 @@ import {
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { colors } from '@/lib/theme';
+import { useThemeColors } from '@/hooks/useTheme';
 import {
   fetchUsageSummary,
   type UsageSummary,
@@ -87,6 +87,7 @@ function dayLabel(isoDate: string): string {
 // ---------------------------------------------------------------------------
 
 function ProgressBar({ percentage, label }: { percentage: number; label: string }) {
+  const colors = useThemeColors();
   const clamped = Math.max(0, Math.min(100, percentage));
   return (
     <View className="gap-2">
@@ -169,6 +170,7 @@ function ApiSpendCard({ summary }: { summary: UsageSummary }) {
 }
 
 function StatsRow({ summary }: { summary: UsageSummary }) {
+  const colors = useThemeColors();
   return (
     <Card>
       <View className="flex-row justify-around">
@@ -193,6 +195,7 @@ function StatsRow({ summary }: { summary: UsageSummary }) {
 }
 
 function ModelBreakdownCard({ models }: { models: ModelUsage[] }) {
+  const colors = useThemeColors();
   if (models.length === 0) return null;
 
   const maxTokens = Math.max(...models.map((m) => m.totalTokens), 1);
@@ -246,6 +249,7 @@ function ModelBreakdownCard({ models }: { models: ModelUsage[] }) {
 }
 
 function DailyChartCard({ days }: { days: DailyUsage[] }) {
+  const colors = useThemeColors();
   if (days.length === 0) return null;
 
   const maxTokens = Math.max(...days.map((d) => d.totalTokens), 1);
@@ -308,6 +312,7 @@ function ActionRow({
   label: string;
   onPress: () => void;
 }) {
+  const colors = useThemeColors();
   return (
     <Pressable
       onPress={onPress}
@@ -329,6 +334,7 @@ function ActionRow({
 // ---------------------------------------------------------------------------
 
 function ErrorCard() {
+  const colors = useThemeColors();
   return (
     <Card>
       <View className="items-center py-6 gap-2">
@@ -347,6 +353,7 @@ function ErrorCard() {
 // ---------------------------------------------------------------------------
 
 export default function UsageScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
   const [summary, setSummary] = useState<UsageSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);

@@ -38,7 +38,8 @@ import {
   useNotificationPrefsStore,
   type NotificationCategory,
 } from '@/stores/notificationPrefsStore';
-import { colors } from '@/lib/theme';
+import { useThemeColors } from '@/hooks/useTheme';
+import type { ColorScheme } from '@/lib/theme';
 import type { LucideIcon } from 'lucide-react-native';
 
 // ---------------------------------------------------------------------------
@@ -53,36 +54,38 @@ interface CategoryMeta {
   iconColor: string;
 }
 
-const CATEGORIES: CategoryMeta[] = [
-  {
-    id: 'approvals',
-    label: 'Approvals',
-    description: 'Agent action approval requests',
-    icon: CheckSquare,
-    iconColor: colors.agentWarning,
-  },
-  {
-    id: 'task_updates',
-    label: 'Task Updates',
-    description: 'Task completed, paused, or resumed',
-    icon: Info,
-    iconColor: colors.teal,
-  },
-  {
-    id: 'errors',
-    label: 'Errors & Stops',
-    description: 'Agent failures and emergency stops',
-    icon: AlertOctagon,
-    iconColor: colors.agentError,
-  },
-  {
-    id: 'status',
-    label: 'Status Updates',
-    description: 'Heartbeat and connection info',
-    icon: AlertTriangle,
-    iconColor: colors.textMuted,
-  },
-];
+function getCategories(c: ColorScheme): CategoryMeta[] {
+  return [
+    {
+      id: 'approvals',
+      label: 'Approvals',
+      description: 'Agent action approval requests',
+      icon: CheckSquare,
+      iconColor: c.agentWarning,
+    },
+    {
+      id: 'task_updates',
+      label: 'Task Updates',
+      description: 'Task completed, paused, or resumed',
+      icon: Info,
+      iconColor: c.teal,
+    },
+    {
+      id: 'errors',
+      label: 'Errors & Stops',
+      description: 'Agent failures and emergency stops',
+      icon: AlertOctagon,
+      iconColor: c.agentError,
+    },
+    {
+      id: 'status',
+      label: 'Status Updates',
+      description: 'Heartbeat and connection info',
+      icon: AlertTriangle,
+      iconColor: c.textMuted,
+    },
+  ];
+}
 
 // ---------------------------------------------------------------------------
 // Priority row
@@ -127,6 +130,7 @@ function TimePickerModal({
   onClose,
   onConfirm,
 }: TimePickerModalProps) {
+  const colors = useThemeColors();
   const [value, setValue] = useState(currentValue);
 
   const handleConfirm = useCallback(() => {
@@ -257,6 +261,7 @@ function TimePickerModal({
 // ---------------------------------------------------------------------------
 
 export default function NotificationPreferencesScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
   const {
     categoryEnabled,
@@ -266,6 +271,7 @@ export default function NotificationPreferencesScreen() {
     setVibrationEnabled,
     setQuietHours,
   } = useNotificationPrefsStore();
+  const CATEGORIES = getCategories(colors);
 
   const [timePickerField, setTimePickerField] = useState<'start' | 'end' | null>(null);
 
