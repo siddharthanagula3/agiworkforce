@@ -1,20 +1,22 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
-  PanelLeft,
-  Plus,
-  Search,
-  Palette,
-  MessageSquare,
+  Code,
   FolderOpen,
-  Zap,
-  Plug,
+  LayoutGrid,
+  MessageSquare,
+  Search,
+  Settings,
+  Sparkles,
+  SquarePen,
 } from 'lucide-react';
+import { PLAN_LABEL, isFreePlan } from '@agiworkforce/types';
 import { cn } from '../lib/utils';
 import { useHostBridge } from '../lib/hostBridge';
 import { syncPackageStoreFromHost } from '../hooks/useHostBridgeSync';
 import { useSidebar } from '../hooks/useSidebar';
 import { useChatStore } from '../stores/chatStore';
 import { useUIStore } from '../stores/uiStore';
+import { useTierStore, selectTier } from '../stores/tierStore';
 import { ScrollArea } from './ui/ScrollArea';
 import { Tooltip } from './ui/Tooltip';
 import { ConversationItem } from './ConversationItem';
@@ -35,8 +37,12 @@ interface NavItem {
 }
 
 export function Sidebar() {
-  const { collapsed, width, toggleSidebar } = useSidebar();
+  const { collapsed, toggleSidebar: _toggleSidebar } = useSidebar();
   const hostBridge = useHostBridge();
+  // Hover-expand: rail is collapsed by default; hovering expands to 260px without toggling store
+  const [hoverExpanded, setHoverExpanded] = useState(false);
+  const isExpanded = !collapsed || hoverExpanded;
+  const width = isExpanded ? tokens.spacing.sidebarWidth : tokens.spacing.sidebarCollapsedWidth;
 
   const addConversation = useChatStore((s) => s.addConversation);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
@@ -73,20 +79,20 @@ export function Sidebar() {
   const navItems: NavItem[] = [
     {
       id: 'new-chat',
-      icon: <Plus size={16} />,
+      icon: <SquarePen size={18} strokeWidth={1.75} />,
       label: 'New Chat',
       shortcut: '⇧⌘O',
       action: handleNewChat,
     },
     {
       id: 'search',
-      icon: <Search size={16} />,
+      icon: <Search size={18} strokeWidth={1.75} />,
       label: 'Search',
       action: toggleSearchModal,
     },
     {
       id: 'customize',
-      icon: <Palette size={16} />,
+      icon: <LayoutGrid size={18} strokeWidth={1.75} />,
       label: 'Customize',
       action: () =>
         window.dispatchEvent(
@@ -95,19 +101,19 @@ export function Sidebar() {
     },
     {
       id: 'chats',
-      icon: <MessageSquare size={16} />,
+      icon: <MessageSquare size={18} strokeWidth={1.75} />,
       label: 'Chats',
       action: () => setActiveView('chat'),
     },
     {
       id: 'projects',
-      icon: <FolderOpen size={16} />,
+      icon: <FolderOpen size={18} strokeWidth={1.75} />,
       label: 'Projects',
       action: () => setActiveView('projects'),
     },
     {
       id: 'skills',
-      icon: <Zap size={16} />,
+      icon: <Sparkles size={18} strokeWidth={1.75} />,
       label: 'Skills',
       action: () =>
         window.dispatchEvent(
@@ -115,15 +121,20 @@ export function Sidebar() {
         ),
     },
     {
-      id: 'connectors',
-      icon: <Plug size={16} />,
-      label: 'Connectors',
+      id: 'code',
+      icon: <Code size={18} strokeWidth={1.75} />,
+      label: 'Code',
       action: () =>
         window.dispatchEvent(
-          new CustomEvent('chat:action', {
-            detail: { type: 'open-settings', tab: 'connectors' },
-          }),
+          new CustomEvent('chat:action', { detail: { type: 'open-settings', tab: 'code' } }),
         ),
+    },
+    {
+      id: 'settings',
+      icon: <Settings size={18} strokeWidth={1.75} />,
+      label: 'Settings',
+      action: () =>
+        window.dispatchEvent(new CustomEvent('chat:action', { detail: { type: 'open-settings' } })),
     },
   ];
 
@@ -135,8 +146,15 @@ export function Sidebar() {
     skills: 'skills',
     connectors: 'connectors',
     customize: 'customize',
+    code: 'code',
+    settings: 'settings',
   };
   const activeNavId = viewToNavId[activeView] ?? '';
+
+  // Tier/upgrade pill
+  const tier = useTierStore(selectTier);
+  const showUpgradePill = isFreePlan(tier);
+  const planLabel = PLAN_LABEL[tier];
 
   const groupedConversations = useMemo(() => {
     const filtered = searchQuery
@@ -161,6 +179,8 @@ export function Sidebar() {
 
   return (
     <aside
+      onMouseEnter={() => collapsed && setHoverExpanded(true)}
+      onMouseLeave={() => setHoverExpanded(false)}
       style={{
         width: `${width}px`,
         minWidth: `${width}px`,
@@ -168,29 +188,11 @@ export function Sidebar() {
       }}
       className="flex h-full flex-col bg-[var(--chat-surface-base)] border-r border-[var(--chat-border)] overflow-hidden"
     >
-      {/* Toggle button row */}
-      <div
-        className={cn(
-          'flex shrink-0 items-center px-2 pt-3 pb-1',
-          collapsed ? 'justify-center' : 'justify-start',
-        )}
-      >
-        <Tooltip content={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} side="right">
-          <button
-            onClick={toggleSidebar}
-            className={cn(
-              'flex h-8 w-8 items-center justify-center rounded-[var(--chat-radius-md)] transition-colors',
-              'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
-            )}
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            <PanelLeft size={16} />
-          </button>
-        </Tooltip>
-      </div>
+      {/* Top padding — 12px per spec */}
+      <div className="pt-3" />
 
-      {/* Nav items */}
-      <nav className="shrink-0 px-2 pb-2" aria-label="Main navigation">
+      {/* Nav items — 32×32 icon buttons, 8px gap, 6px hover background per spec §6.1 */}
+      <nav className="shrink-0 px-2 pb-2 flex flex-col gap-0.5" aria-label="Main navigation">
         {navItems.map((item) => {
           const isActive = item.id === activeNavId;
           const button = (
@@ -198,23 +200,18 @@ export function Sidebar() {
               key={item.id}
               onClick={item.action}
               className={cn(
-                'flex w-full items-center rounded-[var(--chat-radius-md)] transition-colors',
-                collapsed ? 'h-8 justify-center px-0' : 'h-8 gap-2 px-2',
+                'flex w-full items-center rounded-md transition-colors duration-100',
+                !isExpanded ? 'h-8 w-8 justify-center mx-auto' : 'h-8 gap-2 px-2',
                 isActive
-                  ? 'bg-[var(--chat-accent-primary)]/12 text-[var(--chat-accent-primary)]'
+                  ? 'bg-[var(--chat-surface-hover)] text-[var(--chat-text-primary)]'
                   : 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
               )}
               aria-current={isActive ? 'page' : undefined}
             >
               <span className="shrink-0">{item.icon}</span>
-              {!collapsed && (
+              {isExpanded && (
                 <>
-                  <span
-                    className="flex-1 text-left text-sm font-medium transition-opacity duration-100"
-                    style={{ opacity: collapsed ? 0 : 1 }}
-                  >
-                    {item.label}
-                  </span>
+                  <span className="flex-1 text-left text-sm">{item.label}</span>
                   {item.shortcut && (
                     <span className="text-[11px] text-[var(--chat-text-muted)]">
                       {item.shortcut}
@@ -225,30 +222,30 @@ export function Sidebar() {
             </button>
           );
 
-          if (collapsed) {
+          if (!isExpanded) {
             return (
               <Tooltip key={item.id} content={item.label} side="right">
                 {button}
               </Tooltip>
             );
           }
-          return button;
+          return <div key={item.id}>{button}</div>;
         })}
       </nav>
 
       {/* Divider */}
-      {!collapsed && <div className="mx-2 mb-1 h-px bg-[var(--chat-border)]" />}
+      {isExpanded && <div className="mx-2 mb-1 h-px bg-[var(--chat-border)]" />}
 
       {/* Recents section */}
       <ScrollArea className="flex-1 min-h-0">
         <div className="px-2 pb-2">
-          {!collapsed && orderedGroups.length === 0 && (
+          {isExpanded && orderedGroups.length === 0 && (
             <p className="px-2 py-4 text-center text-xs text-[var(--chat-text-muted)]">
               No conversations yet
             </p>
           )}
 
-          {!collapsed && orderedGroups.length > 0 && (
+          {isExpanded && orderedGroups.length > 0 && (
             <>
               {orderedGroups.map((group) => (
                 <div key={group} className="mb-1">
@@ -263,7 +260,7 @@ export function Sidebar() {
             </>
           )}
 
-          {collapsed && orderedGroups.length > 0 && (
+          {!isExpanded && orderedGroups.length > 0 && (
             <>
               {orderedGroups.map((group) =>
                 groupedConversations[group]!.map((conv) => (
@@ -275,9 +272,32 @@ export function Sidebar() {
         </div>
       </ScrollArea>
 
+      {/* Free-plan upgrade pill — bottom of expanded sidebar per spec §6.4 */}
+      {isExpanded && showUpgradePill && (
+        <div className="shrink-0 px-3 pb-2">
+          <div className="flex items-center gap-1.5 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-hover)] px-3 py-1 text-xs text-[var(--chat-text-secondary)]">
+            <span>{planLabel} plan</span>
+            <span aria-hidden="true">·</span>
+            <button
+              type="button"
+              onClick={() =>
+                window.dispatchEvent(
+                  new CustomEvent('chat:action', {
+                    detail: { type: 'open-settings', tab: 'billing' },
+                  }),
+                )
+              }
+              className="font-medium text-[var(--chat-accent-primary)] hover:underline underline-offset-2 transition-colors"
+            >
+              Upgrade
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* User Profile — pinned to bottom */}
-      <div className={cn('shrink-0 border-t border-[var(--chat-border)] px-2 py-2')}>
-        <UserProfile collapsed={collapsed} />
+      <div className="shrink-0 border-t border-[var(--chat-border)] px-2 py-2">
+        <UserProfile collapsed={!isExpanded} />
       </div>
     </aside>
   );
