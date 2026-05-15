@@ -215,16 +215,6 @@ export { createSortableHeader } from './data-table-helpers';
 export { Avatar, AvatarImage, AvatarFallback } from './avatar';
 export { AvatarWithFallback } from './avatar-with-fallback';
 export { Calendar, type CalendarProps } from './calendar';
-export {
-  type ChartConfig,
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  ChartLegend,
-  ChartLegendContent,
-  ChartStyle,
-} from './chart';
-
 // Accordion and collapsible
 export { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from './accordion';
 export { Collapsible, CollapsibleTrigger, CollapsibleContent } from './collapsible';
