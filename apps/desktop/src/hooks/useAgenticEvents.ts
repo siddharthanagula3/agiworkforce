@@ -106,13 +106,29 @@ interface ExtensionStatusDiagnosticsPayload {
   };
 }
 
-let runtimeActivityHookMounts = 0;
-let runtimeActivityListenersInitialized = false;
-let runtimeActivityInitializationPromise: Promise<void> | null = null;
-let runtimeActivityListenersActive = false;
-let extensionPreflightChecked = false;
-const runtimeActivityUnlistenFns: UnlistenFn[] = [];
-const toolStreamCleanupTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+export interface SharedListenerContext {
+  hookMounts: number;
+  listenersInitialized: boolean;
+  initializationPromise: Promise<void> | null;
+  listenersActive: boolean;
+  extensionPreflightChecked: boolean;
+  unlistenFns: UnlistenFn[];
+  toolStreamCleanupTimeouts: Map<string, ReturnType<typeof setTimeout>>;
+}
+
+function createSharedListenerContext(): SharedListenerContext {
+  return {
+    hookMounts: 0,
+    listenersInitialized: false,
+    initializationPromise: null,
+    listenersActive: false,
+    extensionPreflightChecked: false,
+    unlistenFns: [],
+    toolStreamCleanupTimeouts: new Map(),
+  };
+}
+
+const _ctx: SharedListenerContext = createSharedListenerContext();
 
 const runtimeActivityHandlers = {
   addFileOperation: () => useUnifiedChatStore.getState().addFileOperation,
@@ -183,11 +199,11 @@ function emitRuntimeActivity(activity: ReturnType<typeof buildRuntimeActivityEmi
   }
 }
 
-function runExtensionPreflightCheck(): void {
-  if (extensionPreflightChecked || !isTauri) {
+function runExtensionPreflightCheck(ctx: SharedListenerContext): void {
+  if (ctx.extensionPreflightChecked || !isTauri) {
     return;
   }
-  extensionPreflightChecked = true;
+  ctx.extensionPreflightChecked = true;
 
   void (async () => {
     try {
@@ -237,10 +253,10 @@ function runExtensionPreflightCheck(): void {
         fadeAfter: 5000,
       });
       if (degraded) {
-        extensionPreflightChecked = false;
+        ctx.extensionPreflightChecked = false;
       }
     } catch (error) {
-      extensionPreflightChecked = false;
+      ctx.extensionPreflightChecked = false;
       upsertActionLogEntry({
         id: 'extension-preflight',
         actionId: 'extension-preflight',
@@ -357,9 +373,13 @@ function upsertInlineExtensionArtifact(
   );
 }
 
-function safeHandler<T>(eventName: string, handler: (payload: T) => void | Promise<void>) {
+function safeHandler<T>(
+  ctx: SharedListenerContext,
+  eventName: string,
+  handler: (payload: T) => void | Promise<void>,
+) {
   return async (event: { payload: T }) => {
-    if (!runtimeActivityListenersActive) return;
+    if (!ctx.listenersActive) return;
     try {
       await handler(event.payload);
     } catch (error) {
@@ -368,12 +388,12 @@ function safeHandler<T>(eventName: string, handler: (payload: T) => void | Promi
   };
 }
 
-async function setupRuntimeActivityEventListeners(): Promise<void> {
-  const push = (fn: UnlistenFn) => runtimeActivityUnlistenFns.push(fn);
+async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): Promise<void> {
+  const push = (fn: UnlistenFn) => ctx.unlistenFns.push(fn);
 
   const unlistenFileOp = await listen<FileOperationEvent>(
     'agi:file_operation',
-    safeHandler('agi:file_operation', (payload) => {
+    safeHandler(ctx, 'agi:file_operation', (payload) => {
       runtimeActivityHandlers.addFileOperation()(payload.operation);
       focusSidecar(`file_${payload.operation.type ?? 'file'}`);
     }),
@@ -382,7 +402,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   const unlistenTerminal = await listen<TerminalCommandEvent>(
     'agi:terminal_command',
-    safeHandler('agi:terminal_command', (payload) => {
+    safeHandler(ctx, 'agi:terminal_command', (payload) => {
       runtimeActivityHandlers.addTerminalCommand()(payload.command);
       focusSidecar('terminal_execute');
     }),
@@ -391,7 +411,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   const unlistenToolExec = await listen<ToolExecutionEvent>(
     'agi:tool_execution',
-    safeHandler('agi:tool_execution', (payload) => {
+    safeHandler(ctx, 'agi:tool_execution', (payload) => {
       runtimeActivityHandlers.addToolExecution()(payload.execution);
       // Extract tool name from various possible field names in the execution payload
       const exec = payload.execution as ToolExecution & {
@@ -407,7 +427,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   const unlistenScreenshot = await listen<ScreenshotEvent>(
     'agi:screenshot',
-    safeHandler('agi:screenshot', (payload) => {
+    safeHandler(ctx, 'agi:screenshot', (payload) => {
       runtimeActivityHandlers.addScreenshot()(payload.screenshot);
     }),
   );
@@ -415,7 +435,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   const unlistenExtensionPageContext = await listen<ExtensionPageContextEvent>(
     'extension:page-context',
-    safeHandler('extension:page-context', (payload) => {
+    safeHandler(ctx, 'extension:page-context', (payload) => {
       useExtensionEventsStore.getState().applyPageContext(payload);
       const actionCount = payload.actions?.length ?? 0;
       const selectedText =
@@ -496,7 +516,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   const unlistenExtensionConnectionStatus = await listen<ExtensionConnectionStatusEvent>(
     'extension:connection-status',
-    safeHandler('extension:connection-status', (payload) => {
+    safeHandler(ctx, 'extension:connection-status', (payload) => {
       useExtensionEventsStore.getState().applyConnectionStatus(payload.connected === true);
       const isConnected = payload.connected === true;
       const statusLabel = String(payload.status ?? (isConnected ? 'connected' : 'disconnected'));
@@ -532,9 +552,9 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
       if (!isConnected) {
         // Allow preflight to run again on the next extension-native tool call.
-        extensionPreflightChecked = false;
+        ctx.extensionPreflightChecked = false;
       } else {
-        runExtensionPreflightCheck();
+        runExtensionPreflightCheck(ctx);
       }
 
       focusSidecar('browser');
@@ -544,7 +564,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   const unlistenExtensionTaskResult = await listen<ExtensionTaskResultEvent>(
     'extension:task-result',
-    safeHandler('extension:task-result', (payload) => {
+    safeHandler(ctx, 'extension:task-result', (payload) => {
       useExtensionEventsStore.getState().applyTaskResult(payload);
       const actionId = `extension-${payload.task_id}`;
       const status: ActionLogStatus = payload.success ? 'success' : 'failed';
@@ -628,7 +648,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
     message: string;
     graceful?: boolean;
   }>('automation:permission_required', (event) => {
-    if (!runtimeActivityListenersActive) return;
+    if (!ctx.listenersActive) return;
     const { message, reason, graceful } = event.payload;
     const openSettings = () => {
       void automation.requestAutomationPermission(reason ?? 'accessibility').catch((err) => {
@@ -656,7 +676,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
   // Calendar domain events -> unified action timeline
   const unlistenCalendarAuthStarted = await listen<string>(
     'calendar:auth_started',
-    safeHandler('calendar:auth_started', (provider) => {
+    safeHandler(ctx, 'calendar:auth_started', (provider) => {
       const providerLabel = String(provider || 'calendar').trim() || 'calendar';
       emitRuntimeActivity(
         buildRuntimeActivityEmission({
@@ -679,7 +699,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   const unlistenCalendarConnected = await listen<string>(
     'calendar:connected',
-    safeHandler('calendar:connected', (accountId) => {
+    safeHandler(ctx, 'calendar:connected', (accountId) => {
       const normalizedAccountId = String(accountId || '').trim() || 'unknown';
       emitRuntimeActivity(
         buildRuntimeActivityEmission({
@@ -702,7 +722,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   const unlistenCalendarDisconnected = await listen<string>(
     'calendar:disconnected',
-    safeHandler('calendar:disconnected', (accountId) => {
+    safeHandler(ctx, 'calendar:disconnected', (accountId) => {
       const normalizedAccountId = String(accountId || '').trim() || 'unknown';
       emitRuntimeActivity(
         buildRuntimeActivityEmission({
@@ -725,7 +745,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   const unlistenCalendarEventCreated = await listen<Record<string, unknown>>(
     'calendar:event_created',
-    safeHandler('calendar:event_created', (payload) => {
+    safeHandler(ctx, 'calendar:event_created', (payload) => {
       const title = String(payload['title'] ?? payload['summary'] ?? 'Calendar event');
       const eventId = String(payload['id'] ?? payload['event_id'] ?? '');
       emitRuntimeActivity(
@@ -749,7 +769,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   const unlistenCalendarEventUpdated = await listen<Record<string, unknown>>(
     'calendar:event_updated',
-    safeHandler('calendar:event_updated', (payload) => {
+    safeHandler(ctx, 'calendar:event_updated', (payload) => {
       const title = String(payload['title'] ?? payload['summary'] ?? 'Calendar event');
       const eventId = String(payload['id'] ?? payload['event_id'] ?? '');
       emitRuntimeActivity(
@@ -773,7 +793,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   const unlistenCalendarEventDeleted = await listen<Record<string, unknown>>(
     'calendar:event_deleted',
-    safeHandler('calendar:event_deleted', (payload) => {
+    safeHandler(ctx, 'calendar:event_deleted', (payload) => {
       const eventId = String(payload['event_id'] ?? payload['id'] ?? 'unknown');
       emitRuntimeActivity(
         buildRuntimeActivityEmission({
@@ -797,7 +817,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
   // Automation domain events -> unified action timeline
   const unlistenAutomationRecordingStarted = await listen<Record<string, unknown>>(
     'automation:recording_started',
-    safeHandler('automation:recording_started', (payload) => {
+    safeHandler(ctx, 'automation:recording_started', (payload) => {
       const sessionId = String(payload['session_id'] ?? payload['sessionId'] ?? 'unknown');
       emitRuntimeActivity(
         buildRuntimeActivityEmission({
@@ -821,7 +841,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   const unlistenAutomationActionRecorded = await listen<Record<string, unknown>>(
     'automation:action_recorded',
-    safeHandler('automation:action_recorded', (payload) => {
+    safeHandler(ctx, 'automation:action_recorded', (payload) => {
       const actionType = String(payload['action_type'] ?? payload['actionType'] ?? 'action');
       const actionId = String(payload['id'] ?? crypto.randomUUID());
       emitRuntimeActivity(
@@ -847,7 +867,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   const unlistenAutomationRecordingStopped = await listen<Record<string, unknown>>(
     'automation:recording_stopped',
-    safeHandler('automation:recording_stopped', (payload) => {
+    safeHandler(ctx, 'automation:recording_stopped', (payload) => {
       const recordingId = String(payload['id'] ?? payload['recording_id'] ?? 'unknown');
       const actionCount = Number(payload['actions_count'] ?? payload['action_count'] ?? 0);
       emitRuntimeActivity(
@@ -878,7 +898,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   const unlistenAutomationScreenshotRequested = await listen<Record<string, unknown>>(
     'automation:request_screenshot',
-    safeHandler('automation:request_screenshot', (payload) => {
+    safeHandler(ctx, 'automation:request_screenshot', (payload) => {
       const actionId = String(payload['action_id'] ?? payload['actionId'] ?? 'unknown');
       emitRuntimeActivity(
         buildRuntimeActivityEmission({
@@ -904,7 +924,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
   // Cloud integration events -> unified action timeline
   const unlistenCloudAuthStarted = await listen<string>(
     'cloud:auth_started',
-    safeHandler('cloud:auth_started', (provider) => {
+    safeHandler(ctx, 'cloud:auth_started', (provider) => {
       const providerLabel = String(provider || 'cloud').trim() || 'cloud';
       emitRuntimeActivity(
         buildRuntimeActivityEmission({
@@ -927,7 +947,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   const unlistenCloudConnected = await listen<string>(
     'cloud:connected',
-    safeHandler('cloud:connected', (accountId) => {
+    safeHandler(ctx, 'cloud:connected', (accountId) => {
       const normalizedAccountId = String(accountId || '').trim() || 'unknown';
       emitRuntimeActivity(
         buildRuntimeActivityEmission({
@@ -950,7 +970,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   const unlistenCloudDisconnected = await listen<string>(
     'cloud:disconnected',
-    safeHandler('cloud:disconnected', (accountId) => {
+    safeHandler(ctx, 'cloud:disconnected', (accountId) => {
       const normalizedAccountId = String(accountId || '').trim() || 'unknown';
       emitRuntimeActivity(
         buildRuntimeActivityEmission({
@@ -973,7 +993,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   const unlistenCloudFileUploaded = await listen<Record<string, unknown>>(
     'cloud:file_uploaded',
-    safeHandler('cloud:file_uploaded', (payload) => {
+    safeHandler(ctx, 'cloud:file_uploaded', (payload) => {
       const remotePath = String(payload['remotePath'] ?? payload['remote_path'] ?? 'file');
       emitRuntimeActivity(
         buildRuntimeActivityEmission({
@@ -997,7 +1017,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   const unlistenCloudFileDownloaded = await listen<Record<string, unknown>>(
     'cloud:file_downloaded',
-    safeHandler('cloud:file_downloaded', (payload) => {
+    safeHandler(ctx, 'cloud:file_downloaded', (payload) => {
       const remotePath = String(payload['remotePath'] ?? payload['remote_path'] ?? 'file');
       emitRuntimeActivity(
         buildRuntimeActivityEmission({
@@ -1021,7 +1041,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   const unlistenCloudFileDeleted = await listen<Record<string, unknown>>(
     'cloud:file_deleted',
-    safeHandler('cloud:file_deleted', (payload) => {
+    safeHandler(ctx, 'cloud:file_deleted', (payload) => {
       const remotePath = String(payload['remotePath'] ?? payload['remote_path'] ?? 'file');
       emitRuntimeActivity(
         buildRuntimeActivityEmission({
@@ -1045,7 +1065,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   const unlistenCloudFolderCreated = await listen<Record<string, unknown>>(
     'cloud:folder_created',
-    safeHandler('cloud:folder_created', (payload) => {
+    safeHandler(ctx, 'cloud:folder_created', (payload) => {
       const remotePath = String(payload['remotePath'] ?? payload['remote_path'] ?? 'folder');
       emitRuntimeActivity(
         buildRuntimeActivityEmission({
@@ -1070,7 +1090,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
   // Gmail integration events -> unified action timeline
   const unlistenGmailAuthStarted = await listen<string>(
     'gmail:auth_started',
-    safeHandler('gmail:auth_started', (oauthState) => {
+    safeHandler(ctx, 'gmail:auth_started', (oauthState) => {
       emitRuntimeActivity(
         buildRuntimeActivityEmission({
           id: `gmail-auth-${Date.now()}`,
@@ -1092,7 +1112,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   const unlistenGmailConnected = await listen<string>(
     'gmail:connected',
-    safeHandler('gmail:connected', (accountId) => {
+    safeHandler(ctx, 'gmail:connected', (accountId) => {
       const normalizedAccountId = String(accountId || '').trim() || 'unknown';
       emitRuntimeActivity(
         buildRuntimeActivityEmission({
@@ -1115,7 +1135,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   const unlistenGmailTokenRefreshed = await listen<string>(
     'gmail:token_refreshed',
-    safeHandler('gmail:token_refreshed', (accountId) => {
+    safeHandler(ctx, 'gmail:token_refreshed', (accountId) => {
       const normalizedAccountId = String(accountId || '').trim() || 'unknown';
       emitRuntimeActivity(
         buildRuntimeActivityEmission({
@@ -1139,7 +1159,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   const unlistenGmailDisconnected = await listen<string>(
     'gmail:disconnected',
-    safeHandler('gmail:disconnected', (accountId) => {
+    safeHandler(ctx, 'gmail:disconnected', (accountId) => {
       const normalizedAccountId = String(accountId || '').trim() || 'unknown';
       emitRuntimeActivity(
         buildRuntimeActivityEmission({
@@ -1164,7 +1184,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
   const unlistenMcpToolStarted = await listen<McpToolExecutionStartedPayload>(
     'mcp:tool_execution_started',
     (event) => {
-      if (!runtimeActivityListenersActive) return;
+      if (!ctx.listenersActive) return;
       const { tool_id, server_name } = event.payload;
       const toolName = getMcpToolDisplayName(tool_id);
       emitRuntimeActivity(
@@ -1190,7 +1210,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
   const unlistenMcpToolCompleted = await listen<McpToolExecutionCompletedPayload>(
     'mcp:tool_execution_completed',
     (event) => {
-      if (!runtimeActivityListenersActive) return;
+      if (!ctx.listenersActive) return;
       const { tool_id, success, duration_ms } = event.payload;
       const toolName = getMcpToolDisplayName(tool_id);
 
@@ -1242,7 +1262,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
   const unlistenMcpConnection = await listen<McpConnectionChangedPayload>(
     'mcp:connection_changed',
     (event) => {
-      if (!runtimeActivityListenersActive) return;
+      if (!ctx.listenersActive) return;
       const { server_name, connected, error } = event.payload;
       emitRuntimeActivity(
         buildRuntimeActivityEmission({
@@ -1270,10 +1290,10 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
   // Tool Stream Events - real-time progress for tool executions
   const unlistenToolStream = await listen<ToolStreamEventPayload>('agi:tool_stream', (event) => {
-    if (!runtimeActivityListenersActive) return;
+    if (!ctx.listenersActive) return;
     const { event: streamEvent, timestamp } = event.payload;
     const scheduleToolStreamCleanup = (toolId: string) => {
-      const existingTimeout = toolStreamCleanupTimeouts.get(toolId);
+      const existingTimeout = ctx.toolStreamCleanupTimeouts.get(toolId);
       if (existingTimeout) {
         clearTimeout(existingTimeout);
       }
@@ -1281,7 +1301,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
       // This ensures message artifacts reflect final status before stream is removed
       // AUDIT-UI-053 fix: Also update top-level message metadata status so fallback works correctly
       const timeoutId = setTimeout(() => {
-        if (runtimeActivityListenersActive) {
+        if (ctx.listenersActive) {
           const state = useUnifiedChatStore.getState();
           const stream = state.activeToolStreams.get(toolId);
 
@@ -1305,9 +1325,9 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
           runtimeActivityHandlers.removeToolStream()(toolId);
         }
-        toolStreamCleanupTimeouts.delete(toolId);
+        ctx.toolStreamCleanupTimeouts.delete(toolId);
       }, 5000);
-      toolStreamCleanupTimeouts.set(toolId, timeoutId);
+      ctx.toolStreamCleanupTimeouts.set(toolId, timeoutId);
     };
 
     switch (streamEvent.type) {
@@ -1338,7 +1358,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
         );
 
         if (startedEvent.tool_name.startsWith('extension_native_')) {
-          runExtensionPreflightCheck();
+          runExtensionPreflightCheck(ctx);
         }
         break;
       }
@@ -1489,7 +1509,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
   try {
     const unlistenMcpServerUnhealthy = await listen<McpServerUnhealthyPayload>(
       'mcp:server_unhealthy',
-      safeHandler('mcp:server_unhealthy', (payload) => {
+      safeHandler(ctx, 'mcp:server_unhealthy', (payload) => {
         const mcpState = useMcpStore.getState();
         mcpState.upsertServerHealth({
           server_name: payload.server_name,
@@ -1507,7 +1527,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
     const unlistenMcpConnectionChanged = await listen<McpConnectionChangedPayload>(
       'mcp:connection_changed',
-      safeHandler('mcp:connection_changed', () => {
+      safeHandler(ctx, 'mcp:connection_changed', () => {
         const mcpState = useMcpStore.getState();
         mcpState.refreshServers();
         mcpState.refreshHealth();
@@ -1518,7 +1538,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
     const unlistenMcpToolCompletedSync = await listen<McpToolExecutionCompletedPayload>(
       'mcp:tool_execution_completed',
-      safeHandler('mcp:tool_execution_completed', () => {
+      safeHandler(ctx, 'mcp:tool_execution_completed', () => {
         const mcpState = useMcpStore.getState();
         mcpState.refreshExecutionHistory();
         mcpState.refreshToolExecutionStats();
@@ -1528,7 +1548,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
     const unlistenMcpToolsUpdated = await listen<McpToolsUpdatedPayload>(
       'mcp:tools_updated',
-      safeHandler('mcp:tools_updated', () => {
+      safeHandler(ctx, 'mcp:tools_updated', () => {
         const mcpState = useMcpStore.getState();
         mcpState.refreshTools();
         mcpState.refreshHealth();
@@ -1539,7 +1559,7 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 
     const unlistenMcpSystemInitialized = await listen<McpSystemInitializedPayload>(
       'mcp:system_initialized',
-      safeHandler('mcp:system_initialized', () => {
+      safeHandler(ctx, 'mcp:system_initialized', () => {
         useMcpStore.getState().refreshRuntimeTelemetry();
       }),
     );
@@ -1550,12 +1570,12 @@ async function setupRuntimeActivityEventListeners(): Promise<void> {
 }
 
 export function cleanupRuntimeActivityEventListeners(): void {
-  runtimeActivityListenersActive = false;
-  runtimeActivityListenersInitialized = false;
-  runtimeActivityInitializationPromise = null;
-  extensionPreflightChecked = false;
+  _ctx.listenersActive = false;
+  _ctx.listenersInitialized = false;
+  _ctx.initializationPromise = null;
+  _ctx.extensionPreflightChecked = false;
 
-  for (const unlisten of runtimeActivityUnlistenFns.splice(0)) {
+  for (const unlisten of _ctx.unlistenFns.splice(0)) {
     try {
       unlisten();
     } catch (error) {
@@ -1563,8 +1583,8 @@ export function cleanupRuntimeActivityEventListeners(): void {
     }
   }
 
-  toolStreamCleanupTimeouts.forEach((timeoutId) => clearTimeout(timeoutId));
-  toolStreamCleanupTimeouts.clear();
+  _ctx.toolStreamCleanupTimeouts.forEach((timeoutId) => clearTimeout(timeoutId));
+  _ctx.toolStreamCleanupTimeouts.clear();
 }
 
 export async function initializeRuntimeActivityEventListeners(): Promise<void> {
@@ -1572,41 +1592,41 @@ export async function initializeRuntimeActivityEventListeners(): Promise<void> {
     return;
   }
 
-  if (runtimeActivityListenersInitialized) {
+  if (_ctx.listenersInitialized) {
     return;
   }
 
-  if (runtimeActivityInitializationPromise) {
-    return runtimeActivityInitializationPromise;
+  if (_ctx.initializationPromise) {
+    return _ctx.initializationPromise;
   }
 
-  runtimeActivityListenersActive = true;
+  _ctx.listenersActive = true;
 
-  runtimeActivityInitializationPromise = (async () => {
+  _ctx.initializationPromise = (async () => {
     try {
-      await setupRuntimeActivityEventListeners();
-      runtimeActivityListenersInitialized = true;
+      await setupRuntimeActivityEventListeners(_ctx);
+      _ctx.listenersInitialized = true;
     } catch (error) {
       cleanupRuntimeActivityEventListeners();
       throw error;
     } finally {
-      runtimeActivityInitializationPromise = null;
+      _ctx.initializationPromise = null;
     }
   })();
 
-  return runtimeActivityInitializationPromise;
+  return _ctx.initializationPromise;
 }
 
 export function useAgenticEvents() {
   useEffect(() => {
-    runtimeActivityHookMounts += 1;
+    _ctx.hookMounts += 1;
     void initializeRuntimeActivityEventListeners().catch((error) => {
       console.error('[useAgenticEvents] Failed to initialize listeners:', error);
     });
 
     return () => {
-      runtimeActivityHookMounts = Math.max(0, runtimeActivityHookMounts - 1);
-      if (runtimeActivityHookMounts === 0) {
+      _ctx.hookMounts = Math.max(0, _ctx.hookMounts - 1);
+      if (_ctx.hookMounts === 0) {
         cleanupRuntimeActivityEventListeners();
       }
     };
