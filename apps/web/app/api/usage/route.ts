@@ -1,13 +1,11 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { requireEnv } from '@/utils/env';
-import { getUserClient } from '@/lib/supabase-server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimitHandler } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { handleCorsPreflightRequest } from '@/lib/cors';
@@ -18,51 +16,16 @@ import { handleCorsPreflightRequest } from '@/lib/cors';
  * Used by TokenBalanceDisplay and UsageWarningBanner.
  */
 async function handler(request: NextRequest) {
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-
-  // Authenticate user
-  const authHeader = request.headers.get('authorization');
-
-  let userId: string;
-  let userClient: import('@supabase/supabase-js').SupabaseClient;
-
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser(token);
-    if (error || !user) {
-      throw createError.unauthorized('Invalid or expired token');
-    }
-    userId = user.id;
-    userClient = getUserClient(token);
-  } else {
-    // Try cookie-based auth for browser requests
-    const { createServerClient } = await import('@supabase/ssr');
-    const ssrClient = createServerClient(supabaseUrl, requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY'), {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll() {
-          // Read-only for this route
-        },
-      },
-    });
-    const {
-      data: { user },
-      error,
-    } = await ssrClient.auth.getUser();
-    if (error || !user) {
-      throw createError.unauthorized('Authentication required');
-    }
-    userId = user.id;
-    // ssrClient is already RLS-bound via cookie session; use it directly.
-    userClient = ssrClient;
+  let user;
+  let userClient;
+  try {
+    const auth = await getAuthenticatedUserWithClient(request);
+    user = auth.user;
+    userClient = auth.userDb;
+  } catch {
+    throw createError.unauthorized('Authentication required');
   }
+  const userId = user.id;
 
   try {
     // Fetch credit balance and subscription in parallel
