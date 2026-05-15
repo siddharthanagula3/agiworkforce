@@ -125,6 +125,76 @@ interface MessageGroupRowProps {
   onPaywallDismiss?: (messageId: string) => void;
 }
 
+interface MessageRowProps {
+  message: ChatMessage;
+  isFirst: boolean;
+  isLast: boolean;
+  onRegenerate?: (id: string) => void;
+  onDelete?: (id: string) => void;
+  onPaywallUpgrade?: (messageId: string) => void;
+  onPaywallDismiss?: (messageId: string) => void;
+}
+
+// Per-message row component. Stable callbacks bound via useCallback below so
+// React.memo on MessageBubble actually short-circuits when sibling messages
+// stream or update.
+const MessageRow = ({
+  message,
+  isFirst,
+  isLast,
+  onRegenerate,
+  onDelete,
+  onPaywallUpgrade,
+  onPaywallDismiss,
+}: MessageRowProps) => {
+  const paywall = message.metadata?.paywall;
+
+  const handleRegenerate = useCallback(
+    () => onRegenerate?.(message.id),
+    [onRegenerate, message.id],
+  );
+  const handleDelete = useCallback(() => onDelete?.(message.id), [onDelete, message.id]);
+  const handlePaywallUpgrade = useCallback(
+    () => onPaywallUpgrade?.(message.id),
+    [onPaywallUpgrade, message.id],
+  );
+  const handlePaywallDismiss = useCallback(
+    () => onPaywallDismiss?.(message.id),
+    [onPaywallDismiss, message.id],
+  );
+
+  if (paywall) {
+    return (
+      <InlinePaywallCard
+        feature={paywall.feature}
+        currentTier="free"
+        requiredTier={paywall.requiredTier}
+        reason={paywall.reason}
+        onUpgrade={handlePaywallUpgrade}
+        onDismiss={handlePaywallDismiss}
+      />
+    );
+  }
+
+  return (
+    <MessageBubble
+      message={{
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        timestamp: message.createdAt,
+        isStreaming: message.isStreaming,
+        metadata: message.metadata as Parameters<typeof MessageBubble>[0]['message']['metadata'],
+      }}
+      showAvatar={isFirst}
+      showTimestamp={isFirst}
+      enableActions={isLast && !message.isStreaming}
+      onRegenerate={onRegenerate && message.role === 'assistant' ? handleRegenerate : undefined}
+      onDelete={onDelete ? handleDelete : undefined}
+    />
+  );
+};
+
 const MessageGroupRow = memo(
   ({
     group,
@@ -138,49 +208,18 @@ const MessageGroupRow = memo(
       <div
         className={cn('message-group', group.role === 'user' ? 'user-group' : 'assistant-group')}
       >
-        {group.messages.map((message, idx) => {
-          const isFirst = idx === 0;
-          const isLast = idx === group.messages.length - 1;
-          const paywall = message.metadata?.paywall;
-
-          // When the API returns { kind: 'paywall', ... } (HTTP 402), the message
-          // metadata carries a `paywall` field. Render InlinePaywallCard instead of
-          // the normal bubble. rendering-conditional-render: ternary, not &&.
-          return paywall ? (
-            <InlinePaywallCard
-              key={message.id}
-              feature={paywall.feature}
-              currentTier="free"
-              requiredTier={paywall.requiredTier}
-              reason={paywall.reason}
-              onUpgrade={onPaywallUpgrade ? () => onPaywallUpgrade(message.id) : () => {}}
-              onDismiss={onPaywallDismiss ? () => onPaywallDismiss(message.id) : () => {}}
-            />
-          ) : (
-            <MessageBubble
-              key={message.id}
-              message={{
-                id: message.id,
-                role: message.role,
-                content: message.content,
-                timestamp: message.createdAt,
-                isStreaming: message.isStreaming,
-                metadata: message.metadata as Parameters<
-                  typeof MessageBubble
-                >[0]['message']['metadata'],
-              }}
-              showAvatar={isFirst}
-              showTimestamp={isFirst}
-              enableActions={isLast && !message.isStreaming}
-              onRegenerate={
-                onRegenerate && message.role === 'assistant'
-                  ? () => onRegenerate(message.id)
-                  : undefined
-              }
-              onDelete={onDelete ? () => onDelete(message.id) : undefined}
-            />
-          );
-        })}
+        {group.messages.map((message, idx) => (
+          <MessageRow
+            key={message.id}
+            message={message}
+            isFirst={idx === 0}
+            isLast={idx === group.messages.length - 1}
+            onRegenerate={onRegenerate}
+            onDelete={onDelete}
+            onPaywallUpgrade={onPaywallUpgrade}
+            onPaywallDismiss={onPaywallDismiss}
+          />
+        ))}
       </div>
     );
   },
