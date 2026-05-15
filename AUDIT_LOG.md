@@ -212,3 +212,52 @@ Rotation order: `apps/cli → apps/desktop → apps/web → apps/mobile → apps
 - Combined commits this fire: 7 (c90359068, 6b5225902, 91fafd3cf, fceaee92f, 291bf6ccb, 069b17bb6, fbff4064e docs)
 
 **Last surface audited:** workspace + 3 surfaces. **Next rotation per `MASTER_PLAN.md` §1.4:** continue rotation cli/desktop/web/mobile/ext/vscode — currently web fire #4 and mobile fire #5 in flight via web-eng-2 and mob-eng-2; cli Phase B split in flight via cli-eng-2.
+
+---
+
+## 2026-05-14T22:30Z — Fire #4 + #5 waves — Phase B/C/D continued
+
+**Audited:** apps/cli (main.rs split), apps/desktop (useAgenticEvents dedup), apps/web (slash-cmds modal), apps/mobile (offline queue + theme prefs), apps/extension (conv history + pairing), apps/extension-vscode (chat-in-editor), packages/crates (workspace lint inheritance)
+
+**Items closed this wave:**
+
+| Item                                                 | Commit                           | Surface               | Phase         | Type     |
+| ---------------------------------------------------- | -------------------------------- | --------------------- | ------------- | -------- |
+| posttest=pnpm build on 19 packages                   | `91fafd3cf`                      | packages              | D §3.11       | mech     |
+| workspace clippy 33-deny lints                       | `fceaee92f`                      | workspace             | A #8 / D §3.9 | mech     |
+| cli main.rs Phase B split                            | `8cd6f740f`                      | apps/cli              | B             | refactor |
+| desktop adaptive thinking toggle                     | `291bf6ccb`                      | apps/desktop          | C #C2         | feat     |
+| chrome ext side_panel 47-site sweep                  | `069b17bb6`                      | apps/extension        | A #12         | fix      |
+| web custom slash-commands modal                      | `07844d4b8`                      | apps/web              | C #C6         | feat     |
+| mobile offline outbound queue                        | `798a25ac1`                      | apps/mobile           | C #C9         | feat     |
+| crates inherit workspace lints (13)                  | `1c1789eaa`                      | crates                | D §3.9        | mech     |
+| Codex agent definitions (AGENTS.md + .codex/agents/) | `76a4d8e88`                      | meta                  | docs          | docs     |
+| useAgenticEvents dedup (-86 LOC)                     | `1bc2be696`                      | apps/desktop          | B (partial)   | refactor |
+| vscode chat-in-editor WebviewPanel                   | `ad196dca0` + `5ae8cfefd` wiring | apps/extension-vscode | C #C13        | feat     |
+| chrome ext conversation history                      | `75e86d545`                      | apps/extension        | C #C12        | feat     |
+| chrome ext pairing flow                              | `887a02b10`                      | apps/extension        | C #C11        | feat     |
+| mobile theme prefs scaffolding                       | `720a7fd95`                      | apps/mobile           | C #C10        | feat     |
+
+### Escalation points discovered (next-fire input)
+
+**E1 — Desktop `useAgenticEvents.ts` per-event-hook split blocked by shared mutable state (desk-eng-3 finding)**
+
+- Location: `apps/desktop/src/hooks/useAgenticEvents.ts:251, 1351` + 7 module-level mutable variables (`runtimeActivityListenersActive`, `extensionPreflightChecked`, `runtimeActivityUnlistenFns`, `toolStreamCleanupTimeouts`, etc.)
+- The plan-prescribed "per-event hooks" split requires either exporting mutable refs (breaks encapsulation) or introducing a `SharedListenerContext` object passed to per-event setup functions (~300 LOC net structural change — exceeds single-fire scope).
+- Also blocked: `apps/desktop/src/hooks/__tests__/useExtensionEvents.test.ts` imports `cleanupRuntimeActivityEventListeners` + `initializeRuntimeActivityEventListeners` as a unified singleton — split would require test rewrite.
+- This fire shipped the safer dedup (`1bc2be696`, -86 LOC) instead. Full split needs explicit sign-off + a multi-fire plan.
+
+**E2 — Chrome ext pairing flow has no desktop endpoint counterpart (ext-eng-4 finding)**
+
+- Location: `apps/extension/src/pairing.ts:81` (TODO comment) posts to `http://127.0.0.1:8787/pair` on the desktop bridge
+- The desktop bridge (`apps/desktop`) does NOT expose `POST /pair` — pairing currently fails with 404 / ECONNREFUSED in production
+- Client UI degrades cleanly (state machine → ERROR with inline message), but the feature is non-functional end-to-end until the desktop side ships
+- Future fire on `apps/desktop` should add the bridge endpoint matching the pairing.ts contract (returns `{token: string, fingerprint: string}` on accept)
+
+### Verification log
+
+- All 6 TS surfaces typecheck GREEN, lint 0/0
+- Test counts post-fire: CLI 1,326 / Desktop 1,653 / Web 3,240 / Mobile 778 / Chrome ext 607 / VS Code 512 = 8,116 surface tests. Plus packages 1,103 + cargo workspace ~5,679 = **≥14,498 platform tests green**.
+- Net diff this campaign: ~107K LOC removed, ~5K LOC added, 30 commits since `3fdda63b3`.
+
+**Last surface audited:** all 6 surfaces + packages + crates + workspace root. **Next rotation per `MASTER_PLAN.md` §1.4:** `apps/web` for fire #6. Remaining work per §10 status tracker: Phase B 20/21 god-files, Phase C 5/15 features (C1 Cowork tab, C3 submenu, C4 Account/Billing tabs, C5 partner perks, C7 Show thinking, C15 marketplace screenshots), Phase D 5/12 polish (composite workspace, dark-mode parity migrations, a11y audit, insta snapshots, domain-first reorg). E1 + E2 above are explicit cross-fire escalations.
