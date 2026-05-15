@@ -341,6 +341,38 @@ const ChatMessageListComponent = ({
   // Render
   // ---------------------------------------------------------------------------
 
+  if (messages.length === 0 && !isLoading) {
+    return (
+      <div
+        className={cn('relative flex h-full flex-col items-center justify-center', className)}
+        data-testid="chat-message-list"
+      >
+        <div className="flex w-full max-w-[760px] flex-col items-center px-4">
+          <h1 className="mb-6 text-[28px] font-normal leading-9 text-foreground/80">
+            What can I help with?
+          </h1>
+          {onSendMessage && (
+            <div className="flex flex-wrap justify-center gap-2">
+              {[
+                { label: 'Code', text: 'Help me write code' },
+                { label: 'Write', text: 'Help me write something' },
+                { label: 'Learn', text: 'Explain a concept to me' },
+              ].map((chip) => (
+                <button
+                  key={chip.label}
+                  onClick={() => onSendMessage(chip.text)}
+                  className="inline-flex h-[34px] items-center rounded-full border border-border/60 bg-background px-3 text-[13px] text-muted-foreground transition-colors hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.05]"
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={cn('relative flex h-full flex-col', className)} data-testid="chat-message-list">
       <div
