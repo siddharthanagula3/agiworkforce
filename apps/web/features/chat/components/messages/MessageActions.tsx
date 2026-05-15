@@ -124,9 +124,10 @@ function ReactionPicker({
           size="sm"
           className="h-7 w-7 p-0"
           title="Add reaction"
+          aria-label="Add reaction"
           disabled={disabled}
         >
-          <SmilePlus className="h-3.5 w-3.5" />
+          <SmilePlus className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-2" align="start" side="top" sideOffset={8}>
@@ -238,11 +239,12 @@ export function MessageActions({
             onClick={handleCopy}
             className="h-7 w-7 p-0"
             title="Copy message"
+            aria-label={copied ? 'Message copied' : 'Copy message'}
           >
             {copied ? (
-              <Check className="h-3.5 w-3.5 text-green-600" />
+              <Check className="h-3.5 w-3.5 text-green-600" aria-hidden="true" />
             ) : (
-              <Copy className="h-3.5 w-3.5" />
+              <Copy className="h-3.5 w-3.5" aria-hidden="true" />
             )}
           </Button>
 
@@ -253,8 +255,14 @@ export function MessageActions({
         {/* More Actions Menu */}
         <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="More actions">
-              <MoreVertical className="h-3.5 w-3.5" />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              title="More actions"
+              aria-label="More message actions"
+            >
+              <MoreVertical className="h-3.5 w-3.5" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
 
