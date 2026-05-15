@@ -2,6 +2,55 @@
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased — launch-readiness wave 1] — 2026-05-15
+
+**31 commits** in a single parallel wave (`079ae721f..759f6a977`) addressing user's launch-readiness mandate: zero dead code, zero half-done features, no onboarding friction, design parity with `~/Desktop/reference/`. Net **−1,879 LOC** across 86 files / all 6 surfaces. Plan at `tasks/launch-readiness-2026-05-15.md`. Audit fire entry at `AUDIT_LOG.md` 2026-05-15T14:50Z.
+
+### Added
+
+- `docs/design/design-spec-2026-05-15.md` — 749-LOC reference-driven design spec locked for launch. Centerpieces: borderless inline tool-call run-block (Claude pattern), Lucide React with stroke-width 1.75, 8-step spacing, 5-step typography, 14px chat body.
+- `scripts/launch-verify.sh` — parallel 6-surface verification harness (typecheck + lint + test per surface, optional `--with-builds`).
+- `tasks/launch-readiness-2026-05-15.md` + `tasks/launch-readiness-wave2-plan.md` — 4-phase wave plan + wave 2 implementation plan.
+- Desktop + web a11y improvements: aria-labels on folder/bookmark/shortcut/attachment icon buttons; Settings nav, onboarding input, theme radiogroup labeled.
+- Mobile 7 more screens migrated from static colors to `useThemeColors()`.
+- Chrome ext nativeMessaging host manifest scaffolding + autoSubmit confirm guard + 1.0-min keep-alive alarm.
+
+### Changed
+
+- **Onboarding** — desktop / web / mobile / chrome-ext / vscode-ext gate onboarding behind a "has seen" flag and land users directly in chat on subsequent launches. (`a7446a102`, `35de3bd3d`, `d2b977157`, `5e4b1e3b7`, plus vscode slash-command guide swap `5e441a276`.)
+- **Design tokens** — desktop + web consume `@agiworkforce/design-tokens` chat CSS vars (`a0c7de1b4`, `9abdfa44d`); chrome ext aligned tokens; mobile sources from same.
+- **Inline tool-call** — web `ToolCallCard.tsx` aligned with claude.ai compact-flat pattern (`51f5963b2`).
+- **Web RLS** — `agent/communication`, `share`, `workforce`, `/usage`, `/llm/v1/models` routes migrated from `SUPABASE_SERVICE_ROLE_KEY` to `getUserClient()` (5 commits including `a9f28d0d1`, `788f75572`, `d5984c910`, `759f6a977`). Closes part of P1-1 from `tasks/todo.md`.
+- **VS Code ghost command** — `agi-workforce.showSubsystemHealth` stub closed + re-activation isolation test (`806f8342b`).
+- **CLI lib.rs phase2 comments** — corrected false "no call sites" claims (`1ae4e1804`).
+- **CLI test coverage** — insta snapshots added for `render_skills`, `render_keybindings`, `render_mcp_list`, `render_usage` (`ef29ea2a3`).
+- **CLI chatwidget split** — mcp/connector handlers extracted to `mcp_connector_handlers.rs` (`bba624a48`).
+
+### Removed
+
+- Web: 10 unused dependencies + `chart.tsx` (`af5ec69be`); `InlineCodeExecutor.tsx` + `code-execution-service.ts` deleted as dead code (`5e549dc6a`); welcome/quick-action blocking empty state (`35de3bd3d`).
+- Desktop: placeholder onboarding code (`8092e476b`); hardcoded hex colors replaced with design-token classes (`a0c7de1b4`).
+- Chrome ext: `model-id` eslint-disable wrappers replaced with real catalog lookups, 42 sites (`18f3d3e8c`).
+
+### Fixed
+
+- **Web perf** — message rows memoized + mermaid renderer lazy-loaded (`4eb259cae`).
+- **Desktop typecheck regression** — a11y aria-label used non-existent `shortcut.label` instead of `shortcut.description` (`54c7ca0a1`).
+- **Launch-verify harness** — mobile invocation passed vitest-only `--run` to jest (`54c7ca0a1`).
+
+### Verified
+
+| Surface     | Tests             | Notes               |
+| ----------- | ----------------- | ------------------- |
+| CLI         | 1,333             | +6 from `ef29ea2a3` |
+| Desktop     | typecheck GREEN   | post-fix            |
+| Web         | 3,231 + 1 skipped | 135 test files      |
+| Mobile      | 789 (44 suites)   |                     |
+| Chrome ext  | passed            | vitest 3.89s        |
+| VS Code ext | passed            | vitest 2.49s        |
+
+---
+
 ## [Unreleased — cross-surface] — 2026-05-14 → 2026-05-15
 
 Cross-surface campaign fire #1 through fire #12+ per `MASTER_PLAN.md` §10. **115+ commits** since `3fdda63b3`, all 6 surfaces touched, ~13,744 platform tests green. Includes Phase B god-file marathon (waves 5-12, ~50 refactor commits) and a frontend-alignment wave (8 PRs from `reports/frontend-reference-comparison/source-comparison-report.md`).

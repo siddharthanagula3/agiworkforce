@@ -1,11 +1,9 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import type { User } from '@supabase/supabase-js';
-import { requireEnv } from '@/utils/env';
+import type { User, SupabaseClient } from '@supabase/supabase-js';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getUserClient } from '@/lib/supabase-server';
+import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -15,7 +13,7 @@ export type AuthGateSuccess = {
   user: User;
   token: string;
   subscription: Awaited<ReturnType<typeof SubscriptionService.getSubscription>> & object;
-  userClient: ReturnType<typeof getUserClient>;
+  userClient: SupabaseClient;
 };
 
 type AuthGateFailure = {
@@ -40,6 +38,10 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return { ok: false, response: csrfError };
 
+  // This route is the LLM chat-completions API — only Bearer-token clients
+  // (desktop, mobile, CLI, third-party API consumers) are valid callers; the
+  // web UI uses a separate session-cookie path. Reject browser-style cookie
+  // requests up front.
   const authHeader = request.headers.get('authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return {
@@ -59,21 +61,16 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
 
   const token = authHeader.substring(7);
 
-  // SECURITY (WEB-RLS-BYPASS mitigation): service-role client used ONLY for JWT
-  // verification. All downstream DB access goes through userClient (RLS-bound).
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-
-  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabaseAdmin.auth.getUser(token);
-
-  if (authError || !user) {
+  // getAuthenticatedUserWithClient handles JWT verification via the documented
+  // service-role exception and returns an RLS-bound client for all downstream
+  // DB access.
+  let user: User;
+  let userClient: SupabaseClient;
+  try {
+    const auth = await getAuthenticatedUserWithClient(request);
+    user = auth.user;
+    userClient = auth.userDb;
+  } catch {
     return {
       ok: false,
       response: NextResponse.json(
@@ -89,7 +86,6 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     };
   }
 
-  const userClient = getUserClient(token);
   const subscription = await SubscriptionService.getSubscription(userClient, user.id);
 
   if (!subscription) {
