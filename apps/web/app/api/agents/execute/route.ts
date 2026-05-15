@@ -1,20 +1,17 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { readFile, access } from 'fs/promises';
 import { join } from 'path';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimitHandler } from '@/lib/rate-limit';
 import { createError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { CreditService } from '@/lib/services/credit-service';
-import { getUserClient } from '@/lib/supabase-server';
+import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
 import { handleCorsPreflightRequest } from '@/lib/cors';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getTaskModelForProvider } from '@agiworkforce/types';
 
@@ -104,52 +101,16 @@ async function handler(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-
-  // Authenticate user
-  const authHeader = request.headers.get('authorization');
-
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
+  // Authenticate user. The userClient is RLS-bound so all CreditService ops
+  // happen under the user's identity — no service-role escalation.
   let userId: string;
-  // RLS-bound client for credit operations on behalf of this user.
-  let userClient: SupabaseClient;
-
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser(token);
-    if (error || !user) {
-      throw createError.unauthorized('Invalid or expired token');
-    }
-    userId = user.id;
-    userClient = getUserClient(token);
-  } else {
-    // Try cookie-based auth for browser requests
-    const { createServerClient } = await import('@supabase/ssr');
-    const ssrClient = createServerClient(supabaseUrl, requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY'), {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll() {
-          // Read-only for this route
-        },
-      },
-    });
-    const {
-      data: { user },
-      error,
-    } = await ssrClient.auth.getUser();
-    if (error || !user) {
-      throw createError.unauthorized('Authentication required');
-    }
-    userId = user.id;
-    // ssrClient is already RLS-bound via cookie session; use it directly.
-    userClient = ssrClient;
+  let userClient;
+  try {
+    const auth = await getAuthenticatedUserWithClient(request);
+    userId = auth.user.id;
+    userClient = auth.userDb;
+  } catch {
+    throw createError.unauthorized('Authentication required');
   }
 
   // H9: Validate request body with Zod
