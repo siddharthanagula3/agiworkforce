@@ -50,26 +50,43 @@ interface ChatChunk {
   error?: string;
 }
 
-const messages: ChatMessage[] = [];
-let pendingPageContext: string | null = null;
-let isStreaming = false;
-let currentStreamId: string | null = null;
-let streamTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
-// Track how many messages have already been rendered to avoid full DOM rebuilds.
-let lastRenderedCount = 0;
+export interface SharedSidePanelContext {
+  messages: ChatMessage[];
+  pendingPageContext: string | null;
+  isStreaming: boolean;
+  currentStreamId: string | null;
+  streamTimeoutHandle: ReturnType<typeof setTimeout> | null;
+  /** Track how many messages have already been rendered to avoid full DOM rebuilds. */
+  lastRenderedCount: number;
+  currentApiKey: string | null;
+  isConnected: boolean;
+  /**
+   * Whether extended thinking is enabled for the next outgoing message.
+   * Persisted to chrome.storage.local as 'agi_thinking_enabled'.
+   * The value is forwarded to the desktop bridge as `extended_thinking: true` in
+   * the CHAT_MESSAGE payload. The bridge handles the provider-specific mapping.
+   * TODO(Phase 3 bridge): wire the desktop bridge to consume `extendedThinking`
+   * in the ChatRequest type and forward it to providers that support it
+   * (Anthropic thinking blocks, OpenAI reasoning effort, Gemini thinkingBudget).
+   */
+  thinkingEnabled: boolean;
+}
 
-let currentApiKey: string | null = null;
-let isConnected = false;
-/**
- * Whether extended thinking is enabled for the next outgoing message.
- * Persisted to chrome.storage.local as 'agi_thinking_enabled'.
- * The value is forwarded to the desktop bridge as `extended_thinking: true` in
- * the CHAT_MESSAGE payload. The bridge handles the provider-specific mapping.
- * TODO(Phase 3 bridge): wire the desktop bridge to consume `extendedThinking`
- * in the ChatRequest type and forward it to providers that support it
- * (Anthropic thinking blocks, OpenAI reasoning effort, Gemini thinkingBudget).
- */
-let thinkingEnabled = false;
+function createSharedSidePanelContext(): SharedSidePanelContext {
+  return {
+    messages: [],
+    pendingPageContext: null,
+    isStreaming: false,
+    currentStreamId: null,
+    streamTimeoutHandle: null,
+    lastRenderedCount: 0,
+    currentApiKey: null,
+    isConnected: false,
+    thinkingEnabled: false,
+  };
+}
+
+const _ctx: SharedSidePanelContext = createSharedSidePanelContext();
 
 /**
  * Capability tier mapping for model-picker sub-labels.
@@ -237,7 +254,7 @@ const MAX_STORED_MESSAGES = 50;
 const API_KEY_STORAGE_KEY = 'agi_api_key';
 
 function saveMessages(): void {
-  const toSave = messages.slice(-MAX_STORED_MESSAGES);
+  const toSave = _ctx.messages.slice(-MAX_STORED_MESSAGES);
   chrome.storage.local.set({ [STORAGE_KEY]: toSave }).catch((err) => {
     console.warn('[SidePanel] Failed to persist messages:', err);
   });
@@ -253,8 +270,8 @@ async function loadMessages(): Promise<void> {
       const raw = result[STORAGE_KEY];
       const stored = Array.isArray(raw) ? (raw as ChatMessage[]) : undefined;
       if (stored && stored.length > 0) {
-        messages.push(...stored.slice(-MAX_STORED_MESSAGES));
-        lastRenderedCount = 0;
+        _ctx.messages.push(...stored.slice(-MAX_STORED_MESSAGES));
+        _ctx.lastRenderedCount = 0;
       }
       resolve();
     });
@@ -1513,11 +1530,11 @@ function renderMessages(): void {
   const container = document.getElementById('sp-messages')!;
   const empty = document.getElementById('sp-empty')!;
 
-  if (messages.length === 0) {
+  if (_ctx.messages.length === 0) {
     empty.style.display = 'flex';
     // Remove all message nodes and reset counter
     container.querySelectorAll('.sp-msg, .sp-thinking-wrap').forEach((n) => n.remove());
-    lastRenderedCount = 0;
+    _ctx.lastRenderedCount = 0;
     return;
   }
 
@@ -1525,17 +1542,17 @@ function renderMessages(): void {
 
   // Only append messages that haven't been rendered yet — avoids full DOM rebuild on each
   // streaming chunk and preserves browser focus/scroll state for already-rendered bubbles.
-  if (lastRenderedCount > messages.length) {
+  if (_ctx.lastRenderedCount > _ctx.messages.length) {
     // Messages were cleared — rebuild from scratch
     container.querySelectorAll('.sp-msg, .sp-thinking-wrap').forEach((n) => n.remove());
-    lastRenderedCount = 0;
+    _ctx.lastRenderedCount = 0;
   }
 
-  for (let i = lastRenderedCount; i < messages.length; i++) {
-    const msg = messages[i];
+  for (let i = _ctx.lastRenderedCount; i < _ctx.messages.length; i++) {
+    const msg = _ctx.messages[i];
     if (msg) container.appendChild(buildBubble(msg));
   }
-  lastRenderedCount = messages.length;
+  _ctx.lastRenderedCount = _ctx.messages.length;
 
   scrollToBottom();
 }
@@ -1659,7 +1676,7 @@ function expandSlashCommand(
 }
 
 function sendMessage(text: string): void {
-  if (!text.trim() || isStreaming) return;
+  if (!text.trim() || _ctx.isStreaming) return;
 
   // Route through the shared priority send queue for backpressure /
   // cancellation parity with other surfaces. Drain immediately — current
@@ -1687,36 +1704,36 @@ function sendMessage(text: string): void {
       content: displayText,
       timestamp: Date.now(),
     };
-    messages.push(userMsg);
+    _ctx.messages.push(userMsg);
     saveMessages();
     renderMessages();
 
     capturePageContext()
-      .then((ctx) => {
-        if (ctx) pendingPageContext = ctx;
+      .then((capturedCtx) => {
+        if (capturedCtx) _ctx.pendingPageContext = capturedCtx;
 
-        const pageCtx = pendingPageContext;
-        pendingPageContext = null;
+        const pageCtx = _ctx.pendingPageContext;
+        _ctx.pendingPageContext = null;
         pendingAttachments.length = 0;
         updateContextButton();
         updateAttachmentPreview();
 
         const streamId = `a-${Date.now()}`;
-        currentStreamId = streamId;
-        isStreaming = true;
+        _ctx.currentStreamId = streamId;
+        _ctx.isStreaming = true;
         updateSendButton();
 
-        if (streamTimeoutHandle) clearTimeout(streamTimeoutHandle);
-        streamTimeoutHandle = setTimeout(() => {
-          if (isStreaming && currentStreamId === streamId) {
+        if (_ctx.streamTimeoutHandle) clearTimeout(_ctx.streamTimeoutHandle);
+        _ctx.streamTimeoutHandle = setTimeout(() => {
+          if (_ctx.isStreaming && _ctx.currentStreamId === streamId) {
             handleStreamError(streamId, 'Response timed out. Please try again.');
           }
-          streamTimeoutHandle = null;
+          _ctx.streamTimeoutHandle = null;
         }, 90_000);
 
         showThinking();
 
-        const history = messages
+        const history = _ctx.messages
           .slice(0, -1)
           .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
@@ -1727,11 +1744,11 @@ function sendMessage(text: string): void {
             text: actualPrompt,
             pageContext: pageCtx ?? undefined,
             conversationHistory: history,
-            apiKey: currentApiKey ?? undefined,
+            apiKey: _ctx.currentApiKey ?? undefined,
             // TODO(Phase 3 bridge): bridge must consume extendedThinking and
             // forward to providers that support it (Anthropic thinking blocks,
             // OpenAI reasoning effort, Gemini thinkingBudget).
-            extendedThinking: thinkingEnabled || undefined,
+            extendedThinking: _ctx.thinkingEnabled || undefined,
           },
           () => {
             if (chrome.runtime.lastError) {
@@ -1752,34 +1769,34 @@ function sendMessage(text: string): void {
     content: text.trim(),
     timestamp: Date.now(),
   };
-  messages.push(userMsg);
+  _ctx.messages.push(userMsg);
   saveMessages();
   renderMessages();
 
-  const pageCtx = pendingPageContext;
-  pendingPageContext = null;
+  const pageCtx = _ctx.pendingPageContext;
+  _ctx.pendingPageContext = null;
   pendingAttachments.length = 0;
   updateContextButton();
   updateAttachmentPreview();
 
   const streamId = `a-${Date.now()}`;
-  currentStreamId = streamId;
-  isStreaming = true;
+  _ctx.currentStreamId = streamId;
+  _ctx.isStreaming = true;
   updateSendButton();
 
   // Safety timeout: if no chunks arrive within 90s, stop streaming to prevent stuck UI
-  if (streamTimeoutHandle) clearTimeout(streamTimeoutHandle);
-  streamTimeoutHandle = setTimeout(() => {
-    if (isStreaming && currentStreamId === streamId) {
+  if (_ctx.streamTimeoutHandle) clearTimeout(_ctx.streamTimeoutHandle);
+  _ctx.streamTimeoutHandle = setTimeout(() => {
+    if (_ctx.isStreaming && _ctx.currentStreamId === streamId) {
       handleStreamError(streamId, 'Response timed out. Please try again.');
     }
-    streamTimeoutHandle = null;
+    _ctx.streamTimeoutHandle = null;
   }, 90_000);
 
   showThinking();
 
   // Build conversation history (exclude the message we're about to send)
-  const history = messages
+  const history = _ctx.messages
     .slice(0, -1)
     .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
@@ -1790,11 +1807,11 @@ function sendMessage(text: string): void {
       text: userMsg.content,
       pageContext: pageCtx ?? undefined,
       conversationHistory: history,
-      apiKey: currentApiKey ?? undefined,
+      apiKey: _ctx.currentApiKey ?? undefined,
       // TODO(Phase 3 bridge): bridge must consume extendedThinking and
       // forward to providers that support it (Anthropic thinking blocks,
       // OpenAI reasoning effort, Gemini thinkingBudget).
-      extendedThinking: thinkingEnabled || undefined,
+      extendedThinking: _ctx.thinkingEnabled || undefined,
     },
     () => {
       if (chrome.runtime.lastError) {
@@ -1805,9 +1822,9 @@ function sendMessage(text: string): void {
 }
 
 function handleStreamError(id: string, errorText: string): void {
-  if (streamTimeoutHandle) {
-    clearTimeout(streamTimeoutHandle);
-    streamTimeoutHandle = null;
+  if (_ctx.streamTimeoutHandle) {
+    clearTimeout(_ctx.streamTimeoutHandle);
+    _ctx.streamTimeoutHandle = null;
   }
   removeThinking();
   const assistantMsg: ChatMessage = {
@@ -1817,18 +1834,18 @@ function handleStreamError(id: string, errorText: string): void {
     error: true,
     timestamp: Date.now(),
   };
-  messages.push(assistantMsg);
+  _ctx.messages.push(assistantMsg);
   saveMessages();
   renderMessages();
-  isStreaming = false;
-  currentStreamId = null;
+  _ctx.isStreaming = false;
+  _ctx.currentStreamId = null;
   updateSendButton();
 }
 
 function updateConnectionStatus(): void {
   const pill = document.getElementById('sp-status-pill');
   if (!pill) return;
-  if (isConnected) {
+  if (_ctx.isConnected) {
     pill.className = 'connected';
     const dot = document.createElement('span');
     dot.className = 'sp-status-dot';
@@ -1845,11 +1862,11 @@ async function validateAndSaveApiKey(key: string): Promise<void> {
   const trimmed = key.trim();
   if (!trimmed) return;
 
-  currentApiKey = trimmed;
+  _ctx.currentApiKey = trimmed;
   saveApiKey(trimmed);
 
   // Optimistically mark connected — real validation happens when a message is sent
-  isConnected = true;
+  _ctx.isConnected = true;
   updateConnectionStatus();
 }
 
@@ -1859,7 +1876,7 @@ function updateContextButton(): void {
   // contextBtn is now the persistent composer-bar chip (sp-context-chip)
   if (!contextBtn) return;
   const hostname = currentPageHostname || 'page';
-  if (pendingPageContext) {
+  if (_ctx.pendingPageContext) {
     contextBtn.classList.add('has-context');
     contextBtn.title = 'Page context attached — click to detach';
     contextBtn.textContent = hostname;
@@ -1880,7 +1897,7 @@ function updateModelBadge(modelId: string): void {
 function updateSendButton(): void {
   const btn = document.getElementById('sp-send-btn') as HTMLButtonElement | null;
   if (!btn) return;
-  btn.disabled = isStreaming;
+  btn.disabled = _ctx.isStreaming;
 }
 
 function updateAttachmentPreview(): void {
@@ -2188,18 +2205,18 @@ function buildUI(): void {
     const toggleRow = el('div', { class: 'sp-thinking-toggle-row' });
     const toggleLabel = el(
       'label',
-      { class: `sp-thinking-toggle-label${thinkingEnabled ? ' active' : ''}` },
+      { class: `sp-thinking-toggle-label${_ctx.thinkingEnabled ? ' active' : ''}` },
       'Extended thinking',
     );
     const toggleInput = el('input', {
       class: 'sp-thinking-toggle',
       type: 'checkbox',
     }) as HTMLInputElement;
-    toggleInput.checked = thinkingEnabled;
+    toggleInput.checked = _ctx.thinkingEnabled;
     toggleInput.addEventListener('change', () => {
-      thinkingEnabled = toggleInput.checked;
-      chrome.storage.local.set({ agi_thinking_enabled: thinkingEnabled }).catch(() => {});
-      if (thinkingEnabled) {
+      _ctx.thinkingEnabled = toggleInput.checked;
+      chrome.storage.local.set({ agi_thinking_enabled: _ctx.thinkingEnabled }).catch(() => {});
+      if (_ctx.thinkingEnabled) {
         toggleLabel.classList.add('active');
       } else {
         toggleLabel.classList.remove('active');
@@ -2228,7 +2245,7 @@ function buildUI(): void {
     }
     const storedThinking = result['agi_thinking_enabled'] as boolean | undefined;
     if (storedThinking !== undefined) {
-      thinkingEnabled = storedThinking;
+      _ctx.thinkingEnabled = storedThinking;
     }
     updateModelBadge(currentModelValue);
     renderModelDropdown();
@@ -2245,7 +2262,7 @@ function buildUI(): void {
     '📝',
   );
   summarizeBtn.addEventListener('click', () => {
-    if (isStreaming) return;
+    if (_ctx.isStreaming) return;
     sendMessage('/summarize');
   });
   headerRight.appendChild(summarizeBtn);
@@ -2306,18 +2323,18 @@ function buildUI(): void {
       item.addEventListener('click', () => {
         historyDropdown.classList.remove('open');
         historyBtn.classList.remove('active');
-        if (isStreaming) return;
-        if (streamTimeoutHandle) {
-          clearTimeout(streamTimeoutHandle);
-          streamTimeoutHandle = null;
+        if (_ctx.isStreaming) return;
+        if (_ctx.streamTimeoutHandle) {
+          clearTimeout(_ctx.streamTimeoutHandle);
+          _ctx.streamTimeoutHandle = null;
         }
-        messages.length = 0;
-        lastRenderedCount = 0;
-        isStreaming = false;
-        currentStreamId = null;
-        pendingPageContext = null;
+        _ctx.messages.length = 0;
+        _ctx.lastRenderedCount = 0;
+        _ctx.isStreaming = false;
+        _ctx.currentStreamId = null;
+        _ctx.pendingPageContext = null;
         for (const hm of entry.messages) {
-          messages.push({
+          _ctx.messages.push({
             id: `h-${hm.timestamp}-${Math.random().toString(36).slice(2, 5)}`,
             role: hm.role,
             content: hm.content,
@@ -2362,12 +2379,12 @@ function buildUI(): void {
     '🗑',
   );
   clearBtn.addEventListener('click', () => {
-    if (streamTimeoutHandle) {
-      clearTimeout(streamTimeoutHandle);
-      streamTimeoutHandle = null;
+    if (_ctx.streamTimeoutHandle) {
+      clearTimeout(_ctx.streamTimeoutHandle);
+      _ctx.streamTimeoutHandle = null;
     }
-    if (messages.length > 0) {
-      const toSave: HistoryMessage[] = messages.map((m) => ({
+    if (_ctx.messages.length > 0) {
+      const toSave: HistoryMessage[] = _ctx.messages.map((m) => ({
         role: m.role,
         content: m.content,
         timestamp: m.timestamp,
@@ -2376,11 +2393,11 @@ function buildUI(): void {
         console.warn('[SidePanel] failed to save conversation to history:', err),
       );
     }
-    messages.length = 0;
-    lastRenderedCount = 0;
-    isStreaming = false;
-    currentStreamId = null;
-    pendingPageContext = null;
+    _ctx.messages.length = 0;
+    _ctx.lastRenderedCount = 0;
+    _ctx.isStreaming = false;
+    _ctx.currentStreamId = null;
+    _ctx.pendingPageContext = null;
     clearStoredMessages();
     updateContextButton();
     updateSendButton();
@@ -2537,8 +2554,8 @@ function buildUI(): void {
     const val = authInput.value.trim();
     if (!val) {
       // Clear key
-      currentApiKey = null;
-      isConnected = false;
+      _ctx.currentApiKey = null;
+      _ctx.isConnected = false;
       clearStoredApiKey();
       authInput.value = '';
       updateConnectionStatus();
@@ -3324,8 +3341,8 @@ function buildUI(): void {
   });
   contextBtn.textContent = currentPageHostname || 'page';
   contextBtn.addEventListener('click', async () => {
-    if (pendingPageContext) {
-      pendingPageContext = null;
+    if (_ctx.pendingPageContext) {
+      _ctx.pendingPageContext = null;
       updateContextButton();
       return;
     }
@@ -3338,7 +3355,7 @@ function buildUI(): void {
     chip.disabled = false;
     chip.classList.remove('loading');
     if (ctx) {
-      pendingPageContext = ctx;
+      _ctx.pendingPageContext = ctx;
     } else {
       chip.textContent = prevText;
     }
@@ -3642,14 +3659,14 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
 
   const chunk = msg as ChatChunk;
   if (chunk.type !== 'CHAT_CHUNK') return;
-  if (chunk.id !== currentStreamId) return;
+  if (chunk.id !== _ctx.currentStreamId) return;
 
   if (chunk.error) {
     handleStreamError(chunk.id, chunk.error);
     return;
   }
 
-  if (!messages.find((m) => m.id === chunk.id)) {
+  if (!_ctx.messages.find((m) => m.id === chunk.id)) {
     removeThinking();
     const assistantMsg: ChatMessage = {
       id: chunk.id,
@@ -3658,26 +3675,26 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       streaming: true,
       timestamp: Date.now(),
     };
-    messages.push(assistantMsg);
+    _ctx.messages.push(assistantMsg);
     renderMessages();
   } else {
-    const existing = messages.find((m) => m.id === chunk.id)!;
+    const existing = _ctx.messages.find((m) => m.id === chunk.id)!;
     existing.content += chunk.text;
     updateStreamingBubble(chunk.id, existing.content, chunk.done);
   }
 
   if (chunk.done) {
-    if (streamTimeoutHandle) {
-      clearTimeout(streamTimeoutHandle);
-      streamTimeoutHandle = null;
+    if (_ctx.streamTimeoutHandle) {
+      clearTimeout(_ctx.streamTimeoutHandle);
+      _ctx.streamTimeoutHandle = null;
     }
-    const existing = messages.find((m) => m.id === chunk.id);
+    const existing = _ctx.messages.find((m) => m.id === chunk.id);
     if (existing) {
       existing.streaming = false;
     }
     removeThinking();
-    isStreaming = false;
-    currentStreamId = null;
+    _ctx.isStreaming = false;
+    _ctx.currentStreamId = null;
     updateSendButton();
     saveMessages();
     renderMessages();
@@ -3692,13 +3709,13 @@ refreshPageHostname();
 Promise.all([
   loadApiKey().then((key) => {
     if (key) {
-      currentApiKey = key;
-      isConnected = true;
+      _ctx.currentApiKey = key;
+      _ctx.isConnected = true;
       updateConnectionStatus();
     }
   }),
   loadMessages().then(() => {
-    if (messages.length > 0) {
+    if (_ctx.messages.length > 0) {
       renderMessages();
     }
   }),
@@ -3738,7 +3755,7 @@ function checkPendingChat(): void {
         // Auto-capture page context then send
         capturePageContext()
           .then((ctx) => {
-            if (ctx) pendingPageContext = ctx;
+            if (ctx) _ctx.pendingPageContext = ctx;
             sendMessage(
               'Summarize this page concisely. Include key points, main arguments, and any important details.',
             );
