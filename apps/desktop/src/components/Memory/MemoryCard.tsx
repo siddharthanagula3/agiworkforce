@@ -290,16 +290,18 @@ export const MemoryCard = memo(function MemoryCard({
                   onSelect={handleImportanceChange}
                 />
               ) : (
-                <div
-                  className="flex items-center gap-1 cursor-pointer"
+                <button
+                  type="button"
+                  className="flex items-center gap-1 cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   onClick={() => setIsEditingImportance(true)}
                   title="Click to edit importance"
+                  aria-label={`Edit importance, currently ${memory.importance} out of 10`}
                 >
                   <ImportanceStars importance={memory.importance} />
                   <span className="text-xs text-muted-foreground ml-1">
                     ({memory.importance}/10)
                   </span>
-                </div>
+                </button>
               )}
             </div>
             {isEditingImportance && (
