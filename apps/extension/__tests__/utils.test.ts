@@ -73,6 +73,7 @@ describe('logger', () => {
 
   it('logger.info calls console.info with [AGI Workforce] prefix', () => {
     logger.info('info msg');
+    // eslint-disable-next-line no-console
     expect(console.info).toHaveBeenCalledWith('[AGI Workforce] %s', 'info msg', undefined);
   });
 

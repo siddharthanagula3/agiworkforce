@@ -5,6 +5,7 @@ import type {
   RunPageAction,
   ScheduledTask,
 } from './types';
+import { getDefaultModelFor } from '@agiworkforce/types';
 import { logger, RateLimiter, withTimeout, storageUtils, sleep } from './utils';
 import {
   loadShortcuts,
@@ -2297,14 +2298,13 @@ function inferProviderFromModel(modelId: string | undefined): ProviderStreamProv
 async function getSelectedModel(): Promise<string> {
   return new Promise((resolve) => {
     chrome.storage.local.get('agi_model', (result) => {
+      const defaultModel = getDefaultModelFor('free', 'chat');
       if (chrome.runtime.lastError) {
-        // eslint-disable-next-line no-restricted-syntax -- FIXME: P1-CHROMEEXT-MODELID-MIGRATION: fallback when chrome.storage errors. Replace with getDefaultModelFor('chat') once chrome ext has access to packages/types catalog.
-        resolve('claude-sonnet-4.6');
+        resolve(defaultModel);
         return;
       }
       const stored = (result['agi_model'] as string | undefined)?.trim();
-      // eslint-disable-next-line no-restricted-syntax -- FIXME: P1-CHROMEEXT-MODELID-MIGRATION: same fallback as above.
-      resolve(stored && stored !== 'auto' ? stored : 'claude-sonnet-4.6');
+      resolve(stored && stored !== 'auto' ? stored : defaultModel);
     });
   });
 }
