@@ -300,105 +300,164 @@ export function getWebviewContent(
     }
     .save-key-btn:hover { opacity: 0.85; }
 
-    /* ── Input area ── */
+    /* ── Input area / composer (design-spec §7) ── */
     .input-area {
-      border-top: 1px solid var(--border);
-      background: var(--bg-elevated);
-      padding: 10px 12px;
+      background: var(--bg-base);
+      padding: 8px 10px 10px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 0;
       flex-shrink: 0;
+      position: relative;
     }
 
-    .model-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .model-label {
-      font-size: 11px;
-      color: var(--text-secondary);
-      flex-shrink: 0;
-    }
-
-    .model-select {
-      background: var(--bg-overlay);
+    /* Outer rounded composer card */
+    .composer-card {
+      background: var(--bg-elevated);
       border: 1px solid var(--border);
-      border-radius: 6px;
-      color: var(--text-primary);
-      font-size: 11px;
-      padding: 3px 8px;
-      cursor: pointer;
-      flex: 1;
-      max-width: 180px;
+      border-radius: 14px;
+      display: flex;
+      flex-direction: column;
+      overflow: visible;
+      transition: border-color 0.15s var(--transition),
+                  box-shadow 0.15s var(--transition);
     }
-    .model-select:focus-visible {
-      outline: 2px solid var(--agi-vscode-focus);
-      outline-offset: 2px;
+    .composer-card:focus-within {
       border-color: var(--accent-teal);
+      box-shadow: 0 0 0 2px rgba(33, 128, 141, 0.18);
     }
+
+    .model-row { display: none; } /* hidden — model is now in bottom controls row */
 
     .input-row {
       display: flex;
-      gap: 8px;
+      gap: 0;
       align-items: flex-end;
+      padding: 8px 10px 0;
     }
 
     #userInput {
       flex: 1;
-      background: var(--bg-base);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
+      background: transparent;
+      border: 0;
+      outline: 0;
       color: var(--text-primary);
       font-family: inherit;
       font-size: 13px;
       line-height: 1.5;
-      min-height: 38px;
+      min-height: 28px;
       max-height: 140px;
-      padding: 9px 12px;
+      padding: 0;
       resize: none;
-      transition: border-color 0.15s var(--transition);
     }
-    #userInput:focus-visible {
-      outline: 2px solid var(--agi-vscode-focus);
-      outline-offset: 2px;
-      border-color: var(--accent-teal);
-    }
-    #userInput::placeholder { color: var(--text-secondary); }
+    #userInput::placeholder { color: var(--text-secondary); opacity: 0.7; }
 
-    #sendBtn {
-      background: var(--accent-terra);
-      border: none;
-      border-radius: var(--radius-md);
-      color: #fff;
+    /* ── Bottom controls row ── */
+    .composer-bottom {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 6px 6px;
+    }
+
+    /* Plus button */
+    .plus-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-secondary);
       cursor: pointer;
       font-size: 16px;
-      height: 38px;
-      width: 38px;
+      height: 26px;
+      width: 26px;
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
+      transition: background 0.12s var(--transition), color 0.12s var(--transition);
+      line-height: 1;
+    }
+    .plus-btn:hover { background: var(--bg-overlay); color: var(--text-primary); }
+
+    /* Model picker pill */
+    .model-pill {
+      background: var(--bg-overlay);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 10px;
+      font-weight: 500;
+      padding: 2px 7px;
+      white-space: nowrap;
+      max-width: 110px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: background 0.12s var(--transition), color 0.12s var(--transition);
+    }
+    .model-pill:hover { background: var(--bg-overlay); color: var(--text-primary); }
+
+    #sendBtn {
+      background: var(--accent-terra);
+      border: none;
+      border-radius: 50%;
+      color: #fff;
+      cursor: pointer;
+      font-size: 14px;
+      height: 26px;
+      width: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-left: auto;
       transition: opacity 0.15s var(--transition),
                   transform 0.1s var(--transition);
     }
     #sendBtn:hover:not(:disabled) { opacity: 0.88; transform: scale(1.05); }
-    #sendBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+    #sendBtn:disabled { opacity: 0.35; cursor: not-allowed; }
     #sendBtn.streaming { background: var(--bg-overlay); border: 1px solid var(--border); }
 
     /* Stop square icon when streaming */
     #sendBtn.streaming::before {
       content: '■';
-      font-size: 12px;
+      font-size: 10px;
     }
     /* Arrow icon when idle */
     #sendBtn:not(.streaming)::before {
       content: '↑';
-      font-size: 18px;
+      font-size: 14px;
       font-weight: 700;
     }
+
+    /* ── Plus-menu popover ── */
+    .plus-menu {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 10px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+      min-width: 200px;
+      z-index: 20;
+      overflow: hidden;
+    }
+    .plus-menu.open { display: block; }
+
+    .plus-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .plus-menu-item:hover { background: var(--bg-overlay); color: var(--text-primary); }
+    .plus-menu-item .pm-icon { font-size: 13px; flex-shrink: 0; }
 
     /* ── Code blocks ── */
     pre { background: #0d0d0d; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 12px; overflow-x: auto; margin: 8px 0; }
@@ -737,28 +796,42 @@ export function getWebviewContent(
 
   <!-- ── Input ── -->
   <div class="input-area">
-    <div class="model-row">
-      <span class="model-label">Model:</span>
-      <select class="model-select" id="modelSelect">
-        ${modelOptionsHtml}
-      </select>
-    </div>
-    <div class="input-row">
-      <div class="input-wrapper">
-        <div class="mention-dropdown" id="mentionDropdown"></div>
-        <textarea
-          id="userInput"
-          placeholder="Ask about your code… (use @ to reference files)"
-          rows="1"
-          spellcheck="true"
-        ></textarea>
+    <!-- Hidden model select (keeps JS working; pill shows selected label) -->
+    <select class="model-row" id="modelSelect" aria-label="Model" style="display:none">
+      ${modelOptionsHtml}
+    </select>
+
+    <!-- Plus-menu popover -->
+    <div class="plus-menu" id="plusMenu" role="menu" aria-label="Attach or use tools">
+      <div class="plus-menu-item" id="plusMenuUpload" role="menuitem" tabindex="0">
+        <span class="pm-icon">&#128206;</span> Add file or image
       </div>
-      <button id="sendBtn" title="Send (Enter)"></button>
+      <div class="plus-menu-item" id="plusMenuPlanMode" role="menuitem" tabindex="0">
+        <span class="pm-icon">&#128221;</span> Plan mode
+      </div>
     </div>
-    <div class="composer-controls">
-      <button class="mode-chip" id="modeChip" title="Agent mode">${modeLabel}</button>
-      <button class="effort-chip" id="effortChip" title="Reasoning effort"${effortHidden}>${effortLabel}</button>
-      <span class="chip-separator"></span>
+
+    <!-- Composer card -->
+    <div class="composer-card">
+      <div class="input-row">
+        <div class="input-wrapper">
+          <div class="mention-dropdown" id="mentionDropdown"></div>
+          <textarea
+            id="userInput"
+            placeholder="Ask about your code…"
+            rows="1"
+            spellcheck="true"
+            aria-label="Chat input"
+          ></textarea>
+        </div>
+      </div>
+      <div class="composer-bottom">
+        <button class="plus-btn" id="plusBtn" title="Attach or use tools" aria-haspopup="true" aria-expanded="false">+</button>
+        <button class="model-pill" id="modelPill" title="Switch model">${escapeHtml(MODEL_PICKER_OPTIONS[0]?.label ?? 'Model')}</button>
+        <button class="mode-chip" id="modeChip" title="Agent mode">${modeLabel}</button>
+        <button class="effort-chip" id="effortChip" title="Reasoning effort"${effortHidden}>${effortLabel}</button>
+        <button id="sendBtn" title="Send (Cmd+Enter)" aria-label="Send"></button>
+      </div>
     </div>
   </div>
 
@@ -770,6 +843,9 @@ export function getWebviewContent(
     const userInput = document.getElementById('userInput');
     const sendBtn = document.getElementById('sendBtn');
     const modelSelect = document.getElementById('modelSelect');
+    const modelPill = document.getElementById('modelPill');
+    const plusBtn = document.getElementById('plusBtn');
+    const plusMenu = document.getElementById('plusMenu');
     const apiKeyBanner = document.getElementById('apiKeyBanner');
     const apiKeyInput = document.getElementById('apiKeyInput');
     const saveKeyBtn = document.getElementById('saveKeyBtn');
@@ -1128,6 +1204,43 @@ export function getWebviewContent(
       vscode.postMessage({ type: 'openActionSheet' });
     });
 
+    // ── Plus-menu toggle ──────────────────────────────────────────────────────
+    if (plusBtn && plusMenu) {
+      plusBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        var isOpen = plusMenu.classList.contains('open');
+        plusMenu.classList.toggle('open', !isOpen);
+        plusBtn.setAttribute('aria-expanded', String(!isOpen));
+      });
+      document.addEventListener('click', () => {
+        plusMenu.classList.remove('open');
+        plusBtn.setAttribute('aria-expanded', 'false');
+      });
+      // "Add file" opens file picker via extension
+      var plusMenuUpload = document.getElementById('plusMenuUpload');
+      if (plusMenuUpload) {
+        plusMenuUpload.addEventListener('click', () => {
+          plusMenu.classList.remove('open');
+          vscode.postMessage({ type: 'openFilePicker' });
+        });
+      }
+      // "Plan mode" toggles mode chip
+      var plusMenuPlanMode = document.getElementById('plusMenuPlanMode');
+      if (plusMenuPlanMode) {
+        plusMenuPlanMode.addEventListener('click', () => {
+          plusMenu.classList.remove('open');
+          vscode.postMessage({ type: 'openModePicker' });
+        });
+      }
+    }
+
+    // Model pill opens model picker
+    if (modelPill) {
+      modelPill.addEventListener('click', () => {
+        vscode.postMessage({ type: 'openModelPicker' });
+      });
+    }
+
     modeChip.addEventListener('click', () => {
       vscode.postMessage({ type: 'openModePicker' });
     });
@@ -1214,7 +1327,10 @@ export function getWebviewContent(
 
       else if (msg.type === 'model') {
         const opt = modelSelect.querySelector('option[value="' + msg.payload.model + '"]');
-        if (opt) modelSelect.value = msg.payload.model;
+        if (opt) {
+          modelSelect.value = msg.payload.model;
+          if (modelPill) modelPill.textContent = (opt as HTMLOptionElement).text;
+        }
       }
 
       else if (msg.type === 'providerBadge') {
