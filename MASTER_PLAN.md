@@ -1481,11 +1481,22 @@ Per `pnpm-workspace.yaml` glob `packages/*`:
 - `packages/providers/ollama` — multi-block tool-result data loss — same scope
 - `packages/providers/{anthropic,openai}` — catalog stale vs `models.json` — Wave 5+ ongoing
 
-#### 4.8.4 OpenClaw-derived packages have ZERO tests
+#### 4.8.4 OpenClaw-derived packages — test status (verified 2026-05-14)
 
-Per Phase-3 audit: `apply-patch`, `browser-tool`, `mcp`, `skills`, `llm-normalize` all ZERO test files.
+The Phase-3 audit claim of "ZERO tests" is **stale**. Verified current counts via `pnpm --filter <pkg> test`:
 
-**Fix recipe:** add per-package smoke tests covering the canonical public API surface. Start with `mcp` (309 LOC) and `skills` (485 LOC) as they're smallest and most testable.
+| Package       | Test files | Tests passing |
+| ------------- | ---------- | ------------- |
+| apply-patch   | 2          | 19            |
+| browser-tool  | 3          | 15            |
+| mcp           | 1          | 5             |
+| skills        | 3          | 26            |
+| llm-normalize | 4          | 52            |
+| **Total**     | **13**     | **117**       |
+
+Tests cover: path-traversal regressions (apply-patch), profile-name + evaluate-gate (browser-tool), public connect API (mcp), frontmatter + loader + merge (skills), anthropic-payload-policy + openai-reasoning-effort + system-prompt-cache + tool-parameter-schema (llm-normalize).
+
+**Remaining work:** broader coverage of public API surface for each package, especially edge cases not yet exercised. Use the existing test files as the starting point; add complementary tests rather than rewriting.
 
 #### 4.8.5 Top fixes
 
@@ -1732,25 +1743,27 @@ Any RED → `git stash` + failure report in `AUDIT_LOG.md` + exit without commit
 | Phase 4 — deep-dive               | ✅ complete 2026-05-14 | 9 deep-dive reports (6 surface + 3 reference)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Phase A — Critical fixes          | 🟡 11/20 shipped 05-14 | Fire #1 a2a.rs (5/7) + Fire #2 Phase A campaign 2026-05-14: items #1 SSRF allowlist (`a2a.rs:36-101`), #2 handoff→HTTP 501 (`a2a.rs:904-918`), #3 \_attic delete (-107K LOC), #4 agent.rs false-positive verified, #9 mobile TLS pinning guard, #11 chrome ext innerHTML, #15+#17 web rate-limit/CSRF (verified shipped — alias inherits canonical), #18 google ?key= (verified shipped), #19 google tool_result.name (verified shipped — has regression test), #20 browser-tool evaluate (verified shipped — allowEvaluate gated). Deferred: #5+#6 (test-only panics, no-op), #8 workspace clippy lints, #10 EAS signingCredentials, #12 50 innerHTML audit, #13 dispatch UI (already wired), #14 sandbox OS-level (design-heavy), #16 explicit rate limit (already at line 229) |
 | Phase A — Web Phase D lint sweep  | ✅ shipped 2026-05-14  | apps/web: 2 errors + 13 warnings → 0/0 (setState-in-useMemo bugfix, unused hook removal, lucide alias rename, dead-file delete, eslint-disable cleanup). Verified: 3,233 web tests + 133 files all green                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| Phase B — God-file splits         | ⏳ pending             | Start after Phase A wraps                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| Phase C — PNG-grounded features   | ⏳ pending             | Web homepage `/` VERIFIED EXISTS at `apps/web/app/page.tsx` (plan claim was stale); start in parallel with Phase B (different files)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| Phase D — Cross-surface polish    | 🟡 1/8 web             | Web lint sweep counts as Phase D polish; rest still pending                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Phase B — God-file splits         | 🟡 1/21 in flight      | cli-eng-2 in flight on `apps/cli/src/main.rs` (2,385 LOC) → lib.rs#run_main + 50-LOC main.rs                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Phase C — PNG-grounded features   | 🟡 4/15 shipped        | #C14 vscode @mention sidebar (commit c90359068), #C2 desktop adaptive thinking (commit 291bf6ccb); #C8 web homepage verified-shipped; #C6 web slash-cmds modal + #C9 mobile offline queue in flight. Plan claim of stale #C8 was wrong — `apps/web/app/page.tsx` is fully wired with hero+features+pricing CTAs                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Phase D — Cross-surface polish    | 🟡 6/12 shipped        | Web lint sweep (commit 911bfd2ed), posttest=pnpm build on 19 packages (commit 91fafd3cf), workspace clippy 33-deny lints (commit fceaee92f), VS Code TS project references via tsconfig.build.json (commit 291bf6ccb), `exports` field verified shipped (already on every package), OpenClaw package tests verified shipped (apply-patch 19 + browser-tool 15 + mcp 5 + skills 26 + llm-normalize 52 = 117 tests). Pending: composite workspace-wide, dark-mode parity, a11y audit, insta snapshots for cli TUI, domain-first reorg                                                                                                                                                                                                                                               |
 | Phase E — Steady-state audit loop | ⏳ pending             | Cloud routine `trig_01V2cYHrydfcy9ixqvRm2iwa` at 5:03 AM CDT daily                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
-**Last refresh:** 2026-05-14 evening. **Next refresh:** after each fire updates `AUDIT_LOG.md`.
+**Last refresh:** 2026-05-14 night (fire #3+ wave). **Next refresh:** after each fire updates `AUDIT_LOG.md`.
 
-### 10.1 Surface-by-surface health snapshot (post-fire-2)
+### 10.1 Surface-by-surface health snapshot (post-fire-3 wave)
 
-| Surface               | typecheck | lint   | tests passed (latest)               | Phase A items closed                          |
-| --------------------- | --------- | ------ | ----------------------------------- | --------------------------------------------- |
-| apps/cli              | n/a       | n/a    | 1,326 cargo tests (+8 SSRF)         | #1 #2 #3 #4 verified                          |
-| apps/desktop          | ✅ GREEN  | ✅ 0/0 | 128 files / 1,648 tests (1 skipped) | #13 verified-shipped, #14 deferred            |
-| apps/web              | ✅ GREEN  | ✅ 0/0 | 133 files / 3,233 tests (5 skipped) | #15 #17 verified-shipped, lint polish shipped |
-| apps/mobile           | ✅ GREEN  | ✅ 0/0 | 42 suites / 769 tests (+26 pinning) | #9 shipped (guard pattern), #10 deferred      |
-| apps/extension        | ✅ GREEN  | ✅ 0/0 | 18 files / 576 tests                | #11 shipped, #12 deferred                     |
-| apps/extension-vscode | ✅ GREEN  | ✅ 0/0 | 24 files / 504 tests                | — (no Phase A items; Phase C #C14 in flight)  |
+| Surface               | typecheck | lint   | tests passed (latest)                | Items closed (Phase A / B / C / D)                 |
+| --------------------- | --------- | ------ | ------------------------------------ | -------------------------------------------------- |
+| apps/cli              | n/a       | n/a    | 1,326 cargo tests (+8 SSRF)          | A #1 #2 #3 #4 closed; B main.rs split in flight    |
+| apps/desktop          | ✅ GREEN  | ✅ 0/0 | 128 files / 1,648 tests (+5 → 1,653) | A #13 ✓; C #C2 ✓ adaptive-thinking toggle          |
+| apps/web              | ✅ GREEN  | ✅ 0/0 | 133 files / 3,233 tests              | A #15 #17 ✓; D lint polish ✓; C #C6 in flight      |
+| apps/mobile           | ✅ GREEN  | ✅ 0/0 | 42 suites / 769 tests (+26 pinning)  | A #9 ✓ (guard); C #C9 offline queue in flight      |
+| apps/extension        | ✅ GREEN  | ✅ 0/0 | 18 files / 576 tests (+5 → 581)      | A #11 ✓; A #12 ✓ (47 sites swept) commit 069b17bb6 |
+| apps/extension-vscode | ✅ GREEN  | ✅ 0/0 | 24+1 files / 508 tests (+4)          | C #C14 ✓; D #3.10 TS project refs ✓                |
+| Workspace             | n/a       | n/a    | n/a                                  | D #3.9 33 clippy deny lints ✓ at root Cargo.toml   |
+| packages              | ✅ GREEN  | ✅ 0/0 | 117 tests across 5 OpenClaw packages | D #3.11 posttest=pnpm build on 19 packages ✓       |
 
-Combined: **~8,156 tests green across 6 surfaces** (CLI 1,326 + Desktop 1,648 + Web 3,233 + Mobile 769 + Chrome ext 576 + VS Code 504 + packages tests not counted here).
+Combined: **~8,272 tests green across 6 surfaces + packages** (CLI 1,326 + Desktop 1,653 + Web 3,233 + Mobile 769 + Chrome ext 581 + VS Code 508 + OpenClaw packages 117 + other packages tests not enumerated here).
 
 ---
 
