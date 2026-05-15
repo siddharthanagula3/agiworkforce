@@ -12,25 +12,10 @@ import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shared/ui/card';
 import { Button } from '@shared/ui/button';
-import { Input } from '@shared/ui/input';
-import { Label } from '@shared/ui/label';
 import { Switch } from '@shared/ui/switch';
-import { Textarea } from '@shared/ui/textarea';
 import { Badge } from '@shared/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@shared/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@shared/ui/alert-dialog';
 import {
   Form,
   FormControl,
@@ -40,24 +25,19 @@ import {
   FormLabel,
   FormMessage,
 } from '@shared/ui/form';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shared/ui/card';
+import { Input } from '@shared/ui/input';
 import {
   Settings,
   User,
   Bell,
   Shield,
-  Camera,
   Save,
   Trash2,
-  Copy,
-  Plus,
   Loader2,
   CheckCircle,
   AlertTriangle,
-  Eye,
-  EyeOff,
-  Key,
   Bot,
-  Download,
   UserX,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -76,7 +56,6 @@ import {
   type CreateAPIKeyResult,
 } from '@features/settings/hooks/use-settings-queries';
 import type {} from '@features/settings/services/user-preferences';
-import { InteractiveHoverCard } from '@shared/ui/interactive-hover-card';
 import { Particles } from '@shared/ui/particles';
 import {
   profileSettingsSchema,
@@ -93,6 +72,10 @@ import {
   type CreateApiKeyFormData,
 } from '@features/settings/schemas/settings-validation';
 import { getCsrfToken } from '@/lib/client/csrf';
+import { ProfilePanel } from '@features/settings/components/Settings/Profile';
+import { TwoFactorPanel } from '@features/settings/components/Settings/TwoFactor';
+import { ApiKeysPanel } from '@features/settings/components/Settings/ApiKeys';
+import { ExportDataPanel } from '@features/settings/components/Settings/ExportData';
 
 const SettingsPageContent: React.FC = () => {
   const params = useParams();
@@ -101,7 +84,6 @@ const SettingsPageContent: React.FC = () => {
   const { user } = useAuthStore();
   const metricsStore = useAgentMetricsStore();
 
-  // React Query hooks for server state
   const {
     profile: serverProfile,
     settings: serverSettings,
@@ -111,7 +93,6 @@ const SettingsPageContent: React.FC = () => {
     refetch,
   } = useAllSettingsData();
 
-  // Mutations
   const updateProfileMutation = useUpdateProfile();
   const updateSettingsMutation = useUpdateSettings();
   const uploadAvatarMutation = useUploadAvatar();
@@ -124,7 +105,6 @@ const SettingsPageContent: React.FC = () => {
   // FORM INSTANCES WITH ZOD VALIDATION
   // ============================================================================
 
-  // Profile Form
   const profileForm = useForm<ProfileSettingsFormData>({
     resolver: zodResolver(profileSettingsSchema) as Resolver<ProfileSettingsFormData>,
     defaultValues: {
@@ -135,10 +115,9 @@ const SettingsPageContent: React.FC = () => {
       bio: '',
       avatar_url: undefined,
     },
-    mode: 'onBlur', // Validate on blur for better UX
+    mode: 'onBlur',
   });
 
-  // Password Change Form
   const passwordForm = useForm<ChangePasswordFormData>({
     resolver: zodResolver(changePasswordSchema),
     defaultValues: {
@@ -148,7 +127,6 @@ const SettingsPageContent: React.FC = () => {
     mode: 'onBlur',
   });
 
-  // Notification Preferences Form
   const notificationForm = useForm<NotificationPreferencesFormData>({
     resolver: zodResolver(notificationPreferencesSchema),
     defaultValues: {
@@ -163,7 +141,6 @@ const SettingsPageContent: React.FC = () => {
     },
   });
 
-  // Security Settings Form
   const securityForm = useForm<SecuritySettingsFormData>({
     resolver: zodResolver(securitySettingsSchema),
     defaultValues: {
@@ -172,7 +149,6 @@ const SettingsPageContent: React.FC = () => {
     },
   });
 
-  // System Settings Form
   const systemForm = useForm<SystemSettingsFormData>({
     resolver: zodResolver(systemSettingsSchema),
     defaultValues: {
@@ -187,7 +163,6 @@ const SettingsPageContent: React.FC = () => {
     },
   });
 
-  // API Key Form
   const apiKeyForm = useForm<CreateApiKeyFormData>({
     resolver: zodResolver(createApiKeySchema),
     defaultValues: {
@@ -195,7 +170,6 @@ const SettingsPageContent: React.FC = () => {
     },
   });
 
-  // Sync server data to forms when loaded
   useEffect(() => {
     if (serverProfile) {
       profileForm.reset({
@@ -243,7 +217,6 @@ const SettingsPageContent: React.FC = () => {
     }
   }, [serverSettings, notificationForm, securityForm, systemForm]);
 
-  // Derived state
   const profile = serverProfile;
   const settings = serverSettings;
   const isSaving =
@@ -255,15 +228,12 @@ const SettingsPageContent: React.FC = () => {
     deleteAPIKeyMutation.isPending ||
     toggle2FAMutation.isPending;
 
-  // UI states
   const [activeSection, setActiveSection] = useState(section || 'profile');
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showAPIKeyDialog, setShowAPIKeyDialog] = useState(false);
   const [generatedAPIKey, setGeneratedAPIKey] = useState('');
   const [keyToDelete, setKeyToDelete] = useState<string | null>(null);
-
-  // GDPR states
   const [isExporting, setIsExporting] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -310,7 +280,6 @@ const SettingsPageContent: React.FC = () => {
       toast.success('Account data deleted. You will be signed out.');
       setShowDeleteAccount(false);
       setDeleteConfirmText('');
-      // Sign out after a short delay so the user sees the toast
       setTimeout(() => {
         window.location.href = '/login';
       }, 2000);
@@ -321,7 +290,6 @@ const SettingsPageContent: React.FC = () => {
     }
   }, []);
 
-  // Update active section when URL changes
   useEffect(() => {
     if (section && section !== activeSection) {
       setActiveSection(section);
@@ -332,7 +300,6 @@ const SettingsPageContent: React.FC = () => {
   // FORM SUBMIT HANDLERS
   // ============================================================================
 
-  // Profile submit handler
   const handleSaveProfile = useCallback(
     (data: ProfileSettingsFormData) => {
       updateProfileMutation.mutate({
@@ -347,12 +314,10 @@ const SettingsPageContent: React.FC = () => {
     [updateProfileMutation],
   );
 
-  // Avatar upload handler
   const handleAvatarUpload = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       if (!file) return;
-
       uploadAvatarMutation.mutate(file, {
         onSuccess: (url) => {
           profileForm.setValue('avatar_url', url, { shouldDirty: true });
@@ -362,7 +327,6 @@ const SettingsPageContent: React.FC = () => {
     [uploadAvatarMutation, profileForm],
   );
 
-  // Password change handler
   const handlePasswordChange = useCallback(
     (data: ChangePasswordFormData) => {
       changePasswordMutation.mutate(
@@ -377,7 +341,6 @@ const SettingsPageContent: React.FC = () => {
     [changePasswordMutation, passwordForm],
   );
 
-  // Notification preferences handler
   const handleSaveNotifications = useCallback(
     (data: NotificationPreferencesFormData) => {
       updateSettingsMutation.mutate(data);
@@ -385,7 +348,6 @@ const SettingsPageContent: React.FC = () => {
     [updateSettingsMutation],
   );
 
-  // Security settings handler
   const handleSaveSecurity = useCallback(
     (data: SecuritySettingsFormData) => {
       updateSettingsMutation.mutate(data);
@@ -393,7 +355,6 @@ const SettingsPageContent: React.FC = () => {
     [updateSettingsMutation],
   );
 
-  // System settings handler
   const handleSaveSystem = useCallback(
     (data: SystemSettingsFormData) => {
       updateSettingsMutation.mutate(data);
@@ -401,7 +362,6 @@ const SettingsPageContent: React.FC = () => {
     [updateSettingsMutation],
   );
 
-  // API Key handlers
   const handleGenerateAPIKey = useCallback(
     (data: CreateApiKeyFormData) => {
       createAPIKeyMutation.mutate(data.name, {
@@ -416,7 +376,6 @@ const SettingsPageContent: React.FC = () => {
 
   const handleDeleteAPIKey = useCallback(() => {
     if (!keyToDelete) return;
-
     deleteAPIKeyMutation.mutate(keyToDelete, {
       onSettled: () => {
         setKeyToDelete(null);
@@ -429,7 +388,6 @@ const SettingsPageContent: React.FC = () => {
     toast.success('API key copied to clipboard');
   }, []);
 
-  // 2FA handlers
   const handleToggle2FA = useCallback(
     (enabled: boolean) => {
       toggle2FAMutation.mutate(enabled, {
@@ -468,7 +426,6 @@ const SettingsPageContent: React.FC = () => {
 
   return (
     <div className="relative min-h-screen space-y-4 p-4 md:space-y-6 md:p-6">
-      {/* Subtle Background Particles */}
       <Particles
         className="pointer-events-none absolute inset-0 opacity-20"
         quantity={30}
@@ -476,7 +433,6 @@ const SettingsPageContent: React.FC = () => {
         staticity={50}
       />
 
-      {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -495,7 +451,6 @@ const SettingsPageContent: React.FC = () => {
         </Badge>
       </motion.div>
 
-      {/* Settings Content */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -510,7 +465,6 @@ const SettingsPageContent: React.FC = () => {
           }}
           className="space-y-6"
         >
-          {/* Glassmorphism Tabs with enhanced styling */}
           <TabsList className="grid grid-cols-2 border border-border/50 bg-card/50 p-1 shadow-lg backdrop-blur-xl md:grid-cols-5">
             <TabsTrigger
               value="profile"
@@ -551,234 +505,16 @@ const SettingsPageContent: React.FC = () => {
 
           {/* Profile Settings */}
           <TabsContent value="profile" className="space-y-6">
-            {!profile ? (
-              <Card className="border-border bg-card">
-                <CardContent className="flex items-center justify-center py-8">
-                  <div className="text-center">
-                    <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
-                    <p className="text-muted-foreground">Loading profile...</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card className="border-border bg-card">
-                <CardHeader>
-                  <CardTitle className="text-foreground">Profile Information</CardTitle>
-                  <CardDescription>
-                    Update your personal information and preferences
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Form {...profileForm}>
-                    <form
-                      onSubmit={profileForm.handleSubmit(handleSaveProfile)}
-                      className="space-y-6"
-                    >
-                      {/* Avatar with 3D Hover Effect */}
-                      <div className="flex items-center space-x-4">
-                        <InteractiveHoverCard>
-                          <Avatar className="h-20 w-20 ring-2 ring-primary/20 transition-all duration-300 hover:ring-primary/40">
-                            {}
-                            {}
-                            <AvatarImage src={profileForm.watch('avatar_url')} />
-                            <AvatarFallback className="bg-accent text-lg text-foreground">
-                              {profileForm
-                                .watch('name')
-                                ?.split(' ')
-                                .map((n) => n[0])
-                                .join('') || 'U'}
-                            </AvatarFallback>
-                          </Avatar>
-                        </InteractiveHoverCard>
-                        <div className="space-y-2">
-                          <input
-                            type="file"
-                            id="avatar-upload"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={handleAvatarUpload}
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="border-border text-foreground transition-transform duration-200 hover:scale-105 hover:text-foreground"
-                            onClick={() => document.getElementById('avatar-upload')?.click()}
-                            disabled={uploadAvatarMutation.isPending}
-                          >
-                            {uploadAvatarMutation.isPending ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                              <Camera className="mr-2 h-4 w-4" />
-                            )}
-                            Change Photo
-                          </Button>
-                          <p className="text-xs text-muted-foreground">JPG, PNG up to 5MB</p>
-                        </div>
-                      </div>
-
-                      {/* Profile Form Fields */}
-                      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                        <FormField
-                          control={profileForm.control}
-                          name="name"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-foreground">Full Name</FormLabel>
-                              <FormControl>
-                                <Input
-                                  {...field}
-                                  className="border-border bg-background text-foreground"
-                                  placeholder="Enter your full name"
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <div>
-                          <Label className="text-foreground">Email Address</Label>
-                          <Input
-                            type="email"
-                            value={user?.email || ''}
-                            disabled
-                            className="mt-2 cursor-not-allowed border-border bg-muted text-muted-foreground"
-                          />
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            Email cannot be changed
-                          </p>
-                        </div>
-
-                        <FormField
-                          control={profileForm.control}
-                          name="phone"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-foreground">Phone Number</FormLabel>
-                              <FormControl>
-                                <Input
-                                  {...field}
-                                  value={field.value || ''}
-                                  className="border-border bg-background text-foreground"
-                                  placeholder="+1 (555) 000-0000"
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={profileForm.control}
-                          name="timezone"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-foreground">Timezone</FormLabel>
-                              <Select value={field.value} onValueChange={field.onChange}>
-                                <FormControl>
-                                  <SelectTrigger className="border-border bg-background text-foreground">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent className="border-border bg-popover">
-                                  <SelectItem value="America/New_York">
-                                    Eastern Time (ET)
-                                  </SelectItem>
-                                  <SelectItem value="America/Chicago">Central Time (CT)</SelectItem>
-                                  <SelectItem value="America/Denver">Mountain Time (MT)</SelectItem>
-                                  <SelectItem value="America/Los_Angeles">
-                                    Pacific Time (PT)
-                                  </SelectItem>
-                                  <SelectItem value="Europe/London">GMT</SelectItem>
-                                  <SelectItem value="Europe/Paris">CET</SelectItem>
-                                  <SelectItem value="Asia/Tokyo">JST</SelectItem>
-                                  <SelectItem value="Asia/Shanghai">CST</SelectItem>
-                                  <SelectItem value="Australia/Sydney">AEST</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={profileForm.control}
-                          name="language"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-foreground">Language</FormLabel>
-                              <Select value={field.value} onValueChange={field.onChange}>
-                                <FormControl>
-                                  <SelectTrigger className="border-border bg-background text-foreground">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent className="border-border bg-popover">
-                                  <SelectItem value="en">English</SelectItem>
-                                  <SelectItem value="es">Espanol</SelectItem>
-                                  <SelectItem value="fr">Francais</SelectItem>
-                                  <SelectItem value="de">Deutsch</SelectItem>
-                                  <SelectItem value="zh">Chinese</SelectItem>
-                                  <SelectItem value="ja">Japanese</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-
-                      <FormField
-                        control={profileForm.control}
-                        name="bio"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-foreground">Bio</FormLabel>
-                            <FormControl>
-                              <Textarea
-                                {...field}
-                                value={field.value || ''}
-                                className="border-border bg-background text-foreground"
-                                rows={3}
-                                placeholder="Tell us about yourself..."
-                              />
-                            </FormControl>
-                            <FormDescription>
-                              {field.value?.length || 0}/500 characters
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm text-muted-foreground">
-                          {profileForm.formState.isDirty && (
-                            <span className="text-yellow-500">You have unsaved changes</span>
-                          )}
-                        </div>
-                        <Button
-                          type="submit"
-                          disabled={
-                            isSaving ||
-                            !profileForm.formState.isDirty ||
-                            !profileForm.formState.isValid
-                          }
-                          className="bg-blue-600 hover:bg-blue-700"
-                        >
-                          {updateProfileMutation.isPending ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <Save className="mr-2 h-4 w-4" />
-                          )}
-                          Save Profile
-                        </Button>
-                      </div>
-                    </form>
-                  </Form>
-                </CardContent>
-              </Card>
-            )}
+            <ProfilePanel
+              profileForm={profileForm}
+              userEmail={user?.email || ''}
+              isSaving={isSaving}
+              isUploadPending={uploadAvatarMutation.isPending}
+              isUpdatePending={updateProfileMutation.isPending}
+              onSaveProfile={handleSaveProfile}
+              onAvatarUpload={handleAvatarUpload}
+              profile={profile}
+            />
           </TabsContent>
 
           {/* Notification Settings */}
@@ -886,259 +622,40 @@ const SettingsPageContent: React.FC = () => {
           {/* Security Settings */}
           <TabsContent value="security" className="space-y-6">
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              {/* Security Settings */}
-              <Card className="border-border bg-card">
-                <CardHeader>
-                  <CardTitle className="text-foreground">Security Settings</CardTitle>
-                  <CardDescription>Manage your account security and authentication</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <Form {...securityForm}>
-                    <form
-                      onSubmit={securityForm.handleSubmit(handleSaveSecurity)}
-                      className="space-y-6"
-                    >
-                      <FormField
-                        control={securityForm.control}
-                        name="two_factor_enabled"
-                        render={({ field }) => (
-                          <FormItem className="flex items-center justify-between rounded-lg border border-border/50 p-4">
-                            <div className="space-y-0.5">
-                              <FormLabel className="text-foreground">
-                                Two-Factor Authentication
-                              </FormLabel>
-                              <FormDescription>Add an extra layer of security</FormDescription>
-                            </div>
-                            <FormControl>
-                              <Switch
-                                checked={field.value}
-                                onCheckedChange={(checked) => {
-                                  field.onChange(checked);
-                                  handleToggle2FA(checked);
-                                }}
-                                disabled={toggle2FAMutation.isPending}
-                              />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
+              <TwoFactorPanel
+                securityForm={securityForm}
+                passwordForm={passwordForm}
+                isSaving={isSaving}
+                isToggle2FAPending={toggle2FAMutation.isPending}
+                isUpdateSettingsPending={updateSettingsMutation.isPending}
+                isChangePasswordPending={changePasswordMutation.isPending}
+                showNewPassword={showNewPassword}
+                showConfirmPassword={showConfirmPassword}
+                onSaveSecurity={handleSaveSecurity}
+                onPasswordChange={handlePasswordChange}
+                onToggle2FA={handleToggle2FA}
+                onToggleShowNewPassword={() => setShowNewPassword((p) => !p)}
+                onToggleShowConfirmPassword={() => setShowConfirmPassword((p) => !p)}
+              />
 
-                      <FormField
-                        control={securityForm.control}
-                        name="session_timeout"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-foreground">Session Timeout</FormLabel>
-                            <Select
-                              value={field.value.toString()}
-                              onValueChange={(value) => field.onChange(parseInt(value))}
-                            >
-                              <FormControl>
-                                <SelectTrigger className="border-border bg-background text-foreground">
-                                  <SelectValue />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent className="border-border bg-popover">
-                                <SelectItem value="15">15 minutes</SelectItem>
-                                <SelectItem value="30">30 minutes</SelectItem>
-                                <SelectItem value="60">1 hour</SelectItem>
-                                <SelectItem value="240">4 hours</SelectItem>
-                                <SelectItem value="1440">Never</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <div className="flex justify-end">
-                        <Button
-                          type="submit"
-                          disabled={isSaving || !securityForm.formState.isDirty}
-                          className="bg-blue-600 hover:bg-blue-700"
-                        >
-                          {updateSettingsMutation.isPending ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <Save className="mr-2 h-4 w-4" />
-                          )}
-                          Save Security Settings
-                        </Button>
-                      </div>
-                    </form>
-                  </Form>
-
-                  {/* Change Password - Separate Form */}
-                  <div className="border-t border-border pt-6">
-                    <Form {...passwordForm}>
-                      <form
-                        onSubmit={passwordForm.handleSubmit(handlePasswordChange)}
-                        className="space-y-4"
-                      >
-                        <h4 className="font-medium text-foreground">Change Password</h4>
-
-                        <FormField
-                          control={passwordForm.control}
-                          name="newPassword"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-sm text-muted-foreground">
-                                New Password
-                              </FormLabel>
-                              <FormControl>
-                                <div className="relative">
-                                  <Input
-                                    {...field}
-                                    type={showNewPassword ? 'text' : 'password'}
-                                    className="border-border bg-background pr-10 text-foreground"
-                                    placeholder="Enter new password"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => setShowNewPassword(!showNewPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                                  >
-                                    {showNewPassword ? (
-                                      <EyeOff className="h-4 w-4" />
-                                    ) : (
-                                      <Eye className="h-4 w-4" />
-                                    )}
-                                  </button>
-                                </div>
-                              </FormControl>
-                              <FormDescription className="text-xs">
-                                Min 8 characters with uppercase, lowercase, number, and special
-                                character
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={passwordForm.control}
-                          name="confirmPassword"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-sm text-muted-foreground">
-                                Confirm Password
-                              </FormLabel>
-                              <FormControl>
-                                <div className="relative">
-                                  <Input
-                                    {...field}
-                                    type={showConfirmPassword ? 'text' : 'password'}
-                                    className="border-border bg-background pr-10 text-foreground"
-                                    placeholder="Confirm new password"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                                  >
-                                    {showConfirmPassword ? (
-                                      <EyeOff className="h-4 w-4" />
-                                    ) : (
-                                      <Eye className="h-4 w-4" />
-                                    )}
-                                  </button>
-                                </div>
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <Button
-                          type="submit"
-                          disabled={
-                            changePasswordMutation.isPending ||
-                            !passwordForm.formState.isValid ||
-                            !passwordForm.formState.isDirty
-                          }
-                          variant="outline"
-                          className="w-full border-border"
-                        >
-                          {changePasswordMutation.isPending ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <Key className="mr-2 h-4 w-4" />
-                          )}
-                          Change Password
-                        </Button>
-                      </form>
-                    </Form>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* API Keys */}
-              <Card className="border-border bg-card">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-foreground">API Keys</CardTitle>
-                      <CardDescription>Manage API keys for external integrations</CardDescription>
-                    </div>
-                    <Button
-                      onClick={() => setShowAPIKeyDialog(true)}
-                      className="bg-green-600 hover:bg-green-700"
-                      size="sm"
-                    >
-                      <Plus className="mr-2 h-4 w-4" />
-                      New Key
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {apiKeys.length === 0 ? (
-                      <div className="py-8 text-center text-muted-foreground">
-                        <Key className="mx-auto mb-2 h-12 w-12 opacity-50" />
-                        <p>No API keys yet</p>
-                        <p className="text-sm">Generate your first API key to get started</p>
-                      </div>
-                    ) : (
-                      apiKeys.map((apiKey) => (
-                        <div
-                          key={apiKey.id}
-                          className="flex items-center justify-between rounded-lg border border-border bg-accent/50 p-3"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate font-medium text-foreground">{apiKey.name}</p>
-                            <p className="font-mono text-sm text-muted-foreground">
-                              {apiKey.key_prefix}...
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Created: {new Date(apiKey.created_at).toLocaleDateString()}
-                              {apiKey.last_used_at &&
-                                ` • Last used: ${new Date(apiKey.last_used_at).toLocaleDateString()}`}
-                            </p>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-muted-foreground hover:text-foreground"
-                              onClick={() => handleCopyAPIKey(apiKey.key_prefix)}
-                            >
-                              <Copy className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setKeyToDelete(apiKey.id)}
-                              className="text-red-400 hover:text-red-300"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+              <ApiKeysPanel
+                apiKeys={apiKeys}
+                apiKeyForm={apiKeyForm}
+                showAPIKeyDialog={showAPIKeyDialog}
+                generatedAPIKey={generatedAPIKey}
+                keyToDelete={keyToDelete}
+                isCreatePending={createAPIKeyMutation.isPending}
+                onSetShowAPIKeyDialog={setShowAPIKeyDialog}
+                onSetKeyToDelete={setKeyToDelete}
+                onGenerateAPIKey={handleGenerateAPIKey}
+                onDeleteAPIKey={handleDeleteAPIKey}
+                onCopyAPIKey={handleCopyAPIKey}
+                onDismissGeneratedKey={() => {
+                  setShowAPIKeyDialog(false);
+                  setGeneratedAPIKey('');
+                  apiKeyForm.reset();
+                }}
+              />
             </div>
           </TabsContent>
 
@@ -1147,7 +664,6 @@ const SettingsPageContent: React.FC = () => {
             <Form {...systemForm}>
               <form onSubmit={systemForm.handleSubmit(handleSaveSystem)} className="space-y-6">
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                  {/* General System Settings */}
                   <Card className="border-border bg-card">
                     <CardHeader>
                       <CardTitle className="text-foreground">General Settings</CardTitle>
@@ -1214,7 +730,6 @@ const SettingsPageContent: React.FC = () => {
                     </CardContent>
                   </Card>
 
-                  {/* Advanced Settings */}
                   <Card className="border-border bg-card">
                     <CardHeader>
                       <CardTitle className="text-foreground">Advanced Settings</CardTitle>
@@ -1317,19 +832,17 @@ const SettingsPageContent: React.FC = () => {
                   </Card>
                 </div>
 
-                {/* Agent & Metrics Settings */}
                 <Card className="border-border bg-card">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-foreground">
                       <Bot className="h-5 w-5 text-primary" />
-                      Agent & Metrics
+                      Agent &amp; Metrics
                     </CardTitle>
                     <CardDescription>
                       Manage background services and metrics tracking
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
-                    {/* Background Service Status */}
                     <div className="rounded-lg border border-border/50 bg-accent/20 p-4">
                       <div className="mb-2 flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -1354,7 +867,6 @@ const SettingsPageContent: React.FC = () => {
                       </p>
                     </div>
 
-                    {/* Metrics Summary */}
                     <div className="grid grid-cols-2 gap-4">
                       <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-3">
                         <p className="text-xs text-muted-foreground">Active Agents</p>
@@ -1382,7 +894,6 @@ const SettingsPageContent: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Actions */}
                     <div className="flex gap-2">
                       <Button
                         variant="outline"
@@ -1424,230 +935,19 @@ const SettingsPageContent: React.FC = () => {
 
           {/* Account / GDPR Settings */}
           <TabsContent value="account" className="space-y-6">
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              {/* Export Data */}
-              <Card className="border-border bg-card">
-                <CardHeader>
-                  <CardTitle className="text-foreground">Export My Data</CardTitle>
-                  <CardDescription>
-                    Download a copy of all your personal data in JSON format (GDPR Article 20)
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    Your export will include your profile, subscription details, credit
-                    transactions, email preferences, device authorizations, and organization
-                    memberships.
-                  </p>
-                  <Button
-                    onClick={handleExportData}
-                    disabled={isExporting}
-                    variant="outline"
-                    className="w-full border-border"
-                  >
-                    {isExporting ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Download className="mr-2 h-4 w-4" />
-                    )}
-                    {isExporting ? 'Exporting...' : 'Export My Data'}
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* Delete Account */}
-              <Card className="border-border border-destructive/30 bg-card">
-                <CardHeader>
-                  <CardTitle className="text-destructive">Delete My Account</CardTitle>
-                  <CardDescription>
-                    Permanently delete all your data from our systems (GDPR Article 17)
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3">
-                    <p className="text-sm text-destructive">
-                      This action is irreversible. All your data including profile, subscriptions,
-                      credits, and device authorizations will be permanently deleted.
-                    </p>
-                  </div>
-                  <Button
-                    onClick={() => setShowDeleteAccount(true)}
-                    variant="destructive"
-                    className="w-full"
-                  >
-                    <UserX className="mr-2 h-4 w-4" />
-                    Delete My Account
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
+            <ExportDataPanel
+              isExporting={isExporting}
+              showDeleteAccount={showDeleteAccount}
+              isDeleting={isDeleting}
+              deleteConfirmText={deleteConfirmText}
+              onExportData={handleExportData}
+              onSetShowDeleteAccount={setShowDeleteAccount}
+              onSetDeleteConfirmText={setDeleteConfirmText}
+              onDeleteAccount={handleDeleteAccount}
+            />
           </TabsContent>
         </Tabs>
       </motion.div>
-
-      {/* Delete Account Confirmation Dialog */}
-      <AlertDialog open={showDeleteAccount} onOpenChange={setShowDeleteAccount}>
-        <AlertDialogContent className="border-border bg-popover">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-destructive">Delete your account?</AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
-              <div className="space-y-3">
-                <p>This will permanently delete all your data. This action cannot be undone.</p>
-                <div className="space-y-1.5">
-                  <Label htmlFor="delete-confirm" className="text-sm text-muted-foreground">
-                    Type <strong>DELETE</strong> to confirm
-                  </Label>
-                  <Input
-                    id="delete-confirm"
-                    value={deleteConfirmText}
-                    onChange={(e) => setDeleteConfirmText(e.target.value)}
-                    placeholder="DELETE"
-                    className="border-border bg-background text-foreground"
-                  />
-                </div>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              className="border-border bg-secondary text-foreground hover:bg-secondary/80"
-              onClick={() => setDeleteConfirmText('')}
-            >
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteAccount}
-              disabled={deleteConfirmText !== 'DELETE' || isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isDeleting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <UserX className="mr-2 h-4 w-4" />
-              )}
-              {isDeleting ? 'Deleting...' : 'Delete Everything'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* API Key Generation Dialog */}
-      <AlertDialog open={showAPIKeyDialog} onOpenChange={setShowAPIKeyDialog}>
-        <AlertDialogContent className="border-border bg-popover">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-foreground">
-              {generatedAPIKey ? 'API Key Generated' : 'Generate New API Key'}
-            </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="text-muted-foreground">
-                {generatedAPIKey ? (
-                  <div className="space-y-4">
-                    <p className="text-yellow-400">
-                      <AlertTriangle className="mr-2 inline h-4 w-4" />
-                      Save this key now. You will not be able to see it again!
-                    </p>
-                    <div className="break-all rounded border border-border bg-background/50 p-3 font-mono text-sm text-green-400">
-                      {generatedAPIKey}
-                    </div>
-                    <Button onClick={() => handleCopyAPIKey(generatedAPIKey)} className="w-full">
-                      <Copy className="mr-2 h-4 w-4" />
-                      Copy to Clipboard
-                    </Button>
-                  </div>
-                ) : (
-                  <Form {...apiKeyForm}>
-                    <form
-                      onSubmit={apiKeyForm.handleSubmit(handleGenerateAPIKey)}
-                      className="space-y-4 pt-4"
-                    >
-                      <FormField
-                        control={apiKeyForm.control}
-                        name="name"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-foreground">Key Name</FormLabel>
-                            <FormControl>
-                              <Input
-                                {...field}
-                                placeholder="e.g., Production API"
-                                className="border-border bg-background text-foreground"
-                              />
-                            </FormControl>
-                            <FormDescription>
-                              A descriptive name to identify this API key
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => {
-                            setShowAPIKeyDialog(false);
-                            apiKeyForm.reset();
-                          }}
-                          className="border-border bg-secondary text-foreground hover:bg-secondary/80"
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          type="submit"
-                          disabled={createAPIKeyMutation.isPending || !apiKeyForm.formState.isValid}
-                          className="bg-green-600 hover:bg-green-700"
-                        >
-                          {createAPIKeyMutation.isPending ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <Key className="mr-2 h-4 w-4" />
-                          )}
-                          Generate Key
-                        </Button>
-                      </div>
-                    </form>
-                  </Form>
-                )}
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {generatedAPIKey && (
-            <AlertDialogFooter>
-              <AlertDialogAction
-                onClick={() => {
-                  setShowAPIKeyDialog(false);
-                  setGeneratedAPIKey('');
-                  apiKeyForm.reset();
-                }}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                Done
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          )}
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Delete API Key Confirmation */}
-      <AlertDialog open={!!keyToDelete} onOpenChange={() => setKeyToDelete(null)}>
-        <AlertDialogContent className="border-border bg-popover">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-foreground">Delete API Key</AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
-              Are you sure you want to delete this API key? This action cannot be undone. Any
-              applications using this key will stop working.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="border-border bg-secondary text-foreground hover:bg-secondary/80">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteAPIKey} className="bg-red-600 hover:bg-red-700">
-              Delete Key
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 };
