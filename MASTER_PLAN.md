@@ -1753,7 +1753,7 @@ Any RED → `git stash` + failure report in `AUDIT_LOG.md` + exit without commit
 - **E2 closed 2026-05-14** (commit `948ceeb7f`): desktop bridge now exposes `POST /pair` HTTP endpoint on port 8787, with loopback-only enforcement, idempotent token rotation, and 7 new tests. Chrome ext pairing flow (`887a02b10`) is now end-to-end functional. Desktop backend tests: 3,938 → 3,945 (+7).
 - **E1 still open**: full per-event-hook split of `apps/desktop/src/hooks/useAgenticEvents.ts` blocked by 7 module-level mutable singletons. Requires `SharedListenerContext` refactor (~300 LOC net structural change). Documented at AUDIT_LOG.md E1.
 
-**Last refresh:** 2026-05-15 (fires #1-#7 converged + pushed to `origin/main`). **Next refresh:** after each fire updates `AUDIT_LOG.md`.
+**Last refresh:** 2026-05-15 (fires #1-#12+ converged: Phase B marathon waves 5-12 + frontend-alignment wave 8 PRs). **Next refresh:** after each fire updates `AUDIT_LOG.md`.
 
 ### 10.1 Surface-by-surface health snapshot (post-fire-7, pushed to origin/main `0276d541f`)
 
@@ -1771,7 +1771,28 @@ Any RED → `git stash` + failure report in `AUDIT_LOG.md` + exit without commit
 
 Combined: **≥13,744 tests green** (surface vitest+jest 6,807 + desktop backend cargo 3,945 + cli cargo 1,326 + other cargo ~408 + packages 1,103 + services 155).
 
-Net cumulative diff: **-107,000 LOC** removed (dominated by `tui/_attic/` delete) / **+5,500 LOC** added. **41 commits this session + 33 pre-session = 74 commits pushed to `origin/main`** at `0276d541f` (2026-05-15).
+Net cumulative diff: **-107,000 LOC** removed (dominated by `tui/_attic/` delete) / **+5,500 LOC** added. **41 commits this session + 33 pre-session = 74 commits pushed to `origin/main`** at `0276d541f` (2026-05-15). Subsequent Phase B marathon (waves 5-12) + frontend-alignment wave added another ~41 commits, bringing the campaign total to **~115 commits since `3fdda63b3`**.
+
+### 10.3 Frontend alignment wave (2026-05-15)
+
+A new source-level audit landed at `reports/frontend-reference-comparison/source-comparison-report.md` (688 LOC, dated 2026-05-15) comparing all six surfaces against `~/Desktop/reference/ui` and the Vercel Web Interface Guidelines. It identifies two cross-surface P0s and prescribes a 7-phase plan; the highest-confidence-first PRs are tracked here.
+
+| #   | PR                                   | Phase | Status                                                     | Commit      | Surface(s) touched    |
+| --- | ------------------------------------ | ----- | ---------------------------------------------------------- | ----------- | --------------------- |
+| 1   | Web correctness pass                 | 2     | ✅ shipped                                                 | `8e9dbac28` | apps/web              |
+| 2   | Design-tokens package                | 1     | ✅ shipped                                                 | `bc1d5dcd3` | packages              |
+| 3   | Web `unified-chat` adoption          | 2     | ⏳ deferred (framer-motion peer mismatch + runtime bridge) | —           | apps/web              |
+| 4   | Desktop consumes design-tokens       | 3     | ✅ shipped                                                 | `0515cc0e1` | apps/desktop          |
+| 5   | Chrome extension token + icon polish | 4     | ✅ shipped                                                 | `95b0ee75b` | apps/extension        |
+| 6   | Mobile sources tokens from package   | 6     | ✅ shipped                                                 | `5510322df` | apps/mobile           |
+| 7   | CLI copy hygiene                     | 7     | ✅ shipped                                                 | `29426be6e` | apps/cli              |
+| 8   | VS Code native-theme pass            | 5     | ⏳ deferred (coordinated webviewContent + sidebar edits)   | —           | apps/extension-vscode |
+
+**Brand decision shipped (PR 2):** teal primary + terra-cotta secondary as canonical product palette; purple/indigo retired as primary extension identity; web amber reserved for marketing accent only.
+
+**Open items per source-comparison-report:** PR 3 (web→`packages/unified-chat`) is the largest single drift-reduction lever per the report's "Direct web adoption" tradeoff analysis. PR 8 (VS Code native-theme) is the largest fit-with-platform improvement. Both are next-wave targets.
+
+**Acceptance criteria already met:** "No surface invents primary brand colors independently" (Phase 1) — design-tokens package now sources colors for desktop, mobile, Chrome extension; web/unified-chat alignment pending PR 3; VS Code pending PR 8.
 
 ---
 
