@@ -95,7 +95,7 @@ use std::io::{self, IsTerminal, Read};
     name = "agiworkforce",
     version,
     about = "AGI Workforce CLI — multi-model AI agent in your terminal",
-    long_about = "A Claude Code competitor with multi-model support. \
+    long_about = "Multi-provider AI agent for your terminal. \
                   Connects to Anthropic, OpenAI, Google, Ollama, and more."
 )]
 pub struct Cli {
