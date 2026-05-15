@@ -6,7 +6,7 @@ import {
   type KeyboardEvent,
   type ChangeEvent,
 } from 'react';
-import { Mic, Plus, Square } from 'lucide-react';
+import { ArrowUp, Mic, Plus, Square } from 'lucide-react';
 import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils';
 import { cn } from '../lib/utils';
 import { useChatStore } from '../stores/chatStore';
@@ -99,12 +99,12 @@ export function ChatInput({
     textareaRef.current?.focus();
   }, []);
 
-  // Auto-expand textarea height
+  // Auto-expand textarea height — grows to 240px then scrolls internally
   const adjustHeight = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+    el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
   }, []);
 
   // Apply draft content from store (e.g. from chip clicks)
@@ -160,13 +160,17 @@ export function ChatInput({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+      // Cmd/Ctrl+Enter sends; plain Enter inserts newline (Claude/ChatGPT/Codex Desktop pattern)
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         handleSend();
       }
     },
     [handleSend],
   );
+
+  const [focused, setFocused] = useState(false);
+  const modKey = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl';
 
   const placeholder = disabled
     ? (disabledMessage ?? 'Connect to start chatting')
@@ -178,9 +182,13 @@ export function ChatInput({
     <div className={cn('mx-auto w-full max-w-3xl px-4 pb-2', className)}>
       <div
         className={cn(
-          'overflow-hidden rounded-2xl border border-[var(--chat-border)]',
+          'overflow-hidden border',
           'bg-[var(--chat-surface-elevated)]',
+          focused
+            ? 'border-[var(--chat-border-strong,var(--chat-border))] shadow-[0_0_0_2px_rgba(33,128,141,0.25)]'
+            : 'border-[var(--chat-border)]',
         )}
+        style={{ borderRadius: 16 }}
       >
         {/* Attached files preview */}
         {attachedFiles.length > 0 && (
@@ -211,20 +219,22 @@ export function ChatInput({
           placeholder={placeholder}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           disabled={disabled}
           className={cn(
             'w-full resize-none border-0 bg-transparent px-4 pt-3 pb-1',
             'text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)]',
             'focus:outline-none',
-            'min-h-[44px]',
+            'min-h-[28px]',
             disabled && 'cursor-not-allowed opacity-50',
           )}
-          style={{ maxHeight: 200 }}
+          style={{ maxHeight: 240, overflowY: 'auto' }}
           aria-label="Chat message input"
         />
 
         {/* Bottom toolbar */}
-        <div className="flex items-center justify-between px-3 py-2">
+        <div className="relative flex items-center justify-between px-3 py-2">
           {/* Left: Plus button — opens attachment menu */}
           <input
             ref={fileInputRef}
@@ -284,33 +294,19 @@ export function ChatInput({
             />
           )}
 
-          {/* Right: Model selector + mic/stop */}
+          {/* Right: Model selector + mic + send */}
           <div className="flex items-center gap-2">
             {/* Inline model selector popover */}
             <ModelSelector onSettingsClick={onModelSelectorClick} />
 
-            {/* Mic / Stop */}
-            {isStreaming ? (
-              <button
-                type="button"
-                onClick={onStop}
-                aria-label="Stop generation"
-                className={cn(
-                  'flex h-8 w-8 items-center justify-center rounded-lg',
-                  'text-[var(--chat-destructive)] transition-colors duration-150',
-                  'hover:bg-[var(--chat-destructive)]/10',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
-                )}
-              >
-                <Square size={15} />
-              </button>
-            ) : voiceState !== 'unsupported' ? (
+            {/* Mic button — ghost, hidden when streaming */}
+            {!isStreaming && voiceState !== 'unsupported' && (
               <button
                 type="button"
                 onClick={startVoice}
                 aria-label={voiceState === 'listening' ? 'Stop recording' : 'Voice input'}
                 className={cn(
-                  'flex h-8 w-8 items-center justify-center rounded-lg',
+                  'flex h-8 w-8 items-center justify-center rounded-full',
                   'transition-colors duration-150',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
                   voiceState === 'listening'
@@ -318,10 +314,45 @@ export function ChatInput({
                     : 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
                 )}
               >
-                <Mic size={15} />
+                <Mic size={16} strokeWidth={1.75} />
               </button>
-            ) : null}
+            )}
+
+            {/* Send / Stop — round accent circle */}
+            {isStreaming ? (
+              <button
+                type="button"
+                onClick={onStop}
+                aria-label="Stop generation"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] text-white transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]"
+              >
+                <Square size={13} />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSend}
+                aria-label={`Send message (${modKey}+Enter)`}
+                disabled={disabled}
+                className={cn(
+                  'flex h-8 w-8 items-center justify-center rounded-full transition-colors duration-150',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
+                  disabled
+                    ? 'bg-[var(--chat-surface-hover)] text-[var(--chat-text-muted)] cursor-not-allowed'
+                    : 'bg-[var(--chat-accent-primary)] text-white hover:opacity-80',
+                )}
+              >
+                <ArrowUp size={16} strokeWidth={2} />
+              </button>
+            )}
           </div>
+
+          {/* Cmd/Ctrl+Enter shortcut helper — visible only when focused */}
+          {focused && !isStreaming && (
+            <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-[var(--chat-text-muted)] pointer-events-none select-none whitespace-nowrap">
+              {modKey}+Enter to send
+            </span>
+          )}
         </div>
       </div>
     </div>
