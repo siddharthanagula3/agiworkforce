@@ -69,6 +69,11 @@
         "icon": "$(comment-discussion)"
       },
       {
+        "command": "agi-workforce.openChatInEditor",
+        "title": "AGI Workforce: Open Chat in Editor",
+        "icon": "$(comment-discussion)"
+      },
+      {
         "command": "agi-workforce.agentMode",
         "title": "AGI Workforce: Agent Mode",
         "icon": "$(robot)"
