@@ -82,7 +82,6 @@ use agiworkforce_protocol::ThreadId;
 use agiworkforce_protocol::config_types::Personality;
 #[cfg(target_os = "windows")]
 use agiworkforce_protocol::config_types::WindowsSandboxLevel;
-use agiworkforce_protocol::items::TurnItem;
 use agiworkforce_protocol::openai_models::ModelAvailabilityNux;
 use agiworkforce_protocol::openai_models::ModelPreset;
 use agiworkforce_protocol::openai_models::ModelUpgrade;
@@ -111,7 +110,6 @@ use ratatui::widgets::Paragraph;
 use ratatui::widgets::Wrap;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::path::Path;
 use std::path::PathBuf;
@@ -134,10 +132,14 @@ use uuid::Uuid;
 
 mod agent_navigation;
 mod pending_interactive_replay;
+mod thread_event_store;
 
 use self::agent_navigation::AgentNavigationDirection;
 use self::agent_navigation::AgentNavigationState;
 use self::pending_interactive_replay::PendingInteractiveReplayState;
+use self::thread_event_store::ThreadEventChannel;
+use self::thread_event_store::ThreadEventSnapshot;
+use self::thread_event_store::ThreadEventStore;
 
 const EXTERNAL_EDITOR_HINT: &str = "Save and close external editor to continue.";
 const THREAD_EVENT_CHANNEL_CAPACITY: usize = 32768;
@@ -512,152 +514,6 @@ async fn emit_custom_prompt_deprecation_notice(
 struct SessionSummary {
     usage_line: String,
     resume_command: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-struct ThreadEventSnapshot {
-    session_configured: Option<Event>,
-    events: Vec<Event>,
-    input_state: Option<ThreadInputState>,
-}
-
-#[derive(Debug)]
-struct ThreadEventStore {
-    session_configured: Option<Event>,
-    buffer: VecDeque<Event>,
-    user_message_ids: HashSet<String>,
-    pending_interactive_replay: PendingInteractiveReplayState,
-    input_state: Option<ThreadInputState>,
-    capacity: usize,
-    active: bool,
-}
-
-impl ThreadEventStore {
-    fn new(capacity: usize) -> Self {
-        Self {
-            session_configured: None,
-            buffer: VecDeque::new(),
-            user_message_ids: HashSet::new(),
-            pending_interactive_replay: PendingInteractiveReplayState::default(),
-            input_state: None,
-            capacity,
-            active: false,
-        }
-    }
-
-    fn new_with_session_configured(capacity: usize, event: Event) -> Self {
-        let mut store = Self::new(capacity);
-        store.session_configured = Some(event);
-        store
-    }
-
-    fn push_event(&mut self, event: Event) {
-        self.pending_interactive_replay.note_event(&event);
-        match &event.msg {
-            EventMsg::SessionConfigured(_) => {
-                self.session_configured = Some(event);
-                return;
-            }
-            EventMsg::ItemCompleted(completed) => {
-                if let TurnItem::UserMessage(item) = &completed.item {
-                    if !event.id.is_empty() && self.user_message_ids.contains(&event.id) {
-                        return;
-                    }
-                    let legacy = Event {
-                        id: event.id,
-                        msg: item.as_legacy_event(),
-                    };
-                    self.push_legacy_event(legacy);
-                    return;
-                }
-            }
-            _ => {}
-        }
-
-        self.push_legacy_event(event);
-    }
-
-    fn push_legacy_event(&mut self, event: Event) {
-        if let EventMsg::UserMessage(_) = &event.msg
-            && !event.id.is_empty()
-            && !self.user_message_ids.insert(event.id.clone())
-        {
-            return;
-        }
-        self.buffer.push_back(event);
-        if self.buffer.len() > self.capacity
-            && let Some(removed) = self.buffer.pop_front()
-        {
-            self.pending_interactive_replay.note_evicted_event(&removed);
-            if matches!(removed.msg, EventMsg::UserMessage(_)) && !removed.id.is_empty() {
-                self.user_message_ids.remove(&removed.id);
-            }
-        }
-    }
-
-    fn snapshot(&self) -> ThreadEventSnapshot {
-        ThreadEventSnapshot {
-            session_configured: self.session_configured.clone(),
-            // Thread switches replay buffered events into a rebuilt ChatWidget. Only replay
-            // interactive prompts that are still pending, or answered approvals/input will reappear.
-            events: self
-                .buffer
-                .iter()
-                .filter(|event| {
-                    self.pending_interactive_replay
-                        .should_replay_snapshot_event(event)
-                })
-                .cloned()
-                .collect(),
-            input_state: self.input_state.clone(),
-        }
-    }
-
-    fn note_outbound_op(&mut self, op: &Op) {
-        self.pending_interactive_replay.note_outbound_op(op);
-    }
-
-    fn op_can_change_pending_replay_state(op: &Op) -> bool {
-        PendingInteractiveReplayState::op_can_change_state(op)
-    }
-
-    fn event_can_change_pending_thread_approvals(event: &Event) -> bool {
-        PendingInteractiveReplayState::event_can_change_pending_thread_approvals(event)
-    }
-
-    fn has_pending_thread_approvals(&self) -> bool {
-        self.pending_interactive_replay
-            .has_pending_thread_approvals()
-    }
-}
-
-#[derive(Debug)]
-struct ThreadEventChannel {
-    sender: mpsc::Sender<Event>,
-    receiver: Option<mpsc::Receiver<Event>>,
-    store: Arc<Mutex<ThreadEventStore>>,
-}
-
-impl ThreadEventChannel {
-    fn new(capacity: usize) -> Self {
-        let (sender, receiver) = mpsc::channel(capacity);
-        Self {
-            sender,
-            receiver: Some(receiver),
-            store: Arc::new(Mutex::new(ThreadEventStore::new(capacity))),
-        }
-    }
-
-    fn new_with_session_configured(capacity: usize, event: Event) -> Self {
-        let (sender, receiver) = mpsc::channel(capacity);
-        Self {
-            sender,
-            receiver: Some(receiver),
-            store: Arc::new(Mutex::new(ThreadEventStore::new_with_session_configured(
-                capacity, event,
-            ))),
-        }
-    }
 }
 
 fn should_show_model_migration_prompt(
