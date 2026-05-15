@@ -6,17 +6,19 @@
 
 ## 1. Tier Matrix
 
-| Tier      | Price              | Token cap/mo        | Pool                                                         | Auto          | Manual picker              | Tools                                              | Specialty caps                                                                                             |
-| --------- | ------------------ | ------------------- | ------------------------------------------------------------ | ------------- | -------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| **Free**  | $0                 | 100K + 5 msgs/day   | Pool B                                                       | Yes (forced)  | No                         | None                                               | None                                                                                                       |
-| **Local** | $0                 | unlimited (own GPU) | Ollama / LMStudio                                            | No            | Yes (only mode)            | Per local model                                    | n/a                                                                                                        |
-| **BYOK**  | $0                 | own quota           | User's keys, manual select                                   | No            | Yes (only mode)            | Per user provider                                  | n/a                                                                                                        |
-| **Hobby** | $5 / ₹399 GST-incl | 2M                  | Pool B (global) / Pool C (India) / Pool A (China — reserved) | Yes (forced)  | No                         | + web search + Projects light (with burn warnings) | 10 images/mo                                                                                               |
-| **Pro**   | $20                | 10M                 | Sonnet 4.6 + Gemini 3.1 Pro + GPT-5.4 mini + Kimi K2.6       | Yes (default) | Yes (Advanced mode toggle) | + Artifacts + CU light + edit/review               | No video, no Opus, no GPT-5.5                                                                              |
-| **Pro+**  | $40                | 10M                 | Pro pool + Opus 4.7 (15K/day) + GPT-5.5 (15K/day)            | Yes (default) | Yes (Advanced mode toggle) | + advanced CU + bigger Projects context            | + 60 sec/mo Runway Gen-4 video (720p), US-only routing toggle                                              |
-| **Max**   | $299               | 50M                 | Pro+ + Opus 1M/mo + GPT-5.5 1M/mo                            | Yes (default) | Yes (Advanced mode toggle) | + everything unlimited within caps + cache-aware   | + 5 min/mo Runway Gen-4 video (720p, 1024p choice) + computer use 1K soft / 2.5K hard / mo + deep research |
+| Tier      | Price                | Token cap/mo        | Pool                                                         | Auto          | Manual picker              | Tools                                                                | Specialty caps                                                                                             |
+| --------- | -------------------- | ------------------- | ------------------------------------------------------------ | ------------- | -------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **Free**  | $0                   | 100K + 5 msgs/day   | Pool B                                                       | Yes (forced)  | No                         | None                                                                 | None                                                                                                       |
+| **Local** | $0                   | unlimited (own GPU) | Ollama / LMStudio                                            | No            | Yes (only mode)            | Per local model                                                      | n/a                                                                                                        |
+| **BYOK**  | $0                   | own quota           | User's keys, manual select                                   | No            | Yes (only mode)            | Per user provider                                                    | n/a                                                                                                        |
+| **Hobby** | $10 / ₹399 GST-incl¹ | 2M                  | Pool B (global) / Pool C (India) / Pool A (China — reserved) | Yes (forced)  | No                         | + web search + Projects light + voice 60 min/mo (with burn warnings) | 10 images/mo                                                                                               |
+| **Pro**   | $29.99               | 10M                 | Sonnet 4.6 + Gemini 3.1 Pro + GPT-5.4 mini + Kimi K2.6       | Yes (default) | Yes (Advanced mode toggle) | + Artifacts + CU light + edit/review + voice 300 min/mo              | No video, no Opus, no GPT-5.5                                                                              |
+| **Pro+**  | $49.99               | 10M                 | Pro pool + Opus 4.7 (15K/day) + GPT-5.5 (15K/day)            | Yes (default) | Yes (Advanced mode toggle) | + advanced CU + bigger Projects + voice 1500 min/mo                  | + 60 sec/mo Runway Gen-4 video (720p), US-only routing toggle                                              |
+| **Max**   | $299.99              | 50M                 | Pro+ + Opus 1M/mo + GPT-5.5 1M/mo                            | Yes (default) | Yes (Advanced mode toggle) | + everything unlimited within caps + voice unlimited + cache-aware   | + 5 min/mo Runway Gen-4 video (720p, 1024p choice) + computer use 1K soft / 2.5K hard / mo + deep research |
 
 Cap behavior (all paid tiers): warn at 80% / silent downgrade to workhorse at 100% / hard cap at 150%.
+
+¹ Hobby pricing reconciled 2026-05-15 — `packages/types/src/billing-catalog.ts` lock: $10/mo, $59.88/yr (≈50% annual discount). Pro $29.99/mo $299.88/yr (~17% annual discount); Pro+ $49.99/mo $499.88/yr; Max $299.99/mo $2,999.88/yr.
 
 China launch: BYOK-only at v1; Hobby tier reserved for when payment infra (Pingpong / Adyen-CN-acquirer) is solved.
 
@@ -83,23 +85,23 @@ When Pro+ user toggles "Region: US/EU only", router skips Chinese vendors (DeepS
 
 ## 6. Capabilities Gating
 
-| Capability                          | Free | Hobby                 | Pro                     | Pro+                    | Max                             |
-| ----------------------------------- | ---- | --------------------- | ----------------------- | ----------------------- | ------------------------------- |
-| Text Auto routing                   | ✓    | ✓                     | ✓                       | ✓                       | ✓                               |
-| Web search                          | —    | ✓                     | ✓                       | ✓                       | ✓                               |
-| Projects (saved chats)              | —    | light                 | full                    | full                    | full                            |
-| Artifacts                           | —    | —                     | ✓                       | ✓                       | ✓                               |
-| File uploads                        | —    | —                     | ✓                       | ✓                       | ✓                               |
-| Image gen (Imagen-4 Fast)           | —    | 10/mo                 | unlimited within bucket | unlimited within bucket | unlimited within bucket         |
-| Computer use                        | —    | —                     | light                   | advanced                | unlimited (1K soft / 2.5K hard) |
-| Code execution                      | —    | —                     | ✓                       | ✓                       | ✓                               |
-| MCP servers                         | —    | basic (with warnings) | ✓                       | advanced                | unlimited                       |
-| Video gen (Runway Gen-4)            | —    | —                     | —                       | 60 sec/mo @ 720p        | 5 min/mo @ 720p or 1024p        |
-| Opus 4.7 access                     | —    | —                     | —                       | 15K tokens/day          | 1M tokens/mo                    |
-| GPT-5.5 access                      | —    | —                     | —                       | 15K tokens/day          | 1M tokens/mo                    |
-| Deep research                       | —    | —                     | —                       | —                       | ✓                               |
-| Voice features (TTS/STT/voice mode) | —    | —                     | —                       | —                       | — (deferred from v1)            |
-| US-only routing toggle              | —    | —                     | —                       | ✓                       | ✓ (default)                     |
+| Capability                                   | Free | Hobby                 | Pro                     | Pro+                    | Max                             |
+| -------------------------------------------- | ---- | --------------------- | ----------------------- | ----------------------- | ------------------------------- |
+| Text Auto routing                            | ✓    | ✓                     | ✓                       | ✓                       | ✓                               |
+| Web search                                   | —    | ✓                     | ✓                       | ✓                       | ✓                               |
+| Projects (saved chats)                       | —    | light                 | full                    | full                    | full                            |
+| Artifacts                                    | —    | —                     | ✓                       | ✓                       | ✓                               |
+| File uploads                                 | —    | —                     | ✓                       | ✓                       | ✓                               |
+| Image gen (Imagen-4 Fast)                    | —    | 10/mo                 | unlimited within bucket | unlimited within bucket | unlimited within bucket         |
+| Computer use                                 | —    | —                     | light                   | advanced                | unlimited (1K soft / 2.5K hard) |
+| Code execution                               | —    | —                     | ✓                       | ✓                       | ✓                               |
+| MCP servers                                  | —    | basic (with warnings) | ✓                       | advanced                | unlimited                       |
+| Video gen (Runway Gen-4)                     | —    | —                     | —                       | 60 sec/mo @ 720p        | 5 min/mo @ 720p or 1024p        |
+| Opus 4.7 access                              | —    | —                     | —                       | 15K tokens/day          | 1M tokens/mo                    |
+| GPT-5.5 access                               | —    | —                     | —                       | 15K tokens/day          | 1M tokens/mo                    |
+| Deep research                                | —    | —                     | —                       | —                       | ✓                               |
+| Voice (Wispr-Flow: Whisper STT + AI rewrite) | —    | 60 min/mo             | 300 min/mo              | 1500 min/mo             | unlimited                       |
+| US-only routing toggle                       | —    | —                     | —                       | ✓                       | ✓ (default)                     |
 
 ## 7. Telemetry + Privacy
 
