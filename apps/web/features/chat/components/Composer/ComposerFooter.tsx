@@ -88,7 +88,7 @@ interface ComposerFooterProps {
 }
 
 export function ComposerFooter({
-  hint = 'Enter to send · Shift+Enter for newline',
+  hint = 'Cmd+Enter to send · Enter for newline',
   showModelSelector = true,
 }: ComposerFooterProps) {
   const [open, setOpen] = useState(false);

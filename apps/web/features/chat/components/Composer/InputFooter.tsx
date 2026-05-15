@@ -19,7 +19,7 @@ function usageColor(pct: number): string {
 }
 
 export function InputFooter({
-  hint = 'Enter to send · Shift+Enter for newline',
+  hint = 'Cmd+Enter to send · Enter for newline',
   usedCredits = 0,
   totalCredits = 100,
   hideCredits = false,
