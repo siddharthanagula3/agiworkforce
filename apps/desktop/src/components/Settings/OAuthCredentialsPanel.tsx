@@ -334,12 +334,12 @@ export function OAuthCredentialsPanel() {
             return (
               <div
                 key={provider.id}
-                className="rounded-lg border border-border bg-[#242424] overflow-hidden"
+                className="rounded-lg border border-border bg-card overflow-hidden"
               >
                 {/* Header row — always visible */}
                 <button
                   type="button"
-                  className="w-full flex items-center gap-3 p-4 text-left hover:bg-[#383838] transition-colors"
+                  className="w-full flex items-center gap-3 p-4 text-left hover:bg-accent transition-colors"
                   onClick={() => toggleExpand(provider.id)}
                   aria-expanded={ps.expanded}
                 >
@@ -397,7 +397,7 @@ export function OAuthCredentialsPanel() {
                         placeholder={`Enter ${provider.clientIdLabel.toLowerCase()}`}
                         autoComplete="off"
                         spellCheck={false}
-                        className="w-full rounded-md border border-input bg-[#1c1c1c] px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+                        className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
                       />
                     </div>
 
@@ -415,7 +415,7 @@ export function OAuthCredentialsPanel() {
                           placeholder={`Enter ${provider.clientSecretLabel.toLowerCase()}`}
                           autoComplete="new-password"
                           spellCheck={false}
-                          className="w-full rounded-md border border-input bg-[#1c1c1c] px-3 py-2 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+                          className="w-full rounded-md border border-input bg-card px-3 py-2 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
                         />
                         <button
                           type="button"

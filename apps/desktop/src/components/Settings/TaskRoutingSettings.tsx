@@ -258,7 +258,7 @@ export function TaskRoutingSettings() {
             : 'auto';
 
           return (
-            <div key={category} className="rounded-lg border border-border bg-[#242424] p-4">
+            <div key={category} className="rounded-lg border border-border bg-card p-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <Label htmlFor={`routing-${category}`} className="text-sm font-medium">
@@ -294,7 +294,7 @@ export function TaskRoutingSettings() {
         })}
       </div>
 
-      <div className="rounded-lg border border-border bg-[#2a2a2a] p-4">
+      <div className="rounded-lg border border-border bg-muted p-4">
         <h4 className="text-sm font-medium mb-2">Model Selection Tips</h4>
         <ul className="text-xs text-muted-foreground space-y-1">
           <li>

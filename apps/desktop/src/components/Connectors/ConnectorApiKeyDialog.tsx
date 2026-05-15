@@ -67,7 +67,7 @@ export function ConnectorApiKeyDialog({
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder={connector.apiKeyPlaceholder ?? 'Enter API key...'}
-                className="w-full px-3 py-2 pr-10 text-sm rounded-md border border-border bg-[#222222]
+                className="w-full px-3 py-2 pr-10 text-sm rounded-md border border-border bg-card
                   placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleConnect();
@@ -86,7 +86,7 @@ export function ConnectorApiKeyDialog({
           </div>
 
           {/* Security note */}
-          <div className="flex items-start gap-2 text-xs text-muted-foreground bg-[#222222] rounded-md px-3 py-2">
+          <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted rounded-md px-3 py-2">
             <Lock className="h-3.5 w-3.5 mt-0.5 shrink-0" />
             <span>Your API key is encrypted and stored securely on your device.</span>
           </div>
@@ -110,7 +110,7 @@ export function ConnectorApiKeyDialog({
             type="button"
             onClick={handleClose}
             className="px-4 py-2 text-sm font-medium rounded-md border border-border
-              hover:bg-[#383838] transition-colors"
+              hover:bg-accent transition-colors"
           >
             Cancel
           </button>
