@@ -2426,10 +2426,12 @@ async function getSelectedModel(): Promise<string> {
   return new Promise((resolve) => {
     chrome.storage.local.get('agi_model', (result) => {
       if (chrome.runtime.lastError) {
+        // eslint-disable-next-line no-restricted-syntax -- FIXME: P1-CHROMEEXT-MODELID-MIGRATION: fallback when chrome.storage errors. Replace with getDefaultModelFor('chat') once chrome ext has access to packages/types catalog.
         resolve('claude-sonnet-4.6');
         return;
       }
       const stored = (result['agi_model'] as string | undefined)?.trim();
+      // eslint-disable-next-line no-restricted-syntax -- FIXME: P1-CHROMEEXT-MODELID-MIGRATION: same fallback as above.
       resolve(stored && stored !== 'auto' ? stored : 'claude-sonnet-4.6');
     });
   });
