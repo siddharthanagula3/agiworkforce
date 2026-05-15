@@ -2,6 +2,66 @@
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased — launch-readiness wave 3 + strategy lock] — 2026-05-15
+
+**27 commits** (`98ed9ef1c..01e56f2a3`) covering wave 3 (8 parallel agents) + self-audit fixes + voice slot reopening + doc reconciliation + brand mark proposals. Audit fire at `AUDIT_LOG.md` 2026-05-15T22:00Z.
+
+### Added
+
+- **Voice slot reopening for Hobby+ tiers** (`a8c5c92c7`) — `allowVoice` + `voiceMinutesPerMonth` fields added to `TierPolicy`. `voice_transcription` (Whisper-1) + `voice_rewrite` (Gemini Flash-Lite) slots added to allowedSlots of Hobby/Pro/Pro+/Max/Enterprise. Hobby 60 min/mo, Pro 300, Pro+ 1500, Max+Enterprise unlimited. Free stays text-only. Implements Wispr-Flow-style system-wide dictation per user's 2026-05-15 decision (supersedes Round 14 "voice deferred from v1").
+- **Brand-mark proposals** (`01e56f2a3`) — 3 SVG directions at `docs/design/brand-mark-proposals/` (connected nodes, angular A monogram, stacked layers prism) + HTML preview rendering all 3 at 5 sizes on dark+light + wordmark pair previews. User to pick direction.
+- `@next/bundle-analyzer` wired in `apps/web` (web-launch3, `f90519eac`).
+- Chrome ext ↔ desktop bridge :8787 pairing e2e test (integ-launch3, `dde2cc56a`).
+- Web `/api/llm/v1/chat/completions` Bearer auth contract test (integ-launch3, `0c1739d16`).
+- Mobile dispatch payload schema test + round-trip e2e (integ-launch3, `0a35492a5`, `feff4965f`).
+- CLI binary-size doc + cargo-bloat workflow (cli-launch3, `725d2108d`).
+- CLI Unicode icon mapping wired into `exec_cell` + `status_surfaces` (cli-launch3, `3fa1e2880`).
+- Mobile 7 more screens migrated to `useThemeColors` (mob-launch3, `4c1db310a`).
+- Chrome ext Lucide sprite icons applied throughout side-panel UI (chr-launch3, `e9ff5bd82`).
+- README launch-readiness section + MASTER_PLAN §10 status refresh (docs-launch3, `addf33b8b`, `ff47b1ba3`).
+- Markdown pipeline `next/dynamic` code-split (web-launch3, `c8d8bb5d7`).
+
+### Changed
+
+- **Pricing reconciliation** (`b4af6fa55`) — `tasks/auto-routing-spec.md` §1 (Hobby $5→$10, Pro $20→$29.99, Pro+ $40→$49.99) and `docs/PRICING.md` (full rewrite with yearly pricing + per-slot provider/API map) reconciled to match canonical `packages/types/src/billing-catalog.ts` SSOT.
+- `tasks/auto-routing-spec.md` §6 voice row replaced from "deferred from v1" to per-tier minute caps (60/300/1500/unlimited).
+- Tauri version-aligned 2.10.3→2.11.0 + plugin-fs 2.4.5→2.5.1 + plugin-dialog 2.6.0→2.7.1 (desk-launch3, `c53048041`).
+- Web 3 user-scoped routes migrated to `getUserClient`: `user/data`, `user/delete-account`, `user/export` (web-launch3, `3849a3906`).
+- CLI `chatwidget.rs` turn-lifecycle handlers extracted to `turn_lifecycle.rs` (cli-launch3, `ec2c357ce`).
+
+### Fixed
+
+- **Web typecheck regression** (`172884f1d`) — added `apps/web/test/jest-dom.d.ts` triple-slash reference so Vitest's `Assertion` interface picks up `toBeInTheDocument`/`toHaveAttribute` from `@testing-library/jest-dom`. Removed unused `React` import in `MessageBubble.test.tsx` (artifact of web-launch3's markdown code-split).
+- **Mobile gitignore** (`172884f1d`) — added `android/` + `ios/` to `apps/mobile/.gitignore` since `expo prebuild` generates them under `apps/mobile/` but canonical iOS lives at top-level `/ios`.
+- **Desktop tauri embedding command registration** (`c53048041`) — `__cmd__*` re-exports removed; commands now route directly through `crate::core::embeddings::*`.
+- **Desktop release build lint** (`ee317c714`) — `mcp/transport.rs` SSL bypass code cfg-gated behind `#[cfg(debug_assertions)]` so release builds don't trip `-D unreachable-code` / `-D unused-mut`.
+- **Expo prebuild** (`859b053e4`) — `@xmldom/xmldom` override tightened from `>=0.8.13` to `^0.8.13` to keep within `@expo/plist@0.5.2`'s `^0.8.8` peer range.
+- **Production web build** (`0da0cd24a`) — Turbopack `resolveAlias` browser stub for `node:async_hooks` added so `@agiworkforce/runtime` barrel re-export doesn't pull `AsyncLocalStorage` into client chunks.
+
+### Verified
+
+| Surface        | Tests           | Notes                                                                                                                                                                                                                                        |
+| -------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CLI            | 1,337           | cargo check workspace green                                                                                                                                                                                                                  |
+| Desktop        | typecheck green | Tauri release build green; macOS notarization 403 (Apple Dev Program Agreement expired in portal — account action)                                                                                                                           |
+| Web            | typecheck green | 31 pre-existing test failures in `core/integrations/*` + `core/security/gradual-rollout` + `shared/stores/artifact-store` + `__tests__/security/rt-09-audit-idor`. Pre-existing on main per web-launch3's note. Mock-expectation fix queued. |
+| Mobile         | 804 (45 suites) | jest                                                                                                                                                                                                                                         |
+| Chrome ext     | 614 tests       | vitest. extension.zip 139,161 bytes / 35 files, no source maps.                                                                                                                                                                              |
+| VS Code ext    | 513 tests       | vitest                                                                                                                                                                                                                                       |
+| packages/types | 163 tests       | includes new voice assertions                                                                                                                                                                                                                |
+
+### Strategy locked (user decision 2026-05-15)
+
+1. Stack stays as is — no framework rewrite.
+2. Positioning = general AI productivity workforce.
+3. Billing = Hobby cloud $10 at launch + BYOK + Local free.
+4. v1 75%-parity scope: voice + computer use + image + video gen all ship.
+5. Voice = Wispr-Flow pattern (push-to-talk + Whisper STT + AI cleanup → paste anywhere), Hobby+.
+6. Brand = design new (no mimicry).
+7. Mobile = first-class chat peer (not a Dispatch companion).
+
+---
+
 ## [Unreleased — launch-readiness wave 2] — 2026-05-15
 
 **25 commits** in a single parallel wave (`0fa1c7190..74b7f0255`) implementing `docs/design/design-spec-2026-05-15.md` across all 6 surfaces. Plan at `tasks/launch-readiness-wave2-plan.md`. Audit fire at `AUDIT_LOG.md` 2026-05-15T15:08Z.
