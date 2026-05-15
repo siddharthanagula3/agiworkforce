@@ -16,7 +16,7 @@ import {
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { colors } from '@/lib/theme';
+import { useThemeColors } from '@/hooks/useTheme';
 
 // ---------------------------------------------------------------------------
 // Quick action list
@@ -68,6 +68,7 @@ function SectionHeader({
   title: string;
   step: number;
 }) {
+  const colors = useThemeColors();
   return (
     <View className="flex-row items-center gap-3 mb-3">
       <View
@@ -97,6 +98,7 @@ function QuickActionRow({
   label: string;
   description: string;
 }) {
+  const colors = useThemeColors();
   return (
     <View className="flex-row items-start gap-3 py-2.5 px-1">
       <View
@@ -118,6 +120,7 @@ function QuickActionRow({
 // ---------------------------------------------------------------------------
 
 export default function WidgetSetupScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
 
   const handleBack = useCallback(() => {

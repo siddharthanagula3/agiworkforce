@@ -3,7 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { AlertTriangle, RotateCcw } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/lib/theme';
+import { useThemeColors } from '@/hooks/useTheme';
 
 interface ErrorBoundaryProps {
   error: Error;
@@ -12,6 +12,7 @@ interface ErrorBoundaryProps {
 
 export default function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   const router = useRouter();
+  const colors = useThemeColors();
 
   return (
     <SafeAreaView className="flex-1 bg-surface-base">
