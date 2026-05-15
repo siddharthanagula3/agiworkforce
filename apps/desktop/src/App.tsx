@@ -150,9 +150,6 @@ const ErrorToastContainer = lazy(() =>
     default: m.default,
   })),
 );
-// Cross-surface chat lives in packages/chat (@agiworkforce/unified-chat) — shared by desktop, mobile, web.
-// UnifiedAgenticChat features (BudgetTracker, AgentStepTimeline, etc.) are being ported INTO packages/chat.
-// Once parity is reached, UnifiedAgenticChat will be removed.
 import { useSessionPersistence } from './hooks/useSessionPersistence';
 import { initializeSyncManager, cleanupSyncManager } from './lib/offline/offlineSync';
 import { CHAT_COMPOSER_CAPTURE_EVENT } from './lib/chatComposerEvents';
@@ -1276,7 +1273,6 @@ const DesktopShell = () => {
                 </div>
               }
             >
-              {/* OLD: <UnifiedAgenticChat className="h-full w-full" layout="default" defaultSidecarOpen={false} /> */}
               <ChatInterface
                 runtime={tauriRuntime}
                 className="h-full w-full"
