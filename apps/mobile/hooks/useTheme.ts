@@ -31,3 +31,8 @@ export function useTheme(): ThemeResult {
     statusBarStyle: isDark ? 'light' : 'dark',
   };
 }
+
+/** Convenience hook — returns just the resolved palette. */
+export function useThemeColors(): ColorScheme {
+  return useTheme().colors;
+}

@@ -42,7 +42,7 @@ import { useConnectionStore } from '@/stores/connectionStore';
 import { useModelStore } from '@/stores/modelStore';
 import { api } from '@/services/api';
 import { openExternalUrl } from '@/lib/safeOpenURL';
-import { colors } from '@/lib/theme';
+import { useThemeColors } from '@/hooks/useTheme';
 import { VoiceSelector } from '@/components/voice/VoiceSelector';
 
 // ---------------------------------------------------------------------------
@@ -99,6 +99,7 @@ function NavigationRow({
   onPress?: () => void;
   destructive?: boolean;
 }) {
+  const c = useThemeColors();
   return (
     <Pressable
       className="flex-row items-center justify-between py-3.5 px-4 active:bg-white/5"
@@ -107,17 +108,18 @@ function NavigationRow({
       accessibilityRole="button"
     >
       <View className="flex-row items-center gap-3">
-        <Icon size={18} color={destructive ? colors.agentError : colors.textSecondary} />
-        <Text
-          className="text-[15px]"
-          style={{ color: destructive ? colors.agentError : colors.textPrimary }}
-        >
+        <Icon size={18} color={destructive ? c.agentError : c.textSecondary} />
+        <Text className="text-[15px]" style={{ color: destructive ? c.agentError : c.textPrimary }}>
           {label}
         </Text>
       </View>
       <View className="flex-row items-center gap-1.5">
-        {value ? <Text className="text-[13px] text-white/40">{value}</Text> : null}
-        {!destructive && <ChevronRight size={16} color={colors.textMuted} />}
+        {value ? (
+          <Text className="text-[13px]" style={{ color: c.textMuted }}>
+            {value}
+          </Text>
+        ) : null}
+        {!destructive && <ChevronRight size={16} color={c.textMuted} />}
       </View>
     </Pressable>
   );
@@ -134,11 +136,14 @@ function ToggleRow({
   value: boolean;
   onValueChange: (v: boolean) => void;
 }) {
+  const c = useThemeColors();
   return (
     <View className="flex-row items-center justify-between py-3.5 px-4">
       <View className="flex-row items-center gap-3">
-        <Icon size={18} color={colors.textSecondary} />
-        <Text className="text-[15px] text-white">{label}</Text>
+        <Icon size={18} color={c.textSecondary} />
+        <Text className="text-[15px]" style={{ color: c.textPrimary }}>
+          {label}
+        </Text>
       </View>
       <Switch value={value} onValueChange={onValueChange} />
     </View>
@@ -152,11 +157,14 @@ function ThemeRow({
   currentMode: ThemeMode;
   onSelect: (mode: ThemeMode) => void;
 }) {
+  const c = useThemeColors();
   return (
     <View className="py-3.5 px-4">
       <View className="flex-row items-center gap-3 mb-3">
-        <Palette size={18} color={colors.textSecondary} />
-        <Text className="text-[15px] text-white">Appearance</Text>
+        <Palette size={18} color={c.textSecondary} />
+        <Text className="text-[15px]" style={{ color: c.textPrimary }}>
+          Appearance
+        </Text>
       </View>
       <View className="flex-row gap-2">
         {(['dark', 'light', 'system'] as ThemeMode[]).map((mode) => {
@@ -176,11 +184,8 @@ function ThemeRow({
               accessibilityRole="radio"
               accessibilityState={{ selected }}
             >
-              <Icon size={16} color={selected ? colors.teal : colors.textMuted} />
-              <Text
-                className="text-xs"
-                style={{ color: selected ? colors.teal : colors.textSecondary }}
-              >
+              <Icon size={16} color={selected ? c.teal : c.textMuted} />
+              <Text className="text-xs" style={{ color: selected ? c.teal : c.textSecondary }}>
                 {THEME_LABELS[mode]}
               </Text>
             </Pressable>
@@ -192,6 +197,7 @@ function ThemeRow({
 }
 
 function VersionRow() {
+  const c = useThemeColors();
   const version = Constants.expoConfig?.version ?? '1.0.0';
   const buildNumber =
     Constants.expoConfig?.ios?.buildNumber ??
@@ -199,7 +205,7 @@ function VersionRow() {
     '1';
   return (
     <View className="items-center py-4">
-      <Text className="text-[11px] text-white/20">
+      <Text className="text-[11px]" style={{ color: c.textMuted }}>
         v{version} Build {buildNumber}
       </Text>
     </View>
@@ -211,7 +217,8 @@ function VersionRow() {
 // ---------------------------------------------------------------------------
 
 function RowSeparator() {
-  return <View className="h-px mx-4" style={{ backgroundColor: colors.border }} />;
+  const c = useThemeColors();
+  return <View className="h-px mx-4" style={{ backgroundColor: c.border }} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -225,6 +232,7 @@ export default function SettingsTabScreen() {
   const selectedModel = useModelStore((s) => s.selectedModel);
   const voiceSelectorRef = useRef<BottomSheet>(null);
   const { hapticsEnabled, themeMode, setHapticsEnabled, setThemeMode } = useSettingsStore();
+  const c = useThemeColors();
 
   // ---- Handlers ----
 
@@ -471,12 +479,15 @@ export default function SettingsTabScreen() {
   const renderSectionHeader = useCallback(
     ({ section }: { section: SettingSection }) => (
       <View className="pt-5 pb-1.5 px-4">
-        <Text className="text-[11px] text-white/40 uppercase tracking-wider font-semibold">
+        <Text
+          className="text-[11px] uppercase tracking-wider font-semibold"
+          style={{ color: c.textMuted }}
+        >
           {section.title}
         </Text>
       </View>
     ),
-    [],
+    [c],
   );
 
   const renderSectionFooter = useCallback(() => null, []);
@@ -484,10 +495,14 @@ export default function SettingsTabScreen() {
   const keyExtractor = useCallback((item: SettingItem) => item.key, []);
 
   return (
-    <SafeAreaView className="flex-1 bg-surface-base" edges={['top']}>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
       {/* Header */}
       <View className="flex-row items-center px-4 h-12">
-        <Text variant="subheading" className="text-white text-lg font-semibold">
+        <Text
+          variant="subheading"
+          className="text-lg font-semibold"
+          style={{ color: c.textPrimary }}
+        >
           Settings
         </Text>
       </View>
@@ -501,7 +516,7 @@ export default function SettingsTabScreen() {
         stickySectionHeadersEnabled={false}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
-        style={{ backgroundColor: colors.surfaceBase }}
+        style={{ backgroundColor: c.surfaceBase }}
       />
 
       <VoiceSelector ref={voiceSelectorRef} />

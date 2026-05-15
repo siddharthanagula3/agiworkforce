@@ -19,7 +19,7 @@ import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/stores/modelStore';
 import { useProjectStore } from '@/stores/projectStore';
-import { colors } from '@/lib/theme';
+import { useThemeColors } from '@/hooks/useTheme';
 import type { ConversationTag } from '@/services/autotag';
 
 /**
@@ -31,6 +31,7 @@ import type { ConversationTag } from '@/services/autotag';
 export default function ChatTabScreen() {
   const router = useRouter();
   const navigation = useNavigation();
+  const c = useThemeColors();
   const modelPickerRef = useRef<BottomSheet>(null);
   const addToChatRef = useRef<BottomSheet>(null);
   const chatInputAttachRef = useRef<{
@@ -212,7 +213,7 @@ export default function ChatTabScreen() {
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-surface-base" edges={['top']}>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 h-12">
         <View className="flex-row items-center gap-2">
@@ -222,9 +223,9 @@ export default function ChatTabScreen() {
             accessibilityLabel="Open navigation drawer"
             accessibilityRole="button"
           >
-            <Menu size={18} color={colors.textSecondary} />
+            <Menu size={18} color={c.textSecondary} />
           </Pressable>
-          <Text variant="subheading" className="text-white">
+          <Text variant="subheading" style={{ color: c.textPrimary }}>
             Chats
           </Text>
         </View>
@@ -234,7 +235,7 @@ export default function ChatTabScreen() {
           accessibilityLabel="New chat"
           accessibilityRole="button"
         >
-          <Plus size={18} color={colors.teal} />
+          <Plus size={18} color={c.teal} />
         </Pressable>
       </View>
 

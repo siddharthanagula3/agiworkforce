@@ -13,7 +13,7 @@ import { ArrowLeft, Check, Sun, Moon, Monitor } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { useSettingsStore, type ThemeMode } from '@/stores/settingsStore';
-import { colors } from '@/lib/theme';
+import { useThemeColors } from '@/hooks/useTheme';
 
 // ---------------------------------------------------------------------------
 // Slider config
@@ -50,18 +50,25 @@ function LabeledInput({
   placeholder?: string;
   multiline?: boolean;
 }) {
+  const c = useThemeColors();
   return (
     <View className="gap-1.5">
-      <Text className="text-sm text-white/60">{label}</Text>
+      <Text className="text-sm" style={{ color: c.textMuted }}>
+        {label}
+      </Text>
       <TextInput
-        className={`px-4 rounded-xl bg-surface-elevated border border-white/10 text-white text-[15px] ${
-          multiline ? 'pt-3 pb-3 min-h-[100px]' : 'h-12'
-        }`}
+        className={`px-4 rounded-xl text-[15px] ${multiline ? 'pt-3 pb-3 min-h-[100px]' : 'h-12'}`}
+        style={{
+          backgroundColor: c.surfaceElevated,
+          borderWidth: 1,
+          borderColor: c.border,
+          color: c.textPrimary,
+        }}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="rgba(255,255,255,0.25)"
-        selectionColor={colors.teal}
+        placeholderTextColor={c.textMuted}
+        selectionColor={c.teal}
         multiline={multiline}
         textAlignVertical={multiline ? 'top' : 'center'}
         autoCorrect={false}
@@ -84,24 +91,33 @@ function StyleSlider({
   value: number;
   onValueChange: (v: number) => void;
 }) {
+  const c = useThemeColors();
   return (
     <View className="gap-1">
-      <Text className="text-[13px] text-white font-medium">{config.label}</Text>
+      <Text className="text-[13px] font-medium" style={{ color: c.textPrimary }}>
+        {config.label}
+      </Text>
       <Slider
         minimumValue={0}
         maximumValue={100}
         step={1}
         value={value}
         onValueChange={onValueChange}
-        minimumTrackTintColor={colors.teal}
-        maximumTrackTintColor={colors.charcoal700}
-        thumbTintColor={Platform.OS === 'ios' ? colors.white : colors.teal}
+        minimumTrackTintColor={c.teal}
+        maximumTrackTintColor={c.charcoal700}
+        thumbTintColor={Platform.OS === 'ios' ? c.white : c.teal}
         style={{ height: 36 }}
       />
       <View className="flex-row justify-between px-0.5">
-        <Text className="text-[11px] text-white/30">{config.leftLabel}</Text>
-        <Text className="text-[11px] text-white/30">Default</Text>
-        <Text className="text-[11px] text-white/30">{config.rightLabel}</Text>
+        <Text className="text-[11px]" style={{ color: c.textMuted }}>
+          {config.leftLabel}
+        </Text>
+        <Text className="text-[11px]" style={{ color: c.textMuted }}>
+          Default
+        </Text>
+        <Text className="text-[11px]" style={{ color: c.textMuted }}>
+          {config.rightLabel}
+        </Text>
       </View>
     </View>
   );
@@ -124,9 +140,12 @@ function ThemeSegmentedControl({
   value: ThemeMode;
   onChange: (mode: ThemeMode) => void;
 }) {
+  const c = useThemeColors();
   return (
     <View className="gap-2">
-      <Text className="text-sm text-white/60">Appearance</Text>
+      <Text className="text-sm" style={{ color: c.textMuted }}>
+        Appearance
+      </Text>
       <View className="flex-row gap-2">
         {THEME_OPTIONS.map(({ mode, label, Icon }) => {
           const selected = value === mode;
@@ -136,26 +155,23 @@ function ThemeSegmentedControl({
               onPress={() => onChange(mode)}
               className="flex-1 items-center gap-1.5 py-2.5 rounded-xl"
               style={{
-                backgroundColor: selected ? 'rgba(33,128,141,0.15)' : 'rgba(255,255,255,0.04)',
+                backgroundColor: selected ? 'rgba(33,128,141,0.15)' : c.border,
                 borderWidth: 1,
-                borderColor: selected ? 'rgba(33,128,141,0.3)' : 'rgba(255,255,255,0.08)',
+                borderColor: selected ? 'rgba(33,128,141,0.3)' : c.border,
               }}
               accessibilityLabel={label}
               accessibilityRole="radio"
               accessibilityState={{ selected }}
             >
-              <Icon size={16} color={selected ? colors.teal : colors.textMuted} />
-              <Text
-                className="text-xs"
-                style={{ color: selected ? colors.teal : colors.textSecondary }}
-              >
+              <Icon size={16} color={selected ? c.teal : c.textMuted} />
+              <Text className="text-xs" style={{ color: selected ? c.teal : c.textSecondary }}>
                 {label}
               </Text>
             </Pressable>
           );
         })}
       </View>
-      <Text className="text-[11px] text-white/30 leading-4">
+      <Text className="text-[11px] leading-4" style={{ color: c.textMuted }}>
         Light mode is coming soon — preference is saved but UI is currently dark only.
       </Text>
     </View>
@@ -168,6 +184,7 @@ function ThemeSegmentedControl({
 
 export default function PersonalizationScreen() {
   const router = useRouter();
+  const c = useThemeColors();
   const personalization = useSettingsStore((s) => s.personalization);
   const setPersonalization = useSettingsStore((s) => s.setPersonalization);
   const themeMode = useSettingsStore((s) => s.themeMode);
@@ -262,7 +279,7 @@ export default function PersonalizationScreen() {
   ]);
 
   return (
-    <SafeAreaView className="flex-1 bg-surface-base">
+    <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
       {/* Header */}
       <View className="flex-row items-center justify-between px-3 h-12">
         <View className="flex-row items-center">
@@ -272,9 +289,9 @@ export default function PersonalizationScreen() {
             accessibilityLabel="Go back"
             accessibilityRole="button"
           >
-            <ArrowLeft size={20} color={colors.textSecondary} />
+            <ArrowLeft size={20} color={c.textSecondary} />
           </Pressable>
-          <Text variant="subheading" className="ml-2">
+          <Text variant="subheading" className="ml-2" style={{ color: c.textPrimary }}>
             Personalization
           </Text>
         </View>
@@ -284,8 +301,8 @@ export default function PersonalizationScreen() {
           accessibilityLabel="Save personalization settings"
           accessibilityRole="button"
         >
-          <Check size={16} color={colors.teal} />
-          <Text className="text-sm font-medium" style={{ color: colors.teal }}>
+          <Check size={16} color={c.teal} />
+          <Text className="text-sm font-medium" style={{ color: c.teal }}>
             Save
           </Text>
         </Pressable>
@@ -299,7 +316,10 @@ export default function PersonalizationScreen() {
       >
         {/* Theme */}
         <View>
-          <Text className="text-[11px] text-white/40 uppercase tracking-wider font-semibold mb-3 px-1">
+          <Text
+            className="text-[11px] uppercase tracking-wider font-semibold mb-3 px-1"
+            style={{ color: c.textMuted }}
+          >
             Theme
           </Text>
           <Card>
@@ -338,7 +358,10 @@ export default function PersonalizationScreen() {
 
         {/* Response Style */}
         <View>
-          <Text className="text-[11px] text-white/40 uppercase tracking-wider font-semibold mb-3 px-1">
+          <Text
+            className="text-[11px] uppercase tracking-wider font-semibold mb-3 px-1"
+            style={{ color: c.textMuted }}
+          >
             Response Style
           </Text>
           <Card className="gap-5">
@@ -354,11 +377,8 @@ export default function PersonalizationScreen() {
         </View>
 
         {/* Note */}
-        <View
-          className="mx-1 px-3 py-2.5 rounded-lg"
-          style={{ backgroundColor: 'rgba(255,255,255,0.04)' }}
-        >
-          <Text className="text-[11px] text-white/30 leading-4">
+        <View className="mx-1 px-3 py-2.5 rounded-lg" style={{ backgroundColor: c.border }}>
+          <Text className="text-[11px] leading-4" style={{ color: c.textMuted }}>
             Preferences apply to all conversations. Your name and instructions are included as
             context when chatting with AI.
           </Text>
