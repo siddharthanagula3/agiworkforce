@@ -119,6 +119,7 @@ use toml::Value as TomlValue;
 mod agent_navigation;
 mod pending_interactive_replay;
 mod plugin_io;
+mod status;
 mod thread_event_store;
 
 use self::agent_navigation::AgentNavigationDirection;
@@ -3972,73 +3973,6 @@ impl App {
         Ok(())
     }
 
-    fn reasoning_label(reasoning_effort: Option<ReasoningEffortConfig>) -> &'static str {
-        match reasoning_effort {
-            Some(ReasoningEffortConfig::Minimal) => "minimal",
-            Some(ReasoningEffortConfig::Low) => "low",
-            Some(ReasoningEffortConfig::Medium) => "medium",
-            Some(ReasoningEffortConfig::High) => "high",
-            Some(ReasoningEffortConfig::XHigh) => "xhigh",
-            None | Some(ReasoningEffortConfig::None) => "default",
-        }
-    }
-
-    fn reasoning_label_for(
-        model: &str,
-        reasoning_effort: Option<ReasoningEffortConfig>,
-    ) -> Option<&'static str> {
-        (!model.starts_with("agiworkforce-auto-")).then(|| Self::reasoning_label(reasoning_effort))
-    }
-
-    pub(crate) fn token_usage(&self) -> agiworkforce_protocol::protocol::TokenUsage {
-        self.chat_widget.token_usage()
-    }
-
-    fn on_update_reasoning_effort(&mut self, effort: Option<ReasoningEffortConfig>) {
-        // TODO(aibrahim): Remove this and don't use config as a state object.
-        // Instead, explicitly pass the stored collaboration mode's effort into new sessions.
-        self.config.model_reasoning_effort = effort;
-        self.chat_widget.set_reasoning_effort(effort);
-    }
-
-    fn on_update_personality(&mut self, personality: Personality) {
-        self.config.personality = Some(personality);
-        self.chat_widget.set_personality(personality);
-    }
-
-    fn sync_tui_theme_selection(&mut self, name: String) {
-        self.config.tui_theme = Some(name.clone());
-        self.chat_widget.set_tui_theme(Some(name));
-    }
-
-    fn restore_runtime_theme_from_config(&self) {
-        if let Some(name) = self.config.tui_theme.as_deref()
-            && let Some(theme) = crate::render::highlight::resolve_theme_by_name(
-                name,
-                Some(&self.config.agiworkforce_home),
-            )
-        {
-            crate::render::highlight::set_syntax_theme(theme);
-            return;
-        }
-
-        let auto_theme_name = crate::render::highlight::adaptive_default_theme_name();
-        if let Some(theme) = crate::render::highlight::resolve_theme_by_name(
-            auto_theme_name,
-            Some(&self.config.agiworkforce_home),
-        ) {
-            crate::render::highlight::set_syntax_theme(theme);
-        }
-    }
-
-    fn personality_label(personality: Personality) -> &'static str {
-        match personality {
-            Personality::None => "None",
-            Personality::Friendly => "Friendly",
-            Personality::Pragmatic => "Pragmatic",
-        }
-    }
-
     async fn launch_external_editor(&mut self, tui: &mut tui::Tui) {
         let editor_cmd = match external_editor::resolve_editor_command() {
             Ok(cmd) => cmd,
@@ -4233,10 +4167,6 @@ impl App {
                 self.chat_widget.handle_key_event(key_event);
             }
         };
-    }
-
-    fn refresh_status_surfaces(&mut self) {
-        self.chat_widget.refresh_status_surfaces();
     }
 
     #[cfg(target_os = "windows")]
