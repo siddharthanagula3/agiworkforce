@@ -1,16 +1,12 @@
 import 'server-only';
 
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { createClient } from '@supabase/supabase-js';
-import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getSecurityHeaders, getCorsHeaders, handleCorsPreflightRequest } from '@/lib/cors';
-import type { User } from '@supabase/supabase-js';
+import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
  * GET /api/user/export
@@ -48,78 +44,8 @@ async function handleExportUserData(request: NextRequest) {
   }
 
   try {
-    const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-    const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
-    const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-
-    let user: User | null = null;
-
-    // Check for Bearer token in Authorization header (desktop/mobile app)
-    const authHeader = request.headers.get('authorization');
-    if (authHeader?.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-
-      // Create a regular Supabase client to verify the JWT token
-      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-        auth: {
-          persistSession: false,
-          flowType: 'pkce',
-        },
-      });
-
-      const { data, error: authError } = await supabase.auth.getUser(token);
-
-      if (authError || !data.user) {
-        logger.warn({ error: authError }, 'Bearer token authentication failed for data export');
-        throw createError.unauthorized('Invalid authentication token');
-      }
-
-      user = data.user;
-    } else {
-      // Fall back to cookie-based authentication (web app)
-      const cookieStore = await cookies();
-
-      const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-        auth: {
-          flowType: 'pkce',
-        },
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value;
-          },
-
-          set(name: string, value: string, options: CookieOptions) {
-            try {
-              cookieStore.set({ name, value, ...options });
-            } catch {
-              // ignore cookie setting errors
-            }
-          },
-          remove(name: string, options: CookieOptions) {
-            try {
-              cookieStore.set({ name, value: '', ...options });
-            } catch {
-              // ignore cookie removal errors
-            }
-          },
-        },
-      });
-
-      const {
-        data: { user: cookieUser },
-        error: cookieAuthError,
-      } = await supabase.auth.getUser();
-
-      if (cookieAuthError || !cookieUser) {
-        throw createError.unauthorized();
-      }
-
-      user = cookieUser;
-    }
-
-    if (!user) {
-      throw createError.unauthorized();
-    }
+    // userDb is RLS-bound: all reads below are scoped to the authenticated user.
+    const { user, userDb } = await getAuthenticatedUserWithClient(request);
 
     // Log the export request for audit purposes
     logger.info(
@@ -131,28 +57,17 @@ async function handleExportUserData(request: NextRequest) {
       'User requested GDPR data export',
     );
 
-    // Create service role client for database operations
-    const adminSupabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { persistSession: false },
-    });
-
-    // Try to call the export_user_data database function first
-    const { data: rpcData, error: rpcError } = await adminSupabase.rpc('export_user_data', {
+    // Try RLS-bound RPC first. If the RPC requires elevated privileges (SECURITY DEFINER),
+    // it will succeed even through an anon-key client because the function itself elevates.
+    const { data: rpcData, error: rpcError } = await userDb.rpc('export_user_data', {
       target_user_id: user.id,
     });
 
     if (!rpcError && rpcData) {
-      logger.info(
-        {
-          userId: user.id,
-        },
-        'User data exported successfully via RPC',
-      );
-
+      logger.info({ userId: user.id }, 'User data exported successfully via RPC');
       return createExportResponse(request, user.id, rpcData);
     }
 
-    // If the function doesn't exist, fall back to manual data collection
     if (rpcError) {
       logger.warn(
         { error: rpcError, userId: user.id },
@@ -160,157 +75,9 @@ async function handleExportUserData(request: NextRequest) {
       );
     }
 
-    // Manual data collection from each table
-    const exportData: Record<string, unknown> = {
-      export_metadata: {
-        user_id: user.id,
-        export_timestamp: new Date().toISOString(),
-        gdpr_article: 'Article 20 - Right to Data Portability',
-        format_version: '1.0',
-      },
-      account: {
-        id: user.id,
-        email: user.email,
-        created_at: user.created_at,
-        updated_at: user.updated_at,
-        email_confirmed_at: user.email_confirmed_at,
-        last_sign_in_at: user.last_sign_in_at,
-        app_metadata: user.app_metadata,
-        user_metadata: user.user_metadata,
-      },
-    };
-
-    // Fetch profile
-    const { data: profile } = await adminSupabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
-    if (profile) {
-      exportData['profile'] = profile;
-    }
-
-    // Fetch subscription
-    const { data: subscription } = await adminSupabase
-      .from('subscriptions')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
-    if (subscription) {
-      // Remove sensitive Stripe IDs from export
-      exportData['subscription'] = {
-        ...subscription,
-        stripe_customer_id: subscription.stripe_customer_id ? '[REDACTED]' : null,
-        stripe_subscription_id: subscription.stripe_subscription_id ? '[REDACTED]' : null,
-      };
-    }
-
-    // Fetch token credits
-    const { data: tokenCredits } = await adminSupabase
-      .from('token_credits')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-    if (tokenCredits && tokenCredits.length > 0) {
-      exportData['token_credits'] = tokenCredits;
-    }
-
-    // Fetch credit transactions (limited to last 1000)
-    const { data: creditTransactions } = await adminSupabase
-      .from('credit_transactions')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(1000);
-    if (creditTransactions && creditTransactions.length > 0) {
-      exportData['credit_transactions'] = creditTransactions;
-    }
-
-    // Fetch email preferences
-    const { data: emailPreferences } = await adminSupabase
-      .from('email_preferences')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
-    if (emailPreferences) {
-      // Remove sensitive tokens from export
-      exportData['email_preferences'] = {
-        ...emailPreferences,
-        unsubscribe_token: '[REDACTED]',
-        consent_ip_address: emailPreferences.consent_ip_address ? '[PARTIALLY_REDACTED]' : null,
-      };
-    }
-
-    // Fetch organization memberships
-    const { data: orgMemberships } = await adminSupabase
-      .from('organization_members')
-      .select('*, organizations(*)')
-      .eq('user_id', user.id);
-    if (orgMemberships && orgMemberships.length > 0) {
-      exportData['organization_memberships'] = orgMemberships;
-    }
-
-    // Fetch beta redemptions
-    const { data: betaRedemptions } = await adminSupabase
-      .from('beta_redemptions')
-      .select('*, beta_invites(code, plan_tier, trial_days)')
-      .eq('user_id', user.id);
-    if (betaRedemptions && betaRedemptions.length > 0) {
-      exportData['beta_redemptions'] = betaRedemptions;
-    }
-
-    // Fetch device authorizations
-    const { data: deviceAuths } = await adminSupabase
-      .from('device_authorization_codes')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-    if (deviceAuths && deviceAuths.length > 0) {
-      // Redact sensitive device tokens
-      exportData['device_authorizations'] = deviceAuths.map((auth) => ({
-        ...auth,
-        user_code: auth.user_code ? '[REDACTED]' : null,
-        access_token: auth.access_token ? '[REDACTED]' : null,
-        refresh_token: auth.refresh_token ? '[REDACTED]' : null,
-      }));
-    }
-
-    // Fetch desktop devices
-    const { data: desktopDevices } = await adminSupabase
-      .from('desktop_devices')
-      .select('*')
-      .eq('user_id', user.id);
-    if (desktopDevices && desktopDevices.length > 0) {
-      exportData['desktop_devices'] = desktopDevices;
-    }
-
-    // Fetch mobile devices
-    const { data: mobileDevices } = await adminSupabase
-      .from('mobile_devices')
-      .select('*')
-      .eq('user_id', user.id);
-    if (mobileDevices && mobileDevices.length > 0) {
-      exportData['mobile_devices'] = mobileDevices;
-    }
-
-    // Fetch sync data
-    const { data: syncData } = await adminSupabase
-      .from('sync_data')
-      .select('*')
-      .eq('user_id', user.id);
-    if (syncData && syncData.length > 0) {
-      exportData['sync_data'] = syncData;
-    }
-
-    logger.info(
-      {
-        userId: user.id,
-        dataSections: Object.keys(exportData).length,
-      },
-      'User data export completed via fallback method',
-    );
-
-    return createExportResponse(request, user.id, exportData);
+    // Manual data collection using the RLS-bound client — RLS ensures each
+    // query returns only the authenticated user's rows without needing service-role.
+    return createExportResponse(request, user.id, await collectUserData(user, userDb));
   } catch (error) {
     logger.error(
       {
@@ -320,6 +87,137 @@ async function handleExportUserData(request: NextRequest) {
     );
     throw error;
   }
+}
+
+async function collectUserData(
+  user: {
+    id: string;
+    email?: string;
+    created_at: string;
+    updated_at?: string;
+    email_confirmed_at?: string;
+    last_sign_in_at?: string;
+    app_metadata?: unknown;
+    user_metadata?: unknown;
+  },
+  db: SupabaseClient,
+): Promise<Record<string, unknown>> {
+  const exportData: Record<string, unknown> = {
+    export_metadata: {
+      user_id: user.id,
+      export_timestamp: new Date().toISOString(),
+      gdpr_article: 'Article 20 - Right to Data Portability',
+      format_version: '1.0',
+    },
+    account: {
+      id: user.id,
+      email: user.email,
+      created_at: user.created_at,
+      updated_at: user.updated_at,
+      email_confirmed_at: user.email_confirmed_at,
+      last_sign_in_at: user.last_sign_in_at,
+      app_metadata: user.app_metadata,
+      user_metadata: user.user_metadata,
+    },
+  };
+
+  const { data: profile } = await db.from('profiles').select('*').eq('id', user.id).single();
+  if (profile) exportData['profile'] = profile;
+
+  const { data: subscription } = await db
+    .from('subscriptions')
+    .select('*')
+    .eq('user_id', user.id)
+    .single();
+  if (subscription) {
+    exportData['subscription'] = {
+      ...subscription,
+      stripe_customer_id: subscription.stripe_customer_id ? '[REDACTED]' : null,
+      stripe_subscription_id: subscription.stripe_subscription_id ? '[REDACTED]' : null,
+    };
+  }
+
+  const { data: tokenCredits } = await db
+    .from('token_credits')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false });
+  if (tokenCredits && tokenCredits.length > 0) exportData['token_credits'] = tokenCredits;
+
+  const { data: creditTransactions } = await db
+    .from('credit_transactions')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(1000);
+  if (creditTransactions && creditTransactions.length > 0) {
+    exportData['credit_transactions'] = creditTransactions;
+  }
+
+  const { data: emailPreferences } = await db
+    .from('email_preferences')
+    .select('*')
+    .eq('user_id', user.id)
+    .single();
+  if (emailPreferences) {
+    exportData['email_preferences'] = {
+      ...emailPreferences,
+      unsubscribe_token: '[REDACTED]',
+      consent_ip_address: emailPreferences.consent_ip_address ? '[PARTIALLY_REDACTED]' : null,
+    };
+  }
+
+  const { data: orgMemberships } = await db
+    .from('organization_members')
+    .select('*, organizations(*)')
+    .eq('user_id', user.id);
+  if (orgMemberships && orgMemberships.length > 0) {
+    exportData['organization_memberships'] = orgMemberships;
+  }
+
+  const { data: betaRedemptions } = await db
+    .from('beta_redemptions')
+    .select('*, beta_invites(code, plan_tier, trial_days)')
+    .eq('user_id', user.id);
+  if (betaRedemptions && betaRedemptions.length > 0) {
+    exportData['beta_redemptions'] = betaRedemptions;
+  }
+
+  const { data: deviceAuths } = await db
+    .from('device_authorization_codes')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false });
+  if (deviceAuths && deviceAuths.length > 0) {
+    exportData['device_authorizations'] = deviceAuths.map((auth) => ({
+      ...auth,
+      user_code: auth.user_code ? '[REDACTED]' : null,
+      access_token: auth.access_token ? '[REDACTED]' : null,
+      refresh_token: auth.refresh_token ? '[REDACTED]' : null,
+    }));
+  }
+
+  const { data: desktopDevices } = await db
+    .from('desktop_devices')
+    .select('*')
+    .eq('user_id', user.id);
+  if (desktopDevices && desktopDevices.length > 0) exportData['desktop_devices'] = desktopDevices;
+
+  const { data: mobileDevices } = await db
+    .from('mobile_devices')
+    .select('*')
+    .eq('user_id', user.id);
+  if (mobileDevices && mobileDevices.length > 0) exportData['mobile_devices'] = mobileDevices;
+
+  const { data: syncData } = await db.from('sync_data').select('*').eq('user_id', user.id);
+  if (syncData && syncData.length > 0) exportData['sync_data'] = syncData;
+
+  logger.info(
+    { userId: user.id, dataSections: Object.keys(exportData).length },
+    'User data export completed via fallback method',
+  );
+
+  return exportData;
 }
 
 /**
@@ -336,7 +234,6 @@ function createExportResponse(request: NextRequest, userId: string, data: unknow
   const timestamp = new Date().toISOString().split('T')[0];
 
   if (isDownload) {
-    // Return as downloadable file
     return new NextResponse(jsonData, {
       headers: {
         'Content-Type': 'application/json',
@@ -347,7 +244,6 @@ function createExportResponse(request: NextRequest, userId: string, data: unknow
     });
   }
 
-  // Return as JSON response
   return NextResponse.json(
     {
       success: true,

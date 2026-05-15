@@ -1,17 +1,14 @@
 import 'server-only';
 
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { createClient } from '@supabase/supabase-js';
-import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getSecurityHeaders, getCorsHeaders, handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
-import type { User } from '@supabase/supabase-js';
+import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getServiceClient } from '@/lib/supabase-server';
 
 /**
  * DELETE /api/user/data
@@ -55,78 +52,7 @@ async function handleDeleteUserData(request: NextRequest) {
   }
 
   try {
-    const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-    const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
-    const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-
-    let user: User | null = null;
-
-    // Check for Bearer token in Authorization header (desktop/mobile app)
-    const authHeader = request.headers.get('authorization');
-    if (authHeader?.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-
-      // Create a regular Supabase client to verify the JWT token
-      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-        auth: {
-          persistSession: false,
-          flowType: 'pkce',
-        },
-      });
-
-      const { data, error: authError } = await supabase.auth.getUser(token);
-
-      if (authError || !data.user) {
-        logger.warn({ error: authError }, 'Bearer token authentication failed for data deletion');
-        throw createError.unauthorized('Invalid authentication token');
-      }
-
-      user = data.user;
-    } else {
-      // Fall back to cookie-based authentication (web app)
-      const cookieStore = await cookies();
-
-      const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-        auth: {
-          flowType: 'pkce',
-        },
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value;
-          },
-
-          set(name: string, value: string, options: CookieOptions) {
-            try {
-              cookieStore.set({ name, value, ...options });
-            } catch {
-              // ignore cookie setting errors
-            }
-          },
-          remove(name: string, options: CookieOptions) {
-            try {
-              cookieStore.set({ name, value: '', ...options });
-            } catch {
-              // ignore cookie removal errors
-            }
-          },
-        },
-      });
-
-      const {
-        data: { user: cookieUser },
-        error: cookieAuthError,
-      } = await supabase.auth.getUser();
-
-      if (cookieAuthError || !cookieUser) {
-        throw createError.unauthorized();
-      }
-
-      user = cookieUser;
-    }
-
-    if (!user) {
-      throw createError.unauthorized();
-    }
+    const { user } = await getAuthenticatedUserWithClient(request);
 
     // Log the deletion request for audit purposes
     logger.info(
@@ -138,10 +64,10 @@ async function handleDeleteUserData(request: NextRequest) {
       'User requested GDPR data deletion',
     );
 
-    // Create service role client for database operations
-    const adminSupabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { persistSession: false },
-    });
+    // Service-role client required: delete_user_data RPC runs as a privileged
+    // database function that removes data across multiple tables. RLS on the
+    // individual tables would block the cascading deletes.
+    const adminSupabase = getServiceClient();
 
     // Call the delete_user_data database function
     const { data, error } = await adminSupabase.rpc('delete_user_data', {

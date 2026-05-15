@@ -1,12 +1,12 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { requireEnv } from '@/utils/env';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
+import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getServiceClient } from '@/lib/supabase-server';
 
 /**
  * DELETE /api/user/delete-account
@@ -29,40 +29,6 @@ const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
 };
 
-async function getAuthenticatedUserId(request: NextRequest): Promise<string | null> {
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-
-  const authHeader = request.headers.get('authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
-    const client = createClient(supabaseUrl, supabaseServiceKey);
-    const {
-      data: { user },
-      error,
-    } = await client.auth.getUser(token);
-    if (error || !user) return null;
-    return user.id;
-  }
-
-  // Cookie-based auth
-  const { createServerClient } = await import('@supabase/ssr');
-  const ssrClient = createServerClient(supabaseUrl, requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY'), {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll() {
-        // read-only
-      },
-    },
-  });
-  const {
-    data: { user },
-  } = await ssrClient.auth.getUser();
-  return user?.id ?? null;
-}
-
 export async function DELETE(request: NextRequest) {
   // Strict rate limit - this is a destructive action (5 req/min per IP)
   const rateLimitResponse = await withRateLimit(request, 'user-data-delete');
@@ -74,16 +40,17 @@ export async function DELETE(request: NextRequest) {
     return csrfError as NextResponse;
   }
 
-  const userId = await getAuthenticatedUserId(request);
-  if (!userId) {
+  let userId: string;
+  try {
+    const { user } = await getAuthenticatedUserWithClient(request);
+    userId = user.id;
+  } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: SECURITY_HEADERS });
   }
 
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
-    auth: { persistSession: false },
-  });
+  // Service-role client required: auth.admin.deleteUser and profile updates that
+  // bypass RLS are intentional — this is a privileged account-lifecycle operation.
+  const adminClient = getServiceClient();
   const untypedClient = adminClient as unknown as import('@supabase/supabase-js').SupabaseClient;
 
   try {
