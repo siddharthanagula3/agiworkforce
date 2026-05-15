@@ -53,7 +53,7 @@ pids+=($!)
 (run_surface "web"             "pnpm --filter web typecheck && pnpm --filter web lint && pnpm --filter web test -- --run") &
 pids+=($!)
 
-(run_surface "mobile"          "pnpm --filter @agiworkforce/mobile typecheck && pnpm --filter @agiworkforce/mobile lint && pnpm --filter @agiworkforce/mobile test -- --run") &
+(run_surface "mobile"          "pnpm --filter @agiworkforce/mobile typecheck && pnpm --filter @agiworkforce/mobile lint && pnpm --filter @agiworkforce/mobile test") &
 pids+=($!)
 
 (run_surface "chrome-ext"      "pnpm --filter @agiworkforce/extension typecheck && pnpm --filter @agiworkforce/extension lint && pnpm --filter @agiworkforce/extension test -- --run") &
