@@ -3,6 +3,9 @@ name = "agiworkforce-utils-rustls-provider"
 version = "0.1.0"
 edition = "2024"
 
+[lints]
+workspace = true
+
 [lib]
 name = "agiworkforce_utils_rustls_provider"
 path = "src/lib.rs"

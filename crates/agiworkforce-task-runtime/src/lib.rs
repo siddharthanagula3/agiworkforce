@@ -92,7 +92,7 @@ impl TaskRegistry {
 
     pub async fn create(&self, kind: TaskKind, command: Option<String>) -> Result<TaskId> {
         let id = Uuid::new_v4();
-        let output_path = self.base_dir.join(format!("{}.out", id));
+        let output_path = self.base_dir.join(format!("{id}.out"));
         // Pre-create the output file
         std::fs::File::create(&output_path)?;
         let task = Task {

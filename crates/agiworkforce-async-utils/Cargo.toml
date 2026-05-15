@@ -3,6 +3,9 @@ name = "agiworkforce-async-utils"
 version = "0.1.0"
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
 async-trait = "0.1.89"
 tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "time"] }
