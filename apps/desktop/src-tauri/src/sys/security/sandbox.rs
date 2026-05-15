@@ -323,3 +323,134 @@ impl Default for SandboxManager {
         Self::new(SandboxConfig::default())
     }
 }
+
+// ---------------------------------------------------------------------------
+// OS-level sandbox profile stubs (Phase A #14)
+// Enforcement is NOT wired — these stubs define the typed surface so callers
+// can be written before kernel integration ships.
+// ---------------------------------------------------------------------------
+
+/// Which OS-level isolation mechanism to use for a session.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SandboxProfile {
+    /// macOS sandbox-exec (Seatbelt) — profile DSL applied via `sandbox-exec -p`.
+    MacosSeatbelt {
+        /// Rendered Seatbelt profile DSL string (SBPL).
+        profile_dsl: String,
+    },
+    /// Linux bubblewrap (bwrap) — args forwarded to the bwrap binary.
+    LinuxBwrap {
+        /// Additional bwrap CLI flags beyond the minimal read-only base set.
+        extra_args: Vec<String>,
+    },
+    /// Windows AppContainer — SID and capability list (ships as of v1.7.0).
+    WindowsAppContainer {
+        /// Capability SIDs granted to the container.
+        capability_sids: Vec<String>,
+    },
+    /// No OS-level enforcement — rely on Rust-side path/host checks only.
+    None,
+}
+
+impl SandboxProfile {
+    /// Return the profile appropriate for the current OS.
+    /// Callers receive `None` on unsupported platforms (silent fallthrough
+    /// matches existing behaviour at `sandbox.rs:159` noted in the audit).
+    pub fn for_current_os() -> Self {
+        #[cfg(target_os = "macos")]
+        {
+            Self::macos_default()
+        }
+        #[cfg(target_os = "linux")]
+        {
+            Self::linux_default()
+        }
+        #[cfg(target_os = "windows")]
+        {
+            Self::windows_default()
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+        {
+            Self::None
+        }
+    }
+
+    /// Minimal read-only Seatbelt profile — allows reading from the sandbox
+    /// working directory and denies everything else by default.
+    #[cfg(target_os = "macos")]
+    pub fn macos_default() -> Self {
+        // STUB: DSL is valid SBPL syntax but enforcement is not wired yet.
+        // Full profile will be generated from SandboxPermissions fields once
+        // the `sandbox-exec` invocation path ships.
+        let dsl = "(version 1)\n\
+                   (deny default)\n\
+                   (allow file-read*\n\
+                     (subpath \"/usr/lib\")\n\
+                     (subpath \"/System/Library\")\n\
+                   )\n\
+                   (allow process-exec (with no-sandbox))\n"
+            .to_string();
+        Self::MacosSeatbelt { profile_dsl: dsl }
+    }
+
+    /// Minimal bwrap profile — unshares all namespaces, bind-mounts the
+    /// sandbox working directory read-write, everything else read-only.
+    #[cfg(target_os = "linux")]
+    pub fn linux_default() -> Self {
+        // STUB: extra_args are appended after the base `--unshare-all
+        // --ro-bind / /` invocation. Actual invocation not wired yet.
+        Self::LinuxBwrap {
+            extra_args: vec![
+                "--unshare-all".to_string(),
+                "--ro-bind".to_string(),
+                "/usr".to_string(),
+                "/usr".to_string(),
+                "--ro-bind".to_string(),
+                "/lib".to_string(),
+                "/lib".to_string(),
+                "--proc".to_string(),
+                "/proc".to_string(),
+                "--dev".to_string(),
+                "/dev".to_string(),
+            ],
+        }
+    }
+
+    /// Windows AppContainer with no extra capabilities beyond the default set.
+    #[cfg(target_os = "windows")]
+    pub fn windows_default() -> Self {
+        // Reuses the AppContainer model already shipped in the v1.7.0 stub at
+        // crates/agiworkforce-protocol (windows_sandbox.rs 121-LOC pattern).
+        Self::WindowsAppContainer {
+            capability_sids: vec![],
+        }
+    }
+
+    /// Returns `true` when the profile implies kernel-enforced isolation.
+    pub fn is_enforced(&self) -> bool {
+        !matches!(self, Self::None)
+    }
+}
+
+/// Feature-gate flags for OS sandbox enforcement.
+/// All gates default to `false` (stubs only) until the invocation paths ship.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SandboxFeatureGates {
+    /// macOS: actually invoke `sandbox-exec` with the Seatbelt DSL.
+    pub macos_seatbelt_exec: bool,
+    /// Linux: actually invoke `bwrap` with the generated args.
+    pub linux_bwrap_exec: bool,
+    /// Windows: actually apply AppContainer restrictions.
+    pub windows_appcontainer_exec: bool,
+}
+
+impl Default for SandboxFeatureGates {
+    fn default() -> Self {
+        Self {
+            macos_seatbelt_exec: false,
+            linux_bwrap_exec: false,
+            windows_appcontainer_exec: false,
+        }
+    }
+}
