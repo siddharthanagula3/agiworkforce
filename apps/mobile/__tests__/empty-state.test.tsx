@@ -3,9 +3,12 @@
  * ChatEmptyState — component tests
  *
  * Covers:
- *   - Shows time-aware greeting (morning/afternoon/evening)
- *   - Shows "How can I help you?" subtitle
- *   - Does NOT show suggestion chips
+ *   - Shows "Ask anything" headline when no display name
+ *   - Shows personalized "Hi, {name}" when name is set
+ *   - Shows "How can I help you?" subtitle only when no display name
+ *   - Shows 3 prompt chip buttons (Code, Write, Research)
+ *   - Tapping a chip calls onSelectPrompt with correct prompt text
+ *   - Does NOT show suggestion-style cards or multi-step wizard content
  *   - Shows pairing banner on first launch
  *   - Pairing banner is dismissible
  */
@@ -33,7 +36,7 @@ jest.mock('react-native-reanimated', () => {
 jest.mock('lucide-react-native', () => {
   const { Text } = require('react-native');
   const icon = () => <Text>icon</Text>;
-  return { Sparkles: icon, Monitor: icon, X: icon };
+  return { Monitor: icon, X: icon, Code: icon, PenLine: icon, Search: icon };
 });
 
 const mockStorageGetString = jest.fn().mockReturnValue(undefined);
@@ -68,10 +71,6 @@ jest.mock('react-native-safe-area-context', () => {
     useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
   };
 });
-
-jest.mock('../components/chat/ConversationStarters', () => ({
-  ConversationStarters: () => null,
-}));
 
 // ---------------------------------------------------------------------------
 // Imports after mocks
@@ -110,36 +109,13 @@ describe('ChatEmptyState', () => {
     jest.clearAllMocks();
   });
 
-  describe('greeting', () => {
-    it('shows time-aware greeting for morning (before 12)', () => {
-      jest.spyOn(Date.prototype, 'getHours').mockReturnValue(9);
-
+  describe('headline', () => {
+    it('shows "Ask anything" when no display name is set', () => {
       const { getByText } = render(<ChatEmptyState />);
-      expect(getByText('Good morning')).toBeTruthy();
-
-      jest.restoreAllMocks();
+      expect(getByText('Ask anything')).toBeTruthy();
     });
 
-    it('shows time-aware greeting for afternoon (12-16)', () => {
-      jest.spyOn(Date.prototype, 'getHours').mockReturnValue(14);
-
-      const { getByText } = render(<ChatEmptyState />);
-      expect(getByText('Good afternoon')).toBeTruthy();
-
-      jest.restoreAllMocks();
-    });
-
-    it('shows time-aware greeting for evening (17+)', () => {
-      jest.spyOn(Date.prototype, 'getHours').mockReturnValue(19);
-
-      const { getByText } = render(<ChatEmptyState />);
-      expect(getByText('Good evening')).toBeTruthy();
-
-      jest.restoreAllMocks();
-    });
-
-    it('includes nickname in greeting when set', () => {
-      jest.spyOn(Date.prototype, 'getHours').mockReturnValue(9);
+    it('shows personalized greeting when nickname is set', () => {
       useSettingsStore.setState({
         personalization: {
           fullName: '',
@@ -154,13 +130,10 @@ describe('ChatEmptyState', () => {
       });
 
       const { getByText } = render(<ChatEmptyState />);
-      expect(getByText('Good morning, Alex')).toBeTruthy();
-
-      jest.restoreAllMocks();
+      expect(getByText('Hi, Alex')).toBeTruthy();
     });
 
     it('uses first name from fullName when nickname is empty', () => {
-      jest.spyOn(Date.prototype, 'getHours').mockReturnValue(14);
       useSettingsStore.setState({
         personalization: {
           fullName: 'Jane Smith',
@@ -175,24 +148,69 @@ describe('ChatEmptyState', () => {
       });
 
       const { getByText } = render(<ChatEmptyState />);
-      expect(getByText('Good afternoon, Jane')).toBeTruthy();
-
-      jest.restoreAllMocks();
+      expect(getByText('Hi, Jane')).toBeTruthy();
     });
   });
 
-  it('shows "How can I help you?" subtitle', () => {
-    const { getByText } = render(<ChatEmptyState />);
-    expect(getByText('How can I help you?')).toBeTruthy();
+  describe('subtitle', () => {
+    it('shows "How can I help you?" when no display name', () => {
+      const { getByText } = render(<ChatEmptyState />);
+      expect(getByText('How can I help you?')).toBeTruthy();
+    });
+
+    it('does NOT show subtitle when display name is set', () => {
+      useSettingsStore.setState({
+        personalization: {
+          fullName: '',
+          nickname: 'Alex',
+          occupation: '',
+          instructions: '',
+          warmth: 50,
+          enthusiasm: 50,
+          headersLists: 50,
+          emoji: 50,
+        },
+      });
+
+      const { queryByText } = render(<ChatEmptyState />);
+      expect(queryByText('How can I help you?')).toBeNull();
+    });
   });
 
-  it('does NOT show suggestion chips', () => {
-    const { queryByText } = render(<ChatEmptyState />);
+  describe('prompt chips', () => {
+    it('renders 3 prompt chip buttons', () => {
+      const { getByLabelText } = render(<ChatEmptyState />);
+      expect(getByLabelText('Code prompt')).toBeTruthy();
+      expect(getByLabelText('Write prompt')).toBeTruthy();
+      expect(getByLabelText('Research prompt')).toBeTruthy();
+    });
 
-    // Common suggestion chip patterns that should NOT exist
+    it('calls onSelectPrompt with correct text when Code chip is tapped', () => {
+      const onSelectPrompt = jest.fn();
+      const { getByLabelText } = render(<ChatEmptyState onSelectPrompt={onSelectPrompt} />);
+      fireEvent.press(getByLabelText('Code prompt'));
+      expect(onSelectPrompt).toHaveBeenCalledWith('Help me write a function that...');
+    });
+
+    it('calls onSelectPrompt with correct text when Write chip is tapped', () => {
+      const onSelectPrompt = jest.fn();
+      const { getByLabelText } = render(<ChatEmptyState onSelectPrompt={onSelectPrompt} />);
+      fireEvent.press(getByLabelText('Write prompt'));
+      expect(onSelectPrompt).toHaveBeenCalledWith('Write a professional email about...');
+    });
+
+    it('does not crash when onSelectPrompt is not provided', () => {
+      const { getByLabelText } = render(<ChatEmptyState />);
+      expect(() => fireEvent.press(getByLabelText('Code prompt'))).not.toThrow();
+    });
+  });
+
+  it('does NOT show multi-step wizard content', () => {
+    const { queryByText } = render(<ChatEmptyState />);
     expect(queryByText(/suggest/i)).toBeNull();
     expect(queryByText(/try asking/i)).toBeNull();
     expect(queryByText(/get started with/i)).toBeNull();
+    expect(queryByText(/start a conversation/i)).toBeNull();
   });
 
   describe('pairing banner', () => {
@@ -216,16 +234,9 @@ describe('ChatEmptyState', () => {
 
       const { getByLabelText, queryByText } = render(<ChatEmptyState showPairingBanner />);
 
-      // Banner should be visible
       expect(queryByText('Pair your desktop?')).toBeTruthy();
-
-      // Tap dismiss button
       fireEvent.press(getByLabelText('Dismiss pairing banner'));
-
-      // Banner should be gone
       expect(queryByText('Pair your desktop?')).toBeNull();
-
-      // Should persist dismissal
       expect(mockStorageSet).toHaveBeenCalledWith('dismissedDesktopPairingBanner', 'true');
     });
 

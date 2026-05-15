@@ -583,6 +583,105 @@ export function getWebviewContent(
       background: var(--bg-overlay);
       color: var(--text-primary);
     }
+
+    /* ── Inline tool-call (design-spec §4) ── */
+    .tool-call-stack {
+      border-left: 1px solid var(--border);
+      padding-left: 12px;
+      margin-left: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 4px;
+    }
+
+    .tool-call {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .tool-call__bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 32px;
+      padding: 0 4px;
+      cursor: pointer;
+      user-select: none;
+      border-radius: 6px;
+      transition: background 120ms ease;
+      color: var(--text-secondary);
+      font-size: 12px;
+    }
+    .tool-call__bar:hover { background: var(--bg-overlay); }
+
+    .tool-call__icon {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      color: var(--text-secondary);
+      font-size: 14px;
+      line-height: 1;
+    }
+    .tool-call--pending .tool-call__icon { animation: tool-spin 1s linear infinite; }
+    @keyframes tool-spin { to { transform: rotate(360deg); } }
+
+    .tool-call--error .tool-call__bar { color: #ef4444; }
+    .tool-call--error .tool-call__icon { color: #ef4444; }
+
+    .tool-call__label { font-weight: 400; color: var(--text-secondary); flex-shrink: 0; }
+
+    .tool-call__summary {
+      color: var(--text-secondary);
+      font-size: 11px;
+      margin-left: 4px;
+      max-width: 220px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      opacity: 0.7;
+    }
+
+    .tool-call__chevron {
+      width: 12px;
+      height: 12px;
+      color: var(--text-secondary);
+      margin-left: auto;
+      transition: transform 160ms ease;
+      font-size: 10px;
+      opacity: 0.6;
+    }
+    .tool-call--open .tool-call__chevron { transform: rotate(90deg); }
+
+    .tool-call__body {
+      display: none;
+      background: var(--bg-base);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 11px;
+      color: var(--text-primary);
+      overflow-x: auto;
+      max-height: 320px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin-left: 22px;
+    }
+    .tool-call--open .tool-call__body { display: block; }
+
+    .tool-call-done {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      padding: 2px 4px;
+      margin-left: 8px;
+      opacity: 0.8;
+    }
   </style>
 </head>
 <body>
@@ -1068,9 +1167,37 @@ export function getWebviewContent(
         if (currentAssistantEl && accumulatedContent) {
           currentAssistantEl.innerHTML = sanitizeHtml(renderMarkdown(accumulatedContent));
         }
+        finalizeToolCallStack();
         setStreaming(false);
         currentAssistantEl = null;
         accumulatedContent = '';
+      }
+
+      else if (msg.type === 'toolCallStart') {
+        removeTyping();
+        createToolCallEl(msg.payload.toolUseId, msg.payload.name);
+      }
+
+      else if (msg.type === 'toolCallDelta') {
+        var tc = toolCallMap[msg.payload.toolUseId];
+        if (tc) {
+          tc.inputBuf += msg.payload.deltaJson;
+          tc.summaryEl.textContent = tc.inputBuf.slice(0, 60);
+          tc.bodyEl.textContent = tc.inputBuf;
+        }
+      }
+
+      else if (msg.type === 'toolCallEnd') {
+        var tcEnd = toolCallMap[msg.payload.toolUseId];
+        if (tcEnd) {
+          tcEnd.el.classList.remove('tool-call--pending');
+          tcEnd.el.classList.add('tool-call--done');
+          // Format JSON body if parseable
+          try {
+            var parsed = JSON.parse(tcEnd.inputBuf);
+            tcEnd.bodyEl.textContent = JSON.stringify(parsed, null, 2);
+          } catch (_) { /* leave as-is */ }
+        }
       }
 
       else if (msg.type === 'error') {
@@ -1103,6 +1230,8 @@ export function getWebviewContent(
           '<div class="message system">New conversation. Type a message or use /explain, /fix, /refactor, /tests, /docs.</div>';
         streaming = false;
         currentAssistantEl = null;
+        toolCallStack = null;
+        toolCallMap = {};
         setStreaming(false);
       }
 
@@ -1176,6 +1305,104 @@ export function getWebviewContent(
       userInput.setSelectionRange(newPos, newPos);
       hideMentionDropdown();
       userInput.focus();
+    }
+
+    // ── Inline tool-call rendering (design-spec §4) ───────────────────────────
+    var toolCallStack = null; // active .tool-call-stack container
+    var toolCallMap = {}; // toolUseId → { el, bodyEl, inputBuf }
+
+    var TOOL_ICONS = {
+      bash: '$(terminal)', shell: '$(terminal)', run_command: '$(terminal)',
+      read: '$(file)', read_file: '$(file)', file_read: '$(file)',
+      write: '$(file-add)', write_file: '$(file-add)', create_file: '$(file-add)',
+      edit: '$(edit)', edit_file: '$(edit)', apply_patch: '$(edit)',
+      search: '$(search)', web_search: '$(search)', grep: '$(search)',
+      web_fetch: '$(globe)', fetch: '$(globe)', browser: '$(globe)',
+      list_dir: '$(folder)', fs_list: '$(folder)', list_files: '$(folder)',
+      mcp: '$(plug)', tool: '$(plug)',
+    };
+
+    function getToolIcon(name) {
+      var key = name.toLowerCase().replace(/[- ]/g, '_');
+      return TOOL_ICONS[key] || '$(symbol-misc)';
+    }
+
+    function getToolLabel(name) {
+      return name.replace(/_/g, ' ').replace(/\b[a-z]/g, function(c) { return c.toUpperCase(); });
+    }
+
+    function ensureToolCallStack() {
+      if (toolCallStack) return toolCallStack;
+      var stackEl = document.createElement('div');
+      stackEl.className = 'tool-call-stack';
+      messagesEl.appendChild(stackEl);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      toolCallStack = stackEl;
+      return stackEl;
+    }
+
+    function createToolCallEl(toolUseId, name) {
+      var stack = ensureToolCallStack();
+      var icon = getToolIcon(name);
+      var label = getToolLabel(name);
+
+      var wrapper = document.createElement('div');
+      wrapper.className = 'tool-call tool-call--pending';
+      wrapper.dataset.id = toolUseId;
+
+      var bar = document.createElement('div');
+      bar.className = 'tool-call__bar';
+      bar.setAttribute('role', 'button');
+      bar.setAttribute('aria-expanded', 'false');
+
+      var iconEl = document.createElement('span');
+      var codiconName = icon.replace('$(', '').replace(')', '');
+      iconEl.className = 'tool-call__icon codicon codicon-' + codiconName;
+      iconEl.setAttribute('aria-hidden', 'true');
+
+      var labelEl = document.createElement('span');
+      labelEl.className = 'tool-call__label';
+      labelEl.textContent = label;
+
+      var summaryEl = document.createElement('span');
+      summaryEl.className = 'tool-call__summary';
+
+      var chevron = document.createElement('span');
+      chevron.className = 'tool-call__chevron';
+      chevron.textContent = '▶';
+
+      bar.appendChild(iconEl);
+      bar.appendChild(labelEl);
+      bar.appendChild(summaryEl);
+      bar.appendChild(chevron);
+
+      var bodyEl = document.createElement('div');
+      bodyEl.className = 'tool-call__body';
+
+      wrapper.appendChild(bar);
+      wrapper.appendChild(bodyEl);
+
+      bar.addEventListener('click', function() {
+        var isOpen = wrapper.classList.contains('tool-call--open');
+        wrapper.classList.toggle('tool-call--open', !isOpen);
+        bar.setAttribute('aria-expanded', String(!isOpen));
+      });
+
+      stack.appendChild(wrapper);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+
+      toolCallMap[toolUseId] = { el: wrapper, bodyEl: bodyEl, summaryEl: summaryEl, inputBuf: '' };
+      return toolCallMap[toolUseId];
+    }
+
+    function finalizeToolCallStack() {
+      if (!toolCallStack) return;
+      var doneEl = document.createElement('div');
+      doneEl.className = 'tool-call-done';
+      doneEl.textContent = '$(check) Done';
+      toolCallStack.appendChild(doneEl);
+      toolCallStack = null;
+      toolCallMap = {};
     }
 
     // ── Signal ready ──────────────────────────────────────────────────────────
