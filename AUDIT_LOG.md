@@ -402,3 +402,49 @@ The source-comparison-report identified two cross-surface P0s — "no single sou
 - Source-comparison-report's P0s now partially addressed: design-tokens package eliminates token fragmentation; chat UX SoT (P0 #1) blocked on PR 3 which is the largest item in the report.
 
 **Last surface audited:** all 6 surfaces + packages. **Next rotation:** PR 3 (web→`packages/unified-chat` convergence) is the highest-impact open item per the report's "Direct web adoption" tradeoff analysis (largest drift reduction; uses existing dependency).
+
+---
+
+## 2026-05-15T14:50Z — Launch-Readiness Wave 1 — All 6 surfaces
+
+**Mandate (verbatim from user 2026-05-15):**
+
+> "main priority now is fully working 6 surfaces for the launch i want every part of agiworkforce to be completely optimized reviewed without any dead code everything should be completed their should be no incomplete or half done work… they should not get any onboarding suggestions, they should directly dig in to work… similar Design present in the ~Desktop/reference/ my main aim is to get as much similarities from images as possible, especially the inline tool calling and the icons i like them so much"
+
+**Plan:** `tasks/launch-readiness-2026-05-15.md` — 4-phase wave (recon → execution → hardening → verification). Plan at `e4bca6edf`.
+
+**Wave dispatch:** 10 parallel agents via `frontend-alignment` team — design-spec, 6 surface engineers (desk/web/mob/cli/chr/vsc-launch1), 3 hardening (sec/a11y/perf-launch1).
+
+**Commits landed:** 31 (range `079ae721f..759f6a977`). **Net LOC delta:** +2,228 / -4,107 = **net −1,879 LOC** across 86 files. **Surfaces touched:** all 6 + packages/unified-chat + docs/design + scripts + tasks.
+
+**Per-surface verification:**
+
+| Surface     | Tests                                               | Lint                                  | Typecheck                           |
+| ----------- | --------------------------------------------------- | ------------------------------------- | ----------------------------------- |
+| CLI         | 1,333 passed (cargo test -p agiworkforce-cli --lib) | clippy 4 warnings (pre-existing)      | cargo check workspace GREEN         |
+| Desktop     | typecheck GREEN                                     | lint GREEN                            | tsc clean (post-fix at `54c7ca0a1`) |
+| Web         | 3,231 passed + 1 skipped (135 test files)           | 0 errors + 10 warnings (pre-existing) | tsc clean                           |
+| Mobile      | 789 passed (44 suites)                              | 0/0                                   | tsc clean                           |
+| Chrome ext  | passed (vitest 3.89s)                               | clean                                 | tsc clean                           |
+| VS Code ext | passed (vitest 2.49s)                               | clean                                 | tsc clean                           |
+
+**Verification harness:** new `scripts/launch-verify.sh` runs all 6 surfaces in parallel + tee logs to `/tmp/launch-verify-<ts>/`. Two harness bugs fixed in `54c7ca0a1`: KeybindingsSettings aria-label used `.label` (does not exist on `ShortcutDefinition`) instead of `.description`; mobile test invocation passed vitest-only `--run` to jest.
+
+**Findings closed:**
+
+- **Onboarding friction** — desktop / web / mobile / chrome-ext / vscode-ext all gate onboarding behind a "has seen" flag and land users directly in the chat interface on subsequent launches.
+- **Design tokens** — desktop + web both now consume `@agiworkforce/design-tokens` chat CSS vars; mobile migrated 7 more screens to `useThemeColors()` hook; chrome ext aligned tokens; vscode ext kept native VS Code theme vars.
+- **Inline tool-call UI** — web `ToolCallCard.tsx` aligned with the claude.ai compact-flat pattern per design-spec §4.
+- **Dead code** — net −1,879 LOC. Web removed 10 unused deps + `chart.tsx` (`af5ec69be`); web `InlineCodeExecutor.tsx` + `code-execution-service.ts` deleted; desktop placeholder onboarding code removed; CLI lib.rs phase2 comments corrected (no false "no call sites" claims); chrome ext `model-id` eslint-disable wrappers replaced with real catalog lookups (42 sites).
+- **Security — RLS bypass remediation** (P1-1 from `tasks/todo.md`): sec-launch1 migrated **agent communication, share, workforce, /usage, /llm/v1/models** routes from `SUPABASE_SERVICE_ROLE_KEY` to `getUserClient()` (5 commits: `a9f28d0d1`, `788f75572`, `d5984c910`, `759f6a977`, plus initial route-set audit). Remaining routes deferred to a focused wave per scope-discipline in the agent's prompt.
+- **Accessibility** — web added `aria-label` to folder/bookmark/shortcut/attachment icon buttons (`cc03a6a56`); desktop added a11y to Settings nav, onboarding input, theme radiogroup (`ca322f604`).
+- **Perf** — web memoized message rows + lazy-loaded mermaid renderer (`4eb259cae`); 10 unused deps removed.
+- **VS Code ghost command** — `agi-workforce.showSubsystemHealth` stub closed + re-activation isolation test added (`806f8342b`) — closes FINAL_AUDIT §10 P0.
+- **CLI ghost models + FAST_STATUS_MODEL** — cli-launch1 commits `1ae4e1804` + `ef29ea2a3` + `bba624a48` (comments correction, insta snapshots `render_skills/render_keybindings/render_mcp_list/render_usage`, mcp/connector handlers split). Ghost-model hard-block awaits further wave.
+- **Chrome ext P2 closures** — autoSubmit confirm + 1.0-min keep-alive alarm interval + nativeMessaging manifest scaffolding (`effac41d7`, `6fe490856`).
+
+**Design spec output:** `docs/design/design-spec-2026-05-15.md` — 749 LOC. Locks: borderless inline tool-call run-block (Claude pattern); Lucide React across all surfaces with stroke-width 1.75; 8-step spacing; 5-step typography; 14px chat body (matches Claude/ChatGPT density). Authored by `design-spec` agent.
+
+**Pushed:** `git push origin main` at 14:50 — `079ae721f..759f6a977`. Working tree clean (untracked report PNGs intentionally retained).
+
+**Next rotation (Wave 2):** Implement the design spec across all 6 surfaces — InlineToolCall component per §4, composer parity per §7, sidebar parity per §6, empty-state polish per §8. Plan at `tasks/launch-readiness-wave2-plan.md`.
