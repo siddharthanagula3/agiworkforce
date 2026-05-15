@@ -79,6 +79,15 @@ export async function updateSession(request: NextRequest) {
     '/api/control-plane',
     '/api/voice',
     '/api/completion',
+    '/api/usage',
+    '/api/credit-topup',
+    '/api/connectors',
+    '/api/marketplace',
+    '/api/mcp',
+    '/api/me',
+    '/api/mission',
+    '/api/skills',
+    '/api/claim-offer',
   ];
   const isProtectedPath = protectedPaths.some((path) => request.nextUrl.pathname.startsWith(path));
 
