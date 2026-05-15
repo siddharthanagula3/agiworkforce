@@ -46,7 +46,7 @@ jest.mock('@react-native-community/slider', () => {
 jest.mock('lucide-react-native', () => {
   const { Text } = require('react-native');
   const icon = () => <Text>icon</Text>;
-  return { ArrowLeft: icon, Check: icon };
+  return { ArrowLeft: icon, Check: icon, Sun: icon, Moon: icon, Monitor: icon };
 });
 
 jest.mock('../lib/mmkv', () => ({
