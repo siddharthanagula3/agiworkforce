@@ -509,7 +509,7 @@ mod tests {
         CONTENT_LOOP_CHUNK_THRESHOLD, LOOP_DETECTION_THRESHOLD,
     };
     use history::build_assistant_message;
-    use tools::{is_team_tool, TEAM_TOOL_NAMES as _};
+    use tools::is_team_tool;
     use crate::models::ContentBlock;
 
     #[test]
