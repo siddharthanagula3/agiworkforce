@@ -1,17 +1,43 @@
 # Pricing — AGI Workforce
 
-> Decided 2026-05-03. This is the locked model for MVP.
+> Decided 2026-05-03. Reconciled 2026-05-15 against `packages/types/src/billing-catalog.ts` (the SSOT) and `tasks/auto-routing-spec.md` §1 + §6. All prices wired in code with Stripe price IDs (`STRIPE_PRICE_{HOBBY,PRO,PRO_PLUS,MAX,ENTERPRISE}_{MONTHLY,YEARLY}`).
 
 ## Tiers
 
-| Tier           | Price              | Available at MVP?           | What you get                                                                                                                                                                                                                                          |
-| -------------- | ------------------ | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Local-only** | Free forever       | ✅ YES                      | Run Ollama / LMStudio on your own laptop. No Supabase. No cloud. Desktop only. Full feature set, just on your hardware.                                                                                                                               |
-| **BYOK**       | Free forever       | ✅ YES                      | Bring your own API keys (Anthropic, OpenAI, Google, xAI, DeepSeek, Mistral, Groq, Together, Fireworks, Perplexity, Azure, Bedrock, OpenRouter, AI21, SambaNova, Cohere — **10+ Providers**). Optional Supabase if Cloud mode (for cross-device sync). |
-| **Hobby**      | TBD ($5/mo target) | ✅ YES (only paid MVP tier) | Managed cloud — limited credits per month, basic models (Haiku 4.5, GPT-5.4-mini equivalent). The simple option for users who don't want to manage API keys. **Required for Cloud mode** on Web/Mobile.                                               |
-| **Pro**        | TBD                | ❌ Waitlist                 | Released after security audit clears. Full models, higher credit cap, priority support. Mirrors Claude Cowork Pro tier.                                                                                                                               |
-| **Max**        | TBD                | ❌ Waitlist                 | Released after security audit clears. Highest credit cap, computer use, advanced agent features. Mirrors Claude Cowork Max tier.                                                                                                                      |
-| **Enterprise** | Contact sales      | ✅ Contact sales            | SSO (SAML / OIDC), SCIM provisioning, custom retention windows, audit log export, dedicated support, custom MSA. Reach out at https://agiworkforce.com/contact.                                                                                       |
+| Tier           | Monthly     | Yearly                   | Available at MVP? | What you get                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------- | ----------- | ------------------------ | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Local-only** | Free        | Free                     | ✅ YES            | Run Ollama / LMStudio on your own laptop. No Supabase. No cloud. Desktop only. Full feature set, just on your hardware.                                                                                                                                                                                                                                                                |
+| **BYOK**       | Free        | Free                     | ✅ YES            | Bring your own API keys (Anthropic, OpenAI, Google, xAI, DeepSeek, Mistral, Groq, Together, Fireworks, Perplexity, Azure, Bedrock, OpenRouter, AI21, SambaNova, Cohere — **10+ Providers**). Optional Supabase if Cloud mode (for cross-device sync).                                                                                                                                  |
+| **Free**       | $0          | $0                       | ✅ YES            | 100K tokens/mo + 5 messages/day cap. Pool B workhorse only (Gemini 3.1 Flash-Lite). No tool use, no MCP, no manual model picker, no voice, no media generation. Funnel-seeding tier.                                                                                                                                                                                                   |
+| **Hobby**      | **$10**     | **$59.88** (≈50% off)    | ✅ YES            | 2M tokens/mo. Pool B auto-routed: workhorse + escalation_coding + reasoning_premium + image_generation. 10 images/mo (Imagen-4 Fast, 50K synthetic tokens each). **Voice 60 min/mo** (Wispr-Flow STT via Whisper-1 + AI rewrite via Gemini Flash-Lite). Web search + basic MCP with burn warnings. No video, no computer use, no manual picker. Required for Cloud mode on Web/Mobile. |
+| **Pro**        | **$29.99**  | **$299.88** (~17% off)   | ✅ YES            | 10M tokens/mo. `*_pro` slots: Sonnet 4.6 (general + coding) + Gemini 3.1 Pro (multimodal + long context) + Kimi K2.6 (reasoning) + GPT-5.4 mini. Unlimited images (debit token bucket at 50K each). **Voice 300 min/mo.** Artifacts + browser DOM + light computer use + Sonar search + Sonar Deep Research. Manual picker via Advanced toggle. No video, no Opus 4.7, no GPT-5.5.     |
+| **Pro+**       | **$49.99**  | **$499.88** (~17% off)   | ✅ YES            | Pro pool + **Opus 4.7 (15K tokens/day)** + **GPT-5.5 (15K tokens/day)** + **60 sec/mo Runway Gen-4 video (720p)** + **voice 1500 min/mo** + advanced computer use + US-only routing toggle (skip Chinese vendors).                                                                                                                                                                     |
+| **Max**        | **$299.99** | **$2,999.88** (~17% off) | ✅ YES            | Pro+ pool + Opus 4.7 **1M tokens/mo** + GPT-5.5 **1M tokens/mo** + **5 min/mo Runway video (720p or 1024p)** + computer use **1K soft / 2.5K hard actions/mo** + Deep Research workflow + **voice unlimited** + local provider surface unlocked (BYOK + Local + managed).                                                                                                              |
+| **Enterprise** | Contact     | Contact                  | ✅ Contact sales  | SSO (SAML / OIDC), SCIM provisioning, custom retention windows, audit log export, dedicated support, custom MSA. Reach out at https://agiworkforce.com/contact.                                                                                                                                                                                                                        |
+
+## Provider / API map per slot (which APIs we route to)
+
+Canonical from `packages/types/src/model-catalog.ts` `SLOT_REGISTRY`:
+
+| Slot                        | Model ID                 | Provider     | Pricing $/M (in/out) | Tier exposure                                |
+| --------------------------- | ------------------------ | ------------ | -------------------- | -------------------------------------------- |
+| `workhorse_general`         | `gemini-3.1-flash-lite`  | Google       | 0.25 / 1.50          | All paid tiers (downgrade fallback)          |
+| `escalation_coding`         | `glm-4.7`                | Zhipu (Z.AI) | 0.30 / 1.20          | Hobby                                        |
+| `reasoning_premium`         | `deepseek-v4-flash`      | DeepSeek     | 0.14 / 0.28          | Hobby                                        |
+| `general_balanced_pro`      | `claude-sonnet-4.6`      | Anthropic    | (per Anthropic)      | Pro+                                         |
+| `coding_premium_pro`        | `claude-sonnet-4.6`      | Anthropic    | (per Anthropic)      | Pro+                                         |
+| `reasoning_premium_pro`     | `kimi-k2.6`              | Moonshot     | 0.95 / 4.00          | Pro+ (replaces DeepSeek V4-Pro post-promo)   |
+| `multimodal_pro`            | `gemini-3.1-pro-preview` | Google       | (per Google)         | Pro+                                         |
+| `long_context_pro`          | `gemini-3.1-pro-preview` | Google       | (per Google)         | Pro+                                         |
+| `flagship_coding_pro_plus`  | `claude-opus-4.7`        | Anthropic    | (per Anthropic)      | **Pro+** (15K/day) / Max (1M/mo)             |
+| `flagship_general_pro_plus` | `gpt-5.5`                | OpenAI       | (per OpenAI)         | **Pro+** (15K/day) / Max (1M/mo)             |
+| `image_generation`          | `imagen-4-fast`          | Google       | $0.02/image @ 1024²  | Hobby+ (10/mo cap on Hobby)                  |
+| `video_generation`          | `veo-3`                  | Google       | (per Google)         | Max                                          |
+| `video_generation_pro_plus` | `runway-gen-4`           | Runway       | (per Runway)         | Pro+ (60s/mo) / Max (300s/mo)                |
+| `search_fast`               | `sonar`                  | Perplexity   | (per Perplexity)     | Pro+                                         |
+| `search_premium`            | `sonar-deep-research`    | Perplexity   | (per Perplexity)     | Max (Deep Research)                          |
+| `voice_transcription`       | `whisper-1`              | OpenAI       | $0.006/min           | **Hobby+** (60/300/1500/unlimited)           |
+| `voice_rewrite`             | `gemini-3.1-flash-lite`  | Google       | 0.25 / 1.50          | **Hobby+** (paired with voice_transcription) |
 
 ## Modes (Local vs Cloud)
 
