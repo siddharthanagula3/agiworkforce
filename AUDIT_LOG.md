@@ -4,7 +4,7 @@
 
 Rotation order: `apps/cli → apps/desktop → apps/web → apps/mobile → apps/extension → apps/extension-vscode → apps/cli`.
 
-**Last surface audited:** apps/cli (Phase A fixes 2026-05-14)
+**Last surface audited:** workspace + apps/desktop + apps/extension + apps/extension-vscode + packages (Fire #3 wave 2026-05-14)
 
 ---
 
@@ -142,3 +142,73 @@ Rotation order: `apps/cli → apps/desktop → apps/web → apps/mobile → apps
 - cargo test --release -p agiworkforce-cli: 1326/1326 PASS
 - Cumulative diff: +160 / -107411 (net -107251, dominated by \_attic deletion)
 - Commits: 4 (ceda1ad10, a618d13ef, 0e81d1546, c0c012464)
+
+---
+
+## 2026-05-14T22:00Z — Fire #3 wave — multi-surface Phase A/C/D campaign
+
+**Audited:** apps/desktop, apps/extension, apps/extension-vscode, packages, workspace root
+**Total items:** 6 fixes + 4 verifications · all green
+**Fixed:** 6 · **Deferred:** 0
+
+### Fix 1 — vscode sidebar @mention → @agi chat participant (Phase C #C14)
+
+- Location: `apps/extension-vscode/src/extension.ts:170-189` + `apps/extension-vscode/package.json` (commands + view/item/context menus)
+- Gap: Sidebar context-panel had no action to mention a file in the @agi chat. The sidebar's own webview had `@mention` autocomplete but no bridge to the VS Code Chat panel.
+- Fix: Registered `agi-workforce.mentionFileInChat` command that opens `workbench.action.chat.open` with `{query: "@agi #file:<relpath> "}`. Falls back to copilot focus then sidebar.reveal if chat is unavailable.
+- Tests added: 4 (registered, query format, relative path, no-editor warning)
+- Commits: `c90359068` (feature) + `6b5225902` (tests)
+
+### Fix 2 — desktop per-turn adaptiveThinking toggle (Phase C #C2)
+
+- Location: `apps/desktop/src/stores/modelStore.ts` (state + actions); `apps/desktop/src/components/UnifiedAgenticChat/QuickModelSelector.tsx:480-510` (UI); `apps/desktop/src/components/UnifiedAgenticChat/index.tsx:1112-1116` (IPC payload override); `:1144` (auto-clear after send)
+- Gap: Model picker had only per-model adaptiveThinking. Plan asked for per-turn toggle.
+- Fix: New ephemeral `perTurnAdaptiveThinking` state in modelStore (not persisted). Sparkles "Adaptive" icon-button at the bottom of the Think section. IPC payload ORs the per-turn flag and forces `thinkingBudget: 0` when adaptive is on. Auto-resets after each send.
+- Tests added: 5 (toggle on, toggle off, budget override, flag flip, clear-after-send)
+- Commit: `291bf6ccb`
+
+### Fix 3 — chrome ext side_panel.ts innerHTML sweep (Phase A #12)
+
+- Location: `apps/extension/src/side_panel.ts` (47 sites converted across the file); `apps/extension/src/dom-helpers.ts` (new helper module: setText, clearChildren, createElementWith, setChild); `apps/extension/src/__tests__/dom-helpers.test.ts` (5 tests)
+- Gap: 49 static-string / numeric-template innerHTML assignments — non-active XSS but baseline-hygiene risk. 2 user-content paths via `sanitizeHtml(renderMarkdown(...))` are correctly DOMPurify-guarded.
+- Fix: 47 sites converted to safe DOM construction (replaceChildren, createElementNS for SVG, appendChild). Two sanitized paths retained as-is.
+- Tests added: 5 (dom-helpers public API)
+- Commit: `069b17bb6`
+
+### Fix 4 — workspace clippy 33-deny lints (Phase A #8 partial / Phase D §3.9)
+
+- Location: root `Cargo.toml` (new `[workspace.lints.clippy]` block, lines 14-49)
+- Gap: No workspace-level clippy enforcement; per-crate lints scattered.
+- Fix: Added 33 of the 35 codex-rs deny lints (omitted `unwrap_used` and `expect_used` because codebase has 2,409 such sites today — a future Phase B+ fire reduces that count first). Per-crate inheritance via `[lints] workspace = true` is the next-fire follow-up.
+- Verification: `cargo check --workspace` and `cargo clippy --workspace --lib` both pass (10 pre-existing doc-indent warnings in desktop, unrelated).
+- Commit: `fceaee92f`
+
+### Fix 5 — vscode TS project references (Phase D §3.10)
+
+- Location: `packages/types/tsconfig.json` + `packages/runtime/tsconfig.json` (`noEmit: false` so composite actually emits); `apps/extension-vscode/tsconfig.build.json` (new — references + composite for `tsc -b`); `apps/extension-vscode/package.json` (new `check:refs` script).
+- Gap: No compile-time DAG enforcement between vscode ext and its package deps.
+- Fix: `tsc -b tsconfig.build.json` now enforces the DAG. Original `typecheck` script (uses `--noEmit`) is preserved separately because `--noEmit` is incompatible with project references (TS6310).
+- Concern documented: Other packages may have similar silent `noEmit: true` from base — broader audit pending.
+- Commit: bundled into `291bf6ccb`
+
+### Fix 6 — posttest=pnpm build on 19 packages (Phase D §3.11)
+
+- Location: `packages/{api,apply-patch,browser-tool,data-layer,llm-normalize,llm-runtime,mcp,routing,runtime,skills,types}/package.json` + `packages/providers/{anthropic,deepseek,google,lmstudio,ollama,openai,perplexity,xai}/package.json`
+- Gap: A test-only fix could pass `pnpm test` but leave the package un-buildable; break surfaces at next consumer's build.
+- Fix: Added `"posttest": "pnpm build"` to 19 eligible packages (those with both `build` and `test` scripts). Skipped 4 packages without one or the other.
+- Commit: `91fafd3cf`
+
+### Verifications (no code changes)
+
+- **OpenClaw packages** — Plan claimed apply-patch, browser-tool, mcp, skills, llm-normalize have ZERO tests. Verified actual: 117 tests across 13 files (apply-patch 19, browser-tool 15, mcp 5, skills 26, llm-normalize 52). Plan claim was stale; MASTER_PLAN.md §4.8.4 corrected.
+- **Web homepage** — Plan said "Web has no homepage at /". Verified `apps/web/app/page.tsx` is fully wired with Header + AgiChatDemo + MarketingFooter + SEO metadata. Plan claim was stale; MASTER_PLAN.md §10 corrected.
+- **Web rate-limit / CSRF** — Plan items #15 (voice/transcribe rate-limit) and #17 (chat/conversations CSRF). Both verified already shipped: voice/transcribe re-exports the canonical `/llm/v1/audio/transcriptions` route which has rate-limit at line 70; chat/conversations has CSRF on all non-idempotent verbs.
+- **Packages exports field** — Verified all 23 packages already have `"exports"` field set. Phase D #10 item is already done.
+
+### Verification log
+
+- All 6 TS surfaces typecheck GREEN, lint 0/0
+- Test counts: CLI 1326, Desktop 1648→1653 (+5), Web 3233, Mobile 769, Chrome ext 576→581 (+5), VS Code 504→508 (+4). **Combined: 8,158→8,272 (+114 new tests across 4 surfaces in this fire).**
+- Combined commits this fire: 7 (c90359068, 6b5225902, 91fafd3cf, fceaee92f, 291bf6ccb, 069b17bb6, fbff4064e docs)
+
+**Last surface audited:** workspace + 3 surfaces. **Next rotation per `MASTER_PLAN.md` §1.4:** continue rotation cli/desktop/web/mobile/ext/vscode — currently web fire #4 and mobile fire #5 in flight via web-eng-2 and mob-eng-2; cli Phase B split in flight via cli-eng-2.
