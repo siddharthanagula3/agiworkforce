@@ -30,6 +30,7 @@ import { ArtifactsGallery } from '../Artifacts/ArtifactsGallery';
 import { ShareConversationDialog } from './ShareConversationDialog';
 import { ExecutionSidecar } from '../ExecutionSidecar';
 import { ReminderList } from '../Reminders/ReminderList';
+import { CoworkTab } from '../Cowork/CoworkTab';
 
 // Lazy load MediaLab for code splitting
 const MediaLab = lazy(() => import('./MediaLab').then((m) => ({ default: m.MediaLab })));
@@ -85,6 +86,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     | 'schedules'
     | 'artifacts'
     | 'reminders'
+    | 'cowork'
     | null;
   const [activeRightPanel, setActiveRightPanel] = useState<RightPanel>(null);
   const RIGHT_PANEL_WIDTH = 420;
@@ -287,6 +289,11 @@ export function AppLayout({ children }: AppLayoutProps) {
         e.preventDefault();
         openRightPanel('reminders');
       }
+
+      if (isMeta && e.shiftKey && e.key.toLowerCase() === 'w') {
+        e.preventDefault();
+        openRightPanel('cowork');
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -487,7 +494,9 @@ export function AppLayout({ children }: AppLayoutProps) {
                                 ? 'Artifacts Gallery'
                                 : activeRightPanel === 'reminders'
                                   ? 'Reminders'
-                                  : activeRightPanel}
+                                  : activeRightPanel === 'cowork'
+                                    ? 'Cowork'
+                                    : activeRightPanel}
             </h2>
             <button
               type="button"
@@ -527,6 +536,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             {activeRightPanel === 'schedules' && <ScheduledTasksPanel />}
             {activeRightPanel === 'artifacts' && <ArtifactsGallery />}
             {activeRightPanel === 'reminders' && <ReminderList />}
+            {activeRightPanel === 'cowork' && <CoworkTab />}
           </div>
         </div>
       )}
