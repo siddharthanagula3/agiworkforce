@@ -445,23 +445,19 @@ function injectStyles(): void {
     #sp-messages::-webkit-scrollbar-track { background: transparent; }
     #sp-messages::-webkit-scrollbar-thumb { background: #1e2030; border-radius: 4px; }
 
-    /* ── Empty state ── */
-    #sp-empty {
-      flex: 1;
+    /* ── Empty state (hidden; chips live in composer bar) ── */
+    #sp-empty { display: none; }
+
+    /* ── Inline prompt chips under the composer ── */
+    #sp-prompt-chips {
       display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      color: #475569;
-      text-align: center;
-      padding: 32px 16px;
+      flex-wrap: nowrap;
+      gap: 6px;
+      overflow: hidden;
+      padding: 4px 0 0;
     }
-    #sp-empty-icon { font-size: 32px; opacity: 0.5; }
-    #sp-empty-title { font-size: 14px; font-weight: 500; color: #64748b; }
-    #sp-empty-hint { font-size: 11px; color: #334155; line-height: 1.5; }
-    #sp-empty-cmds { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
-    .sp-cmd-chip { display: inline-block; padding: 4px 10px; font-size: 11px; font-family: 'SF Mono', Monaco, monospace; background: rgba(33, 128, 141, 0.1); color: var(--agi-ext-accent); border-radius: 12px; cursor: pointer; transition: background 0.15s; border: 1px solid rgba(33, 128, 141, 0.25); }
+    #sp-prompt-chips.hidden { display: none; }
+    .sp-cmd-chip { display: inline-block; padding: 3px 10px; font-size: 11px; font-family: 'SF Mono', Monaco, monospace; background: rgba(33, 128, 141, 0.1); color: var(--agi-ext-accent); border-radius: 12px; cursor: pointer; transition: background 0.15s; border: 1px solid rgba(33, 128, 141, 0.25); white-space: nowrap; flex-shrink: 0; }
     .sp-cmd-chip:hover { background: #334155; color: #c7d2fe; }
 
     /* ── Blocked / restricted-site state ── */
@@ -1552,17 +1548,17 @@ function buildBubble(msg: ChatMessage): HTMLElement {
 
 function renderMessages(): void {
   const container = document.getElementById('sp-messages')!;
-  const empty = document.getElementById('sp-empty')!;
+  const chips = document.getElementById('sp-prompt-chips');
 
   if (_ctx.messages.length === 0) {
-    empty.style.display = 'flex';
+    if (chips) chips.classList.remove('hidden');
     // Remove all message nodes and reset counter
     container.querySelectorAll('.sp-msg, .sp-thinking-wrap').forEach((n) => n.remove());
     _ctx.lastRenderedCount = 0;
     return;
   }
 
-  empty.style.display = 'none';
+  if (chips) chips.classList.add('hidden');
 
   // Only append messages that haven't been rendered yet — avoids full DOM rebuild on each
   // streaming chunk and preserves browser focus/scroll state for already-rendered bubbles.
@@ -1583,8 +1579,8 @@ function renderMessages(): void {
 
 function showThinking(): void {
   const container = document.getElementById('sp-messages')!;
-  const empty = document.getElementById('sp-empty')!;
-  empty.style.display = 'none';
+  const chips = document.getElementById('sp-prompt-chips');
+  if (chips) chips.classList.add('hidden');
 
   const wrap = el('div', { class: 'sp-msg sp-msg-assistant sp-thinking-wrap' });
   const thinking = el('div', { class: 'sp-thinking' });
@@ -2013,7 +2009,7 @@ function isRestrictedUrl(url: string): boolean {
  */
 function setBlockedState(blocked: boolean): void {
   const blockedEl = document.getElementById('sp-blocked');
-  const emptyEl = document.getElementById('sp-empty');
+  const promptChips = document.getElementById('sp-prompt-chips');
   const msgsEl = document.getElementById('sp-messages');
   const inputEl = document.getElementById('sp-input') as HTMLTextAreaElement | null;
   const sendBtnEl = document.getElementById('sp-send-btn') as HTMLButtonElement | null;
@@ -2023,7 +2019,7 @@ function setBlockedState(blocked: boolean): void {
 
   if (blocked) {
     blockedEl.classList.add('visible');
-    if (emptyEl) emptyEl.style.display = 'none';
+    if (promptChips) promptChips.classList.add('hidden');
     if (msgsEl) {
       msgsEl.querySelectorAll('.sp-msg, .sp-thinking-wrap').forEach((n) => n.remove());
     }
@@ -2041,6 +2037,8 @@ function setBlockedState(blocked: boolean): void {
     }
     if (sendBtnEl) sendBtnEl.disabled = false;
     if (composerBar) composerBar.style.opacity = '';
+    // Re-show prompt chips only if there are no messages yet
+    if (promptChips && _ctx.messages.length === 0) promptChips.classList.remove('hidden');
   }
 }
 
@@ -2623,22 +2621,8 @@ function buildUI(): void {
   const chatPanel = el('div', { id: 'sp-chat-panel' });
 
   const msgsArea = el('div', { id: 'sp-messages' });
-  const emptyState = el('div', { id: 'sp-empty' });
-  emptyState.appendChild(createElementWith({ tag: 'div', id: 'sp-empty-icon', text: '🤖' }));
-  emptyState.appendChild(
-    createElementWith({ tag: 'div', id: 'sp-empty-title', text: 'AGI Workforce Assistant' }),
-  );
-  const emptyHint = createElementWith({ tag: 'div', id: 'sp-empty-hint' });
-  emptyHint.appendChild(document.createTextNode('Ask anything about the current page,'));
-  emptyHint.appendChild(document.createElement('br'));
-  emptyHint.appendChild(document.createTextNode('or try a slash command:'));
-  emptyState.appendChild(emptyHint);
-  const emptyCmds = createElementWith({ tag: 'div', id: 'sp-empty-cmds' });
-  for (const cmd of ['/summarize', '/explain', '/translate', '/extract', '/tldr', '/code']) {
-    emptyCmds.appendChild(createElementWith({ tag: 'span', className: 'sp-cmd-chip', text: cmd }));
-  }
-  emptyState.appendChild(emptyCmds);
-  msgsArea.appendChild(emptyState);
+  // #sp-empty retained as an invisible sentinel so renderMessages() can reference it without guard.
+  msgsArea.appendChild(el('div', { id: 'sp-empty' }));
 
   const blockedState = el('div', { id: 'sp-blocked' });
   const svgNS = 'http://www.w3.org/2000/svg';
@@ -2686,16 +2670,6 @@ function buildUI(): void {
 
   chatPanel.appendChild(msgsArea);
   document.body.appendChild(chatPanel);
-
-  setTimeout(() => {
-    const chips = document.querySelectorAll('.sp-cmd-chip');
-    chips.forEach((chip) => {
-      chip.addEventListener('click', () => {
-        const cmd = chip.textContent?.trim();
-        if (cmd) sendMessage(cmd);
-      });
-    });
-  }, 0);
 
   const workflowsPanel = el('div', { id: 'sp-workflows' });
 
@@ -3386,9 +3360,18 @@ function buildUI(): void {
     updateContextButton();
   });
   composerBar.appendChild(contextBtn);
+
+  const promptChipsRow = el('div', { id: 'sp-prompt-chips' });
+  for (const cmd of ['/summarize', '/explain', '/extract', '/code']) {
+    const chip = el('span', { class: 'sp-cmd-chip' }, cmd);
+    chip.addEventListener('click', () => sendMessage(cmd));
+    promptChipsRow.appendChild(chip);
+  }
+
   inputArea.appendChild(attachmentBar);
   inputArea.appendChild(inputRow);
   inputArea.appendChild(composerBar);
+  inputArea.appendChild(promptChipsRow);
   document.body.appendChild(inputArea);
 
   setupVoiceInput(micBtn, inputEl, autoResizeInput);
