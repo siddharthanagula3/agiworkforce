@@ -3,10 +3,25 @@ import type {
   ExtensionResponse,
   ConnectionStatus,
   RunPageAction,
-  SavedShortcut,
   ScheduledTask,
 } from './types';
 import { logger, RateLimiter, withTimeout, storageUtils, sleep } from './utils';
+import {
+  loadShortcuts,
+  handleSaveShortcut,
+  handleListShortcuts,
+  handleDeleteShortcut,
+} from './background/shortcuts';
+import {
+  loadScheduledTasks,
+  saveScheduledTasks,
+  handleCreateScheduledTask,
+  handleListScheduledTasks,
+  handleUpdateScheduledTask,
+  handleDeleteScheduledTask,
+  restoreScheduledTaskAlarms,
+  TASK_ALARM_PREFIX,
+} from './background/tasks';
 import { getPlatformPrompt } from './platform-prompts';
 import {
   streamFromProvider,
@@ -123,11 +138,8 @@ const NATIVE_RECONNECT_BASE_DELAY_MS = 1000;
 const NATIVE_RECONNECT_MAX_DELAY_MS = 30000;
 const NATIVE_RECONNECT_MAX_ATTEMPTS = 8;
 const NATIVE_CONNECT_POLL_INTERVAL_MS = 100;
-const SHORTCUTS_STORAGE_KEY = 'agi_saved_shortcuts';
-const TASKS_STORAGE_KEY = 'agi_scheduled_tasks';
-const MAX_SHORTCUTS = 50;
-const MAX_TASKS = 50;
-const TASK_ALARM_PREFIX = 'agi_task_';
+// SHORTCUTS_STORAGE_KEY, TASKS_STORAGE_KEY, MAX_SHORTCUTS, MAX_TASKS, TASK_ALARM_PREFIX
+// are now owned by background/shortcuts.ts and background/tasks.ts respectively.
 const TAB_GROUP_NAME = 'AGI Workforce';
 
 let nativeReconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -476,60 +488,8 @@ async function ensureTabGroup(tabId: number): Promise<void> {
   }
 }
 
-async function loadShortcuts(): Promise<SavedShortcut[]> {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(SHORTCUTS_STORAGE_KEY, (result) => {
-      if (chrome.runtime.lastError) {
-        resolve([]);
-        return;
-      }
-      resolve((result[SHORTCUTS_STORAGE_KEY] as SavedShortcut[] | undefined) ?? []);
-    });
-  });
-}
-
-async function saveShortcuts(shortcuts: SavedShortcut[]): Promise<void> {
-  await chrome.storage.local.set({ [SHORTCUTS_STORAGE_KEY]: shortcuts });
-}
-
-async function handleSaveShortcut(
-  message: import('./types').SaveShortcutMessage,
-): Promise<ExtensionResponse> {
-  const shortcuts = await loadShortcuts();
-  if (shortcuts.length >= MAX_SHORTCUTS) {
-    return {
-      success: false,
-      error: `Maximum ${MAX_SHORTCUTS} shortcuts reached`,
-    } as ExtensionResponse;
-  }
-  const shortcut: SavedShortcut = {
-    id: `sc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    name: message.name.slice(0, 100),
-    actions: message.actions,
-    createdAt: Date.now(),
-    url: message.url,
-    prompt: message.prompt,
-    startUrl: message.startUrl,
-    scheduled: message.scheduled,
-  };
-  shortcuts.push(shortcut);
-  await saveShortcuts(shortcuts);
-  return { success: true, shortcuts } as ExtensionResponse;
-}
-
-async function handleListShortcuts(): Promise<ExtensionResponse> {
-  const shortcuts = await loadShortcuts();
-  return { success: true, shortcuts } as ExtensionResponse;
-}
-
-async function handleDeleteShortcut(
-  message: import('./types').DeleteShortcutMessage,
-): Promise<ExtensionResponse> {
-  let shortcuts = await loadShortcuts();
-  shortcuts = shortcuts.filter((s) => s.id !== message.shortcutId);
-  await saveShortcuts(shortcuts);
-  return { success: true, shortcuts } as ExtensionResponse;
-}
+// loadShortcuts, saveShortcuts, handleSaveShortcut, handleListShortcuts, handleDeleteShortcut
+// extracted to background/shortcuts.ts
 
 async function handleReplayShortcut(
   message: import('./types').ReplayShortcutMessage,
@@ -554,54 +514,9 @@ async function handleReplayShortcut(
   return result;
 }
 
-async function loadScheduledTasks(): Promise<ScheduledTask[]> {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(TASKS_STORAGE_KEY, (result) => {
-      if (chrome.runtime.lastError) {
-        resolve([]);
-        return;
-      }
-      resolve((result[TASKS_STORAGE_KEY] as ScheduledTask[] | undefined) ?? []);
-    });
-  });
-}
-
-async function saveScheduledTasks(tasks: ScheduledTask[]): Promise<void> {
-  await chrome.storage.local.set({ [TASKS_STORAGE_KEY]: tasks });
-}
-
-function getAlarmPeriod(task: ScheduledTask): number {
-  switch (task.scheduleType) {
-    case 'hourly':
-      return 60;
-    case 'daily':
-      return 60 * 24;
-    case 'weekly':
-      return 60 * 24 * 7;
-    case 'monthly':
-      return 60 * 24 * 30; // Approximate — real months vary 28-31 days
-    default: {
-      // Exhaustive guard: if a new scheduleType is added to the ScheduledTask
-      // type, TypeScript will flag this assignment as unreachable.
-      const _exhaustive: never = task.scheduleType;
-      logger.warn('Unknown schedule type, defaulting to daily', { scheduleType: _exhaustive });
-      return 60 * 24;
-    }
-  }
-}
-
-async function registerTaskAlarm(task: ScheduledTask): Promise<void> {
-  if (!task.enabled) return;
-  const alarmName = `${TASK_ALARM_PREFIX}${task.id}`;
-  await chrome.alarms.create(alarmName, {
-    periodInMinutes: getAlarmPeriod(task),
-    delayInMinutes: getAlarmPeriod(task),
-  });
-}
-
-async function unregisterTaskAlarm(taskId: string): Promise<void> {
-  await chrome.alarms.clear(`${TASK_ALARM_PREFIX}${taskId}`);
-}
+// loadScheduledTasks, saveScheduledTasks, getAlarmPeriod, registerTaskAlarm, unregisterTaskAlarm,
+// handleCreateScheduledTask, handleListScheduledTasks, handleUpdateScheduledTask,
+// handleDeleteScheduledTask, restoreScheduledTaskAlarms extracted to background/tasks.ts
 
 async function executeScheduledTask(task: ScheduledTask): Promise<void> {
   logger.info('Executing scheduled task', { id: task.id, name: task.name });
@@ -644,68 +559,6 @@ async function executeScheduledTask(task: ScheduledTask): Promise<void> {
   await saveScheduledTasks(updated);
 
   showNotification('Task Completed', `Scheduled task "${task.name}" finished`);
-}
-
-async function handleCreateScheduledTask(
-  message: import('./types').CreateScheduledTaskMessage,
-): Promise<ExtensionResponse> {
-  const tasks = await loadScheduledTasks();
-  if (tasks.length >= MAX_TASKS) {
-    return { success: false, error: `Maximum ${MAX_TASKS} tasks reached` } as ExtensionResponse;
-  }
-  const task: ScheduledTask = {
-    ...message.task,
-    id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    createdAt: Date.now(),
-  };
-  tasks.push(task);
-  await saveScheduledTasks(tasks);
-  await registerTaskAlarm(task);
-  return { success: true, tasks } as ExtensionResponse;
-}
-
-async function handleListScheduledTasks(): Promise<ExtensionResponse> {
-  const tasks = await loadScheduledTasks();
-  return { success: true, tasks } as ExtensionResponse;
-}
-
-async function handleUpdateScheduledTask(
-  message: import('./types').UpdateScheduledTaskMessage,
-): Promise<ExtensionResponse> {
-  const tasks = await loadScheduledTasks();
-  const idx = tasks.findIndex((t) => t.id === message.taskId);
-  if (idx === -1) {
-    return { success: false, error: 'Task not found' } as ExtensionResponse;
-  }
-  const updated = { ...tasks[idx]!, ...message.updates };
-  tasks[idx] = updated;
-  await saveScheduledTasks(tasks);
-  await unregisterTaskAlarm(message.taskId);
-  await registerTaskAlarm(updated);
-  return { success: true, tasks } as ExtensionResponse;
-}
-
-async function handleDeleteScheduledTask(
-  message: import('./types').DeleteScheduledTaskMessage,
-): Promise<ExtensionResponse> {
-  let tasks = await loadScheduledTasks();
-  tasks = tasks.filter((t) => t.id !== message.taskId);
-  await saveScheduledTasks(tasks);
-  await unregisterTaskAlarm(message.taskId);
-  return { success: true, tasks } as ExtensionResponse;
-}
-
-/** Re-register all task alarms on service worker startup (MV3 restarts kill alarms). */
-async function restoreScheduledTaskAlarms(): Promise<void> {
-  const tasks = await loadScheduledTasks();
-  for (const task of tasks) {
-    if (task.enabled) {
-      await registerTaskAlarm(task);
-    }
-  }
-  if (tasks.length > 0) {
-    logger.info(`Restored ${tasks.length} scheduled task alarm(s)`);
-  }
 }
 
 // EXT-1, EXT-2 (audit 2026-05-03): allowlist-based sender validation.
