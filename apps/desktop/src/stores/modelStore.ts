@@ -244,6 +244,8 @@ interface ModelState {
 
   thinkingModeEnabled: boolean;
   thinkingBudget: number;
+  /** Per-turn adaptive thinking: enabled for the next send only, then resets to false. */
+  perTurnAdaptiveThinking: boolean;
 
   /** Controls the speed/quality tradeoff for all requests. */
   speedQualityMode: SpeedQualityMode;
@@ -283,6 +285,8 @@ interface ModelState {
   toggleFavorite: (modelId: string) => void;
   toggleThinkingMode: () => void;
   setThinkingBudget: (budget: number) => void;
+  togglePerTurnAdaptiveThinking: () => void;
+  clearPerTurnAdaptiveThinking: () => void;
   addToRecent: (modelId: string) => void;
   checkProviderStatus: (provider: Provider) => Promise<ProviderStatus>;
   checkAllProviders: () => Promise<void>;
@@ -443,6 +447,7 @@ export const useModelStore = create<ModelState>()(
         usageStats: null,
         thinkingModeEnabled: false,
         thinkingBudget: 0,
+        perTurnAdaptiveThinking: false,
         speedQualityMode: 'balanced' as SpeedQualityMode,
 
         // Ollama-specific initial state
@@ -563,6 +568,18 @@ export const useModelStore = create<ModelState>()(
             undefined,
             'model/setThinkingBudget',
           );
+        },
+
+        togglePerTurnAdaptiveThinking: () => {
+          set(
+            (state) => ({ perTurnAdaptiveThinking: !state.perTurnAdaptiveThinking }),
+            undefined,
+            'model/togglePerTurnAdaptiveThinking',
+          );
+        },
+
+        clearPerTurnAdaptiveThinking: () => {
+          set({ perTurnAdaptiveThinking: false }, undefined, 'model/clearPerTurnAdaptiveThinking');
         },
 
         addToRecent: (modelId: string) => {
