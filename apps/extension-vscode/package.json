@@ -846,6 +846,7 @@
     "build": "pnpm run compile"
   },
   "dependencies": {
+    "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/runtime": "workspace:*",
     "ws": "^8.20.0"
   },
