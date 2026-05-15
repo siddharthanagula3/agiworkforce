@@ -17,6 +17,7 @@
     "test:local": "jest --runInBand --detectOpenHandles --openHandlesTimeout=5000"
   },
   "dependencies": {
+    "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/mcp": "workspace:*",
     "@agiworkforce/runtime": "workspace:*",
     "@agiworkforce/skills": "workspace:*",
