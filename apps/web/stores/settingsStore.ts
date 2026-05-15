@@ -8,6 +8,13 @@ export type ChatFontSize = 'sm' | 'md' | 'lg';
 export type ChatFont = 'default' | 'system' | 'dyslexic';
 export type ResponseStyle = 'concise' | 'balanced' | 'detailed' | 'technical';
 
+export interface CustomCommand {
+  id: string;
+  name: string;
+  description: string;
+  template: string;
+}
+
 export interface NotificationPreferences {
   emailWeeklySummary: boolean;
   emailAgentTaskComplete: boolean;
@@ -39,6 +46,7 @@ interface SettingsState {
    * Only applied when `advancedMode === true`.
    */
   advancedModelId: string | null;
+  customCommands: CustomCommand[];
   // Actions
   setTheme: (theme: Theme) => void;
   setChatFontSize: (size: ChatFontSize) => void;
@@ -50,6 +58,9 @@ interface SettingsState {
   setNotification: (key: keyof NotificationPreferences, value: boolean) => void;
   setAdvancedMode: (enabled: boolean) => void;
   setAdvancedModelId: (modelId: string | null) => void;
+  addCustomCommand: (cmd: Omit<CustomCommand, 'id'>) => void;
+  updateCustomCommand: (id: string, cmd: Partial<Omit<CustomCommand, 'id'>>) => void;
+  deleteCustomCommand: (id: string) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -65,6 +76,7 @@ export const useSettingsStore = create<SettingsState>()(
       responseStyle: 'balanced',
       advancedMode: false,
       advancedModelId: null,
+      customCommands: [],
       notifications: {
         emailWeeklySummary: true,
         emailAgentTaskComplete: true,
@@ -83,6 +95,19 @@ export const useSettingsStore = create<SettingsState>()(
         set((state) => ({ notifications: { ...state.notifications, [key]: value } })),
       setAdvancedMode: (enabled) => set({ advancedMode: enabled }),
       setAdvancedModelId: (modelId) => set({ advancedModelId: modelId }),
+      addCustomCommand: (cmd) =>
+        set((s) => ({
+          customCommands: [
+            ...s.customCommands,
+            { ...cmd, id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` },
+          ],
+        })),
+      updateCustomCommand: (id, patch) =>
+        set((s) => ({
+          customCommands: s.customCommands.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+        })),
+      deleteCustomCommand: (id) =>
+        set((s) => ({ customCommands: s.customCommands.filter((c) => c.id !== id) })),
     }),
     {
       name: 'agiworkforce-web-settings',
