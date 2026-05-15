@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@agiworkforce/api": "workspace:*",
+    "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/apply-patch": "workspace:*",
     "@agiworkforce/mcp": "workspace:*",
     "@agiworkforce/skills": "workspace:*",
