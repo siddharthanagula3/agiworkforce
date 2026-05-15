@@ -81,9 +81,9 @@ export default function Home() {
           </h1>
 
           <p className="agi-lede">
-            Twelve providers in one thread. Switch mid-conversation; the history follows. Bring your
-            own keys, run fully offline, or use our managed cloud.{' '}
-            <strong>Anthropic locks you to Claude. We don&rsquo;t.</strong>
+            {MARKETING.providers.display} providers in one thread. Switch mid-conversation; the
+            history follows. Bring your own keys, run fully offline, or use our managed cloud.{' '}
+            <strong>One platform. Every model. Your choice.</strong>
           </p>
 
           <div className="agi-cta-row">
