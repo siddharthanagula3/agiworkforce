@@ -73,9 +73,10 @@ export const useChatViewStore = create<ViewState>()(
         searchDebounceTimer = setTimeout(() => {
           searchDebounceTimer = undefined;
           // Import lazily at call-time to avoid circular dep at module load
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          /* eslint-disable @typescript-eslint/no-require-imports */
           const { useChatMessageStore } =
             require('@/stores/chat/chatMessageStore') as typeof import('@/stores/chat/chatMessageStore');
+          /* eslint-enable @typescript-eslint/no-require-imports */
           const msgState = useChatMessageStore.getState();
 
           const lower = trimmed.toLowerCase();
