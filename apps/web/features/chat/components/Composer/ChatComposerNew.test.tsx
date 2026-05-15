@@ -128,13 +128,13 @@ describe('ChatComposerNew', () => {
     expect(screen.getByRole('textbox', { name: /message input/i })).toBeInTheDocument();
   });
 
-  it('calls onSend with typed message on Enter', async () => {
+  it('calls onSend with typed message on Cmd+Enter', async () => {
     const onSendMock = vi.fn();
     render(<ChatComposerNew onSend={onSendMock} />);
 
     const textarea = screen.getByRole('textbox', { name: /message input/i });
     await userEvent.type(textarea, 'hello world');
-    fireEvent.keyDown(textarea, { key: 'Enter' });
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
 
     await waitFor(() => {
       expect(onSendMock).toHaveBeenCalledWith(
@@ -169,7 +169,7 @@ describe('ChatComposerNew', () => {
 
     const textarea = screen.getByRole('textbox', { name: /message input/i });
     await userEvent.type(textarea, 'test');
-    fireEvent.keyDown(textarea, { key: 'Enter' });
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
 
     await waitFor(() => {
       expect(onSendMock).toHaveBeenCalledWith(
@@ -195,7 +195,7 @@ describe('ChatComposerNew', () => {
 
     const textarea = screen.getByRole('textbox', { name: /message input/i });
     await userEvent.type(textarea, 'hi');
-    fireEvent.keyDown(textarea, { key: 'Enter' });
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
 
     await waitFor(() => {
       expect(onSendMock).toHaveBeenCalledWith(
@@ -221,7 +221,7 @@ describe('ChatComposerNew', () => {
 
     const textarea = screen.getByRole('textbox', { name: /message input/i });
     await userEvent.type(textarea, 'msg');
-    fireEvent.keyDown(textarea, { key: 'Enter' });
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
 
     await waitFor(() => {
       expect(onSendMock).toHaveBeenCalledWith(
@@ -237,7 +237,7 @@ describe('ChatComposerNew', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
     const textarea = screen.getByRole('textbox', { name: /message input/i });
     await userEvent.type(textarea, 'hello');
-    fireEvent.keyDown(textarea, { key: 'Enter' });
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
     await waitFor(() => {
       expect(textarea).toHaveValue('');
     });
@@ -312,7 +312,7 @@ describe('ChatComposerNew', () => {
 
     const textarea = screen.getByRole('textbox', { name: /message input/i });
     await userEvent.type(textarea, 'think hard');
-    fireEvent.keyDown(textarea, { key: 'Enter' });
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
 
     await waitFor(() => {
       expect(onSendMock).toHaveBeenCalledWith(
@@ -334,7 +334,7 @@ describe('ChatComposerNew', () => {
 
     const textarea = screen.getByRole('textbox', { name: /message input/i });
     await userEvent.type(textarea, 'hello');
-    fireEvent.keyDown(textarea, { key: 'Enter' });
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
 
     await waitFor(() => {
       expect(thinkingBtn).toHaveAttribute('aria-pressed', 'false');
