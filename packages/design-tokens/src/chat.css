@@ -16,8 +16,8 @@
     --chat-border: rgba(26, 25, 21, 0.08);
     --chat-border-strong: rgba(26, 25, 21, 0.15);
     --chat-border-subtle: rgba(26, 25, 21, 0.08);
-    --chat-accent-primary: #21808d;
-    --chat-accent-secondary: #da7756;
+    --chat-accent-primary: #da7756;
+    --chat-accent-secondary: #21808d;
     --chat-user-bubble-bg: #f0eeeb;
     --chat-thinking-text: #6b6560;
     --chat-thinking-line: rgba(26, 25, 21, 0.08);
@@ -51,8 +51,8 @@
     --chat-border: rgba(255, 235, 205, 0.08);
     --chat-border-strong: rgba(255, 235, 205, 0.15);
     --chat-border-subtle: rgba(255, 235, 205, 0.08);
-    --chat-accent-primary: #21808d;
-    --chat-accent-secondary: #da7756;
+    --chat-accent-primary: #da7756;
+    --chat-accent-secondary: #21808d;
     --chat-user-bubble-bg: #2a2724;
     --chat-thinking-text: #8b8680;
     --chat-thinking-line: rgba(255, 235, 205, 0.08);
