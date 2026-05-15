@@ -470,6 +470,9 @@ interface StreamCallbacks {
   onToken: (token: string) => void;
   onDone: () => void;
   onError: (err: Error) => void;
+  onToolUseStart?: (toolUseId: string, name: string) => void;
+  onToolUseDelta?: (toolUseId: string, deltaJson: string) => void;
+  onToolUseEnd?: (toolUseId: string) => void;
 }
 
 /**
@@ -530,10 +533,31 @@ export async function streamChatCompletion(
         authHeaders,
         bodyStr,
         (chunk) => {
-          const content = chunk.choices[0]?.delta?.content;
+          const delta = chunk.choices[0]?.delta;
+          const content = delta?.content;
           if (content !== undefined && content !== '') {
             responseChars += content.length;
             callbacks.onToken(content);
+          }
+          // Forward tool-call streaming events when the caller subscribes
+          if (callbacks.onToolUseStart ?? callbacks.onToolUseDelta ?? callbacks.onToolUseEnd) {
+            const tc = (delta as Record<string, unknown> | undefined)?.['tool_calls'];
+            if (Array.isArray(tc)) {
+              for (const entry of tc as Array<Record<string, unknown>>) {
+                const id =
+                  typeof entry['id'] === 'string' ? entry['id'] : String(entry['index'] ?? '');
+                const fn = entry['function'] as Record<string, unknown> | undefined;
+                if (fn?.['name'] && typeof fn['name'] === 'string') {
+                  callbacks.onToolUseStart?.(id, fn['name']);
+                }
+                if (fn?.['arguments'] && typeof fn['arguments'] === 'string') {
+                  callbacks.onToolUseDelta?.(id, fn['arguments']);
+                }
+                if (entry['finish_reason'] === 'tool_calls') {
+                  callbacks.onToolUseEnd?.(id);
+                }
+              }
+            }
           }
         },
         cancellationToken,
