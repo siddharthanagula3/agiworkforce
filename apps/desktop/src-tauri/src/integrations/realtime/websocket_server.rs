@@ -18,6 +18,7 @@ use std::time::{Duration, Instant};
 use subtle::ConstantTimeEq;
 use tauri::Emitter;
 use tauri::Manager;
+use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{Mutex as TokioMutex, RwLock as TokioRwLock, Semaphore};
 use tokio_tungstenite::{
@@ -150,6 +151,9 @@ pub struct RealtimeServer {
     /// SEV-DESK-01: per-source-IP auth-failure record; entries decay after
     /// AUTH_FAILURE_WINDOW elapses without further failures.
     auth_failures: Arc<TokioMutex<HashMap<IpAddr, AuthFailureRecord>>>,
+    /// E2 fix: token issued by POST /pair and stored for subsequent
+    /// X-Bridge-Token validation. Empty string means no pairing has occurred.
+    pair_token: Arc<TokioRwLock<String>>,
 }
 
 impl RealtimeServer {
@@ -166,7 +170,14 @@ impl RealtimeServer {
             app_handle,
             connection_semaphore: Arc::new(Semaphore::new(MAX_CONNECTIONS)),
             auth_failures: Arc::new(TokioMutex::new(HashMap::new())),
+            pair_token: Arc::new(TokioRwLock::new(String::new())),
         }
+    }
+
+    /// Return the current pair token for X-Bridge-Token validation.
+    /// Returns an empty string if no pairing has been performed yet.
+    pub async fn get_pair_token(&self) -> String {
+        self.pair_token.read().await.clone()
     }
 
     /// SEV-DESK-01: returns true if `ip` is currently in the lockout window.
@@ -287,6 +298,23 @@ impl RealtimeServer {
                         continue;
                     }
 
+                    // E2 fix: dual-protocol dispatch. Peek the first 8 bytes to
+                    // distinguish a plain HTTP request (POST /pair) from a WebSocket
+                    // upgrade (begins with "GET "). The peek does NOT consume bytes,
+                    // so the WS upgrade path sees a pristine stream.
+                    let mut peek_buf = [0u8; 8];
+                    let peek_len = match stream.peek(&mut peek_buf).await {
+                        Ok(n) => n,
+                        Err(e) => {
+                            tracing::debug!("Peek failed on new connection from {}: {}", peer, e);
+                            drop(stream);
+                            drop(permit);
+                            continue;
+                        }
+                    };
+
+                    let is_plain_http = peek_len >= 5 && &peek_buf[..5] == b"POST ";
+
                     let clients = self.clients.clone();
                     let senders = self.senders.clone();
                     let presence = self.presence.clone();
@@ -297,12 +325,17 @@ impl RealtimeServer {
                     let token = self.token.read().await.clone();
                     let app_handle = self.app_handle.clone();
                     let auth_failures = self.auth_failures.clone();
+                    let pair_token = self.pair_token.clone();
 
                     tokio::spawn(async move {
                         // The permit is held for the entire connection lifetime;
                         // drop on task exit releases it for the next connection.
                         let _permit = permit;
-                        if let Err(e) = Self::handle_connection_wrapper(
+
+                        if is_plain_http {
+                            // Route plain HTTP POST /pair to the pairing handler.
+                            Self::handle_http_pair(stream, peer, pair_token).await;
+                        } else if let Err(e) = Self::handle_connection_wrapper(
                             stream,
                             peer,
                             clients,
@@ -324,6 +357,99 @@ impl RealtimeServer {
             }
         }
     }
+
+    // ── E2: HTTP /pair handler ────────────────────────────────────────────────
+    //
+    // Accepts POST /pair from loopback only. Reads the minimal HTTP/1.1 framing
+    // (headers until \r\n\r\n, then Content-Length body bytes), validates the
+    // path, generates a 32-byte random token, stores it in the shared pair_token
+    // lock, and returns {"token":"…","fingerprint":"…"} as JSON.
+    //
+    // Calling /pair a second time ROTATES the token (idempotent success, new value).
+    // Non-loopback source IPs and wrong paths both receive 403 / 404 respectively.
+
+    async fn handle_http_pair(
+        mut stream: TcpStream,
+        peer: SocketAddr,
+        pair_token: Arc<TokioRwLock<String>>,
+    ) {
+        use tokio::io::AsyncReadExt;
+
+        // Loopback-only: reject any non-127.0.0.1 source immediately.
+        if !peer.ip().is_loopback() {
+            tracing::warn!("E2: /pair rejected from non-loopback source {}", peer);
+            let response = b"HTTP/1.1 403 Forbidden\r\nContent-Length: 9\r\nConnection: close\r\n\r\nForbidden";
+            let _ = stream.write_all(response).await;
+            let _ = stream.shutdown().await;
+            return;
+        }
+
+        // Read up to 4 KiB — enough for any real HTTP /pair request.
+        let mut buf = vec![0u8; 4096];
+        let n = match stream.read(&mut buf).await {
+            Ok(0) | Err(_) => return,
+            Ok(n) => n,
+        };
+        let raw = &buf[..n];
+
+        // Parse the request line (first line) to validate method + path.
+        let header_section = match std::str::from_utf8(raw) {
+            Ok(s) => s,
+            Err(_) => {
+                let _ = stream.write_all(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 11\r\nConnection: close\r\n\r\nBad Request").await;
+                let _ = stream.shutdown().await;
+                return;
+            }
+        };
+
+        let first_line = header_section.lines().next().unwrap_or("");
+        // Expect "POST /pair HTTP/1.1" (path segment only; ignore query string).
+        let parts: Vec<&str> = first_line.splitn(3, ' ').collect();
+        let method = parts.first().copied().unwrap_or("");
+        let path = parts.get(1).copied().unwrap_or("");
+        let path_no_query = path.split('?').next().unwrap_or(path);
+
+        if method != "POST" || path_no_query != "/pair" {
+            let body = format!("Not found: {} {}", method, path_no_query);
+            let response = format!(
+                "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = stream.write_all(response.as_bytes()).await;
+            let _ = stream.shutdown().await;
+            return;
+        }
+
+        // Generate a 32-byte (64 hex chars) cryptographically random token.
+        let new_token = {
+            use rand::RngCore;
+            let mut bytes = [0u8; 32];
+            rand::thread_rng().fill_bytes(&mut bytes);
+            hex::encode(bytes)
+        };
+        let fingerprint = new_token[..8].to_string();
+
+        // Store (rotate) the pair token.
+        *pair_token.write().await = new_token.clone();
+
+        tracing::info!("E2: /pair issued new token with fingerprint {}", fingerprint);
+
+        let body = serde_json::json!({
+            "token": new_token,
+            "fingerprint": fingerprint,
+        })
+        .to_string();
+
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let _ = stream.write_all(response.as_bytes()).await;
+        let _ = stream.shutdown().await;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     async fn handle_connection_wrapper(
         stream: TcpStream,
@@ -1658,6 +1784,149 @@ impl RealtimeServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+    // ── E2: /pair endpoint tests ──────────────────────────────────────────────
+
+    /// helper: send a raw HTTP request string to a bound TcpListener and collect
+    /// the full response bytes.
+    async fn send_http(listener_addr: SocketAddr, request: &str) -> Vec<u8> {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut client = tokio::net::TcpStream::connect(listener_addr).await.unwrap();
+        client.write_all(request.as_bytes()).await.unwrap();
+        client.shutdown().await.ok();
+        let mut response = Vec::new();
+        client.read_to_end(&mut response).await.unwrap();
+        response
+    }
+
+    /// Spawn handle_http_pair on a fresh loopback listener; return (addr, pair_token_arc).
+    async fn spawn_pair_handler() -> (SocketAddr, Arc<TokioRwLock<String>>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let pair_token: Arc<TokioRwLock<String>> = Arc::new(TokioRwLock::new(String::new()));
+        let pair_token_clone = pair_token.clone();
+        tokio::spawn(async move {
+            let (stream, peer) = listener.accept().await.unwrap();
+            RealtimeServer::handle_http_pair(stream, peer, pair_token_clone).await;
+        });
+        (addr, pair_token)
+    }
+
+    #[tokio::test]
+    async fn pair_returns_200_with_token_and_fingerprint() {
+        let (addr, pair_token) = spawn_pair_handler().await;
+        let resp_bytes = send_http(addr, "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n").await;
+        let resp = String::from_utf8_lossy(&resp_bytes);
+        assert!(resp.starts_with("HTTP/1.1 200"), "expected 200, got: {resp}");
+        let body_start = resp.find("\r\n\r\n").unwrap() + 4;
+        let body: serde_json::Value = serde_json::from_str(&resp[body_start..]).unwrap();
+        let token = body["token"].as_str().unwrap();
+        let fingerprint = body["fingerprint"].as_str().unwrap();
+        // token must be 64 hex chars (32 bytes)
+        assert_eq!(token.len(), 64, "token should be 64 hex chars");
+        assert!(token.chars().all(|c| c.is_ascii_hexdigit()));
+        // fingerprint is first 8 chars of token
+        assert_eq!(fingerprint, &token[..8]);
+        // pair_token shared state updated
+        assert_eq!(*pair_token.read().await, token);
+    }
+
+    #[tokio::test]
+    async fn pair_token_has_correct_length() {
+        let (addr, pair_token) = spawn_pair_handler().await;
+        send_http(addr, "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n").await;
+        let stored = pair_token.read().await.clone();
+        // 32 bytes = 64 hex chars
+        assert_eq!(stored.len(), 64);
+    }
+
+    #[tokio::test]
+    async fn pair_fingerprint_is_first_8_chars_of_token() {
+        let (addr, _pair_token) = spawn_pair_handler().await;
+        let resp_bytes = send_http(addr, "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n").await;
+        let resp = String::from_utf8_lossy(&resp_bytes);
+        let body_start = resp.find("\r\n\r\n").unwrap() + 4;
+        let body: serde_json::Value = serde_json::from_str(&resp[body_start..]).unwrap();
+        let token = body["token"].as_str().unwrap();
+        let fingerprint = body["fingerprint"].as_str().unwrap();
+        assert_eq!(fingerprint.len(), 8);
+        assert_eq!(fingerprint, &token[..8]);
+    }
+
+    #[tokio::test]
+    async fn pair_idempotent_second_call_rotates_token() {
+        // First call
+        let (addr1, pair_token1) = spawn_pair_handler().await;
+        let resp1 = send_http(addr1, "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n").await;
+        let r1 = String::from_utf8_lossy(&resp1);
+        let b1: serde_json::Value = serde_json::from_str(&r1[r1.find("\r\n\r\n").unwrap() + 4..]).unwrap();
+        let token1 = b1["token"].as_str().unwrap().to_string();
+
+        // Second call on a new handler sharing the same pair_token arc
+        let listener2 = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr2 = listener2.local_addr().unwrap();
+        let pair_token2 = pair_token1.clone();
+        tokio::spawn(async move {
+            let (stream, peer) = listener2.accept().await.unwrap();
+            RealtimeServer::handle_http_pair(stream, peer, pair_token2).await;
+        });
+        let resp2 = send_http(addr2, "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n").await;
+        let r2 = String::from_utf8_lossy(&resp2);
+        let b2: serde_json::Value = serde_json::from_str(&r2[r2.find("\r\n\r\n").unwrap() + 4..]).unwrap();
+        let token2 = b2["token"].as_str().unwrap().to_string();
+
+        // Both calls succeed (200) but tokens differ (rotation)
+        assert!(r1.starts_with("HTTP/1.1 200"));
+        assert!(r2.starts_with("HTTP/1.1 200"));
+        assert_ne!(token1, token2, "second /pair call must rotate token");
+        assert_eq!(*pair_token1.read().await, token2);
+    }
+
+    #[tokio::test]
+    async fn pair_wrong_path_returns_404() {
+        let (addr, _pair_token) = spawn_pair_handler().await;
+        let resp_bytes = send_http(addr, "POST /wrong HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n").await;
+        let resp = String::from_utf8_lossy(&resp_bytes);
+        assert!(resp.starts_with("HTTP/1.1 404"), "expected 404, got: {resp}");
+    }
+
+    #[tokio::test]
+    async fn pair_non_loopback_returns_403() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        // We can't bind a non-loopback address in tests, so we invoke
+        // handle_http_pair directly with a fake peer address.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let pair_token: Arc<TokioRwLock<String>> = Arc::new(TokioRwLock::new(String::new()));
+        let pair_token_clone = pair_token.clone();
+
+        // Spawn the handler but inject a non-loopback peer address.
+        tokio::spawn(async move {
+            let (stream, _real_peer) = listener.accept().await.unwrap();
+            let fake_peer = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)), 54321);
+            RealtimeServer::handle_http_pair(stream, fake_peer, pair_token_clone).await;
+        });
+
+        let mut client = tokio::net::TcpStream::connect(addr).await.unwrap();
+        client.write_all(b"POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n").await.unwrap();
+        client.shutdown().await.ok();
+        let mut response = Vec::new();
+        client.read_to_end(&mut response).await.unwrap();
+        let resp = String::from_utf8_lossy(&response);
+        assert!(resp.starts_with("HTTP/1.1 403"), "expected 403, got: {resp}");
+        // pair_token must remain empty — no token issued
+        assert!(pair_token.read().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn pair_token_all_hex_chars() {
+        let (addr, pair_token) = spawn_pair_handler().await;
+        send_http(addr, "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n").await;
+        let stored = pair_token.read().await.clone();
+        assert!(!stored.is_empty());
+        assert!(stored.chars().all(|c| c.is_ascii_hexdigit()), "token must be all hex");
+    }
 
     #[tokio::test]
     async fn test_execute_native_message_ping() {

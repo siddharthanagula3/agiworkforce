@@ -247,12 +247,14 @@ Rotation order: `apps/cli → apps/desktop → apps/web → apps/mobile → apps
 - Also blocked: `apps/desktop/src/hooks/__tests__/useExtensionEvents.test.ts` imports `cleanupRuntimeActivityEventListeners` + `initializeRuntimeActivityEventListeners` as a unified singleton — split would require test rewrite.
 - This fire shipped the safer dedup (`1bc2be696`, -86 LOC) instead. Full split needs explicit sign-off + a multi-fire plan.
 
-**E2 — Chrome ext pairing flow has no desktop endpoint counterpart (ext-eng-4 finding)**
+**E2 — Chrome ext pairing flow has no desktop endpoint counterpart (ext-eng-4 finding) — CLOSED**
 
-- Location: `apps/extension/src/pairing.ts:81` (TODO comment) posts to `http://127.0.0.1:8787/pair` on the desktop bridge
-- The desktop bridge (`apps/desktop`) does NOT expose `POST /pair` — pairing currently fails with 404 / ECONNREFUSED in production
-- Client UI degrades cleanly (state machine → ERROR with inline message), but the feature is non-functional end-to-end until the desktop side ships
-- Future fire on `apps/desktop` should add the bridge endpoint matching the pairing.ts contract (returns `{token: string, fingerprint: string}` on accept)
+- Location: `apps/extension/src/pairing.ts:115` posts to `http://127.0.0.1:8787/pair` on the desktop bridge
+- **Fix:** dual-protocol dispatch added to `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs`. The `start()` accept loop now peeks the first 8 bytes of each TCP connection before spawning; `POST `-prefixed connections are routed to `handle_http_pair()` (new, ~80 LOC). WebSocket connections proceed unchanged.
+- `handle_http_pair()` enforces loopback-only (`peer.ip().is_loopback()`), generates a 32-byte / 64 hex-char `pair_token` via `rand::thread_rng()`, stores it in `Arc<TokioRwLock<String>>` (`pair_token` field on `RealtimeServer`), returns `{"token":"…","fingerprint":"…"}` JSON. Second call rotates (idempotent success).
+- 7 new tests added: 200+token+fingerprint shape, token length=64, fingerprint=token[..8], idempotent rotation, 404 on wrong path, 403 on non-loopback, all-hex validation.
+- No changes to `apps/extension/src/pairing.ts` — contract already matched.
+- Cargo check: GREEN. `cargo test -p agiworkforce-desktop --lib integrations::realtime::websocket_server::tests`: 29/29 passed (was 22).
 
 ### Verification log
 
