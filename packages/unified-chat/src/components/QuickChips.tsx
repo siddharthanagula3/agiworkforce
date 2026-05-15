@@ -26,7 +26,7 @@ export function QuickChips({ onChipClick }: QuickChipsProps) {
   };
 
   return (
-    <div className="flex flex-wrap gap-2 justify-center pb-3">
+    <div className="flex flex-wrap gap-2 justify-center pt-2 pb-1">
       {chips.map((chip) => (
         <button
           key={chip.type}
@@ -34,8 +34,8 @@ export function QuickChips({ onChipClick }: QuickChipsProps) {
           onClick={() => handleClick(chip.type)}
           className={
             activeMode === chip.type
-              ? 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs border border-[var(--chat-accent-primary)]/40 bg-[var(--chat-accent-primary)]/20 text-[var(--chat-accent-primary)] transition-colors'
-              : 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs border border-[var(--chat-border)] bg-transparent hover:bg-[var(--chat-surface-hover)] text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)] transition-colors'
+              ? 'inline-flex items-center gap-1.5 h-[34px] px-3 rounded-full text-[13px] border border-[var(--chat-accent-primary)]/40 bg-[var(--chat-accent-primary)]/20 text-[var(--chat-accent-primary)] transition-colors'
+              : 'inline-flex items-center gap-1.5 h-[34px] px-3 rounded-full text-[13px] border border-[var(--chat-border)] bg-[var(--chat-surface-base)] hover:bg-[var(--chat-surface-hover)] text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)] transition-colors'
           }
         >
           {chip.icon}
