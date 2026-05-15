@@ -55,8 +55,10 @@ export function getWebviewContent(
   const effortLabel = escapeHtml(EFFORT_LABEL[initialEffort]);
   const effortHidden = supportsEffort ? '' : ' style="display:none"';
 
-  // extensionUri is accepted for API symmetry (future local asset URIs)
-  void extensionUri;
+  // Codicon font — copied to out/codicons/ by esbuild.js so it's included in the VSIX.
+  const codiconCssUri = webview.asWebviewUri(
+    vscode.Uri.joinPath(extensionUri, 'out', 'codicons', 'codicon.css'),
+  );
 
   return /* html */ `<!DOCTYPE html>
 <html lang="en">
@@ -65,11 +67,12 @@ export function getWebviewContent(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'none';
-             style-src 'nonce-${nonce}';
+             style-src 'nonce-${nonce}' ${cspSource};
              script-src 'nonce-${nonce}';
              img-src ${cspSource} https: data:;
              font-src ${cspSource};" />
   <title>AGI Workforce</title>
+  <link rel="stylesheet" href="${codiconCssUri}" />
   <style nonce="${nonce}">
     :root {
       /* VS Code theme variables with AGI dark-mode fallbacks */
@@ -802,8 +805,8 @@ export function getWebviewContent(
 
   <!-- ── Usage meter banner ── -->
   <div class="usage-meter-banner" id="usageMeterBanner" style="display:none">
-    <span class="byok-icon" id="meterByokIcon" style="display:none">&#128273;</span>
-    <span class="local-icon" id="meterLocalIcon" style="display:none">&#127968;</span>
+    <span class="byok-icon codicon codicon-key" id="meterByokIcon" style="display:none" aria-hidden="true"></span>
+    <span class="local-icon codicon codicon-vm" id="meterLocalIcon" style="display:none" aria-hidden="true"></span>
     <div class="usage-meter-bar-wrap" id="meterBarWrap" style="display:none">
       <div class="usage-progress">
         <div class="usage-progress-fill" id="meterFill" style="width:0%;background:var(--agi-vscode-button)"></div>
@@ -852,10 +855,10 @@ export function getWebviewContent(
     <!-- Plus-menu popover -->
     <div class="plus-menu" id="plusMenu" role="menu" aria-label="Attach or use tools">
       <div class="plus-menu-item" id="plusMenuUpload" role="menuitem" tabindex="0">
-        <span class="pm-icon">&#128206;</span> Add file or image
+        <span class="pm-icon codicon codicon-file-add" aria-hidden="true"></span>&nbsp;Add file or image
       </div>
       <div class="plus-menu-item" id="plusMenuPlanMode" role="menuitem" tabindex="0">
-        <span class="pm-icon">&#128221;</span> Plan mode
+        <span class="pm-icon codicon codicon-checklist" aria-hidden="true"></span>&nbsp;Plan mode
       </div>
     </div>
 
@@ -1580,7 +1583,7 @@ export function getWebviewContent(
       if (!toolCallStack) return;
       var doneEl = document.createElement('div');
       doneEl.className = 'tool-call-done';
-      doneEl.textContent = '$(check) Done';
+      doneEl.innerHTML = '<span class="codicon codicon-check" aria-hidden="true"></span> Done';
       toolCallStack.appendChild(doneEl);
       toolCallStack = null;
       toolCallMap = {};
