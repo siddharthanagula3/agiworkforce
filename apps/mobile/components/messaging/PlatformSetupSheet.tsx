@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Alert } from 'react-native';
+import { View } from 'react-native';
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetScrollView,
@@ -204,12 +204,7 @@ export function PlatformSetupSheet({ sheetRef, platform, onConnect }: PlatformSe
               title="Authorize with Slack"
               variant="outline"
               size="md"
-              onPress={() => {
-                Alert.alert(
-                  'OAuth',
-                  'Slack OAuth flow will open in your browser. This feature is coming soon.',
-                );
-              }}
+              onPress={handleConnect}
               className="mt-1"
             />
           </View>

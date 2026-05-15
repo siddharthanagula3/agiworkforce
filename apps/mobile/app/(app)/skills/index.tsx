@@ -1,15 +1,22 @@
 import { useCallback } from 'react';
-import { View, Pressable } from 'react-native';
+import { View, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Zap } from 'lucide-react-native';
+import { ArrowLeft, Zap, ChevronRight } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/hooks/useTheme';
 
-/**
- * Skills browser — placeholder screen.
- * Will display 150+ AI skills organized by category in Phase C.
- */
+const SKILL_CATEGORIES = [
+  { id: 'productivity', label: 'Productivity', description: 'Writing, summarizing, scheduling' },
+  { id: 'coding', label: 'Coding', description: 'Code review, debugging, generation' },
+  { id: 'research', label: 'Research', description: 'Web search, synthesis, citations' },
+  { id: 'data', label: 'Data Analysis', description: 'Charts, statistics, insights' },
+  { id: 'legal', label: 'Legal', description: 'Contract review, compliance checks' },
+  { id: 'healthcare', label: 'Healthcare', description: 'Medical literature, protocols' },
+  { id: 'finance', label: 'Finance', description: 'Market analysis, financial modeling' },
+  { id: 'education', label: 'Education', description: 'Tutoring, lesson plans, quizzes' },
+];
+
 export default function SkillsScreen() {
   const colors = useThemeColors();
   const router = useRouter();
@@ -30,24 +37,43 @@ export default function SkillsScreen() {
         >
           <ArrowLeft size={20} color={colors.textSecondary} />
         </Pressable>
-        <Text variant="subheading" className="text-white ml-2">
-          Skills
-        </Text>
-      </View>
-      <View className="flex-1 items-center justify-center px-8">
-        <View
-          className="w-16 h-16 rounded-2xl items-center justify-center mb-4"
-          style={{ backgroundColor: `${colors.teal}15` }}
-        >
-          <Zap size={32} color={colors.teal} />
+        <View className="flex-row items-center gap-2 ml-2">
+          <Zap size={18} color={colors.teal} />
+          <Text variant="subheading" className="text-white">
+            Skills
+          </Text>
         </View>
-        <Text className="text-[17px] font-semibold text-white text-center mb-2">
-          150+ AI Skills
-        </Text>
-        <Text className="text-[14px] text-center leading-5" style={{ color: colors.textMuted }}>
-          Browse AI skills for healthcare, legal, finance, education, and more. Coming soon.
+      </View>
+
+      <View className="px-4 pb-3">
+        <Text className="text-[13px]" style={{ color: colors.textMuted }}>
+          150+ AI skills across 8 domains. Tap a category to explore.
         </Text>
       </View>
+
+      <ScrollView
+        className="flex-1 px-4"
+        contentContainerStyle={{ paddingBottom: 40, gap: 8 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {SKILL_CATEGORIES.map((cat) => (
+          <Pressable
+            key={cat.id}
+            className="flex-row items-center justify-between px-4 py-3.5 rounded-xl active:opacity-80"
+            style={{ backgroundColor: colors.surfaceElevated }}
+            accessibilityLabel={cat.label}
+            accessibilityRole="button"
+          >
+            <View className="flex-1">
+              <Text className="text-[14px] font-semibold text-white">{cat.label}</Text>
+              <Text className="text-[12px] mt-0.5" style={{ color: colors.textMuted }}>
+                {cat.description}
+              </Text>
+            </View>
+            <ChevronRight size={16} color={colors.textMuted} />
+          </Pressable>
+        ))}
+      </ScrollView>
     </SafeAreaView>
   );
 }

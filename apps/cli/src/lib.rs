@@ -67,22 +67,18 @@ pub mod tool_search;
 // not yet wired. Each carries an inline PHASE2 marker explaining the unblock.
 #[allow(dead_code)] // PHASE2: registry.agiworkforce.com not deployed; rewires to plugin-manifest discovery (Sprint B6)
 pub mod marketplace;
+#[allow(dead_code)] // PHASE2: SDK stdin-reader surface ships in Sprint B (headless mode hardening)
+pub mod sdk_io; // used by OneShotOutputMode::JsonEvents in lib.rs
 #[allow(dead_code)] // PHASE2: Gemini-style declarative TOML tool-rule eval not yet wired into agent
-pub mod policy;
-#[allow(dead_code)] // PHASE2: SDK stdin-reader surface (StdinReader, ControlRequest, etc.) ships in Sprint B (headless mode hardening)
-pub mod sdk_io;
-
-// Phase-2 candidates — implementations exist with no current call sites.
-// PHASE2 markers in each module describe what wires them up.
-// Removed 2026-05-03 (dead): history, models_cache, shell_snapshot, tui_basic.
-#[allow(dead_code)] // PHASE2: expose `agiworkforce a2a serve/discover/delegate`
-pub mod a2a;
+pub mod policy; // workspace TOML policy engine
 #[allow(dead_code)] // PHASE2: WS transport for a2a — wraps jsonrpc::handle_request over persistent WS connections
 pub mod a2a_ws;
-#[allow(dead_code)] // PHASE2: hook into session-end lifecycle in daemon.rs
-pub mod memory_pipeline;
-#[allow(dead_code)] // PHASE2: wire into daemon background tick
-pub mod skill_learner;
+pub mod memory_pipeline; // used by agent/mod.rs + agent/chat.rs + agent/prompt.rs
+pub mod skill_learner; // used by agent/chat.rs session-end hook
+
+// A2A protocol — recently promoted from single-file to submodule; active Sprint B target.
+#[allow(dead_code)] // PHASE2: expose `agiworkforce a2a serve/discover/delegate`
+pub mod a2a;
 
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
