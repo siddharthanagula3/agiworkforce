@@ -72,7 +72,7 @@ export function ConnectorOAuthFlow({ state, onClose, onRetry }: ConnectorOAuthFl
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2 text-sm font-medium rounded-lg border border-border hover:bg-[#383838] transition-colors"
+                  className="px-4 py-2 text-sm font-medium rounded-lg border border-border hover:bg-accent transition-colors"
                 >
                   Cancel
                 </button>
