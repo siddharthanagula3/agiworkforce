@@ -26,8 +26,10 @@ interface ChatInputProps {
   onOpenVoiceMode?: () => void;
   onOpenAddToChat?: () => void;
   onOpenConnectors?: () => void;
-  /** When true, input is grayed out and non-interactive (e.g. offline) */
-  disabled?: boolean;
+  /** When false, send button shows queued state and placeholder reflects offline status */
+  isOnline?: boolean;
+  /** Number of messages currently waiting in the offline queue */
+  queueSize?: number;
   /** Ref to imperatively add attachments from outside (e.g. AddToChatSheet pickers) */
   attachRef?: React.RefObject<{ addAttachments: (items: Attachment[]) => void } | null>;
 }
@@ -40,7 +42,8 @@ export function ChatInput({
   onOpenVoiceMode,
   onOpenAddToChat,
   onOpenConnectors,
-  disabled,
+  isOnline = true,
+  queueSize = 0,
   attachRef,
 }: ChatInputProps) {
   const [text, setText] = useState('');
@@ -190,7 +193,11 @@ export function ChatInput({
     inputRef.current?.focus();
   }, []);
 
-  const sendButtonState = isStreaming ? ('streaming' as const) : ('idle' as const);
+  const sendButtonState = isStreaming
+    ? ('streaming' as const)
+    : !isOnline && hasContent
+      ? ('queued' as const)
+      : ('idle' as const);
 
   const handleSendButtonPress = useCallback(() => {
     if (isStreaming) {
@@ -214,19 +221,15 @@ export function ChatInput({
     onOpenConnectors?.();
   }, [hapticsEnabled, onOpenConnectors]);
 
-  // Streaming placeholder text
-  const placeholder = disabled
-    ? "You're offline"
-    : isStreaming
-      ? `Reply to ${modelName}...`
+  const queueLabel = queueSize > 0 ? ` (${queueSize} queued)` : '';
+  const placeholder = isStreaming
+    ? `Reply to ${modelName}...`
+    : !isOnline
+      ? `Offline — message will send on reconnect${queueLabel}`
       : 'Ask anything...';
 
   return (
-    <View
-      className="px-4 pb-4 pt-2"
-      style={disabled ? { opacity: 0.5 } : undefined}
-      pointerEvents={disabled ? 'none' : 'auto'}
-    >
+    <View className="px-4 pb-4 pt-2">
       {/* Recording overlay -- shown while recording is active */}
       <RecordingOverlay
         visible={isRecording}

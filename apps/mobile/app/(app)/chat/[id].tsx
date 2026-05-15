@@ -31,6 +31,7 @@ import { useModelStore } from '@/stores/modelStore';
 import { useAgentStore } from '@/stores/agentStore';
 import { useVoicePlayback } from '@/hooks/useVoicePlayback';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { offlineQueue } from '@/services/offlineQueue';
 import { generateImage } from '@/services/imagegen';
 import { colors } from '@/lib/theme';
 import type { ChatMessage } from '@/types/chat';
@@ -54,7 +55,7 @@ export default function ChatScreen() {
   const [thinkingSheetIndex, setThinkingSheetIndex] = useState(-1);
   const [thinkingContent, setThinkingContent] = useState('');
   const paywallSheetRef = useRef<import('@gorhom/bottom-sheet').default>(null);
-  const { isOnline } = useNetworkStatus();
+  const { isOnline, queueSize } = useNetworkStatus();
 
   const conversationMessages = useChatStore((s) => (id ? (s.messages[id] ?? []) : []));
   const isStreaming = useChatStore((s) => s.isStreaming);
@@ -71,6 +72,7 @@ export default function ChatScreen() {
   const deleteConversation = useChatStore((s) => s.deleteConversation);
   const paywallError = useChatStore((s) => s.paywallError);
   const clearPaywallError = useChatStore((s) => s.clearPaywallError);
+  const enqueueOfflineMessage = useChatStore((s) => s.enqueueOfflineMessage);
 
   const selectedModel = useModelStore((s) => s.selectedModel);
   const approveRequest = useAgentStore((s) => s.approveRequest);
@@ -151,6 +153,17 @@ export default function ChatScreen() {
         setQuotedMessage(null);
       }
 
+      // When offline, enqueue and show an optimistic queued message bubble
+      if (!isOnline) {
+        const entry = offlineQueue.enqueue({
+          conversationId: id,
+          content: finalText,
+          model: selectedModel,
+        });
+        enqueueOfflineMessage(id, finalText, selectedModel, entry.id);
+        return;
+      }
+
       // Handle /image command — generate an image and add result to conversation
       if (finalText.startsWith('/image ')) {
         const prompt = finalText.slice(7).trim();
@@ -166,7 +179,7 @@ export default function ChatScreen() {
 
       sendMessage(id, finalText, selectedModel, attachments);
     },
-    [id, selectedModel, sendMessage, stopSpeaking, quotedMessage],
+    [id, selectedModel, sendMessage, stopSpeaking, quotedMessage, isOnline, enqueueOfflineMessage],
   );
 
   const handleStop = useCallback(() => {
@@ -524,7 +537,7 @@ export default function ChatScreen() {
         {/* Quoted reply bar */}
         {quotedMessage && <QuotedReplyBar message={quotedMessage} onDismiss={handleDismissQuote} />}
 
-        {/* Input — disabled when offline */}
+        {/* Input — always active; offline sends are queued automatically */}
         <ChatInput
           onSend={handleSend}
           isStreaming={isStreaming}
@@ -533,7 +546,8 @@ export default function ChatScreen() {
           onOpenVoiceMode={handleOpenVoiceMode}
           onOpenAddToChat={handleOpenAddToChat}
           onOpenConnectors={handleOpenConnectors}
-          disabled={!isOnline}
+          isOnline={isOnline}
+          queueSize={queueSize}
           attachRef={chatInputAttachRef}
         />
 
