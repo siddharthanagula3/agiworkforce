@@ -1,0 +1,13 @@
+---
+source: apps/cli/src/tui/widgets/snapshot_smoke.rs
+expression: rendered
+---
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Manage MCP servers
+
+  0 servers
+
+  ※ Run `agiworkforce --debug` to see error logs
+  https://code.agiworkforce.com/docs/mcp for help
+
+  ↑↓ to navigate · Enter to confirm · Esc to cancel

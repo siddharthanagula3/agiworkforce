@@ -5,7 +5,7 @@
 #![cfg(test)]
 
 use super::list_selection_view::ListSelectionView;
-use super::screen_renderers::{render_sandbox, render_tasks, SandboxMode};
+use super::screen_renderers::{render_keybindings, render_mcp_list, render_sandbox, render_skills, render_tasks, render_usage, SandboxMode, UsageSummary};
 
 #[test]
 fn list_selection_view_snapshot() {
@@ -29,4 +29,28 @@ fn render_tasks_empty_baseline() {
 fn render_sandbox_contained_baseline() {
     let rendered = render_sandbox(SandboxMode::Contained);
     insta::assert_snapshot!("render_sandbox_contained_baseline", rendered);
+}
+
+#[test]
+fn render_skills_empty_baseline() {
+    let rendered = render_skills(&[]);
+    insta::assert_snapshot!("render_skills_empty_baseline", rendered);
+}
+
+#[test]
+fn render_keybindings_baseline() {
+    let rendered = render_keybindings();
+    insta::assert_snapshot!("render_keybindings_baseline", rendered);
+}
+
+#[test]
+fn render_mcp_list_empty_baseline() {
+    let rendered = render_mcp_list(&[]);
+    insta::assert_snapshot!("render_mcp_list_empty_baseline", rendered);
+}
+
+#[test]
+fn render_usage_default_baseline() {
+    let rendered = render_usage(&UsageSummary::default());
+    insta::assert_snapshot!("render_usage_default_baseline", rendered);
 }
