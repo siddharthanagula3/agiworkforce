@@ -6,6 +6,8 @@
     "composite": true,
     "declaration": true,
     "declarationMap": true,
+    "noEmit": false,
+    "allowImportingTsExtensions": false,
     "ignoreDeprecations": "5.0"
   },
   "include": ["src/**/*"],

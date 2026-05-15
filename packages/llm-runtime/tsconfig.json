@@ -6,6 +6,8 @@
     "composite": true,
     "declaration": true,
     "declarationMap": true,
+    "noEmit": false,
+    "allowImportingTsExtensions": false,
     "target": "ES2022",
     "lib": ["ES2023"]
   },

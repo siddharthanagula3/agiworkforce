@@ -6,6 +6,8 @@
     "composite": true,
     "declaration": true,
     "declarationMap": true,
+    "noEmit": false,
+    "allowImportingTsExtensions": false,
     // Node 22+ runtime per package.json#engines.node — safe to use modern stdlib.
     // `toSorted` (Array.prototype) needs ES2023; `replaceAll` (String.prototype) needs ES2021.
     "target": "ES2022",
