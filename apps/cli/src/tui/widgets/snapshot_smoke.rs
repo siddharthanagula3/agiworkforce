@@ -5,6 +5,7 @@
 #![cfg(test)]
 
 use super::list_selection_view::ListSelectionView;
+use super::screen_renderers::{render_sandbox, render_tasks, SandboxMode};
 
 #[test]
 fn list_selection_view_snapshot() {
@@ -16,4 +17,16 @@ fn list_selection_view_snapshot() {
     );
     let rendered = <ListSelectionView<String> as super::interactive::InteractiveView>::render(&view);
     insta::assert_snapshot!("list_selection_view_baseline", rendered);
+}
+
+#[test]
+fn render_tasks_empty_baseline() {
+    let rendered = render_tasks(&[]);
+    insta::assert_snapshot!("render_tasks_empty_baseline", rendered);
+}
+
+#[test]
+fn render_sandbox_contained_baseline() {
+    let rendered = render_sandbox(SandboxMode::Contained);
+    insta::assert_snapshot!("render_sandbox_contained_baseline", rendered);
 }

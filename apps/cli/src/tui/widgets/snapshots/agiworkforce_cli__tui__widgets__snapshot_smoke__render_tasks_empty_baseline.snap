@@ -1,0 +1,10 @@
+---
+source: apps/cli/src/tui/widgets/snapshot_smoke.rs
+expression: rendered
+---
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Background tasks
+
+  No tasks currently running
+
+  ↑/↓ to select · Enter to view · ←/Esc to close
