@@ -186,16 +186,17 @@ const DesktopShell = () => {
   const isSearchModalOpen = useSearchModal((state) => state.isOpen);
   const { theme, setTheme } = useThemeContext();
 
-  // Onboarding state - show welcome flow on first launch
+  // Onboarding state - show mode picker only on first-ever launch
   const onboardingCompleted = useSimpleModeStore(selectOnboardingCompleted);
+  const hasSelectedMode = useAppModeStore((s) => s.hasSelectedMode);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
-  // Show onboarding after auth is resolved and only if not completed
+  // Show mode picker only when neither onboarding nor mode selection has been persisted
   useEffect(() => {
-    if (!onboardingCompleted) {
+    if (!onboardingCompleted && !hasSelectedMode) {
       setShowOnboarding(true);
     }
-  }, [onboardingCompleted]);
+  }, [onboardingCompleted, hasSelectedMode]);
 
   // Apply dyslexic font class from persisted settings on mount
   const dyslexicFont = useSettingsStore((s) => s.windowPreferences?.dyslexicFont ?? false);
