@@ -42,6 +42,12 @@ describe('TIER_POLICIES — Free tier (auto-routing-spec §1)', () => {
     expect(policy.manualModelSelection).toBe(false);
   });
 
+  it('blocks voice (Wispr-Flow-style is Hobby+ per Round 15-launch 2026-05-15)', () => {
+    expect(policy.allowVoice).toBeFalsy();
+    expect(policy.allowedSlots).not.toContain('voice_transcription');
+    expect(policy.allowedSlots).not.toContain('voice_rewrite');
+  });
+
   it('warns at 80%, downgrades at 100%, hard-caps at 150%', () => {
     const cap = policy.capBehavior as TierCapBehavior;
     expect(cap.warnAt).toBe(0.8);
@@ -57,12 +63,14 @@ describe('TIER_POLICIES — Hobby tier (auto-routing-spec §1)', () => {
     expect(policy.tokenCapPerMonth).toBe(2_000_000);
   });
 
-  it('exposes workhorse + escalation_coding + reasoning_premium + image_generation', () => {
+  it('exposes workhorse + escalation_coding + reasoning_premium + image_generation + voice (Round 15-launch)', () => {
     expect(policy.allowedSlots).toEqual([
       'workhorse_general',
       'escalation_coding',
       'reasoning_premium',
       'image_generation',
+      'voice_transcription',
+      'voice_rewrite',
     ]);
   });
 
@@ -87,6 +95,13 @@ describe('TIER_POLICIES — Hobby tier (auto-routing-spec §1)', () => {
     expect(policy.allowManualSelection).toBe(false);
     expect(policy.manualModelSelection).toBe(false);
     expect(policy.surfacedUx).toBe('auto_only');
+  });
+
+  it('unlocks Wispr-Flow-style voice (Round 15-launch 2026-05-15) — 60 min/mo cap', () => {
+    expect(policy.allowVoice).toBe(true);
+    expect(policy.voiceMinutesPerMonth).toBe(60);
+    expect(policy.allowedSlots).toContain('voice_transcription');
+    expect(policy.allowedSlots).toContain('voice_rewrite');
   });
 
   it('warns at 80%, downgrades at 100%, hard-caps at 150%', () => {
@@ -133,9 +148,6 @@ describe('TIER_POLICIES — Pro tier (parallel-spinning-hedgehog §3, §4, §6)'
   });
 
   it('does NOT expose Hobby-pool or pre-spec slots that moved away in Task #16', () => {
-    // Round 14 dropped voice slots — no voice in v1.
-    expect(policy.allowedSlots).not.toContain('voice_transcription');
-    expect(policy.allowedSlots).not.toContain('voice_rewrite');
     // Pool B Hobby slots replaced by *_pro counterparts.
     expect(policy.allowedSlots).not.toContain('general_fast');
     expect(policy.allowedSlots).not.toContain('general_balanced');
@@ -297,12 +309,17 @@ describe('getTierPolicy — public getter', () => {
         'escalation_coding',
         'reasoning_premium',
         'image_generation',
+        'voice_transcription',
+        'voice_rewrite',
       ],
       allowMediaGeneration: true,
       allowImageGeneration: true,
       allowVideoGeneration: false,
       imageQuotaPerMonth: 10,
       imageSyntheticTokenCost: 50_000,
+      // Round 15-launch (2026-05-15) voice unlock.
+      allowVoice: true,
+      voiceMinutesPerMonth: 60,
       allowToolUse: 'web_search_with_burn_warning',
       allowMCP: 'basic_with_burn_warning',
       allowComputerUse: false,

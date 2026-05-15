@@ -416,6 +416,20 @@ export interface TierPolicy {
    * web search + summarization workflow). Max-only at v1.
    */
   allowDeepResearch?: boolean;
+
+  /**
+   * Whether the tier exposes Wispr-Flow-style system-wide voice dictation:
+   * push-to-talk hotkey → Whisper transcription → optional AI cleanup → paste
+   * at cursor in any text field (system-wide). Hobby+ at v1 (Round 15-launch
+   * decision 2026-05-15 supersedes Round 14 "voice deferred"). BYOK users
+   * bring their own Whisper API key — no markup on our side.
+   */
+  allowVoice?: boolean;
+  /**
+   * Per-month voice transcription minutes budget. `null`/undefined = uncapped.
+   * Hobby: 60 min. Pro: 300. Pro+: 1500. Max+Enterprise: uncapped.
+   */
+  voiceMinutesPerMonth?: number | null;
 }
 
 export const modelsCatalog = modelsCatalogJson as ModelsCatalog;
@@ -837,6 +851,10 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
       'escalation_coding',
       'reasoning_premium',
       'image_generation',
+      // Round 15-launch (2026-05-15) — voice slots reopened for Wispr-Flow
+      // style system-wide dictation. Hobby+ at v1.
+      'voice_transcription',
+      'voice_rewrite',
     ],
     allowedProviderSurfaces: ['managed_cloud'],
     manualModelSelection: false,
@@ -849,6 +867,9 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     allowVideoGeneration: false,
     imageQuotaPerMonth: 10,
     imageSyntheticTokenCost: 50_000,
+    // Hobby voice budget: 60 min/mo (Wispr-Flow positioning).
+    allowVoice: true,
+    voiceMinutesPerMonth: 60,
     // Round 16 tool-tier ladder — Hobby gets web search + basic MCP with
     // burn-warning UX (in-stream metadata) so users notice quota burn.
     allowToolUse: 'web_search_with_burn_warning',
@@ -876,6 +897,9 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
       'computer_use',
       'search_fast',
       'search_premium',
+      // Round 15-launch voice unlock (Pro: 300 min/mo).
+      'voice_transcription',
+      'voice_rewrite',
     ],
     allowedProviderSurfaces: ['managed_cloud', 'byok'],
     // CRITICAL Pro unlock — the manual picker is the entire reason users pay
@@ -889,6 +913,9 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     allowSearch: true,
     allowMediaGeneration: true,
     allowImageGeneration: true,
+    // Pro voice budget: 300 min/mo.
+    allowVoice: true,
+    voiceMinutesPerMonth: 300,
     // Video gen is a Pro+ unlock per spec §6.
     allowVideoGeneration: false,
     // null = no per-image cap; image generation debits the 10M-token bucket
@@ -925,6 +952,9 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
       'computer_use_premium',
       'search_fast',
       'search_premium',
+      // Round 15-launch voice unlock (Pro+: 1500 min/mo).
+      'voice_transcription',
+      'voice_rewrite',
     ],
     allowedProviderSurfaces: ['managed_cloud', 'byok'],
     manualModelSelection: true,
@@ -938,6 +968,9 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     allowVideoGeneration: true,
     imageQuotaPerMonth: null,
     imageSyntheticTokenCost: 50_000,
+    // Pro+ voice budget: 1500 min/mo (25 hours).
+    allowVoice: true,
+    voiceMinutesPerMonth: 1500,
     // Pro+ unlocks Opus 4.7 + GPT-5.5 with daily-token caps. The numbers
     // here are the canonical caps from auto-routing-spec §3 + §6.
     flagshipDailyTokenCap: 15_000,
@@ -977,6 +1010,9 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
       'computer_use_premium',
       'image_generation',
       'video_generation',
+      // Round 15-launch voice unlock (Max: unlimited).
+      'voice_transcription',
+      'voice_rewrite',
     ],
     allowedProviderSurfaces: ['managed_cloud', 'byok', 'local'],
     manualModelSelection: true,
@@ -989,6 +1025,9 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     allowVideoGeneration: true,
     imageQuotaPerMonth: null,
     imageSyntheticTokenCost: 50_000,
+    // Max voice budget: unlimited.
+    allowVoice: true,
+    voiceMinutesPerMonth: null,
     // Max also surfaces the US-only routing toggle (inherits Pro+ capability).
     usOnlyRoutingAvailable: true,
     // Max-tier video budget: 5 min/mo at 720p (Runway Gen-4). Spec §3 + §12.
@@ -1027,6 +1066,9 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
       'computer_use_premium',
       'image_generation',
       'video_generation',
+      // Round 15-launch voice unlock (Enterprise: unlimited).
+      'voice_transcription',
+      'voice_rewrite',
     ],
     allowedProviderSurfaces: ['managed_cloud', 'byok', 'local'],
     manualModelSelection: true,
@@ -1039,6 +1081,9 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     allowVideoGeneration: true,
     imageQuotaPerMonth: null,
     imageSyntheticTokenCost: 50_000,
+    // Enterprise voice: unlimited.
+    allowVoice: true,
+    voiceMinutesPerMonth: null,
     allowToolUse: 'unlimited',
     allowMCP: 'unlimited',
     // Enterprise is uncapped at the policy level (custom contracts handle billing).
