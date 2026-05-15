@@ -162,8 +162,9 @@ export function AllowedDirectoriesSettings() {
                       className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
                       onClick={() => setRemoveDirPath(path)}
                       title="Remove path"
+                      aria-label={`Remove allowed path ${path}`}
                     >
-                      <FolderX className="h-4 w-4" />
+                      <FolderX className="h-4 w-4" aria-hidden="true" />
                     </Button>
                   </div>
                 ))}

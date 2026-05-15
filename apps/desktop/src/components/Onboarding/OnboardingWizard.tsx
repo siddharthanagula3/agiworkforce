@@ -261,7 +261,10 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
               <div className="flex-1 h-px bg-border" />
             </div>
             <div className="relative">
-              <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
+              <Key
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50"
+                aria-hidden="true"
+              />
               <input
                 type="password"
                 value={apiKey}
@@ -272,6 +275,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
                   }
                 }}
                 placeholder="Paste any API key here..."
+                aria-label="API key"
+                aria-describedby="byok-providers-hint"
                 className={cn(
                   'w-full pl-9 pr-28 py-2.5 rounded-xl border bg-card text-sm text-foreground placeholder:text-muted-foreground/50',
                   'focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50',
@@ -297,7 +302,10 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
                 </div>
               )}
             </div>
-            <p className="text-xs text-muted-foreground/60 mt-1.5 text-center">
+            <p
+              id="byok-providers-hint"
+              className="text-xs text-muted-foreground/60 mt-1.5 text-center"
+            >
               Auto-detects: Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot,
               Zhipu
             </p>

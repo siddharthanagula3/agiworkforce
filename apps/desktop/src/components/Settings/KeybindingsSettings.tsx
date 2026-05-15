@@ -161,8 +161,9 @@ function ShortcutRow({
             className="h-7 px-2 text-xs text-muted-foreground"
             onClick={() => onReset(shortcut.id)}
             title="Reset to default"
+            aria-label={`Reset shortcut for ${shortcut.label} to default`}
           >
-            <RotateCcw className="h-3 w-3" />
+            <RotateCcw className="h-3 w-3" aria-hidden="true" />
           </Button>
         )}
       </div>

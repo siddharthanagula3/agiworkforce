@@ -415,8 +415,9 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
             onClick={() => refreshEvents()}
             disabled={loading}
             title="Refresh events"
+            aria-label="Refresh calendar events"
           >
-            <RefreshCcw className={cn('h-4 w-4', loading && 'animate-spin')} />
+            <RefreshCcw className={cn('h-4 w-4', loading && 'animate-spin')} aria-hidden="true" />
           </Button>
           <Button onClick={handleNewEvent} size="sm">
             <Plus className="mr-2 h-4 w-4" />
