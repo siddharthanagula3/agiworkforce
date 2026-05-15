@@ -1753,24 +1753,25 @@ Any RED → `git stash` + failure report in `AUDIT_LOG.md` + exit without commit
 - **E2 closed 2026-05-14** (commit `948ceeb7f`): desktop bridge now exposes `POST /pair` HTTP endpoint on port 8787, with loopback-only enforcement, idempotent token rotation, and 7 new tests. Chrome ext pairing flow (`887a02b10`) is now end-to-end functional. Desktop backend tests: 3,938 → 3,945 (+7).
 - **E1 still open**: full per-event-hook split of `apps/desktop/src/hooks/useAgenticEvents.ts` blocked by 7 module-level mutable singletons. Requires `SharedListenerContext` refactor (~300 LOC net structural change). Documented at AUDIT_LOG.md E1.
 
-**Last refresh:** 2026-05-15 (fire #6 wave converged — E2 closed, vscode + cli Phase B splits landed, web C5 + light-mode shipped). **Next refresh:** after each fire updates `AUDIT_LOG.md`.
+**Last refresh:** 2026-05-15 (fires #1-#7 converged + pushed to `origin/main`). **Next refresh:** after each fire updates `AUDIT_LOG.md`.
 
-### 10.1 Surface-by-surface health snapshot (post-fire-5)
+### 10.1 Surface-by-surface health snapshot (post-fire-7, pushed to origin/main `0276d541f`)
 
-| Surface               | typecheck | lint   | tests passed (latest)          | Items closed (Phase A / B / C / D)                                      |
-| --------------------- | --------- | ------ | ------------------------------ | ----------------------------------------------------------------------- |
-| apps/cli              | n/a       | n/a    | 1,326 cargo tests (+8 SSRF)    | A #1 #2 #3 #4 ✓; B main.rs split ✓ (2,385→7 LOC)                        |
-| apps/desktop          | ✅ GREEN  | ✅ 0/0 | 128 files / 1,653 tests (+5)   | A #13 ✓; C #C2 ✓; useAgenticEvents dedup (-86 LOC)                      |
-| apps/web              | ✅ GREEN  | ✅ 0/0 | 134 files / 3,240+ tests       | A #15 #17 ✓; D lint polish ✓; C #C6 ✓ slash-cmds modal                  |
-| apps/mobile           | ✅ GREEN  | ✅ 0/0 | 42 suites / 778 tests (+9)     | A #9 ✓ guard; C #C9 ✓ offline queue; C #C10 ✓ theme prefs scaffold      |
-| apps/extension        | ✅ GREEN  | ✅ 0/0 | 21+ files / 607 tests (+26)    | A #11 ✓; A #12 ✓ (47 sites swept); C #C12 ✓ conv history; C #C11 ✓ pair |
-| apps/extension-vscode | ✅ GREEN  | ✅ 0/0 | 26 files / 512 tests (+8)      | C #C14 ✓; C #C13 ✓ chat-in-editor; D #3.10 TS project refs ✓            |
-| Workspace + crates    | n/a       | clean  | 5,679+ cargo workspace tests   | D #3.9 33 clippy deny lints + 13 crates inherit ✓                       |
-| packages              | ✅ GREEN  | ✅ 0/0 | 1,103 tests across 12 packages | D #3.11 posttest=pnpm build on 19 packages ✓                            |
+| Surface               | typecheck | lint   | tests passed (latest)        | Items closed (Phase A / B / C / D)                                                        |
+| --------------------- | --------- | ------ | ---------------------------- | ----------------------------------------------------------------------------------------- |
+| apps/cli              | n/a       | n/a    | 1,326 cargo tests            | A #1 #2 #3 #4 ✓; B main.rs ✓ + a2a.rs ✓                                                   |
+| apps/desktop frontend | ✅ GREEN  | ✅ 0/0 | 1,653 tests                  | A #13 ✓; C #C2 ✓ + #C3 ✓ + #C4 ✓; useAgenticEvents dedup -86 LOC                          |
+| apps/desktop backend  | n/a       | n/a    | 3,945 cargo tests (+7 /pair) | E2 closed (POST /pair endpoint, loopback-only, idempotent token rotation)                 |
+| apps/web              | ✅ GREEN  | ✅ 0/0 | 3,246 tests                  | A #15 #17 ✓; D lint clean + light-mode tokens ✓; C #C5 ✓ partner perks + #C6 ✓ slash-cmds |
+| apps/mobile           | ✅ GREEN  | ✅ 0/0 | 789 tests                    | A #9 ✓ guard; C #C9 ✓ offline queue + #C10 ✓ theme prefs; B companion 609→256 LOC ✓       |
+| apps/extension        | ✅ GREEN  | ✅ 0/0 | 607 tests                    | A #11 ✓ + #12 ✓ (47-site sweep); C #C11 ✓ pairing + #C12 ✓ conv history                   |
+| apps/extension-vscode | ✅ GREEN  | ✅ 0/0 | 512 tests                    | C #C14 ✓ + #C13 ✓; D #3.10 TS project refs ✓; B extension.ts 1,629→255 LOC ✓              |
+| Workspace + crates    | n/a       | clean  | ~5,679 cargo workspace tests | D #3.9 33 clippy deny lints + 13 utility crates inherit ✓                                 |
+| packages + services   | ✅ GREEN  | ✅ 0/0 | 1,103 + 155 = 1,258          | D #3.11 posttest=pnpm build on 19 packages ✓; OpenClaw 117 tests verified ✓               |
 
-Combined surface vitest/jest: 6,796 (Desktop frontend 1,653 + Web 3,246 + Mobile 778 + Chrome ext 607 + VS Code 512) + Desktop backend cargo 3,945 + CLI cargo 1,326 + other cargo crates ~408 + packages 1,103 + services 155 = **~13,733+ tests green across the platform**.
+Combined: **≥13,744 tests green** (surface vitest+jest 6,807 + desktop backend cargo 3,945 + cli cargo 1,326 + other cargo ~408 + packages 1,103 + services 155).
 
-Net cumulative diff this campaign: ~107,000 LOC removed (dominated by `tui/_attic/` delete), ~5,500 LOC added (new features + tests + Codex agent definitions). **35 commits since `3fdda63b3`**.
+Net cumulative diff: **-107,000 LOC** removed (dominated by `tui/_attic/` delete) / **+5,500 LOC** added. **41 commits this session + 33 pre-session = 74 commits pushed to `origin/main`** at `0276d541f` (2026-05-15).
 
 ---
 
