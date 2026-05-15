@@ -8,6 +8,7 @@
 import * as vscode from 'vscode';
 import { MODEL_PICKER_OPTIONS } from '../../services/modelConstants';
 import { AGENT_MODE_LABEL, EFFORT_LABEL, type AgentMode, type Effort } from '@agiworkforce/types';
+import { agiVsCodeCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
 
 // ─── HTML helpers ─────────────────────────────────────────────────────────────
 
@@ -33,10 +34,8 @@ export function getNonce(): string {
 
 /**
  * Generates the webview HTML.
- * Tailored to match AGI Workforce design tokens:
- *   - Background: #0f0f0f / #1a1a1a
- *   - Accent: #21808d (teal)
- *   - Send button: #da7756 (terra cotta)
+ * Colors adapt to the active VS Code theme via --vscode-* variables with
+ * AGI palette fallbacks (dark defaults). Light/HC themes work automatically.
  */
 export function getWebviewContent(
   webview: vscode.Webview,
@@ -73,14 +72,16 @@ export function getWebviewContent(
   <title>AGI Workforce</title>
   <style nonce="${nonce}">
     :root {
-      --bg-base: #0f0f0f;
-      --bg-elevated: #1a1a1a;
-      --bg-overlay: #242424;
-      --accent-teal: #21808d;
-      --accent-terra: #da7756;
-      --text-primary: rgba(255, 255, 255, 0.92);
-      --text-secondary: rgba(255, 255, 255, 0.55);
-      --border: rgba(255, 255, 255, 0.07);
+      /* VS Code theme variables with AGI dark-mode fallbacks */
+      ${cssVarsToString(agiVsCodeCssVars)}
+      --bg-base: var(--agi-vscode-bg);
+      --bg-elevated: var(--agi-vscode-surface);
+      --bg-overlay: var(--agi-vscode-overlay);
+      --accent-teal: var(--agi-vscode-button);
+      --accent-terra: var(--vscode-button-secondaryBackground, #da7756);
+      --text-primary: var(--agi-vscode-text);
+      --text-secondary: var(--agi-vscode-text-muted);
+      --border: var(--agi-vscode-border);
       --radius-md: 8px;
       --radius-lg: 12px;
       --transition: cubic-bezier(0.16, 1, 0.3, 1);
@@ -278,10 +279,13 @@ export function getWebviewContent(
       color: var(--text-primary);
       font-size: 12px;
       padding: 6px 10px;
-      outline: none;
       transition: border-color 0.15s;
     }
-    .api-key-input:focus { border-color: var(--accent-teal); }
+    .api-key-input:focus-visible {
+      outline: 2px solid var(--agi-vscode-focus);
+      outline-offset: 2px;
+      border-color: var(--accent-teal);
+    }
 
     .save-key-btn {
       background: var(--accent-teal);
@@ -326,12 +330,15 @@ export function getWebviewContent(
       color: var(--text-primary);
       font-size: 11px;
       padding: 3px 8px;
-      outline: none;
       cursor: pointer;
       flex: 1;
       max-width: 180px;
     }
-    .model-select:focus { border-color: var(--accent-teal); }
+    .model-select:focus-visible {
+      outline: 2px solid var(--agi-vscode-focus);
+      outline-offset: 2px;
+      border-color: var(--accent-teal);
+    }
 
     .input-row {
       display: flex;
@@ -350,12 +357,15 @@ export function getWebviewContent(
       line-height: 1.5;
       min-height: 38px;
       max-height: 140px;
-      outline: none;
       padding: 9px 12px;
       resize: none;
       transition: border-color 0.15s var(--transition);
     }
-    #userInput:focus { border-color: var(--accent-teal); }
+    #userInput:focus-visible {
+      outline: 2px solid var(--agi-vscode-focus);
+      outline-offset: 2px;
+      border-color: var(--accent-teal);
+    }
     #userInput::placeholder { color: var(--text-secondary); }
 
     #sendBtn {
@@ -597,7 +607,7 @@ export function getWebviewContent(
     <span class="local-icon" id="meterLocalIcon" style="display:none">&#127968;</span>
     <div class="usage-meter-bar-wrap" id="meterBarWrap" style="display:none">
       <div class="usage-progress">
-        <div class="usage-progress-fill" id="meterFill" style="width:0%;background:#21808d"></div>
+        <div class="usage-progress-fill" id="meterFill" style="width:0%;background:var(--agi-vscode-button)"></div>
       </div>
     </div>
     <span class="usage-text" id="meterText"></span>
