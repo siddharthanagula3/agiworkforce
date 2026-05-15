@@ -1,15 +1,14 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import { getAuthenticatedUser } from '@/lib/api-auth';
 import { getTaskModelForProvider, getProviderDefaultModel } from '@agiworkforce/types';
 
 /**
@@ -46,28 +45,10 @@ async function handleCompletion(request: NextRequest): Promise<NextResponse> {
     return rateLimitResponse;
   }
 
-  // Authentication via Bearer token
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    throw createError.unauthorized('Missing or invalid authorization header');
-  }
-
-  const token = authHeader.substring(7);
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  // Use service role key for server-side JWT verification - anon key cannot verify
-  // JWT signatures server-side since it lacks the JWT secret.
-  const supabase = createClient(supabaseUrl, requireEnv('SUPABASE_SERVICE_ROLE_KEY'));
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser(token);
-
-  if (authError || !user) {
-    logger.warn({ error: authError }, 'Completion auth failed');
-    throw createError.unauthorized('Invalid authentication token');
-  }
+  // Authentication — verify the caller is signed in; we do not use the user
+  // object here (completions are not user-scoped), but this gate prevents
+  // unauthenticated access.
+  await getAuthenticatedUser(request);
 
   // Parse and validate request body
   let body: unknown;
