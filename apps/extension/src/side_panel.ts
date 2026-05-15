@@ -30,6 +30,7 @@ import {
   Folder,
   Plug,
   ChevronRight,
+  ArrowUp,
   renderIcon,
 } from './assets/icons';
 
@@ -387,20 +388,50 @@ function injectStyles(): void {
     #sp-messages::-webkit-scrollbar-track { background: transparent; }
     #sp-messages::-webkit-scrollbar-thumb { background: #1e2030; border-radius: 4px; }
 
-    /* ── Empty state (hidden; chips live in composer bar) ── */
-    #sp-empty { display: none; }
+    /* ── Empty state — composer-first per design-spec §8 ── */
+    #sp-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      padding: 24px 16px 8px;
+      gap: 8px;
+      text-align: center;
+    }
+    #sp-empty.hidden { display: none; }
+    #sp-empty-headline {
+      font-size: 15px;
+      font-weight: 500;
+      color: #8b8680;
+      letter-spacing: -0.01em;
+    }
 
-    /* ── Inline prompt chips under the composer ── */
+    /* ── Inline prompt chips under the composer (design-spec §8.2) ── */
     #sp-prompt-chips {
       display: flex;
       flex-wrap: nowrap;
       gap: 6px;
       overflow: hidden;
-      padding: 4px 0 0;
+      padding: 6px 10px 0;
     }
     #sp-prompt-chips.hidden { display: none; }
-    .sp-cmd-chip { display: inline-block; padding: 3px 10px; font-size: 11px; font-family: 'SF Mono', Monaco, monospace; background: rgba(33, 128, 141, 0.1); color: var(--agi-ext-accent); border-radius: 12px; cursor: pointer; transition: background 0.15s; border: 1px solid rgba(33, 128, 141, 0.25); white-space: nowrap; flex-shrink: 0; }
-    .sp-cmd-chip:hover { background: #334155; color: #c7d2fe; }
+    .sp-cmd-chip {
+      display: inline-flex;
+      align-items: center;
+      height: 28px;
+      padding: 0 10px;
+      font-size: 11px;
+      background: #13131a;
+      color: #8b8680;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      border: 1px solid rgba(255,235,205,0.08);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .sp-cmd-chip:hover { background: rgba(255,235,205,0.06); color: #e8e4db; }
 
     /* ── Blocked / restricted-site state ── */
     #sp-blocked {
@@ -862,11 +893,26 @@ function injectStyles(): void {
       -webkit-box-orient: vertical;
     }
 
-    /* ── Input row ── */
+    /* ── Input row (composer §7) ── */
     #sp-input-area {
-      padding: 8px 10px 10px;
+      padding: 6px 10px 8px;
       border-top: 1px solid #1e1e2e;
       flex-shrink: 0;
+    }
+    /* outer composer shell */
+    #sp-composer-shell {
+      background: #13131a;
+      border: 1px solid #1e1e2e;
+      border-radius: 16px;
+      padding: 6px 8px 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    #sp-composer-shell:focus-within {
+      border-color: rgba(33,128,141,0.5);
+      box-shadow: 0 0 0 2px rgba(33,128,141,0.18);
     }
     #sp-input-row {
       display: flex;
@@ -875,63 +921,58 @@ function injectStyles(): void {
     }
     #sp-input {
       flex: 1;
-      background: #13131a;
-      border: 1px solid #1e1e2e;
-      border-radius: 10px;
+      background: transparent;
+      border: none;
       color: #e2e8f0;
       font-size: 13px;
-      padding: 8px 11px;
+      padding: 4px 4px;
       resize: none;
       outline: none;
       font-family: inherit;
       line-height: 1.5;
       max-height: 120px;
-      min-height: 38px;
+      min-height: 28px;
       overflow-y: auto;
-      transition: border-color 0.15s;
     }
-    #sp-input:focus { border-color: var(--agi-ext-focus); }
-    #sp-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     #sp-input::placeholder { color: #334155; }
     #sp-send-btn {
       background: var(--agi-ext-accent);
       color: var(--agi-ext-on-accent);
       border: none;
-      border-radius: 8px;
-      width: 34px;
-      height: 34px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      font-size: 14px;
-      flex-shrink: 0;
-      transition: background 0.15s, transform 0.1s;
-    }
-    #sp-send-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); transform: scale(1.05); }
-    #sp-send-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-    #sp-send-btn:disabled { background: #1e1e2e; color: #334155; cursor: not-allowed; transform: none; }
-
-    /* ── Attachment + button and menu ── */
-    .sp-attach-wrapper { position: relative; flex-shrink: 0; }
-    .sp-attach-btn {
+      border-radius: 50%;
       width: 30px;
       height: 30px;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #13131a;
-      border: 1px solid #1e1e2e;
-      border-radius: 8px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.15s, transform 0.1s;
+    }
+    #sp-send-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); transform: scale(1.05); }
+    #sp-send-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    #sp-send-btn:disabled { background: #2d2d3a; color: #334155; cursor: not-allowed; transform: none; }
+
+    /* ── Attachment + button and menu ── */
+    .sp-attach-wrapper { position: relative; flex-shrink: 0; }
+    .sp-attach-btn {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
       color: #64748b;
       font-size: 18px;
       font-weight: 300;
       line-height: 1;
       cursor: pointer;
       flex-shrink: 0;
-      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      transition: color 0.15s, background 0.15s;
     }
-    .sp-attach-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: rgba(33, 128, 141, 0.08); }
+    .sp-attach-btn:hover { color: var(--agi-ext-accent); background: rgba(33, 128, 141, 0.08); }
     #sp-attach-menu {
       display: none;
       position: absolute;
@@ -1723,9 +1764,11 @@ function buildBubbleWithTools(msg: ChatMessage): HTMLElement {
 function renderMessages(): void {
   const container = document.getElementById('sp-messages')!;
   const chips = document.getElementById('sp-prompt-chips');
+  const emptyEl = document.getElementById('sp-empty');
 
   if (_ctx.messages.length === 0) {
     if (chips) chips.classList.remove('hidden');
+    if (emptyEl) emptyEl.classList.remove('hidden');
     // Remove all message nodes and reset counter
     container.querySelectorAll('.sp-msg, .sp-thinking-wrap').forEach((n) => n.remove());
     _ctx.lastRenderedCount = 0;
@@ -1733,6 +1776,7 @@ function renderMessages(): void {
   }
 
   if (chips) chips.classList.add('hidden');
+  if (emptyEl) emptyEl.classList.add('hidden');
 
   // Only append messages that haven't been rendered yet — avoids full DOM rebuild on each
   // streaming chunk and preserves browser focus/scroll state for already-rendered bubbles.
@@ -2795,8 +2839,10 @@ function buildUI(): void {
   const chatPanel = el('div', { id: 'sp-chat-panel' });
 
   const msgsArea = el('div', { id: 'sp-messages' });
-  // #sp-empty retained as an invisible sentinel so renderMessages() can reference it without guard.
-  msgsArea.appendChild(el('div', { id: 'sp-empty' }));
+  // #sp-empty: composer-first empty state (design-spec §8); hidden when messages present
+  const emptyState = el('div', { id: 'sp-empty' });
+  emptyState.appendChild(el('div', { id: 'sp-empty-headline' }, 'Ask about this page'));
+  msgsArea.appendChild(emptyState);
 
   const blockedState = el('div', { id: 'sp-blocked' });
   const svgNS = 'http://www.w3.org/2000/svg';
@@ -3395,11 +3441,12 @@ function buildUI(): void {
   document.body.appendChild(toolbar);
 
   const inputArea = el('div', { id: 'sp-input-area' });
+  const composerShell = el('div', { id: 'sp-composer-shell' });
   const inputRow = el('div', { id: 'sp-input-row' });
 
   const inputEl = el('textarea', {
     id: 'sp-input',
-    placeholder: 'Ask anything…',
+    placeholder: 'Ask about this page',
     rows: '1',
   }) as HTMLTextAreaElement;
 
@@ -3414,8 +3461,8 @@ function buildUI(): void {
     }
   });
 
-  const sendBtn = el('button', { id: 'sp-send-btn', title: 'Send (Enter)' });
-  setText(sendBtn, '↑');
+  const sendBtn = el('button', { id: 'sp-send-btn', title: 'Send (Cmd+Enter)' });
+  sendBtn.appendChild(renderIcon(ArrowUp, 14));
   sendBtn.addEventListener('click', () => {
     const text = inputEl.value;
     inputEl.value = '';
@@ -3504,6 +3551,8 @@ function buildUI(): void {
   inputRow.appendChild(inputEl);
   inputRow.appendChild(sendBtn);
 
+  composerShell.appendChild(inputRow);
+
   // Persistent page-context chip in the composer bottom bar
   const composerBar = el('div', { id: 'sp-composer-bar' });
   contextBtn = el('button', {
@@ -3542,9 +3591,9 @@ function buildUI(): void {
     promptChipsRow.appendChild(chip);
   }
 
+  composerShell.appendChild(composerBar);
   inputArea.appendChild(attachmentBar);
-  inputArea.appendChild(inputRow);
-  inputArea.appendChild(composerBar);
+  inputArea.appendChild(composerShell);
   inputArea.appendChild(promptChipsRow);
   document.body.appendChild(inputArea);
 
