@@ -3,6 +3,11 @@ import { toast } from 'sonner';
 import { useEffect } from 'react';
 import { isTauri } from '../lib/tauri-mock';
 import { automation, browserExtension } from '@agiworkforce/api';
+import {
+  getMcpToolDisplayName,
+  mapToolNameToActionType,
+  safeJsonStringify,
+} from './agenticEventUtils';
 import type {
   ActionLogEntry,
   ActionLogEntryType,
@@ -120,76 +125,6 @@ const runtimeActivityHandlers = {
   updateToolStream: () => useUnifiedChatStore.getState().updateToolStream,
   removeToolStream: () => useUnifiedChatStore.getState().removeToolStream,
 };
-
-function mapToolNameToActionType(toolName?: string): ActionLogEntryType {
-  const normalized = (toolName ?? '').toLowerCase();
-  if (
-    normalized.startsWith('browser_') ||
-    normalized.startsWith('extension_') ||
-    normalized.startsWith('mcp__playwright__') ||
-    normalized.startsWith('web_')
-  ) {
-    return 'browser';
-  }
-  if (
-    normalized.startsWith('mcp__') ||
-    normalized.startsWith('mcp_') ||
-    normalized.includes('mcp')
-  ) {
-    return 'mcp';
-  }
-  if (
-    normalized.startsWith('file_') ||
-    normalized.includes('filesystem') ||
-    normalized.includes('directory') ||
-    normalized.includes('cloud_')
-  ) {
-    return 'filesystem';
-  }
-  if (
-    normalized.startsWith('automation_') ||
-    normalized.startsWith('ui_') ||
-    normalized.includes('desktop')
-  ) {
-    return 'ui';
-  }
-  return 'terminal';
-}
-
-function decodeMcpIdComponent(value: string): string {
-  if (value.startsWith('hex:')) {
-    try {
-      const hex = value.slice(4);
-      const bytes = hex.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) ?? [];
-      return new TextDecoder().decode(new Uint8Array(bytes));
-    } catch {
-      return value;
-    }
-  }
-
-  if (value.startsWith('b64:')) {
-    try {
-      const encoded = value.slice(4).replace(/-/g, '+').replace(/_/g, '/');
-      const padded = encoded + '='.repeat((4 - (encoded.length % 4)) % 4);
-      return atob(padded);
-    } catch {
-      return value;
-    }
-  }
-  return value;
-}
-
-function getMcpToolDisplayName(toolId: string): string {
-  if (toolId.startsWith('mcp__')) {
-    const parts = toolId.split('__', 3);
-    if (parts.length === 3) {
-      const decoded = decodeMcpIdComponent(parts[2] || '');
-      return decoded.replace(/_/g, ' ');
-    }
-  }
-
-  return toolId.replace(/^mcp_[^_]+_/, '').replace(/_/g, ' ');
-}
 
 function upsertActionLogEntry(
   entry: Partial<ActionLogEntry> & { id?: string; actionId?: string; type?: ActionLogEntryType },
@@ -326,17 +261,6 @@ function runExtensionPreflightCheck(): void {
       });
     }
   })();
-}
-
-function safeJsonStringify(value: unknown): string | undefined {
-  if (value === undefined || value === null) {
-    return undefined;
-  }
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
 }
 
 function resolveActiveConversationMessages() {
