@@ -1146,7 +1146,11 @@
   /* Button glow effect */
   .btn-glow {
     @apply relative overflow-hidden;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition:
+      background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+      border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+      color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .btn-glow::before {
@@ -1617,6 +1621,13 @@
   color: var(--agi-bg);
 }
 
+/* chrome band — full-bleed wrapper for header and footer rows */
+[data-design='agi'] .agi-chrome-band {
+  width: 100%;
+  background: var(--agi-bg);
+  border-bottom: 1px solid var(--agi-rule);
+}
+
 /* shell */
 [data-design='agi'] .agi-shell {
   width: 100%;
@@ -1694,11 +1705,21 @@
 [data-design='agi'] .agi-h1 {
   font-family: var(--agi-font);
   font-weight: 600;
-  font-size: clamp(2.25rem, 6vw, 5rem);
+  font-size: 2.25rem;
   line-height: 1.04;
-  letter-spacing: -0.034em;
+  letter-spacing: 0;
   color: var(--agi-ink);
   margin: 0;
+}
+@media (min-width: 600px) {
+  [data-design='agi'] .agi-h1 {
+    font-size: 3.25rem;
+  }
+}
+@media (min-width: 960px) {
+  [data-design='agi'] .agi-h1 {
+    font-size: 5rem;
+  }
 }
 [data-design='agi'] .agi-h1-line {
   display: block;
@@ -1764,12 +1785,22 @@
 [data-design='agi'] .agi-page-h1 {
   font-family: var(--agi-font);
   font-weight: 600;
-  font-size: clamp(2rem, 5vw, 3.75rem);
+  font-size: 2rem;
   line-height: 1.04;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
   color: var(--agi-ink);
   margin: 0;
   max-width: 22ch;
+}
+@media (min-width: 600px) {
+  [data-design='agi'] .agi-page-h1 {
+    font-size: 2.75rem;
+  }
+}
+@media (min-width: 960px) {
+  [data-design='agi'] .agi-page-h1 {
+    font-size: 3.75rem;
+  }
 }
 [data-design='agi'] .agi-page-lede {
   margin: 22px 0 0;
