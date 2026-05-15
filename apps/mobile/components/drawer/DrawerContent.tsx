@@ -148,19 +148,27 @@ export function DrawerContent(_props: DrawerContentComponentProps) {
             <Pressable
               key={item.key}
               onPress={() => handleNavPress(item.route)}
-              className="flex-row items-center gap-3 px-3 py-2.5 rounded-lg"
+              className="flex-row items-center gap-3 px-3 rounded-lg"
               style={{
-                backgroundColor: active ? `${colors.teal}15` : 'transparent',
+                height: 40,
+                backgroundColor: active ? colors.surfaceHover : 'transparent',
               }}
               accessibilityLabel={item.label}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
             >
-              <Icon size={20} color={active ? colors.teal : colors.textSecondary} />
+              <Icon
+                size={18}
+                strokeWidth={1.75}
+                color={active ? colors.teal : colors.textSecondary}
+              />
               <Text
-                className="text-[15px] font-medium"
+                numberOfLines={1}
                 style={{
-                  color: active ? colors.teal : colors.textPrimary,
+                  fontSize: 14,
+                  fontWeight: active ? '500' : '400',
+                  color: active ? colors.textPrimary : colors.textSecondary,
+                  flex: 1,
                 }}
               >
                 {item.label}
@@ -185,23 +193,35 @@ export function DrawerContent(_props: DrawerContentComponentProps) {
             Recents
           </Text>
           <View className="gap-0.5">
-            {recentConversations.map((conv) => (
-              <Pressable
-                key={conv.id}
-                onPress={() => handleConversationPress(conv.id)}
-                className="px-3 py-2 rounded-lg active:bg-white/5"
-                accessibilityLabel={`Open conversation: ${conv.title}`}
-                accessibilityRole="button"
-              >
-                <Text
-                  className="text-[13px]"
-                  style={{ color: colors.textSecondary }}
-                  numberOfLines={1}
+            {recentConversations.map((conv) => {
+              const activeConv = pathname.includes(conv.id);
+              return (
+                <Pressable
+                  key={conv.id}
+                  onPress={() => handleConversationPress(conv.id)}
+                  style={{
+                    height: 32,
+                    paddingHorizontal: 12,
+                    borderRadius: 6,
+                    justifyContent: 'center',
+                    backgroundColor: activeConv ? colors.surfaceHover : 'transparent',
+                  }}
+                  accessibilityLabel={`Open conversation: ${conv.title}`}
+                  accessibilityRole="button"
                 >
-                  {conv.title}
-                </Text>
-              </Pressable>
-            ))}
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      fontSize: 13,
+                      color: activeConv ? colors.textPrimary : colors.textSecondary,
+                      fontWeight: activeConv ? '500' : '400',
+                    }}
+                  >
+                    {conv.title}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
         </View>
       )}
