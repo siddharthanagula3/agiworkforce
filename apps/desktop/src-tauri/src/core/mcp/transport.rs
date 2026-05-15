@@ -1053,7 +1053,13 @@ impl HttpSseTransport {
         );
 
         // Build HTTP client for JSON-RPC requests (with overall request timeout)
+        // `mut` is only needed in debug builds where verify_ssl=false flows through.
+        #[cfg(debug_assertions)]
         let mut client_builder = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(config.timeout_secs))
+            .connect_timeout(std::time::Duration::from_secs(SSE_CONNECT_TIMEOUT_SECS));
+        #[cfg(not(debug_assertions))]
+        let client_builder = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(config.timeout_secs))
             .connect_timeout(std::time::Duration::from_secs(SSE_CONNECT_TIMEOUT_SECS));
 
@@ -1065,7 +1071,12 @@ impl HttpSseTransport {
         //   that accept TCP but never send headers or go silent between chunks.
         //   This does NOT kill healthy SSE streams because each SSE chunk (including
         //   server heartbeats) counts as a read and resets the timer.
+        #[cfg(debug_assertions)]
         let mut sse_client_builder = reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(SSE_CONNECT_TIMEOUT_SECS))
+            .read_timeout(std::time::Duration::from_secs(SSE_STREAM_IDLE_TIMEOUT_SECS));
+        #[cfg(not(debug_assertions))]
+        let sse_client_builder = reqwest::Client::builder()
             .connect_timeout(std::time::Duration::from_secs(SSE_CONNECT_TIMEOUT_SECS))
             .read_timeout(std::time::Duration::from_secs(SSE_STREAM_IDLE_TIMEOUT_SECS));
 
@@ -1098,40 +1109,45 @@ impl HttpSseTransport {
             // 127.0.0.1 cannot reach this branch because `host_str()` returns
             // the literal hostname, not the resolved IP. DNS rebinding does
             // not apply here.
-            let is_localhost = if let Ok(parsed) = url::Url::parse(&config.url) {
-                matches!(
-                    parsed.host_str(),
-                    Some("localhost") | Some("127.0.0.1") | Some("::1")
-                )
-            } else {
-                false
-            };
+            //
+            // Release builds never reach here — the #[cfg(not(debug_assertions))]
+            // block above returns early before this point.
+            #[cfg(debug_assertions)]
+            {
+                let is_localhost = if let Ok(parsed) = url::Url::parse(&config.url) {
+                    matches!(
+                        parsed.host_str(),
+                        Some("localhost") | Some("127.0.0.1") | Some("::1")
+                    )
+                } else {
+                    false
+                };
 
-            if !is_localhost {
-                tracing::error!(
-                    "[MCP HTTP Transport] Refusing to disable SSL verification for remote server '{}' at {}. \
-                     SSL verification can only be disabled for localhost connections.",
-                    server_name,
-                    config.url
+                if !is_localhost {
+                    tracing::error!(
+                        "[MCP HTTP Transport] Refusing to disable SSL verification for remote server '{}' at {}. \
+                         SSL verification can only be disabled for localhost connections.",
+                        server_name,
+                        config.url
+                    );
+                    return Err(McpError::ConnectionError(
+                        "SSL verification cannot be disabled for remote servers. \
+                         Only localhost (127.0.0.1, ::1) connections may bypass SSL verification."
+                            .to_string(),
+                    ));
+                }
+
+                tracing::warn!(
+                    "[MCP HTTP Transport] SSL certificate verification DISABLED for local server '{}' (debug build). \
+                     This is acceptable for local development with self-signed certificates.",
+                    server_name
                 );
-                return Err(McpError::ConnectionError(
-                    "SSL verification cannot be disabled for remote servers. \
-                     Only localhost (127.0.0.1, ::1) connections may bypass SSL verification."
-                        .to_string(),
-                ));
+                // SECURITY: Certificate verification bypass is ONLY reached after
+                // localhost guard. Remote servers are rejected before reaching this point.
+                client_builder = client_builder.danger_accept_invalid_certs(true); // lgtm[rust/disabled-certificate-check]
+                sse_client_builder = sse_client_builder.danger_accept_invalid_certs(true);
+                // lgtm[rust/disabled-certificate-check]
             }
-
-            tracing::warn!(
-                "[MCP HTTP Transport] SSL certificate verification DISABLED for local server '{}' (debug build). \
-                 This is acceptable for local development with self-signed certificates.",
-                server_name
-            );
-            // SECURITY: Certificate verification bypass is ONLY reached after the
-            // release-build refusal above + localhost guard. Remote servers
-            // and release builds are rejected before reaching this point.
-            client_builder = client_builder.danger_accept_invalid_certs(true); // lgtm[rust/disabled-certificate-check]
-            sse_client_builder = sse_client_builder.danger_accept_invalid_certs(true);
-            // lgtm[rust/disabled-certificate-check]
         }
 
         let client = client_builder.build().map_err(|e| {
