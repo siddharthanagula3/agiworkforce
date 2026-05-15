@@ -9,10 +9,10 @@ import { View, ScrollView, Pressable, TextInput, Platform, Alert } from 'react-n
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Slider from '@react-native-community/slider';
-import { ArrowLeft, Check } from 'lucide-react-native';
+import { ArrowLeft, Check, Sun, Moon, Monitor } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { useSettingsStore, type ThemeMode } from '@/stores/settingsStore';
 import { colors } from '@/lib/theme';
 
 // ---------------------------------------------------------------------------
@@ -108,6 +108,61 @@ function StyleSlider({
 }
 
 // ---------------------------------------------------------------------------
+// Theme segmented control
+// ---------------------------------------------------------------------------
+
+const THEME_OPTIONS: { mode: ThemeMode; label: string; Icon: typeof Sun }[] = [
+  { mode: 'light', label: 'Light', Icon: Sun },
+  { mode: 'dark', label: 'Dark', Icon: Moon },
+  { mode: 'system', label: 'System', Icon: Monitor },
+];
+
+function ThemeSegmentedControl({
+  value,
+  onChange,
+}: {
+  value: ThemeMode;
+  onChange: (mode: ThemeMode) => void;
+}) {
+  return (
+    <View className="gap-2">
+      <Text className="text-sm text-white/60">Appearance</Text>
+      <View className="flex-row gap-2">
+        {THEME_OPTIONS.map(({ mode, label, Icon }) => {
+          const selected = value === mode;
+          return (
+            <Pressable
+              key={mode}
+              onPress={() => onChange(mode)}
+              className="flex-1 items-center gap-1.5 py-2.5 rounded-xl"
+              style={{
+                backgroundColor: selected ? 'rgba(33,128,141,0.15)' : 'rgba(255,255,255,0.04)',
+                borderWidth: 1,
+                borderColor: selected ? 'rgba(33,128,141,0.3)' : 'rgba(255,255,255,0.08)',
+              }}
+              accessibilityLabel={label}
+              accessibilityRole="radio"
+              accessibilityState={{ selected }}
+            >
+              <Icon size={16} color={selected ? colors.teal : colors.textMuted} />
+              <Text
+                className="text-xs"
+                style={{ color: selected ? colors.teal : colors.textSecondary }}
+              >
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Text className="text-[11px] text-white/30 leading-4">
+        Light mode is coming soon — preference is saved but UI is currently dark only.
+      </Text>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------
 
@@ -115,6 +170,8 @@ export default function PersonalizationScreen() {
   const router = useRouter();
   const personalization = useSettingsStore((s) => s.personalization);
   const setPersonalization = useSettingsStore((s) => s.setPersonalization);
+  const themeMode = useSettingsStore((s) => s.themeMode);
+  const setThemeMode = useSettingsStore((s) => s.setThemeMode);
 
   // Local editing state — commit on Save
   const [fullName, setFullName] = useState(personalization.fullName);
@@ -240,6 +297,16 @@ export default function PersonalizationScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Theme */}
+        <View>
+          <Text className="text-[11px] text-white/40 uppercase tracking-wider font-semibold mb-3 px-1">
+            Theme
+          </Text>
+          <Card>
+            <ThemeSegmentedControl value={themeMode} onChange={setThemeMode} />
+          </Card>
+        </View>
+
         {/* Text Fields */}
         <Card className="gap-4 mt-2">
           <LabeledInput
