@@ -9,9 +9,10 @@ import { Text } from '@/components/ui/text';
 import { PlatformCard } from '@/components/messaging/PlatformCard';
 import { PlatformSetupSheet } from '@/components/messaging/PlatformSetupSheet';
 import { useMessagingStore, type MessagingPlatform } from '@/stores/messagingStore';
-import { colors } from '@/lib/theme';
+import { useThemeColors } from '@/hooks/useTheme';
 
 export default function MessagingScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
   const setupSheetRef = useRef<GorhomBottomSheet>(null);
 

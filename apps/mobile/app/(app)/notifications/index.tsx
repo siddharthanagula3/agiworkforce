@@ -34,7 +34,7 @@ import {
   type NotificationCenterItem,
   type NotificationPriority,
 } from '@/services/notifications';
-import { colors } from '@/lib/theme';
+import { useThemeColors } from '@/hooks/useTheme';
 
 // ---------------------------------------------------------------------------
 // Priority Icon
@@ -124,7 +124,7 @@ function NotificationItem({ item, onPress, onMarkRead }: NotificationItemProps) 
                 {item.body}
               </Text>
             </View>
-            <ChevronRight size={14} color={colors.textMuted} style={{ marginTop: 2 }} />
+            <ChevronRight size={14} color="rgba(255,255,255,0.3)" style={{ marginTop: 2 }} />
           </View>
 
           {/* Footer row: priority badge + time + mark read */}
@@ -156,6 +156,7 @@ function NotificationItem({ item, onPress, onMarkRead }: NotificationItemProps) 
 // ---------------------------------------------------------------------------
 
 export default function NotificationCenterScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
   const { items, unreadCount, markRead, markAllRead, clear } = useNotificationCenter();
 
