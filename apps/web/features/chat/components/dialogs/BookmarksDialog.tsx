@@ -247,8 +247,9 @@ export function BookmarksDialog({ open, onOpenChange }: BookmarksDialogProps) {
                           setEditNote(bookmark.note || '');
                         }}
                         title="Edit note"
+                        aria-label="Edit bookmark note"
                       >
-                        <Edit className="h-3.5 w-3.5" />
+                        <Edit className="h-3.5 w-3.5" aria-hidden="true" />
                       </Button>
                       <Button
                         variant="ghost"
@@ -256,8 +257,9 @@ export function BookmarksDialog({ open, onOpenChange }: BookmarksDialogProps) {
                         className="h-7 w-7 text-destructive hover:text-destructive"
                         onClick={() => handleRemoveBookmark(bookmark.messageId)}
                         title="Remove bookmark"
+                        aria-label="Remove bookmark"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                       </Button>
                     </div>
                   </div>

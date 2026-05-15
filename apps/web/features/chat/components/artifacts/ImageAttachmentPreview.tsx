@@ -116,8 +116,9 @@ export function ImageAttachmentPreview({ attachments, className }: ImageAttachme
                       handleDownload(attachment);
                     }}
                     title="Download"
+                    aria-label={`Download ${attachment.name}`}
                   >
-                    <Download className="h-3 w-3" />
+                    <Download className="h-3 w-3" aria-hidden="true" />
                   </Button>
                   <Button
                     variant="ghost"
@@ -128,8 +129,9 @@ export function ImageAttachmentPreview({ attachments, className }: ImageAttachme
                       window.open(attachment.url, '_blank');
                     }}
                     title="Open in new tab"
+                    aria-label={`Open ${attachment.name} in new tab`}
                   >
-                    <ExternalLink className="h-3 w-3" />
+                    <ExternalLink className="h-3 w-3" aria-hidden="true" />
                   </Button>
                 </div>
               </div>
