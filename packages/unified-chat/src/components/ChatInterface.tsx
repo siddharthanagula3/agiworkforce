@@ -441,7 +441,6 @@ export function ChatInterface({
         {/* Input area — ALWAYS at bottom in natural document flow.
             Never position:fixed. Never teleported. */}
         <div className="shrink-0 px-4 pb-2">
-          {!hasMessages && <QuickChips onChipClick={handleChipClick} />}
           <ChatInput
             onSend={handleSend}
             onStop={stopGeneration}
@@ -454,6 +453,8 @@ export function ChatInterface({
             conversationId={activeConversationId}
             projectId={null}
           />
+          {/* Sample-prompt chips below composer per design-spec §8 */}
+          {!hasMessages && <QuickChips onChipClick={handleChipClick} />}
           <Disclaimer variant={disclaimerVariant} />
         </div>
       </div>
