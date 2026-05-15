@@ -4,6 +4,7 @@
 //      node esbuild.js --production (minified, no sourcemaps)
 
 const esbuild = require('esbuild');
+const fs = require('fs');
 const path = require('path');
 
 const isWatch = process.argv.includes('--watch');
@@ -35,6 +36,16 @@ const buildOptions = {
   mainFields: ['main', 'module'],
 };
 
+function copyCodiconAssets() {
+  const codiconSrc = path.join(__dirname, 'node_modules', '@vscode', 'codicons', 'dist');
+  const codiconDst = path.join(__dirname, 'out', 'codicons');
+  if (!fs.existsSync(codiconSrc)) return;
+  fs.mkdirSync(codiconDst, { recursive: true });
+  for (const file of fs.readdirSync(codiconSrc)) {
+    fs.copyFileSync(path.join(codiconSrc, file), path.join(codiconDst, file));
+  }
+}
+
 async function build() {
   try {
     if (isWatch) {
@@ -48,6 +59,7 @@ async function build() {
         result.errors.forEach((e) => console.error(e));
         process.exit(1);
       }
+      copyCodiconAssets();
       const mode = isProduction ? 'production' : 'development';
       console.log(`[esbuild] Build complete (${mode})`);
     }
