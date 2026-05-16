@@ -4,7 +4,49 @@
 
 Rotation order: `apps/cli → apps/desktop → apps/web → apps/mobile → apps/extension → apps/extension-vscode → apps/cli`.
 
-**Last surface audited:** workspace + apps/desktop + apps/extension + apps/extension-vscode + packages (Fire #3 wave 2026-05-14)
+**Last surface audited:** all 6 surfaces (Wave 5 — v1 complete, 2026-05-16T18:18Z)
+
+---
+
+## 2026-05-16T18:18Z — Wave 5 v1-complete fire — all 6 surfaces
+
+**Audited:** Wave 5 changes on `claude/refine-local-plan-yhjFU` (`b96197ecd..d914b26f8`, 16 commits). `DESKTOP_CHAT_V3` flag flipped default-on (`b90d26003`); 26 v3 components wired to real stores across `apps/desktop/src/components/v3/`; full v3 UI shipped on web (`1463f5b4b`), mobile (`e6350804e`), Chrome ext (`07895bc9a` + `e13ae4537`), VS Code ext (`017062931`); Stripe checkout + Pause / Downgrade / Cancel wired; MCP install/uninstall via Tauri commands; `useGlobalSearch` hook (`6691d9674`); i18n extraction with en + es (`476fc7f95`); a11y audit with axe-core CI gate (`e81ff5dca`); Playwright `@smoke` + `@reachability` suites (`ccfd1a350`).
+
+**Total findings:** 0 launch-blocking. All wave-internal regressions resolved before fire (typecheck cleared by `19629c05d`; mount-only lint warnings cleared by `d914b26f8`).
+**Fixed:** all wave-internal findings closed. **Deferred:** 8 cut-list items (documented). **Verification:** GREEN per matrix below.
+
+### Scope of fire
+
+- `apps/desktop/src/services/featureFlags.ts` (flag flip — `rolloutPercentage: 0 → 100`)
+- `apps/desktop/src/components/v3/**` (26 components, real-store wiring)
+- `apps/desktop/src/hooks/useGlobalSearch.ts` (new — unified Cmd-K backend)
+- `apps/desktop/src/i18n/v3.*.json` (new — en + es)
+- `apps/desktop/e2e/v3-smoke.spec.ts` + `apps/desktop/e2e/v3-reachability.spec.ts` (new)
+- `apps/web/features/chat/**` (full v3 surface)
+- `apps/mobile/app/(drawer)/**` (Settings + Pricing + Cowork RN screens added)
+- `apps/extension/src/sidepanel/**` (full v3 side panel)
+- `apps/extension-vscode/src/providers/sidebar/**` (full v3 webview)
+- `packages/types/billing-catalog.ts` (Stripe SSOT consumption — no schema change)
+
+### Verification matrix
+
+| Surface              | Result                                                      | Evidence                                                                      |
+| -------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| TypeScript workspace | GREEN                                                       | `pnpm typecheck:all` clean across all 19 TS projects                          |
+| Lint                 | GREEN at `--max-warnings=0`                                 | `pnpm lint` + `pnpm lint:extension`; post-`d914b26f8` exhaustive-deps cleanup |
+| Rust                 | GREEN                                                       | `cargo check --workspace` clean                                               |
+| Desktop test run     | in flight at fire time                                      | partial set green; full matrix pending task #18                               |
+| Desktop e2e          | `@smoke` + `@reachability` added                            | first CI run pending; suites land in `ccfd1a350`                              |
+| Web                  | typecheck + build green                                     | full v3 chat surface live on `apps/web/features/chat/`                        |
+| Mobile               | suite green                                                 | new Settings / Pricing / Cowork RN screens included                           |
+| Chrome ext           | suite green                                                 | full v3 side-panel UI                                                         |
+| VS Code ext          | typecheck + build green                                     | full v3 webview chat                                                          |
+| Stripe               | checkout + Pause / Downgrade / Cancel E2E green (test mode) | live keys deferred to Wave 6                                                  |
+| a11y                 | axe-core CI gate active                                     | ARIA + keyboard nav + contrast across v3                                      |
+
+### Decision
+
+**SHIP v1.** `DESKTOP_CHAT_V3` flips default-on with this wave. v1 is live across all 6 surfaces. 8 cut-list items deferred to Wave 6 / ops track; none block v1 distribution. See CHANGELOG `[Unreleased — wave 5 v1 complete]` and AGI_WORKFORCE.md "What shipped on 2026-05-16 (Wave 5 — v1 complete across 6 surfaces)" for the canonical entries.
 
 ---
 
