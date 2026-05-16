@@ -284,7 +284,7 @@ export const useConnectorsStore = create<ConnectorsState>()(
               oauthStartedAt: {},
               _oauthTimers: {},
               connectorPermissions: {},
-            } as ConnectorsState;
+            } as unknown as ConnectorsState;
           }
           if (version < 4) {
             return {
