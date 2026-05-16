@@ -1584,7 +1584,7 @@ function showRecordingIndicator(): void {
   style.textContent = `
     .agi-rec-dot {
       display:inline-flex;align-items:center;gap:6px;
-      background:rgba(30,10,10,0.88);color:#f87171;
+      background:rgba(30,10,10,0.88);color:#ef4444;
       font-family:-apple-system,BlinkMacSystemFont,sans-serif;
       font-size:12px;font-weight:600;letter-spacing:0.04em;
       padding:5px 12px;border-radius:20px;
@@ -1593,7 +1593,7 @@ function showRecordingIndicator(): void {
     }
     .agi-rec-circle {
       width:9px;height:9px;border-radius:50%;
-      background:#ef4444;flex-shrink:0;
+      background:#ef4444;flex-shrink:0;/* --agi-ext-danger */
       animation:agi-rec-pulse 1.1s ease-in-out infinite;
     }
     @keyframes agi-rec-pulse {
@@ -1847,7 +1847,7 @@ function addAutomationIndicator(): void {
     .agi-indicator {
       width: 40px;
       height: 40px;
-      background: radial-gradient(circle, #667eea 0%, #764ba2 100%);
+      background: radial-gradient(circle, #21808d 0%, #da7756 100%);
       border-radius: 50%;
       display: flex;
       align-items: center;
@@ -1855,7 +1855,7 @@ function addAutomationIndicator(): void {
       color: white;
       font-size: 20px;
       cursor: pointer;
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      box-shadow: 0 4px 12px rgba(33, 128, 141, 0.3);
       font-family: system-ui, -apple-system, sans-serif;
       user-select: none;
       pointer-events: all;
@@ -1886,8 +1886,8 @@ function updateIndicatorStatus(): void {
   if (indicator) {
     const isConnected = automationState.connectionStatus === 'connected';
     indicator.style.background = isConnected
-      ? 'radial-gradient(circle, #28a745 0%, #20c997 100%)'
-      : 'radial-gradient(circle, #dc3545 0%, #fd7e14 100%)';
+      ? 'radial-gradient(circle, #16a34a 0%, #22c55e 100%)'
+      : 'radial-gradient(circle, #dc2626 0%, #ef4444 100%)';
   }
 }
 
