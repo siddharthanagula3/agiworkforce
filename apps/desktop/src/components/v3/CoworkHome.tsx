@@ -1,16 +1,9 @@
 import { Check } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { cn } from '../../lib/utils';
+import { useAgentTaskStore, type AgentTaskStatus } from '../../stores/agentTaskStore';
 
 type TaskStatus = 'running' | 'pending' | 'done' | 'blocked';
-
-interface CoworkTask {
-  id: string;
-  title: string;
-  status: TaskStatus;
-  ago: string;
-  proj?: string;
-}
 
 interface OnboardingItem {
   title: string;
@@ -18,28 +11,23 @@ interface OnboardingItem {
   done: boolean;
 }
 
-const COWORK_TASKS: CoworkTask[] = [
-  {
-    id: 't1',
-    title: 'Summarize investor updates and flag blockers',
-    status: 'running',
-    ago: '2 min ago',
-    proj: 'Investor digest',
-  },
-  {
-    id: 't2',
-    title: 'Triage incoming support tickets by priority',
-    status: 'running',
-    ago: '8 min ago',
-    proj: 'Customer support',
-  },
-  {
-    id: 't3',
-    title: 'Draft follow-up email to Series A prospects',
-    status: 'pending',
-    ago: 'Queued',
-  },
-];
+function agentStatusToCowork(status: AgentTaskStatus): TaskStatus {
+  if (status === 'running' || status === 'recovering') return 'running';
+  if (status === 'pending' || status === 'paused') return 'pending';
+  if (status === 'completed') return 'done';
+  return 'blocked';
+}
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
 
 const COWORK_ONBOARDING: OnboardingItem[] = [
   {
@@ -83,11 +71,33 @@ export function CoworkHome() {
   const [showOnboarding, setShowOnboarding] = useState(true);
   const [draft, setDraft] = useState('');
 
-  const active = COWORK_TASKS.filter((t) => t.status === 'running');
-  const pending = COWORK_TASKS.filter((t) => t.status === 'pending').slice(0, 1);
+  const { tasks, fetchTasks, submitGoal, loading } = useAgentTaskStore((s) => ({
+    tasks: s.tasks,
+    fetchTasks: s.fetchTasks,
+    submitGoal: s.submitGoal,
+    loading: s.loading,
+  }));
+
+  useEffect(() => {
+    void fetchTasks();
+  }, [fetchTasks]);
+
+  const activeTasks = tasks
+    .filter((t) => t.status === 'running' || t.status === 'recovering')
+    .slice(0, 5);
+  const pendingTasks = tasks
+    .filter((t) => t.status === 'pending' || t.status === 'paused')
+    .slice(0, 1);
 
   function markDone(i: number) {
     setOnboarding((prev) => prev.map((o, idx) => (idx === i ? { ...o, done: true } : o)));
+  }
+
+  async function handleStartTask() {
+    const goal = draft.trim();
+    if (!goal) return;
+    setDraft('');
+    await submitGoal(goal);
   }
 
   return (
@@ -121,7 +131,8 @@ export function CoworkHome() {
               <button
                 type="button"
                 className="rounded-lg bg-teal-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-400 disabled:opacity-40"
-                disabled={!draft.trim()}
+                disabled={!draft.trim() || loading}
+                onClick={() => void handleStartTask()}
               >
                 Start task
               </button>
@@ -135,29 +146,25 @@ export function CoworkHome() {
         </div>
 
         {/* Active task list */}
-        {(active.length > 0 || pending.length > 0) && (
+        {(activeTasks.length > 0 || pendingTasks.length > 0) && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-white/40">
                 Active
               </span>
-              <button type="button" className="text-xs text-white/30 hover:text-white/60">
-                Clear active
-              </button>
             </div>
             <div className="space-y-1">
-              {[...active, ...pending].map((t) => (
+              {[...activeTasks, ...pendingTasks].map((t) => (
                 <button
                   key={t.id}
                   type="button"
                   className="flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-white/5"
                 >
-                  <StatusDot status={t.status} />
+                  <StatusDot status={agentStatusToCowork(t.status)} />
                   <div className="min-w-0">
-                    <div className="truncate text-sm text-white/85">{t.title}</div>
+                    <div className="truncate text-sm text-white/85">{t.goal}</div>
                     <div className="mt-0.5 text-xs text-white/35">
-                      {t.ago}
-                      {t.proj && <span> · {t.proj}</span>}
+                      {t.status === 'pending' ? 'Queued' : timeAgo(t.createdAt)}
                     </div>
                   </div>
                 </button>
@@ -166,7 +173,7 @@ export function CoworkHome() {
           </div>
         )}
 
-        {/* Onboarding checklist */}
+        {/* Onboarding checklist — static UI hint copy, not from store */}
         {showOnboarding && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
