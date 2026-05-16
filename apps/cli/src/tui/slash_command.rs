@@ -12,6 +12,26 @@ use strum_macros::IntoStaticStr;
 pub enum SlashCommand {
     // DO NOT ALPHA-SORT! Enum order is presentation order in the popup, so
     // more frequently used commands should be listed first.
+    //
+    // v3 PlusMenu group (matches desktop PlusMenu order: Files · Screenshot ·
+    // GitHub · Skills · Connectors · Plugins · Research · Web · Style).
+    // These appear at the top of the slash-command popup for discoverability.
+    #[strum(serialize = "files")]
+    Files,
+    #[strum(serialize = "screenshot")]
+    Screenshot,
+    #[strum(serialize = "github")]
+    Github,
+    Skills,
+    Apps,
+    Plugins,
+    #[strum(serialize = "research")]
+    Research,
+    #[strum(serialize = "web")]
+    Web,
+    #[strum(serialize = "style")]
+    Style,
+    // ── Core workflow ─────────────────────────────────────────────────────
     Model,
     Fast,
     Approvals,
@@ -21,7 +41,6 @@ pub enum SlashCommand {
     #[strum(serialize = "sandbox-add-read-dir")]
     SandboxReadRoot,
     Experimental,
-    Skills,
     Review,
     Rename,
     New,
@@ -42,8 +61,6 @@ pub enum SlashCommand {
     Statusline,
     Theme,
     Mcp,
-    Apps,
-    Plugins,
     Logout,
     Quit,
     Exit,
@@ -70,6 +87,12 @@ impl SlashCommand {
     /// User-visible description shown in the popup.
     pub fn description(self) -> &'static str {
         match self {
+            SlashCommand::Files => "attach files or images from your filesystem",
+            SlashCommand::Screenshot => "capture a screenshot and attach it",
+            SlashCommand::Github => "attach a GitHub issue, PR, or file",
+            SlashCommand::Research => "deep-research a topic with web sources",
+            SlashCommand::Web => "toggle web search for this turn",
+            SlashCommand::Style => "apply a writing or response style",
             SlashCommand::Feedback => "send logs to maintainers",
             SlashCommand::New => "start a new chat during a conversation",
             SlashCommand::Init => "create an AGENTS.md file with instructions for AGI Workforce",
@@ -110,7 +133,7 @@ impl SlashCommand {
             }
             SlashCommand::Experimental => "toggle experimental features",
             SlashCommand::Mcp => "list configured MCP tools",
-            SlashCommand::Apps => "manage apps",
+            SlashCommand::Apps => "manage apps and connectors",
             SlashCommand::Plugins => "browse plugins",
             SlashCommand::Logout => "log out of AGI Workforce",
             SlashCommand::Rollout => "print the rollout file path",
@@ -133,6 +156,9 @@ impl SlashCommand {
                 | SlashCommand::Plan
                 | SlashCommand::Fast
                 | SlashCommand::SandboxReadRoot
+                | SlashCommand::Research
+                | SlashCommand::Github
+                | SlashCommand::Style
         )
     }
 
@@ -163,6 +189,12 @@ impl SlashCommand {
             | SlashCommand::Copy
             | SlashCommand::Rename
             | SlashCommand::Mention
+            | SlashCommand::Files
+            | SlashCommand::Screenshot
+            | SlashCommand::Github
+            | SlashCommand::Research
+            | SlashCommand::Web
+            | SlashCommand::Style
             | SlashCommand::Skills
             | SlashCommand::Status
             | SlashCommand::DebugConfig
