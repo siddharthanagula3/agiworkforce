@@ -4,6 +4,7 @@ import { SidebarProvider } from '../providers/sidebarProvider';
 import { ConversationStore } from '../storage/conversationStore';
 import { ConversationTreeProvider } from '../providers/conversationTreeProvider';
 import { ContextPanelProvider, setContextPanelInstance } from '../providers/contextPanelProvider';
+import { type DiffDecorationProvider } from '../providers/diffDecorationProvider';
 import { WorkspaceIndexer } from '../services/workspaceIndexer';
 
 export interface ChatState {
@@ -13,7 +14,10 @@ export interface ChatState {
   contextPanelProvider: ContextPanelProvider;
 }
 
-export function setupChat(context: vscode.ExtensionContext): ChatState {
+export function setupChat(
+  context: vscode.ExtensionContext,
+  diffDecorationProvider?: DiffDecorationProvider,
+): ChatState {
   const conversationStore = new ConversationStore(context);
   const conversationTreeProvider = new ConversationTreeProvider(conversationStore);
 
@@ -31,6 +35,7 @@ export function setupChat(context: vscode.ExtensionContext): ChatState {
     conversationStore,
     conversationTreeProvider,
     context.workspaceState,
+    diffDecorationProvider,
   );
 
   context.subscriptions.push(

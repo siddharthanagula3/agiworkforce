@@ -1286,10 +1286,15 @@ export function getWebviewContent(
       }
     }
 
-    // Model pill opens model picker
+    // Model pill opens inline model popover (v3)
     if (modelPill) {
-      modelPill.addEventListener('click', () => {
-        vscode.postMessage({ type: 'openModelPicker' });
+      modelPill.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (modelPopoverEl && modelPopoverEl.classList.contains('open')) {
+          closeModelPopover();
+        } else {
+          vscode.postMessage({ type: 'openModelPopover' });
+        }
       });
     }
 

@@ -19,8 +19,13 @@ import {
 import { getVSCodeSendQueue } from '../../services/sendQueue';
 import { type ConversationStore } from '../../storage/conversationStore';
 import { type ConversationTreeProvider } from '../conversationTreeProvider';
+import { type DiffDecorationProvider } from '../diffDecorationProvider';
 import { getContextBuilder } from '../../services/contextBuilder';
-import { normalizeConfiguredModelId, getModelProviderInfo } from '../../services/modelConstants';
+import {
+  normalizeConfiguredModelId,
+  getModelProviderInfo,
+  buildGroupedQuickPickItems,
+} from '../../services/modelConstants';
 import {
   PROVIDER_DISPLAY,
   type AgentMode,
@@ -57,11 +62,15 @@ export type WebviewToExtMessage =
   | { type: 'setEffort'; payload: { effort: Effort } }
   | { type: 'dismissUsageMeter' }
   | { type: 'restoreUsageMeter' }
-  | { type: 'upgradeClicked' };
+  | { type: 'upgradeClicked' }
+  | { type: 'openModelPopover' }
+  | { type: 'selectModel'; payload: { modelId: string } }
+  | { type: 'proposeDiff'; payload: { code: string; language: string } }
+  | { type: 'openFilePicker' };
 
 export type ExtToWebviewMessage =
   | { type: 'token'; payload: { text: string } }
-  | { type: 'done' }
+  | { type: 'done'; payload?: { model?: string; providerLabel?: string; brandColor?: string } }
   | { type: 'error'; payload: { message: string } }
   | { type: 'apiKeyStatus'; payload: { hasKey: boolean } }
   | { type: 'model'; payload: { model: string } }
@@ -74,7 +83,18 @@ export type ExtToWebviewMessage =
   | { type: 'usageMeter'; payload: UsageMeterWebviewPayload }
   | { type: 'toolCallStart'; payload: { toolUseId: string; name: string } }
   | { type: 'toolCallDelta'; payload: { toolUseId: string; deltaJson: string } }
-  | { type: 'toolCallEnd'; payload: { toolUseId: string } };
+  | { type: 'toolCallEnd'; payload: { toolUseId: string } }
+  | {
+      type: 'modelPickerData';
+      payload: {
+        groups: Array<{
+          label: string;
+          models: Array<{ id: string; label: string; description: string }>;
+        }>;
+        currentModel: string;
+      };
+    }
+  | { type: 'diffProposed'; payload: { sessionId: string; filePath: string } };
 
 export interface UsageMeterWebviewPayload {
   source: UsageMeter['source'];
@@ -111,6 +131,7 @@ export class ChatStateManager {
     private readonly _conversationStore?: ConversationStore,
     private readonly _conversationTreeProvider?: ConversationTreeProvider,
     private readonly _workspaceState?: vscode.Memento,
+    private readonly _diffDecorationProvider?: DiffDecorationProvider,
   ) {
     this._activeModel = Config.model();
     if (this._workspaceState !== undefined) {
@@ -340,6 +361,128 @@ export class ChatStateManager {
         await vscode.env.openExternal(vscode.Uri.parse('https://agiworkforce.com/pricing'));
         break;
       }
+
+      // ── v3: inline model popover ──────────────────────────────────────────────
+      case 'openModelPopover': {
+        const currentModel = normalizeConfiguredModelId(
+          vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
+        );
+        const allItems = buildGroupedQuickPickItems();
+        const groups: Array<{
+          label: string;
+          models: Array<{ id: string; label: string; description: string }>;
+        }> = [];
+        let currentGroup:
+          | { label: string; models: Array<{ id: string; label: string; description: string }> }
+          | undefined;
+
+        for (const item of allItems) {
+          if (item.kind === vscode.QuickPickItemKind.Separator) {
+            if (item.label !== '') {
+              currentGroup = { label: item.label, models: [] };
+              groups.push(currentGroup);
+            }
+          } else if (item.modelId !== undefined) {
+            if (currentGroup === undefined) {
+              currentGroup = { label: 'Models', models: [] };
+              groups.push(currentGroup);
+            }
+            currentGroup.models.push({
+              id: item.modelId,
+              label: item.label.replace(/^\$\([^)]+\)\s*/, ''),
+              description: item.description ?? '',
+            });
+          }
+        }
+
+        this._post({ type: 'modelPickerData', payload: { groups, currentModel } });
+        break;
+      }
+
+      // ── v3: model selection from inline popover ───────────────────────────────
+      case 'selectModel': {
+        const { modelId } = (msg as { type: 'selectModel'; payload: { modelId: string } }).payload;
+        const normalized = normalizeConfiguredModelId(modelId);
+        const tier = await resolveTier(this._context);
+        const guardResult = guardProviderSwitch(this._activeModel, normalized, tier);
+        if (guardResult === 'upgrade-required') {
+          this._post({
+            type: 'error',
+            payload: {
+              message:
+                'Upgrade to Pro+ to switch between providers mid-conversation. ' +
+                'Visit agiworkforce.com/pricing to upgrade.',
+            },
+          });
+          break;
+        }
+        await vscode.workspace
+          .getConfiguration('agiWorkforce')
+          .update('model', normalized, vscode.ConfigurationTarget.Global);
+        this._activeModel = normalized;
+        this._post({ type: 'model', payload: { model: normalized } });
+        this._postProviderBadge(normalized);
+        this._post({
+          type: 'effortChanged',
+          payload: {
+            effort: this._effort ?? Config.agentEffort(),
+            supportsEffort: this.modelSupportsEffort(normalized),
+          },
+        });
+        break;
+      }
+
+      // ── v3: open file picker to attach files ──────────────────────────────────
+      case 'openFilePicker': {
+        const uris = await vscode.window.showOpenDialog({
+          canSelectMany: true,
+          openLabel: 'Add to Context',
+          title: 'Attach File to Chat',
+        });
+        if (uris !== undefined && uris.length > 0) {
+          for (const uri of uris) {
+            await vscode.commands.executeCommand('agi-workforce.addToContext', uri);
+          }
+        }
+        break;
+      }
+
+      // ── v3: apply code block to active editor via diff decoration ─────────────
+      case 'proposeDiff': {
+        const { code, language } = (
+          msg as { type: 'proposeDiff'; payload: { code: string; language: string } }
+        ).payload;
+        const editor = vscode.window.activeTextEditor;
+        if (editor === undefined) {
+          vscode.window.showWarningMessage(
+            'Open a file in the editor to apply this code suggestion.',
+          );
+          break;
+        }
+        if (this._diffDecorationProvider === undefined) {
+          vscode.window.showWarningMessage(
+            'Diff provider is not available. Please reload the extension.',
+          );
+          break;
+        }
+        const selection = editor.selection;
+        const range = selection.isEmpty
+          ? new vscode.Range(editor.selection.active, editor.selection.active)
+          : selection;
+        const originalText = selection.isEmpty ? '' : editor.document.getText(selection);
+        void language; // language recorded for future syntax-aware diffing
+        const session = this._diffDecorationProvider.showDiff(editor, originalText, code, range, {
+          filePath: vscode.workspace.asRelativePath(editor.document.uri),
+        });
+        this._post({
+          type: 'diffProposed',
+          payload: {
+            sessionId: session.id,
+            filePath: vscode.workspace.asRelativePath(editor.document.uri),
+          },
+        });
+        break;
+      }
     }
   }
 
@@ -523,7 +666,16 @@ export class ChatStateManager {
               role: 'assistant',
               content: full,
             });
-            this._post({ type: 'done' });
+
+            // v3 ProvenanceFooter — include model/provider in done payload
+            const resolvedModel = normalizeConfiguredModelId(
+              model ?? vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
+            );
+            const { providerLabel, brandColor } = getModelProviderInfo(resolvedModel);
+            this._post({
+              type: 'done',
+              payload: { model: resolvedModel, providerLabel, brandColor },
+            });
 
             if (
               this._conversationStore !== undefined &&
@@ -532,9 +684,7 @@ export class ChatStateManager {
               const userText = text;
               const conv = this._conversationStore.create(
                 userText.slice(0, 60).replace(/\n/g, ' '),
-                normalizeConfiguredModelId(
-                  model ?? vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
-                ),
+                resolvedModel,
               );
               const now = Date.now();
               conv.messages = this._conversationHistory

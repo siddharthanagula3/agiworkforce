@@ -63,12 +63,8 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   }
 
-  // ── 1. Chat participant + sidebar + conversation tree + context tree ─────────
-  const chatState = setupChat(context);
-  const { sidebarProvider, conversationStore, conversationTreeProvider, contextPanelProvider } =
-    chatState;
-
-  // ── 2. Code intelligence + diff + inline completion providers ────────────────
+  // ── 1. Code intelligence + diff + inline completion providers ────────────────
+  // Runs before chat setup so diffDecorationProvider is available for the sidebar.
   const providerState = setupProviders(context);
   const {
     diffDecorationProvider,
@@ -76,6 +72,11 @@ export function activate(context: vscode.ExtensionContext): void {
     syncCodeLensProvider,
     syncInlineCompletionProvider,
   } = providerState;
+
+  // ── 2. Chat participant + sidebar + conversation tree + context tree ─────────
+  const chatState = setupChat(context, diffDecorationProvider);
+  const { sidebarProvider, conversationStore, conversationTreeProvider, contextPanelProvider } =
+    chatState;
 
   // ── 3. Commands ──────────────────────────────────────────────────────────────
   setupCommands(context, {

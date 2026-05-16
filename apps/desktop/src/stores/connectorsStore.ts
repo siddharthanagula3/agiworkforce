@@ -7,6 +7,11 @@ import { CONNECTORS } from '../components/Connectors/connectorDefinitions';
 /** Duration (ms) before a pending OAuth flow is treated as timed out */
 const OAUTH_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
+export type ConnectorPermState = 'allow' | 'ask' | 'never';
+
+/** Persisted per-tool permission state: connectorId → toolName → PermState */
+export type ConnectorPermissions = Record<string, Record<string, ConnectorPermState>>;
+
 interface ConnectorsState {
   connectedIds: string[];
   loading: Record<string, boolean>;
@@ -17,6 +22,8 @@ interface ConnectorsState {
   oauthStartedAt: Record<string, number>;
   /** Timer IDs for OAuth timeouts, keyed by connector ID */
   _oauthTimers: Record<string, ReturnType<typeof setTimeout>>;
+  /** Per-tool permission state, persisted across sessions */
+  connectorPermissions: ConnectorPermissions;
 
   connect: (id: string) => Promise<void>;
   connectWithApiKey: (id: string, apiKey: string) => Promise<void>;
@@ -34,6 +41,14 @@ interface ConnectorsState {
   clearAllTimers: () => void;
   /** Full reset for logout — clears timers, state, and persisted data */
   resetOnLogout: () => void;
+  /** Set a single tool permission for a connector and persist it */
+  setToolPermission: (connectorId: string, toolName: string, state: ConnectorPermState) => void;
+  /** Get the current permission state for a connector tool */
+  getToolPermission: (
+    connectorId: string,
+    toolName: string,
+    defaultState: ConnectorPermState,
+  ) => ConnectorPermState;
 }
 
 export const useConnectorsStore = create<ConnectorsState>()(
@@ -46,6 +61,7 @@ export const useConnectorsStore = create<ConnectorsState>()(
         pendingOAuth: {},
         oauthStartedAt: {},
         _oauthTimers: {},
+        connectorPermissions: {},
 
         connect: async (id: string) => {
           set((state) => ({
@@ -213,6 +229,22 @@ export const useConnectorsStore = create<ConnectorsState>()(
           }));
         },
 
+        setToolPermission: (connectorId, toolName, state) => {
+          set((s) => ({
+            connectorPermissions: {
+              ...s.connectorPermissions,
+              [connectorId]: {
+                ...(s.connectorPermissions[connectorId] ?? {}),
+                [toolName]: state,
+              },
+            },
+          }));
+        },
+
+        getToolPermission: (connectorId, toolName, defaultState) => {
+          return get().connectorPermissions[connectorId]?.[toolName] ?? defaultState;
+        },
+
         clearAllTimers: () => {
           const timers = get()._oauthTimers;
           for (const timerId of Object.values(timers)) {
@@ -234,12 +266,13 @@ export const useConnectorsStore = create<ConnectorsState>()(
             pendingOAuth: {},
             oauthStartedAt: {},
             _oauthTimers: {},
+            connectorPermissions: {},
           });
         },
       }),
       {
         name: 'connectors-store',
-        version: 4,
+        version: 5,
         migrate: (persistedState, version) => {
           if (version < 3) {
             return {
@@ -250,14 +283,22 @@ export const useConnectorsStore = create<ConnectorsState>()(
               pendingOAuth: {},
               oauthStartedAt: {},
               _oauthTimers: {},
-            };
+              connectorPermissions: {},
+            } as ConnectorsState;
           }
           if (version < 4) {
             return {
               ...(persistedState as ConnectorsState),
               oauthStartedAt: {},
               _oauthTimers: {},
-            };
+              connectorPermissions: {},
+            } as ConnectorsState;
+          }
+          if (version < 5) {
+            return {
+              ...(persistedState as ConnectorsState),
+              connectorPermissions: {},
+            } as ConnectorsState;
           }
           return persistedState as ConnectorsState;
         },
@@ -268,6 +309,7 @@ export const useConnectorsStore = create<ConnectorsState>()(
           error: state.error,
           pendingOAuth: state.pendingOAuth,
           oauthStartedAt: state.oauthStartedAt,
+          connectorPermissions: state.connectorPermissions,
         }),
       },
     ),
