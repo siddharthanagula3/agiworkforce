@@ -43,6 +43,24 @@ export interface ChatMessage {
   artifacts?: Artifact[];
   isStreaming?: boolean;
   error?: string;
+  /**
+   * Routing provenance for this assistant message. When the model was chosen
+   * by the auto-router rather than the user, `source` is `'auto'` and the
+   * footer renders a trace ("Auto routed: <task> -> <model>") plus a button
+   * to pin the conversation to the resolved `pinModel` for future turns.
+   * Never carries a hardcoded model id — values flow from the router.
+   */
+  routing?: MessageRouting;
+}
+
+export interface MessageRouting {
+  source: 'manual' | 'auto';
+  /** Short human-readable reason the router picked this model. */
+  reason?: string;
+  /** Detected task label (e.g. 'code', 'image', 'research'). */
+  task?: string;
+  /** Model id to pin the conversation to when the user accepts the suggestion. */
+  pinModel?: string;
 }
 
 export interface Citation {
