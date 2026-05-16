@@ -108,7 +108,7 @@ describe('Onboarding', () => {
       fireEvent.press(getByLabelText('Sign in to existing account'));
 
       expect(mockStorageSet).toHaveBeenCalledWith('onboarding-done', 'true');
-      expect(mockReplace).toHaveBeenCalledWith('/(auth)/login');
+      expect(mockReplace).toHaveBeenCalledWith({ pathname: '/(auth)/login' });
     });
   });
 
@@ -190,7 +190,7 @@ describe('Onboarding', () => {
       fireEvent.press(getByText('Get Started'));
 
       expect(mockStorageSet).toHaveBeenCalledWith('onboarding-done', 'true');
-      expect(mockReplace).toHaveBeenCalledWith('/(auth)/login');
+      expect(mockReplace).toHaveBeenCalledWith({ pathname: '/(auth)/login' });
     });
   });
 
@@ -210,6 +210,6 @@ describe('Onboarding', () => {
 
     // Tapping "Get Started" on slide 3 finishes onboarding (no slide 4)
     fireEvent.press(getByText('Get Started'));
-    expect(mockReplace).toHaveBeenCalledWith('/(auth)/login');
+    expect(mockReplace).toHaveBeenCalledWith({ pathname: '/(auth)/login' });
   });
 });
