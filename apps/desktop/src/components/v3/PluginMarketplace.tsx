@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { X, Search, Wrench, Plug, Box, ChevronDown, Check, Settings } from 'lucide-react';
+import { useMcpServersStore } from '@/stores/mcp/mcpServersStore';
 
 interface PluginEntry {
   id: string;
@@ -151,17 +152,59 @@ export function PluginMarketplace({ onClose, onInstall, onOpenDetail }: PluginMa
   const [filterOpen, setFilterOpen] = useState(false);
   const [sort, setSort] = useState('Most installed');
   const [sortOpen, setSortOpen] = useState(false);
+  const [installingIds, setInstallingIds] = useState<Set<string>>(new Set());
+  const [installedOverrides, setInstalledOverrides] = useState<Set<string>>(new Set());
+  const [toast, setToast] = useState<string | null>(null);
+
+  const { installServer, servers, refreshServers } = useMcpServersStore();
+
+  useEffect(() => {
+    void refreshServers();
+  }, [refreshServers]);
+
+  const serverNames = useMemo(() => new Set(servers.map((s) => s.name)), [servers]);
+
+  function isInstalled(entry: PluginEntry): boolean {
+    if (serverNames.has(entry.id)) return true;
+    if (installedOverrides.has(entry.id)) return true;
+    return entry.installed;
+  }
+
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  }
+
+  async function handleInstall(entry: PluginEntry) {
+    if (isInstalled(entry) || installingIds.has(entry.id)) return;
+    setInstallingIds((prev) => new Set(prev).add(entry.id));
+    try {
+      await installServer(`mcp-${entry.id}`);
+      setInstalledOverrides((prev) => new Set(prev).add(entry.id));
+      showToast(`${entry.name} installed`);
+      onInstall?.(entry.id);
+    } catch {
+      showToast(`Failed to install ${entry.name}`);
+    } finally {
+      setInstallingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(entry.id);
+        return next;
+      });
+    }
+  }
 
   const filtered = useMemo(() => {
     let list = CATALOG.filter((p) => p.tab === tab);
-    if (filter === 'Installed') list = list.filter((p) => p.installed);
+    if (filter === 'Installed') list = list.filter((p) => isInstalled(p));
     else if (filter === 'Anthropic') list = list.filter((p) => p.author === 'Anthropic');
     else if (filter === 'Anthropic & Partners') list = list.filter((p) => p.author !== 'Community');
     else if (filter === 'Community') list = list.filter((p) => p.author === 'Community');
     if (q.trim()) list = list.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()));
     if (sort === 'A–Z') list = [...list].sort((a, b) => a.name.localeCompare(b.name));
     return list;
-  }, [tab, filter, sort, q]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, filter, sort, q, serverNames, installedOverrides]);
 
   const tabDefs = [
     { id: 'skill' as const, label: 'Skills', Icon: Wrench },
@@ -478,116 +521,152 @@ export function PluginMarketplace({ onClose, onInstall, onOpenDetail }: PluginMa
                 </div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-                  {filtered.map((p) => (
-                    <div
-                      key={p.id}
-                      onClick={() => onOpenDetail?.(p.id)}
-                      style={{
-                        border: '1px solid var(--border)',
-                        borderRadius: 'var(--radius)',
-                        background: 'var(--bg)',
-                        padding: '14px 14px 12px',
-                        cursor: 'pointer',
-                        position: 'relative',
-                      }}
-                    >
+                  {filtered.map((p) => {
+                    const installed = isInstalled(p);
+                    const installing = installingIds.has(p.id);
+                    return (
                       <div
+                        key={p.id}
+                        onClick={() => onOpenDetail?.(p.id)}
                         style={{
-                          display: 'flex',
-                          alignItems: 'flex-start',
-                          gap: 10,
-                          marginBottom: 8,
+                          border: '1px solid var(--border)',
+                          borderRadius: 'var(--radius)',
+                          background: 'var(--bg)',
+                          padding: '14px 14px 12px',
+                          cursor: 'pointer',
+                          position: 'relative',
                         }}
                       >
                         <div
                           style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: 8,
-                            background: p.color,
-                            flexShrink: 0,
                             display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
+                            alignItems: 'flex-start',
+                            gap: 10,
+                            marginBottom: 8,
                           }}
                         >
-                          <Box size={14} style={{ color: '#fff' }} />
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>
-                            {p.name}
-                          </div>
-                          <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
-                            {p.author}
-                            <span style={{ margin: '0 4px' }}>·</span>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-                              ↓ {p.installs}
-                            </span>
-                          </div>
-                        </div>
-                        {p.installed && (
-                          <span
+                          <div
                             style={{
-                              fontSize: 10,
-                              fontWeight: 600,
-                              color: 'var(--teal)',
-                              background: 'rgba(33,128,141,0.1)',
-                              padding: '2px 6px',
+                              width: 32,
+                              height: 32,
                               borderRadius: 8,
+                              background: p.color,
+                              flexShrink: 0,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
                             }}
                           >
-                            Installed
-                          </span>
-                        )}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                          }}
+                            <Box size={14} style={{ color: '#fff' }} />
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>
+                              {p.name}
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                              {p.author}
+                              <span style={{ margin: '0 4px' }}>·</span>
+                              <span
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}
+                              >
+                                ↓ {p.installs}
+                              </span>
+                            </div>
+                          </div>
+                          {installed && (
+                            <span
+                              style={{
+                                fontSize: 10,
+                                fontWeight: 600,
+                                color: 'var(--teal)',
+                                background: 'rgba(33,128,141,0.1)',
+                                padding: '2px 6px',
+                                borderRadius: 8,
+                              }}
+                            >
+                              Installed
+                            </span>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                            }}
+                            style={{
+                              border: 'none',
+                              background: 'transparent',
+                              cursor: 'pointer',
+                              color: 'var(--text-3)',
+                              padding: 2,
+                              display: 'flex',
+                            }}
+                          >
+                            <Settings size={13} />
+                          </button>
+                        </div>
+                        <p
                           style={{
-                            border: 'none',
-                            background: 'transparent',
-                            cursor: 'pointer',
-                            color: 'var(--text-3)',
-                            padding: 2,
-                            display: 'flex',
-                          }}
-                        >
-                          <Settings size={13} />
-                        </button>
-                      </div>
-                      <p
-                        style={{ margin: 0, fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5 }}
-                      >
-                        {p.desc}
-                      </p>
-                      {!p.installed && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onInstall?.(p.id);
-                          }}
-                          style={{
-                            marginTop: 10,
-                            padding: '5px 12px',
-                            border: '1px solid var(--border)',
-                            borderRadius: 'var(--radius)',
-                            background: 'transparent',
-                            color: 'var(--text-2)',
+                            margin: 0,
                             fontSize: 12,
-                            cursor: 'pointer',
+                            color: 'var(--text-3)',
+                            lineHeight: 1.5,
                           }}
                         >
-                          Install
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                          {p.desc}
+                        </p>
+                        {!installed && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleInstall(p);
+                            }}
+                            disabled={installing}
+                            style={{
+                              marginTop: 10,
+                              padding: '5px 12px',
+                              border: '1px solid var(--border)',
+                              borderRadius: 'var(--radius)',
+                              background: 'transparent',
+                              color: installing ? 'var(--text-3)' : 'var(--text-2)',
+                              fontSize: 12,
+                              cursor: installing ? 'not-allowed' : 'pointer',
+                              opacity: installing ? 0.7 : 1,
+                            }}
+                          >
+                            {installing ? 'Installing…' : 'Install'}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
           </main>
         </div>
       </div>
+
+      {/* Toast */}
+      {toast && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'var(--bg-elev)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius)',
+            padding: '8px 16px',
+            fontSize: 13,
+            color: 'var(--text-1)',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+            zIndex: 100,
+            pointerEvents: 'none',
+          }}
+        >
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
