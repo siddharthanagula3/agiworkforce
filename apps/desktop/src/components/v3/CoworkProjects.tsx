@@ -1,5 +1,7 @@
 import { Plus, Search } from 'lucide-react';
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useProjectStore, type Project } from '../../stores/projectStore';
 
 const PROJECT_COLORS = [
@@ -18,21 +20,22 @@ function projectColor(project: Project, index: number): string {
   return PROJECT_COLORS[index % PROJECT_COLORS.length] ?? '#21808d';
 }
 
-function timeAgo(iso: string): string {
+function timeAgo(iso: string, t: TFunction): string {
   const diff = Date.now() - new Date(iso).getTime();
   const s = Math.floor(diff / 1000);
-  if (s < 60) return 'just now';
+  if (s < 60) return t('time.justNow');
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
+  if (m < 60) return t('time.mAgoShort', { count: m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return t('time.hAgo', { count: h });
   const d = Math.floor(h / 24);
-  if (d === 1) return 'yesterday';
-  if (d < 7) return `${d} days ago`;
-  return `${Math.floor(d / 7)}w ago`;
+  if (d === 1) return t('sidebar.groups.yesterday').toLowerCase();
+  if (d < 7) return t('time.daysAgo', { count: d });
+  return t('time.weeksAgo', { count: Math.floor(d / 7) });
 }
 
 export function CoworkProjects() {
+  const { t } = useTranslation('v3');
   const { projects, isLoading, loadProjects } = useProjectStore((s) => ({
     projects: s.projects.filter((p) => !p.isArchived),
     isLoading: s.isLoading,
@@ -48,7 +51,9 @@ export function CoworkProjects() {
       <div className="mx-auto max-w-3xl px-6 py-8 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h1 className="font-serif text-xl font-medium text-white/90">Cowork projects</h1>
+          <h1 className="font-serif text-xl font-medium text-white/90">
+            {t('cowork.projects.title')}
+          </h1>
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -61,17 +66,17 @@ export function CoworkProjects() {
               className="flex items-center gap-1.5 rounded-lg bg-teal-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-400"
             >
               <Plus size={13} strokeWidth={2.4} />
-              New project
+              {t('cowork.projects.newProject')}
             </button>
           </div>
         </div>
 
         {/* Project grid */}
         {isLoading && projects.length === 0 ? (
-          <div className="py-8 text-center text-sm text-white/30">Loading projects...</div>
+          <div className="py-8 text-center text-sm text-white/30">{t('common.loading')}</div>
         ) : projects.length === 0 ? (
           <div className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-white/30">
-            No projects yet. Click &ldquo;New project&rdquo; to get started.
+            {t('cowork.projects.newProject')}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -95,9 +100,11 @@ export function CoworkProjects() {
                 )}
                 <div className="flex items-center justify-between pt-1 text-xs text-white/30">
                   <div className="flex items-center gap-1.5">
-                    <span>Updated {timeAgo(p.updatedAt)}</span>
+                    <span>{t('cowork.projects.updated', { when: timeAgo(p.updatedAt, t) })}</span>
                     <span className="text-white/20">·</span>
-                    <span>{p.conversationIds.length} sessions</span>
+                    <span>
+                      {t('cowork.projects.sessions', { count: p.conversationIds.length })}
+                    </span>
                   </div>
                 </div>
               </button>

@@ -1,25 +1,27 @@
 import { Check, ChevronRight, Loader2, Clock } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { cn } from '../../lib/utils';
 import { useAgentTaskStore, type AgentTask } from '../../stores/agentTaskStore';
 
 type OutputStatus = 'queued' | 'running' | 'done';
 
-function taskToOutputStatus(t: AgentTask): OutputStatus {
-  if (t.status === 'running' || t.status === 'recovering') return 'running';
-  if (t.status === 'completed') return 'done';
+function taskToOutputStatus(task: AgentTask): OutputStatus {
+  if (task.status === 'running' || task.status === 'recovering') return 'running';
+  if (task.status === 'completed') return 'done';
   return 'queued';
 }
 
-function timeAgo(iso: string): string {
+function timeAgo(iso: string, t: TFunction): string {
   const diff = Date.now() - new Date(iso).getTime();
   const s = Math.floor(diff / 1000);
-  if (s < 60) return 'just now';
+  if (s < 60) return t('time.justNow');
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m} min ago`;
+  if (m < 60) return t('time.minAgo', { count: m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
+  if (h < 24) return t('time.hAgo', { count: h });
+  return t('time.dAgo', { count: Math.floor(h / 24) });
 }
 
 function IosToggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
@@ -45,11 +47,12 @@ function IosToggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
 }
 
 function StatusChip({ status }: { status: OutputStatus }) {
+  const { t } = useTranslation('v3');
   if (status === 'running') {
     return (
       <span className="flex items-center gap-1.5 text-xs text-teal-400">
         <Loader2 size={11} className="animate-spin" />
-        Running
+        {t('common.running')}
       </span>
     );
   }
@@ -57,19 +60,20 @@ function StatusChip({ status }: { status: OutputStatus }) {
     return (
       <span className="flex items-center gap-1.5 text-xs text-emerald-400">
         <Check size={11} strokeWidth={2.6} />
-        Done
+        {t('common.done')}
       </span>
     );
   }
   return (
     <span className="flex items-center gap-1.5 text-xs text-white/35">
       <Clock size={11} />
-      Queued
+      {t('common.queued')}
     </span>
   );
 }
 
 export function CoworkDispatch() {
+  const { t } = useTranslation('v3');
   const [acceptTasks, setAcceptTasks] = useState(true);
   const [requireConfirm, setRequireConfirm] = useState(true);
 
@@ -91,14 +95,14 @@ export function CoworkDispatch() {
       <div className="mx-auto max-w-2xl px-6 py-8 space-y-6">
         {/* Header */}
         <div className="flex items-center gap-3">
-          <h1 className="font-serif text-xl font-medium text-white/90">Dispatch</h1>
+          <h1 className="font-serif text-xl font-medium text-white/90">
+            {t('cowork.dispatch.title')}
+          </h1>
           <span className="rounded-full bg-teal-500/15 px-2 py-0.5 text-xs font-medium text-teal-400">
-            Beta
+            {t('common.beta')}
           </span>
         </div>
-        <p className="text-sm text-white/40">
-          Send tasks from your phone, run them on this Mac. Outputs land in Live artifacts.
-        </p>
+        <p className="text-sm text-white/40">{t('cowork.dispatch.subtitle')}</p>
 
         {/* Mobile CTA */}
         <div className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/5 px-4 py-4">
@@ -116,17 +120,18 @@ export function CoworkDispatch() {
             </svg>
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-white/90">Send from anywhere</div>
+            <div className="text-sm font-medium text-white/90">
+              {t('cowork.dispatch.sendFromAnywhere')}
+            </div>
             <div className="mt-0.5 text-xs text-white/40 leading-relaxed">
-              Dispatch a task from the mobile app, your wrist, or a shortcut. This Mac picks it up,
-              runs it, returns the artifact.
+              {t('cowork.dispatch.sendFromAnywhereDesc')}
             </div>
           </div>
           <button
             type="button"
             className="flex-shrink-0 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs text-white/70 hover:bg-white/10 hover:text-white/90"
           >
-            Get mobile app
+            {t('cowork.dispatch.getMobileApp')}
           </button>
         </div>
 
@@ -136,14 +141,14 @@ export function CoworkDispatch() {
             {
               on: acceptTasks,
               toggle: () => setAcceptTasks((v) => !v),
-              title: 'Accept dispatched tasks',
-              desc: "When off, your phone won't be able to dispatch work here.",
+              title: t('cowork.dispatch.acceptTasks'),
+              desc: t('cowork.dispatch.acceptTasksDesc'),
             },
             {
               on: requireConfirm,
               toggle: () => setRequireConfirm((v) => !v),
-              title: 'Require confirmation for writes',
-              desc: 'Anything that sends mail, runs SQL, or deploys waits for your tap.',
+              title: t('cowork.dispatch.requireConfirm'),
+              desc: t('cowork.dispatch.requireConfirmDesc'),
             },
           ].map((s, i) => (
             <div
@@ -161,10 +166,12 @@ export function CoworkDispatch() {
 
         {/* Outputs feed */}
         <div className="space-y-3">
-          <h2 className="font-serif text-base font-medium text-white/80">Outputs</h2>
+          <h2 className="font-serif text-base font-medium text-white/80">
+            {t('cowork.dispatch.outputs')}
+          </h2>
           {recentOutputs.length === 0 ? (
             <div className="rounded-xl border border-dashed border-white/10 px-4 py-6 text-center text-sm text-white/30">
-              No task outputs yet. Dispatch a task from the mobile app to get started.
+              {t('cowork.dispatch.noOutputs')}
             </div>
           ) : (
             <div className="space-y-1">
@@ -179,7 +186,7 @@ export function CoworkDispatch() {
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm text-white/85">{o.goal}</div>
                     <div className="mt-0.5 flex items-center gap-1.5 text-xs text-white/35">
-                      <span>{timeAgo(o.createdAt)}</span>
+                      <span>{timeAgo(o.createdAt, t)}</span>
                     </div>
                   </div>
                   <button type="button" className="flex-shrink-0 text-white/20 hover:text-white/60">

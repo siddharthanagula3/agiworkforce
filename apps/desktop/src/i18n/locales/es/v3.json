@@ -1,0 +1,382 @@
+{
+  "common": {
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "close": "Cerrar",
+    "refresh": "Actualizar",
+    "delete": "Eliminar",
+    "options": "Opciones",
+    "settings": "Configuración",
+    "search": "Buscar",
+    "loading": "Cargando…",
+    "enable": "Habilitar",
+    "disable": "Deshabilitar",
+    "enabled": "Habilitado",
+    "off": "Apagado",
+    "default": "Predeterminado",
+    "beta": "Beta",
+    "connected": "Conectado",
+    "manage": "Gestionar",
+    "untitled": "Sin título",
+    "showAll": "Mostrar todo",
+    "hide": "Ocultar",
+    "newFile": "Nuevo archivo",
+    "openExternally": "Abrir externamente",
+    "openArtifact": "Abrir artefacto",
+    "running": "Ejecutando",
+    "done": "Listo",
+    "queued": "En cola",
+    "paused": "Pausado",
+    "fresh": "Reciente",
+    "stale": "Antiguo",
+    "view": "Ver"
+  },
+  "sidebar": {
+    "expand": "Expandir barra lateral",
+    "collapse": "Contraer barra lateral",
+    "newChat": "Nuevo chat",
+    "newSession": "Nueva sesión",
+    "searchKbd": "Buscar (⌘K)",
+    "recents": "Recientes",
+    "groups": {
+      "lastHour": "Última hora",
+      "today": "Hoy",
+      "yesterday": "Ayer",
+      "pastWeek": "Semana pasada",
+      "pastMonth": "Mes pasado"
+    },
+    "modes": {
+      "chat": "Chat",
+      "cowork": "Cowork",
+      "code": "Código"
+    },
+    "nav": {
+      "projects": "Proyectos",
+      "artifacts": "Artefactos",
+      "customize": "Personalizar",
+      "scheduled": "Programado",
+      "liveArtifacts": "Artefactos en vivo",
+      "dispatch": "Despacho",
+      "routines": "Rutinas"
+    },
+    "account": "Cuenta"
+  },
+  "emptyChat": {
+    "greetMorning": "Buenos días, {{name}}",
+    "greetDay": "¿En qué puedo ayudarte, {{name}}?",
+    "greetNight": "Es de madrugada, {{name}}",
+    "fallbackName": "tú",
+    "chipPrompts": {
+      "code": "Ayúdame a escribir código para ",
+      "write": "Ayúdame a escribir ",
+      "research": "Investiga este tema en profundidad: ",
+      "image": "Crea una imagen de ",
+      "video": "Crea un video de ",
+      "computer": "Usa la computadora para ",
+      "learn": "Explícame esto: ",
+      "life": "Ayúdame con ",
+      "web": "Busca en la web "
+    }
+  },
+  "composer": {
+    "placeholder": "¿En qué puedo ayudarte hoy?",
+    "placeholderReply": "Responde o pregunta algo más…",
+    "inputAriaLabel": "Entrada de mensaje de chat",
+    "addAriaLabel": "Añadir archivos, skills, conectores…",
+    "modelAriaLabel": "Elegir modelo",
+    "voiceAriaLabel": "Configuración de voz",
+    "stopAriaLabel": "Detener generación",
+    "sendAriaLabel": "Enviar mensaje",
+    "adaptive": "Adaptativo",
+    "standard": "Estándar",
+    "disclaimer": "La IA puede cometer errores. Verifica las respuestas."
+  },
+  "plusMenu": {
+    "addFiles": "Añadir archivos o fotos",
+    "addProject": "Añadir al proyecto",
+    "addGithub": "Añadir desde GitHub",
+    "skills": "Skills",
+    "connectors": "Conectores",
+    "plugins": "Plugins",
+    "research": "Investigar",
+    "webSearch": "Búsqueda web",
+    "useStyle": "Usar estilo",
+    "browseAll": "Ver todos los plugins",
+    "manageSkills": "Gestionar skills",
+    "addConnector": "Añadir conector"
+  },
+  "modelPopover": {
+    "primary": {
+      "premium": "Más capaz para trabajos ambiciosos",
+      "balanced": "Trabajo diario receptivo",
+      "fast": "Más rápido y eficiente"
+    },
+    "groups": {
+      "olderAnthropic": "Anthropic antiguos",
+      "otherProviders": "Otros proveedores"
+    },
+    "tags": {
+      "local": "Local"
+    },
+    "thinking": "Pensamiento adaptativo",
+    "thinkingDesc": "Piensa para tareas más complejas",
+    "moreModels": "Más modelos"
+  },
+  "micSettings": {
+    "title": "Entrada de voz",
+    "source": "Fuente",
+    "loadingDevices": "Cargando dispositivos…",
+    "defaultMic": "Micrófono predeterminado",
+    "microphone": "Micrófono",
+    "holdToRecord": "Mantener para grabar",
+    "holdToRecordDesc": "Toca para empezar, toca para parar cuando esté apagado",
+    "autoTrim": "Recortar silencio automáticamente",
+    "autoTrimDesc": "Cortar pausas al inicio/final",
+    "footer": "En dispositivo · Whisper-small",
+    "settings": "Configuración"
+  },
+  "responseActions": {
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "helpful": "Útil",
+    "notHelpful": "No útil",
+    "regenerate": "Regenerar",
+    "branch": "Ramificar",
+    "branchConversation": "Ramificar esta conversación"
+  },
+  "thinking": {
+    "reasoned": "Razonado",
+    "reasonedFor": "Razonado durante {{seconds}}s"
+  },
+  "capModal": {
+    "title": "Has alcanzado tu límite de mensajes",
+    "subtitle": "Elige cómo continuar — cambia a un modelo más pequeño, recarga o espera a que se restablezca tu uso.",
+    "dismiss": "Descartar hasta el próximo reinicio",
+    "switchModel": "Cambiar a un modelo más pequeño",
+    "buyTopUp": "Comprar recarga",
+    "waitReset": "Esperar al reinicio"
+  },
+  "artifact": {
+    "title": "Artefacto",
+    "interactive": "interactivo",
+    "interactiveWithLang": "{{language}} · interactivo",
+    "noFiles": "Sin archivos",
+    "loadingArtifact": "Cargando artefacto…",
+    "notFound": "Artefacto no encontrado",
+    "emptyHint": "Abre un artefacto para previsualizarlo aquí",
+    "noArtifactSelected": "Ningún artefacto seleccionado",
+    "loading": "Cargando…",
+    "tabs": {
+      "preview": "Vista previa",
+      "code": "Código",
+      "share": "Compartir"
+    },
+    "shareTitle": "Compartir este artefacto",
+    "shareSubtitle": "Cualquiera con el enlace puede verlo, pero no ejecutar código. La conversación se mantiene privada.",
+    "provenance": "Se preserva la procedencia",
+    "provenanceDesc": "Los destinatarios ven qué modelo generó esto — sin suplantación.",
+    "htmlPreview": "Vista previa HTML",
+    "fileCount_one": "{{count}} archivo",
+    "fileCount_other": "{{count}} archivos",
+    "mcpManage": "Gestionar",
+    "mcpConnected": "Conectado:"
+  },
+  "search": {
+    "placeholder": "Buscar chats, proyectos, skills, conectores, configuración…",
+    "noMatches": "Sin coincidencias para \"{{query}}\"",
+    "noResults": "Sin resultados",
+    "esc": "esc",
+    "navigate": "navegar",
+    "open": "abrir",
+    "closeKbd": "cerrar",
+    "groups": {
+      "chats": "Chats",
+      "projects": "Proyectos",
+      "skills": "Skills",
+      "connectors": "Conectores",
+      "settings": "Configuración"
+    }
+  },
+  "accountMenu": {
+    "settings": "Configuración",
+    "language": "Idioma",
+    "privacySecurity": "Privacidad y seguridad",
+    "viewAllPlans": "Ver todos los planes",
+    "byokLocal": "BYOK y modelos locales",
+    "appsExtensions": "Apps y extensiones",
+    "giftAGI": "Regalar AGI",
+    "helpSupport": "Ayuda y soporte",
+    "logOut": "Cerrar sesión",
+    "accountFallback": "Cuenta"
+  },
+  "customize": {
+    "title": "Personalizar",
+    "subtitle": "Skills, conectores y plugins amplían lo que AGI puede hacer.",
+    "tabs": {
+      "skills": "Skills",
+      "connectors": "Conectores",
+      "plugins": "Plugins"
+    }
+  },
+  "skills": {
+    "searchPlaceholder": "Buscar skills",
+    "loading": "Cargando skills...",
+    "noneFound": "No se encontraron skills.",
+    "addSkill": "Añadir skill",
+    "noneInstalled": "Aún no hay skills instaladas.",
+    "breadcrumb": "Personalizar / Skills / {{name}}",
+    "allowedTools": "Herramientas permitidas",
+    "requirements": "Requisitos",
+    "binaries": "Binarios:",
+    "envVars": "Variables de entorno:",
+    "supportedOs": "SO compatibles",
+    "allOs": "Todos",
+    "category": "Categoría",
+    "edit": "Editar",
+    "viewSource": "Ver fuente",
+    "disableSkill": "Deshabilitar skill",
+    "enableSkill": "Habilitar skill"
+  },
+  "connectors": {
+    "connected": "Conectado",
+    "connectedDesc": "Permisos por herramienta para cada conector. AGI nunca usa acciones ⚠ Ask sin confirmación.",
+    "noneConnected": "Aún no hay conectores conectados.",
+    "notConnected": "No conectado",
+    "notConnectedDesc": "Añade un conector para dar a AGI acceso limitado a tus herramientas.",
+    "add": "Añadir",
+    "perm": {
+      "allow": "Permitir",
+      "ask": "Preguntar",
+      "never": "Nunca"
+    },
+    "tools": {
+      "readEmails": "Leer correos",
+      "readEmailsDesc": "Ver asunto, remitente y cuerpo",
+      "sendEmails": "Enviar correos",
+      "sendEmailsDesc": "Componer y enviar en tu nombre",
+      "deleteEmails": "Eliminar correos",
+      "deleteEmailsDesc": "Mover a la papelera",
+      "readDeployments": "Leer despliegues",
+      "readDeploymentsDesc": "Ver registros y estado de compilación",
+      "triggerDeploy": "Iniciar despliegue",
+      "triggerDeployDesc": "Iniciar un nuevo despliegue",
+      "readRepos": "Leer repositorios",
+      "readReposDesc": "Navegar código e issues",
+      "createPrs": "Crear PRs",
+      "createPrsDesc": "Abrir pull requests",
+      "pushCommits": "Subir commits",
+      "pushCommitsDesc": "Escribir en ramas",
+      "readEvents": "Leer eventos",
+      "readEventsDesc": "Ver tu agenda",
+      "createEvents": "Crear eventos",
+      "createEventsDesc": "Añadir eventos a tu calendario",
+      "readPages": "Leer páginas",
+      "readPagesDesc": "Ver y buscar páginas",
+      "editPages": "Editar páginas",
+      "editPagesDesc": "Actualizar contenido en tu workspace",
+      "readChannels": "Leer canales",
+      "readChannelsDesc": "Ver mensajes e información de canal",
+      "sendMessages": "Enviar mensajes",
+      "sendMessagesDesc": "Publicar en tu nombre",
+      "readIssues": "Leer issues",
+      "readIssuesDesc": "Ver issues y proyectos",
+      "createIssues": "Crear issues",
+      "createIssuesDesc": "Abrir nuevos issues",
+      "updateIssues": "Actualizar issues",
+      "updateIssuesDesc": "Editar estado y campos",
+      "readDataGeneric": "Leer datos",
+      "readDataGenericDesc": "Ver datos de {{name}}",
+      "writeDataGeneric": "Escribir datos",
+      "writeDataGenericDesc": "Modificar datos en {{name}}"
+    }
+  },
+  "plugins": {
+    "installed": "Plugins instalados",
+    "installedDesc": "Herramientas del servidor que AGI puede llamar mientras responde. Distintas de los conectores — los plugins no necesitan una cuenta.",
+    "featured": "Destacado en el directorio",
+    "browseAll": "Ver todos los plugins",
+    "loading": "Cargando...",
+    "emptyDirectory": "Explora el directorio para descubrir más plugins.",
+    "toolsAvailable": "{{count}} herramientas disponibles",
+    "mcpServer": "Servidor MCP",
+    "mcp": "MCP",
+    "builtIn": "Integrado",
+    "view": "Ver",
+    "card": {
+      "calc": "Calculadora",
+      "calcDesc": "Aritmética exacta sin errores matemáticos del LLM",
+      "py": "Sandbox Python",
+      "pyDesc": "Ejecutar Python en un contenedor aislado",
+      "img": "Generación de imágenes",
+      "imgDesc": "Creación de imágenes multi-proveedor (enrutado por nivel)",
+      "ts": "TypeScript REPL",
+      "tsDesc": "Ejecución de TS impulsada por Bun en un sandbox"
+    }
+  },
+  "cowork": {
+    "home": {
+      "headline": "Vamos a tachar algo de tu lista",
+      "learnLink": "Aprende a usar Cowork con seguridad.",
+      "placeholder": "¿En qué puedo ayudarte hoy?",
+      "startTask": "Iniciar tarea",
+      "kbdHint": "para iniciar una tarea y seguir",
+      "active": "Activo",
+      "clearActive": "Limpiar activo",
+      "onboardingTitle": "Conoce Cowork",
+      "onboarding": {
+        "startTitle": "Inicia tu primera tarea",
+        "startDesc": "Describe un trabajo recurrente arriba y deja que tu equipo de IA lo gestione.",
+        "connectTitle": "Conecta un proyecto",
+        "connectDesc": "Vincula un proyecto para dar contexto a las tareas — correos, docs, CRM, repo.",
+        "scheduleTitle": "Programa una tarea recurrente",
+        "scheduleDesc": "Ejecuta tareas automáticamente en un horario cron, incluso mientras duermes.",
+        "phoneTitle": "Envía una tarea desde tu teléfono",
+        "phoneDesc": "Instala la app móvil y despacha trabajo desde cualquier lugar vía Dispatch."
+      }
+    },
+    "dispatch": {
+      "title": "Despacho",
+      "subtitle": "Envía tareas desde tu teléfono, ejecútalas en este Mac. Los resultados aparecen en Artefactos en vivo.",
+      "sendFromAnywhere": "Envía desde cualquier lugar",
+      "sendFromAnywhereDesc": "Despacha una tarea desde la app móvil, tu muñeca o un atajo. Este Mac la recoge, ejecuta y devuelve el artefacto.",
+      "getMobileApp": "Obtener app móvil",
+      "acceptTasks": "Aceptar tareas despachadas",
+      "acceptTasksDesc": "Cuando está apagado, tu teléfono no podrá despachar trabajo aquí.",
+      "requireConfirm": "Requerir confirmación para escrituras",
+      "requireConfirmDesc": "Cualquier cosa que envíe correo, ejecute SQL o despliegue espera tu toque.",
+      "outputs": "Resultados",
+      "noOutputs": "Aún no hay resultados de tareas. Despacha una tarea desde la app móvil para empezar."
+    },
+    "artifacts": {
+      "title": "Artefactos en vivo",
+      "subtitle": "Resultados de tareas programadas. Refrescados en cada ejecución.",
+      "loading": "Cargando artefactos…",
+      "empty": "Aún no hay artefactos. Ejecuta una tarea programada para generar resultados."
+    },
+    "projects": {
+      "title": "Proyectos Cowork",
+      "newProject": "Nuevo proyecto",
+      "updated": "Actualizado {{when}}",
+      "sessions": "{{count}} sesiones"
+    },
+    "scheduled": {
+      "title": "Tareas programadas",
+      "scheduleNew": "Programar nueva tarea",
+      "keepAwake": "Mantener este Mac despierto para tareas programadas",
+      "keepAwakeDesc": "Cuando está activado, usa caffeinate para prevenir el sueño durante ejecuciones programadas. Conéctalo para tareas largas.",
+      "loading": "Cargando tareas programadas…",
+      "nextRun": "Próxima ejecución",
+      "paused": "Pausado",
+      "empty": "Aún no hay tareas programadas. Pulsa \"Programar nueva tarea\" para empezar."
+    }
+  },
+  "time": {
+    "justNow": "ahora mismo",
+    "minAgo": "hace {{count}} min",
+    "hAgo": "hace {{count}}h",
+    "dAgo": "hace {{count}}d",
+    "mAgoShort": "hace {{count}}m",
+    "daysAgo": "hace {{count}} días",
+    "weeksAgo": "hace {{count}} semanas"
+  }
+}

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Box, ExternalLink } from 'lucide-react';
 
 export interface InlineArtifactChipProps {
@@ -7,11 +8,12 @@ export interface InlineArtifactChipProps {
 }
 
 export function InlineArtifactChip({ title, meta, onOpen }: InlineArtifactChipProps) {
+  const { t } = useTranslation('v3');
   return (
     <button
       data-v3-artifact-chip=""
       onClick={onOpen}
-      title="Open artifact"
+      title={t('common.openArtifact')}
       style={{
         display: 'flex',
         alignItems: 'center',

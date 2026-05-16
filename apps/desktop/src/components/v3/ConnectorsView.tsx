@@ -1,4 +1,6 @@
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { Loader2, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useConnectorsStore, type ConnectorPermState } from '../../stores/connectorsStore';
@@ -8,8 +10,12 @@ import { CONNECTORS, type ConnectorDef } from '../Connectors/connectorDefinition
 
 const PERM_CYCLE: ConnectorPermState[] = ['allow', 'ask', 'never'];
 
-function permLabel(s: ConnectorPermState): string {
-  return s === 'allow' ? 'Allow' : s === 'ask' ? 'Ask' : 'Never';
+function permLabel(s: ConnectorPermState, t: TFunction): string {
+  return s === 'allow'
+    ? t('connectors.perm.allow')
+    : s === 'ask'
+      ? t('connectors.perm.ask')
+      : t('connectors.perm.never');
 }
 
 function permIcon(s: ConnectorPermState): string {
@@ -77,6 +83,7 @@ function defaultToolsForConnector(
 // ── ConnectorCard ─────────────────────────────────────────────────────────────
 
 function ConnectorCard({ connector }: { connector: ConnectorDef }) {
+  const { t } = useTranslation('v3');
   const { getToolPermission, setToolPermission } = useConnectorsStore();
   const tools = defaultToolsForConnector(connector);
 
@@ -117,7 +124,7 @@ function ConnectorCard({ connector }: { connector: ConnectorDef }) {
           </div>
         </div>
         <span className="text-[11px] font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
-          Connected
+          {t('common.connected')}
         </span>
       </div>
 
@@ -146,7 +153,7 @@ function ConnectorCard({ connector }: { connector: ConnectorDef }) {
                   permColors(state),
                 )}
               >
-                {permIcon(state)} {permLabel(state)}
+                {permIcon(state)} {permLabel(state, t)}
               </button>
             </div>
           );
@@ -159,6 +166,7 @@ function ConnectorCard({ connector }: { connector: ConnectorDef }) {
 // ── ConnectorsView ────────────────────────────────────────────────────────────
 
 export function ConnectorsView() {
+  const { t } = useTranslation('v3');
   const { connectedIds, fetchConnected, connect, isLoading } = useConnectorsStore();
 
   useEffect(() => {
@@ -174,17 +182,16 @@ export function ConnectorsView() {
     <div className="h-full overflow-y-auto px-6 py-5">
       <div className="mb-4">
         <h2 className="font-serif text-lg font-medium text-[var(--chat-text-primary,#1a1a1a)] mb-1">
-          Connected
+          {t('connectors.connected')}
         </h2>
         <p className="text-xs text-[var(--chat-text-tertiary,#9e9488)]">
-          Per-tool permissions for each connector. AGI never uses ⚠ Ask actions without
-          confirmation.
+          {t('connectors.connectedDesc')}
         </p>
       </div>
 
       {connectedConnectors.length === 0 ? (
         <p className="text-sm text-[var(--chat-text-tertiary,#9e9488)] mb-8">
-          No connectors connected yet.
+          {t('connectors.noneConnected')}
         </p>
       ) : (
         <div className="grid gap-3 grid-cols-1 xl:grid-cols-2 mb-8">
@@ -195,10 +202,10 @@ export function ConnectorsView() {
       )}
 
       <h2 className="font-serif text-lg font-medium text-[var(--chat-text-primary,#1a1a1a)] mb-1">
-        Not connected
+        {t('connectors.notConnected')}
       </h2>
       <p className="text-xs text-[var(--chat-text-tertiary,#9e9488)] mb-4">
-        Add a connector to give AGI scoped access to your tools.
+        {t('connectors.notConnectedDesc')}
       </p>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
@@ -242,7 +249,7 @@ export function ConnectorsView() {
                   <Loader2 size={10} className="animate-spin" />
                 ) : (
                   <>
-                    Add <Plus size={10} />
+                    {t('connectors.add')} <Plus size={10} />
                   </>
                 )}
               </div>

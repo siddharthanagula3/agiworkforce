@@ -1,5 +1,7 @@
 import { Copy, ExternalLink, File, RefreshCw, Search, Table } from 'lucide-react';
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { cn } from '../../lib/utils';
 import {
   useArtifactStore,
@@ -20,18 +22,18 @@ function KindIcon({ artifactType }: { artifactType: ArtifactType }) {
   return <File size={13} />;
 }
 
-function timeAgo(iso: string): string {
+function timeAgo(iso: string, t: TFunction): string {
   const diff = Date.now() - new Date(iso).getTime();
   const s = Math.floor(diff / 1000);
-  if (s < 60) return 'just now';
+  if (s < 60) return t('time.justNow');
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
+  if (m < 60) return t('time.mAgoShort', { count: m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return t('time.hAgo', { count: h });
   const d = Math.floor(h / 24);
-  if (d === 1) return 'yesterday';
-  if (d < 7) return `${d} days ago`;
-  return `${Math.floor(d / 7)} weeks ago`;
+  if (d === 1) return t('sidebar.groups.yesterday').toLowerCase();
+  if (d < 7) return t('time.daysAgo', { count: d });
+  return t('time.weeksAgo', { count: Math.floor(d / 7) });
 }
 
 function isFresh(summary: ArtifactSummary): boolean {
@@ -40,6 +42,7 @@ function isFresh(summary: ArtifactSummary): boolean {
 }
 
 export function CoworkArtifacts() {
+  const { t } = useTranslation('v3');
   const { summaries, isLoading, listPersistedArtifacts } = useArtifactStore((s) => ({
     summaries: s.summaries,
     isLoading: s.isLoading,
@@ -56,10 +59,10 @@ export function CoworkArtifacts() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-serif text-xl font-medium text-white/90">Live artifacts</h1>
-            <p className="mt-1 text-xs text-white/40">
-              Outputs from scheduled tasks. Refreshed on each run.
-            </p>
+            <h1 className="font-serif text-xl font-medium text-white/90">
+              {t('cowork.artifacts.title')}
+            </h1>
+            <p className="mt-1 text-xs text-white/40">{t('cowork.artifacts.subtitle')}</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -80,10 +83,12 @@ export function CoworkArtifacts() {
 
         {/* Artifact grid */}
         {isLoading && summaries.length === 0 ? (
-          <div className="py-8 text-center text-sm text-white/30">Loading artifacts...</div>
+          <div className="py-8 text-center text-sm text-white/30">
+            {t('cowork.artifacts.loading')}
+          </div>
         ) : summaries.length === 0 ? (
           <div className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-white/30">
-            No artifacts yet. Run a scheduled task to generate outputs.
+            {t('cowork.artifacts.empty')}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -115,7 +120,7 @@ export function CoworkArtifacts() {
                           fresh ? 'bg-teal-400' : 'bg-white/30',
                         )}
                       />
-                      {fresh ? 'Fresh' : 'Stale'}
+                      {fresh ? t('common.fresh') : t('common.stale')}
                     </span>
                   </div>
 
@@ -123,23 +128,23 @@ export function CoworkArtifacts() {
 
                   <div className="flex items-center gap-1.5 text-xs text-white/35">
                     <RefreshCw size={10} />
-                    <span className="truncate">{timeAgo(a.updated_at)}</span>
+                    <span className="truncate">{timeAgo(a.updated_at, t)}</span>
                   </div>
 
                   <div className="flex items-center justify-between pt-1">
-                    <span className="text-xs text-white/25">{timeAgo(a.created_at)}</span>
+                    <span className="text-xs text-white/25">{timeAgo(a.created_at, t)}</span>
                     <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                       <button
                         type="button"
                         className="flex h-5 w-5 items-center justify-center rounded text-white/30 hover:text-white/70"
-                        title="Copy"
+                        title={t('common.copy')}
                       >
                         <Copy size={11} />
                       </button>
                       <button
                         type="button"
                         className="flex h-5 w-5 items-center justify-center rounded text-white/30 hover:text-white/70"
-                        title="Open"
+                        title={t('search.open')}
                       >
                         <ExternalLink size={11} />
                       </button>

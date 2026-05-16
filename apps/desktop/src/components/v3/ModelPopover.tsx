@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, ChevronRight } from 'lucide-react';
 import { cn, useChatModelStore } from '@agiworkforce/unified-chat';
 import {
@@ -18,12 +19,12 @@ const PRIMARY_MODELS = [
       getTaskModelForProvider('anthropic', 'complex_reasoning') ??
       getProviderDefaultModel('anthropic') ??
       '',
-    label: 'Most capable for ambitious work',
+    labelKey: 'modelPopover.primary.premium',
   },
   {
     key: 'anthropic-balanced',
     getId: () => getProviderDefaultModel('anthropic') ?? '',
-    label: 'Responsive everyday work',
+    labelKey: 'modelPopover.primary.balanced',
   },
   {
     key: 'anthropic-fast',
@@ -31,7 +32,7 @@ const PRIMARY_MODELS = [
       getTaskModelForProvider('anthropic', 'fast_completion') ??
       getProviderDefaultModel('anthropic') ??
       '',
-    label: 'Fastest, most efficient',
+    labelKey: 'modelPopover.primary.fast',
   },
 ] as const;
 
@@ -41,7 +42,7 @@ const PRIMARY_MODELS = [
 // ---------------------------------------------------------------------------
 const MORE_GROUPS = [
   {
-    label: 'Older Anthropic',
+    labelKey: 'modelPopover.groups.olderAnthropic',
     items: [
       {
         key: 'anthropic-vision',
@@ -49,7 +50,7 @@ const MORE_GROUPS = [
           getTaskModelForProvider('anthropic', 'vision') ??
           getProviderDefaultModel('anthropic') ??
           '',
-        tag: undefined as string | undefined,
+        tagKey: undefined as string | undefined,
       },
       {
         key: 'anthropic-code',
@@ -57,32 +58,32 @@ const MORE_GROUPS = [
           getTaskModelForProvider('anthropic', 'code_generation') ??
           getProviderDefaultModel('anthropic') ??
           '',
-        tag: undefined as string | undefined,
+        tagKey: undefined as string | undefined,
       },
     ],
   },
   {
-    label: 'Other providers',
+    labelKey: 'modelPopover.groups.otherProviders',
     items: [
       {
         key: 'openai-default',
         getId: () => getProviderDefaultModel('openai') ?? '',
-        tag: undefined as string | undefined,
+        tagKey: undefined as string | undefined,
       },
       {
         key: 'google-default',
         getId: () => getProviderDefaultModel('google') ?? '',
-        tag: undefined as string | undefined,
+        tagKey: undefined as string | undefined,
       },
       {
         key: 'xai-default',
         getId: () => getProviderDefaultModel('xai') ?? '',
-        tag: undefined as string | undefined,
+        tagKey: undefined as string | undefined,
       },
       {
         key: 'moonshot-default',
         getId: () => getProviderDefaultModel('moonshot') ?? '',
-        tag: undefined as string | undefined,
+        tagKey: undefined as string | undefined,
       },
       {
         key: 'qwen-fast',
@@ -90,7 +91,7 @@ const MORE_GROUPS = [
           getTaskModelForProvider('qwen', 'fast_completion') ??
           getProviderDefaultModel('qwen') ??
           '',
-        tag: 'Local' as string | undefined,
+        tagKey: 'modelPopover.tags.local' as string | undefined,
       },
     ],
   },
@@ -101,6 +102,7 @@ export interface ModelPopoverProps {
 }
 
 export function ModelPopover({ onClose }: ModelPopoverProps) {
+  const { t } = useTranslation('v3');
   const selectedModelId = useChatModelStore((s) => s.selectedModelId);
   const selectModel = useChatModelStore((s) => s.selectModel);
   const thinkingEnabled = useChatModelStore((s) => s.thinkingEnabled);
@@ -174,7 +176,7 @@ export function ModelPopover({ onClose }: ModelPopoverProps) {
                 {resolveName(item.id)}
               </div>
               <div className="text-xs" style={{ color: 'var(--chat-text-muted)' }}>
-                {item.label}
+                {t(item.labelKey)}
               </div>
             </div>
             {selected && (
@@ -196,10 +198,10 @@ export function ModelPopover({ onClose }: ModelPopoverProps) {
       >
         <div className="flex-1">
           <div className="text-sm font-medium" style={{ color: 'var(--chat-text-primary)' }}>
-            Adaptive thinking
+            {t('modelPopover.thinking')}
           </div>
           <div className="text-xs" style={{ color: 'var(--chat-text-muted)' }}>
-            Thinks for more complex tasks
+            {t('modelPopover.thinkingDesc')}
           </div>
         </div>
         <IosToggle on={thinkingEnabled} onToggle={toggleThinking} />
@@ -214,7 +216,7 @@ export function ModelPopover({ onClose }: ModelPopoverProps) {
         style={{ color: 'var(--chat-text-secondary)' }}
         onClick={() => setMoreOpen((o) => !o)}
       >
-        <span className="flex-1 text-left">More models</span>
+        <span className="flex-1 text-left">{t('modelPopover.moreModels')}</span>
         <ChevronRight
           size={13}
           className={cn('transition-transform duration-150', moreOpen && 'rotate-90')}
@@ -235,12 +237,12 @@ export function ModelPopover({ onClose }: ModelPopoverProps) {
               });
             if (items.length === 0) return null;
             return (
-              <div key={group.label}>
+              <div key={group.labelKey}>
                 <div
                   className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider"
                   style={{ color: 'var(--chat-text-muted)' }}
                 >
-                  {group.label}
+                  {t(group.labelKey)}
                 </div>
                 {items.map((item) => {
                   const selected = selectedModelId === item.id;
@@ -261,7 +263,7 @@ export function ModelPopover({ onClose }: ModelPopoverProps) {
                       >
                         {resolveName(item.id)}
                       </span>
-                      {item.tag && (
+                      {item.tagKey && (
                         <span
                           className="rounded px-1.5 py-0.5 text-[10px] font-medium"
                           style={{
@@ -269,7 +271,7 @@ export function ModelPopover({ onClose }: ModelPopoverProps) {
                             color: 'var(--chat-text-muted)',
                           }}
                         >
-                          {item.tag}
+                          {t(item.tagKey)}
                         </span>
                       )}
                       {selected && (
