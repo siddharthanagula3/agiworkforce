@@ -41,6 +41,8 @@ import {
   FileImage,
   Zap,
   FileEdit,
+  Copy,
+  Square,
   renderIcon,
 } from './assets/icons';
 
@@ -407,11 +409,23 @@ function injectStyles(): void {
       text-align: center;
     }
     #sp-empty.hidden { display: none; }
+    #sp-empty-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 4px;
+    }
     #sp-empty-headline {
       font-size: 15px;
-      font-weight: 500;
-      color: var(--agi-ext-text-muted);
+      font-weight: 600;
+      color: var(--agi-ext-text);
       letter-spacing: -0.01em;
+    }
+    #sp-empty-subtext {
+      font-size: 11px;
+      color: var(--agi-ext-text-muted);
+      line-height: 1.5;
+      max-width: 200px;
     }
 
     /* ── Inline prompt chips under the composer (design-spec §8.2) ── */
@@ -499,12 +513,36 @@ function injectStyles(): void {
       border-color: var(--agi-ext-danger-border);
       color: var(--agi-ext-danger);
     }
+    /* ── Bubble action row (timestamp + copy) ── */
+    .sp-bubble-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-height: 16px;
+    }
+    .sp-msg-user .sp-bubble-actions { justify-content: flex-end; }
     .sp-timestamp {
       font-size: 10px;
       color: var(--agi-ext-text-muted);
       opacity: 0.5;
       padding: 0 3px;
     }
+    .sp-copy-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      color: var(--agi-ext-text-muted);
+      cursor: pointer;
+      padding: 2px;
+      border-radius: 3px;
+      opacity: 0;
+      transition: opacity 0.15s, color 0.15s, background 0.15s;
+    }
+    .sp-msg:hover .sp-copy-btn { opacity: 1; }
+    .sp-copy-btn:hover { color: var(--agi-ext-text); background: var(--agi-ext-hover); }
+    .sp-copy-btn.copied { color: var(--agi-ext-success); opacity: 1; }
 
     /* ── Markdown rendering inside assistant bubbles ── */
     .sp-bubble-assistant code {
@@ -963,6 +1001,8 @@ function injectStyles(): void {
     #sp-send-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); transform: scale(1.05); }
     #sp-send-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
     #sp-send-btn:disabled { background: var(--agi-ext-overlay); color: var(--agi-ext-border-strong); cursor: not-allowed; transform: none; }
+    #sp-send-btn[data-mode="stop"] { background: var(--agi-ext-danger); }
+    #sp-send-btn[data-mode="stop"]:hover { background: color-mix(in srgb, var(--agi-ext-danger) 80%, black); }
 
     /* ── Attachment + button and menu ── */
     .sp-attach-wrapper { position: relative; flex-shrink: 0; }
@@ -1613,10 +1653,33 @@ function buildBubble(msg: ChatMessage): HTMLElement {
     bubble.innerHTML = sanitizeHtml(renderMarkdown(msg.content));
   }
 
-  const ts = el('span', { class: 'sp-timestamp' }, formatTime(msg.timestamp));
-
   wrapper.appendChild(bubble);
-  wrapper.appendChild(ts);
+
+  // Action row: timestamp + copy button (assistant only)
+  const actionRow = el('div', { class: 'sp-bubble-actions' });
+  const ts = el('span', { class: 'sp-timestamp' }, formatTime(msg.timestamp));
+  actionRow.appendChild(ts);
+
+  if (!isUser) {
+    const copyBtn = el('button', {
+      class: 'sp-copy-btn',
+      title: 'Copy',
+      'aria-label': 'Copy response',
+    });
+    copyBtn.appendChild(renderIcon(Copy, 11));
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard
+        .writeText(msg.content)
+        .then(() => {
+          copyBtn.classList.add('copied');
+          setTimeout(() => copyBtn.classList.remove('copied'), 1500);
+        })
+        .catch(() => {});
+    });
+    actionRow.appendChild(copyBtn);
+  }
+
+  wrapper.appendChild(actionRow);
   return wrapper;
 }
 
@@ -1765,10 +1828,33 @@ function buildBubbleWithTools(msg: ChatMessage): HTMLElement {
     }
   }
 
+  const actionRow = document.createElement('div');
+  actionRow.className = 'sp-bubble-actions';
   const ts = document.createElement('span');
   ts.className = 'sp-timestamp';
   ts.textContent = formatTime(msg.timestamp);
-  wrapper.appendChild(ts);
+  actionRow.appendChild(ts);
+
+  if (msg.role === 'assistant') {
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'sp-copy-btn';
+    copyBtn.title = 'Copy';
+    copyBtn.setAttribute('aria-label', 'Copy response');
+    copyBtn.appendChild(renderIcon(Copy, 11));
+    copyBtn.addEventListener('click', () => {
+      const text = textParts.join('').trim();
+      navigator.clipboard
+        .writeText(text || msg.content)
+        .then(() => {
+          copyBtn.classList.add('copied');
+          setTimeout(() => copyBtn.classList.remove('copied'), 1500);
+        })
+        .catch(() => {});
+    });
+    actionRow.appendChild(copyBtn);
+  }
+
+  wrapper.appendChild(actionRow);
   return wrapper;
 }
 
@@ -2146,7 +2232,19 @@ function updateModelBadge(modelId: string): void {
 function updateSendButton(): void {
   const btn = document.getElementById('sp-send-btn') as HTMLButtonElement | null;
   if (!btn) return;
-  btn.disabled = _ctx.isStreaming;
+  if (_ctx.isStreaming) {
+    btn.disabled = false;
+    btn.setAttribute('data-mode', 'stop');
+    btn.title = 'Stop generating';
+    clearChildren(btn);
+    btn.appendChild(renderIcon(Square, 14));
+  } else {
+    btn.disabled = false;
+    btn.setAttribute('data-mode', 'send');
+    btn.title = 'Send';
+    clearChildren(btn);
+    btn.appendChild(renderIcon(ArrowUp, 16));
+  }
 }
 
 function updateAttachmentPreview(): void {
@@ -2868,7 +2966,24 @@ function buildUI(): void {
   const msgsArea = el('div', { id: 'sp-messages' });
   // #sp-empty: composer-first empty state (design-spec §8); hidden when messages present
   const emptyState = el('div', { id: 'sp-empty' });
-  emptyState.appendChild(el('div', { id: 'sp-empty-headline' }, 'Ask about this page'));
+  const emptyIcon = el('div', { id: 'sp-empty-icon' });
+  emptyIcon.innerHTML = `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" width="40" height="40" aria-hidden="true">
+    <rect width="40" height="40" rx="10" fill="url(#emGrad)" opacity="0.18"/>
+    <circle cx="20" cy="15" r="5" stroke="url(#emGrad)" stroke-width="1.75"/>
+    <path d="M10 32c0-5.523 4.477-8.5 10-8.5s10 2.977 10 8.5" stroke="url(#emGrad)" stroke-width="1.75" stroke-linecap="round"/>
+    <defs><linearGradient id="emGrad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#21808d"/><stop offset="1" stop-color="#da7756"/>
+    </linearGradient></defs>
+  </svg>`;
+  emptyState.appendChild(emptyIcon);
+  emptyState.appendChild(el('div', { id: 'sp-empty-headline' }, 'What can I help with?'));
+  emptyState.appendChild(
+    el(
+      'div',
+      { id: 'sp-empty-subtext' },
+      'Ask about this page, summarize content, or start a conversation.',
+    ),
+  );
   msgsArea.appendChild(emptyState);
 
   const blockedState = el('div', { id: 'sp-blocked' });
@@ -3491,9 +3606,21 @@ function buildUI(): void {
     }
   });
 
-  const sendBtn = el('button', { id: 'sp-send-btn', title: 'Send (Cmd+Enter)' });
-  sendBtn.appendChild(renderIcon(ArrowUp, 14));
+  const sendBtn = el('button', {
+    id: 'sp-send-btn',
+    title: 'Send (Cmd+Enter)',
+    'data-mode': 'send',
+  });
+  sendBtn.appendChild(renderIcon(ArrowUp, 16));
   sendBtn.addEventListener('click', () => {
+    if (sendBtn.getAttribute('data-mode') === 'stop') {
+      // Cancel the active stream
+      if (_ctx.currentStreamId) {
+        chrome.runtime.sendMessage({ type: 'CANCEL_STREAM', id: _ctx.currentStreamId });
+      }
+      handleStreamError(_ctx.currentStreamId ?? 'cancelled', 'Cancelled.');
+      return;
+    }
     const text = inputEl.value;
     inputEl.value = '';
     autoResizeInput(inputEl);
@@ -3983,6 +4110,8 @@ Promise.all([
       renderMessages();
     }
   }),
+  // Probe bridge status on init — updates connection pill if desktop is running
+  probeBridgeStatus(),
 ])
   .then(() => {
     // Check for pending chat from context menu (selection, summarize, explain, translate)
@@ -3992,6 +4121,29 @@ Promise.all([
     // Boot errors must not surface to the user, but log for debugging.
     console.error('[SidePanel] Boot initialization failed:', err);
   });
+
+async function probeBridgeStatus(): Promise<void> {
+  try {
+    const stored = await new Promise<string | undefined>((resolve) => {
+      chrome.storage.local.get({ agi_bridge_url: '' }, (items) => {
+        resolve((items['agi_bridge_url'] as string | undefined) || undefined);
+      });
+    });
+    const baseUrl = stored?.trim().replace(/\/$/, '') || 'http://localhost:8787';
+    const resp = await fetch(`${baseUrl}/v1/status`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(3000),
+    });
+    if (resp.ok) {
+      if (!_ctx.isConnected) {
+        _ctx.isConnected = true;
+        updateConnectionStatus();
+      }
+    }
+  } catch {
+    // Bridge not running — leave connection status as-is
+  }
+}
 
 function checkPendingChat(): void {
   chrome.storage.session.get('agi_pending_chat', (result) => {
