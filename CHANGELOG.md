@@ -2,6 +2,74 @@
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased — wave 4 frontend rebuild] — 2026-05-16
+
+**20 commits** (`ea104d1b3..6af5e3004` on `claude/refine-local-plan-yhjFU`, landing as PR #366) shipping the v3 desktop chat shell, cross-surface design-token parity, the v3 Pricing UI, and a brand-locked design system. Plan SSOT: `~/.claude/plans/robust-whistling-crane.md` (replaces the 9 pre-v3 plans archived under `docs/archive/2026-05-16-pre-v3/`). Audit fire at `AUDIT_LOG.md` 2026-05-16T08:49Z.
+
+### Added
+
+- **Feature-flagged v3 desktop chat shell** (`cbbed3ca3`) — `FeatureFlagName.DESKTOP_CHAT_V3` registered at `apps/desktop/src/services/featureFlags.ts:30,204` with `rolloutPercentage: 0` (default off, user-overridable for dogfooding). Mounted at `apps/desktop/src/App.tsx:1052` behind `useFeatureFlag`. Lets the v3 surface land on `main` without affecting any user until flag is flipped or rollout ramps.
+- **`apps/desktop/src/components/v3/` — full v3 component set** behind the flag:
+  - **Shell + nav** (`52fc08af6`): `DesktopShellV3.tsx`, `Sidebar.tsx`
+  - **Composer stack** (`0a9158c87`, +973 LOC; refined in `7163765d0`, +175 / -100): `Composer.tsx`, `PlusMenu.tsx`, `ModelPopover.tsx`. `ModelPopover` reads Opus 4.7 / Sonnet 4.6 / Haiku 4.5 via `getTaskModelForProvider('anthropic', …)` + `getProviderDefaultModel('anthropic')` — never hardcodes model IDs per CLAUDE.md "Critical rules". Composer model pill becomes an always-visible read-only Adaptive/Standard HUD per design-spec lock.
+  - **Active chat** (`3428e29d1`, +443 LOC): `ActiveChat.tsx`, `ThinkingPill.tsx`, `InlineArtifactChip.tsx`, `ResponseActionRow.tsx`
+  - **Artifacts** (`0a995cf09`): `ArtifactWorkspace.tsx` (multi-file split-pane + file tree + MCP-live banner)
+  - **Cowork mode 5 views + Code mode home** (`4333eccf8`): `CoworkHome.tsx`, `CoworkProjects.tsx`, `CoworkScheduled.tsx`, `CoworkArtifacts.tsx`, `CoworkDispatch.tsx`, `CodeModeHome.tsx`
+  - **Customize hub** (`8259d6014`, +1,036 LOC): `CustomizeHub.tsx`, `SkillsView.tsx`, `ConnectorsView.tsx`, `PluginsHub.tsx`
+  - **Pricing UI** (`dc38ad52e`, +696 LOC): `Pricing.tsx` — 5 tier cards + capability matrix + trust signals, hydrated from `packages/types/billing-catalog.ts` SSOT
+  - **Overlays** (`93c87001b`, +1,954 LOC): `AccountMenu.tsx`, `SearchModalCmdK.tsx`, `PluginMarketplace.tsx`, `PluginDetail.tsx`, `MicSettings.tsx`
+- **`packages/unified-chat` QuickChips → 6 chips** (`6e0dd8621`) — Code / Write / Research / Image / Video / Computer. `ChipType` union extended in `chatStore.ts`; consumed by `EmptyChat.tsx` and `ChatInterface.tsx`.
+- **`packages/unified-chat` ProvenanceFooter auto-routing trace + Pin-to-model button** (`fc3bc68ed`, +193 / -17 LOC) — renders the router's `traceId`, candidate alternatives, and a one-click "Pin to model" action. +113 lines of RTL coverage in `ProvenanceFooter.test.tsx`.
+- **`packages/unified-chat` MessageRouting schema** (`675ae9db4`, +11 LOC) — adds `traceId`, `alternatives[]`, `routedBy` fields wired as the OTel hook for downstream telemetry. Consumed by the ProvenanceFooter above; non-breaking (all new fields optional).
+- **Web pricing page wired to `packages/types/billing-catalog.ts` SSOT** (`205159185`) — 5 tier cards render from the canonical catalog instead of duplicated literals, so monthly/yearly + feature matrix can't drift from in-code Stripe wiring.
+- **Chrome extension consumes `@agiworkforce/design-tokens` CSS vars** (`1dbd2ceeb`) — adds workspace dep + `src/tokens.ts` with `getExtensionTokensCss(mode)`. `side_panel`, `popup`, `inPagePanel` shadow scope, and `content.ts` now read brand teal/terracotta from tokens; all Bootstrap-era purples (`#667eea` / `#764ba2`) and hardcoded hex stripped.
+- **CLI v3 palette + slash menu + model picker** (`2cf38a32d`, +328 LOC) — `apps/cli/src/tui/terminal_palette.rs` (new), `tui/slash_command.rs` reorders for v3 IA, `tui/chatwidget.rs` gets the Adaptive Thinking model picker. `model_catalog.rs` extended.
+- **Mobile v3 parity** (`fc86460a5`, +196 / -62 LOC) — `apps/mobile/components/chat/TaskChips.tsx` (6 chips matching unified-chat), `Composer/Composer.tsx` (new wrapper aligning to design-spec §7), `sidebar/Sidebar.tsx` + `SidebarHeader.tsx` updates, brand copy fix in `drawer/DrawerContent.tsx`.
+- **VS Code extension webview theming + diff-inline review** (bundled in `0a995cf09`) — `apps/extension-vscode/src/providers/diffDecorationProvider.ts` (±28) and `apps/extension-vscode/src/providers/sidebar/webviewContent.ts` (±20) updated to consume `agiVsCodeCssVars` from `packages/design-tokens/src/index.ts` (+10). Webview now reads brand teal/terracotta from the shared token set instead of duplicating VS Code's native theme tokens; diff decorations align to design-spec §5.
+
+### Changed
+
+- **ESLint v3 surface guardrails** (`eslint.config.mjs:436-468`) — narrow scope: `apps/desktop/src/components/v3/**` + `apps/desktop/e2e/v3-*.spec.ts`:
+  - User-facing brand string locked to "AGI" — `Literal` + `JSXText` selectors matching `/^AGI Workforce/` error with a pointer to `docs/design/design-spec-2026-05-15.md`. Catches toast titles, alt text, and JSX children.
+  - `ModeSelectionDialog` re-introduction blocked via `no-restricted-imports` pattern. Mode picker lives in `OnboardingWizard.tsx` per CLAUDE.md.
+
+### Fixed
+
+- **Pre-existing expo-router type errors in `apps/mobile`** (task #2) — 26+ errors cleared by the typed-`Href` migration: `apps/mobile/.expo/types/router.d.ts` regenerated (+223), `apps/mobile/services/notifications.ts` (±34) and 13 other `apps/mobile/app/**` + `components/sidebar/**` files migrated to the typed `Href` shape. Shipped bundled in `0a995cf09` (see "Process notes" in the AGI_WORKFORCE.md audit-log entry for why this landed bundled with `#8` and `#16`).
+- **Mobile test fixtures regressed by typed-`Href` migration** (`6af5e3004`, task #21) — 4 suites / 49 tests repaired: `notification-auth-gate` (3 router push/navigate assertions → `{ pathname }`), `empty-state` (lucide mock corrected `Image` not `ImageIcon`, 3→6 chips, `accessibilityLabel "X prompt"` → `"X mode"`), `drawer-content` (header text "AGI Workforce" → "AGI", conversation/newchat assertions → `{ pathname, params }`). Mobile suite now 815 tests / 46 suites / 0 failures.
+
+### Removed
+
+- **9 pre-v3 plan docs** (`9cc27e02f`) → archived to `docs/archive/2026-05-16-pre-v3/` with a README mapping each file → its successor (`UNIFIED_LAUNCH_PLAN.md` → `robust-whistling-crane.md`, `DESIGN.md` → `design-spec-2026-05-15.md` + brand-mark proposals, `SURFACE_VERIFICATION.md` → `scripts/launch-verify.sh`, etc.). Git history preserved via `git mv`.
+
+### Verified
+
+| Surface      | Tests                   | Notes                                                                                                                                                                                                |
+| ------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CLI          | 1,337                   | `cargo test --workspace --lib` + `cargo clippy --workspace --lib -- -D warnings` green                                                                                                               |
+| Desktop      | typecheck + build green | tsc clean across all 31 TS workspace projects; v3 e2e specs respect feature flag                                                                                                                     |
+| Web          | typecheck + build green | pricing page renders from billing-catalog SSOT                                                                                                                                                       |
+| Mobile       | 815 (46 suites)         | post-`6af5e3004` fixture repair; typed-`Href` migration green                                                                                                                                        |
+| Chrome ext   | 614 (22 suites)         | design-tokens consumed; no hardcoded hex remaining                                                                                                                                                   |
+| VS Code ext  | typecheck + build green | webview theming + diff-decoration review now read `agiVsCodeCssVars`                                                                                                                                 |
+| unified-chat | 361                     | +113 RTL lines added for ProvenanceFooter auto-routing trace                                                                                                                                         |
+| Lint         | clean                   | `pnpm lint` + `pnpm lint:extension` both at `--max-warnings=0`                                                                                                                                       |
+| Rust         | green                   | `cargo check` + `cargo clippy --workspace --lib -D warnings` + `cargo test --workspace --lib` all green; 4 visibility warnings in `cli_options.rs` (non-error)                                       |
+| Playwright   | env-only caveat         | `@locks` shell-mount test fails without Tauri runtime + auth (verified by code review of `App.tsx:1284-1306`, shell DOES mount in real Tauri dev). Other `@locks` specs pass or correctly skip-gate. |
+
+### Status: feature flag
+
+- `DESKTOP_CHAT_V3` default `rolloutPercentage: 0` — v3 shell ships **dark**. Operators enable per-user via local override (`setLocalOverride(FeatureFlagName.DESKTOP_CHAT_V3, true)`) or ramp the rollout in a follow-up commit once internal dogfooding completes.
+
+### Source of truth
+
+- Plan: `~/.claude/plans/robust-whistling-crane.md`
+- PR: #366
+- Branch: `claude/refine-local-plan-yhjFU`
+- Archived predecessors: `docs/archive/2026-05-16-pre-v3/` (see that README for replacement map)
+
+---
+
 ## [Unreleased — launch-readiness wave 3 + strategy lock] — 2026-05-15
 
 **27 commits** (`98ed9ef1c..01e56f2a3`) covering wave 3 (8 parallel agents) + self-audit fixes + voice slot reopening + doc reconciliation + brand mark proposals. Audit fire at `AUDIT_LOG.md` 2026-05-15T22:00Z.
