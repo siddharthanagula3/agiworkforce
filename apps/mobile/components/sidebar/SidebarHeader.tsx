@@ -42,7 +42,7 @@ export function SidebarHeader({ onSearchChange }: SidebarHeaderProps) {
   return (
     <View className="px-4 pt-14 pb-3 gap-3 border-b border-white/5">
       <View className="flex-row items-center justify-between">
-        <Text variant="subheading">AGI Workforce</Text>
+        <Text variant="subheading">AGI</Text>
         <Pressable
           onPress={handleNewChat}
           className="p-2 rounded-lg active:bg-white/5"
