@@ -1,55 +1,12 @@
 import { ChevronDown, Plus, RefreshCw, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { cn } from '../../lib/utils';
-
-interface ScheduledTask {
-  id: string;
-  name: string;
-  freq: string;
-  project?: string;
-  on: boolean;
-  next: string;
-  lastRun: string;
-}
-
-const SCHEDULED_TASKS: ScheduledTask[] = [
-  {
-    id: 's1',
-    name: 'Sales pipeline digest',
-    freq: 'Every weekday 8 AM',
-    project: 'Sales pipeline',
-    on: true,
-    next: 'Tomorrow 8:00 AM',
-    lastRun: 'Today 8:02 AM',
-  },
-  {
-    id: 's2',
-    name: 'Support ticket triage',
-    freq: 'Every 2h',
-    project: 'Customer support',
-    on: true,
-    next: 'In 45 min',
-    lastRun: '2h ago',
-  },
-  {
-    id: 's3',
-    name: 'Investor weekly digest',
-    freq: 'Every Monday 7 AM',
-    project: 'Investor digest',
-    on: false,
-    next: 'Mon 7:00 AM',
-    lastRun: 'Mon 7:04 AM',
-  },
-  {
-    id: 's4',
-    name: 'Hiring brief prep',
-    freq: 'On demand',
-    project: 'Hiring loop',
-    on: true,
-    next: '—',
-    lastRun: '3 days ago',
-  },
-];
+import {
+  useSchedulerStore,
+  getScheduleSummary,
+  getRelativeTimeDisplay,
+  type ScheduledTask,
+} from '../../stores/schedulerStore';
 
 function IosToggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   return (
@@ -73,17 +30,45 @@ function IosToggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   );
 }
 
+function getKeepAwake(): boolean {
+  try {
+    return localStorage.getItem('cowork-keep-awake') !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+function setKeepAwakePref(v: boolean): void {
+  try {
+    localStorage.setItem('cowork-keep-awake', v ? 'true' : 'false');
+  } catch {
+    // ignore
+  }
+}
+
+function isTaskOn(t: ScheduledTask): boolean {
+  return t.status === 'active';
+}
+
+function nextRunDisplay(t: ScheduledTask): string {
+  if (t.status !== 'active') return getRelativeTimeDisplay(t.lastRunAt);
+  return getRelativeTimeDisplay(t.nextRunAt);
+}
+
 export function CoworkScheduled() {
-  const [keepAwake, setKeepAwake] = useState(true);
-  const [tasks, setTasks] = useState<ScheduledTask[]>(SCHEDULED_TASKS);
+  const { tasks, isLoading, fetchTasks, toggleTask, deleteTask } = useSchedulerStore((s) => ({
+    tasks: s.tasks,
+    isLoading: s.isLoading,
+    fetchTasks: s.fetchTasks,
+    toggleTask: s.toggleTask,
+    deleteTask: s.deleteTask,
+  }));
 
-  function toggleTask(id: string) {
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, on: !t.on } : t)));
-  }
+  const keepAwake = getKeepAwake();
 
-  function deleteTask(id: string) {
-    setTasks((prev) => prev.filter((t) => t.id !== id));
-  }
+  useEffect(() => {
+    void fetchTasks();
+  }, [fetchTasks]);
 
   return (
     <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-white/10">
@@ -111,68 +96,66 @@ export function CoworkScheduled() {
               tasks.
             </div>
           </div>
-          <IosToggle on={keepAwake} onToggle={() => setKeepAwake((v) => !v)} />
+          <IosToggle on={keepAwake} onToggle={() => setKeepAwakePref(!keepAwake)} />
         </div>
 
         {/* Task list */}
-        <div className="space-y-1">
-          {tasks.map((t) => (
-            <div
-              key={t.id}
-              className={cn(
-                'group flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3',
-                !t.on && 'opacity-60',
-              )}
-            >
-              <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-white/8 text-white/50">
-                <RefreshCw size={13} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-white/90">{t.name}</div>
-                <div className="mt-0.5 flex items-center gap-1.5 text-xs text-white/40">
-                  <span>{t.freq}</span>
-                  {t.project && (
-                    <>
-                      <span className="text-white/20">·</span>
-                      <span>{t.project}</span>
-                    </>
-                  )}
+        {isLoading && tasks.length === 0 ? (
+          <div className="py-8 text-center text-sm text-white/30">Loading scheduled tasks...</div>
+        ) : (
+          <div className="space-y-1">
+            {tasks.map((t) => (
+              <div
+                key={t.id}
+                className={cn(
+                  'group flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3',
+                  !isTaskOn(t) && 'opacity-60',
+                )}
+              >
+                <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-white/8 text-white/50">
+                  <RefreshCw size={13} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-white/90">{t.name}</div>
+                  <div className="mt-0.5 flex items-center gap-1.5 text-xs text-white/40">
+                    <span>{getScheduleSummary(t.schedule)}</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-shrink-0 flex-col items-end text-xs text-white/35">
+                  <span className="text-white/25">{isTaskOn(t) ? 'Next run' : 'Paused'}</span>
+                  <span className="text-white/60">{nextRunDisplay(t)}</span>
+                </div>
+
+                <IosToggle on={isTaskOn(t)} onToggle={() => void toggleTask(t.id)} />
+
+                <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <button
+                    type="button"
+                    className="flex h-6 w-6 items-center justify-center rounded text-white/30 hover:text-white/70"
+                    title="Options"
+                  >
+                    <ChevronDown size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    className="flex h-6 w-6 items-center justify-center rounded text-white/30 hover:text-red-400"
+                    title="Delete"
+                    onClick={() => void deleteTask(t.id)}
+                  >
+                    <Trash2 size={12} />
+                  </button>
                 </div>
               </div>
+            ))}
 
-              <div className="flex flex-shrink-0 flex-col items-end text-xs text-white/35">
-                <span className="text-white/25">{t.on ? 'Next run' : 'Paused'}</span>
-                <span className="text-white/60">{t.on ? t.next : t.lastRun}</span>
+            {tasks.length === 0 && !isLoading && (
+              <div className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-white/30">
+                No scheduled tasks yet. Click &ldquo;Schedule new task&rdquo; to get started.
               </div>
-
-              <IosToggle on={t.on} onToggle={() => toggleTask(t.id)} />
-
-              <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                <button
-                  type="button"
-                  className="flex h-6 w-6 items-center justify-center rounded text-white/30 hover:text-white/70"
-                  title="Options"
-                >
-                  <ChevronDown size={13} />
-                </button>
-                <button
-                  type="button"
-                  className="flex h-6 w-6 items-center justify-center rounded text-white/30 hover:text-red-400"
-                  title="Delete"
-                  onClick={() => deleteTask(t.id)}
-                >
-                  <Trash2 size={12} />
-                </button>
-              </div>
-            </div>
-          ))}
-
-          {tasks.length === 0 && (
-            <div className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-white/30">
-              No scheduled tasks yet. Click &ldquo;Schedule new task&rdquo; to get started.
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
