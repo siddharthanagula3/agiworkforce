@@ -67,16 +67,18 @@ export function CoworkArtifacts() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/50 hover:text-white/80"
+              aria-label={t('common.search')}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/50 hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
             >
-              <Search size={14} />
+              <Search size={14} aria-hidden="true" />
             </button>
             <button
               type="button"
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/50 hover:text-white/80"
+              aria-label={t('common.refresh')}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/50 hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
               onClick={() => void listPersistedArtifacts(undefined, 50)}
             >
-              <RefreshCw size={14} />
+              <RefreshCw size={14} aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -136,17 +138,19 @@ export function CoworkArtifacts() {
                     <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                       <button
                         type="button"
-                        className="flex h-5 w-5 items-center justify-center rounded text-white/30 hover:text-white/70"
+                        className="flex h-5 w-5 items-center justify-center rounded text-white/30 hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
                         title={t('common.copy')}
+                        aria-label={t('common.copy')}
                       >
-                        <Copy size={11} />
+                        <Copy size={11} aria-hidden="true" />
                       </button>
                       <button
                         type="button"
-                        className="flex h-5 w-5 items-center justify-center rounded text-white/30 hover:text-white/70"
+                        className="flex h-5 w-5 items-center justify-center rounded text-white/30 hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
                         title={t('search.open')}
+                        aria-label={t('search.open')}
                       >
-                        <ExternalLink size={11} />
+                        <ExternalLink size={11} aria-hidden="true" />
                       </button>
                     </div>
                   </div>

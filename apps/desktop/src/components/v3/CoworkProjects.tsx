@@ -57,9 +57,10 @@ export function CoworkProjects() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/50 hover:text-white/80"
+              aria-label={t('common.search')}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/50 hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
             >
-              <Search size={14} />
+              <Search size={14} aria-hidden="true" />
             </button>
             <button
               type="button"

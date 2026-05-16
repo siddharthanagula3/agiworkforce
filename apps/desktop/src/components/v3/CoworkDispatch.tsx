@@ -189,8 +189,12 @@ export function CoworkDispatch() {
                       <span>{timeAgo(o.createdAt, t)}</span>
                     </div>
                   </div>
-                  <button type="button" className="flex-shrink-0 text-white/20 hover:text-white/60">
-                    <ChevronRight size={14} />
+                  <button
+                    type="button"
+                    aria-label={t('search.open')}
+                    className="flex-shrink-0 text-white/20 hover:text-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
+                  >
+                    <ChevronRight size={14} aria-hidden="true" />
                   </button>
                 </div>
               ))}
