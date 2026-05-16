@@ -1,18 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Mic, X, Check, Shield } from 'lucide-react';
+import { useVoiceInputStore } from '../../stores/voiceInputStore';
 
-interface AudioSource {
-  id: string;
-  name: string;
-  note: string;
+interface AudioDevice {
+  deviceId: string;
+  label: string;
 }
-
-const SOURCES: AudioSource[] = [
-  { id: 'macbook', name: 'MacBook Pro Microphone', note: 'Default' },
-  { id: 'airpods', name: 'AirPods Pro', note: 'Bluetooth' },
-  { id: 'display', name: 'Studio Display Mic', note: 'USB-C' },
-  { id: 'external', name: 'Shure MV7', note: 'USB' },
-];
 
 export interface MicSettingsProps {
   onClose: () => void;
@@ -20,10 +13,52 @@ export interface MicSettingsProps {
 }
 
 export function MicSettings({ onClose, onSettings }: MicSettingsProps) {
-  // On-device is the default per product lock
-  const [source, setSource] = useState('macbook');
-  const [hold, setHold] = useState(true);
-  const [trim, setTrim] = useState(true);
+  const selectedDeviceId = useVoiceInputStore((s) => s.selectedDeviceId);
+  const setSelectedDeviceId = useVoiceInputStore((s) => s.setSelectedDeviceId);
+  const holdToRecord = useVoiceInputStore((s) => s.holdToRecord);
+  const setHoldToRecord = useVoiceInputStore((s) => s.setHoldToRecord);
+  const autoTrimSilence = useVoiceInputStore((s) => s.autoTrimSilence);
+  const setAutoTrimSilence = useVoiceInputStore((s) => s.setAutoTrimSilence);
+
+  const [devices, setDevices] = useState<AudioDevice[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDevices() {
+      try {
+        // Enumerate without requesting permission first; labels may be empty until granted.
+        // If empty labels, show a single "Default microphone" fallback.
+        const all = await navigator.mediaDevices.enumerateDevices();
+        if (cancelled) return;
+        const inputs = all
+          .filter((d) => d.kind === 'audioinput')
+          .map((d) => ({
+            deviceId: d.deviceId || 'default',
+            label: d.label || (d.deviceId === 'default' ? 'Default microphone' : 'Microphone'),
+          }));
+        // Always ensure a "default" entry is present
+        if (!inputs.some((d) => d.deviceId === 'default')) {
+          inputs.unshift({ deviceId: 'default', label: 'Default microphone' });
+        }
+        setDevices(inputs);
+      } catch {
+        // mediaDevices unavailable (non-secure context, etc.) — show static fallback
+        setDevices([{ deviceId: 'default', label: 'Default microphone' }]);
+      }
+    }
+
+    void loadDevices();
+
+    // Re-enumerate when devices change (headphones plugged in, etc.)
+    navigator.mediaDevices?.addEventListener('devicechange', loadDevices);
+    return () => {
+      cancelled = true;
+      navigator.mediaDevices?.removeEventListener('devicechange', loadDevices);
+    };
+  }, []);
+
+  const activeDeviceId = selectedDeviceId || 'default';
 
   return (
     <>
@@ -89,67 +124,83 @@ export function MicSettings({ onClose, onSettings }: MicSettingsProps) {
           >
             Source
           </div>
-          {SOURCES.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setSource(s.id)}
-              style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '7px 12px',
-                border: 'none',
-                background: source === s.id ? 'var(--bg-soft)' : 'transparent',
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-            >
-              {/* Radio dot */}
-              <div
-                style={{
-                  width: 14,
-                  height: 14,
-                  borderRadius: '50%',
-                  border: `2px solid ${source === s.id ? 'var(--teal)' : 'var(--border)'}`,
-                  flexShrink: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                {source === s.id && (
-                  <div
-                    style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--teal)' }}
-                  />
-                )}
-              </div>
-
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div
+          {devices.length === 0 ? (
+            <div style={{ padding: '7px 12px', fontSize: 12, color: 'var(--text-3)' }}>
+              Loading devices…
+            </div>
+          ) : (
+            devices.map((device) => {
+              const isSelected = activeDeviceId === device.deviceId;
+              return (
+                <button
+                  key={device.deviceId}
+                  onClick={() => setSelectedDeviceId(device.deviceId)}
                   style={{
-                    fontSize: 12.5,
-                    color: 'var(--text-1)',
-                    fontWeight: source === s.id ? 600 : 400,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '7px 12px',
+                    border: 'none',
+                    background: isSelected ? 'var(--bg-soft)' : 'transparent',
+                    cursor: 'pointer',
+                    textAlign: 'left',
                   }}
                 >
-                  {s.name}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{s.note}</div>
-              </div>
+                  {/* Radio dot */}
+                  <div
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: '50%',
+                      border: `2px solid ${isSelected ? 'var(--teal)' : 'var(--border)'}`,
+                      flexShrink: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {isSelected && (
+                      <div
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          background: 'var(--teal)',
+                        }}
+                      />
+                    )}
+                  </div>
 
-              {source === s.id && (
-                <Check
-                  size={12}
-                  strokeWidth={2.5}
-                  style={{ color: 'var(--teal)', flexShrink: 0 }}
-                />
-              )}
-            </button>
-          ))}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 12.5,
+                        color: 'var(--text-1)',
+                        fontWeight: isSelected ? 600 : 400,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {device.label}
+                    </div>
+                    {device.deviceId === 'default' && (
+                      <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Default</div>
+                    )}
+                  </div>
+
+                  {isSelected && (
+                    <Check
+                      size={12}
+                      strokeWidth={2.5}
+                      style={{ color: 'var(--teal)', flexShrink: 0 }}
+                    />
+                  )}
+                </button>
+              );
+            })
+          )}
         </div>
 
         <div style={{ height: 1, background: 'var(--border)', margin: '2px 0' }} />
@@ -158,7 +209,7 @@ export function MicSettings({ onClose, onSettings }: MicSettingsProps) {
         <div style={{ padding: '8px 0' }}>
           {/* Hold to record */}
           <div
-            onClick={() => setHold(!hold)}
+            onClick={() => setHoldToRecord(!holdToRecord)}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -178,14 +229,14 @@ export function MicSettings({ onClose, onSettings }: MicSettingsProps) {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                setHold(!hold);
+                setHoldToRecord(!holdToRecord);
               }}
               style={{
                 width: 36,
                 height: 20,
                 borderRadius: 10,
                 border: 'none',
-                background: hold ? 'var(--teal)' : 'var(--border)',
+                background: holdToRecord ? 'var(--teal)' : 'var(--border)',
                 cursor: 'pointer',
                 position: 'relative',
                 transition: 'background 0.2s',
@@ -196,7 +247,7 @@ export function MicSettings({ onClose, onSettings }: MicSettingsProps) {
                 style={{
                   position: 'absolute',
                   top: 2,
-                  left: hold ? 17 : 2,
+                  left: holdToRecord ? 17 : 2,
                   width: 16,
                   height: 16,
                   borderRadius: '50%',
@@ -210,7 +261,7 @@ export function MicSettings({ onClose, onSettings }: MicSettingsProps) {
 
           {/* Auto-trim */}
           <div
-            onClick={() => setTrim(!trim)}
+            onClick={() => setAutoTrimSilence(!autoTrimSilence)}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -230,14 +281,14 @@ export function MicSettings({ onClose, onSettings }: MicSettingsProps) {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                setTrim(!trim);
+                setAutoTrimSilence(!autoTrimSilence);
               }}
               style={{
                 width: 36,
                 height: 20,
                 borderRadius: 10,
                 border: 'none',
-                background: trim ? 'var(--teal)' : 'var(--border)',
+                background: autoTrimSilence ? 'var(--teal)' : 'var(--border)',
                 cursor: 'pointer',
                 position: 'relative',
                 transition: 'background 0.2s',
@@ -248,7 +299,7 @@ export function MicSettings({ onClose, onSettings }: MicSettingsProps) {
                 style={{
                   position: 'absolute',
                   top: 2,
-                  left: trim ? 17 : 2,
+                  left: autoTrimSilence ? 17 : 2,
                   width: 16,
                   height: 16,
                   borderRadius: '50%',

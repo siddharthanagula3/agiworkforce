@@ -10,6 +10,7 @@ import { ArrowUp, Mic, Plus, Square, ChevronDown } from 'lucide-react';
 import { cn, useChatStore, useChatModelStore } from '@agiworkforce/unified-chat';
 import { PlusMenu } from './PlusMenu';
 import { ModelPopover } from './ModelPopover';
+import { MicSettings } from './MicSettings';
 
 export interface ComposerProps {
   onSend: (content: string) => void;
@@ -295,16 +296,7 @@ export function Composer({
         {modelOpen && <ModelPopover onClose={() => setModelOpen(false)} />}
       </div>
 
-      {/* MicSettings — window stub (desktop-overlays teammate owns implementation) */}
-      {micOpen &&
-        typeof window !== 'undefined' &&
-        (() => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const MicSettings = (window as any).AGIPlugins?.MicSettings as
-            | React.ComponentType<{ onClose: () => void }>
-            | undefined;
-          return MicSettings ? <MicSettings onClose={() => setMicOpen(false)} /> : null;
-        })()}
+      {micOpen && <MicSettings onClose={() => setMicOpen(false)} />}
     </div>
   );
 }
