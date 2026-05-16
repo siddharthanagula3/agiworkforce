@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ChevronRight, Wrench, Plug, Plus, ChevronDown, ArrowRight, Box } from 'lucide-react';
+import { useMcpStore } from '../../stores/mcpStore';
 
 interface PluginCommand {
   cmd: string;
@@ -107,10 +108,66 @@ export interface PluginDetailProps {
 }
 
 export function PluginDetail({ pluginId = 'legal', onBack, onNavigatePlugin }: PluginDetailProps) {
-  const [enabled, setEnabled] = useState(true);
   const [activePluginId, setActivePluginId] = useState(pluginId);
 
-  const plugin: PluginData = DEMO_PLUGINS[activePluginId] ?? DEMO_PLUGINS['legal']!;
+  const servers = useMcpStore((s) => s.servers);
+  const tools = useMcpStore((s) => s.tools);
+  const enableServer = useMcpStore((s) => s.enableServer);
+  const disableServer = useMcpStore((s) => s.disableServer);
+
+  const livePlugin = useMemo<PluginData | null>(() => {
+    const server = servers.find(
+      (s) => s.name === activePluginId || s.name === `mcp-${activePluginId}`,
+    );
+    if (!server) return null;
+    const serverTools = tools.filter((t) => t.server === server.name);
+    return {
+      id: activePluginId,
+      name: server.name,
+      desc: '',
+      color: '#21808d',
+      version: '—',
+      author: 'Local MCP',
+      installs: `${server.tool_count} tools`,
+      lastUpdated: '—',
+      commands: serverTools.map((t) => ({ cmd: `/${t.name}`, desc: t.description })),
+      tryPrompts: [],
+    };
+  }, [servers, tools, activePluginId]);
+
+  const plugin: PluginData = livePlugin ?? DEMO_PLUGINS[activePluginId] ?? DEMO_PLUGINS['legal']!;
+
+  const serverEnabled = useMemo(() => {
+    const server = servers.find(
+      (s) => s.name === activePluginId || s.name === `mcp-${activePluginId}`,
+    );
+    return server?.enabled ?? true;
+  }, [servers, activePluginId]);
+
+  const [localEnabled, setLocalEnabled] = useState(true);
+  const [toggling, setToggling] = useState(false);
+  const enabled = livePlugin ? serverEnabled : localEnabled;
+
+  async function handleToggle() {
+    if (toggling) return;
+    if (livePlugin) {
+      const serverName =
+        servers.find((s) => s.name === activePluginId || s.name === `mcp-${activePluginId}`)
+          ?.name ?? activePluginId;
+      setToggling(true);
+      try {
+        if (enabled) {
+          await disableServer(serverName);
+        } else {
+          await enableServer(serverName);
+        }
+      } finally {
+        setToggling(false);
+      }
+    } else {
+      setLocalEnabled((v) => !v);
+    }
+  }
 
   const handlePluginSwitch = (id: string) => {
     setActivePluginId(id);
@@ -374,19 +431,7 @@ export function PluginDetail({ pluginId = 'legal', onBack, onNavigatePlugin }: P
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button
-              style={{
-                padding: '6px 12px',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)',
-                background: 'transparent',
-                color: 'var(--text-2)',
-                fontSize: 12,
-                cursor: 'pointer',
-              }}
-            >
-              Update
-            </button>
+            {/* mcp_update_server does not exist — Update button intentionally omitted */}
             <button
               style={{
                 padding: '6px 12px',
@@ -400,19 +445,21 @@ export function PluginDetail({ pluginId = 'legal', onBack, onNavigatePlugin }: P
             >
               Customize
             </button>
-            {/* iOS-style toggle */}
+            {/* iOS-style toggle wired to mcp_enable_server / mcp_disable_server */}
             <button
-              onClick={() => setEnabled(!enabled)}
+              onClick={() => void handleToggle()}
+              disabled={toggling}
               style={{
                 width: 38,
                 height: 22,
                 borderRadius: 11,
                 border: 'none',
                 background: enabled ? 'var(--teal)' : 'var(--border)',
-                cursor: 'pointer',
+                cursor: toggling ? 'not-allowed' : 'pointer',
                 position: 'relative',
                 transition: 'background 0.2s',
                 flexShrink: 0,
+                opacity: toggling ? 0.7 : 1,
               }}
             >
               <span

@@ -8,6 +8,7 @@ import type { ChatRuntime } from '@agiworkforce/unified-chat';
 import { EmptyChat } from './EmptyChat';
 import { CapModal } from './CapModal';
 import { Sidebar } from './Sidebar';
+import { AccountMenu } from './AccountMenu';
 
 // ─── mode type (shared with Sidebar) ─────────────────────────────────────────
 
@@ -92,6 +93,7 @@ export function DesktopShellV3({
         onOpenAccountMenu={() => setAccountMenuOpen((o) => !o)}
         accountMenuOpen={accountMenuOpen}
       />
+      {accountMenuOpen && <AccountMenu onClose={() => setAccountMenuOpen(false)} />}
 
       <div style={{ flex: 1, minWidth: 0, position: 'relative', overflow: 'hidden' }}>
         {mode === 'chat' && (
