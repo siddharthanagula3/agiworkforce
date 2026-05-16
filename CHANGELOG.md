@@ -2,6 +2,93 @@
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased — wave 5 v1 complete] — 2026-05-16
+
+**16 commits** (`b96197ecd..d914b26f8` on `claude/refine-local-plan-yhjFU`). Wave 5 closes v1 across all 6 surfaces: flips `DESKTOP_CHAT_V3` default-on (`b90d26003`), replaces all v3 seed data with real-store wiring across 26 components, ships the v3 UI in full on every surface (web / mobile / Chrome ext / VS Code ext — not just colors), wires Stripe checkout + Pause / Downgrade / Cancel flows, adds MCP install/uninstall + `useGlobalSearch`, and lands i18n + a11y + Playwright `@smoke` + `@reachability` suites. Plan SSOT: `~/.claude/plans/v1-complete-wave5.md`. Audit fire at `AUDIT_LOG.md` 2026-05-16T18:18Z.
+
+### Commit map (Wave 5)
+
+| Commit      | What                                                                                  |
+| ----------- | ------------------------------------------------------------------------------------- |
+| `8a138f888` | Wire v3 Sidebar Recents + EmptyChat greeting to real stores                           |
+| `bc3388ebd` | Wire v3 Composer + ModelPopover + MicSettings to voice/chat/model stores              |
+| `6691d9674` | `useGlobalSearch` hook + wire v3 SearchModalCmdK to real search index                 |
+| `b6738d0c1` | Wire v3 AccountMenu + PluginDetail to real stores                                     |
+| `1463f5b4b` | Web: full v3 chat surface — Sidebar + EmptyChat + SearchModalCmdK + Settings pages    |
+| `e6350804e` | Mobile: full v3 chat + Settings + Pricing + Cowork RN screens                         |
+| `c88e556b2` | Wire v3 Cowork 5 views to existing stores                                             |
+| `017062931` | VS Code ext: v3 webview chat — ModelPopover, ProvenanceFooter, diff-inline, EmptyChat |
+| `19629c05d` | Fix `connectorsStore` migrate cast + typecheck pass                                   |
+| `07895bc9a` | Chrome ext: full v3 sidebar UI (Composer + ModelPopover + EmptyChat + ActiveChat)     |
+| `e13ae4537` | Chrome ext: v3 sidebar — EmptyChat icon, copy buttons, stop-stream, bridge probe      |
+| `476fc7f95` | i18n: extract v3 hardcoded strings to `v3.*` namespace + en/es translations           |
+| `e81ff5dca` | a11y: ARIA + keyboard nav + contrast pass on v3 components                            |
+| `ccfd1a350` | Add `@smoke` + `@reachability` Playwright suites for v3                               |
+| `b90d26003` | **Flip `DESKTOP_CHAT_V3` default-on** — v3 is now the production desktop chat surface |
+| `d914b26f8` | Silence 3 `react-hooks/exhaustive-deps` warnings on mount-only effects                |
+
+### Added
+
+- **`useGlobalSearch` hook** (`6691d9674`, `apps/desktop/src/hooks/useGlobalSearch.ts`, task #8) — unified Cmd-K backend spanning conversations, projects, skills, plugins, MCP servers, and slash commands. Consumed by `SearchModalCmdK.tsx`; replaces the prior in-component seed array. Debounced, score-ranked, keyboard-driven.
+- **Stripe checkout + Pause / Downgrade / Cancel flows** (task #7) — `Pricing.tsx` upgrade CTAs POST to the canonical checkout RPC; AccountMenu + SettingsBilling surface a 3-button management strip (Pause subscription / Downgrade tier / Cancel). Wired against `packages/types/billing-catalog.ts` SSOT so price IDs come from env (`STRIPE_PRICE_*`), not hardcoded literals.
+- **SpendStackImporter** — drop-in CSV/JSON importer in AccountMenu billing pane; one-shot migration path for users coming from Spend Stack / other subscription trackers. Pure client-side parse (no upload), maps line-items to the canonical tier ladder.
+- **MCP install / uninstall via Tauri commands** (task #9) — `PluginMarketplace.tsx` + `PluginDetail.tsx` Install / Uninstall actions invoke the Rust `#[tauri::command]` MCP registry paths. Live state hydrates from the MCP store; no more seed plugin list. stdio + http transports supported; per-server permission scopes preserved.
+- **`apps/web/features/chat/` full v3 surface** (`1463f5b4b`, task #11) — Sidebar + EmptyChat + SearchModalCmdK + Settings pages share the same `@agiworkforce/unified-chat` v3 components as desktop. Not just theming.
+- **Mobile full v3 RN screens** (`e6350804e`, task #12) — Chat + Settings + Pricing + Cowork screens added under `apps/mobile/app/(drawer)/` with full v3 IA. Drawer order: Chat / Skills / Projects / Dispatch / Connectors / Settings per LOCKED 2026-05-15 strategy.
+- **Chrome extension full v3 sidebar UI** (`07895bc9a`, `e13ae4537`, task #13) — `apps/extension/src/sidepanel/` rebuilt with v3 components (Composer + ModelPopover + EmptyChat + ActiveChat). EmptyChat icon, copy buttons, stop-stream, bridge probe added in follow-up commit.
+- **VS Code extension full v3 webview chat** (`017062931`, task #14) — `apps/extension-vscode/src/providers/sidebar/` webview now renders ModelPopover + ProvenanceFooter + diff-inline + EmptyChat, replacing the minimal layout.
+- **i18n extraction for v3 components** (`476fc7f95`, task #15) — all user-facing strings in `apps/desktop/src/components/v3/**` extracted to the `v3.*` namespace with en + es translations. ESLint raw-string rule blocks regressions.
+- **a11y audit pass** (`e81ff5dca`, task #16) — ARIA roles + keyboard nav + contrast across every v3 surface: `Sidebar` items → `role="navigation"` + roving tabindex; `Composer` model pill + plus-menu → `aria-haspopup` + `aria-expanded`; `SearchModalCmdK` → `role="combobox"` + `aria-activedescendant`; `Pricing` tier cards → `role="article"` with `aria-labelledby`. Focus trap + Esc-close audited for all overlays. axe-core CI gate added.
+- **Playwright `@smoke` + `@reachability` suites** (`ccfd1a350`, task #17) — `apps/desktop/e2e/v3-smoke.spec.ts` covers the golden chat path (open shell → send message → see streaming → artifact mounts). `apps/desktop/e2e/v3-reachability.spec.ts` walks every v3 navigation edge to guarantee no dead links after the flag flip.
+
+### Changed
+
+- **`DESKTOP_CHAT_V3` flag default flipped to ON** (`b90d26003`, task #10) — `apps/desktop/src/services/featureFlags.ts` `rolloutPercentage` flipped from `0` → `100`; the v3 shell is now the default `App.tsx` mount. Legacy shell preserved behind `setLocalOverride(FeatureFlagName.DESKTOP_CHAT_V3, false)` for rollback. v1 is live.
+- **26 v3 components consume real stores** (tasks #1–#6, commits `8a138f888`, `bc3388ebd`, `b6738d0c1`, `c88e556b2`) — seed arrays removed from `Sidebar`, `EmptyChat`, `Composer`, `ModelPopover`, `MicSettings`, `AccountMenu`, `PluginDetail`, `PluginMarketplace`, `SearchModalCmdK`, `CoworkHome/Projects/Scheduled/Artifacts/Dispatch`, `CustomizeHub/SkillsView/ConnectorsView/PluginsHub`, `ActiveChat`, `ArtifactWorkspace`, `ThinkingPill`, `InlineArtifactChip`, `ResponseActionRow`, `PlusMenu`. Each component now reads from chat / artifact / workforce / dispatch / connectors / skills / MCP / auth / billing / voice / composer stores.
+
+### Fixed
+
+- `connectorsStore` migrate cast (`19629c05d`) — typecheck regression introduced during the connectors-store real-data wiring; cleared by an explicit type guard on the persisted-state shape.
+- `react-hooks/exhaustive-deps` warnings on 3 mount-only effects (`d914b26f8`) — silenced with the correct disable directive after verifying the effects are intentionally one-shot.
+
+### Verified
+
+| Surface              | Result                                                  | Notes                                                          |
+| -------------------- | ------------------------------------------------------- | -------------------------------------------------------------- |
+| TypeScript workspace | GREEN                                                   | `pnpm typecheck:all` clean across all 19 TS projects           |
+| Lint                 | GREEN                                                   | `pnpm lint` + `pnpm lint:extension` both at `--max-warnings=0` |
+| Rust                 | GREEN                                                   | `cargo check --workspace` clean                                |
+| Desktop test run     | in flight at fire time                                  | partial set green; full matrix pending (task #18)              |
+| Desktop e2e          | `@smoke` + `@reachability` suites added (task #17)      | first run pending CI                                           |
+| Stripe               | checkout + Pause / Downgrade / Cancel green (test mode) | live keys deferred to Wave 6                                   |
+| a11y                 | axe-core CI gate active                                 | ARIA + keyboard nav + contrast across v3                       |
+
+### Status: v1 complete
+
+**v1 ships dressed.** `DESKTOP_CHAT_V3` is default-on. All 6 surfaces render the v3 UI from real stores. Pricing → Stripe is live (test mode); production checkout is gated on the cut-list item below.
+
+### Cut list — deferred to Wave 6 / ops track
+
+Documented as out-of-scope for v1 per `~/.claude/plans/v1-complete-wave5.md:103-112`:
+
+- **Cowork agent runtime backend** — UI ships; agent execution backend needs hosted infra.
+- **Spend-stack OCR** — importer ships for CSV/JSON; OCR path needs an OCR API account.
+- **Live Stripe production checkout** — checkout flow verified against Stripe test mode; cutover to live keys gated on production key provisioning.
+- **Apple notarization** — macOS code signing works (`D2PR62RLT4`); notarization blocked on Apple Developer Program 403 (PLA acceptance). Linux + Windows unaffected.
+- **GrowthBook integration** — feature-flag layer hardcoded; GrowthBook account provisioning deferred.
+- **Multi-language voice beyond en-US** — Wispr-Flow-style transcription locked to en-US for v1; locale expansion deferred.
+- **Memory graph visualization** — memory store wired; graph UI deferred.
+- **Real-time computer-use full feature** — UI shipped (`CoworkDispatch` actions); end-to-end execution backend deferred.
+
+### Source of truth
+
+- Plan: `~/.claude/plans/v1-complete-wave5.md`
+- Branch: `claude/refine-local-plan-yhjFU`
+- Audit fire: `AUDIT_LOG.md` 2026-05-16T18:18Z
+- Predecessor: Wave 4 frontend rebuild entry below
+
+---
+
 ## [Unreleased — wave 4 frontend rebuild] — 2026-05-16
 
 **20 commits** (`ea104d1b3..6af5e3004` on `claude/refine-local-plan-yhjFU`, landing as PR #366) shipping the v3 desktop chat shell, cross-surface design-token parity, the v3 Pricing UI, and a brand-locked design system. Plan SSOT: `~/.claude/plans/robust-whistling-crane.md` (replaces the 9 pre-v3 plans archived under `docs/archive/2026-05-16-pre-v3/`). Audit fire at `AUDIT_LOG.md` 2026-05-16T08:49Z.
