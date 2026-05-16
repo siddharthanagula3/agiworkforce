@@ -61,6 +61,17 @@ export interface MessageRouting {
   task?: string;
   /** Model id to pin the conversation to when the user accepts the suggestion. */
   pinModel?: string;
+  /**
+   * UUID for OpenTelemetry correlation across the routing decision, the model
+   * call, and any tool invocations spawned by this message. Optional in v1 —
+   * baked into the schema so future telemetry doesn't break the contract.
+   */
+  traceId?: string;
+  /**
+   * Other models the router considered and why it didn't pick them. Lets the
+   * UI render "switch to <model>" affordances next to the Pin button.
+   */
+  alternatives?: { model: string; reason: string }[];
 }
 
 export interface Citation {
