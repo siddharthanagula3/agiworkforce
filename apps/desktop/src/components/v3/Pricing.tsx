@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   Sparkles,
   MessageSquare,
@@ -14,7 +14,12 @@ import {
   ChevronUp,
   Check,
 } from 'lucide-react';
-import { BILLING_PLAN_PRICING, type BillingPlanTier } from '@agiworkforce/types';
+import {
+  BILLING_PLAN_PRICING,
+  type BillingPlanTier,
+  type BillingInterval,
+} from '@agiworkforce/types';
+import { openCheckout } from '../../lib/stripeCheckout';
 
 interface TierDef {
   id: BillingPlanTier;
@@ -133,12 +138,33 @@ export interface PricingProps {
   currentTier?: BillingPlanTier;
   onUpgrade?: (tier: BillingPlanTier) => void;
   onBYOK?: () => void;
+  onError?: (msg: string) => void;
 }
 
-export function Pricing({ currentTier = 'free', onUpgrade, onBYOK }: PricingProps) {
+export function Pricing({ currentTier = 'free', onUpgrade, onBYOK, onError }: PricingProps) {
   const [yearly, setYearly] = useState(true);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [spendStack, setSpendStack] = useState<Record<string, boolean>>({});
+  const [upgrading, setUpgrading] = useState<BillingPlanTier | null>(null);
+
+  const handleUpgrade = useCallback(
+    async (tierId: BillingPlanTier) => {
+      if (onUpgrade) {
+        onUpgrade(tierId);
+        return;
+      }
+      if (tierId === 'free' || tierId === 'byok' || tierId === 'local-only') {
+        onBYOK?.();
+        return;
+      }
+      setUpgrading(tierId);
+      const interval: BillingInterval = yearly ? 'yearly' : 'monthly';
+      const err = await openCheckout(tierId, interval);
+      setUpgrading(null);
+      if (err) onError?.(err);
+    },
+    [onUpgrade, onBYOK, onError, yearly],
+  );
 
   const SPEND_OPTIONS = [
     { id: 'chatgpt', label: 'ChatGPT Plus', price: 20 },
@@ -349,8 +375,8 @@ export function Pricing({ currentTier = 'free', onUpgrade, onBYOK }: PricingProp
                 </div>
 
                 <button
-                  onClick={() => !isCurrent && onUpgrade?.(tier.id)}
-                  disabled={isCurrent}
+                  onClick={() => !isCurrent && void handleUpgrade(tier.id)}
+                  disabled={isCurrent || upgrading === tier.id}
                   style={{
                     padding: '8px 0',
                     border:
@@ -378,7 +404,7 @@ export function Pricing({ currentTier = 'free', onUpgrade, onBYOK }: PricingProp
                     marginTop: 4,
                   }}
                 >
-                  {isCurrent ? '✓ Current plan' : tier.cta}
+                  {isCurrent ? '✓ Current plan' : upgrading === tier.id ? 'Opening…' : tier.cta}
                 </button>
 
                 {/* Cap rows */}
@@ -559,7 +585,7 @@ export function Pricing({ currentTier = 'free', onUpgrade, onBYOK }: PricingProp
               </div>
               {savings > 0 && (
                 <button
-                  onClick={() => onUpgrade?.('pro')}
+                  onClick={() => void handleUpgrade('pro')}
                   style={{
                     padding: '8px 16px',
                     background: 'var(--teal)',
