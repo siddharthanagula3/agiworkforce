@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   useChatStore,
   selectMessages,
@@ -57,6 +58,7 @@ function AiResponseRow({
   onBranch?: (messageId: string) => void;
   onReact?: (messageId: string, reaction: 'thumbsUp' | 'thumbsDown') => void;
 }) {
+  const { t } = useTranslation('v3');
   const thinking = message.metadata?.thinking;
   const artifacts = message.artifacts ?? [];
 
@@ -110,8 +112,12 @@ function AiResponseRow({
       {artifacts.map((artifact) => (
         <InlineArtifactChip
           key={artifact.id}
-          title={artifact.title ?? 'Artifact'}
-          meta={artifact.language ? `${artifact.language} · interactive` : 'interactive'}
+          title={artifact.title ?? t('artifact.title')}
+          meta={
+            artifact.language
+              ? t('artifact.interactiveWithLang', { language: artifact.language })
+              : t('artifact.interactive')
+          }
           onOpen={onOpenArtifact ? () => onOpenArtifact(artifact.id) : undefined}
         />
       ))}

@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Copy, ThumbsUp, ThumbsDown, RefreshCw, GitBranch, Check } from 'lucide-react';
 
 export interface ResponseActionRowProps {
@@ -16,6 +17,7 @@ export function ResponseActionRow({
   onReact,
   currentReaction,
 }: ResponseActionRowProps) {
+  const { t } = useTranslation('v3');
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(async () => {
@@ -48,15 +50,15 @@ export function ResponseActionRow({
       data-v3-response-action-row=""
       style={{ display: 'flex', gap: 2, marginTop: 6, flexWrap: 'wrap' }}
     >
-      <button style={btnStyle(copied)} onClick={handleCopy} title="Copy">
+      <button style={btnStyle(copied)} onClick={handleCopy} title={t('responseActions.copy')}>
         {copied ? <Check size={13} /> : <Copy size={13} />}
-        <span>{copied ? 'Copied' : 'Copy'}</span>
+        <span>{copied ? t('responseActions.copied') : t('responseActions.copy')}</span>
       </button>
 
       <button
         style={btnStyle(currentReaction === 'thumbsUp')}
         onClick={() => onReact?.('thumbsUp')}
-        title="Helpful"
+        title={t('responseActions.helpful')}
       >
         <ThumbsUp size={13} />
       </button>
@@ -64,22 +66,26 @@ export function ResponseActionRow({
       <button
         style={btnStyle(currentReaction === 'thumbsDown')}
         onClick={() => onReact?.('thumbsDown')}
-        title="Not helpful"
+        title={t('responseActions.notHelpful')}
       >
         <ThumbsDown size={13} />
       </button>
 
       {onRegenerate && (
-        <button style={btnStyle()} onClick={onRegenerate} title="Regenerate">
+        <button style={btnStyle()} onClick={onRegenerate} title={t('responseActions.regenerate')}>
           <RefreshCw size={13} />
-          <span>Regenerate</span>
+          <span>{t('responseActions.regenerate')}</span>
         </button>
       )}
 
       {onBranch && (
-        <button style={btnStyle()} onClick={onBranch} title="Branch this conversation">
+        <button
+          style={btnStyle()}
+          onClick={onBranch}
+          title={t('responseActions.branchConversation')}
+        >
           <GitBranch size={13} />
-          <span>Branch</span>
+          <span>{t('responseActions.branch')}</span>
         </button>
       )}
     </div>

@@ -1,5 +1,6 @@
 import { Check } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '../../lib/utils';
 import { useAgentTaskStore, type AgentTaskStatus } from '../../stores/agentTaskStore';
 
@@ -18,39 +19,43 @@ function agentStatusToCowork(status: AgentTaskStatus): TaskStatus {
   return 'blocked';
 }
 
-function timeAgo(iso: string): string {
+import type { TFunction } from 'i18next';
+
+function timeAgo(iso: string, t: TFunction): string {
   const diff = Date.now() - new Date(iso).getTime();
   const s = Math.floor(diff / 1000);
-  if (s < 60) return 'just now';
+  if (s < 60) return t('time.justNow');
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m} min ago`;
+  if (m < 60) return t('time.minAgo', { count: m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
+  if (h < 24) return t('time.hAgo', { count: h });
+  return t('time.dAgo', { count: Math.floor(h / 24) });
 }
 
-const COWORK_ONBOARDING: OnboardingItem[] = [
-  {
-    title: 'Start your first task',
-    desc: 'Describe a recurring work job above and let your AI team handle it.',
-    done: true,
-  },
-  {
-    title: 'Connect a project',
-    desc: 'Link a project to give tasks context — emails, docs, CRM, repo.',
-    done: false,
-  },
-  {
-    title: 'Schedule a recurring task',
-    desc: 'Run tasks automatically on a cron schedule, even while you sleep.',
-    done: false,
-  },
-  {
-    title: 'Send a task from your phone',
-    desc: 'Install the mobile app and dispatch work from anywhere via Dispatch.',
-    done: false,
-  },
-];
+function buildOnboarding(t: TFunction): OnboardingItem[] {
+  return [
+    {
+      title: t('cowork.home.onboarding.startTitle'),
+      desc: t('cowork.home.onboarding.startDesc'),
+      done: true,
+    },
+    {
+      title: t('cowork.home.onboarding.connectTitle'),
+      desc: t('cowork.home.onboarding.connectDesc'),
+      done: false,
+    },
+    {
+      title: t('cowork.home.onboarding.scheduleTitle'),
+      desc: t('cowork.home.onboarding.scheduleDesc'),
+      done: false,
+    },
+    {
+      title: t('cowork.home.onboarding.phoneTitle'),
+      desc: t('cowork.home.onboarding.phoneDesc'),
+      done: false,
+    },
+  ];
+}
 
 function StatusDot({ status }: { status: TaskStatus }) {
   return (
@@ -67,7 +72,8 @@ function StatusDot({ status }: { status: TaskStatus }) {
 }
 
 export function CoworkHome() {
-  const [onboarding, setOnboarding] = useState(COWORK_ONBOARDING);
+  const { t } = useTranslation('v3');
+  const [onboarding, setOnboarding] = useState<OnboardingItem[]>(() => buildOnboarding(t));
   const [showOnboarding, setShowOnboarding] = useState(true);
   const [draft, setDraft] = useState('');
 
@@ -106,14 +112,14 @@ export function CoworkHome() {
         {/* Hero */}
         <div className="space-y-1">
           <h1 className="font-serif text-2xl font-medium text-white/90">
-            Let&apos;s knock something off your list
+            {t('cowork.home.headline')}
           </h1>
           <a
             href="#"
             className="text-sm text-teal-400 hover:underline"
             onClick={(e) => e.preventDefault()}
           >
-            Learn how to use Cowork safely.
+            {t('cowork.home.learnLink')}
           </a>
         </div>
 
@@ -122,7 +128,7 @@ export function CoworkHome() {
           <div className="relative rounded-xl border border-white/10 bg-white/5 shadow-sm">
             <textarea
               className="w-full resize-none bg-transparent px-4 pt-3 pb-10 text-sm text-white placeholder-white/30 outline-none"
-              placeholder="How can I help you today?"
+              placeholder={t('cowork.home.placeholder')}
               rows={3}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -134,14 +140,14 @@ export function CoworkHome() {
                 disabled={!draft.trim() || loading}
                 onClick={() => void handleStartTask()}
               >
-                Start task
+                {t('cowork.home.startTask')}
               </button>
             </div>
           </div>
           <div className="flex items-center gap-1 pl-1 text-xs text-white/30">
             <kbd className="rounded border border-white/10 bg-white/5 px-1 font-mono">⌘</kbd>
             <kbd className="rounded border border-white/10 bg-white/5 px-1 font-mono">↩</kbd>
-            <span>to start a task and keep going</span>
+            <span>{t('cowork.home.kbdHint')}</span>
           </div>
         </div>
 
@@ -150,21 +156,21 @@ export function CoworkHome() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-white/40">
-                Active
+                {t('cowork.home.active')}
               </span>
             </div>
             <div className="space-y-1">
-              {[...activeTasks, ...pendingTasks].map((t) => (
+              {[...activeTasks, ...pendingTasks].map((task) => (
                 <button
-                  key={t.id}
+                  key={task.id}
                   type="button"
                   className="flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-white/5"
                 >
-                  <StatusDot status={agentStatusToCowork(t.status)} />
+                  <StatusDot status={agentStatusToCowork(task.status)} />
                   <div className="min-w-0">
-                    <div className="truncate text-sm text-white/85">{t.goal}</div>
+                    <div className="truncate text-sm text-white/85">{task.goal}</div>
                     <div className="mt-0.5 text-xs text-white/35">
-                      {t.status === 'pending' ? 'Queued' : timeAgo(t.createdAt)}
+                      {task.status === 'pending' ? t('common.queued') : timeAgo(task.createdAt, t)}
                     </div>
                   </div>
                 </button>
@@ -178,14 +184,14 @@ export function CoworkHome() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-white/40">
-                Get to know Cowork
+                {t('cowork.home.onboardingTitle')}
               </span>
               <button
                 type="button"
                 className="text-xs text-white/30 hover:text-white/60"
                 onClick={() => setShowOnboarding(false)}
               >
-                Hide
+                {t('common.hide')}
               </button>
             </div>
             <div className="space-y-1">

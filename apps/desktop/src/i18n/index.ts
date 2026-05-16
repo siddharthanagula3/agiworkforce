@@ -93,6 +93,19 @@ import ruModels from './locales/ru/models.json';
 import arModels from './locales/ar/models.json';
 import hiModels from './locales/hi/models.json';
 
+import enV3 from './locales/en/v3.json';
+import esV3 from './locales/es/v3.json';
+import zhV3 from './locales/zh/v3.json';
+import jaV3 from './locales/ja/v3.json';
+import koV3 from './locales/ko/v3.json';
+import frV3 from './locales/fr/v3.json';
+import deV3 from './locales/de/v3.json';
+import ptV3 from './locales/pt/v3.json';
+import itV3 from './locales/it/v3.json';
+import ruV3 from './locales/ru/v3.json';
+import arV3 from './locales/ar/v3.json';
+import hiV3 from './locales/hi/v3.json';
+
 export const SUPPORTED_LANGUAGES = [
   { code: 'en', name: 'English', nativeName: 'English' },
   { code: 'es', name: 'Spanish', nativeName: 'Español' },
@@ -121,6 +134,7 @@ const resources = {
     settings: enSettings,
     pricing: enPricing,
     models: enModels,
+    v3: enV3,
   },
   es: {
     common: es,
@@ -130,6 +144,7 @@ const resources = {
     settings: esSettings,
     pricing: esPricing,
     models: esModels,
+    v3: esV3,
   },
   zh: {
     common: zh,
@@ -139,6 +154,7 @@ const resources = {
     settings: zhSettings,
     pricing: zhPricing,
     models: zhModels,
+    v3: zhV3,
   },
   ja: {
     common: ja,
@@ -148,6 +164,7 @@ const resources = {
     settings: jaSettings,
     pricing: jaPricing,
     models: jaModels,
+    v3: jaV3,
   },
   ko: {
     common: ko,
@@ -157,6 +174,7 @@ const resources = {
     settings: koSettings,
     pricing: koPricing,
     models: koModels,
+    v3: koV3,
   },
   fr: {
     common: fr,
@@ -166,6 +184,7 @@ const resources = {
     settings: frSettings,
     pricing: frPricing,
     models: frModels,
+    v3: frV3,
   },
   de: {
     common: de,
@@ -175,6 +194,7 @@ const resources = {
     settings: deSettings,
     pricing: dePricing,
     models: deModels,
+    v3: deV3,
   },
   pt: {
     common: pt,
@@ -184,6 +204,7 @@ const resources = {
     settings: ptSettings,
     pricing: ptPricing,
     models: ptModels,
+    v3: ptV3,
   },
   it: {
     common: it,
@@ -193,6 +214,7 @@ const resources = {
     settings: itSettings,
     pricing: itPricing,
     models: itModels,
+    v3: itV3,
   },
   ru: {
     common: ru,
@@ -202,6 +224,7 @@ const resources = {
     settings: ruSettings,
     pricing: ruPricing,
     models: ruModels,
+    v3: ruV3,
   },
   ar: {
     common: ar,
@@ -211,6 +234,7 @@ const resources = {
     settings: arSettings,
     pricing: arPricing,
     models: arModels,
+    v3: arV3,
   },
   hi: {
     common: hi,
@@ -220,6 +244,7 @@ const resources = {
     settings: hiSettings,
     pricing: hiPricing,
     models: hiModels,
+    v3: hiV3,
   },
 };
 

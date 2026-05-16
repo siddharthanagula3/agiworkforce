@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { BrainCircuit, ChevronRight } from 'lucide-react';
 
 export interface ThinkingPillProps {
@@ -8,10 +9,14 @@ export interface ThinkingPillProps {
 }
 
 export function ThinkingPill({ summary, details, durationSeconds }: ThinkingPillProps) {
+  const { t } = useTranslation('v3');
   const [open, setOpen] = useState(false);
 
   const label =
-    summary ?? (durationSeconds != null ? `Reasoned for ${durationSeconds}s` : 'Reasoned');
+    summary ??
+    (durationSeconds != null
+      ? t('thinking.reasonedFor', { seconds: durationSeconds })
+      : t('thinking.reasoned'));
 
   return (
     <div data-v3-thinking-pill="" style={{ marginBottom: 8 }}>

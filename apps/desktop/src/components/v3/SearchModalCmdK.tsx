@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Search,
   MessageSquare,
@@ -28,6 +29,7 @@ export interface SearchModalCmdKProps {
 }
 
 export function SearchModalCmdK({ onClose, onNavigate }: SearchModalCmdKProps) {
+  const { t } = useTranslation('v3');
   const [q, setQ] = useState('');
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -117,7 +119,7 @@ export function SearchModalCmdK({ onClose, onNavigate }: SearchModalCmdKProps) {
             ref={inputRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search chats, projects, skills, connectors, settings…"
+            placeholder={t('search.placeholder')}
             style={{
               flex: 1,
               border: 'none',
@@ -138,7 +140,7 @@ export function SearchModalCmdK({ onClose, onNavigate }: SearchModalCmdKProps) {
               borderRadius: 4,
             }}
           >
-            esc
+            {t('search.esc')}
           </span>
         </div>
 
@@ -153,7 +155,7 @@ export function SearchModalCmdK({ onClose, onNavigate }: SearchModalCmdKProps) {
                 fontSize: 13,
               }}
             >
-              {q ? `No matches for "${q}"` : 'No results'}
+              {q ? t('search.noMatches', { query: q }) : t('search.noResults')}
             </div>
           ) : (
             groups.map((group) => (
@@ -236,9 +238,9 @@ export function SearchModalCmdK({ onClose, onNavigate }: SearchModalCmdKProps) {
           }}
         >
           {[
-            ['↑↓', 'navigate'],
-            ['⏎', 'open'],
-            ['⌘K', 'close'],
+            ['↑↓', t('search.navigate')],
+            ['⏎', t('search.open')],
+            ['⌘K', t('search.closeKbd')],
           ].map(([kbd, label]) => (
             <span key={kbd} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <span

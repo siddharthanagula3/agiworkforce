@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Mic, X, Check, Shield } from 'lucide-react';
 import { useVoiceInputStore } from '../../stores/voiceInputStore';
 
@@ -13,6 +14,7 @@ export interface MicSettingsProps {
 }
 
 export function MicSettings({ onClose, onSettings }: MicSettingsProps) {
+  const { t } = useTranslation('v3');
   const selectedDeviceId = useVoiceInputStore((s) => s.selectedDeviceId);
   const setSelectedDeviceId = useVoiceInputStore((s) => s.setSelectedDeviceId);
   const holdToRecord = useVoiceInputStore((s) => s.holdToRecord);
@@ -35,16 +37,20 @@ export function MicSettings({ onClose, onSettings }: MicSettingsProps) {
           .filter((d) => d.kind === 'audioinput')
           .map((d) => ({
             deviceId: d.deviceId || 'default',
-            label: d.label || (d.deviceId === 'default' ? 'Default microphone' : 'Microphone'),
+            label:
+              d.label ||
+              (d.deviceId === 'default'
+                ? t('micSettings.defaultMic')
+                : t('micSettings.microphone')),
           }));
         // Always ensure a "default" entry is present
         if (!inputs.some((d) => d.deviceId === 'default')) {
-          inputs.unshift({ deviceId: 'default', label: 'Default microphone' });
+          inputs.unshift({ deviceId: 'default', label: t('micSettings.defaultMic') });
         }
         setDevices(inputs);
       } catch {
         // mediaDevices unavailable (non-secure context, etc.) — show static fallback
-        setDevices([{ deviceId: 'default', label: 'Default microphone' }]);
+        setDevices([{ deviceId: 'default', label: t('micSettings.defaultMic') }]);
       }
     }
 
@@ -56,7 +62,7 @@ export function MicSettings({ onClose, onSettings }: MicSettingsProps) {
       cancelled = true;
       navigator.mediaDevices?.removeEventListener('devicechange', loadDevices);
     };
-  }, []);
+  }, [t]);
 
   const activeDeviceId = selectedDeviceId || 'default';
 
@@ -93,7 +99,7 @@ export function MicSettings({ onClose, onSettings }: MicSettingsProps) {
         >
           <Mic size={13} style={{ color: 'var(--text-3)' }} />
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)', flex: 1 }}>
-            Voice input
+            {t('micSettings.title')}
           </span>
           <button
             onClick={onClose}
@@ -122,11 +128,11 @@ export function MicSettings({ onClose, onSettings }: MicSettingsProps) {
               letterSpacing: 0.5,
             }}
           >
-            Source
+            {t('micSettings.source')}
           </div>
           {devices.length === 0 ? (
             <div style={{ padding: '7px 12px', fontSize: 12, color: 'var(--text-3)' }}>
-              Loading devices…
+              {t('micSettings.loadingDevices')}
             </div>
           ) : (
             devices.map((device) => {
@@ -186,7 +192,9 @@ export function MicSettings({ onClose, onSettings }: MicSettingsProps) {
                       {device.label}
                     </div>
                     {device.deviceId === 'default' && (
-                      <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Default</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                        {t('common.default')}
+                      </div>
                     )}
                   </div>
 
@@ -220,10 +228,10 @@ export function MicSettings({ onClose, onSettings }: MicSettingsProps) {
           >
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-1)' }}>
-                Hold to record
+                {t('micSettings.holdToRecord')}
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
-                Tap to start, tap to stop when off
+                {t('micSettings.holdToRecordDesc')}
               </div>
             </div>
             <button
@@ -272,10 +280,10 @@ export function MicSettings({ onClose, onSettings }: MicSettingsProps) {
           >
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-1)' }}>
-                Auto-trim silence
+                {t('micSettings.autoTrim')}
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
-                Cut leading/trailing pauses
+                {t('micSettings.autoTrimDesc')}
               </div>
             </div>
             <button
@@ -318,7 +326,7 @@ export function MicSettings({ onClose, onSettings }: MicSettingsProps) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px' }}>
           <Shield size={12} style={{ color: 'var(--teal)', flexShrink: 0 }} />
           <span style={{ fontSize: 11.5, color: 'var(--text-3)', flex: 1 }}>
-            On-device · Whisper-small
+            {t('micSettings.footer')}
           </span>
           <button
             onClick={onSettings}
@@ -331,7 +339,7 @@ export function MicSettings({ onClose, onSettings }: MicSettingsProps) {
               padding: 0,
             }}
           >
-            Settings
+            {t('micSettings.settings')}
           </button>
         </div>
       </div>

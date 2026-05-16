@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertOctagon, X } from 'lucide-react';
 import { useBudgetStore, selectBudget, selectBudgetPercentage } from '@agiworkforce/unified-chat';
 
@@ -20,6 +21,7 @@ interface CapModalProps {
  * and billing flow.
  */
 export function CapModal({ onSwitchModel, onBuyTopUp }: CapModalProps) {
+  const { t } = useTranslation('v3');
   const budget = useBudgetStore(selectBudget);
   const usagePercent = useBudgetStore(selectBudgetPercentage);
   const [waitDismissed, setWaitDismissed] = useState(false);
@@ -67,17 +69,16 @@ export function CapModal({ onSwitchModel, onBuyTopUp }: CapModalProps) {
               className="text-base font-semibold"
               style={{ color: 'var(--chat-text-primary)' }}
             >
-              You&apos;ve hit your message limit
+              {t('capModal.title')}
             </h2>
             <p className="mt-1 text-sm" style={{ color: 'var(--chat-text-secondary)' }}>
-              Pick how you want to keep going — switch to a smaller model, top up, or wait until
-              your usage resets.
+              {t('capModal.subtitle')}
             </p>
           </div>
           <button
             type="button"
             onClick={() => setWaitDismissed(true)}
-            aria-label="Dismiss until next reset"
+            aria-label={t('capModal.dismiss')}
             className="rounded p-1 transition-colors hover:bg-[var(--chat-surface-hover)]"
             style={{ color: 'var(--chat-text-muted)' }}
           >
@@ -96,7 +97,7 @@ export function CapModal({ onSwitchModel, onBuyTopUp }: CapModalProps) {
                 color: 'var(--chat-surface-elevated)',
               }}
             >
-              Switch to a smaller model
+              {t('capModal.switchModel')}
             </button>
           )}
           {onBuyTopUp && (
@@ -109,7 +110,7 @@ export function CapModal({ onSwitchModel, onBuyTopUp }: CapModalProps) {
                 color: 'var(--chat-text-primary)',
               }}
             >
-              Buy a top-up
+              {t('capModal.buyTopUp')}
             </button>
           )}
           <button
@@ -118,7 +119,7 @@ export function CapModal({ onSwitchModel, onBuyTopUp }: CapModalProps) {
             className="text-sm transition-colors hover:opacity-80"
             style={{ color: 'var(--chat-text-muted)' }}
           >
-            Wait until reset
+            {t('capModal.waitReset')}
           </button>
         </div>
       </div>

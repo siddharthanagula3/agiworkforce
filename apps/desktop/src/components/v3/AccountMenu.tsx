@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import {
   Settings,
   Globe,
@@ -31,12 +32,13 @@ export interface AccountMenuProps {
 }
 
 export function AccountMenu({ onClose }: AccountMenuProps) {
+  const { t } = useTranslation('v3');
   const user = useUnifiedAuthStore((s) => s.user);
   const planDisplayName = useUnifiedAuthStore((s) => s.planDisplayName);
   const signOut = useUnifiedAuthStore((s) => s.signOut);
   const openSettings = useSettingsDialogStore((s) => s.openSettings);
 
-  const displayLabel = user?.name || user?.email || 'Account';
+  const displayLabel = user?.name || user?.email || t('accountMenu.accountFallback');
   const emailSub = user?.name && user?.email ? user.email : undefined;
 
   const items: MenuItemDef[] = [
@@ -44,18 +46,18 @@ export function AccountMenu({ onClose }: AccountMenuProps) {
     {
       kind: 'item',
       icon: Settings,
-      label: 'Settings',
+      label: t('accountMenu.settings'),
       kbd: '⌘,',
       action: () => {
         openSettings();
         onClose();
       },
     },
-    { kind: 'item', icon: Globe, label: 'Language', chev: true },
+    { kind: 'item', icon: Globe, label: t('accountMenu.language'), chev: true },
     {
       kind: 'item',
       icon: Lock,
-      label: 'Privacy & security',
+      label: t('accountMenu.privacySecurity'),
       action: () => {
         openSettings('account');
         onClose();
@@ -65,7 +67,7 @@ export function AccountMenu({ onClose }: AccountMenuProps) {
     {
       kind: 'item',
       icon: Sparkles,
-      label: `View all plans${planDisplayName ? ` · ${planDisplayName}` : ''}`,
+      label: `${t('accountMenu.viewAllPlans')}${planDisplayName ? ` · ${planDisplayName}` : ''}`,
       action: () => {
         openSettings('billing');
         onClose();
@@ -74,18 +76,18 @@ export function AccountMenu({ onClose }: AccountMenuProps) {
     {
       kind: 'item',
       icon: Cpu,
-      label: 'BYOK & local models',
+      label: t('accountMenu.byokLocal'),
       action: () => {
         openSettings('models-keys');
         onClose();
       },
     },
-    { kind: 'item', icon: Box, label: 'Apps & extensions', chev: true },
-    { kind: 'item', icon: Mail, label: 'Gift AGI', chev: true },
+    { kind: 'item', icon: Box, label: t('accountMenu.appsExtensions'), chev: true },
+    { kind: 'item', icon: Mail, label: t('accountMenu.giftAGI'), chev: true },
     {
       kind: 'item',
       icon: HelpCircle,
-      label: 'Help & support',
+      label: t('accountMenu.helpSupport'),
       action: () => {
         window.open('https://agiworkforce.com/docs', '_blank', 'noopener,noreferrer');
         onClose();
@@ -95,7 +97,7 @@ export function AccountMenu({ onClose }: AccountMenuProps) {
     {
       kind: 'item',
       icon: LogOut,
-      label: 'Log out',
+      label: t('accountMenu.logOut'),
       danger: true,
       action: () => {
         void signOut();
