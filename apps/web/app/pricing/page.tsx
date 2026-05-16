@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
@@ -29,8 +30,15 @@ function CheckIcon() {
 
 export default function PricingPage() {
   const [annual, setAnnual] = useState(false);
-  const hobbyPrice = annual ? '$5' : '$10';
+  const hobbyMonthly = BILLING_PLAN_PRICING.hobby.monthlyPriceUsd;
+  const hobbyYearly = BILLING_PLAN_PRICING.hobby.yearlyPriceUsd;
+  const hobbyAnnualPerMonth = hobbyYearly / 12;
+  const hobbyPrice = annual ? `$${hobbyAnnualPerMonth.toFixed(2)}` : `$${hobbyMonthly}`;
   const hobbySub = annual ? 'per month, billed annually' : 'per month, billed monthly';
+  const proMonthly = BILLING_PLAN_PRICING.pro.monthlyPriceUsd;
+  const proPlusMonthly = BILLING_PLAN_PRICING.pro_plus.monthlyPriceUsd;
+  const maxMonthly = BILLING_PLAN_PRICING.max.monthlyPriceUsd;
+  const hobbySavingsPct = Math.round((1 - hobbyAnnualPerMonth / hobbyMonthly) * 100);
 
   return (
     <div data-design="agi">
@@ -41,8 +49,9 @@ export default function PricingPage() {
           <h1 className="agi-page-h1">Simple pricing.</h1>
           <p className="agi-page-lede">
             Local and BYOK are free forever. Hobby is the only paid tier shipping today - managed
-            cloud at $10/mo, or $5/mo if you pay annually.{' '}
-            <strong>Pro, Pro+, and Max are on the waitlist</strong> until our security audit closes.
+            cloud at ${hobbyMonthly}/mo, or ${hobbyAnnualPerMonth.toFixed(2)}/mo if you pay
+            annually. <strong>Pro, Pro+, and Max are on the waitlist</strong> until our security
+            audit closes.
           </p>
         </section>
 
@@ -68,7 +77,7 @@ export default function PricingPage() {
                 annual ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active' : 'agi-tier-toggle-btn'
               }
             >
-              Annual <span className="agi-tier-toggle-save">save 50% on Hobby</span>
+              Annual <span className="agi-tier-toggle-save">save {hobbySavingsPct}% on Hobby</span>
             </button>
           </div>
 
@@ -175,9 +184,10 @@ export default function PricingPage() {
 
           <p className="agi-tier-note">
             <span>
-              <strong style={{ color: 'var(--agi-ink)' }}>Pro</strong> $29.99/mo &nbsp;·&nbsp;{' '}
-              <strong style={{ color: 'var(--agi-ink)' }}>Pro+</strong> $49.99/mo &nbsp;·&nbsp;{' '}
-              <strong style={{ color: 'var(--agi-ink)' }}>Max</strong> $299.99/mo - all on the
+              <strong style={{ color: 'var(--agi-ink)' }}>Pro</strong> ${proMonthly}/mo
+              &nbsp;·&nbsp; <strong style={{ color: 'var(--agi-ink)' }}>Pro+</strong> $
+              {proPlusMonthly}/mo &nbsp;·&nbsp;{' '}
+              <strong style={{ color: 'var(--agi-ink)' }}>Max</strong> ${maxMonthly}/mo - all on the
               waitlist until the security audit closes.
             </span>
             <Link href="/contact-sales">Enterprise - contact sales</Link>
