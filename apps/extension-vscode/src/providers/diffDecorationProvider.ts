@@ -194,38 +194,38 @@ export class DiffDecorationProvider implements vscode.Disposable {
   private readonly _disposables: vscode.Disposable[] = [];
 
   constructor() {
+    // v3 palette: success=#22c55e (dark), danger=#ef4444 (dark), warning=#f59e0b (dark)
     this._addedDecoration = vscode.window.createTextEditorDecorationType({
       isWholeLine: true,
-      backgroundColor: 'rgba(76,175,80,0.08)',
-      borderColor: 'rgba(76,175,80,0)',
-      overviewRulerColor: '#4caf50',
+      backgroundColor: new vscode.ThemeColor('diffEditor.insertedLineBackground'),
+      overviewRulerColor: new vscode.ThemeColor('editorOverviewRuler.addedForeground'),
       overviewRulerLane: vscode.OverviewRulerLane.Full,
-      before: { contentText: ' ', backgroundColor: '#4caf50', width: '2px', margin: '0 4px 0 0' },
+      before: { contentText: ' ', backgroundColor: '#22c55e', width: '2px', margin: '0 4px 0 0' },
     });
 
     this._removedDecoration = vscode.window.createTextEditorDecorationType({
       isWholeLine: true,
-      backgroundColor: 'rgba(244,67,54,0.08)',
-      overviewRulerColor: '#f44336',
+      backgroundColor: new vscode.ThemeColor('diffEditor.removedLineBackground'),
+      overviewRulerColor: new vscode.ThemeColor('editorOverviewRuler.deletedForeground'),
       overviewRulerLane: vscode.OverviewRulerLane.Full,
-      textDecoration: 'line-through rgba(244,67,54,0.5)',
-      before: { contentText: ' ', backgroundColor: '#f44336', width: '2px', margin: '0 4px 0 0' },
+      textDecoration: 'line-through rgba(239, 68, 68, 0.5)',
+      before: { contentText: ' ', backgroundColor: '#ef4444', width: '2px', margin: '0 4px 0 0' },
     });
 
     this._modifiedDecoration = vscode.window.createTextEditorDecorationType({
       isWholeLine: true,
-      backgroundColor: 'rgba(255,152,0,0.06)',
-      overviewRulerColor: '#ff9800',
+      backgroundColor: new vscode.ThemeColor('diffEditor.unchangedRegionBackground'),
+      overviewRulerColor: new vscode.ThemeColor('editorOverviewRuler.modifiedForeground'),
       overviewRulerLane: vscode.OverviewRulerLane.Full,
-      before: { contentText: ' ', backgroundColor: '#ff9800', width: '2px', margin: '0 4px 0 0' },
+      before: { contentText: ' ', backgroundColor: '#f59e0b', width: '2px', margin: '0 4px 0 0' },
     });
 
-    // Gutter decorations with clear + / - indicators
+    // Gutter decorations with clear + / - indicators (v3 success/danger palette)
     this._addedGutter = vscode.window.createTextEditorDecorationType({
       isWholeLine: false,
       before: {
         contentText: '+',
-        color: '#4caf50',
+        color: '#22c55e',
         fontWeight: 'bold',
         width: '1ch',
         margin: '0 2px 0 0',
@@ -236,7 +236,7 @@ export class DiffDecorationProvider implements vscode.Disposable {
       isWholeLine: false,
       before: {
         contentText: '-',
-        color: '#f44336',
+        color: '#ef4444',
         fontWeight: 'bold',
         width: '1ch',
         margin: '0 2px 0 0',

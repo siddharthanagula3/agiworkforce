@@ -245,7 +245,7 @@ export default function AgentDetailScreen() {
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
-    else router.replace('/(app)/agents');
+    else router.replace({ pathname: '/(app)/agents' as const });
   }, [router]);
 
   const handleCommand = useCallback(
@@ -282,7 +282,7 @@ export default function AgentDetailScreen() {
     try {
       const title = `Task with ${agent.name}`;
       const conversationId = await createConversation(title);
-      router.push(`/(app)/chat/${conversationId}`);
+      router.push({ pathname: '/(app)/chat/[id]' as const, params: { id: conversationId } });
       sendMessage(
         conversationId,
         `I'd like to start a new task with the agent: ${agent.name}`,
