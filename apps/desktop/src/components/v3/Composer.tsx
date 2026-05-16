@@ -209,17 +209,17 @@ export function Composer({
               }}
             >
               <span>{modelName}</span>
-              {thinkingEnabled && (
-                <span
-                  className="rounded px-1 py-0.5 text-[10px] font-semibold"
-                  style={{
-                    background: 'rgba(33,128,141,0.15)',
-                    color: 'var(--chat-accent-primary)',
-                  }}
-                >
-                  Adaptive
-                </span>
-              )}
+              {/* Adaptive/Standard read-only HUD — shows current thinking state */}
+              <span
+                className="rounded px-1 py-0.5 text-[10px] font-semibold"
+                style={
+                  thinkingEnabled
+                    ? { background: 'rgba(33,128,141,0.15)', color: 'var(--chat-accent-primary)' }
+                    : { background: 'var(--chat-surface-hover)', color: 'var(--chat-text-muted)' }
+                }
+              >
+                {thinkingEnabled ? 'Adaptive' : 'Standard'}
+              </span>
               <ChevronDown size={12} />
             </button>
 
