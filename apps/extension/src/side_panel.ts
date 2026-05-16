@@ -1,4 +1,5 @@
 import { QueueFullError } from '@agiworkforce/runtime';
+import { getExtensionTokensCss } from './tokens';
 import {
   getCoreManualModelOptions,
   normalizeModelId,
@@ -301,19 +302,14 @@ function injectStyles(): void {
   const style = document.createElement('style');
   style.textContent = `
     /* ── AGI design tokens (dark) ── */
-    :root {
-      --agi-ext-accent: #21808d;
-      --agi-ext-accent-secondary: #da7756;
-      --agi-ext-focus: #21808d;
-      --agi-ext-on-accent: #ffffff;
-    }
+    ${getExtensionTokensCss('dark')}
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #0f0f14;
-      color: #e2e8f0;
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text);
       height: 100vh;
       display: flex;
       flex-direction: column;
