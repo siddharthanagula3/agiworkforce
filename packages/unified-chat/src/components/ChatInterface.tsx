@@ -249,6 +249,36 @@ export interface ChatInterfaceProps {
   hostBridge?: ChatHostBridge | null;
   /** Legacy fallback for mirroring messages into a host store. */
   onAddMessage?: (msg: { role: string; content: string; id?: string }) => void;
+  /**
+   * When provided, replaces the default `Sidebar` block. Host apps can use
+   * this to inject a surface-specific sidebar shell while keeping streaming
+   * and host-bridge wiring identical.
+   */
+  sidebarSlot?: ReactNode;
+  /**
+   * When provided, replaces the default `EmptyState + QuickChips` block that
+   * renders when the conversation has no messages.
+   */
+  emptyStateSlot?: ReactNode;
+  /**
+   * When provided, replaces the default `ChatInput + QuickChips + Disclaimer`
+   * composer block at the bottom of the chat. Host apps using this slot are
+   * responsible for invoking `runtime.sendMessage` themselves (typically via
+   * the exported `useChat` hook).
+   */
+  composerSlot?: ReactNode;
+  /**
+   * Forwarded to `ArtifactPanel`. `'split'` keeps the artifact panel docked
+   * beside the chat (current behavior). `'fullscreen'` hides the chat column
+   * while the artifact is open. Default `'split'`.
+   */
+  artifactMode?: 'split' | 'fullscreen';
+  /**
+   * When true (default), assistant messages render a `ProvenanceFooter`
+   * below them showing model id + latency + token counts. Pass `false` to
+   * suppress on hosts that don't want the footer.
+   */
+  showProvenanceFooter?: boolean;
 }
 
 export function ChatInterface({
@@ -262,6 +292,11 @@ export function ChatInterface({
   onNavigateView,
   hostBridge = null,
   onAddMessage,
+  sidebarSlot,
+  emptyStateSlot,
+  composerSlot,
+  artifactMode = 'split',
+  showProvenanceFooter = true,
 }: ChatInterfaceProps) {
   // Side-effect hooks — theme management is opt-in; shortcuts are opt-out
   useTheme();
@@ -432,7 +467,10 @@ export function ChatInterface({
             <MessageList
               conversationId={activeConversationId}
               onArtifactClick={handleArtifactClick}
+              showProvenanceFooter={showProvenanceFooter}
             />
+          ) : emptyStateSlot !== undefined ? (
+            emptyStateSlot
           ) : (
             <EmptyState />
           )}
@@ -441,21 +479,27 @@ export function ChatInterface({
         {/* Input area — ALWAYS at bottom in natural document flow.
             Never position:fixed. Never teleported. */}
         <div className="shrink-0 px-4 pb-2">
-          <ChatInput
-            onSend={handleSend}
-            onStop={stopGeneration}
-            onPlusClick={handlePlusClick}
-            onModelSelectorClick={handleModelSelectorClick}
-            onVoiceClick={handleVoiceClick}
-            hasMessages={hasMessages}
-            disabled={!runtime}
-            disabledMessage="Connect to start chatting"
-            conversationId={activeConversationId}
-            projectId={null}
-          />
-          {/* Sample-prompt chips below composer per design-spec §8 */}
-          {!hasMessages && <QuickChips onChipClick={handleChipClick} />}
-          <Disclaimer variant={disclaimerVariant} />
+          {composerSlot !== undefined ? (
+            composerSlot
+          ) : (
+            <>
+              <ChatInput
+                onSend={handleSend}
+                onStop={stopGeneration}
+                onPlusClick={handlePlusClick}
+                onModelSelectorClick={handleModelSelectorClick}
+                onVoiceClick={handleVoiceClick}
+                hasMessages={hasMessages}
+                disabled={!runtime}
+                disabledMessage="Connect to start chatting"
+                conversationId={activeConversationId}
+                projectId={null}
+              />
+              {/* Sample-prompt chips below composer per design-spec §8 */}
+              {!hasMessages && <QuickChips onChipClick={handleChipClick} />}
+              <Disclaimer variant={disclaimerVariant} />
+            </>
+          )}
         </div>
       </div>
     );
@@ -472,18 +516,25 @@ export function ChatInterface({
           )}
         >
           {/* Left: collapsible sidebar */}
-          <Sidebar />
+          {sidebarSlot !== undefined ? sidebarSlot : <Sidebar />}
 
-          {/* Center: main content — wrapped in ErrorBoundary to catch render errors */}
-          <main className="flex flex-1 min-w-0 flex-col overflow-hidden">
-            <ChatErrorBoundary>{renderMainContent()}</ChatErrorBoundary>
-          </main>
+          {/* Center: main content — wrapped in ErrorBoundary to catch render errors.
+              Hidden when an artifact is open in fullscreen mode. */}
+          {!(artifactOpen && artifactMode === 'fullscreen') && (
+            <main className="flex flex-1 min-w-0 flex-col overflow-hidden">
+              <ChatErrorBoundary>{renderMainContent()}</ChatErrorBoundary>
+            </main>
+          )}
 
-          {/* Right: artifact panel — only mounted when open (Phase 3) */}
+          {/* Right: artifact panel — only mounted when open (Phase 3).
+              In fullscreen mode the panel fills the remaining width. */}
           {artifactOpen && (
             <div
-              className="shrink-0 border-l border-[var(--chat-border)] bg-[var(--chat-surface-base)]"
-              style={{ width: artifactPanelWidth }}
+              className={cn(
+                'border-l border-[var(--chat-border)] bg-[var(--chat-surface-base)]',
+                artifactMode === 'fullscreen' ? 'flex-1' : 'shrink-0',
+              )}
+              style={artifactMode === 'split' ? { width: artifactPanelWidth } : undefined}
             >
               <ArtifactPanel
                 artifact={activeArtifact}

@@ -71,6 +71,7 @@ import { useSettingsDialogStore } from './stores/settingsStore';
 import { useSettingsStore, waitForSettingsHydration } from './stores/settingsStore';
 import { useVoiceInputStore } from './stores/settingsStore';
 import { applyTheme, getThemeById } from './themes/index';
+import { FeatureFlagName, useFeatureFlag } from './services/featureFlags';
 
 const VisualizationLayer = lazy(() =>
   import('./components/Overlay/VisualizationLayer').then((m) => ({
@@ -85,6 +86,11 @@ const FloatingChat = lazy(() =>
 const ChatInterface = lazy(() =>
   import('@agiworkforce/unified-chat').then((m) => ({
     default: m.ChatInterface,
+  })),
+);
+const DesktopShellV3 = lazy(() =>
+  import('./components/v3').then((m) => ({
+    default: m.DesktopShellV3,
   })),
 );
 const SearchModal = lazy(() =>
@@ -1043,6 +1049,8 @@ const DesktopShell = () => {
 
   const openSettings = useCallback(() => openSettingsDialog(), [openSettingsDialog]);
 
+  const isV3DesktopChatEnabled = useFeatureFlag(FeatureFlagName.DESKTOP_CHAT_V3);
+
   const handleDismissTimeoutWarning = useCallback(() => {
     setIsTimeoutWarningOpen(false);
     setTimeoutWarning(null);
@@ -1273,30 +1281,55 @@ const DesktopShell = () => {
                 </div>
               }
             >
-              <ChatInterface
-                runtime={tauriRuntime}
-                className="h-full w-full"
-                manageTheme={false}
-                enableShortcuts={true}
-                hostBridge={chatHostBridge}
-                onModelSelectorClick={() => openSettingsDialog('models-keys')}
-                onVoiceClick={() => {
-                  // Toggle voice input overlay
-                  const event = new CustomEvent('toggle-voice-input');
-                  window.dispatchEvent(event);
-                }}
-                onNavigateView={(view) => {
-                  if (view === 'customize') {
-                    openSettingsDialog('mcp-skills');
-                  } else if (view === 'connectors') {
-                    openSettingsDialog('connectors');
-                  } else if (view === 'skills') {
-                    openSettingsDialog('mcp-skills');
-                  } else if (view === 'projects') {
-                    openSettingsDialog('account');
-                  }
-                }}
-              />
+              {isV3DesktopChatEnabled ? (
+                <DesktopShellV3
+                  runtime={tauriRuntime}
+                  className="h-full w-full"
+                  hostBridge={chatHostBridge}
+                  onModelSelectorClick={() => openSettingsDialog('models-keys')}
+                  onVoiceClick={() => {
+                    const event = new CustomEvent('toggle-voice-input');
+                    window.dispatchEvent(event);
+                  }}
+                  onNavigateView={(view) => {
+                    if (view === 'customize') {
+                      openSettingsDialog('mcp-skills');
+                    } else if (view === 'connectors') {
+                      openSettingsDialog('connectors');
+                    } else if (view === 'skills') {
+                      openSettingsDialog('mcp-skills');
+                    } else if (view === 'projects') {
+                      openSettingsDialog('account');
+                    }
+                  }}
+                  onBuyTopUp={() => openSettingsDialog('billing')}
+                />
+              ) : (
+                <ChatInterface
+                  runtime={tauriRuntime}
+                  className="h-full w-full"
+                  manageTheme={false}
+                  enableShortcuts={true}
+                  hostBridge={chatHostBridge}
+                  onModelSelectorClick={() => openSettingsDialog('models-keys')}
+                  onVoiceClick={() => {
+                    // Toggle voice input overlay
+                    const event = new CustomEvent('toggle-voice-input');
+                    window.dispatchEvent(event);
+                  }}
+                  onNavigateView={(view) => {
+                    if (view === 'customize') {
+                      openSettingsDialog('mcp-skills');
+                    } else if (view === 'connectors') {
+                      openSettingsDialog('connectors');
+                    } else if (view === 'skills') {
+                      openSettingsDialog('mcp-skills');
+                    } else if (view === 'projects') {
+                      openSettingsDialog('account');
+                    }
+                  }}
+                />
+              )}
             </ErrorBoundary>
           </div>
         </main>

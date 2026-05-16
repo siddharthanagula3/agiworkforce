@@ -424,6 +424,50 @@ export default [
     },
   },
 
+  // ---------------------------------------------------------------------------
+  // V3 surface guardrails — narrow-scope rules that lock the new desktop chat
+  // shell to the design-spec brand + IA decisions.
+  //
+  // These rules apply ONLY to `apps/desktop/src/components/v3/**` (and the
+  // matching e2e specs). Existing surfaces are not retroactively affected;
+  // the scope can be widened in a follow-up PR once each legacy site is
+  // either fixed or annotated.
+  // ---------------------------------------------------------------------------
+  {
+    files: [
+      'apps/desktop/src/components/v3/**/*.ts',
+      'apps/desktop/src/components/v3/**/*.tsx',
+      'apps/desktop/e2e/v3-*.spec.ts',
+    ],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          // Brand string — user-facing copy must be "AGI", not "AGI Workforce",
+          // per docs/design/design-spec-2026-05-15.md. Catches both bare
+          // string literals (toast titles, alt text) and JSX text children.
+          selector: ':matches(Literal[value=/^AGI Workforce/], JSXText[value=/AGI Workforce/])',
+          message:
+            'User-facing brand string must be "AGI" per docs/design/design-spec-2026-05-15.md. Use a BRAND_NAME constant or `t("brand.name")` for i18n. To opt out (legal copy, audit logs), add `// eslint-disable-next-line no-restricted-syntax` with a justification.',
+        },
+      ],
+      // Block re-introducing the deleted ModeSelectionDialog component.
+      // Mode selection lives in OnboardingWizard.tsx per CLAUDE.md.
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/ModeSelectionDialog', '**/ModeSelectionDialog/*'],
+              message:
+                'ModeSelectionDialog was removed in 2026-05; mode picker lives in OnboardingWizard.tsx. Do not reintroduce.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // JavaScript files
   {
     files: ['**/*.js', '**/*.cjs', '**/*.mjs'],
