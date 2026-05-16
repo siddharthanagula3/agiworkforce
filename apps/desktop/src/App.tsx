@@ -1300,6 +1300,8 @@ const DesktopShell = () => {
                       openSettingsDialog('mcp-skills');
                     } else if (view === 'projects') {
                       openSettingsDialog('account');
+                    } else if (view === 'pricing' || view === 'billing' || view === 'byok') {
+                      openSettingsDialog('account');
                     }
                   }}
                   onBuyTopUp={() => openSettingsDialog('billing')}
@@ -1325,6 +1327,8 @@ const DesktopShell = () => {
                     } else if (view === 'skills') {
                       openSettingsDialog('mcp-skills');
                     } else if (view === 'projects') {
+                      openSettingsDialog('account');
+                    } else if (view === 'pricing' || view === 'billing' || view === 'byok') {
                       openSettingsDialog('account');
                     }
                   }}

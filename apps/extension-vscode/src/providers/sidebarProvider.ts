@@ -9,6 +9,7 @@
 import * as vscode from 'vscode';
 import { type ConversationStore } from '../storage/conversationStore';
 import { type ConversationTreeProvider } from './conversationTreeProvider';
+import { type DiffDecorationProvider } from './diffDecorationProvider';
 import { normalizeConfiguredModelId } from '../services/modelConstants';
 import { Config } from '../utils/config';
 import { ChatStateManager } from './sidebar/ChatStateManager';
@@ -38,6 +39,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     conversationStore?: ConversationStore,
     conversationTreeProvider?: ConversationTreeProvider,
     workspaceState?: vscode.Memento,
+    diffDecorationProvider?: DiffDecorationProvider,
   ) {
     this._stateManager = new ChatStateManager(
       secrets,
@@ -46,6 +48,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       conversationStore,
       conversationTreeProvider,
       workspaceState,
+      diffDecorationProvider,
     );
   }
 
