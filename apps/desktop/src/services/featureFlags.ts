@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react';
 import { featureFlagGetAll } from '../api/analytics';
 import { FeatureFlag, FeatureFlagConfig, UserProperties } from '../types/analytics';
 import { analytics } from './analytics';
@@ -25,6 +26,8 @@ export enum FeatureFlagName {
   MOBILE_APP = 'mobile_app',
   BROWSER_EXTENSION = 'browser_extension',
   MARKETPLACE = 'marketplace',
+
+  DESKTOP_CHAT_V3 = 'desktop_chat_v3',
 }
 
 class FeatureFlagsService {
@@ -32,6 +35,7 @@ class FeatureFlagsService {
   private userProperties: UserProperties = {};
   private localOverrides: Map<string, boolean> = new Map();
   private updateInterval?: number;
+  private listeners: Set<() => void> = new Set();
 
   constructor() {
     this.config = {
@@ -41,6 +45,23 @@ class FeatureFlagsService {
     };
 
     this.initializeService();
+  }
+
+  public subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private notify(): void {
+    this.listeners.forEach((listener) => {
+      try {
+        listener();
+      } catch (error) {
+        console.error('Feature flags listener threw:', error);
+      }
+    });
   }
 
   /**
@@ -180,6 +201,13 @@ class FeatureFlagsService {
         targetPlanTiers: ['enterprise'],
         description: 'Extension marketplace',
       },
+      [FeatureFlagName.DESKTOP_CHAT_V3]: {
+        name: FeatureFlagName.DESKTOP_CHAT_V3,
+        enabled: true,
+        rolloutPercentage: 0,
+        description:
+          'Desktop chat v3 shell (composer-first, unified-chat primitives, agiPalette tokens)',
+      },
     };
   }
 
@@ -265,6 +293,7 @@ class FeatureFlagsService {
       discovery_method: 'manual_override',
       enabled,
     });
+    this.notify();
   }
 
   public clearLocalOverride(flagName: string) {
@@ -273,11 +302,13 @@ class FeatureFlagsService {
       'feature_flags_overrides',
       JSON.stringify(Array.from(this.localOverrides.entries())),
     );
+    this.notify();
   }
 
   public clearAllOverrides() {
     this.localOverrides.clear();
     localStorage.removeItem('feature_flags_overrides');
+    this.notify();
   }
 
   public trackFeatureUsage(flagName: string) {
@@ -357,6 +388,7 @@ class FeatureFlagsService {
       this.config.lastUpdated = Date.now();
 
       localStorage.setItem('feature_flags_config', JSON.stringify(this.config));
+      this.notify();
     } catch (error) {
       console.error('Failed to fetch remote feature flags:', error);
     }
@@ -388,3 +420,18 @@ class FeatureFlagsService {
 export const featureFlags = new FeatureFlagsService();
 
 export { FeatureFlagsService };
+
+/**
+ * Reactive hook that re-renders the caller whenever the named flag changes
+ * (local override flip, remote fetch update, or override clear).
+ *
+ * Use this rather than `featureFlags.isEnabled(...)` from a React tree —
+ * a plain method call won't re-render on flag changes.
+ */
+export function useFeatureFlag(flagName: string | FeatureFlagName): boolean {
+  return useSyncExternalStore(
+    (listener) => featureFlags.subscribe(listener),
+    () => featureFlags.isEnabled(flagName),
+    () => false,
+  );
+}
