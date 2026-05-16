@@ -3,6 +3,54 @@ use ratatui::style::Color;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// v3 brand palette — mirrors packages/design-tokens/src/tokens.ts
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// AGI v3 teal accent (#21808d)
+pub const V3_TEAL: (u8, u8, u8) = (0x21, 0x80, 0x8d);
+/// AGI v3 terracotta accent (#da7756)
+pub const V3_TERRACOTTA: (u8, u8, u8) = (0xda, 0x77, 0x56);
+/// AGI v3 warm-cream light surface (#fcfaf6)
+pub const V3_WARM_CREAM: (u8, u8, u8) = (0xfc, 0xfa, 0xf6);
+/// AGI v3 warm-black dark surface (#0f0f0e)
+pub const V3_WARM_BLACK: (u8, u8, u8) = (0x0f, 0x0f, 0x0e);
+/// AGI v3 ink text (#1a1a1a)
+pub const V3_INK: (u8, u8, u8) = (0x1a, 0x1a, 0x1a);
+/// AGI v3 bone surface (#f5f5f0)
+pub const V3_BONE: (u8, u8, u8) = (0xf5, 0xf5, 0xf0);
+/// AGI v3 success green (#16a34a)
+pub const V3_SUCCESS: (u8, u8, u8) = (0x16, 0xa3, 0x4a);
+/// AGI v3 warning amber (#d97706)
+pub const V3_WARNING: (u8, u8, u8) = (0xd9, 0x77, 0x06);
+/// AGI v3 danger red (#dc2626)
+pub const V3_DANGER: (u8, u8, u8) = (0xdc, 0x26, 0x26);
+
+/// Return the v3 teal accent as the best ratatui `Color` the terminal can render.
+pub fn v3_teal() -> Color {
+    best_color(V3_TEAL)
+}
+
+/// Return the v3 terracotta accent as the best ratatui `Color` the terminal can render.
+pub fn v3_terracotta() -> Color {
+    best_color(V3_TERRACOTTA)
+}
+
+/// Return the v3 success green as the best ratatui `Color` the terminal can render.
+pub fn v3_success() -> Color {
+    best_color(V3_SUCCESS)
+}
+
+/// Return the v3 warning amber as the best ratatui `Color` the terminal can render.
+pub fn v3_warning() -> Color {
+    best_color(V3_WARNING)
+}
+
+/// Return the v3 danger red as the best ratatui `Color` the terminal can render.
+pub fn v3_danger() -> Color {
+    best_color(V3_DANGER)
+}
+
 static DEFAULT_PALETTE_VERSION: AtomicU64 = AtomicU64::new(0);
 
 fn bump_palette_version() {
