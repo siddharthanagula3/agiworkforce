@@ -5,9 +5,12 @@ import type { ChipType } from '@agiworkforce/unified-chat';
 const CHIP_PROMPTS: Partial<Record<ChipType, string>> = {
   code: 'Help me write code for ',
   write: 'Help me write ',
+  research: 'Research this topic in depth: ',
+  image: 'Create an image of ',
+  video: 'Create a video of ',
+  computer: 'Use computer to ',
   learn: 'Explain this to me: ',
   life: 'Help me with ',
-  research: 'Research this topic in depth: ',
   web: 'Search the web for ',
 };
 

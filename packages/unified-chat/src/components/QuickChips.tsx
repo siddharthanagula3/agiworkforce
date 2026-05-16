@@ -1,23 +1,33 @@
-import { Code2, PenLine, GraduationCap, Coffee } from 'lucide-react';
+import { Code2, PenLine, Search, Image, Film, Monitor } from 'lucide-react';
 import { useChatStore } from '../stores/chatStore';
 import type { ActiveMode } from '../stores/chatStore';
 
 export type ChipType = NonNullable<ActiveMode>;
 
+export type QuickChipsMode = 'four' | 'six';
+
 interface QuickChipsProps {
   onChipClick: (chip: NonNullable<ActiveMode>) => void;
+  mode?: QuickChipsMode;
 }
 
-const chips: { type: NonNullable<ActiveMode>; label: string; icon: React.ReactNode }[] = [
+type ChipDef = { type: NonNullable<ActiveMode>; label: string; icon: React.ReactNode };
+
+const SIX_CHIPS: ChipDef[] = [
   { type: 'code', label: 'Code', icon: <Code2 size={13} /> },
   { type: 'write', label: 'Write', icon: <PenLine size={13} /> },
-  { type: 'learn', label: 'Learn', icon: <GraduationCap size={13} /> },
-  { type: 'life', label: 'Life stuff', icon: <Coffee size={13} /> },
+  { type: 'research', label: 'Research', icon: <Search size={13} /> },
+  { type: 'image', label: 'Image', icon: <Image size={13} /> },
+  { type: 'video', label: 'Video', icon: <Film size={13} /> },
+  { type: 'computer', label: 'Computer', icon: <Monitor size={13} /> },
 ];
 
-export function QuickChips({ onChipClick }: QuickChipsProps) {
+const FOUR_CHIPS: ChipDef[] = SIX_CHIPS.slice(0, 4);
+
+export function QuickChips({ onChipClick, mode = 'six' }: QuickChipsProps) {
   const activeMode = useChatStore((s) => s.activeMode);
   const setActiveMode = useChatStore((s) => s.setActiveMode);
+  const chips = mode === 'four' ? FOUR_CHIPS : SIX_CHIPS;
 
   const handleClick = (type: NonNullable<ActiveMode>) => {
     const next = activeMode === type ? null : type;
