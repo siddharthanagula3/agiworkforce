@@ -3,8 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AGI Workforce</title>
+    <title>AGI</title>
     <style>
+      :root {
+        --agi-ext-accent: #21808d;
+        --agi-ext-accent-secondary: #da7756;
+        --agi-ext-on-accent: #ffffff;
+        --agi-ext-success: #16a34a;
+        --agi-ext-danger: #dc2626;
+        --agi-ext-warning: #d97706;
+        --agi-ext-bg: #faf9f7;
+        --agi-ext-surface: #ffffff;
+        --agi-ext-hover: #f0eeeb;
+        --agi-ext-text: #1a1915;
+        --agi-ext-text-muted: #6b6560;
+        --agi-ext-border: rgba(26, 25, 21, 0.08);
+        --agi-ext-border-strong: rgba(26, 25, 21, 0.15);
+        --agi-ext-success-bg: rgba(22, 163, 74, 0.08);
+        --agi-ext-success-border: rgba(22, 163, 74, 0.24);
+        --agi-ext-danger-bg: rgba(220, 38, 38, 0.08);
+        --agi-ext-danger-border: rgba(220, 38, 38, 0.24);
+        --agi-ext-danger-shadow: rgba(220, 38, 38, 0.3);
+        --agi-ext-transparent-shadow: rgba(220, 38, 38, 0);
+      }
+
       * {
         margin: 0;
         padding: 0;
@@ -16,7 +38,11 @@
         min-height: 480px;
         font-family:
           -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(
+          135deg,
+          var(--agi-ext-accent) 0%,
+          var(--agi-ext-accent-secondary) 100%
+        );
         color: white;
         overflow-x: hidden;
       }
@@ -40,8 +66,8 @@
       }
 
       .content {
-        background: white;
-        color: #333;
+        background: var(--agi-ext-surface);
+        color: var(--agi-ext-text);
         padding: 24px;
         border-radius: 16px 16px 0 0;
         box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.1);
@@ -51,16 +77,16 @@
         display: flex;
         align-items: center;
         padding: 16px;
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        background: var(--agi-ext-bg);
         border-radius: 12px;
         margin-bottom: 20px;
-        border: 1px solid #dee2e6;
+        border: 1px solid var(--agi-ext-border-strong);
         transition: all 0.3s ease;
       }
 
       .status-card.connected {
-        background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-        border-color: #c3e6cb;
+        background: var(--agi-ext-success-bg);
+        border-color: var(--agi-ext-success-border);
       }
 
       .status-icon {
@@ -72,7 +98,7 @@
         justify-content: center;
         margin-right: 14px;
         flex-shrink: 0;
-        background: white;
+        background: var(--agi-ext-surface);
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
       }
 
@@ -80,23 +106,23 @@
         width: 12px;
         height: 12px;
         border-radius: 50%;
-        background: #dc3545;
+        background: var(--agi-ext-danger);
         animation: pulse 2s infinite;
       }
 
       .status-card.connected .status-dot {
-        background: #28a745;
+        background: var(--agi-ext-success);
       }
 
       @keyframes pulse {
         0% {
-          box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+          box-shadow: 0 0 0 0 var(--agi-ext-danger-shadow);
         }
         70% {
-          box-shadow: 0 0 0 6px rgba(220, 53, 69, 0);
+          box-shadow: 0 0 0 6px var(--agi-ext-transparent-shadow);
         }
         100% {
-          box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+          box-shadow: 0 0 0 0 var(--agi-ext-transparent-shadow);
         }
       }
 
@@ -106,13 +132,13 @@
 
       @keyframes pulse-green {
         0% {
-          box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+          box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7);
         }
         70% {
-          box-shadow: 0 0 0 6px rgba(40, 167, 69, 0);
+          box-shadow: 0 0 0 6px rgba(22, 163, 74, 0);
         }
         100% {
-          box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+          box-shadow: 0 0 0 0 rgba(22, 163, 74, 0);
         }
       }
 
@@ -124,50 +150,50 @@
         font-size: 14px;
         font-weight: 600;
         margin-bottom: 4px;
-        color: #495057;
+        color: var(--agi-ext-text);
       }
 
       .status-card.connected .status-title {
-        color: #155724;
+        color: var(--agi-ext-success);
       }
 
       .status-subtitle {
         font-size: 12px;
-        color: #6c757d;
+        color: var(--agi-ext-text-muted);
       }
 
       .status-card.connected .status-subtitle {
-        color: #1e7e34;
+        color: var(--agi-ext-success);
       }
 
       .status-card.reconnecting {
-        background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
-        border-color: #ffc107;
+        background: rgba(217, 119, 6, 0.08);
+        border-color: rgba(217, 119, 6, 0.24);
       }
 
       .status-card.reconnecting .status-dot {
-        background: #ffc107;
+        background: var(--agi-ext-warning);
         animation: pulse-yellow 2s infinite;
       }
 
       @keyframes pulse-yellow {
         0% {
-          box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7);
+          box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.7);
         }
         70% {
-          box-shadow: 0 0 0 6px rgba(255, 193, 7, 0);
+          box-shadow: 0 0 0 6px rgba(217, 119, 6, 0);
         }
         100% {
-          box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
+          box-shadow: 0 0 0 0 rgba(217, 119, 6, 0);
         }
       }
 
       .status-card.reconnecting .status-title {
-        color: #856404;
+        color: var(--agi-ext-warning);
       }
 
       .status-card.reconnecting .status-subtitle {
-        color: #6d5012;
+        color: var(--agi-ext-warning);
       }
 
       .reconnect-btn {
@@ -175,18 +201,18 @@
         margin-top: 8px;
         padding: 6px 12px;
         background: transparent;
-        border: 1px solid #6c757d;
+        border: 1px solid var(--agi-ext-border-strong);
         border-radius: 6px;
         font-size: 12px;
         font-weight: 600;
-        color: #495057;
+        color: var(--agi-ext-text);
         cursor: pointer;
         transition: all 0.2s ease;
       }
 
       .reconnect-btn:hover {
-        background: #e9ecef;
-        border-color: #495057;
+        background: var(--agi-ext-hover);
+        border-color: var(--agi-ext-text-muted);
       }
 
       .reconnect-btn.visible {
@@ -208,9 +234,9 @@
         font-weight: 600;
         cursor: pointer;
         transition: all 0.2s ease;
-        background: #f8f9fa;
-        color: #495057;
-        border: 1px solid #dee2e6;
+        background: var(--agi-ext-bg);
+        color: var(--agi-ext-text);
+        border: 1px solid var(--agi-ext-border-strong);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -218,7 +244,7 @@
       }
 
       .action-btn:hover {
-        background: #e9ecef;
+        background: var(--agi-ext-hover);
         transform: translateY(-1px);
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
       }
@@ -228,13 +254,17 @@
       }
 
       .action-btn.primary {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
+        background: linear-gradient(
+          135deg,
+          var(--agi-ext-accent) 0%,
+          var(--agi-ext-accent-secondary) 100%
+        );
+        color: var(--agi-ext-on-accent);
         border: none;
       }
 
       .action-btn.primary:hover {
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        box-shadow: 0 4px 12px rgba(33, 128, 141, 0.3);
       }
 
       .info-section {
@@ -246,7 +276,7 @@
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        color: #6c757d;
+        color: var(--agi-ext-text-muted);
         margin-bottom: 12px;
       }
 
@@ -262,22 +292,22 @@
       }
 
       .info-item:hover {
-        background: #f8f9fa;
+        background: var(--agi-ext-hover);
       }
 
       .info-label {
         font-weight: 600;
-        color: #495057;
+        color: var(--agi-ext-text);
         display: flex;
         align-items: center;
         gap: 8px;
       }
 
       .info-value {
-        color: #6c757d;
+        color: var(--agi-ext-text-muted);
         font-size: 12px;
         font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
-        background: #f8f9fa;
+        background: var(--agi-ext-bg);
         padding: 4px 8px;
         border-radius: 4px;
         max-width: 200px;
@@ -296,21 +326,21 @@
       .stat-card {
         text-align: center;
         padding: 12px;
-        background: #f8f9fa;
+        background: var(--agi-ext-bg);
         border-radius: 8px;
-        border: 1px solid #dee2e6;
+        border: 1px solid var(--agi-ext-border-strong);
       }
 
       .stat-value {
         font-size: 20px;
         font-weight: 700;
-        color: #667eea;
+        color: var(--agi-ext-accent);
         margin-bottom: 4px;
       }
 
       .stat-label {
         font-size: 11px;
-        color: #6c757d;
+        color: var(--agi-ext-text-muted);
         font-weight: 500;
       }
 
@@ -334,8 +364,12 @@
 
       /* Tier badge */
       .tier-badge {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
+        background: linear-gradient(
+          135deg,
+          var(--agi-ext-accent) 0%,
+          var(--agi-ext-accent-secondary) 100%
+        );
+        color: var(--agi-ext-on-accent);
         font-weight: 700;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         border-radius: 4px;
@@ -347,8 +381,8 @@
 
       /* Paywall card */
       #paywallCard {
-        background: linear-gradient(135deg, #fff8e1 0%, #fff3cd 100%);
-        border: 1px solid #ffc107;
+        background: rgba(217, 119, 6, 0.08);
+        border: 1px solid rgba(217, 119, 6, 0.24);
         border-radius: 10px;
         padding: 14px 16px;
         margin-bottom: 16px;
@@ -357,14 +391,14 @@
       .paywall-title {
         font-size: 13px;
         font-weight: 700;
-        color: #856404;
+        color: var(--agi-ext-warning);
         margin-bottom: 6px;
         line-height: 1.4;
       }
 
       .paywall-reason {
         font-size: 12px;
-        color: #6d5012;
+        color: var(--agi-ext-text-muted);
         margin-bottom: 10px;
         line-height: 1.4;
       }
@@ -379,8 +413,12 @@
       .paywall-upgrade-btn {
         display: inline-block;
         padding: 6px 14px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
+        background: linear-gradient(
+          135deg,
+          var(--agi-ext-accent) 0%,
+          var(--agi-ext-accent-secondary) 100%
+        );
+        color: var(--agi-ext-on-accent);
         font-size: 12px;
         font-weight: 700;
         text-decoration: none;
@@ -389,23 +427,23 @@
       }
 
       .paywall-upgrade-btn:hover {
-        box-shadow: 0 3px 10px rgba(102, 126, 234, 0.35);
+        box-shadow: 0 3px 10px rgba(33, 128, 141, 0.35);
       }
 
       .paywall-dismiss-btn {
         padding: 6px 12px;
         background: transparent;
-        border: 1px solid #adb5bd;
+        border: 1px solid var(--agi-ext-border-strong);
         border-radius: 6px;
         font-size: 12px;
         font-weight: 600;
-        color: #495057;
+        color: var(--agi-ext-text);
         cursor: pointer;
         transition: background 0.2s ease;
       }
 
       .paywall-dismiss-btn:hover {
-        background: #e9ecef;
+        background: var(--agi-ext-hover);
       }
 
       /* Pairing section */
@@ -424,7 +462,7 @@
 
       .pairing-status-label {
         font-weight: 600;
-        color: #495057;
+        color: var(--agi-ext-text);
         display: flex;
         align-items: center;
         gap: 8px;
@@ -433,25 +471,25 @@
       .pairing-fingerprint {
         font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
         font-size: 11px;
-        background: #f8f9fa;
-        border: 1px solid #dee2e6;
-        color: #495057;
+        background: var(--agi-ext-bg);
+        border: 1px solid var(--agi-ext-border-strong);
+        color: var(--agi-ext-text);
         padding: 3px 7px;
         border-radius: 4px;
         letter-spacing: 1px;
       }
 
       .pairing-fingerprint.paired {
-        background: #d4edda;
-        border-color: #c3e6cb;
-        color: #155724;
+        background: var(--agi-ext-success-bg);
+        border-color: var(--agi-ext-success-border);
+        color: var(--agi-ext-success);
       }
 
       .pairing-error {
         font-size: 11px;
-        color: #721c24;
-        background: #f8d7da;
-        border: 1px solid #f5c6cb;
+        color: var(--agi-ext-danger);
+        background: var(--agi-ext-danger-bg);
+        border: 1px solid var(--agi-ext-danger-border);
         border-radius: 4px;
         padding: 6px 10px;
         margin: 0 12px 8px;
@@ -472,19 +510,19 @@
       .pairing-btn {
         flex: 1;
         padding: 8px 12px;
-        border: 1px solid #dee2e6;
+        border: 1px solid var(--agi-ext-border-strong);
         border-radius: 6px;
         font-size: 12px;
         font-weight: 600;
         cursor: pointer;
         transition: all 0.2s ease;
-        background: #f8f9fa;
-        color: #495057;
+        background: var(--agi-ext-bg);
+        color: var(--agi-ext-text);
       }
 
       .pairing-btn:hover:not(:disabled) {
-        background: #e9ecef;
-        border-color: #adb5bd;
+        background: var(--agi-ext-hover);
+        border-color: var(--agi-ext-text-muted);
       }
 
       .pairing-btn:disabled {
@@ -493,24 +531,32 @@
       }
 
       .pairing-btn.primary {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
+        background: linear-gradient(
+          135deg,
+          var(--agi-ext-accent) 0%,
+          var(--agi-ext-accent-secondary) 100%
+        );
+        color: var(--agi-ext-on-accent);
         border: none;
       }
 
       .pairing-btn.primary:hover:not(:disabled) {
-        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        box-shadow: 0 2px 8px rgba(33, 128, 141, 0.3);
+        background: linear-gradient(
+          135deg,
+          var(--agi-ext-accent) 0%,
+          var(--agi-ext-accent-secondary) 100%
+        );
       }
 
       .pairing-btn.danger {
-        color: #721c24;
-        border-color: #f5c6cb;
-        background: #f8d7da;
+        color: var(--agi-ext-danger);
+        border-color: var(--agi-ext-danger-border);
+        background: var(--agi-ext-danger-bg);
       }
 
       .pairing-btn.danger:hover:not(:disabled) {
-        background: #f1b0b7;
+        background: rgba(220, 38, 38, 0.15);
       }
 
       /* Toggle switch */
@@ -533,7 +579,7 @@
       .toggle-slider {
         position: absolute;
         inset: 0;
-        background: #dee2e6;
+        background: var(--agi-ext-border-strong);
         border-radius: 22px;
         transition: background 0.2s ease;
       }
@@ -552,7 +598,11 @@
       }
 
       .toggle-switch input:checked + .toggle-slider {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(
+          135deg,
+          var(--agi-ext-accent) 0%,
+          var(--agi-ext-accent-secondary) 100%
+        );
       }
 
       .toggle-switch input:checked + .toggle-slider::before {
@@ -561,7 +611,7 @@
 
       .divider {
         height: 1px;
-        background: #dee2e6;
+        background: var(--agi-ext-border-strong);
         margin: 20px 0;
       }
 
@@ -569,8 +619,8 @@
         display: inline-block;
         width: 12px;
         height: 12px;
-        border: 2px solid rgba(108, 117, 125, 0.2);
-        border-top-color: #6c757d;
+        border: 2px solid var(--agi-ext-border-strong);
+        border-top-color: var(--agi-ext-text-muted);
         border-radius: 50%;
         animation: spin 0.8s linear infinite;
       }
@@ -584,7 +634,7 @@
   </head>
   <body>
     <div class="header">
-      <h1>AGI Workforce</h1>
+      <h1>AGI</h1>
       <p>Browser Automation Extension</p>
     </div>
 
@@ -682,9 +732,7 @@
     <div class="footer">
       <p>
         Powered by
-        <a href="https://agiworkforce.com" target="_blank" rel="noopener noreferrer"
-          >AGI Workforce</a
-        >
+        <a href="https://agiworkforce.com" target="_blank" rel="noopener noreferrer">AGI</a>
       </p>
     </div>
 
