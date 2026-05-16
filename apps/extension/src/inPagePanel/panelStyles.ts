@@ -1,26 +1,23 @@
-/**
- * CSS styles for the in-page chat overlay panel (Shadow DOM scope).
- *
- * Kept in a separate module so panel.ts stays under 300 LOC.
- * All selectors are scoped to :host / .agi-* so they cannot leak to the page.
- *
- * @module inPagePanel/panelStyles
- */
+import { getExtensionTokensCss } from '../tokens';
+
 export function buildPanelStyles(): string {
   return `
+    /* ── AGI design tokens (light) injected into Shadow DOM ── */
+    ${getExtensionTokensCss('light').replace(':root', ':host')}
+
     :host { display:block; }
 
     .agi-panel {
       position:fixed;
       top:0; right:-400px;
       width:380px; height:100vh;
-      background:#fff;
-      border-left:1px solid #e5e7eb;
+      background:var(--agi-ext-surface);
+      border-left:1px solid var(--agi-ext-border-strong);
       box-shadow:-4px 0 32px rgba(0,0,0,0.12);
       z-index:2147483647;
       display:flex; flex-direction:column;
       font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-      font-size:14px; color:#111827;
+      font-size:14px; color:var(--agi-ext-text);
       transition:right 0.28s cubic-bezier(0.4,0,0.2,1);
       overflow:hidden;
       box-sizing:border-box;
@@ -32,9 +29,9 @@ export function buildPanelStyles(): string {
     .agi-header {
       display:flex; align-items:center;
       padding:14px 16px;
-      border-bottom:1px solid #f3f4f6;
-      background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);
-      color:#fff;
+      border-bottom:1px solid var(--agi-ext-border);
+      background:linear-gradient(135deg,var(--agi-ext-accent) 0%,var(--agi-ext-accent-secondary) 100%);
+      color:var(--agi-ext-on-accent);
       flex-shrink:0;
     }
 
@@ -58,7 +55,7 @@ export function buildPanelStyles(): string {
 
     .agi-close-btn {
       background:transparent; border:none; cursor:pointer;
-      color:#fff; font-size:18px;
+      color:var(--agi-ext-on-accent); font-size:18px;
       width:28px; height:28px;
       display:flex; align-items:center; justify-content:center;
       border-radius:50%;
@@ -78,34 +75,34 @@ export function buildPanelStyles(): string {
     .agi-action-chip {
       display:inline-flex; align-items:center; gap:4px;
       padding:5px 12px;
-      background:#f3f4f6; border:1px solid #e5e7eb;
+      background:var(--agi-ext-hover); border:1px solid var(--agi-ext-border-strong);
       border-radius:20px;
-      font-size:12px; font-weight:600; color:#374151;
+      font-size:12px; font-weight:600; color:var(--agi-ext-text);
       cursor:pointer;
       transition:background 0.15s,border-color 0.15s,color 0.15s;
       white-space:nowrap;
     }
     .agi-action-chip:hover {
-      background:#ede9fe; border-color:#c4b5fd; color:#5b21b6;
+      background:rgba(33,128,141,0.1); border-color:var(--agi-ext-accent); color:var(--agi-ext-accent);
     }
 
     /* ── Response area ───────────────────────────────────────────────────── */
     .agi-response-area {
       flex:1; overflow-y:auto;
       padding:14px;
-      font-size:13.5px; line-height:1.6; color:#1f2937;
+      font-size:13.5px; line-height:1.6; color:var(--agi-ext-text);
       word-break:break-word;
     }
 
     .agi-response-area:empty::before {
       content:"Ask anything about this page…";
-      color:#9ca3af; font-style:italic;
+      color:var(--agi-ext-text-muted); font-style:italic;
     }
 
     .agi-response-area .agi-thinking {
       display:inline-block;
       width:6px; height:14px;
-      background:#6366f1;
+      background:var(--agi-ext-accent);
       border-radius:2px;
       animation:agi-blink 0.9s step-end infinite;
       vertical-align:text-bottom;
@@ -117,15 +114,15 @@ export function buildPanelStyles(): string {
     }
 
     .agi-error {
-      color:#dc2626; font-size:13px;
-      background:#fef2f2; border:1px solid #fecaca;
+      color:var(--agi-ext-danger); font-size:13px;
+      background:var(--agi-ext-danger-bg); border:1px solid var(--agi-ext-danger-border);
       border-radius:8px; padding:10px 12px;
       margin-top:6px;
     }
 
     .agi-disclosure {
-      color:#6b7280; font-size:11px;
-      background:#f9fafb; border:1px solid #e5e7eb;
+      color:var(--agi-ext-text-muted); font-size:11px;
+      background:var(--agi-ext-bg); border:1px solid var(--agi-ext-border-strong);
       border-radius:6px; padding:7px 10px;
       margin-bottom:8px; line-height:1.4;
     }
@@ -134,30 +131,30 @@ export function buildPanelStyles(): string {
     .agi-composer {
       display:flex; gap:8px; align-items:flex-end;
       padding:10px 14px 14px;
-      border-top:1px solid #f3f4f6;
-      background:#fafafa;
+      border-top:1px solid var(--agi-ext-border);
+      background:var(--agi-ext-bg);
       flex-shrink:0;
     }
 
     .agi-textarea {
       flex:1;
-      resize:none; border:1px solid #d1d5db;
+      resize:none; border:1px solid var(--agi-ext-border-strong);
       border-radius:8px; padding:9px 12px;
-      font-size:13px; font-family:inherit; color:#111827;
-      background:#fff; outline:none;
+      font-size:13px; font-family:inherit; color:var(--agi-ext-text);
+      background:var(--agi-ext-surface); outline:none;
       min-height:40px; max-height:120px;
       line-height:1.5;
       transition:border-color 0.15s,box-shadow 0.15s;
     }
     .agi-textarea:focus {
-      border-color:#6366f1;
-      box-shadow:0 0 0 3px rgba(99,102,241,0.15);
+      border-color:var(--agi-ext-accent);
+      box-shadow:0 0 0 3px rgba(33,128,141,0.15);
     }
 
     .agi-submit-btn {
       width:38px; height:38px;
-      background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);
-      border:none; border-radius:8px; cursor:pointer; color:#fff;
+      background:linear-gradient(135deg,var(--agi-ext-accent) 0%,var(--agi-ext-accent-secondary) 100%);
+      border:none; border-radius:8px; cursor:pointer; color:var(--agi-ext-on-accent);
       font-size:16px;
       display:flex; align-items:center; justify-content:center;
       flex-shrink:0;
@@ -171,20 +168,20 @@ export function buildPanelStyles(): string {
     .agi-footer {
       display:flex; justify-content:center;
       padding:8px 14px 10px;
-      background:#fafafa;
-      border-top:1px solid #f3f4f6;
+      background:var(--agi-ext-bg);
+      border-top:1px solid var(--agi-ext-border);
       flex-shrink:0;
     }
 
     .agi-open-side-panel {
-      background:transparent; border:1px solid #d1d5db;
+      background:transparent; border:1px solid var(--agi-ext-border-strong);
       border-radius:6px; padding:5px 12px;
-      font-size:12px; font-weight:500; color:#6b7280; cursor:pointer;
+      font-size:12px; font-weight:500; color:var(--agi-ext-text-muted); cursor:pointer;
       transition:background 0.15s,border-color 0.15s,color 0.15s;
       white-space:nowrap;
     }
     .agi-open-side-panel:hover {
-      background:#f3f4f6; border-color:#9ca3af; color:#374151;
+      background:var(--agi-ext-hover); border-color:var(--agi-ext-text-muted); color:var(--agi-ext-text);
     }
   `;
 }
