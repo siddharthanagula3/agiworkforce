@@ -323,8 +323,8 @@ function injectStyles(): void {
       align-items: center;
       justify-content: space-between;
       padding: 10px 12px;
-      background: #13131a;
-      border-bottom: 1px solid #1e1e2e;
+      background: var(--agi-ext-surface);
+      border-bottom: 1px solid var(--agi-ext-border);
       flex-shrink: 0;
       gap: 8px;
     }
@@ -335,20 +335,22 @@ function injectStyles(): void {
       min-width: 0;
     }
     #sp-logo {
-      width: 26px;
-      height: 26px;
-      background: linear-gradient(135deg, var(--agi-ext-accent), var(--agi-ext-accent-secondary));
-      border-radius: 6px;
+      width: 24px;
+      height: 24px;
+      flex-shrink: 0;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 13px;
-      flex-shrink: 0;
+    }
+    #sp-logo svg {
+      width: 24px;
+      height: 24px;
+      display: block;
     }
     #sp-title {
       font-size: 13px;
       font-weight: 600;
-      color: #f1f5f9;
+      color: var(--agi-ext-text);
       white-space: nowrap;
     }
     #sp-model-badge {
@@ -370,14 +372,14 @@ function injectStyles(): void {
       background: transparent;
       border: none;
       cursor: pointer;
-      color: #64748b;
+      color: var(--agi-ext-text-muted);
       border-radius: 5px;
       padding: 4px 6px;
       font-size: 13px;
       line-height: 1;
       transition: color 0.15s, background 0.15s;
     }
-    .sp-icon-btn:hover { color: #e2e8f0; background: #1e1e2e; }
+    .sp-icon-btn:hover { color: var(--agi-ext-text); background: var(--agi-ext-hover); }
 
     /* ── Messages area ── */
     #sp-messages {
@@ -391,7 +393,7 @@ function injectStyles(): void {
     }
     #sp-messages::-webkit-scrollbar { width: 4px; }
     #sp-messages::-webkit-scrollbar-track { background: transparent; }
-    #sp-messages::-webkit-scrollbar-thumb { background: #1e2030; border-radius: 4px; }
+    #sp-messages::-webkit-scrollbar-thumb { background: var(--agi-ext-border); border-radius: 4px; }
 
     /* ── Empty state — composer-first per design-spec §8 ── */
     #sp-empty {
@@ -408,7 +410,7 @@ function injectStyles(): void {
     #sp-empty-headline {
       font-size: 15px;
       font-weight: 500;
-      color: #8b8680;
+      color: var(--agi-ext-text-muted);
       letter-spacing: -0.01em;
     }
 
@@ -427,16 +429,16 @@ function injectStyles(): void {
       height: 28px;
       padding: 0 10px;
       font-size: 11px;
-      background: #13131a;
-      color: #8b8680;
+      background: var(--agi-ext-surface);
+      color: var(--agi-ext-text-muted);
       border-radius: 999px;
       cursor: pointer;
       transition: background 0.15s, color 0.15s;
-      border: 1px solid rgba(255,235,205,0.08);
+      border: 1px solid var(--agi-ext-border);
       white-space: nowrap;
       flex-shrink: 0;
     }
-    .sp-cmd-chip:hover { background: rgba(255,235,205,0.06); color: #e8e4db; }
+    .sp-cmd-chip:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
 
     /* ── Blocked / restricted-site state ── */
     #sp-blocked {
@@ -455,8 +457,8 @@ function injectStyles(): void {
       height: 48px;
       opacity: 0.35;
     }
-    #sp-blocked-title { font-size: 14px; font-weight: 600; color: #94a3b8; }
-    #sp-blocked-desc { font-size: 11px; color: #475569; line-height: 1.55; max-width: 200px; }
+    #sp-blocked-title { font-size: 14px; font-weight: 600; color: var(--agi-ext-text-muted); }
+    #sp-blocked-desc { font-size: 11px; color: var(--agi-ext-text-muted); opacity: 0.7; line-height: 1.55; max-width: 200px; }
 
     /* ── Message bubbles ── */
     .sp-msg {
@@ -482,47 +484,48 @@ function injectStyles(): void {
       white-space: pre-wrap;
     }
     .sp-bubble-user {
-      background: rgba(33, 128, 141, 0.2);
-      color: #e8e4db;
+      background: rgba(33, 128, 141, 0.18);
+      color: var(--agi-ext-text);
       border-bottom-right-radius: 3px;
     }
     .sp-bubble-assistant {
-      background: #1a1a2e;
-      color: #e2e8f0;
-      border: 1px solid #1e2030;
+      background: var(--agi-ext-surface);
+      color: var(--agi-ext-text);
+      border: 1px solid var(--agi-ext-border);
       border-bottom-left-radius: 3px;
     }
     .sp-bubble-error {
-      background: #450a0a;
-      border-color: #7f1d1d;
-      color: #fca5a5;
+      background: var(--agi-ext-danger-bg);
+      border-color: var(--agi-ext-danger-border);
+      color: var(--agi-ext-danger);
     }
     .sp-timestamp {
       font-size: 10px;
-      color: #334155;
+      color: var(--agi-ext-text-muted);
+      opacity: 0.5;
       padding: 0 3px;
     }
 
     /* ── Markdown rendering inside assistant bubbles ── */
     .sp-bubble-assistant code {
-      background: #0f172a;
-      border: 1px solid #1e293b;
+      background: var(--agi-ext-bg);
+      border: 1px solid var(--agi-ext-border);
       border-radius: 3px;
       padding: 1px 4px;
-      font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace;
+      font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', Consolas, monospace;
       font-size: 11px;
-      color: #a5f3fc;
+      color: var(--agi-ext-accent);
     }
     .sp-bubble-assistant pre {
-      background: #0d1117;
-      border: 1px solid #1e293b;
+      background: var(--agi-ext-bg);
+      border: 1px solid var(--agi-ext-border);
       border-radius: 6px;
       padding: 10px;
       overflow-x: auto;
       margin: 4px 0;
-      font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace;
+      font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', Consolas, monospace;
       font-size: 11px;
-      color: #c9d1d9;
+      color: var(--agi-ext-text);
       white-space: pre;
     }
     .sp-bubble-assistant pre code {
@@ -531,9 +534,9 @@ function injectStyles(): void {
       padding: 0;
       color: inherit;
     }
-    .sp-bubble-assistant strong { color: #f8fafc; font-weight: 600; }
-    .sp-bubble-assistant em { color: #cbd5e1; font-style: italic; }
-    .sp-bubble-assistant a { color: #818cf8; text-decoration: underline; }
+    .sp-bubble-assistant strong { color: var(--agi-ext-text); font-weight: 600; }
+    .sp-bubble-assistant em { color: var(--agi-ext-text-muted); font-style: italic; }
+    .sp-bubble-assistant a { color: var(--agi-ext-accent); text-decoration: underline; }
     .sp-bubble-assistant ul, .sp-bubble-assistant ol {
       padding-left: 16px;
       margin: 4px 0;
@@ -541,7 +544,7 @@ function injectStyles(): void {
     .sp-bubble-assistant li { margin: 2px 0; }
     .sp-bubble-assistant h1, .sp-bubble-assistant h2, .sp-bubble-assistant h3 {
       font-weight: 600;
-      color: #f1f5f9;
+      color: var(--agi-ext-text);
       margin: 6px 0 3px;
     }
     .sp-bubble-assistant h1 { font-size: 15px; }
@@ -550,12 +553,12 @@ function injectStyles(): void {
     .sp-bubble-assistant blockquote {
       border-left: 3px solid var(--agi-ext-accent);
       padding-left: 8px;
-      color: #94a3b8;
+      color: var(--agi-ext-text-muted);
       margin: 4px 0;
     }
     .sp-bubble-assistant hr {
       border: none;
-      border-top: 1px solid #1e293b;
+      border-top: 1px solid var(--agi-ext-border);
       margin: 6px 0;
     }
 
@@ -574,7 +577,7 @@ function injectStyles(): void {
       flex-direction: column;
       gap: 2px;
       font-size: 13px;
-      color: #8b8680;
+      color: var(--agi-ext-text-muted);
     }
     .tool-call__bar {
       display: flex;
@@ -587,17 +590,19 @@ function injectStyles(): void {
       border-radius: 5px;
       transition: background 120ms ease;
     }
-    .tool-call__bar:hover { background: rgba(255,235,205,0.06); }
+    .tool-call__bar:hover { background: var(--agi-ext-hover); }
     .tool-call__icon {
       width: 14px;
       height: 14px;
       flex-shrink: 0;
-      color: #5c5955;
+      color: var(--agi-ext-text-muted);
+      opacity: 0.7;
     }
     .tool-call__icon svg { width: 14px; height: 14px; }
-    .tool-call__label { color: #8b8680; font-weight: 400; font-size: 12px; }
+    .tool-call__label { color: var(--agi-ext-text-muted); font-weight: 400; font-size: 12px; }
     .tool-call__summary {
-      color: #5c5955;
+      color: var(--agi-ext-text-muted);
+      opacity: 0.7;
       font-size: 11px;
       margin-left: 4px;
       max-width: 260px;
@@ -608,7 +613,8 @@ function injectStyles(): void {
     .tool-call__chevron {
       width: 12px;
       height: 12px;
-      color: #5c5955;
+      color: var(--agi-ext-text-muted);
+      opacity: 0.6;
       margin-left: auto;
       transition: transform 160ms ease;
       flex-shrink: 0;
@@ -617,13 +623,13 @@ function injectStyles(): void {
     .tool-call--open .tool-call__chevron { transform: rotate(90deg); }
     .tool-call__body {
       display: none;
-      background: rgba(17,16,13,0.9);
-      border: 1px solid rgba(255,235,205,0.08);
+      background: var(--agi-ext-bg);
+      border: 1px solid var(--agi-ext-border);
       border-radius: 6px;
       padding: 10px 12px;
-      font-family: 'SF Mono','Cascadia Code',Consolas,monospace;
+      font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', Consolas, monospace;
       font-size: 11px;
-      color: #c9d1d9;
+      color: var(--agi-ext-text);
       overflow-x: auto;
       max-height: 320px;
       overflow-y: auto;
@@ -633,7 +639,7 @@ function injectStyles(): void {
     .tool-call--open .tool-call__body { display: block; }
     /* multi-step vertical guideline */
     .tool-call-stack {
-      border-left: 1px solid rgba(255,235,205,0.08);
+      border-left: 1px solid var(--agi-ext-border);
       padding-left: 10px;
       margin-left: 6px;
       display: flex;
@@ -641,12 +647,12 @@ function injectStyles(): void {
       gap: 2px;
     }
     /* spinner rotation for pending/running state */
-    .tool-call--running .tool-call__icon { color: #8b8680; }
+    .tool-call--running .tool-call__icon { color: var(--agi-ext-text-muted); }
     .tool-call--running .tool-call__icon svg { animation: sp-spin 0.8s linear infinite; }
     @keyframes sp-spin { to { transform: rotate(360deg); } }
-    .tool-call--error .tool-call__label { color: #ef4444; }
-    .tool-call--error .tool-call__icon { color: #ef4444; }
-    .tool-call--success .tool-call__icon { color: #22c55e; }
+    .tool-call--error .tool-call__label { color: var(--agi-ext-danger); }
+    .tool-call--error .tool-call__icon { color: var(--agi-ext-danger); }
+    .tool-call--success .tool-call__icon { color: var(--agi-ext-success); }
 
     /* ── Thinking dots ── */
     .sp-thinking {
@@ -654,8 +660,8 @@ function injectStyles(): void {
       align-items: center;
       gap: 4px;
       padding: 8px 12px;
-      background: #1a1a2e;
-      border: 1px solid #1e2030;
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border);
       border-radius: 12px;
       border-bottom-left-radius: 3px;
     }
@@ -684,10 +690,10 @@ function injectStyles(): void {
       display: flex;
       align-items: center;
       gap: 5px;
-      background: #13131a;
-      border: 1px solid #1e1e2e;
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border);
       border-radius: 6px;
-      color: #64748b;
+      color: var(--agi-ext-text-muted);
       font-size: 11px;
       padding: 4px 9px;
       cursor: pointer;
@@ -696,14 +702,14 @@ function injectStyles(): void {
       flex-shrink: 0;
     }
     .sp-tool-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: rgba(33, 128, 141, 0.08); }
-    .sp-tool-btn.active { color: #a5f3fc; border-color: #0891b2; background: #0c1a2e; }
-    .sp-tool-btn.has-context { color: #86efac; border-color: #166534; background: #052e16; }
+    .sp-tool-btn.active { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: rgba(33, 128, 141, 0.15); }
+    .sp-tool-btn.has-context { color: var(--agi-ext-success); border-color: var(--agi-ext-success-border); background: var(--agi-ext-success-bg); }
 
     /* ── Mic pulsing indicator ── */
     .sp-mic-pulse {
       width: 8px; height: 8px;
       border-radius: 50%;
-      background: #ef4444;
+      background: var(--agi-ext-danger);
       animation: sp-pulse 1s infinite;
     }
     @keyframes sp-pulse {
@@ -717,8 +723,8 @@ function injectStyles(): void {
       flex-direction: column;
       max-height: 200px;
       overflow-y: auto;
-      background: #0a0a10;
-      border-bottom: 1px solid #1e1e2e;
+      background: var(--agi-ext-bg);
+      border-bottom: 1px solid var(--agi-ext-border);
       flex-shrink: 0;
       font-family: 'SF Mono', Consolas, monospace;
       font-size: 11px;
@@ -726,17 +732,17 @@ function injectStyles(): void {
     #sp-console-panel.open { display: flex; }
     .sp-console-entry {
       padding: 3px 10px;
-      border-bottom: 1px solid #111118;
+      border-bottom: 1px solid var(--agi-ext-border);
       line-height: 1.4;
       word-break: break-all;
     }
-    .sp-console-log { color: #e2e8f0; }
-    .sp-console-warn { color: #fbbf24; background: #1c1a05; }
-    .sp-console-error { color: #f87171; background: #1c0505; }
-    .sp-console-info { color: #60a5fa; }
-    .sp-console-debug { color: #6b7280; }
+    .sp-console-log { color: var(--agi-ext-text); }
+    .sp-console-warn { color: var(--agi-ext-warning); background: rgba(251, 191, 36, 0.06); }
+    .sp-console-error { color: var(--agi-ext-danger); background: var(--agi-ext-danger-bg); }
+    .sp-console-info { color: var(--agi-ext-info); }
+    .sp-console-debug { color: var(--agi-ext-text-muted); }
     .sp-console-time {
-      color: #475569;
+      color: var(--agi-ext-text-muted);
       font-size: 9px;
       margin-right: 6px;
     }
@@ -745,21 +751,21 @@ function injectStyles(): void {
       align-items: center;
       justify-content: space-between;
       padding: 4px 10px;
-      background: #0d0d14;
-      border-bottom: 1px solid #1e1e2e;
+      background: var(--agi-ext-bg);
+      border-bottom: 1px solid var(--agi-ext-border);
       position: sticky;
       top: 0;
     }
-    .sp-console-title { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+    .sp-console-title { font-size: 10px; color: var(--agi-ext-text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
     .sp-console-clear {
       background: none;
       border: none;
-      color: #64748b;
+      color: var(--agi-ext-text-muted);
       font-size: 10px;
       cursor: pointer;
       padding: 2px 6px;
     }
-    .sp-console-clear:hover { color: #e2e8f0; }
+    .sp-console-clear:hover { color: var(--agi-ext-text); }
 
     /* ── Shortcuts dropdown ── */
     .sp-shortcuts-wrapper { position: relative; }
@@ -772,12 +778,12 @@ function injectStyles(): void {
       min-width: 240px;
       max-height: 260px;
       overflow-y: auto;
-      background: #13131a;
-      border: 1px solid #1e1e2e;
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border);
       border-radius: 8px;
       padding: 4px;
       z-index: 100;
-      box-shadow: 0 -4px 16px rgba(0,0,0,0.4);
+      box-shadow: var(--agi-ext-shadow-panel);
     }
     #sp-shortcuts-dropdown.open { display: block; }
     .sp-shortcut-item {
@@ -789,8 +795,8 @@ function injectStyles(): void {
       cursor: pointer;
       transition: background 0.12s;
     }
-    .sp-shortcut-item:hover { background: #1e1e2e; }
-    .sp-shortcut-name { font-size: 12px; color: #e2e8f0; flex: 1; }
+    .sp-shortcut-item:hover { background: var(--agi-ext-hover); }
+    .sp-shortcut-name { font-size: 12px; color: var(--agi-ext-text); flex: 1; }
     .sp-shortcut-actions {
       display: flex;
       gap: 4px;
@@ -804,10 +810,10 @@ function injectStyles(): void {
       border-radius: 3px;
       transition: background 0.12s;
     }
-    .sp-shortcut-action-btn:hover { background: #2d2d40; }
+    .sp-shortcut-action-btn:hover { background: var(--agi-ext-overlay); }
     .sp-shortcuts-empty {
       padding: 10px 8px;
-      color: #475569;
+      color: var(--agi-ext-text-muted);
       font-size: 11px;
       text-align: center;
     }
@@ -815,14 +821,14 @@ function injectStyles(): void {
       display: flex;
       gap: 4px;
       padding: 6px 4px 4px;
-      border-top: 1px solid #1e1e2e;
+      border-top: 1px solid var(--agi-ext-border);
     }
     .sp-save-shortcut-input {
       flex: 1;
-      background: #0f0f14;
-      border: 1px solid #1e1e2e;
+      background: var(--agi-ext-bg);
+      border: 1px solid var(--agi-ext-border);
       border-radius: 4px;
-      color: #e2e8f0;
+      color: var(--agi-ext-text);
       font-size: 11px;
       padding: 4px 6px;
       outline: none;
@@ -855,20 +861,20 @@ function injectStyles(): void {
       min-width: 220px;
       max-height: 240px;
       overflow-y: auto;
-      background: #13131a;
-      border: 1px solid #1e1e2e;
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border);
       border-radius: 8px;
       padding: 4px;
       z-index: 100;
-      box-shadow: 0 -4px 16px rgba(0,0,0,0.4);
+      box-shadow: var(--agi-ext-shadow-panel);
     }
     #sp-tools-dropdown.open { display: block; }
     #sp-tools-dropdown::-webkit-scrollbar { width: 4px; }
     #sp-tools-dropdown::-webkit-scrollbar-track { background: transparent; }
-    #sp-tools-dropdown::-webkit-scrollbar-thumb { background: #1e2030; border-radius: 4px; }
+    #sp-tools-dropdown::-webkit-scrollbar-thumb { background: var(--agi-ext-border); border-radius: 4px; }
     .sp-tools-empty {
       padding: 10px 8px;
-      color: #475569;
+      color: var(--agi-ext-text-muted);
       font-size: 11px;
       text-align: center;
     }
@@ -881,15 +887,15 @@ function injectStyles(): void {
       cursor: pointer;
       transition: background 0.12s;
     }
-    .sp-tool-item:hover { background: #1e1e2e; }
+    .sp-tool-item:hover { background: var(--agi-ext-hover); }
     .sp-tool-item-name {
       font-size: 12px;
-      color: #e2e8f0;
+      color: var(--agi-ext-text);
       font-weight: 500;
     }
     .sp-tool-item-desc {
       font-size: 10px;
-      color: #64748b;
+      color: var(--agi-ext-text-muted);
       line-height: 1.35;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -901,13 +907,13 @@ function injectStyles(): void {
     /* ── Input row (composer §7) ── */
     #sp-input-area {
       padding: 6px 10px 8px;
-      border-top: 1px solid #1e1e2e;
+      border-top: 1px solid var(--agi-ext-border);
       flex-shrink: 0;
     }
     /* outer composer shell */
     #sp-composer-shell {
-      background: #13131a;
-      border: 1px solid #1e1e2e;
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border);
       border-radius: 16px;
       padding: 6px 8px 4px;
       display: flex;
@@ -928,7 +934,7 @@ function injectStyles(): void {
       flex: 1;
       background: transparent;
       border: none;
-      color: #e2e8f0;
+      color: var(--agi-ext-text);
       font-size: 13px;
       padding: 4px 4px;
       resize: none;
@@ -939,7 +945,7 @@ function injectStyles(): void {
       min-height: 28px;
       overflow-y: auto;
     }
-    #sp-input::placeholder { color: #334155; }
+    #sp-input::placeholder { color: var(--agi-ext-border-strong); }
     #sp-send-btn {
       background: var(--agi-ext-accent);
       color: var(--agi-ext-on-accent);
@@ -956,7 +962,7 @@ function injectStyles(): void {
     }
     #sp-send-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); transform: scale(1.05); }
     #sp-send-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-    #sp-send-btn:disabled { background: #2d2d3a; color: #334155; cursor: not-allowed; transform: none; }
+    #sp-send-btn:disabled { background: var(--agi-ext-overlay); color: var(--agi-ext-border-strong); cursor: not-allowed; transform: none; }
 
     /* ── Attachment + button and menu ── */
     .sp-attach-wrapper { position: relative; flex-shrink: 0; }
@@ -969,7 +975,7 @@ function injectStyles(): void {
       background: transparent;
       border: none;
       border-radius: 6px;
-      color: #64748b;
+      color: var(--agi-ext-text-muted);
       font-size: 18px;
       font-weight: 300;
       line-height: 1;
@@ -984,12 +990,12 @@ function injectStyles(): void {
       bottom: calc(100% + 6px);
       left: 0;
       min-width: 190px;
-      background: #13131a;
-      border: 1px solid #1e1e2e;
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border);
       border-radius: 8px;
       padding: 4px;
       z-index: 150;
-      box-shadow: 0 -4px 16px rgba(0,0,0,0.5);
+      box-shadow: var(--agi-ext-shadow-panel);
     }
     #sp-attach-menu.open { display: block; }
     .sp-attach-menu-item {
@@ -1000,11 +1006,11 @@ function injectStyles(): void {
       border-radius: 5px;
       cursor: pointer;
       font-size: 12px;
-      color: #cbd5e1;
+      color: var(--agi-ext-text-muted);
       transition: background 0.12s, color 0.12s;
       user-select: none;
     }
-    .sp-attach-menu-item:hover { background: #1e1e2e; color: #e2e8f0; }
+    .sp-attach-menu-item:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
     .sp-attach-icon { font-size: 14px; flex-shrink: 0; }
     .sp-attach-file-input { display: none; }
 
@@ -1020,7 +1026,7 @@ function injectStyles(): void {
       display: inline-flex;
       border-radius: 6px;
       overflow: visible;
-      border: 1px solid #1e1e2e;
+      border: 1px solid var(--agi-ext-border);
     }
     .sp-attachment-thumb {
       width: 48px;
@@ -1035,10 +1041,10 @@ function injectStyles(): void {
       right: -6px;
       width: 16px;
       height: 16px;
-      background: #1e1e2e;
-      border: 1px solid #334155;
+      background: var(--agi-ext-hover);
+      border: 1px solid var(--agi-ext-border-strong);
       border-radius: 50%;
-      color: #94a3b8;
+      color: var(--agi-ext-text-muted);
       font-size: 10px;
       line-height: 1;
       cursor: pointer;
@@ -1048,7 +1054,7 @@ function injectStyles(): void {
       padding: 0;
       transition: background 0.12s, color 0.12s;
     }
-    .sp-attachment-remove:hover { background: #7f1d1d; color: #fca5a5; border-color: #7f1d1d; }
+    .sp-attachment-remove:hover { background: var(--agi-ext-danger-bg); color: var(--agi-ext-danger); border-color: var(--agi-ext-danger-border); }
 
     /* ── Composer bottom bar: persistent page-context chip ── */
     #sp-composer-bar {
@@ -1061,10 +1067,10 @@ function injectStyles(): void {
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      background: #1a1a28;
-      border: 1px solid #2d2d40;
+      background: var(--agi-ext-overlay);
+      border: 1px solid var(--agi-ext-border);
       border-radius: 12px;
-      color: #64748b;
+      color: var(--agi-ext-text-muted);
       font-size: 10px;
       font-weight: 500;
       padding: 2px 9px;
@@ -1081,16 +1087,16 @@ function injectStyles(): void {
       width: 6px;
       height: 6px;
       border-radius: 50%;
-      background: #334155;
+      background: var(--agi-ext-border-strong);
       flex-shrink: 0;
       transition: background 0.15s;
     }
     .sp-context-chip.has-context {
-      color: #86efac;
-      border-color: #166534;
-      background: #052e16;
+      color: var(--agi-ext-success);
+      border-color: var(--agi-ext-success-border);
+      background: var(--agi-ext-success-bg);
     }
-    .sp-context-chip.has-context::before { background: #22c55e; }
+    .sp-context-chip.has-context::before { background: var(--agi-ext-success); }
     .sp-context-chip:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: rgba(33, 128, 141, 0.08); }
     .sp-context-chip:hover::before { background: var(--agi-ext-accent); }
     .sp-context-chip.loading { opacity: 0.6; cursor: wait; }
@@ -1101,14 +1107,14 @@ function injectStyles(): void {
       flex-direction: column;
       gap: 5px;
       padding: 6px 10px 8px;
-      background: #0a0a10;
-      border-bottom: 1px solid #1e1e2e;
+      background: var(--agi-ext-bg);
+      border-bottom: 1px solid var(--agi-ext-border);
       flex-shrink: 0;
     }
     #sp-settings-bar.open { display: flex; }
     .sp-settings-label {
       font-size: 10px;
-      color: #475569;
+      color: var(--agi-ext-text-muted);
       letter-spacing: 0.05em;
       text-transform: uppercase;
     }
@@ -1119,24 +1125,24 @@ function injectStyles(): void {
     }
     .sp-settings-input {
       flex: 1;
-      background: #13131a;
-      border: 1px solid #1e1e2e;
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border);
       border-radius: 6px;
-      color: #e2e8f0;
+      color: var(--agi-ext-text);
       font-size: 11px;
       padding: 5px 9px;
       outline: none;
-      font-family: 'SF Mono', Consolas, monospace;
+      font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
       transition: border-color 0.15s;
       min-width: 0;
     }
     .sp-settings-input:focus { border-color: var(--agi-ext-focus); }
     .sp-settings-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    .sp-settings-input::placeholder { color: #334155; }
+    .sp-settings-input::placeholder { color: var(--agi-ext-text-muted); opacity: 0.6; }
     .sp-settings-btn {
-      background: #1e1e2e;
-      color: #94a3b8;
-      border: 1px solid #2d2d40;
+      background: var(--agi-ext-hover);
+      color: var(--agi-ext-text-muted);
+      border: 1px solid var(--agi-ext-border);
       border-radius: 6px;
       padding: 5px 10px;
       font-size: 11px;
@@ -1144,7 +1150,7 @@ function injectStyles(): void {
       transition: color 0.15s, border-color 0.15s;
       white-space: nowrap;
     }
-    .sp-settings-btn:hover { color: #e2e8f0; border-color: var(--agi-ext-accent); }
+    .sp-settings-btn:hover { color: var(--agi-ext-text); border-color: var(--agi-ext-accent); }
 
     /* ── Auth bar ── */
     #sp-auth-bar {
@@ -1152,16 +1158,16 @@ function injectStyles(): void {
       align-items: center;
       gap: 6px;
       padding: 6px 10px;
-      background: #0d0d14;
-      border-bottom: 1px solid #1e1e2e;
+      background: var(--agi-ext-bg);
+      border-bottom: 1px solid var(--agi-ext-border);
       flex-shrink: 0;
     }
     #sp-auth-input {
       flex: 1;
-      background: #13131a;
-      border: 1px solid #1e1e2e;
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border);
       border-radius: 6px;
-      color: #e2e8f0;
+      color: var(--agi-ext-text);
       font-size: 11px;
       padding: 5px 9px;
       outline: none;
@@ -1171,7 +1177,7 @@ function injectStyles(): void {
     }
     #sp-auth-input:focus { border-color: var(--agi-ext-focus); }
     #sp-auth-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    #sp-auth-input::placeholder { color: #334155; }
+    #sp-auth-input::placeholder { color: var(--agi-ext-text-muted); opacity: 0.6; }
     #sp-auth-save-btn {
       background: var(--agi-ext-accent);
       color: var(--agi-ext-on-accent);
@@ -1201,14 +1207,14 @@ function injectStyles(): void {
       white-space: nowrap;
     }
     #sp-status-pill.connected {
-      background: #052e16;
-      color: #86efac;
-      border: 1px solid #166534;
+      background: var(--agi-ext-success-bg);
+      color: var(--agi-ext-success);
+      border: 1px solid var(--agi-ext-success-border);
     }
     #sp-status-pill.disconnected {
-      background: #1c0505;
-      color: #f87171;
-      border: 1px solid #7f1d1d;
+      background: var(--agi-ext-danger-bg);
+      color: var(--agi-ext-danger);
+      border: 1px solid var(--agi-ext-danger-border);
     }
     .sp-status-dot {
       width: 6px;
@@ -1216,14 +1222,14 @@ function injectStyles(): void {
       border-radius: 50%;
       flex-shrink: 0;
     }
-    #sp-status-pill.connected .sp-status-dot { background: #22c55e; }
-    #sp-status-pill.disconnected .sp-status-dot { background: #ef4444; }
+    #sp-status-pill.connected .sp-status-dot { background: var(--agi-ext-success); }
+    #sp-status-pill.disconnected .sp-status-dot { background: var(--agi-ext-danger); }
 
     /* ── Tab bar ── */
     #sp-tab-bar {
       display: flex;
-      background: #13131a;
-      border-bottom: 1px solid #1e1e2e;
+      background: var(--agi-ext-surface);
+      border-bottom: 1px solid var(--agi-ext-border);
       flex-shrink: 0;
     }
     .sp-tab {
@@ -1231,7 +1237,7 @@ function injectStyles(): void {
       background: transparent;
       border: none;
       border-bottom: 2px solid transparent;
-      color: #64748b;
+      color: var(--agi-ext-text-muted);
       font-size: 12px;
       font-weight: 500;
       padding: 9px 0;
@@ -1239,7 +1245,7 @@ function injectStyles(): void {
       letter-spacing: 0.02em;
       transition: color 0.15s, border-color 0.15s;
     }
-    .sp-tab:hover { color: #94a3b8; }
+    .sp-tab:hover { color: var(--agi-ext-text); }
     .sp-tab.sp-tab-active { color: var(--agi-ext-accent); border-bottom-color: var(--agi-ext-accent); }
     #sp-chat-panel { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
     #sp-chat-panel.sp-tab-hidden { display: none; }
@@ -1247,98 +1253,98 @@ function injectStyles(): void {
     #sp-workflows.sp-tab-visible { display: flex; }
     #sp-workflows::-webkit-scrollbar { width: 4px; }
     #sp-workflows::-webkit-scrollbar-track { background: transparent; }
-    #sp-workflows::-webkit-scrollbar-thumb { background: #1e2030; border-radius: 4px; }
-    .sp-wf-section { background: #1a1a28; border: 1px solid #1e1e2e; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+    #sp-workflows::-webkit-scrollbar-thumb { background: var(--agi-ext-border); border-radius: 4px; }
+    .sp-wf-section { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
     .sp-wf-section-header { display: flex; align-items: center; justify-content: space-between; }
-    .sp-wf-section-title { font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; }
-    .sp-wf-empty { color: #475569; font-size: 11px; line-height: 1.55; padding: 4px 0; }
+    .sp-wf-section-title { font-size: 11px; font-weight: 600; color: var(--agi-ext-text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .sp-wf-empty { color: var(--agi-ext-text-muted); font-size: 11px; line-height: 1.55; padding: 4px 0; }
     .sp-wf-shortcuts-list { display: flex; flex-direction: column; gap: 6px; }
-    .sp-wf-shortcut-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: #0f0f14; border: 1px solid #1e1e2e; border-radius: 7px; }
+    .sp-wf-shortcut-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: 7px; }
     .sp-wf-shortcut-icon { font-size: 14px; flex-shrink: 0; }
     .sp-wf-shortcut-info { flex: 1; min-width: 0; }
-    .sp-wf-shortcut-name { font-size: 12px; font-weight: 500; color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .sp-wf-shortcut-meta { font-size: 10px; color: #475569; margin-top: 1px; }
+    .sp-wf-shortcut-name { font-size: 12px; font-weight: 500; color: var(--agi-ext-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sp-wf-shortcut-meta { font-size: 10px; color: var(--agi-ext-text-muted); margin-top: 1px; }
     .sp-wf-shortcut-btns { display: flex; gap: 4px; flex-shrink: 0; }
     .sp-wf-btn-replay { background: rgba(33, 128, 141, 0.12); border: 1px solid rgba(33, 128, 141, 0.3); color: var(--agi-ext-accent); font-size: 11px; padding: 3px 9px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
     .sp-wf-btn-replay:hover { background: rgba(33, 128, 141, 0.22); }
-    .sp-wf-btn-delete { background: none; border: 1px solid #1e1e2e; color: #64748b; font-size: 11px; padding: 3px 7px; border-radius: 5px; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
-    .sp-wf-btn-delete:hover { color: #f87171; border-color: #7f1d1d; }
+    .sp-wf-btn-delete { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); font-size: 11px; padding: 3px 7px; border-radius: 5px; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
+    .sp-wf-btn-delete:hover { color: var(--agi-ext-danger); border-color: var(--agi-ext-danger-border); }
     .sp-wf-tasks-list { display: flex; flex-direction: column; gap: 6px; }
-    .sp-wf-task-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: #0f0f14; border: 1px solid #1e1e2e; border-radius: 7px; }
+    .sp-wf-task-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: 7px; }
     .sp-wf-task-info { flex: 1; min-width: 0; }
-    .sp-wf-task-name { font-size: 12px; font-weight: 500; color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sp-wf-task-name { font-size: 12px; font-weight: 500; color: var(--agi-ext-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .sp-wf-task-schedule-badge { display: inline-block; font-size: 9px; color: var(--agi-ext-accent); background: rgba(33, 128, 141, 0.12); border: 1px solid rgba(33, 128, 141, 0.3); border-radius: 3px; padding: 1px 5px; margin-top: 2px; }
-    .sp-wf-task-toggle { appearance: none; width: 30px; height: 16px; border-radius: 8px; background: #1e1e2e; position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; }
+    .sp-wf-task-toggle { appearance: none; width: 30px; height: 16px; border-radius: 8px; background: var(--agi-ext-hover); position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; }
     .sp-wf-task-toggle:checked { background: var(--agi-ext-accent); }
     .sp-wf-task-toggle::after { content: ''; position: absolute; width: 12px; height: 12px; border-radius: 50%; background: white; top: 2px; left: 2px; transition: transform 0.2s; }
     .sp-wf-task-toggle:checked::after { transform: translateX(14px); }
-    .sp-wf-task-delete { background: none; border: 1px solid #1e1e2e; color: #64748b; font-size: 11px; padding: 3px 7px; border-radius: 5px; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
-    .sp-wf-task-delete:hover { color: #f87171; border-color: #7f1d1d; }
+    .sp-wf-task-delete { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); font-size: 11px; padding: 3px 7px; border-radius: 5px; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
+    .sp-wf-task-delete:hover { color: var(--agi-ext-danger); border-color: var(--agi-ext-danger-border); }
     .sp-wf-new-task-btn { background: rgba(33, 128, 141, 0.12); border: 1px solid rgba(33, 128, 141, 0.3); color: var(--agi-ext-accent); font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
     .sp-wf-new-task-btn:hover { background: rgba(33, 128, 141, 0.22); }
-    .sp-wf-new-task-form { display: none; flex-direction: column; gap: 7px; padding: 10px; background: #0f0f14; border: 1px solid #1e1e2e; border-radius: 7px; }
+    .sp-wf-new-task-form { display: none; flex-direction: column; gap: 7px; padding: 10px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: 7px; }
     .sp-wf-new-task-form.open { display: flex; }
-    .sp-wf-form-label { font-size: 10px; color: #64748b; margin-bottom: 1px; }
-    .sp-wf-form-input { background: #13131a; border: 1px solid #1e1e2e; border-radius: 5px; color: #e2e8f0; font-size: 12px; padding: 5px 8px; outline: none; font-family: inherit; transition: border-color 0.15s; width: 100%; }
+    .sp-wf-form-label { font-size: 10px; color: var(--agi-ext-text-muted); margin-bottom: 1px; }
+    .sp-wf-form-input { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 5px; color: var(--agi-ext-text); font-size: 12px; padding: 5px 8px; outline: none; font-family: inherit; transition: border-color 0.15s; width: 100%; }
     .sp-wf-form-input:focus { border-color: var(--agi-ext-focus); }
     .sp-wf-form-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    .sp-wf-form-input::placeholder { color: #334155; }
-    .sp-wf-form-select { background: #13131a; border: 1px solid #1e1e2e; border-radius: 5px; color: #e2e8f0; font-size: 12px; padding: 5px 8px; outline: none; font-family: inherit; width: 100%; }
+    .sp-wf-form-input::placeholder { color: var(--agi-ext-text-muted); opacity: 0.6; }
+    .sp-wf-form-select { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 5px; color: var(--agi-ext-text); font-size: 12px; padding: 5px 8px; outline: none; font-family: inherit; width: 100%; }
     .sp-wf-form-select:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     .sp-wf-form-save-btn { background: var(--agi-ext-accent); color: var(--agi-ext-on-accent); border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; cursor: pointer; align-self: flex-end; transition: background 0.12s; }
     .sp-wf-form-save-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); }
     .sp-wf-form-save-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-    .sp-wf-form-cancel-btn { background: none; border: 1px solid #1e1e2e; color: #64748b; border-radius: 5px; padding: 6px 10px; font-size: 12px; cursor: pointer; align-self: flex-end; transition: color 0.12s; }
-    .sp-wf-form-cancel-btn:hover { color: #e2e8f0; }
+    .sp-wf-form-cancel-btn { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); border-radius: 5px; padding: 6px 10px; font-size: 12px; cursor: pointer; align-self: flex-end; transition: color 0.12s; }
+    .sp-wf-form-cancel-btn:hover { color: var(--agi-ext-text); }
     .sp-wf-form-actions { display: flex; gap: 6px; justify-content: flex-end; }
     .sp-wf-create-shortcut-btn { background: rgba(33, 128, 141, 0.12); border: 1px solid rgba(33, 128, 141, 0.3); color: var(--agi-ext-accent); font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
     .sp-wf-create-shortcut-btn:hover { background: rgba(33, 128, 141, 0.22); }
-    .sp-create-shortcut-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; align-items: center; justify-content: center; }
+    .sp-create-shortcut-overlay { display: none; position: fixed; inset: 0; background: var(--agi-ext-scrim); z-index: 9999; align-items: center; justify-content: center; }
     .sp-create-shortcut-overlay.open { display: flex; }
-    .sp-create-shortcut-modal { background: #13131a; border: 1px solid #1e1e2e; border-radius: 10px; padding: 18px 18px 14px; width: 290px; max-width: 95vw; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+    .sp-create-shortcut-modal { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 10px; padding: 18px 18px 14px; width: 290px; max-width: 95vw; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 8px 32px var(--agi-ext-modal-shadow); }
     .sp-create-shortcut-header { display: flex; align-items: center; justify-content: space-between; }
-    .sp-create-shortcut-title { font-size: 13px; font-weight: 600; color: #e2e8f0; }
-    .sp-create-shortcut-close { background: none; border: none; color: #64748b; font-size: 16px; cursor: pointer; padding: 0 2px; line-height: 1; transition: color 0.12s; }
-    .sp-create-shortcut-close:hover { color: #e2e8f0; }
+    .sp-create-shortcut-title { font-size: 13px; font-weight: 600; color: var(--agi-ext-text); }
+    .sp-create-shortcut-close { background: none; border: none; color: var(--agi-ext-text-muted); font-size: 16px; cursor: pointer; padding: 0 2px; line-height: 1; transition: color 0.12s; }
+    .sp-create-shortcut-close:hover { color: var(--agi-ext-text); }
     .sp-create-shortcut-field { display: flex; flex-direction: column; gap: 4px; }
-    .sp-create-shortcut-label { font-size: 10px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; }
-    .sp-create-shortcut-input { background: #0f0f14; border: 1px solid #1e1e2e; border-radius: 5px; color: #e2e8f0; font-size: 12px; padding: 6px 9px; outline: none; font-family: inherit; transition: border-color 0.15s; width: 100%; box-sizing: border-box; }
+    .sp-create-shortcut-label { font-size: 10px; font-weight: 600; color: var(--agi-ext-text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .sp-create-shortcut-input { background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: 5px; color: var(--agi-ext-text); font-size: 12px; padding: 6px 9px; outline: none; font-family: inherit; transition: border-color 0.15s; width: 100%; box-sizing: border-box; }
     .sp-create-shortcut-input:focus { border-color: var(--agi-ext-focus); }
     .sp-create-shortcut-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    .sp-create-shortcut-input::placeholder { color: #334155; }
-    .sp-create-shortcut-textarea { background: #0f0f14; border: 1px solid #1e1e2e; border-radius: 5px; color: #e2e8f0; font-size: 12px; padding: 6px 9px; outline: none; font-family: inherit; transition: border-color 0.15s; width: 100%; box-sizing: border-box; resize: none; height: 70px; line-height: 1.4; }
+    .sp-create-shortcut-input::placeholder { color: var(--agi-ext-text-muted); opacity: 0.6; }
+    .sp-create-shortcut-textarea { background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: 5px; color: var(--agi-ext-text); font-size: 12px; padding: 6px 9px; outline: none; font-family: inherit; transition: border-color 0.15s; width: 100%; box-sizing: border-box; resize: none; height: 70px; line-height: 1.4; }
     .sp-create-shortcut-textarea:focus { border-color: var(--agi-ext-focus); }
     .sp-create-shortcut-textarea:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    .sp-create-shortcut-textarea::placeholder { color: #334155; }
+    .sp-create-shortcut-textarea::placeholder { color: var(--agi-ext-text-muted); opacity: 0.6; }
     .sp-create-shortcut-schedule-row { display: flex; align-items: center; justify-content: space-between; }
-    .sp-create-shortcut-schedule-label { font-size: 12px; color: #94a3b8; }
-    .sp-create-shortcut-toggle { appearance: none; width: 34px; height: 18px; border-radius: 9px; background: #1e1e2e; position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; border: none; outline: none; }
+    .sp-create-shortcut-schedule-label { font-size: 12px; color: var(--agi-ext-text-muted); }
+    .sp-create-shortcut-toggle { appearance: none; width: 34px; height: 18px; border-radius: 9px; background: var(--agi-ext-hover); position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; border: none; outline: none; }
     .sp-create-shortcut-toggle:checked { background: var(--agi-ext-accent); }
     .sp-create-shortcut-toggle:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
     .sp-create-shortcut-toggle::after { content: ''; position: absolute; width: 13px; height: 13px; border-radius: 50%; background: white; top: 2.5px; left: 2.5px; transition: transform 0.2s; }
     .sp-create-shortcut-toggle:checked::after { transform: translateX(16px); }
     .sp-create-shortcut-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 2px; }
-    .sp-create-shortcut-cancel { background: none; border: 1px solid #1e1e2e; color: #64748b; border-radius: 5px; padding: 6px 14px; font-size: 12px; cursor: pointer; transition: color 0.12s; }
-    .sp-create-shortcut-cancel:hover { color: #e2e8f0; }
+    .sp-create-shortcut-cancel { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); border-radius: 5px; padding: 6px 14px; font-size: 12px; cursor: pointer; transition: color 0.12s; }
+    .sp-create-shortcut-cancel:hover { color: var(--agi-ext-text); }
     .sp-create-shortcut-save { background: var(--agi-ext-accent); color: var(--agi-ext-on-accent); border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; cursor: pointer; transition: background 0.12s; }
     .sp-create-shortcut-save:hover { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); }
     .sp-create-shortcut-save:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-    .sp-wf-group-desc { font-size: 11px; color: #64748b; line-height: 1.55; }
+    .sp-wf-group-desc { font-size: 11px; color: var(--agi-ext-text-muted); line-height: 1.55; }
     .sp-wf-group-btns { display: flex; gap: 8px; flex-wrap: wrap; }
-    .sp-wf-group-action-btn { display: flex; align-items: center; gap: 5px; background: #13131a; border: 1px solid #1e1e2e; border-radius: 6px; color: #94a3b8; font-size: 11px; padding: 5px 11px; cursor: pointer; transition: color 0.15s, border-color 0.15s, background 0.15s; }
+    .sp-wf-group-action-btn { display: flex; align-items: center; gap: 5px; background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 6px; color: var(--agi-ext-text-muted); font-size: 11px; padding: 5px 11px; cursor: pointer; transition: color 0.15s, border-color 0.15s, background 0.15s; }
     .sp-wf-group-action-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: rgba(33, 128, 141, 0.08); }
-    .sp-wf-group-action-btn.active { color: #86efac; border-color: #166534; background: #052e16; }
+    .sp-wf-group-action-btn.active { color: var(--agi-ext-success); border-color: var(--agi-ext-success-border); background: var(--agi-ext-success-bg); }
     .sp-wf-record-bar { display: flex; align-items: center; gap: 8px; }
-    .sp-wf-record-btn { display: flex; align-items: center; gap: 6px; background: #dc2626; border: none; color: white; font-size: 12px; font-weight: 600; padding: 8px 16px; border-radius: 8px; cursor: pointer; transition: background 0.15s, transform 0.1s; flex-shrink: 0; }
-    .sp-wf-record-btn:hover { background: #b91c1c; transform: scale(1.02); }
-    .sp-wf-record-btn.recording { background: #450a0a; border: 1px solid #dc2626; animation: sp-record-pulse 1.5s infinite; }
-    .sp-wf-record-btn.recording:hover { background: #7f1d1d; }
-    @keyframes sp-record-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); } 50% { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); } }
+    .sp-wf-record-btn { display: flex; align-items: center; gap: 6px; background: var(--agi-ext-danger); border: none; color: white; font-size: 12px; font-weight: 600; padding: 8px 16px; border-radius: 8px; cursor: pointer; transition: background 0.15s, transform 0.1s; flex-shrink: 0; }
+    .sp-wf-record-btn:hover { background: color-mix(in srgb, var(--agi-ext-danger) 85%, black); transform: scale(1.02); }
+    .sp-wf-record-btn.recording { background: var(--agi-ext-danger-bg); border: 1px solid var(--agi-ext-danger); animation: sp-record-pulse 1.5s infinite; }
+    .sp-wf-record-btn.recording:hover { background: var(--agi-ext-danger-bg); }
+    @keyframes sp-record-pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--agi-ext-transparent-shadow); } 50% { box-shadow: 0 0 0 6px var(--agi-ext-transparent-shadow); } }
     .sp-wf-record-dot { width: 8px; height: 8px; border-radius: 50%; background: white; flex-shrink: 0; }
-    .sp-wf-record-btn.recording .sp-wf-record-dot { background: #ef4444; animation: sp-pulse 1s infinite; }
-    .sp-wf-action-counter { font-size: 11px; color: #94a3b8; flex: 1; }
-    .sp-wf-action-counter strong { color: #e2e8f0; }
-    .sp-wf-save-dialog { display: none; flex-direction: column; gap: 6px; padding: 10px; background: #0f0f14; border: 1px solid rgba(33, 128, 141, 0.3); border-radius: 8px; }
+    .sp-wf-record-btn.recording .sp-wf-record-dot { background: var(--agi-ext-danger); animation: sp-pulse 1s infinite; }
+    .sp-wf-action-counter { font-size: 11px; color: var(--agi-ext-text-muted); flex: 1; }
+    .sp-wf-action-counter strong { color: var(--agi-ext-text); }
+    .sp-wf-save-dialog { display: none; flex-direction: column; gap: 6px; padding: 10px; background: var(--agi-ext-bg); border: 1px solid rgba(33, 128, 141, 0.3); border-radius: 8px; }
     .sp-wf-save-dialog.open { display: flex; }
     .sp-wf-save-dialog-title { font-size: 12px; font-weight: 600; color: var(--agi-ext-accent); }
     .sp-wf-count-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; font-size: 10px; font-weight: 600; background: rgba(33, 128, 141, 0.2); color: var(--agi-ext-accent); border-radius: 9px; padding: 0 5px; }
@@ -1348,10 +1354,10 @@ function injectStyles(): void {
     #sp-model-selector-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
     #sp-model-selector-btn .sp-chevron { font-size: 8px; transition: transform 0.15s; }
     #sp-model-selector-btn.open .sp-chevron { transform: rotate(180deg); }
-    #sp-model-dropdown { display: none; position: absolute; top: 100%; right: 0; margin-top: 4px; min-width: 180px; max-height: 280px; overflow-y: auto; background: #13131a; border: 1px solid #1e1e2e; border-radius: 8px; padding: 4px; z-index: 200; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
+    #sp-model-dropdown { display: none; position: absolute; top: 100%; right: 0; margin-top: 4px; min-width: 180px; max-height: 280px; overflow-y: auto; background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 8px; padding: 4px; z-index: 200; box-shadow: 0 4px 16px var(--agi-ext-modal-shadow); }
     #sp-model-dropdown.open { display: block; }
-    .sp-model-option { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 5px; cursor: pointer; transition: background 0.12s; font-size: 11px; color: #94a3b8; }
-    .sp-model-option:hover { background: #1e1e2e; color: #e2e8f0; }
+    .sp-model-option { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 5px; cursor: pointer; transition: background 0.12s; font-size: 11px; color: var(--agi-ext-text-muted); }
+    .sp-model-option:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
     .sp-model-option.selected { color: var(--agi-ext-accent); background: rgba(33, 128, 141, 0.12); }
     .sp-model-option-check { width: 14px; text-align: center; font-size: 10px; flex-shrink: 0; }
     .sp-model-option-label { flex: 1; }
@@ -1369,7 +1375,7 @@ function injectStyles(): void {
       width: 16px;
       height: 16px;
       border-radius: 3px;
-      background: #2d2d40;
+      background: var(--agi-ext-hover);
       flex-shrink: 0;
     }
     .sp-model-option-text {
@@ -1388,15 +1394,15 @@ function injectStyles(): void {
     }
     .sp-model-option-sublabel {
       font-size: 9px;
-      color: #475569;
+      color: var(--agi-ext-text-muted);
       white-space: nowrap;
     }
     .sp-model-option.selected .sp-model-option-sublabel { color: var(--agi-ext-accent); opacity: 0.7; }
-    .sp-model-option:hover .sp-model-option-sublabel { color: #64748b; }
+    .sp-model-option:hover .sp-model-option-sublabel { color: var(--agi-ext-text-muted); }
 
     /* "Best (auto)" option — visually distinct row */
     .sp-model-option-auto {
-      border-bottom: 1px solid #1e1e2e;
+      border-bottom: 1px solid var(--agi-ext-border);
       margin-bottom: 4px;
       padding-bottom: 10px;
     }
@@ -1419,21 +1425,21 @@ function injectStyles(): void {
       align-items: center;
       justify-content: space-between;
       padding: 6px 9px 4px;
-      border-bottom: 1px solid #1e1e2e;
+      border-bottom: 1px solid var(--agi-ext-border);
       margin-bottom: 2px;
     }
     .sp-model-picker-title {
       font-size: 9px;
       font-weight: 600;
-      color: #334155;
+      color: var(--agi-ext-text-muted);
       text-transform: uppercase;
       letter-spacing: 0.08em;
     }
     .provider-count-badge {
       font-size: 10px;
-      color: #64748b;
-      background: #1e1e2e;
-      border: 1px solid #2d2d40;
+      color: var(--agi-ext-text-muted);
+      background: var(--agi-ext-hover);
+      border: 1px solid var(--agi-ext-border);
       border-radius: 10px;
       padding: 1px 7px;
       font-weight: 500;
@@ -1445,13 +1451,13 @@ function injectStyles(): void {
     .sp-model-group-header {
       font-size: 9px;
       font-weight: 600;
-      color: #334155;
+      color: var(--agi-ext-text-muted);
       text-transform: uppercase;
       letter-spacing: 0.08em;
       padding: 6px 9px 2px;
     }
     .sp-model-group-header:not(:first-child) {
-      border-top: 1px solid #1e1e2e;
+      border-top: 1px solid var(--agi-ext-border);
       margin-top: 4px;
       padding-top: 8px;
     }
@@ -1462,13 +1468,13 @@ function injectStyles(): void {
       align-items: center;
       gap: 8px;
       padding: 8px 9px 5px;
-      border-top: 1px solid #1e1e2e;
+      border-top: 1px solid var(--agi-ext-border);
       margin-top: 4px;
     }
     .sp-thinking-toggle-label {
       flex: 1;
       font-size: 10px;
-      color: #64748b;
+      color: var(--agi-ext-text-muted);
       user-select: none;
       cursor: pointer;
     }
@@ -1478,7 +1484,7 @@ function injectStyles(): void {
       width: 28px;
       height: 15px;
       border-radius: 8px;
-      background: #1e1e2e;
+      background: var(--agi-ext-hover);
       position: relative;
       cursor: pointer;
       transition: background 0.2s;
@@ -1512,27 +1518,27 @@ function injectStyles(): void {
       width: 260px;
       max-height: 320px;
       overflow-y: auto;
-      background: #13131a;
-      border: 1px solid #1e1e2e;
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border);
       border-radius: 8px;
       padding: 4px;
       z-index: 200;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+      box-shadow: 0 4px 16px var(--agi-ext-modal-shadow);
     }
     #sp-history-dropdown.open { display: block; }
     #sp-history-dropdown::-webkit-scrollbar { width: 4px; }
     #sp-history-dropdown::-webkit-scrollbar-track { background: transparent; }
-    #sp-history-dropdown::-webkit-scrollbar-thumb { background: #1e2030; border-radius: 4px; }
+    #sp-history-dropdown::-webkit-scrollbar-thumb { background: var(--agi-ext-border); border-radius: 4px; }
     .sp-history-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 5px 8px 4px;
-      border-bottom: 1px solid #1e1e2e;
+      border-bottom: 1px solid var(--agi-ext-border);
       margin-bottom: 2px;
     }
-    .sp-history-title { font-size: 9px; font-weight: 600; color: #334155; text-transform: uppercase; letter-spacing: 0.08em; }
-    .sp-history-empty { padding: 12px 8px; color: #475569; font-size: 11px; text-align: center; }
+    .sp-history-title { font-size: 9px; font-weight: 600; color: var(--agi-ext-text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+    .sp-history-empty { padding: 12px 8px; color: var(--agi-ext-text-muted); font-size: 11px; text-align: center; }
     .sp-history-item {
       display: flex;
       align-items: center;
@@ -1542,20 +1548,20 @@ function injectStyles(): void {
       cursor: pointer;
       transition: background 0.12s;
     }
-    .sp-history-item:hover { background: #1e1e2e; }
+    .sp-history-item:hover { background: var(--agi-ext-hover); }
     .sp-history-item-text { flex: 1; min-width: 0; }
     .sp-history-item-title {
       font-size: 11px;
-      color: #e2e8f0;
+      color: var(--agi-ext-text);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .sp-history-item-date { font-size: 9px; color: #475569; margin-top: 1px; }
+    .sp-history-item-date { font-size: 9px; color: var(--agi-ext-text-muted); margin-top: 1px; }
     .sp-history-item-del {
       background: none;
       border: none;
-      color: #475569;
+      color: var(--agi-ext-text-muted);
       font-size: 12px;
       cursor: pointer;
       padding: 2px 4px;
@@ -1564,7 +1570,7 @@ function injectStyles(): void {
       flex-shrink: 0;
       transition: color 0.12s, background 0.12s;
     }
-    .sp-history-item-del:hover { color: #f87171; background: #1c0505; }
+    .sp-history-item-del:hover { color: var(--agi-ext-danger); background: var(--agi-ext-danger-bg); }
   `;
   document.head.appendChild(style);
 }
@@ -2292,9 +2298,20 @@ function buildUI(): void {
 
   const header = el('div', { id: 'sp-header' });
   const headerLeft = el('div', { id: 'sp-header-left' });
-  headerLeft.appendChild(el('div', { id: 'sp-logo' }, '🤖'));
+
+  const logoEl = el('div', { id: 'sp-logo' });
+  logoEl.innerHTML = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <rect width="24" height="24" rx="6" fill="url(#logoGrad)"/>
+    <circle cx="12" cy="9" r="3" stroke="white" stroke-width="1.5"/>
+    <path d="M6 19c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+    <defs><linearGradient id="logoGrad" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#21808d"/><stop offset="1" stop-color="#da7756"/>
+    </linearGradient></defs>
+  </svg>`;
+  headerLeft.appendChild(logoEl);
+
   const titleWrap = el('div', {});
-  titleWrap.appendChild(el('div', { id: 'sp-title' }, 'AGI Workforce'));
+  titleWrap.appendChild(el('div', { id: 'sp-title' }, 'Workforce'));
   headerLeft.appendChild(titleWrap);
 
   const modelSelectorWrap = el('div', { class: 'sp-model-selector-wrap' });
@@ -2749,7 +2766,7 @@ function buildUI(): void {
             if (existing) existing.remove();
             const errEl = document.createElement('div');
             errEl.className = 'sp-bridge-error';
-            errEl.style.cssText = 'color: #f87171; font-size: 10px; padding: 2px 0;';
+            errEl.style.cssText = 'color: var(--agi-ext-danger); font-size: 10px; padding: 2px 0;';
             errEl.textContent = 'Only local URLs (localhost, 127.0.0.1) are allowed';
             bar.appendChild(errEl);
             setTimeout(() => errEl.remove(), 4000);
@@ -2866,7 +2883,7 @@ function buildUI(): void {
     'd',
     'M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C16.5 22.15 20 17.25 20 12V6l-8-4z',
   );
-  shieldPath.setAttribute('stroke', '#94a3b8');
+  shieldPath.setAttribute('stroke', 'var(--agi-ext-text-muted)');
   shieldPath.setAttribute('stroke-width', '1.5');
   shieldPath.setAttribute('stroke-linejoin', 'round');
   const shieldLine = document.createElementNS(svgNS, 'line');
@@ -2874,14 +2891,14 @@ function buildUI(): void {
   shieldLine.setAttribute('y1', '8');
   shieldLine.setAttribute('x2', '12');
   shieldLine.setAttribute('y2', '13');
-  shieldLine.setAttribute('stroke', '#94a3b8');
+  shieldLine.setAttribute('stroke', 'var(--agi-ext-text-muted)');
   shieldLine.setAttribute('stroke-width', '1.5');
   shieldLine.setAttribute('stroke-linecap', 'round');
   const shieldCircle = document.createElementNS(svgNS, 'circle');
   shieldCircle.setAttribute('cx', '12');
   shieldCircle.setAttribute('cy', '16');
   shieldCircle.setAttribute('r', '0.75');
-  shieldCircle.setAttribute('fill', '#94a3b8');
+  shieldCircle.setAttribute('fill', 'var(--agi-ext-text-muted)');
   shield.appendChild(shieldPath);
   shield.appendChild(shieldLine);
   shield.appendChild(shieldCircle);
@@ -2893,7 +2910,7 @@ function buildUI(): void {
     createElementWith({
       tag: 'div',
       id: 'sp-blocked-desc',
-      text: 'AGI Workforce cannot assist with the content on this page.',
+      text: 'Browser automation is not available on this page.',
     }),
   );
   msgsArea.appendChild(blockedState);
@@ -3001,7 +3018,7 @@ function buildUI(): void {
   saveConfirmBtn.addEventListener('click', () => {
     const name = saveNameInput.value.trim();
     if (!name) {
-      saveNameInput.style.borderColor = '#dc2626';
+      saveNameInput.style.borderColor = 'var(--agi-ext-danger)';
       setTimeout(() => {
         saveNameInput.style.borderColor = '';
       }, 1500);
@@ -3013,7 +3030,7 @@ function buildUI(): void {
         if (chrome.runtime.lastError || !recResp?.success) {
           const origPlaceholder = saveNameInput.placeholder;
           saveNameInput.placeholder = 'Failed to retrieve actions';
-          saveNameInput.style.borderColor = '#dc2626';
+          saveNameInput.style.borderColor = 'var(--agi-ext-danger)';
           setTimeout(() => {
             saveNameInput.placeholder = origPlaceholder;
             saveNameInput.style.borderColor = '';
@@ -3029,7 +3046,7 @@ function buildUI(): void {
           if (chrome.runtime.lastError) {
             const origPlaceholder = saveNameInput.placeholder;
             saveNameInput.placeholder = 'Failed to save shortcut';
-            saveNameInput.style.borderColor = '#dc2626';
+            saveNameInput.style.borderColor = 'var(--agi-ext-danger)';
             setTimeout(() => {
               saveNameInput.placeholder = origPlaceholder;
               saveNameInput.style.borderColor = '';
@@ -3161,14 +3178,14 @@ function buildUI(): void {
     const name = scNameInput.value.trim();
     const prompt = scPromptInput.value.trim();
     if (!name) {
-      scNameInput.style.borderColor = '#dc2626';
+      scNameInput.style.borderColor = 'var(--agi-ext-danger)';
       setTimeout(() => {
         scNameInput.style.borderColor = '';
       }, 1500);
       return;
     }
     if (!prompt) {
-      scPromptInput.style.borderColor = '#dc2626';
+      scPromptInput.style.borderColor = 'var(--agi-ext-danger)';
       setTimeout(() => {
         scPromptInput.style.borderColor = '';
       }, 1500);
@@ -3184,7 +3201,7 @@ function buildUI(): void {
         (scSaveBtn as HTMLButtonElement).disabled = false;
         scSaveBtn.textContent = 'Create shortcut';
         if (chrome.runtime.lastError) {
-          scNameInput.style.borderColor = '#dc2626';
+          scNameInput.style.borderColor = 'var(--agi-ext-danger)';
           setTimeout(() => {
             scNameInput.style.borderColor = '';
           }, 2000);
@@ -3279,13 +3296,13 @@ function buildUI(): void {
     const prompt = ntPromptInput.value.trim();
     if (!name || !prompt) {
       if (!name) {
-        ntNameInput.style.borderColor = '#dc2626';
+        ntNameInput.style.borderColor = 'var(--agi-ext-danger)';
         setTimeout(() => {
           ntNameInput.style.borderColor = '';
         }, 1500);
       }
       if (!prompt) {
-        ntPromptInput.style.borderColor = '#dc2626';
+        ntPromptInput.style.borderColor = 'var(--agi-ext-danger)';
         setTimeout(() => {
           ntPromptInput.style.borderColor = '';
         }, 1500);
@@ -3371,7 +3388,7 @@ function buildUI(): void {
   const groupBtn = el('button', {
     class: 'sp-tool-btn',
     id: 'sp-group-btn',
-    title: 'Add current tab to AGI Workforce group',
+    title: 'Add current tab to group',
   });
   groupBtn.appendChild(renderIcon(Folder, 14));
   const groupBtnLabel = document.createTextNode(' Group');
@@ -3628,7 +3645,7 @@ function refreshConsoleLogs(): void {
       if (logs.length === 0) {
         const noLogs = createElementWith({ tag: 'div', text: 'No console logs captured' });
         noLogs.style.padding = '10px 8px';
-        noLogs.style.color = '#475569';
+        noLogs.style.color = 'var(--agi-ext-text-muted)';
         noLogs.style.fontSize = '11px';
         noLogs.style.textAlign = 'center';
         entries.appendChild(noLogs);
