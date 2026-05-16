@@ -1,8 +1,17 @@
 import { useMemo } from 'react';
-import type { ChatMessage } from '../lib/types';
+import type { ChatMessage, MessageRouting } from '../lib/types';
 
 export interface ProvenanceFooterProps {
-  message: Pick<ChatMessage, 'model' | 'provider' | 'toolCalls' | 'citations' | 'createdAt'>;
+  message: Pick<
+    ChatMessage,
+    'model' | 'provider' | 'toolCalls' | 'citations' | 'createdAt' | 'routing'
+  >;
+  /**
+   * Invoked when the user clicks "Pin to <model>" on an auto-routed message.
+   * Receives the routing metadata so the host can decide which conversation
+   * setting to update.
+   */
+  onPinModel?: (routing: MessageRouting) => void;
 }
 
 function formatRelativeTime(iso: string): string | null {
@@ -23,14 +32,12 @@ function formatRelativeTime(iso: string): string | null {
  * Compact metadata row rendered below assistant messages: model id, provider,
  * tool-call count, citation count, relative timestamp.
  *
- * Derived entirely from fields already present on `ChatMessage` — does not
- * require any new store fields or runtime instrumentation.
- *
- * Suppressed via `<MessageList showProvenanceFooter={false}/>` or by passing
- * `showProvenanceFooter={false}` on `<ChatInterface/>`. Default ON to match
- * the design-spec contract that every AI response carries provenance.
+ * When `message.routing.source === 'auto'`, an additional trace row renders
+ * (`Auto routed: <task> -> <model> · Why? "<reason>"`) followed by a
+ * "Pin to <pinModel>" button that invokes `onPinModel`. The model id is never
+ * hardcoded here; it flows from the router payload on the message.
  */
-export function ProvenanceFooter({ message }: ProvenanceFooterProps) {
+export function ProvenanceFooter({ message, onPinModel }: ProvenanceFooterProps) {
   const parts = useMemo(() => {
     const out: string[] = [];
     if (message.model) out.push(message.model);
@@ -50,20 +57,58 @@ export function ProvenanceFooter({ message }: ProvenanceFooterProps) {
     return out;
   }, [message.model, message.provider, message.toolCalls, message.citations, message.createdAt]);
 
-  if (parts.length === 0) return null;
+  const routing = message.routing;
+  const isAuto = routing?.source === 'auto';
+
+  if (parts.length === 0 && !isAuto) return null;
 
   return (
     <div
-      className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] leading-tight"
+      className="mt-1 flex flex-col gap-0.5 text-[11px] leading-tight"
       style={{ color: 'var(--chat-text-muted)' }}
       data-component="provenance-footer"
     >
-      {parts.map((part, idx) => (
-        <span key={idx} className="inline-flex items-center gap-2">
-          {idx > 0 && <span aria-hidden="true">·</span>}
-          <span>{part}</span>
-        </span>
-      ))}
+      {parts.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          {parts.map((part, idx) => (
+            <span key={idx} className="inline-flex items-center gap-2">
+              {idx > 0 && <span aria-hidden="true">·</span>}
+              <span>{part}</span>
+            </span>
+          ))}
+        </div>
+      )}
+      {isAuto && routing && (
+        <div
+          className="flex flex-wrap items-center gap-x-2 gap-y-0.5"
+          data-component="provenance-routing"
+        >
+          <span>
+            Auto routed{routing.task ? `: ${routing.task}` : ''}
+            {message.model ? ` → ${message.model}` : ''}
+          </span>
+          {routing.reason && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>Why? &ldquo;{routing.reason}&rdquo;</span>
+            </>
+          )}
+          {routing.pinModel && onPinModel && (
+            <button
+              type="button"
+              onClick={() => onPinModel(routing)}
+              className="ml-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition-colors hover:bg-[var(--chat-surface-hover)]"
+              style={{
+                borderColor: 'var(--chat-border)',
+                color: 'var(--chat-text-secondary)',
+              }}
+              data-component="provenance-pin-button"
+            >
+              Pin to {routing.pinModel}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
