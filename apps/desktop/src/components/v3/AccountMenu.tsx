@@ -10,9 +10,11 @@ import {
   ChevronRight,
   HelpCircle,
 } from 'lucide-react';
+import { useUnifiedAuthStore } from '../../stores/auth';
+import { useSettingsDialogStore } from '../../stores/settingsStore';
 
 type MenuItemDef =
-  | { kind: 'header'; label: string }
+  | { kind: 'header'; label: string; sub?: string }
   | { kind: 'divider' }
   | {
       kind: 'item';
@@ -20,30 +22,86 @@ type MenuItemDef =
       label: string;
       kbd?: string;
       chev?: boolean;
-      go?: string;
+      action?: () => void;
       danger?: boolean;
     };
 
 export interface AccountMenuProps {
-  email?: string;
   onClose: () => void;
-  onNavigate?: (dest: string) => void;
 }
 
-export function AccountMenu({ email = '', onClose, onNavigate }: AccountMenuProps) {
+export function AccountMenu({ onClose }: AccountMenuProps) {
+  const user = useUnifiedAuthStore((s) => s.user);
+  const planDisplayName = useUnifiedAuthStore((s) => s.planDisplayName);
+  const signOut = useUnifiedAuthStore((s) => s.signOut);
+  const openSettings = useSettingsDialogStore((s) => s.openSettings);
+
+  const displayLabel = user?.name || user?.email || 'Account';
+  const emailSub = user?.name && user?.email ? user.email : undefined;
+
   const items: MenuItemDef[] = [
-    { kind: 'header', label: email || 'Account' },
-    { kind: 'item', icon: Settings, label: 'Settings', kbd: '⌘,', go: 'settings' },
+    { kind: 'header', label: displayLabel, sub: emailSub },
+    {
+      kind: 'item',
+      icon: Settings,
+      label: 'Settings',
+      kbd: '⌘,',
+      action: () => {
+        openSettings();
+        onClose();
+      },
+    },
     { kind: 'item', icon: Globe, label: 'Language', chev: true },
-    { kind: 'item', icon: Lock, label: 'Privacy & security', go: 'privacy' },
+    {
+      kind: 'item',
+      icon: Lock,
+      label: 'Privacy & security',
+      action: () => {
+        openSettings('account');
+        onClose();
+      },
+    },
     { kind: 'divider' },
-    { kind: 'item', icon: Sparkles, label: 'View all plans', go: 'pricing' },
-    { kind: 'item', icon: Cpu, label: 'BYOK & local models', go: 'byok' },
+    {
+      kind: 'item',
+      icon: Sparkles,
+      label: `View all plans${planDisplayName ? ` · ${planDisplayName}` : ''}`,
+      action: () => {
+        openSettings('billing');
+        onClose();
+      },
+    },
+    {
+      kind: 'item',
+      icon: Cpu,
+      label: 'BYOK & local models',
+      action: () => {
+        openSettings('models-keys');
+        onClose();
+      },
+    },
     { kind: 'item', icon: Box, label: 'Apps & extensions', chev: true },
     { kind: 'item', icon: Mail, label: 'Gift AGI', chev: true },
-    { kind: 'item', icon: HelpCircle, label: 'Help & support', go: 'help' },
+    {
+      kind: 'item',
+      icon: HelpCircle,
+      label: 'Help & support',
+      action: () => {
+        window.open('https://agiworkforce.com/docs', '_blank', 'noopener,noreferrer');
+        onClose();
+      },
+    },
     { kind: 'divider' },
-    { kind: 'item', icon: LogOut, label: 'Log out', danger: true },
+    {
+      kind: 'item',
+      icon: LogOut,
+      label: 'Log out',
+      danger: true,
+      action: () => {
+        void signOut();
+        onClose();
+      },
+    },
   ];
 
   return (
@@ -72,17 +130,37 @@ export function AccountMenu({ email = '', onClose, onNavigate }: AccountMenuProp
                 key={i}
                 style={{
                   padding: '10px 14px 8px',
-                  fontSize: 12,
-                  color: 'var(--text-3)',
-                  fontFamily: 'var(--mono)',
                   borderBottom: '1px solid var(--border)',
                   marginBottom: 4,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
                 }}
               >
-                {it.label}
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: 'var(--text-1)',
+                    fontWeight: 500,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {it.label}
+                </div>
+                {it.sub && (
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--text-3)',
+                      fontFamily: 'var(--mono)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      marginTop: 2,
+                    }}
+                  >
+                    {it.sub}
+                  </div>
+                )}
               </div>
             );
           }
@@ -91,14 +169,11 @@ export function AccountMenu({ email = '', onClose, onNavigate }: AccountMenuProp
               <div key={i} style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
             );
           }
-          const { icon: Icon, label, kbd, chev, go, danger } = it;
+          const { icon: Icon, label, kbd, chev, action, danger } = it;
           return (
             <button
               key={i}
-              onClick={() => {
-                if (go && onNavigate) onNavigate(go);
-                onClose();
-              }}
+              onClick={action}
               style={{
                 width: '100%',
                 display: 'flex',
