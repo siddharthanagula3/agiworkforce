@@ -76,6 +76,30 @@ export const agiRadii = {
   '2xl': '24px',
 } as const;
 
+/**
+ * Font stacks per docs/design/design-spec-2026-05-15.md §2. Each value is a
+ * complete CSS `font-family` string and can be applied directly via
+ * `style.fontFamily`. Mirrored into `agiChatCssVars` as `--chat-font-*` for
+ * stylesheet consumers.
+ */
+export const agiTypography = {
+  sans: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+  serif: "'IBM Plex Serif', Georgia, 'Times New Roman', serif",
+  display: "'Crimson Pro', 'Inter Display', 'IBM Plex Serif', Georgia, 'Times New Roman', serif",
+  mono: "'JetBrains Mono', 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace",
+} as const;
+
+/**
+ * Shadow ramps shared across surfaces. Values picked to read clearly on the
+ * warm-off-white canvas (light mode) and the warm-charcoal canvas (dark mode)
+ * without producing hard cut-outs on either.
+ */
+export const agiShadows = {
+  sm: '0 1px 2px rgba(0, 0, 0, 0.04)',
+  md: '0 4px 16px rgba(0, 0, 0, 0.12)',
+  lg: '0 12px 32px rgba(0, 0, 0, 0.18)',
+} as const;
+
 export const agiChatCssVars = {
   light: {
     '--chat-bg': agiPalette.light.surface.base,
@@ -110,6 +134,13 @@ export const agiChatCssVars = {
     '--chat-radius-lg': agiRadii.lg,
     '--chat-radius-xl': agiRadii.xl,
     '--chat-radius-2xl': agiRadii['2xl'],
+    '--chat-font-sans': agiTypography.sans,
+    '--chat-font-serif': agiTypography.serif,
+    '--chat-font-display': agiTypography.display,
+    '--chat-font-mono': agiTypography.mono,
+    '--chat-shadow-sm': agiShadows.sm,
+    '--chat-shadow-md': agiShadows.md,
+    '--chat-shadow-lg': agiShadows.lg,
   },
   dark: {
     '--chat-bg': agiPalette.dark.surface.base,
@@ -144,6 +175,13 @@ export const agiChatCssVars = {
     '--chat-radius-lg': agiRadii.lg,
     '--chat-radius-xl': agiRadii.xl,
     '--chat-radius-2xl': agiRadii['2xl'],
+    '--chat-font-sans': agiTypography.sans,
+    '--chat-font-serif': agiTypography.serif,
+    '--chat-font-display': agiTypography.display,
+    '--chat-font-mono': agiTypography.mono,
+    '--chat-shadow-sm': '0 1px 2px rgba(0, 0, 0, 0.32)',
+    '--chat-shadow-md': '0 4px 16px rgba(0, 0, 0, 0.48)',
+    '--chat-shadow-lg': '0 12px 32px rgba(0, 0, 0, 0.56)',
   },
 } as const satisfies Record<AgiThemeMode, CssVariableMap>;
 
