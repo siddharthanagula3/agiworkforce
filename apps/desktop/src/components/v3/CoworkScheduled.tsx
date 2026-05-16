@@ -137,18 +137,20 @@ export function CoworkScheduled() {
                 <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                   <button
                     type="button"
-                    className="flex h-6 w-6 items-center justify-center rounded text-white/30 hover:text-white/70"
+                    className="flex h-6 w-6 items-center justify-center rounded text-white/30 hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
                     title={t('common.options')}
+                    aria-label={t('common.options')}
                   >
-                    <ChevronDown size={13} />
+                    <ChevronDown size={13} aria-hidden="true" />
                   </button>
                   <button
                     type="button"
-                    className="flex h-6 w-6 items-center justify-center rounded text-white/30 hover:text-red-400"
+                    className="flex h-6 w-6 items-center justify-center rounded text-white/30 hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
                     title={t('common.delete')}
+                    aria-label={t('common.delete')}
                     onClick={() => void deleteTask(task.id)}
                   >
-                    <Trash2 size={12} />
+                    <Trash2 size={12} aria-hidden="true" />
                   </button>
                 </div>
               </div>
