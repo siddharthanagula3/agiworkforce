@@ -19,10 +19,10 @@ export function SidebarHeader({ onSearchChange }: SidebarHeaderProps) {
   const handleNewChat = useCallback(async () => {
     try {
       await createConversation('New Chat');
-      router.push('/(app)');
+      router.push({ pathname: '/(app)' as const });
     } catch {
       // If creation fails, still navigate to home where the input is
-      router.push('/(app)');
+      router.push({ pathname: '/(app)' as const });
     }
   }, [createConversation, router]);
 

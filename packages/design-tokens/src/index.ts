@@ -308,6 +308,16 @@ export const agiVsCodeCssVars = {
   '--agi-vscode-button-text': 'var(--vscode-button-foreground, #ffffff)',
   '--agi-vscode-focus': 'var(--vscode-focusBorder, #21808d)',
   '--agi-vscode-hover': 'var(--vscode-list-hoverBackground, rgba(255, 235, 205, 0.08))',
+  '--agi-vscode-terra': 'var(--vscode-button-secondaryBackground, #da7756)',
+  '--agi-vscode-danger': 'var(--vscode-errorForeground, #ef4444)',
+  '--agi-vscode-danger-bg': 'rgba(239, 68, 68, 0.12)',
+  '--agi-vscode-danger-border': 'rgba(239, 68, 68, 0.3)',
+  '--agi-vscode-diff-added-bg': 'var(--vscode-diffEditor-insertedLineBackground, rgba(76, 175, 80, 0.08))',
+  '--agi-vscode-diff-removed-bg': 'var(--vscode-diffEditor-removedLineBackground, rgba(244, 67, 54, 0.08))',
+  '--agi-vscode-diff-modified-bg': 'rgba(255, 152, 0, 0.06)',
+  '--agi-vscode-diff-added-gutter': 'var(--vscode-diffEditor-insertedTextBorder, #4caf50)',
+  '--agi-vscode-diff-removed-gutter': 'var(--vscode-diffEditor-removedTextBorder, #f44336)',
+  '--agi-vscode-diff-modified-gutter': '#ff9800',
 } as const satisfies CssVariableMap;
 
 export function cssVarsToString(vars: CssVariableMap): string {
