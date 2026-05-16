@@ -8,50 +8,23 @@ import {
   Settings,
   ArrowRight,
 } from 'lucide-react';
+import {
+  useGlobalSearch,
+  type SearchResultItem,
+  type SearchResultGroup,
+} from '../../hooks/useGlobalSearch';
 
-interface SearchItem {
-  kind: 'chat' | 'project' | 'skill' | 'connector' | 'setting';
-  id: string;
-  title: string;
-  sub?: string;
-}
-
-const DEMO_ITEMS: SearchItem[] = [
-  { kind: 'chat', id: 'c1', title: 'Multi-provider routing research', sub: 'Today' },
-  { kind: 'chat', id: 'c2', title: 'Quarterly KPI dashboard', sub: 'Yesterday' },
-  { kind: 'chat', id: 'c3', title: 'Draft investor update email', sub: 'Yesterday' },
-  { kind: 'chat', id: 'c4', title: 'Legal contract review — Series B', sub: 'Past week' },
-  { kind: 'chat', id: 'c5', title: 'Refactor authentication middleware', sub: 'Past week' },
-  { kind: 'project', id: 'p1', title: 'Sales pipeline', sub: 'Project' },
-  { kind: 'project', id: 'p2', title: 'Customer support triage', sub: 'Project' },
-  { kind: 'project', id: 'p3', title: 'Hiring loop', sub: 'Project' },
-  { kind: 'skill', id: 's1', title: 'Humanizer', sub: 'Skill' },
-  { kind: 'skill', id: 's2', title: 'Brand guidelines', sub: 'Skill' },
-  { kind: 'connector', id: 'cn1', title: 'Gmail', sub: 'Connector · Connected' },
-  { kind: 'connector', id: 'cn2', title: 'GitHub', sub: 'Connector · Connected' },
-  { kind: 'setting', id: 'st1', title: 'Voice settings', sub: 'Settings' },
-  { kind: 'setting', id: 'st2', title: 'BYOK & local models', sub: 'Settings' },
-];
-
-const KIND_ORDER: SearchItem['kind'][] = ['chat', 'project', 'skill', 'connector', 'setting'];
-const KIND_ICON: Record<SearchItem['kind'], React.ElementType> = {
-  chat: MessageSquare,
-  project: FolderOpen,
-  skill: Wrench,
-  connector: Plug,
-  setting: Settings,
-};
-const KIND_LABEL: Record<SearchItem['kind'], string> = {
-  chat: 'Chats',
-  project: 'Projects',
-  skill: 'Skills',
-  connector: 'Connectors',
-  setting: 'Settings',
+const GROUP_ICON: Record<SearchResultGroup['group'], React.ElementType> = {
+  Chats: MessageSquare,
+  Projects: FolderOpen,
+  Skills: Wrench,
+  Connectors: Plug,
+  Settings: Settings,
 };
 
 export interface SearchModalCmdKProps {
   onClose: () => void;
-  onNavigate?: (dest: string, item: SearchItem) => void;
+  onNavigate?: (dest: string, item: SearchResultItem) => void;
 }
 
 export function SearchModalCmdK({ onClose, onNavigate }: SearchModalCmdKProps) {
@@ -63,23 +36,9 @@ export function SearchModalCmdK({ onClose, onNavigate }: SearchModalCmdKProps) {
     inputRef.current?.focus();
   }, []);
 
-  const filtered = useMemo<SearchItem[]>(() => {
-    if (!q.trim()) return DEMO_ITEMS.slice(0, 14);
-    const qq = q.toLowerCase();
-    return DEMO_ITEMS.filter((it) => it.title.toLowerCase().includes(qq));
-  }, [q]);
+  const groups = useGlobalSearch(q);
 
-  // Group by kind
-  const grouped = useMemo(() => {
-    const map = new Map<SearchItem['kind'], SearchItem[]>();
-    for (const it of filtered) {
-      if (!map.has(it.kind)) map.set(it.kind, []);
-      map.get(it.kind)!.push(it);
-    }
-    return KIND_ORDER.filter((k) => map.has(k)).map((k) => ({ kind: k, items: map.get(k)! }));
-  }, [filtered]);
-
-  const flatItems = filtered;
+  const flatItems = useMemo(() => groups.flatMap((g) => g.items), [groups]);
 
   useEffect(() => {
     setSelected(0);
@@ -103,7 +62,8 @@ export function SearchModalCmdK({ onClose, onNavigate }: SearchModalCmdKProps) {
         e.preventDefault();
         const it = flatItems[selected];
         if (it) {
-          onNavigate?.(it.kind, it);
+          it.onClick?.();
+          onNavigate?.(it.id, it);
           onClose();
         }
       }
@@ -184,7 +144,7 @@ export function SearchModalCmdK({ onClose, onNavigate }: SearchModalCmdKProps) {
 
         {/* Results */}
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          {filtered.length === 0 ? (
+          {flatItems.length === 0 ? (
             <div
               style={{
                 padding: '32px 0',
@@ -193,11 +153,11 @@ export function SearchModalCmdK({ onClose, onNavigate }: SearchModalCmdKProps) {
                 fontSize: 13,
               }}
             >
-              No matches for "{q}"
+              {q ? `No matches for "${q}"` : 'No results'}
             </div>
           ) : (
-            grouped.map((group) => (
-              <div key={group.kind}>
+            groups.map((group) => (
+              <div key={group.group}>
                 <div
                   style={{
                     padding: '8px 16px 4px',
@@ -208,17 +168,18 @@ export function SearchModalCmdK({ onClose, onNavigate }: SearchModalCmdKProps) {
                     letterSpacing: 0.6,
                   }}
                 >
-                  {KIND_LABEL[group.kind]}
+                  {group.group}
                 </div>
                 {group.items.map((it) => {
                   const thisIdx = flatIdx++;
-                  const Icon = KIND_ICON[it.kind];
+                  const Icon = GROUP_ICON[group.group];
                   const isSelected = thisIdx === selected;
                   return (
                     <button
                       key={it.id}
                       onClick={() => {
-                        onNavigate?.(it.kind, it);
+                        it.onClick?.();
+                        onNavigate?.(it.id, it);
                         onClose();
                       }}
                       onMouseEnter={() => setSelected(thisIdx)}
@@ -247,9 +208,9 @@ export function SearchModalCmdK({ onClose, onNavigate }: SearchModalCmdKProps) {
                       >
                         {it.title}
                       </span>
-                      {it.sub && (
+                      {it.subtitle && (
                         <span style={{ fontSize: 11, color: 'var(--text-3)', flexShrink: 0 }}>
-                          {it.sub}
+                          {it.subtitle}
                         </span>
                       )}
                       {isSelected && (
