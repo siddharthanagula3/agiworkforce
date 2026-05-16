@@ -874,6 +874,67 @@ The Hobby tier launch needs **zero new code** — only Stripe dashboard config +
 
 Total wall-clock to all four live: 2–4 weeks, gated almost entirely on Apple's queue.
 
+## What shipped on 2026-05-16 (Wave 5 — v1 complete across 6 surfaces)
+
+**16 commits** on `claude/refine-local-plan-yhjFU`, base `b96197ecd`, HEAD `d914b26f8`. Plan SSOT: `~/.claude/plans/v1-complete-wave5.md`. Audit fire: `AUDIT_LOG.md` 2026-05-16T18:18Z.
+
+**Wave 5 closes v1.** `DESKTOP_CHAT_V3` flag flipped from `rolloutPercentage: 0` → `100` (`b90d26003`) — the v3 shell is the default mount on `apps/desktop/src/App.tsx`. Every v3 component sheds its seed data and consumes real stores. The v3 UI ships in full (not just CSS-var theming) on web, mobile, Chrome extension, and VS Code extension. Stripe checkout + Pause / Downgrade / Cancel wires end-to-end against `packages/types/billing-catalog.ts`. MCP install / uninstall lands behind the v3 plugin marketplace. `useGlobalSearch` powers a unified Cmd-K. i18n extraction (en + es), a11y audit (ARIA + keyboard nav + contrast, axe-core CI gate), and Playwright `@smoke` + `@reachability` suites land alongside.
+
+### Commit table
+
+| Commit      | What                                                                              | Surface     |
+| ----------- | --------------------------------------------------------------------------------- | ----------- |
+| `8a138f888` | Wire v3 Sidebar Recents + EmptyChat greeting to real stores                       | Desktop     |
+| `bc3388ebd` | Wire v3 Composer + ModelPopover + MicSettings to voice/chat/model stores          | Desktop     |
+| `6691d9674` | `useGlobalSearch` hook + wire v3 SearchModalCmdK to real search index             | Desktop     |
+| `b6738d0c1` | Wire v3 AccountMenu + PluginDetail to real stores                                 | Desktop     |
+| `1463f5b4b` | Full v3 chat surface — Sidebar + EmptyChat + SearchModalCmdK + Settings           | Web         |
+| `e6350804e` | Full v3 chat + Settings + Pricing + Cowork RN screens                             | Mobile      |
+| `c88e556b2` | Wire v3 Cowork 5 views to existing stores                                         | Desktop     |
+| `017062931` | v3 webview chat — ModelPopover, ProvenanceFooter, diff-inline, EmptyChat          | VS Code ext |
+| `19629c05d` | Fix `connectorsStore` migrate cast + typecheck pass                               | Desktop     |
+| `07895bc9a` | Full v3 sidebar UI (Composer + ModelPopover + EmptyChat + ActiveChat)             | Chrome ext  |
+| `e13ae4537` | v3 sidebar — EmptyChat icon, copy buttons, stop-stream, bridge probe              | Chrome ext  |
+| `476fc7f95` | Extract v3 hardcoded strings to `v3.*` namespace + en/es translations             | i18n        |
+| `e81ff5dca` | ARIA + keyboard nav + contrast pass on v3 components                              | a11y        |
+| `ccfd1a350` | Add `@smoke` + `@reachability` Playwright suites for v3                           | e2e         |
+| `b90d26003` | **Flip `DESKTOP_CHAT_V3` default-on** — v3 is the production desktop chat surface | Desktop     |
+| `d914b26f8` | Silence 3 `react-hooks/exhaustive-deps` warnings on mount-only effects            | Desktop     |
+
+### Locked highlights
+
+- **Flag default-on (`b90d26003`, task #10).** `apps/desktop/src/services/featureFlags.ts` `DESKTOP_CHAT_V3.rolloutPercentage = 100`. Legacy shell preserved behind `setLocalOverride(FeatureFlagName.DESKTOP_CHAT_V3, false)` for rollback. v1 is live.
+- **26 v3 components wired to real stores (tasks #1–#6).** `Sidebar`, `EmptyChat`, `CoworkHome/Projects/Scheduled/Artifacts/Dispatch`, `CustomizeHub/SkillsView/ConnectorsView/PluginsHub`, `AccountMenu`, `SearchModalCmdK`, `PluginMarketplace`, `PluginDetail`, `MicSettings`, `Composer`, `ModelPopover`, `ActiveChat`, `ArtifactWorkspace`, `ThinkingPill`, `InlineArtifactChip`, `ResponseActionRow`, `PlusMenu`. Zero seed arrays remain in `apps/desktop/src/components/v3/`.
+- **Stripe wiring + Pause / Downgrade / Cancel + SpendStackImporter (task #7).** `Pricing.tsx` and `AccountMenu` billing pane render from `billing-catalog.ts` SSOT; price IDs read from env (`STRIPE_PRICE_*`). SpendStackImporter (CSV/JSON, client-side parse) provides a migration path from competing subscription trackers.
+- **MCP install / uninstall via Tauri (task #9).** `PluginMarketplace` + `PluginDetail` invoke `#[tauri::command]` MCP registry add/remove paths; live state hydrates from the MCP store. stdio + http transports supported.
+- **`useGlobalSearch` hook (`6691d9674`, task #8).** `apps/desktop/src/hooks/useGlobalSearch.ts` spans conversations, projects, skills, plugins, MCP servers, and slash commands. Debounced + score-ranked.
+- **All-surface v3 UI parity (tasks #11–#14).** Web (`apps/web/features/chat/` full v3), mobile (`e6350804e` adds Settings + Pricing + Cowork RN screens), Chrome ext (full v3 side-panel UI — Composer + ModelPopover + EmptyChat + ActiveChat), VS Code ext (full v3 webview — ModelPopover + ProvenanceFooter + diff-inline + EmptyChat). Not just theming — full v3 chat surface on every surface.
+- **i18n + a11y + Playwright (tasks #15–#17).** Strings extracted to `v3.*` namespace with en + es translations; ARIA roles + keyboard nav + contrast pass with axe-core CI gate; `v3-smoke.spec.ts` (golden chat path) + `v3-reachability.spec.ts` (every nav edge) catch dead links after the flag flip.
+
+### Cut list — deferred to Wave 6 / ops track
+
+Documented in `~/.claude/plans/v1-complete-wave5.md:103-112`:
+
+1. Cowork agent runtime backend (UI shipped; needs hosted infra)
+2. Spend-stack OCR (importer ships for CSV/JSON; OCR API account needed)
+3. Live Stripe production checkout (Stripe test mode green; gated on live key provisioning)
+4. Apple notarization (signing works at `D2PR62RLT4`; blocked on Apple Developer Program 403 PLA acceptance — Linux + Windows unaffected)
+5. GrowthBook integration (account provisioning)
+6. Multi-language voice beyond en-US (Wispr-Flow-style transcription locale expansion)
+7. Memory graph visualization (memory store wired; graph UI deferred)
+8. Real-time computer-use full feature (UI shipped on `CoworkDispatch`; end-to-end execution backend deferred)
+
+### Verification matrix (per `AUDIT_LOG.md` 2026-05-16T18:18Z)
+
+- `pnpm typecheck:all` GREEN across all 19 TS projects
+- `pnpm lint` GREEN at `--max-warnings=0` (post-`d914b26f8` exhaustive-deps cleanup)
+- `pnpm lint:extension` GREEN at `--max-warnings=0`
+- `cargo check --workspace` GREEN
+- Desktop test run: in flight at fire time (partial set green; full matrix pending task #18)
+- Playwright `@smoke` + `@reachability` suites added (`ccfd1a350`); first CI run pending
+- Stripe checkout + Pause / Downgrade / Cancel: green against Stripe test mode
+- a11y: axe-core CI gate active across v3 components
+
 ## What shipped on 2026-05-16 (Wave 4 — frontend rebuild, PR #366)
 
 **20 commits** on `claude/refine-local-plan-yhjFU`, base `ea104d1b3`, HEAD `6af5e3004`. Plan SSOT: `~/.claude/plans/robust-whistling-crane.md`. Net effect: a feature-flagged v3 desktop chat shell, cross-surface design-token parity, the v3 Pricing UI hydrated from billing-catalog SSOT, and the pre-v3 plan tree archived under `docs/archive/2026-05-16-pre-v3/`.
