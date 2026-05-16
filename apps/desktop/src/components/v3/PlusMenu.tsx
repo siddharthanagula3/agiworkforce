@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Paperclip,
   FolderPlus,
@@ -56,6 +57,7 @@ export function PlusMenu({
   onWebSearchToggle,
   onInsertCommand,
 }: PlusMenuProps) {
+  const { t } = useTranslation('v3');
   const [openSub, setOpenSub] = useState<SubMenu>(null);
   const [pluginHover, setPluginHover] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -89,25 +91,29 @@ export function PlusMenu({
         {/* Files */}
         <MenuItem
           icon={<Paperclip size={15} />}
-          label="Add files or photos"
+          label={t('plusMenu.addFiles')}
           kbd="⌘O"
           onClick={onClose}
         />
         <MenuItem
           icon={<FolderPlus size={15} />}
-          label="Add to project"
+          label={t('plusMenu.addProject')}
           hasArrow
           onClick={() => toggleSub('connectors')}
           active={openSub === 'connectors'}
         />
-        <MenuItem icon={<FolderGit2 size={15} />} label="Add from GitHub" onClick={onClose} />
+        <MenuItem
+          icon={<FolderGit2 size={15} />}
+          label={t('plusMenu.addGithub')}
+          onClick={onClose}
+        />
 
         <Divider />
 
         {/* Skills */}
         <MenuItem
           icon={<Zap size={15} />}
-          label="Skills"
+          label={t('plusMenu.skills')}
           hasArrow
           active={openSub === 'skills'}
           onClick={() => toggleSub('skills')}
@@ -115,7 +121,7 @@ export function PlusMenu({
         {/* Connectors */}
         <MenuItem
           icon={<Link2 size={15} />}
-          label="Connectors"
+          label={t('plusMenu.connectors')}
           hasArrow
           active={openSub === 'connectors'}
           onClick={() => toggleSub('connectors')}
@@ -123,7 +129,7 @@ export function PlusMenu({
         {/* Plugins */}
         <MenuItem
           icon={<Puzzle size={15} />}
-          label="Plugins"
+          label={t('plusMenu.plugins')}
           hasArrow
           active={openSub === 'plugins'}
           onMouseEnter={() => setOpenSub('plugins')}
@@ -133,11 +139,11 @@ export function PlusMenu({
         <Divider />
 
         {/* Research */}
-        <MenuItem icon={<BookOpen size={15} />} label="Research" onClick={onClose} />
+        <MenuItem icon={<BookOpen size={15} />} label={t('plusMenu.research')} onClick={onClose} />
         {/* Web search toggle */}
         <MenuItem
           icon={<Globe size={15} />}
-          label="Web search"
+          label={t('plusMenu.webSearch')}
           trailing={
             webSearchOn ? (
               <Check size={14} style={{ color: 'var(--chat-accent-primary)' }} />
@@ -148,7 +154,7 @@ export function PlusMenu({
         {/* Use style */}
         <MenuItem
           icon={<PenLine size={15} />}
-          label="Use style"
+          label={t('plusMenu.useStyle')}
           hasArrow
           onClick={() => toggleSub('skills')}
         />
@@ -197,7 +203,7 @@ export function PlusMenu({
             onClick={onClose}
           >
             <Puzzle size={13} style={{ color: 'var(--chat-accent-primary)' }} />
-            <span>Browse all plugins</span>
+            <span>{t('plusMenu.browseAll')}</span>
             <ArrowRight
               size={12}
               style={{ color: 'var(--chat-accent-primary)' }}
@@ -271,7 +277,7 @@ export function PlusMenu({
             onClick={onClose}
           >
             <Zap size={13} style={{ color: 'var(--chat-accent-primary)' }} />
-            <span>Manage skills</span>
+            <span>{t('plusMenu.manageSkills')}</span>
           </button>
         </div>
       )}
@@ -312,7 +318,7 @@ export function PlusMenu({
             onClick={onClose}
           >
             <Link2 size={13} style={{ color: 'var(--chat-accent-primary)' }} />
-            <span>Add connector</span>
+            <span>{t('plusMenu.addConnector')}</span>
           </button>
         </div>
       )}

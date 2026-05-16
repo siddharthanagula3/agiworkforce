@@ -1,4 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import {
   MessageSquare,
   Zap,
@@ -28,7 +30,7 @@ type RecentsGroup = {
   items: ConversationSummary[];
 };
 
-function groupConversations(convos: ConversationSummary[]): RecentsGroup[] {
+function groupConversations(convos: ConversationSummary[], t: TFunction): RecentsGroup[] {
   const now = Date.now();
   const HOUR = 3_600_000;
   const DAY = 86_400_000;
@@ -38,11 +40,11 @@ function groupConversations(convos: ConversationSummary[]): RecentsGroup[] {
     .slice(0, 30);
 
   const groups: RecentsGroup[] = [
-    { label: 'Last hour', items: [] },
-    { label: 'Today', items: [] },
-    { label: 'Yesterday', items: [] },
-    { label: 'Past week', items: [] },
-    { label: 'Past month', items: [] },
+    { label: t('sidebar.groups.lastHour'), items: [] },
+    { label: t('sidebar.groups.today'), items: [] },
+    { label: t('sidebar.groups.yesterday'), items: [] },
+    { label: t('sidebar.groups.pastWeek'), items: [] },
+    { label: t('sidebar.groups.pastMonth'), items: [] },
   ];
 
   for (const c of sorted) {
@@ -66,38 +68,40 @@ type NavItem = {
   beta?: boolean;
 };
 
-function navItemsForMode(mode: V3Mode): NavItem[] {
+function navItemsForMode(mode: V3Mode, t: TFunction): NavItem[] {
   if (mode === 'chat') {
     return [
-      { id: 'projects', label: 'Projects', icon: FolderOpen },
-      { id: 'artifacts', label: 'Artifacts', icon: Box },
-      { id: 'customize', label: 'Customize', icon: Sliders },
+      { id: 'projects', label: t('sidebar.nav.projects'), icon: FolderOpen },
+      { id: 'artifacts', label: t('sidebar.nav.artifacts'), icon: Box },
+      { id: 'customize', label: t('sidebar.nav.customize'), icon: Sliders },
     ];
   }
   if (mode === 'cowork') {
     return [
-      { id: 'cw-projects', label: 'Projects', icon: FolderOpen },
-      { id: 'cw-scheduled', label: 'Scheduled', icon: RefreshCw },
-      { id: 'cw-artifacts', label: 'Live artifacts', icon: Box },
-      { id: 'cw-dispatch', label: 'Dispatch', icon: GitBranch, beta: true },
-      { id: 'customize', label: 'Customize', icon: Sliders },
+      { id: 'cw-projects', label: t('sidebar.nav.projects'), icon: FolderOpen },
+      { id: 'cw-scheduled', label: t('sidebar.nav.scheduled'), icon: RefreshCw },
+      { id: 'cw-artifacts', label: t('sidebar.nav.liveArtifacts'), icon: Box },
+      { id: 'cw-dispatch', label: t('sidebar.nav.dispatch'), icon: GitBranch, beta: true },
+      { id: 'customize', label: t('sidebar.nav.customize'), icon: Sliders },
     ];
   }
   // code
   return [
-    { id: 'routines', label: 'Routines', icon: Repeat },
-    { id: 'customize', label: 'Customize', icon: Sliders },
+    { id: 'routines', label: t('sidebar.nav.routines'), icon: Repeat },
+    { id: 'customize', label: t('sidebar.nav.customize'), icon: Sliders },
   ];
 }
 
 // ─── collapsed rail items ─────────────────────────────────────────────────────
 
-const RAIL_ITEMS: { id: string; icon: React.ElementType; title: string }[] = [
-  { id: 'projects', icon: FolderOpen, title: 'Projects' },
-  { id: 'artifacts', icon: Box, title: 'Artifacts' },
-  { id: 'customize', icon: Sliders, title: 'Customize' },
-  { id: 'settings', icon: Settings, title: 'Settings' },
-];
+function railItems(t: TFunction): { id: string; icon: React.ElementType; title: string }[] {
+  return [
+    { id: 'projects', icon: FolderOpen, title: t('sidebar.nav.projects') },
+    { id: 'artifacts', icon: Box, title: t('sidebar.nav.artifacts') },
+    { id: 'customize', icon: Sliders, title: t('sidebar.nav.customize') },
+    { id: 'settings', icon: Settings, title: t('common.settings') },
+  ];
+}
 
 // ─── avatar initials helper ───────────────────────────────────────────────────
 
@@ -133,6 +137,7 @@ export function Sidebar({
   onOpenAccountMenu,
   accountMenuOpen = false,
 }: SidebarProps) {
+  const { t } = useTranslation('v3');
   const [collapsed, setCollapsed] = useState(false);
   const [showAll, setShowAll] = useState(false);
 
@@ -140,7 +145,7 @@ export function Sidebar({
   const user = useUnifiedAuthStore(selectUser);
   const planDisplayName = useUnifiedAuthStore(selectPlanDisplayName);
 
-  const groups = useMemo(() => groupConversations(conversations), [conversations]);
+  const groups = useMemo(() => groupConversations(conversations, t), [conversations, t]);
   const displayGroups = useMemo(() => {
     if (showAll) return groups;
     // max 30 items enforced in groupConversations; just cap visible groups if not showAll
@@ -157,7 +162,8 @@ export function Sidebar({
 
   const totalItems = useMemo(() => groups.reduce((n, g) => n + g.items.length, 0), [groups]);
 
-  const navItems = useMemo(() => navItemsForMode(mode), [mode]);
+  const navItems = useMemo(() => navItemsForMode(mode, t), [mode, t]);
+  const RAIL_ITEMS = useMemo(() => railItems(t), [t]);
 
   const handleNavClick = useCallback(
     (id: string) => {
@@ -178,7 +184,7 @@ export function Sidebar({
     [onNavigateView],
   );
 
-  const newLabel = mode === 'code' ? 'New session' : 'New chat';
+  const newLabel = mode === 'code' ? t('sidebar.newSession') : t('sidebar.newChat');
 
   return (
     <aside
@@ -220,7 +226,7 @@ export function Sidebar({
         </span>
         <button
           onClick={() => setCollapsed((c) => !c)}
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
           style={{
             background: 'none',
             border: 'none',
@@ -251,9 +257,9 @@ export function Sidebar({
         >
           {(
             [
-              { id: 'chat' as V3Mode, label: 'Chat', icon: MessageSquare },
-              { id: 'cowork' as V3Mode, label: 'Cowork', icon: Zap },
-              { id: 'code' as V3Mode, label: 'Code', icon: Code2 },
+              { id: 'chat' as V3Mode, label: t('sidebar.modes.chat'), icon: MessageSquare },
+              { id: 'cowork' as V3Mode, label: t('sidebar.modes.cowork'), icon: Zap },
+              { id: 'code' as V3Mode, label: t('sidebar.modes.code'), icon: Code2 },
             ] as const
           ).map(({ id, label, icon: Icon }) => (
             <button
@@ -314,7 +320,7 @@ export function Sidebar({
       <div style={{ padding: '2px 8px 4px', flexShrink: 0 }}>
         <button
           onClick={onOpenSearch}
-          title="Search (⌘K)"
+          title={t('sidebar.searchKbd')}
           style={{
             width: '100%',
             display: 'flex',
@@ -333,7 +339,7 @@ export function Sidebar({
           <Search size={14} />
           {!collapsed && (
             <>
-              <span style={{ flex: 1, textAlign: 'left' }}>Search</span>
+              <span style={{ flex: 1, textAlign: 'left' }}>{t('common.search')}</span>
               <span
                 style={{
                   fontSize: 11,
@@ -388,7 +394,7 @@ export function Sidebar({
                       padding: '1px 4px',
                     }}
                   >
-                    Beta
+                    {t('common.beta')}
                   </span>
                 )}
               </button>
@@ -417,7 +423,7 @@ export function Sidebar({
               marginBottom: 4,
             }}
           >
-            Recents
+            {t('sidebar.recents')}
           </div>
           {displayGroups.map((group) => (
             <div key={group.label}>
@@ -453,7 +459,7 @@ export function Sidebar({
                     textOverflow: 'ellipsis',
                   }}
                 >
-                  {c.title || 'Untitled'}
+                  {c.title || t('common.untitled')}
                 </button>
               ))}
             </div>
@@ -472,7 +478,7 @@ export function Sidebar({
                 textAlign: 'left',
               }}
             >
-              Show all
+              {t('common.showAll')}
             </button>
           )}
         </div>
@@ -571,7 +577,7 @@ export function Sidebar({
                     textOverflow: 'ellipsis',
                   }}
                 >
-                  {user?.name ?? user?.email ?? 'Account'}
+                  {user?.name ?? user?.email ?? t('sidebar.account')}
                 </div>
                 <div
                   style={{

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ArrowRight, Box, Loader2, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useMcpStore } from '../../stores/mcpStore';
@@ -52,6 +53,7 @@ const BUILT_INS: BuiltInPlugin[] = [
 // ── BuiltInCard ───────────────────────────────────────────────────────────────
 
 function BuiltInCard({ plugin: p }: { plugin: BuiltInPlugin }) {
+  const { t } = useTranslation('v3');
   const [enabled, setEnabled] = useState(true);
   return (
     <div className="rounded-xl border border-[var(--chat-border,#e8e3db)] bg-[var(--chat-bg,#fcfaf6)] p-4">
@@ -66,7 +68,9 @@ function BuiltInCard({ plugin: p }: { plugin: BuiltInPlugin }) {
           <div className="text-sm font-medium text-[var(--chat-text-primary,#1a1a1a)] truncate">
             {p.name}
           </div>
-          <div className="text-xs text-[var(--chat-text-tertiary,#9e9488)]">Built-in</div>
+          <div className="text-xs text-[var(--chat-text-tertiary,#9e9488)]">
+            {t('plugins.builtIn')}
+          </div>
         </div>
         <div
           className={cn(
@@ -82,7 +86,7 @@ function BuiltInCard({ plugin: p }: { plugin: BuiltInPlugin }) {
               enabled ? 'bg-emerald-500' : 'bg-[var(--chat-text-tertiary,#9e9488)]',
             )}
           />
-          {enabled ? 'Enabled' : 'Off'}
+          {enabled ? t('common.enabled') : t('common.off')}
         </div>
       </div>
       <p className="text-xs text-[var(--chat-text-secondary,#6b6157)] mb-3">{p.desc}</p>
@@ -90,7 +94,7 @@ function BuiltInCard({ plugin: p }: { plugin: BuiltInPlugin }) {
         onClick={() => setEnabled((v) => !v)}
         className="w-full rounded-lg border border-[var(--chat-border,#e8e3db)] bg-[var(--chat-bg-soft,#f5f0e8)] px-3 py-1.5 text-xs text-[var(--chat-text-secondary,#6b6157)] hover:bg-[var(--chat-border,#e8e3db)] transition-colors"
       >
-        {enabled ? 'Disable' : 'Enable'}
+        {enabled ? t('common.disable') : t('common.enable')}
       </button>
     </div>
   );
@@ -99,6 +103,7 @@ function BuiltInCard({ plugin: p }: { plugin: BuiltInPlugin }) {
 // ── McpPluginCard ─────────────────────────────────────────────────────────────
 
 function McpPluginCard({ server }: { server: McpServerInfo }) {
+  const { t } = useTranslation('v3');
   const { enableServer, disableServer } = useMcpStore();
   const isEnabled = server.connected || server.enabled;
 
@@ -120,7 +125,7 @@ function McpPluginCard({ server }: { server: McpServerInfo }) {
           <div className="text-sm font-medium text-[var(--chat-text-primary,#1a1a1a)] truncate">
             {server.name}
           </div>
-          <div className="text-xs text-[var(--chat-text-tertiary,#9e9488)]">MCP</div>
+          <div className="text-xs text-[var(--chat-text-tertiary,#9e9488)]">{t('plugins.mcp')}</div>
         </div>
         <div
           className={cn(
@@ -136,17 +141,19 @@ function McpPluginCard({ server }: { server: McpServerInfo }) {
               isEnabled ? 'bg-emerald-500' : 'bg-[var(--chat-text-tertiary,#9e9488)]',
             )}
           />
-          {isEnabled ? 'Enabled' : 'Off'}
+          {isEnabled ? t('common.enabled') : t('common.off')}
         </div>
       </div>
       <p className="text-xs text-[var(--chat-text-secondary,#6b6157)] mb-3 line-clamp-2">
-        {server.tool_count > 0 ? `${server.tool_count} tools available` : 'MCP server'}
+        {server.tool_count > 0
+          ? t('plugins.toolsAvailable', { count: server.tool_count })
+          : t('plugins.mcpServer')}
       </p>
       <button
         onClick={toggle}
         className="w-full rounded-lg border border-[var(--chat-border,#e8e3db)] bg-[var(--chat-bg-soft,#f5f0e8)] px-3 py-1.5 text-xs text-[var(--chat-text-secondary,#6b6157)] hover:bg-[var(--chat-border,#e8e3db)] transition-colors"
       >
-        {isEnabled ? 'Disable' : 'Enable'}
+        {isEnabled ? t('common.disable') : t('common.enable')}
       </button>
     </div>
   );
@@ -155,6 +162,7 @@ function McpPluginCard({ server }: { server: McpServerInfo }) {
 // ── FeaturedCard ──────────────────────────────────────────────────────────────
 
 function FeaturedCard({ pkg: p, onView }: { pkg: McpRegistryPackage; onView: () => void }) {
+  const { t } = useTranslation('v3');
   return (
     <button
       onClick={onView}
@@ -167,7 +175,7 @@ function FeaturedCard({ pkg: p, onView }: { pkg: McpRegistryPackage; onView: () 
         {p.name}
       </div>
       <div className="flex items-center gap-0.5 text-[11px] text-[var(--chat-text-tertiary,#9e9488)] group-hover:text-[var(--chat-teal,#21808d)] transition-colors">
-        View <ArrowRight size={10} />
+        {t('common.view')} <ArrowRight size={10} />
       </div>
     </button>
   );
@@ -176,6 +184,7 @@ function FeaturedCard({ pkg: p, onView }: { pkg: McpRegistryPackage; onView: () 
 // ── PluginsHub ────────────────────────────────────────────────────────────────
 
 export function PluginsHub() {
+  const { t } = useTranslation('v3');
   const { servers, registry, isLoading, initialize, isInitialized, refreshRegistry } =
     useMcpStore();
   const [showDirectory, setShowDirectory] = useState(false);
@@ -195,18 +204,17 @@ export function PluginsHub() {
     <div className="h-full overflow-y-auto px-6 py-5">
       <div className="mb-4">
         <h2 className="font-serif text-lg font-medium text-[var(--chat-text-primary,#1a1a1a)] mb-1">
-          Installed plugins
+          {t('plugins.installed')}
         </h2>
         <p className="text-xs text-[var(--chat-text-tertiary,#9e9488)]">
-          Server-side tools AGI can call mid-response. Different from connectors — plugins do not
-          need an account.
+          {t('plugins.installedDesc')}
         </p>
       </div>
 
       {isLoading && servers.length === 0 ? (
         <div className="flex items-center gap-2 text-sm text-[var(--chat-text-tertiary,#9e9488)] mb-8">
           <Loader2 size={14} className="animate-spin" />
-          Loading...
+          {t('plugins.loading')}
         </div>
       ) : (
         <div className="grid gap-3 grid-cols-1 xl:grid-cols-2 mb-8">
@@ -221,14 +229,14 @@ export function PluginsHub() {
 
       <div className="mb-4 flex items-center justify-between">
         <h2 className="font-serif text-lg font-medium text-[var(--chat-text-primary,#1a1a1a)]">
-          Featured in the directory
+          {t('plugins.featured')}
         </h2>
         <button
           onClick={() => setShowDirectory(true)}
           className="flex items-center gap-1.5 rounded-lg border border-[var(--chat-border,#e8e3db)] bg-[var(--chat-bg,#fcfaf6)] px-3 py-1.5 text-xs text-[var(--chat-text-secondary,#6b6157)] hover:bg-[var(--chat-bg-soft,#f5f0e8)] transition-colors"
         >
           <Search size={11} />
-          Browse all plugins
+          {t('plugins.browseAll')}
         </button>
       </div>
 
@@ -240,7 +248,7 @@ export function PluginsHub() {
         </div>
       ) : (
         <p className="text-sm text-[var(--chat-text-tertiary,#9e9488)] mb-8">
-          Browse the directory to discover more plugins.
+          {t('plugins.emptyDirectory')}
         </p>
       )}
 
@@ -250,7 +258,7 @@ export function PluginsHub() {
           className="flex items-center gap-2 rounded-xl bg-[var(--chat-teal,#21808d)] px-5 py-2.5 text-sm text-white hover:opacity-90 transition-opacity"
         >
           <Box size={14} />
-          Browse all plugins
+          {t('plugins.browseAll')}
         </button>
       </div>
 

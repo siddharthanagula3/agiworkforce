@@ -6,6 +6,7 @@ import {
   type KeyboardEvent,
   type ChangeEvent,
 } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ArrowUp, Mic, Plus, Square, ChevronDown } from 'lucide-react';
 import { cn, useChatStore, useChatModelStore } from '@agiworkforce/unified-chat';
 import { PlusMenu } from './PlusMenu';
@@ -46,6 +47,7 @@ export function Composer({
   size = 'default',
   className,
 }: ComposerProps) {
+  const { t } = useTranslation('v3');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -136,7 +138,7 @@ export function Composer({
 
   const resolvedPlaceholder =
     placeholder ??
-    (activeConversationId ? 'Reply, or ask a follow-up…' : 'How can I help you today?');
+    (activeConversationId ? t('composer.placeholderReply') : t('composer.placeholder'));
 
   return (
     <div ref={wrapRef} className={cn('relative mx-auto w-full max-w-3xl px-4 pb-2', className)}>
@@ -164,7 +166,7 @@ export function Composer({
             'focus:outline-none min-h-[28px]',
           )}
           style={{ maxHeight: 240, overflowY: 'auto' }}
-          aria-label="Chat message input"
+          aria-label={t('composer.inputAriaLabel')}
         />
 
         {/* Toolbar */}
@@ -172,7 +174,7 @@ export function Composer({
           {/* Left: Plus button */}
           <button
             type="button"
-            aria-label="Add files, skills, connectors…"
+            aria-label={t('composer.addAriaLabel')}
             aria-expanded={plusOpen}
             className={cn(
               'flex h-8 w-8 items-center justify-center rounded-lg',
@@ -194,7 +196,7 @@ export function Composer({
             {/* Model pill */}
             <button
               type="button"
-              aria-label="Choose model"
+              aria-label={t('composer.modelAriaLabel')}
               aria-expanded={modelOpen}
               className={cn(
                 'flex h-8 items-center gap-1.5 rounded-lg px-2.5',
@@ -219,7 +221,7 @@ export function Composer({
                     : { background: 'var(--chat-surface-hover)', color: 'var(--chat-text-muted)' }
                 }
               >
-                {thinkingEnabled ? 'Adaptive' : 'Standard'}
+                {thinkingEnabled ? t('composer.adaptive') : t('composer.standard')}
               </span>
               <ChevronDown size={12} />
             </button>
@@ -228,7 +230,7 @@ export function Composer({
             {!isStreaming && (
               <button
                 type="button"
-                aria-label="Voice input settings"
+                aria-label={t('composer.voiceAriaLabel')}
                 className={cn(
                   'flex h-8 w-8 items-center justify-center rounded-full',
                   'text-[var(--chat-text-secondary)] transition-colors duration-150',
@@ -249,7 +251,7 @@ export function Composer({
               <button
                 type="button"
                 onClick={onStop}
-                aria-label="Stop generation"
+                aria-label={t('composer.stopAriaLabel')}
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] text-white transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]"
               >
                 <Square size={13} />
@@ -258,7 +260,7 @@ export function Composer({
               <button
                 type="button"
                 onClick={handleSend}
-                aria-label="Send message"
+                aria-label={t('composer.sendAriaLabel')}
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] text-white transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]"
               >
                 <ArrowUp size={16} strokeWidth={2} />
@@ -271,7 +273,7 @@ export function Composer({
       {/* Footer disclaimer */}
       {isFocused && size !== 'compact' && (
         <p className="mt-1.5 text-center text-[11px]" style={{ color: 'var(--chat-text-muted)' }}>
-          AI can make mistakes. Please double-check responses.
+          {t('composer.disclaimer')}
         </p>
       )}
 
