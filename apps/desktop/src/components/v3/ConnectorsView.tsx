@@ -171,6 +171,8 @@ export function ConnectorsView() {
 
   useEffect(() => {
     fetchConnected();
+    // Mount-only fetch. fetchConnected is a stable Zustand action.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const connectedConnectors = CONNECTORS.filter((c) => connectedIds.includes(c.id));

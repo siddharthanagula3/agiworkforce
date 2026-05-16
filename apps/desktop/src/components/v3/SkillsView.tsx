@@ -19,6 +19,9 @@ export function SkillsView() {
     if (skills.length === 0 && !isLoading) {
       fetchSkills();
     }
+    // Mount-only fetch. Store fns are stable (Zustand). Including skills.length
+    // / isLoading would loop while fetching.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filtered = skills.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()));

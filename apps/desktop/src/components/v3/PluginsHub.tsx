@@ -195,6 +195,10 @@ export function PluginsHub() {
     } else if (registry.length === 0) {
       refreshRegistry();
     }
+    // Run once on mount + when initialization completes. Store fns are stable
+    // (Zustand); including registry.length would re-fire on every catalog
+    // change which we don't want.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isInitialized]);
 
   const installedNames = new Set(servers.map((s) => s.name.toLowerCase()));
