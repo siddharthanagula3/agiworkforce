@@ -81,7 +81,7 @@ export function getWebviewContent(
       --bg-elevated: var(--agi-vscode-surface);
       --bg-overlay: var(--agi-vscode-overlay);
       --accent-teal: var(--agi-vscode-button);
-      --accent-terra: var(--vscode-button-secondaryBackground, #da7756);
+      --accent-terra: var(--agi-vscode-terra);
       --text-primary: var(--agi-vscode-text);
       --text-secondary: var(--agi-vscode-text-muted);
       --border: var(--agi-vscode-border);
@@ -216,9 +216,9 @@ export function getWebviewContent(
     }
 
     .message.error {
-      background: rgba(239, 68, 68, 0.12);
-      border: 1px solid rgba(239, 68, 68, 0.3);
-      color: #fca5a5;
+      background: var(--agi-vscode-danger-bg);
+      border: 1px solid var(--agi-vscode-danger-border);
+      color: var(--agi-vscode-danger);
       align-self: stretch;
     }
 
@@ -294,7 +294,7 @@ export function getWebviewContent(
       background: var(--accent-teal);
       border: none;
       border-radius: 6px;
-      color: #fff;
+      color: var(--agi-vscode-button-text);
       cursor: pointer;
       font-size: 12px;
       font-weight: 600;
@@ -404,7 +404,7 @@ export function getWebviewContent(
       background: var(--accent-terra);
       border: none;
       border-radius: 50%;
-      color: #fff;
+      color: var(--agi-vscode-button-text);
       cursor: pointer;
       font-size: 14px;
       height: 26px;
@@ -586,7 +586,7 @@ export function getWebviewContent(
       background: var(--accent-terra);
       border: none;
       border-radius: 8px;
-      color: #fff;
+      color: var(--agi-vscode-button-text);
       cursor: pointer;
       font-size: 10px;
       font-weight: 700;
@@ -689,8 +689,8 @@ export function getWebviewContent(
     .tool-call--pending .tool-call__icon { animation: tool-spin 1s linear infinite; }
     @keyframes tool-spin { to { transform: rotate(360deg); } }
 
-    .tool-call--error .tool-call__bar { color: #ef4444; }
-    .tool-call--error .tool-call__icon { color: #ef4444; }
+    .tool-call--error .tool-call__bar { color: var(--agi-vscode-danger); }
+    .tool-call--error .tool-call__icon { color: var(--agi-vscode-danger); }
 
     .tool-call__label { font-weight: 400; color: var(--text-secondary); flex-shrink: 0; }
 
@@ -971,7 +971,7 @@ export function getWebviewContent(
         meterBarWrap.style.display = 'flex';
         var pct = payload.remaining !== null ? payload.remaining * 100 : 100;
         var usedPct = 100 - pct;
-        var fillColor = pct < 20 ? '#da7756' : pct < 40 ? '#f59e0b' : '#21808d';
+        var fillColor = pct < 20 ? 'var(--agi-vscode-terra)' : pct < 40 ? 'var(--vscode-editorWarning-foreground, #f59e0b)' : 'var(--agi-vscode-button)';
         meterFill.style.width = Math.max(0, Math.min(100, usedPct)) + '%';
         meterFill.style.background = fillColor;
         meterText.textContent = 'Usage: ' + (payload.usageLabel || '');

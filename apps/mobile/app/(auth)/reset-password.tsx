@@ -118,7 +118,7 @@ export default function ResetPasswordScreen() {
             text: 'OK',
             onPress: () => {
               supabase.auth.signOut().catch(() => null);
-              router.replace('/(auth)/login');
+              router.replace({ pathname: '/(auth)/login' as const });
             },
           },
         ]);

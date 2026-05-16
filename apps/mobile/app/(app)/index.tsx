@@ -5,5 +5,5 @@ import { Redirect } from 'expo-router';
  * Chat is the default landing screen when the drawer opens.
  */
 export default function AppIndex() {
-  return <Redirect href={'/(app)/(tabs)/chat' as '/(app)'} />;
+  return <Redirect href={{ pathname: '/(app)/(tabs)/chat' as const }} />;
 }

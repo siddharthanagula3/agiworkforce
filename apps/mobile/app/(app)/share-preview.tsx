@@ -63,7 +63,7 @@ export default function SharePreviewScreen() {
       const previewTitle = rawText.length > 40 ? rawText.slice(0, 40).trim() + '...' : rawText;
       const id = await createConversation(previewTitle);
       sendMessage(id, sanitised, selectedModel);
-      router.replace(`/(app)/chat/${id}` as Parameters<typeof router.replace>[0]);
+      router.replace({ pathname: '/(app)/chat/[id]' as const, params: { id } });
     } catch {
       setSending(false);
       Alert.alert('Error', 'Could not start chat. Please try again.');
@@ -74,7 +74,7 @@ export default function SharePreviewScreen() {
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace('/(app)');
+      router.replace({ pathname: '/(app)' as const });
     }
   };
 
