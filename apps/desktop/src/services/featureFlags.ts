@@ -201,10 +201,11 @@ class FeatureFlagsService {
         targetPlanTiers: ['enterprise'],
         description: 'Extension marketplace',
       },
+      // Default-on; localOverride(desktop_chat_v3, false) acts as emergency kill-switch
       [FeatureFlagName.DESKTOP_CHAT_V3]: {
         name: FeatureFlagName.DESKTOP_CHAT_V3,
         enabled: true,
-        rolloutPercentage: 0,
+        enabledForAll: true,
         description:
           'Desktop chat v3 shell (composer-first, unified-chat primitives, agiPalette tokens)',
       },

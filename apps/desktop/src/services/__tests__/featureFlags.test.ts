@@ -21,24 +21,30 @@ describe('FeatureFlagsService', () => {
   });
 
   describe('DESKTOP_CHAT_V3 flag', () => {
-    it('is registered with a default-OFF rollout', () => {
+    it('is registered as enabledForAll (default-on)', () => {
       const flag = service.getFlag(FeatureFlagName.DESKTOP_CHAT_V3);
       expect(flag).toBeDefined();
-      expect(flag?.rolloutPercentage).toBe(0);
-      expect(flag?.enabledForAll).toBeUndefined();
+      expect(flag?.enabledForAll).toBe(true);
+      expect(flag?.rolloutPercentage).toBeUndefined();
     });
 
-    it('is not enabled by default for an arbitrary user', () => {
-      service.setUserProperties({ userId: 'user-not-in-rollout' });
-      expect(service.isEnabled(FeatureFlagName.DESKTOP_CHAT_V3)).toBe(false);
+    it('is enabled by default for any user', () => {
+      service.setUserProperties({ userId: 'user-abc' });
+      expect(service.isEnabled(FeatureFlagName.DESKTOP_CHAT_V3)).toBe(true);
     });
 
-    it('respects a local override', () => {
-      service.setLocalOverride(FeatureFlagName.DESKTOP_CHAT_V3, true);
+    it('is enabled even without a userId set', () => {
+      expect(service.isEnabled(FeatureFlagName.DESKTOP_CHAT_V3)).toBe(true);
+    });
+
+    it('respects a local override kill-switch (override=false disables v3)', () => {
       expect(service.isEnabled(FeatureFlagName.DESKTOP_CHAT_V3)).toBe(true);
 
-      service.clearLocalOverride(FeatureFlagName.DESKTOP_CHAT_V3);
+      service.setLocalOverride(FeatureFlagName.DESKTOP_CHAT_V3, false);
       expect(service.isEnabled(FeatureFlagName.DESKTOP_CHAT_V3)).toBe(false);
+
+      service.clearLocalOverride(FeatureFlagName.DESKTOP_CHAT_V3);
+      expect(service.isEnabled(FeatureFlagName.DESKTOP_CHAT_V3)).toBe(true);
     });
   });
 
