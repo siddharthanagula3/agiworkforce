@@ -874,6 +874,48 @@ The Hobby tier launch needs **zero new code** — only Stripe dashboard config +
 
 Total wall-clock to all four live: 2–4 weeks, gated almost entirely on Apple's queue.
 
+## What shipped on 2026-05-16 (Wave 4 — frontend rebuild, PR #366)
+
+**20 commits** on `claude/refine-local-plan-yhjFU`, base `ea104d1b3`, HEAD `6af5e3004`. Plan SSOT: `~/.claude/plans/robust-whistling-crane.md`. Net effect: a feature-flagged v3 desktop chat shell, cross-surface design-token parity, the v3 Pricing UI hydrated from billing-catalog SSOT, and the pre-v3 plan tree archived under `docs/archive/2026-05-16-pre-v3/`.
+
+| Commit        | What                                                                                                                                     | Impact                          |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `cbbed3ca3`   | Feature-flagged v3 chat shell behind `DESKTOP_CHAT_V3`                                                                                   | flag wired, rollout 0%          |
+| `3e00f9c9b`   | Record `claude/refine-local-plan` session permissions                                                                                    | tooling                         |
+| `6e0dd8621`   | QuickChips → 6 chips (Code/Write/Research/Image/Video/Computer)                                                                          | +41 / -8 LOC                    |
+| `9cc27e02f`   | Archive 9 pre-v3 plans → `docs/archive/2026-05-16-pre-v3/`                                                                               | renames + +35 README LOC        |
+| `fc3bc68ed`   | ProvenanceFooter auto-routing trace + Pin-to-model button                                                                                | +193 / -17 LOC, +113 RTL        |
+| `52fc08af6`   | v3 `Sidebar.tsx` + `DesktopShellV3.tsx` mode routing                                                                                     | shell scaffold                  |
+| `0a995cf09` † | v3 `ArtifactWorkspace.tsx` (split-pane, file tree, MCP-live banner) — bundled with `#16` vscode-ext + `#2` mobile typed-`Href` migration | +819 / -156 LOC across 19 files |
+| `4333eccf8`   | v3 Cowork mode (5 views) + Code mode home                                                                                                | 6 new components                |
+| `675ae9db4`   | `MessageRouting` schema: `traceId` + `alternatives[]` (OTel hook)                                                                        | +11 LOC                         |
+| `205159185`   | Web pricing page → `billing-catalog` SSOT                                                                                                | drift-proofed                   |
+| `1dbd2ceeb`   | Chrome ext: strip hardcoded hex, consume `@agiworkforce/design-tokens` CSS vars                                                          | brand-locked                    |
+| `3428e29d1`   | v3 ActiveChat + ThinkingPill + InlineArtifactChip + ResponseActionRow                                                                    | +443 LOC                        |
+| `0a9158c87`   | v3 Composer + PlusMenu + ModelPopover                                                                                                    | +973 LOC                        |
+| `fc86460a5`   | Mobile v3 parity — TaskChips (6 chips), Composer wrapper, Sidebar, brand copy fix                                                        | +196 / -62 LOC                  |
+| `dc38ad52e`   | v3 Pricing page (5 tiers + capability matrix + trust signals)                                                                            | +696 LOC                        |
+| `8259d6014`   | v3 Customize hub (Skills + Connectors + Plugins)                                                                                         | +1,036 LOC                      |
+| `93c87001b`   | v3 overlays — AccountMenu / SearchCmdK / PluginMarketplace / PluginDetail / MicSettings                                                  | +1,954 LOC                      |
+| `2cf38a32d`   | CLI v3 palette + slash menu order + model picker (Adaptive thinking)                                                                     | +328 LOC                        |
+| `7163765d0`   | Align `ModelPopover` to provider-scoped helpers + always-visible Composer Adaptive HUD                                                   | +175 / -100 LOC                 |
+| `6af5e3004`   | Mobile test fixtures repaired for typed `Href` migration (4 suites / 49 tests)                                                           | mobile suite green at 815 tests |
+
+† **Bundled-commit attribution.** `0a995cf09` carries work from THREE tasks because 13 teammates ran on the shared branch `claude/refine-local-plan-yhjFU` without git-worktree isolation. The commit's primary subject line is the desktop ArtifactWorkspace work (task #8); also included: VS Code webview theming + diff-decoration provider updates (task #16, +48 LOC modified across `extension-vscode/src/providers/`) plus `packages/design-tokens/src/index.ts` `agiVsCodeCssVars` extensions (+10 LOC); and the apps/mobile typed-`Href` router migration (task #2, 14 files / +332 net LOC including `.expo/types/router.d.ts` regen). Mobile work is therefore split across two commits — `0a995cf09` (router migration) and `fc86460a5` (v3 parity per task #17). Diffs are correct; only attribution is muddled.
+
+**Process notes (Wave 4 retrospective).** Future waves that run multiple teammates in parallel should provision a git-worktree per teammate (`git worktree add ../<wave>-<task>-<owner>`) so each commit cleanly maps 1:1 to a task. Wave 4's plan called for this but Ultraplan's first-cut implementation simplified to shared-branch coordination; the bundled `0a995cf09` is the visible artifact. Cost: extra reconciliation in the changelog (this entry); no correctness impact on the shipped code.
+
+**v3 anti-pattern guardrails (ESLint, `eslint.config.mjs:436-468`)** — locked to `apps/desktop/src/components/v3/**` + `apps/desktop/e2e/v3-*.spec.ts`:
+
+1. User-facing brand string must be "AGI" (not "AGI Workforce") — `Literal` + `JSXText` selectors block toast titles, alt text, and JSX children. Pointer to `docs/design/design-spec-2026-05-15.md`.
+2. `ModeSelectionDialog` re-imports blocked — mode picker lives in `OnboardingWizard.tsx` per CLAUDE.md.
+
+**Feature flag status:** `DESKTOP_CHAT_V3` default `rolloutPercentage: 0`. v3 ships dark; flip per-user via local override or ramp the rollout in a follow-up commit once internal dogfooding completes.
+
+**Verification matrix (per `AUDIT_LOG.md` 2026-05-16T08:49Z):** CLI 1,337 · Mobile 815 (46 suites, post-`6af5e3004`) · Chrome ext 614 (22 suites) · unified-chat 361. Desktop / Web / VS Code ext: typecheck + build green, no failures reported. Lint clean at `--max-warnings=0`. `cargo check` + `cargo clippy --workspace --lib -- -D warnings` + `cargo test --workspace --lib` all green (4 visibility warnings in `cli_options.rs`, non-error). Playwright `@locks` shell-mount test has an env-only caveat (no Tauri runtime + auth in CI; shell does mount in real Tauri dev per `App.tsx:1284-1306`).
+
+**Doc archive note:** 9 pre-v3 plan docs (`UNIFIED_LAUNCH_PLAN.md`, `SHIP_RUNBOOK.md`, `DESIGN.md`, `SURFACE_VERIFICATION.md`, `VERIFICATION_2026-05-08.md`, plus the previously-archived wave2/wave3/master-remediation/sprint1-vault-rewire files) are now under `docs/archive/2026-05-16-pre-v3/` with a README that maps each → its successor doc. New SSOT plan: `~/.claude/plans/robust-whistling-crane.md`.
+
 ## How to use this file
 
 - **New contributor?** Read this top to bottom, then [BUILD.md](BUILD.md) + [docs/VISION.md](docs/VISION.md).
