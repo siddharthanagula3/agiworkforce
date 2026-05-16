@@ -1,40 +1,26 @@
 import { Check, ChevronRight, Loader2, Clock } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { cn } from '../../lib/utils';
+import { useAgentTaskStore, type AgentTask } from '../../stores/agentTaskStore';
 
 type OutputStatus = 'queued' | 'running' | 'done';
 
-interface DispatchOutput {
-  id: string;
-  title: string;
-  status: OutputStatus;
-  time: string;
-  artifact?: string;
+function taskToOutputStatus(t: AgentTask): OutputStatus {
+  if (t.status === 'running' || t.status === 'recovering') return 'running';
+  if (t.status === 'completed') return 'done';
+  return 'queued';
 }
 
-const DISPATCH_OUTPUTS: DispatchOutput[] = [
-  {
-    id: 'o1',
-    title: "Summarize today's investor emails",
-    status: 'running',
-    time: 'just now',
-    artifact: undefined,
-  },
-  {
-    id: 'o2',
-    title: 'Draft reply to Series A VC thread',
-    status: 'done',
-    time: '12 min ago',
-    artifact: 'vc-reply-draft.md',
-  },
-  {
-    id: 'o3',
-    title: 'Pull support tickets flagged P0',
-    status: 'queued',
-    time: '2 min ago',
-    artifact: undefined,
-  },
-];
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
 
 function IosToggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   return (
@@ -86,6 +72,19 @@ function StatusChip({ status }: { status: OutputStatus }) {
 export function CoworkDispatch() {
   const [acceptTasks, setAcceptTasks] = useState(true);
   const [requireConfirm, setRequireConfirm] = useState(true);
+
+  const { tasks, fetchTasks } = useAgentTaskStore((s) => ({
+    tasks: s.tasks,
+    fetchTasks: s.fetchTasks,
+  }));
+
+  useEffect(() => {
+    void fetchTasks();
+  }, [fetchTasks]);
+
+  const recentOutputs = [...tasks]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 10);
 
   return (
     <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-white/10">
@@ -163,35 +162,33 @@ export function CoworkDispatch() {
         {/* Outputs feed */}
         <div className="space-y-3">
           <h2 className="font-serif text-base font-medium text-white/80">Outputs</h2>
-          <div className="space-y-1">
-            {DISPATCH_OUTPUTS.map((o) => (
-              <div
-                key={o.id}
-                className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3"
-              >
-                <div className="flex-shrink-0 w-20">
-                  <StatusChip status={o.status} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm text-white/85">{o.title}</div>
-                  <div className="mt-0.5 flex items-center gap-1.5 text-xs text-white/35">
-                    <span>{o.time}</span>
-                    {o.artifact && (
-                      <>
-                        <span className="text-white/20">·</span>
-                        <button type="button" className="text-teal-400 hover:underline">
-                          {o.artifact}
-                        </button>
-                      </>
-                    )}
+          {recentOutputs.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-white/10 px-4 py-6 text-center text-sm text-white/30">
+              No task outputs yet. Dispatch a task from the mobile app to get started.
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {recentOutputs.map((o) => (
+                <div
+                  key={o.id}
+                  className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3"
+                >
+                  <div className="flex-shrink-0 w-20">
+                    <StatusChip status={taskToOutputStatus(o)} />
                   </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm text-white/85">{o.goal}</div>
+                    <div className="mt-0.5 flex items-center gap-1.5 text-xs text-white/35">
+                      <span>{timeAgo(o.createdAt)}</span>
+                    </div>
+                  </div>
+                  <button type="button" className="flex-shrink-0 text-white/20 hover:text-white/60">
+                    <ChevronRight size={14} />
+                  </button>
                 </div>
-                <button type="button" className="flex-shrink-0 text-white/20 hover:text-white/60">
-                  <ChevronRight size={14} />
-                </button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
