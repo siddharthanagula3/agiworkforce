@@ -1,44 +1,97 @@
 import { useState, useRef, useEffect } from 'react';
 import { Check, ChevronRight } from 'lucide-react';
 import { cn, useChatModelStore } from '@agiworkforce/unified-chat';
-import { getRoutingSlotModel } from '@agiworkforce/types';
+import {
+  getTaskModelForProvider,
+  getProviderDefaultModel,
+  getModelMetadataById,
+} from '@agiworkforce/types';
 
-// Primary 3 Anthropic models — IDs come from getRoutingSlotModel, never hardcoded
+// ---------------------------------------------------------------------------
+// Primary 3 — Anthropic models per design spec.
+// IDs resolved via catalog helpers, never hardcoded literals.
+// ---------------------------------------------------------------------------
 const PRIMARY_MODELS = [
   {
-    id: () => getRoutingSlotModel('general_premium'),
-    slot: 'general_premium' as const,
+    key: 'anthropic-premium',
+    getId: () =>
+      getTaskModelForProvider('anthropic', 'complex_reasoning') ??
+      getProviderDefaultModel('anthropic') ??
+      '',
     label: 'Most capable for ambitious work',
-    displayName: 'Claude (Premium)',
   },
   {
-    id: () => getRoutingSlotModel('general_balanced'),
-    slot: 'general_balanced' as const,
+    key: 'anthropic-balanced',
+    getId: () => getProviderDefaultModel('anthropic') ?? '',
     label: 'Responsive everyday work',
-    displayName: 'Claude (Balanced)',
   },
   {
-    id: () => getRoutingSlotModel('general_fast'),
-    slot: 'general_fast' as const,
+    key: 'anthropic-fast',
+    getId: () =>
+      getTaskModelForProvider('anthropic', 'fast_completion') ??
+      getProviderDefaultModel('anthropic') ??
+      '',
     label: 'Fastest, most efficient',
-    displayName: 'Claude (Fast)',
   },
 ] as const;
 
-// "More models" groups — IDs from slot registry
+// ---------------------------------------------------------------------------
+// "More models" — 2 groups per design spec.
+// All IDs from catalog helpers.
+// ---------------------------------------------------------------------------
 const MORE_GROUPS = [
   {
-    label: 'Older models',
+    label: 'Older Anthropic',
     items: [
-      { id: () => getRoutingSlotModel('coding_premium'), tag: undefined },
-      { id: () => getRoutingSlotModel('coding_fast'), tag: 'Budget' },
+      {
+        key: 'anthropic-vision',
+        getId: () =>
+          getTaskModelForProvider('anthropic', 'vision') ??
+          getProviderDefaultModel('anthropic') ??
+          '',
+        tag: undefined as string | undefined,
+      },
+      {
+        key: 'anthropic-code',
+        getId: () =>
+          getTaskModelForProvider('anthropic', 'code_generation') ??
+          getProviderDefaultModel('anthropic') ??
+          '',
+        tag: undefined as string | undefined,
+      },
     ],
   },
   {
     label: 'Other providers',
     items: [
-      { id: () => getRoutingSlotModel('general_balanced_pro'), tag: undefined },
-      { id: () => getRoutingSlotModel('reasoning_premium'), tag: 'Reasoning' },
+      {
+        key: 'openai-default',
+        getId: () => getProviderDefaultModel('openai') ?? '',
+        tag: undefined as string | undefined,
+      },
+      {
+        key: 'google-default',
+        getId: () => getProviderDefaultModel('google') ?? '',
+        tag: undefined as string | undefined,
+      },
+      {
+        key: 'xai-default',
+        getId: () => getProviderDefaultModel('xai') ?? '',
+        tag: undefined as string | undefined,
+      },
+      {
+        key: 'moonshot-default',
+        getId: () => getProviderDefaultModel('moonshot') ?? '',
+        tag: undefined as string | undefined,
+      },
+      {
+        key: 'qwen-fast',
+        getId: () =>
+          getTaskModelForProvider('qwen', 'fast_completion') ??
+          getProviderDefaultModel('qwen') ??
+          '',
+        tag: 'Local' as string | undefined,
+      },
     ],
   },
 ] as const;
@@ -52,7 +105,7 @@ export function ModelPopover({ onClose }: ModelPopoverProps) {
   const selectModel = useChatModelStore((s) => s.selectModel);
   const thinkingEnabled = useChatModelStore((s) => s.thinkingEnabled);
   const toggleThinking = useChatModelStore((s) => s.toggleThinking);
-  const models = useChatModelStore((s) => s.models);
+  const storeModels = useChatModelStore((s) => s.models);
 
   const [moreOpen, setMoreOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -68,15 +121,28 @@ export function ModelPopover({ onClose }: ModelPopoverProps) {
   }, [onClose]);
 
   const handleSelect = (id: string) => {
+    if (!id) return;
     selectModel(id);
     onClose();
   };
 
-  // Resolve display name from store if available, fall back to slot label
-  const resolveDisplayName = (modelId: string, fallback: string): string => {
-    const found = models.find((m) => m.id === modelId);
-    return found?.name ?? fallback;
+  // Resolve display name: store first (live catalog), then models.json metadata, then bare ID.
+  const resolveName = (modelId: string): string => {
+    if (!modelId) return '';
+    const fromStore = storeModels.find((m) => m.id === modelId);
+    if (fromStore?.name) return fromStore.name;
+    const meta = getModelMetadataById(modelId);
+    return meta?.name ?? modelId;
   };
+
+  // Deduplicate primary rows — e.g. if complex_reasoning and defaultModel resolve to same ID
+  const seenPrimary = new Set<string>();
+  const primaryRows = PRIMARY_MODELS.map((item) => {
+    const id = item.getId();
+    const dup = seenPrimary.has(id);
+    seenPrimary.add(id);
+    return { ...item, id, dup };
+  }).filter((r) => r.id && !r.dup);
 
   return (
     <div
@@ -85,28 +151,27 @@ export function ModelPopover({ onClose }: ModelPopoverProps) {
       style={{
         background: 'var(--chat-surface-elevated)',
         borderColor: 'var(--chat-border)',
+        boxShadow: 'var(--chat-shadow-lg, 0 8px 24px rgba(0,0,0,0.12))',
       }}
       onMouseDown={(e) => e.stopPropagation()}
     >
-      {/* Primary 3 */}
-      {PRIMARY_MODELS.map((item) => {
-        const modelId = item.id();
-        const selected = selectedModelId === modelId;
-        const name = resolveDisplayName(modelId, item.displayName);
+      {/* Primary 3 Anthropic models */}
+      {primaryRows.map((item) => {
+        const selected = selectedModelId === item.id;
         return (
           <button
-            key={item.slot}
+            key={item.key}
             type="button"
             className={cn(
               'flex w-full items-center gap-3 px-3 py-2.5 transition-colors',
               'hover:bg-[var(--chat-surface-hover)]',
               selected && 'bg-[var(--chat-surface-hover)]',
             )}
-            onClick={() => handleSelect(modelId)}
+            onClick={() => handleSelect(item.id)}
           >
             <div className="flex-1 text-left">
               <div className="text-sm font-medium" style={{ color: 'var(--chat-text-primary)' }}>
-                {name}
+                {resolveName(item.id)}
               </div>
               <div className="text-xs" style={{ color: 'var(--chat-text-muted)' }}>
                 {item.label}
@@ -121,7 +186,7 @@ export function ModelPopover({ onClose }: ModelPopoverProps) {
 
       <Divider />
 
-      {/* Adaptive thinking toggle */}
+      {/* Adaptive thinking toggle (iOS-style switch) */}
       <div
         className="flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors hover:bg-[var(--chat-surface-hover)]"
         role="button"
@@ -142,72 +207,84 @@ export function ModelPopover({ onClose }: ModelPopoverProps) {
 
       <Divider />
 
-      {/* More models expand */}
+      {/* More models toggle */}
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-[var(--chat-surface-hover)]"
+        className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium transition-colors hover:bg-[var(--chat-surface-hover)]"
         style={{ color: 'var(--chat-text-secondary)' }}
         onClick={() => setMoreOpen((o) => !o)}
       >
-        <span className="flex-1 text-left font-medium">More models</span>
-        <ChevronRight size={13} className={cn('transition-transform', moreOpen && 'rotate-90')} />
+        <span className="flex-1 text-left">More models</span>
+        <ChevronRight
+          size={13}
+          className={cn('transition-transform duration-150', moreOpen && 'rotate-90')}
+        />
       </button>
 
       {moreOpen && (
         <div className="pb-1">
-          {MORE_GROUPS.map((group) => (
-            <div key={group.label}>
-              <div
-                className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider"
-                style={{ color: 'var(--chat-text-muted)' }}
-              >
-                {group.label}
-              </div>
-              {group.items.map((item) => {
-                const modelId = item.id();
-                if (!modelId) return null;
-                const selected = selectedModelId === modelId;
-                const name = resolveDisplayName(modelId, modelId);
-                return (
-                  <button
-                    key={modelId}
-                    type="button"
-                    className={cn(
-                      'flex w-full items-center gap-2 px-3 py-1.5 text-sm transition-colors',
-                      'hover:bg-[var(--chat-surface-hover)]',
-                      selected && 'bg-[var(--chat-surface-hover)]',
-                    )}
-                    onClick={() => handleSelect(modelId)}
-                  >
-                    <span
-                      className="flex-1 text-left"
-                      style={{ color: 'var(--chat-text-primary)' }}
+          {MORE_GROUPS.map((group) => {
+            // Deduplicate within each group
+            const seen = new Set<string>(primaryRows.map((r) => r.id));
+            const items = group.items
+              .map((item) => ({ ...item, id: item.getId() }))
+              .filter((item) => {
+                if (!item.id || seen.has(item.id)) return false;
+                seen.add(item.id);
+                return true;
+              });
+            if (items.length === 0) return null;
+            return (
+              <div key={group.label}>
+                <div
+                  className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider"
+                  style={{ color: 'var(--chat-text-muted)' }}
+                >
+                  {group.label}
+                </div>
+                {items.map((item) => {
+                  const selected = selectedModelId === item.id;
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      className={cn(
+                        'flex w-full items-center gap-2 px-3 py-1.5 text-sm transition-colors',
+                        'hover:bg-[var(--chat-surface-hover)]',
+                        selected && 'bg-[var(--chat-surface-hover)]',
+                      )}
+                      onClick={() => handleSelect(item.id)}
                     >
-                      {name}
-                    </span>
-                    {item.tag && (
                       <span
-                        className="rounded px-1.5 py-0.5 text-[10px] font-medium"
-                        style={{
-                          background: 'var(--chat-surface-hover)',
-                          color: 'var(--chat-text-muted)',
-                        }}
+                        className="flex-1 text-left"
+                        style={{ color: 'var(--chat-text-primary)' }}
                       >
-                        {item.tag}
+                        {resolveName(item.id)}
                       </span>
-                    )}
-                    {selected && (
-                      <Check
-                        size={12}
-                        strokeWidth={2.4}
-                        style={{ color: 'var(--chat-accent-primary)' }}
-                      />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
+                      {item.tag && (
+                        <span
+                          className="rounded px-1.5 py-0.5 text-[10px] font-medium"
+                          style={{
+                            background: 'var(--chat-surface-hover)',
+                            color: 'var(--chat-text-muted)',
+                          }}
+                        >
+                          {item.tag}
+                        </span>
+                      )}
+                      {selected && (
+                        <Check
+                          size={12}
+                          strokeWidth={2.4}
+                          style={{ color: 'var(--chat-accent-primary)' }}
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -235,12 +312,10 @@ function IosToggle({ on, onToggle }: IosToggleProps) {
       }}
       className={cn(
         'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full',
-        'transition-colors duration-200 ease-in-out focus-visible:outline-none',
-        'focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)] focus-visible:ring-offset-2',
+        'transition-colors duration-200 ease-in-out',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)] focus-visible:ring-offset-2',
       )}
-      style={{
-        background: on ? 'var(--chat-accent-primary)' : 'var(--chat-border)',
-      }}
+      style={{ background: on ? 'var(--chat-accent-primary)' : 'var(--chat-border)' }}
     >
       <span
         className={cn(
