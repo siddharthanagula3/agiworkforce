@@ -8,7 +8,9 @@
       "Bash(cp /Users/siddhartha/.claude/plans/make-a-plan-to-purrfect-papert.md docs/plans/master-remediation.md)",
       "Bash(cp /Users/siddhartha/.claude/plans/sprint1-vault-rewire.md docs/plans/sprint1-vault-rewire.md)",
       "Bash(git mv *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Read(//root/.claude/**)",
+      "Bash(mkdir -p /root/.claude/plans)"
     ],
     "deny": [],
     "ask": []
@@ -21,6 +23,6 @@
     "github",
     "vercel"
   ],
-  "prefersReducedMotion": false,
-  "outputStyle": "default"
+  "outputStyle": "default",
+  "prefersReducedMotion": false
 }
