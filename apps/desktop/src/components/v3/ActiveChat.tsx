@@ -1,5 +1,10 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { useChatStore, selectMessages } from '../../stores/chat';
+import {
+  useChatStore,
+  selectMessages,
+  selectActiveConversationId,
+  uuidToDbId,
+} from '../../stores/chat';
 import type { EnhancedMessage } from '../../stores/chat';
 import { ThinkingPill } from './ThinkingPill';
 import { InlineArtifactChip } from './InlineArtifactChip';
@@ -136,6 +141,10 @@ export interface ActiveChatProps {
 
 export function ActiveChat({ onOpenArtifact, onRegenerate, onBranch, onReact }: ActiveChatProps) {
   const messages = useChatStore(selectMessages);
+  const activeConversationId = useChatStore(selectActiveConversationId);
+  const editAndRegenerateFromMessage = useChatStore((s) => s.editAndRegenerateFromMessage);
+  const forkAndRegenerate = useChatStore((s) => s.forkAndRegenerate);
+  const toggleMessageReaction = useChatStore((s) => s.toggleMessageReaction);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when messages change
@@ -147,9 +156,43 @@ export function ActiveChat({ onOpenArtifact, onRegenerate, onBranch, onReact }: 
 
   const handleReact = useCallback(
     (messageId: string, reaction: 'thumbsUp' | 'thumbsDown') => {
-      onReact?.(messageId, reaction);
+      if (onReact) {
+        onReact(messageId, reaction);
+      } else {
+        toggleMessageReaction(messageId, reaction);
+      }
     },
-    [onReact],
+    [onReact, toggleMessageReaction],
+  );
+
+  const handleRegenerate = useCallback(
+    (messageId: string) => {
+      if (onRegenerate) {
+        onRegenerate(messageId);
+      } else {
+        const msg = messages.find((m) => m.id === messageId);
+        if (msg) editAndRegenerateFromMessage(messageId, msg.content);
+      }
+    },
+    [onRegenerate, messages, editAndRegenerateFromMessage],
+  );
+
+  const handleBranch = useCallback(
+    (messageId: string) => {
+      if (onBranch) {
+        onBranch(messageId);
+      } else if (activeConversationId) {
+        const dbConvId = uuidToDbId(activeConversationId);
+        const msg = messages.find((m) => m.id === messageId);
+        if (dbConvId != null && msg) {
+          const dbMsgId = parseInt(messageId, 10);
+          if (!isNaN(dbMsgId)) {
+            void forkAndRegenerate(dbConvId, dbMsgId, msg.content);
+          }
+        }
+      }
+    },
+    [onBranch, activeConversationId, messages, forkAndRegenerate],
   );
 
   if (messages.length === 0) return null;
@@ -194,8 +237,8 @@ export function ActiveChat({ onOpenArtifact, onRegenerate, onBranch, onReact }: 
                 key={msg.id}
                 message={msg}
                 onOpenArtifact={onOpenArtifact}
-                onRegenerate={onRegenerate}
-                onBranch={onBranch}
+                onRegenerate={handleRegenerate}
+                onBranch={handleBranch}
                 onReact={handleReact}
               />
             );

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   ChevronDown,
   ChevronRight,
@@ -15,72 +15,44 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useArtifactStore } from '@/stores/artifactStore';
+import type { Artifact, ArtifactType } from '@/stores/artifactStore';
+import { useMcpStore } from '@/stores/mcpStore';
 
 // ── file tree ─────────────────────────────────────────────────────────────────
 
 interface FileNode {
   name: string;
   open?: boolean;
+  content?: string;
   children?: FileNode[];
 }
 
-const DEMO_TREE: FileNode[] = [
-  {
-    name: '/src',
-    open: true,
-    children: [{ name: 'index.tsx' }, { name: 'App.tsx' }, { name: 'utils.ts' }],
-  },
-  {
-    name: '/styles',
-    open: true,
-    children: [{ name: 'main.css' }],
-  },
-  {
-    name: '/public',
-    open: false,
-    children: [],
-  },
-];
+function buildTreeFromFiles(
+  files: Array<{ name: string; content: string; language?: string }>,
+): FileNode[] {
+  const dirs: Record<string, FileNode> = {};
+  const roots: FileNode[] = [];
 
-const CODE_SAMPLES: Record<string, string> = {
-  'App.tsx': `import { useState } from 'react'
-import { KPI, Spark } from './utils'
-import './styles/main.css'
-
-export default function App() {
-  const [range, setRange] = useState<'month' | 'last'>('month')
-
-  return (
-    <main className="dashboard">
-      <header>
-        <h1>Quarterly performance</h1>
-        <Toggle value={range} onChange={setRange} />
-      </header>
-
-      <KPI label="Conversion" value="5.42%" delta="+0.8pp" />
-      <KPI label="Revenue (MRR)" value="$248,310" delta="+12.4%" />
-      <KPI label="Active users" value="18,920" delta="+6.1%" />
-      <KPI label="Churn" value="2.1%" delta="-0.4pp" />
-    </main>
-  )
-}`,
-  'index.tsx': `import { createRoot } from 'react-dom/client'
-import App from './App'
-
-createRoot(document.getElementById('root')!).render(<App />)`,
-  'utils.ts': `export const fmt = (n: number) =>
-  new Intl.NumberFormat('en-US').format(n)
-
-export const pct = (n: number) =>
-  \`\${(n * 100).toFixed(2)}%\``,
-  'main.css': `:root {
-  --bg: #fcfaf6;
-  --ink: #1a1a1a;
-  --teal: #21808d;
-  --terracotta: #da7756;
+  for (const f of files) {
+    const parts = f.name.split('/').filter(Boolean);
+    if (parts.length === 1) {
+      roots.push({ name: f.name, content: f.content });
+    } else {
+      const dir = '/' + parts.slice(0, -1).join('/');
+      if (!dirs[dir]) {
+        dirs[dir] = { name: dir, open: true, children: [] };
+        roots.push(dirs[dir]);
+      }
+      dirs[dir].children!.push({ name: parts[parts.length - 1]!, content: f.content });
+    }
+  }
+  return roots;
 }
-.dashboard { font-family: 'Source Serif 4', serif; }`,
-};
+
+function singleFileTree(artifact: Artifact): FileNode[] {
+  const name = artifact.title ?? 'artifact';
+  return [{ name, content: artifact.content }];
+}
 
 // ── sparkline ─────────────────────────────────────────────────────────────────
 
@@ -112,144 +84,69 @@ function Spark({ values, color }: { values: number[]; color: string }) {
   );
 }
 
-// ── KPI preview ───────────────────────────────────────────────────────────────
+// ── KPI preview (for chart artifacts) ────────────────────────────────────────
 
-type RangeKey = 'month' | 'last';
+interface KpiEntry {
+  label: string;
+  value: string;
+  delta?: string;
+  trend?: 'up' | 'down';
+  sparkline?: number[];
+  color?: string;
+}
 
-const KPI_DATA: Record<
-  RangeKey,
-  {
-    conversion: { v: string; d: string; trend: 'up' | 'down' };
-    revenue: { v: string; d: string; trend: 'up' | 'down' };
-    users: { v: string; d: string; trend: 'up' | 'down' };
-    churn: { v: string; d: string; trend: 'up' | 'down' };
-    q: number;
+function KPIPreview({ content }: { content: string }) {
+  let parsed: Record<string, unknown> | null = null;
+  try {
+    parsed = JSON.parse(content) as Record<string, unknown>;
+  } catch {
+    // not JSON — render raw
   }
-> = {
-  month: {
-    conversion: { v: '5.42%', d: '+0.8 pp', trend: 'up' },
-    revenue: { v: '$248,310', d: '+12.4%', trend: 'up' },
-    users: { v: '18,920', d: '+6.1%', trend: 'up' },
-    churn: { v: '2.1%', d: '−0.4 pp', trend: 'up' },
-    q: 68,
-  },
-  last: {
-    conversion: { v: '4.62%', d: '+0.2 pp', trend: 'up' },
-    revenue: { v: '$220,990', d: '+3.0%', trend: 'up' },
-    users: { v: '17,830', d: '+2.4%', trend: 'up' },
-    churn: { v: '2.5%', d: '+0.1 pp', trend: 'down' },
-    q: 52,
-  },
-};
 
-function KPIPreview({ range, setRange }: { range: RangeKey; setRange: (r: RangeKey) => void }) {
-  const d = KPI_DATA[range];
+  const COLORS = ['#21808d', '#da7756', '#3a7daa', '#1b8a5a'];
+  const kpis = Array.isArray(parsed?.['kpis']) ? (parsed['kpis'] as KpiEntry[]) : [];
+
+  if (!parsed || kpis.length === 0) {
+    return (
+      <div className="p-5">
+        <pre className="whitespace-pre-wrap font-mono text-xs text-[var(--chat-text-primary,#1a1a1a)]">
+          {content}
+        </pre>
+      </div>
+    );
+  }
+
   return (
     <div className="p-5">
-      {/* header */}
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="font-serif text-base font-medium text-[var(--chat-text-primary,#1a1a1a)]">
-          Quarterly performance
-        </h3>
-        <div className="flex rounded-md border border-[var(--chat-border,#e8e3db)] overflow-hidden text-xs">
-          <button
-            onClick={() => setRange('month')}
-            className={cn(
-              'px-3 py-1.5 transition-colors',
-              range === 'month'
-                ? 'bg-[var(--chat-teal,#21808d)] text-white'
-                : 'bg-[var(--chat-bg,#fcfaf6)] text-[var(--chat-text-secondary,#6b6157)] hover:bg-[var(--chat-bg-soft,#f5f0e8)]',
-            )}
-          >
-            This month
-          </button>
-          <button
-            onClick={() => setRange('last')}
-            className={cn(
-              'px-3 py-1.5 transition-colors',
-              range === 'last'
-                ? 'bg-[var(--chat-teal,#21808d)] text-white'
-                : 'bg-[var(--chat-bg,#fcfaf6)] text-[var(--chat-text-secondary,#6b6157)] hover:bg-[var(--chat-bg-soft,#f5f0e8)]',
-            )}
-          >
-            Last month
-          </button>
-        </div>
-      </div>
-
-      {/* stat grid */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        {(
-          [
-            {
-              label: 'Conversion',
-              stat: d.conversion,
-              values: [3.8, 4.0, 4.2, 4.5, 4.8, 4.6, 5.1, 5.42],
-              color: '#21808d',
-            },
-            {
-              label: 'Revenue (MRR)',
-              stat: d.revenue,
-              values: [190, 198, 205, 212, 220, 228, 238, 248],
-              color: '#da7756',
-            },
-            {
-              label: 'Active users',
-              stat: d.users,
-              values: [16.2, 16.5, 17.0, 17.4, 17.9, 18.2, 18.5, 18.9],
-              color: '#3a7daa',
-            },
-            {
-              label: 'Churn',
-              stat: d.churn,
-              values: [3.0, 2.8, 2.6, 2.5, 2.4, 2.3, 2.2, 2.1],
-              color: '#1b8a5a',
-            },
-          ] as const
-        ).map(({ label, stat, values, color }) => (
+      <div className="grid grid-cols-2 gap-3">
+        {kpis.map((kpi, i) => (
           <div
-            key={label}
+            key={kpi.label}
             className="rounded-lg border border-[var(--chat-border,#e8e3db)] bg-[var(--chat-bg-soft,#f5f0e8)] p-3"
           >
-            <div className="text-xs text-[var(--chat-text-secondary,#6b6157)] mb-1">{label}</div>
+            <div className="text-xs text-[var(--chat-text-secondary,#6b6157)] mb-1">
+              {kpi.label}
+            </div>
             <div className="font-mono text-lg font-semibold text-[var(--chat-text-primary,#1a1a1a)]">
-              {stat.v}
+              {kpi.value}
             </div>
-            <div
-              className={cn(
-                'text-xs mt-0.5',
-                stat.trend === 'up' ? 'text-emerald-600' : 'text-red-500',
-              )}
-            >
-              {stat.trend === 'up' ? '↑' : '↓'} {stat.d} vs last period
-            </div>
-            <div className="mt-2">
-              <Spark values={values as unknown as number[]} color={color} />
-            </div>
+            {kpi.delta && (
+              <div
+                className={cn(
+                  'text-xs mt-0.5',
+                  kpi.trend === 'up' ? 'text-emerald-600' : 'text-red-500',
+                )}
+              >
+                {kpi.trend === 'up' ? '↑' : '↓'} {kpi.delta}
+              </div>
+            )}
+            {kpi.sparkline && (
+              <div className="mt-2">
+                <Spark values={kpi.sparkline} color={kpi.color ?? COLORS[i % COLORS.length]!} />
+              </div>
+            )}
           </div>
         ))}
-      </div>
-
-      {/* progress bar */}
-      <div className="rounded-lg border border-[var(--chat-border,#e8e3db)] bg-[var(--chat-bg-soft,#f5f0e8)] p-3">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-[var(--chat-text-primary,#1a1a1a)]">
-            Q1 progress to plan
-          </span>
-          <span className="font-mono text-xs text-[var(--chat-text-secondary,#6b6157)]">
-            {d.q}% · $1.49M of $2.2M ARR
-          </span>
-        </div>
-        <div className="h-2 flex rounded-full overflow-hidden">
-          <div
-            style={{ width: `${d.q}%`, background: 'linear-gradient(90deg, #21808d, #da7756)' }}
-          />
-          <div style={{ width: `${100 - d.q}%` }} className="bg-[var(--chat-border,#e8e3db)]" />
-        </div>
-        <div className="flex justify-between mt-1.5 font-mono text-[10px] text-[var(--chat-text-tertiary,#9e9488)]">
-          <span>Jan 1</span>
-          <span>Mar 31</span>
-        </div>
       </div>
     </div>
   );
@@ -257,9 +154,8 @@ function KPIPreview({ range, setRange }: { range: RangeKey; setRange: (r: RangeK
 
 // ── code view ─────────────────────────────────────────────────────────────────
 
-function CodeView({ file }: { file: string }) {
-  const src = CODE_SAMPLES[file] ?? '// Empty file';
-  const lines = src.split('\n');
+function CodeView({ content }: { content: string }) {
+  const lines = content.split('\n');
   return (
     <div className="h-full overflow-auto p-4">
       <pre className="m-0 rounded-lg border border-[var(--chat-border,#e8e3db)] bg-[var(--chat-bg-soft,#f5f0e8)] p-4 font-mono text-xs leading-relaxed text-[var(--chat-text-primary,#1a1a1a)]">
@@ -276,11 +172,54 @@ function CodeView({ file }: { file: string }) {
   );
 }
 
+// ── markdown/document view ────────────────────────────────────────────────────
+
+function MarkdownView({ content }: { content: string }) {
+  return (
+    <div className="h-full overflow-auto p-6">
+      <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-[var(--chat-text-primary,#1a1a1a)]">
+        {content}
+      </pre>
+    </div>
+  );
+}
+
+// ── HTML / web view ───────────────────────────────────────────────────────────
+
+function HtmlView({ content }: { content: string }) {
+  const blob = new Blob([content], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  return (
+    <div className="h-full overflow-hidden">
+      <iframe
+        src={url}
+        className="h-full w-full border-0"
+        sandbox="allow-scripts allow-same-origin"
+        title="HTML preview"
+      />
+    </div>
+  );
+}
+
+// ── image view ────────────────────────────────────────────────────────────────
+
+function ImageView({ content }: { content: string }) {
+  const src =
+    content.startsWith('data:') || content.startsWith('http')
+      ? content
+      : `data:image/png;base64,${content}`;
+  return (
+    <div className="h-full overflow-auto p-6 flex items-center justify-center">
+      <img src={src} alt="artifact" className="max-w-full max-h-full object-contain rounded-lg" />
+    </div>
+  );
+}
+
 // ── share view ────────────────────────────────────────────────────────────────
 
-function ShareView() {
+function ShareView({ artifactId }: { artifactId?: string }) {
   const [copied, setCopied] = useState(false);
-  const link = 'https://agi.app/a/9f1c-kpi-dashboard';
+  const link = artifactId ? `https://agi.app/a/${artifactId}` : 'https://agi.app/a/draft';
 
   const handleCopy = () => {
     void navigator.clipboard.writeText(link);
@@ -370,7 +309,7 @@ function FileTree({
                 <span className="truncate">{node.name}</span>
               </button>
               {open[node.name] &&
-                node.children.map((child) => (
+                node.children!.map((child) => (
                   <button
                     key={child.name}
                     onClick={() => onSelect(child.name)}
@@ -412,6 +351,72 @@ function FileTree({
   );
 }
 
+// ── content renderer by type ──────────────────────────────────────────────────
+
+function resolveTabContent(
+  tab: Tab,
+  type: ArtifactType,
+  activeContent: string,
+  artifactId?: string,
+) {
+  if (tab === 'Share') return <ShareView artifactId={artifactId} />;
+
+  if (tab === 'Code') {
+    return <CodeView content={activeContent} />;
+  }
+
+  // Preview tab — render based artifact type
+  switch (type) {
+    case 'code':
+    case 'diagram':
+    case 'spreadsheet':
+    case 'presentation':
+      return <CodeView content={activeContent} />;
+    case 'web':
+      return <HtmlView content={activeContent} />;
+    case 'document':
+      return <MarkdownView content={activeContent} />;
+    case 'image':
+      return <ImageView content={activeContent} />;
+    case 'chart':
+      return <KPIPreview content={activeContent} />;
+    default:
+      return <MarkdownView content={activeContent} />;
+  }
+}
+
+// ── MCP banner ────────────────────────────────────────────────────────────────
+
+function McpBanner() {
+  const servers = useMcpStore((s) => s.servers);
+  const connected = servers.filter((s) => s.connected);
+
+  if (connected.length === 0) return null;
+
+  const names = connected.slice(0, 3).map((s) => s.name);
+  const extra = connected.length > 3 ? ` +${connected.length - 3}` : '';
+
+  return (
+    <div className="flex items-center gap-2 border-t border-[var(--chat-border,#e8e3db)] bg-[var(--chat-bg-soft,#f5f0e8)] px-4 py-1.5 text-xs text-[var(--chat-text-secondary,#6b6157)] shrink-0">
+      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+      <span>
+        Connected:{' '}
+        {names.map((n, i) => (
+          <span key={n}>
+            {i > 0 && ', '}
+            <span className="text-[var(--chat-text-primary,#1a1a1a)]">{n}</span>
+          </span>
+        ))}
+        {extra && <span>{extra}</span>}
+      </span>
+      <button className="ml-auto flex items-center gap-0.5 hover:text-[var(--chat-text-primary,#1a1a1a)] transition-colors">
+        Manage
+        <ChevronRight size={10} />
+      </button>
+    </div>
+  );
+}
+
 // ── ArtifactWorkspace ─────────────────────────────────────────────────────────
 
 export interface ArtifactWorkspaceProps {
@@ -425,31 +430,74 @@ type Tab = 'Preview' | 'Code' | 'Share';
 /**
  * v3 multi-file artifact workspace.
  *
- * Split-pane layout: left = chat (rendered by caller), right = file tree (160px)
- * + tabbed editor [Preview][Code][Share] + MCP-connected banner.
- *
- * This component owns the RIGHT pane only. The caller is responsible for
- * rendering the chat pane on the left inside a split-pane container.
- *
- * When `artifactId` is provided, data from `useArtifactStore` drives the title;
- * otherwise the demo KPI dashboard is shown.
+ * When `artifactId` is provided it loads the real artifact from useArtifactStore
+ * and renders based on artifact_type (code, document, web, chart, image, etc.).
+ * Multi-file artifacts use files array from metadata. Single-file uses artifact.content.
+ * MCP banner reads connected servers from useMcpStore.
  */
 export function ArtifactWorkspace({ artifactId, className, onClose }: ArtifactWorkspaceProps) {
-  const [activeFile, setActiveFile] = useState('App.tsx');
   const [tab, setTab] = useState<Tab>('Preview');
-  const [range, setRange] = useState<RangeKey>('month');
+  const [activeFile, setActiveFile] = useState('');
+  const [artifact, setArtifact] = useState<Artifact | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const { getArtifact } = useArtifactStore();
-  const [artifactTitle, setArtifactTitle] = useState<string | null>(null);
-  useEffect(() => {
+
+  const loadArtifact = useCallback(async () => {
     if (!artifactId) return;
-    void getArtifact(artifactId).then((a) => {
-      if (a) setArtifactTitle(a.title ?? null);
-    });
+    setIsLoading(true);
+    try {
+      const a = await getArtifact(artifactId);
+      setArtifact(a);
+      if (a) {
+        const meta = a.metadata as Record<string, unknown> | null;
+        const files = meta?.['files'] as Array<{ name: string; content: string }> | undefined;
+        if (files && files.length > 0) {
+          setActiveFile(files[0]!.name);
+        } else {
+          setActiveFile(a.title ?? 'artifact');
+        }
+      }
+    } finally {
+      setIsLoading(false);
+    }
   }, [artifactId, getArtifact]);
-  const title = artifactTitle ?? 'KPI dashboard';
+
+  useEffect(() => {
+    void loadArtifact();
+  }, [loadArtifact]);
+
+  // Derive file tree and file content map from real artifact
+  const { fileTree, fileMap } = (() => {
+    if (!artifact) return { fileTree: [] as FileNode[], fileMap: {} as Record<string, string> };
+    const meta = artifact.metadata as Record<string, unknown> | null;
+    const files = meta?.['files'] as
+      | Array<{ name: string; content: string; language?: string }>
+      | undefined;
+    if (files && files.length > 0) {
+      const tree = buildTreeFromFiles(files);
+      const map: Record<string, string> = {};
+      for (const f of files) map[f.name] = f.content;
+      return { fileTree: tree, fileMap: map };
+    }
+    const tree = singleFileTree(artifact);
+    return { fileTree: tree, fileMap: { [artifact.title ?? 'artifact']: artifact.content } };
+  })();
+
+  const fileCount = Object.keys(fileMap).length;
+  const title = artifact?.title ?? (artifactId ? 'Loading…' : 'No artifact selected');
+  const typeLabel = artifact?.artifact_type ?? '';
+  const activeContent = fileMap[activeFile] ?? artifact?.content ?? '';
 
   const TABS: Tab[] = ['Preview', 'Code', 'Share'];
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(activeContent);
+    } catch {
+      // clipboard unavailable
+    }
+  }, [activeContent]);
 
   return (
     <div
@@ -460,7 +508,13 @@ export function ArtifactWorkspace({ artifactId, className, onClose }: ArtifactWo
     >
       {/* file tree — 160px */}
       <div className="w-40 shrink-0 border-r border-[var(--chat-border,#e8e3db)] overflow-y-auto">
-        <FileTree nodes={DEMO_TREE} activeFile={activeFile} onSelect={setActiveFile} />
+        {fileTree.length > 0 ? (
+          <FileTree nodes={fileTree} activeFile={activeFile} onSelect={setActiveFile} />
+        ) : (
+          <div className="p-3 text-xs text-[var(--chat-text-tertiary,#9e9488)]">
+            {isLoading ? 'Loading…' : 'No files'}
+          </div>
+        )}
       </div>
 
       {/* main pane */}
@@ -488,12 +542,14 @@ export function ArtifactWorkspace({ artifactId, className, onClose }: ArtifactWo
           </div>
           <div className="flex items-center gap-0.5">
             <button
+              onClick={() => void loadArtifact()}
               className="rounded p-1.5 text-[var(--chat-text-secondary,#6b6157)] hover:bg-[var(--chat-bg-soft,#f5f0e8)] hover:text-[var(--chat-text-primary,#1a1a1a)] transition-colors"
               title="Refresh"
             >
               <RefreshCw size={12} />
             </button>
             <button
+              onClick={() => void handleCopy()}
               className="rounded p-1.5 text-[var(--chat-text-secondary,#6b6157)] hover:bg-[var(--chat-bg-soft,#f5f0e8)] hover:text-[var(--chat-text-primary,#1a1a1a)] transition-colors"
               title="Copy"
             >
@@ -522,30 +578,30 @@ export function ArtifactWorkspace({ artifactId, className, onClose }: ArtifactWo
           <span className="text-xs font-medium text-[var(--chat-text-primary,#1a1a1a)] truncate">
             {title}
           </span>
-          <span className="text-[10px] text-[var(--chat-text-tertiary,#9e9488)]">
-            interactive · 4 files
-          </span>
+          {typeLabel && (
+            <span className="text-[10px] text-[var(--chat-text-tertiary,#9e9488)]">
+              {typeLabel} · {fileCount} {fileCount === 1 ? 'file' : 'files'}
+            </span>
+          )}
         </div>
 
         {/* content area */}
         <div className="flex-1 overflow-auto">
-          {tab === 'Preview' && <KPIPreview range={range} setRange={setRange} />}
-          {tab === 'Code' && <CodeView file={activeFile} />}
-          {tab === 'Share' && <ShareView />}
+          {isLoading ? (
+            <div className="flex h-full items-center justify-center text-xs text-[var(--chat-text-muted,#9e9488)]">
+              Loading artifact…
+            </div>
+          ) : !artifact ? (
+            <div className="flex h-full items-center justify-center text-xs text-[var(--chat-text-muted,#9e9488)]">
+              {artifactId ? 'Artifact not found' : 'Open an artifact to preview it here'}
+            </div>
+          ) : (
+            resolveTabContent(tab, artifact.artifact_type, activeContent, artifact.id)
+          )}
         </div>
 
-        {/* MCP banner */}
-        <div className="flex items-center gap-2 border-t border-[var(--chat-border,#e8e3db)] bg-[var(--chat-bg-soft,#f5f0e8)] px-4 py-1.5 text-xs text-[var(--chat-text-secondary,#6b6157)] shrink-0">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          <span>
-            Connected: <span className="text-[var(--chat-text-primary,#1a1a1a)]">Gmail</span>,{' '}
-            <span className="text-[var(--chat-text-primary,#1a1a1a)]">Calendar</span>
-          </span>
-          <button className="ml-auto flex items-center gap-0.5 hover:text-[var(--chat-text-primary,#1a1a1a)] transition-colors">
-            Manage
-            <ChevronRight size={10} />
-          </button>
-        </div>
+        {/* MCP banner — shows connected servers */}
+        <McpBanner />
       </div>
     </div>
   );
