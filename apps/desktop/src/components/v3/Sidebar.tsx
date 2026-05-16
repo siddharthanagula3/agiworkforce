@@ -191,6 +191,7 @@ export function Sidebar({
       data-v3-sidebar=""
       data-collapsed={collapsed}
       data-mode={mode}
+      aria-label={t('sidebar.modes.chat')}
       style={{
         width: collapsed ? 64 : 240,
         minWidth: collapsed ? 64 : 240,

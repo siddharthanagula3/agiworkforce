@@ -59,16 +59,20 @@ export function ResponseActionRow({
         style={btnStyle(currentReaction === 'thumbsUp')}
         onClick={() => onReact?.('thumbsUp')}
         title={t('responseActions.helpful')}
+        aria-label={t('responseActions.helpful')}
+        aria-pressed={currentReaction === 'thumbsUp'}
       >
-        <ThumbsUp size={13} />
+        <ThumbsUp size={13} aria-hidden="true" />
       </button>
 
       <button
         style={btnStyle(currentReaction === 'thumbsDown')}
         onClick={() => onReact?.('thumbsDown')}
         title={t('responseActions.notHelpful')}
+        aria-label={t('responseActions.notHelpful')}
+        aria-pressed={currentReaction === 'thumbsDown'}
       >
-        <ThumbsDown size={13} />
+        <ThumbsDown size={13} aria-hidden="true" />
       </button>
 
       {onRegenerate && (
