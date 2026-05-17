@@ -3,20 +3,20 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'API Documentation',
   description:
-    'Complete API reference and developer documentation for AGI Workforce integrations. REST endpoints, authentication, webhooks, and SDK guides.',
+    'Complete API reference and developer documentation for AGI integrations. REST endpoints, authentication, webhooks, and SDK guides.',
   keywords: [
-    'AGI Workforce API',
+    'AGI API',
     'AI agent API',
     'developer documentation',
     'REST API reference',
-    'AGI Workforce SDK',
+    'AGI SDK',
     'API integration',
     'webhooks',
   ],
   openGraph: {
-    title: 'API Documentation | AGI Workforce',
+    title: 'API Documentation | AGI',
     description:
-      'Complete REST API reference for AGI Workforce. Authentication, endpoints, webhooks, and SDK guides.',
+      'Complete REST API reference for AGI. Authentication, endpoints, webhooks, and SDK guides.',
     type: 'website',
     url: 'https://agiworkforce.com/api-docs',
     images: [
@@ -24,15 +24,15 @@ export const metadata: Metadata = {
         url: '/app-preview.png',
         width: 1200,
         height: 630,
-        alt: 'AGI Workforce API Documentation',
+        alt: 'AGI API Documentation',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'API Documentation | AGI Workforce',
+    title: 'API Documentation | AGI',
     description:
-      'Complete REST API reference for AGI Workforce. Authentication, endpoints, webhooks, and SDK guides.',
+      'Complete REST API reference for AGI. Authentication, endpoints, webhooks, and SDK guides.',
     images: ['/app-preview.png'],
     creator: '@agiworkforce',
   },

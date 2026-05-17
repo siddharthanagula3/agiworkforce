@@ -196,7 +196,7 @@ const ContactSalesPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-background">
       <SEOHead
-        title="Contact Sales | Get Custom AI Employee Solutions | AGI Workforce"
+        title="Contact Sales | Get Custom AI Employee Solutions | AGI"
         description="Contact our sales team for custom AI employee solutions. Get personalized pricing, enterprise features, and dedicated support. Schedule a demo today."
         keywords={[
           'contact sales ai employees',
@@ -212,11 +212,11 @@ const ContactSalesPage: React.FC = () => {
         structuredData={{
           '@context': 'https://schema.org',
           '@type': 'ContactPage',
-          name: 'Contact Sales - AGI Workforce',
+          name: 'Contact Sales - AGI',
           description: 'Contact our sales team for custom AI employee solutions',
           mainEntity: {
             '@type': 'Organization',
-            name: 'AGI Workforce',
+            name: 'AGI',
             contactPoint: {
               '@type': 'ContactPoint',
               contactType: 'Sales',
@@ -241,7 +241,7 @@ const ContactSalesPage: React.FC = () => {
               Let&apos;s Talk About Your AI Automation Needs
             </h1>
             <p className="text-xl text-muted-foreground">
-              Speak with our sales team to learn how AGI Workforce can transform your business
+              Speak with our sales team to learn how AGI can transform your business
             </p>
           </motion.div>
         </div>
@@ -457,7 +457,7 @@ const ContactSalesPage: React.FC = () => {
                     </div>
                     <div>
                       <p className="text-sm font-medium">Schedule a personalized demo</p>
-                      <p className="text-xs text-muted-foreground">See AGI Workforce in action</p>
+                      <p className="text-xs text-muted-foreground">See AGI in action</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">

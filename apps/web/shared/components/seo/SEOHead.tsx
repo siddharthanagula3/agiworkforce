@@ -30,7 +30,7 @@ interface SEOHeadProps {
 }
 
 const SEOHead: React.FC<SEOHeadProps> = ({
-  title = 'AGI Workforce - AI Workforce Platform',
+  title = 'AGI - AI Workforce Platform',
   description:
     _description = 'Transform your business with AI employees. Hire, manage, and scale your AI workforce with our comprehensive automation platform.',
   structuredData,

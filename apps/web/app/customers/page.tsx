@@ -4,9 +4,9 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Customers | AGI Workforce',
+  title: 'Customers | AGI',
   description:
-    'Real teams using AGI Workforce. Case studies coming once we have written permission to share them.',
+    'Real teams using AGI. Case studies coming once we have written permission to share them.',
   alternates: { canonical: 'https://agiworkforce.com/customers' },
 };
 
@@ -18,7 +18,7 @@ export default function CustomersPage() {
         <section className="agi-page-hero">
           <h1 className="agi-page-h1">Customers.</h1>
           <p className="agi-page-lede">
-            Real teams use AGI Workforce.{' '}
+            Real teams use AGI.{' '}
             <strong>
               Case studies will appear here once we have written permission to share customer names
               and outcomes.

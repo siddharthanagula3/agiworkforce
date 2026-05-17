@@ -3,12 +3,12 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Changelog | AGI Workforce',
+  title: 'Changelog | AGI',
   description:
     'A dated archive of what shipped. CLI live. Desktop in active development. Honest about what has not.',
   alternates: { canonical: '/changelog' },
   openGraph: {
-    title: 'Changelog | AGI Workforce',
+    title: 'Changelog | AGI',
     description: 'A dated archive of what shipped. Honest about what has not.',
     type: 'website',
     url: 'https://agiworkforce.com/changelog',

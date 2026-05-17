@@ -4,8 +4,8 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Partners | AGI Workforce',
-  description: 'How to partner with AGI Workforce — integrations, resellers, and platform plays.',
+  title: 'Partners | AGI',
+  description: 'How to partner with AGI — integrations, resellers, and platform plays.',
   alternates: { canonical: 'https://agiworkforce.com/partners' },
 };
 
@@ -28,15 +28,15 @@ export default function PartnersPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">Integration builders</h3>
               <p className="agi-reason-p">
-                Building MCP plugins, model adapters, or skill packs for AGI Workforce. We help
-                publish to our directory once it ships.
+                Building MCP plugins, model adapters, or skill packs for AGI. We help publish to our
+                directory once it ships.
               </p>
             </li>
             <li className="agi-reason">
               <h3 className="agi-reason-h">Resellers</h3>
               <p className="agi-reason-p">
-                Selling AGI Workforce as part of a larger consulting or implementation engagement.
-                Volume pricing on Enterprise contracts.
+                Selling AGI as part of a larger consulting or implementation engagement. Volume
+                pricing on Enterprise contracts.
               </p>
             </li>
             <li className="agi-reason">

@@ -4,7 +4,7 @@
  * BYOK (Bring Your Own Key) store.
  * Keys are stored in localStorage via Zustand persist.
  * They never leave the device — the web app passes them directly to AI provider APIs
- * on the client side and does not send them to AGI Workforce servers.
+ * on the client side and does not send them to AGI servers.
  */
 
 import { create } from 'zustand';
