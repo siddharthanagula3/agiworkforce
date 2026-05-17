@@ -1,4 +1,4 @@
-import { Page } from '@playwright/test';
+import { Page, Route } from '@playwright/test';
 
 export class MockLLMProvider {
   private page: Page;
@@ -24,11 +24,19 @@ export class MockLLMProvider {
 
   async setup(): Promise<void> {
     try {
-      await this.page.route('**/api/chat/completions', (route) => {
+      // Shared handler — used for both `/api/chat/completions` (legacy proxy)
+      // and `/api/llm/v1/chat/completions` (WebRuntime → cloudApi.sendCloudMessage,
+      // the actual path the v3 ChatInterface fires from when running in browser
+      // mode under Playwright). Without the second pattern, send goes to the
+      // real cloud endpoint, returns 4xx, and no assistant message ever
+      // renders — which broke self-healing.spec.ts after Wave 4+5's WebRuntime
+      // wired through cloudApi.
+      const handleChatCompletions = (route: Route) => {
         try {
           const request = route.request();
           const postData = request.postDataJSON();
           const prompt = postData?.messages?.[0]?.content || '';
+          const isStreaming = postData?.stream === true;
           const oneShotFailure = this.consumeFailureForPrompt(prompt);
 
           if (oneShotFailure) {
@@ -41,6 +49,34 @@ export class MockLLMProvider {
           }
 
           const response = this.getResponseForPrompt(prompt);
+
+          if (isStreaming) {
+            // Emit OpenAI-compat SSE chunks so cloudApi's SSE parser pumps
+            // content into the chat store as assistant message deltas.
+            const chunkBody = JSON.stringify({
+              id: 'mock-chatcmpl-' + Date.now(),
+              object: 'chat.completion.chunk',
+              created: Math.floor(Date.now() / 1000),
+              model: 'mock-model',
+              choices: [
+                { index: 0, delta: { role: 'assistant', content: response }, finish_reason: null },
+              ],
+            });
+            const doneBody = JSON.stringify({
+              id: 'mock-chatcmpl-' + Date.now(),
+              object: 'chat.completion.chunk',
+              created: Math.floor(Date.now() / 1000),
+              model: 'mock-model',
+              choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+            });
+            route.fulfill({
+              status: 200,
+              contentType: 'text/event-stream',
+              headers: { 'Cache-Control': 'no-cache', Connection: 'keep-alive' },
+              body: `data: ${chunkBody}\n\ndata: ${doneBody}\n\ndata: [DONE]\n\n`,
+            });
+            return;
+          }
 
           route.fulfill({
             status: 200,
@@ -71,8 +107,14 @@ export class MockLLMProvider {
           console.error('[Mock] Error handling chat/completions route:', error);
           route.abort('failed');
         }
-      });
+      };
+
+      await this.page.route('**/api/chat/completions', handleChatCompletions);
       this.registeredRoutes.add('**/api/chat/completions');
+
+      // Wave 4+5: WebRuntime → cloudApi.sendCloudMessage targets this path.
+      await this.page.route('**/api/llm/v1/chat/completions', handleChatCompletions);
+      this.registeredRoutes.add('**/api/llm/v1/chat/completions');
 
       await this.page.route('**/api/chat/stream', async (route) => {
         try {
