@@ -1,4 +1,4 @@
-# Vision — AGI Workforce
+# Vision — AGI
 
 > Lifted from `~/.claude/projects/.../memory/product-vision.md` (originally written 2026-03-21). Preserved here in repo so it's the durable source.
 
