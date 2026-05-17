@@ -1,7 +1,7 @@
 'use client';
 
 import { I18nextProvider } from 'react-i18next';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Toaster } from 'sonner';
 import i18n from './i18n';
 import { QueryProvider } from '@shared/stores/query-client';
@@ -10,30 +10,16 @@ import { ThemeProvider } from '@shared/components/ThemeProvider';
 import { OfflineIndicator } from '@/components/OfflineIndicator';
 import { seoService } from '@core/monitoring/seo-optimizer';
 
+// i18n is initialized synchronously at module import time (see app/i18n/index.ts).
+// No async gate needed — rendering immediately prevents the blank-screen flash
+// that occurred when this component returned null on its first render cycle.
 export default function Providers({ children }: { children: React.ReactNode }) {
-  const [isReady, setIsReady] = useState(false);
-
-  useEffect(() => {
-    // Ensure i18n is initialized
-    const initI18n = async () => {
-      if (i18n && !i18n.isInitialized) {
-        await i18n.init();
-      }
-      setIsReady(true);
-    };
-    initI18n();
-  }, []);
-
   // Initialize SEO service for marketing pages (structured data, meta tags)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       seoService.initialize();
     }
   }, []);
-
-  if (!isReady) {
-    return null;
-  }
 
   return (
     <QueryProvider>
