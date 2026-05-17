@@ -116,6 +116,77 @@ export class MockLLMProvider {
       await this.page.route('**/api/llm/v1/chat/completions', handleChatCompletions);
       this.registeredRoutes.add('**/api/llm/v1/chat/completions');
 
+      // Cloud chat backend — useChat.sendMessage aborts at line 396 if no
+      // activeConversationId is set. The desktop chat store auto-creates the
+      // conversation via cloudApi.createCloudConversation → POST /api/cloud-chat.
+      // Without this mock the fetch fails, conversation creation throws,
+      // convId stays null, and the LLM mock above is never reached.
+      await this.page.route('**/api/cloud-chat', (route) => {
+        const method = route.request().method();
+        if (method === 'POST') {
+          let body: { title?: string; model?: string } = {};
+          try {
+            body = route.request().postDataJSON() ?? {};
+          } catch {
+            // empty body — fine
+          }
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              conversation: {
+                id: 'mock-conv-' + Date.now(),
+                title: body.title ?? 'E2E Test',
+                model: body.model ?? 'mock-model',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                user_id: 'e2e-mock-user-id',
+              },
+            }),
+          });
+          return;
+        }
+        // GET — list conversations
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ conversations: [] }),
+        });
+      });
+      this.registeredRoutes.add('**/api/cloud-chat');
+
+      // Single-conversation fetch + message-list endpoints.
+      await this.page.route('**/api/cloud-chat/**', (route) => {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            conversation: {
+              id: 'mock-conv-existing',
+              title: 'E2E Test',
+              model: 'mock-model',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              user_id: 'e2e-mock-user-id',
+            },
+            messages: [],
+          }),
+        });
+      });
+      this.registeredRoutes.add('**/api/cloud-chat/**');
+
+      // CSRF token endpoint — getAuthHeaders fetches this in web mode. Failure
+      // is non-fatal but slow (no timeout on the fetch); mocking keeps the
+      // auth path deterministic and fast.
+      await this.page.route('**/api/csrf', (route) => {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ token: 'mock-csrf-token' }),
+        });
+      });
+      this.registeredRoutes.add('**/api/csrf');
+
       await this.page.route('**/api/chat/stream', async (route) => {
         try {
           const request = route.request();
