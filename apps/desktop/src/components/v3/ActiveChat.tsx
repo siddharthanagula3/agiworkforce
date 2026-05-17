@@ -16,6 +16,7 @@ import { ResponseActionRow } from './ResponseActionRow';
 function UserBubble({ message }: { message: EnhancedMessage }) {
   return (
     <div
+      data-role="user"
       data-v3-msg-user=""
       style={{
         display: 'flex',
@@ -71,6 +72,7 @@ function AiResponseRow({
 
   return (
     <div
+      data-role="assistant"
       data-v3-msg-ai=""
       style={{
         display: 'flex',
