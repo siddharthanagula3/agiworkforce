@@ -1,19 +1,19 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Pricing Plans | AGI Workforce',
+  title: 'Pricing Plans | AGI',
   description:
-    'Choose the perfect plan for your AI automation needs. From hobbyists to enterprises, AGI Workforce has a plan for you. Start free or upgrade anytime.',
+    'Choose the perfect plan for your AI automation needs. From hobbyists to enterprises, AGI has a plan for you. Start free or upgrade anytime.',
   keywords: [
     'AI pricing',
     'AI agent plans',
-    'AGI Workforce pricing',
+    'AGI pricing',
     'AI automation cost',
     'BYOK AI',
     'AI subscription',
   ],
   openGraph: {
-    title: 'Pricing Plans | AGI Workforce',
+    title: 'Pricing Plans | AGI',
     description:
       'Affordable AI agent automation. Hobby, Pro, and Max plans. Start free or upgrade anytime.',
     type: 'website',
@@ -23,13 +23,13 @@ export const metadata: Metadata = {
         url: '/app-preview.png',
         width: 1200,
         height: 630,
-        alt: 'AGI Workforce Pricing Plans',
+        alt: 'AGI Pricing Plans',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Pricing Plans | AGI Workforce',
+    title: 'Pricing Plans | AGI',
     description:
       'Affordable AI agent automation plans. Start free, upgrade when ready. No credit card required.',
     images: ['/app-preview.png'],

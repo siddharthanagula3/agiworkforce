@@ -4,9 +4,9 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'API docs | AGI Workforce',
+  title: 'API docs | AGI',
   description:
-    'API reference for the AGI Workforce gateway. OpenAI-compatible endpoints, BYOK across providers.',
+    'API reference for the AGI gateway. OpenAI-compatible endpoints, BYOK across providers.',
   alternates: { canonical: 'https://agiworkforce.com/api-docs' },
 };
 

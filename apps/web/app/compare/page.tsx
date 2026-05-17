@@ -4,9 +4,9 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Comparative reviews — Claude, ChatGPT, Gemini, Perplexity vs AGI Workforce',
+  title: 'Comparative reviews — Claude, ChatGPT, Gemini, Perplexity vs AGI',
   description:
-    'Honest reviews of the major AI tools and where AGI Workforce sits. The case for us is the routing across all of them.',
+    'Honest reviews of the major AI tools and where AGI sits. The case for us is the routing across all of them.',
   alternates: { canonical: 'https://agiworkforce.com/compare' },
 };
 
@@ -51,8 +51,8 @@ export default function ComparePage() {
           <h1 className="agi-page-h1">Comparative reviews.</h1>
           <p className="agi-page-lede">
             The other AI tools are not bad. Several are excellent.{' '}
-            <strong>The case for AGI Workforce is the routing across all of them</strong> — that
-            lane was empty until we shipped. These reviews are honest. Where we lose, we say so.
+            <strong>The case for AGI is the routing across all of them</strong> — that lane was
+            empty until we shipped. These reviews are honest. Where we lose, we say so.
           </p>
         </section>
         <section className="agi-section">
@@ -82,7 +82,7 @@ export default function ComparePage() {
           </div>
         </section>
         <section className="agi-section">
-          <p className="agi-section-eyebrow">Where AGI Workforce sits</p>
+          <p className="agi-section-eyebrow">Where AGI sits</p>
           <table className="agi-ledger">
             <thead>
               <tr>
@@ -91,7 +91,7 @@ export default function ComparePage() {
                 <th>ChatGPT</th>
                 <th>Gemini</th>
                 <th>Perplexity</th>
-                <th>AGI Workforce</th>
+                <th>AGI</th>
               </tr>
             </thead>
             <tbody>

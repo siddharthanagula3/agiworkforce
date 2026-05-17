@@ -80,15 +80,15 @@ impl ByokConfig {
 // Cloud config
 // ─────────────────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct CloudConfig {
     pub base_url: String,
     pub byok: ByokConfig,
     pub default_model: String,
 }
 
-impl CloudConfig {
-    pub fn default() -> Self {
+impl Default for CloudConfig {
+    fn default() -> Self {
         Self {
             base_url: "https://cloud.agiworkforce.com/api/v1".into(),
             byok: ByokConfig::from_env(),

@@ -21,8 +21,6 @@
 #![cfg(target_os = "linux")]
 #![allow(dead_code)]
 
-use anyhow::Result;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LinuxSandboxPreset {
     ReadOnly,

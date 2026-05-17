@@ -38,10 +38,10 @@ const NAV_ITEMS: {
 ];
 
 /**
- * Custom drawer content matching the AGI Workforce mobile spec.
+ * Custom drawer content for the mobile app.
  *
  * Layout:
- *   Header: "AGI Workforce" + [+] new chat button
+ *   Header: brand wordmark + [+] new chat button
  *   Nav items (6)
  *   Recents section (last 5 conversations)
  *   User profile card at bottom
@@ -59,10 +59,10 @@ export function DrawerContent(_props: DrawerContentComponentProps) {
   const handleNewChat = useCallback(async () => {
     try {
       const id = await createConversation('New Chat');
-      router.push(`/(app)/chat/${id}` as Parameters<typeof router.push>[0]);
+      router.push({ pathname: '/(app)/chat/[id]' as const, params: { id } });
     } catch {
       // Navigate to chat list on failure
-      router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
+      router.push({ pathname: '/(app)/(tabs)/chat' as const });
     }
   }, [createConversation, router]);
 
@@ -75,7 +75,7 @@ export function DrawerContent(_props: DrawerContentComponentProps) {
 
   const handleConversationPress = useCallback(
     (id: string) => {
-      router.navigate(`/(app)/chat/${id}` as Parameters<typeof router.navigate>[0]);
+      router.navigate({ pathname: '/(app)/chat/[id]' as const, params: { id } });
     },
     [router],
   );
@@ -126,7 +126,7 @@ export function DrawerContent(_props: DrawerContentComponentProps) {
         style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}
       >
         <Text className="text-[17px] font-semibold" style={{ color: colors.textPrimary }}>
-          AGI Workforce
+          AGI
         </Text>
         <Pressable
           onPress={handleNewChat}

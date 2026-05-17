@@ -5,7 +5,7 @@ import { AgiChatDemo } from '../components/agi/AgiChatDemo';
 import { MARKETING } from '../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'AGI Workforce: Beyond one model. Beyond one surface.',
+  title: 'AGI: Beyond one model. Beyond one surface.',
   description:
     'Beyond one model. Beyond one surface. AGI in your hands. ' +
     `${MARKETING.providers.display} AI providers in one thread, ` +
@@ -28,17 +28,17 @@ export const metadata: Metadata = {
     'data privacy',
   ],
   openGraph: {
-    title: 'AGI Workforce: Beyond one model. Beyond one surface.',
+    title: 'AGI: Beyond one model. Beyond one surface.',
     description:
       'Beyond one model. Beyond one surface. AGI in your hands. ' +
       `${MARKETING.providers.display} AI providers in one thread.`,
     type: 'website',
     url: 'https://agiworkforce.com',
-    images: [{ url: '/app-preview.png', width: 1200, height: 630, alt: 'AGI Workforce' }],
+    images: [{ url: '/app-preview.png', width: 1200, height: 630, alt: 'AGI' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AGI Workforce: Beyond one model. Beyond one surface.',
+    title: 'AGI: Beyond one model. Beyond one surface.',
     description:
       'Beyond one model. Beyond one surface. AGI in your hands. ' +
       `${MARKETING.providers.display} providers, ${MARKETING.surfaces.display} surfaces, one workforce.`,
@@ -49,7 +49,7 @@ export const metadata: Metadata = {
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
-  name: 'AGI Workforce',
+  name: 'AGI',
   applicationCategory: 'BusinessApplication',
   operatingSystem: 'macOS, Windows, Linux',
   featureList: [

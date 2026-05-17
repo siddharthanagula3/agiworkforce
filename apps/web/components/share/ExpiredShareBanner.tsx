@@ -16,7 +16,7 @@ export function ExpiredShareBanner() {
           href="/"
           className="rounded-lg bg-blue-600 px-6 py-3 text-sm font-medium text-white hover:bg-blue-500"
         >
-          Go to AGI Workforce
+          Go to AGI
         </Link>
       </div>
     </div>

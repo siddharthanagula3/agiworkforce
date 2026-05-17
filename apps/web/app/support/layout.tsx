@@ -3,9 +3,9 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Support',
   description:
-    'Get technical support for AGI Workforce. Report bugs, request features, check system status, or contact our support team directly.',
+    'Get technical support for AGI. Report bugs, request features, check system status, or contact our support team directly.',
   keywords: [
-    'AGI Workforce support',
+    'AGI support',
     'AI agent help',
     'technical support',
     'bug report',
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     'contact support',
   ],
   openGraph: {
-    title: 'Support | AGI Workforce',
+    title: 'Support | AGI',
     description:
       'Need help? Contact our support team, report bugs, or request features. We respond fast.',
     type: 'website',
@@ -23,13 +23,13 @@ export const metadata: Metadata = {
         url: '/app-preview.png',
         width: 1200,
         height: 630,
-        alt: 'AGI Workforce Support',
+        alt: 'AGI Support',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Support | AGI Workforce',
+    title: 'Support | AGI',
     description:
       'Need help? Contact our support team, report bugs, or request features. We respond fast.',
     images: ['/app-preview.png'],

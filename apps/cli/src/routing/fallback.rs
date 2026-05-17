@@ -17,20 +17,17 @@ use crate::errors::CliError;
 /// transient errors (rate limit, network, server 5xx) trigger the chain.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
+#[derive(Default)]
 pub enum FallbackOn {
     /// Only rotate on rate-limit responses. Default.
     RateLimit,
     /// Rotate on rate-limit + network + server errors.
+    #[default]
     Transient,
     /// Rotate on every error. Use sparingly — masks bugs.
     Any,
 }
 
-impl Default for FallbackOn {
-    fn default() -> Self {
-        Self::Transient
-    }
-}
 
 /// Ordered list of models to try. `primaries[0]` is the user's first choice;
 /// each subsequent entry is consulted in order on a classified error.

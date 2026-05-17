@@ -1,9 +1,10 @@
 'use client';
 
 import { useMemo } from 'react';
-import { ChatInterface, HostBridgeContext, type ChatHostBridge } from '@agiworkforce/unified-chat';
+import { HostBridgeContext, type ChatHostBridge } from '@agiworkforce/unified-chat';
 import { WebChatRuntime } from '@/lib/runtime/WebChatRuntime';
 import { useChatStore } from '@/stores/chatStore';
+import { WebShellV3 } from '../v3/WebShellV3';
 
 /** Adapts the existing web chatStore into the unified-chat host bridge contract. */
 function useWebHostBridge(): ChatHostBridge {
@@ -46,11 +47,11 @@ function useWebChatRuntime(): WebChatRuntime {
 }
 
 /**
- * Feature-flagged variant of the web /chat route that mounts the unified-chat
- * ChatInterface. Activated via `?unified=1`.
+ * Full v3 web chat surface.
  *
- * The existing WebChatPage keeps running at /chat (unchanged). Side-by-side
- * rendering is used for parity comparison before migration.
+ * Mounts the WebShellV3 layout (WebSidebar + ChatInterface + SearchModalCmdK)
+ * with the unified-chat host bridge wired to the existing web chatStore.
+ * Activated via ?unified=1 on /chat.
  */
 export default function UnifiedChatPage() {
   const runtime = useWebChatRuntime();
@@ -59,7 +60,7 @@ export default function UnifiedChatPage() {
   return (
     <HostBridgeContext.Provider value={hostBridge}>
       <div className="flex h-full w-full overflow-hidden">
-        <ChatInterface runtime={runtime} hostBridge={hostBridge} />
+        <WebShellV3 runtime={runtime} hostBridge={hostBridge} />
       </div>
     </HostBridgeContext.Provider>
   );

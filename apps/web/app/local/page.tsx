@@ -3,7 +3,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Local — Run AI offline, free forever | AGI Workforce',
+  title: 'Local — Run AI offline, free forever | AGI',
   description:
     'No internet. No API keys. No quotas. No per-token cost. Run any open-weight model on your laptop with Ollama or LM Studio.',
   alternates: { canonical: 'https://agiworkforce.com/local' },

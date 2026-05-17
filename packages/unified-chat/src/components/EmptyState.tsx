@@ -19,7 +19,12 @@ import { useUIStore } from '../stores/uiStore';
  *   ❌ Tour overlays
  *   ❌ "Try one of these prompts" header label
  */
-export function EmptyState() {
+export interface EmptyStateProps {
+  /** Override the default "What can I help with?" headline. */
+  headline?: string;
+}
+
+export function EmptyState({ headline }: EmptyStateProps = {}) {
   const tier = useTierStore(selectTier);
   const openSettings = useUIStore((s) => s.openSettings);
 
@@ -56,7 +61,7 @@ export function EmptyState() {
           fontFamily: "'Crimson Pro', 'IBM Plex Serif', Georgia, 'Times New Roman', serif",
         }}
       >
-        What can I help with?
+        {headline ?? 'What can I help with?'}
       </h1>
     </div>
   );

@@ -4,9 +4,8 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Data Processing Agreement | AGI Workforce',
-  description:
-    'How to obtain a Data Processing Agreement (DPA) with AGI Workforce, and what it covers.',
+  title: 'Data Processing Agreement | AGI',
+  description: 'How to obtain a Data Processing Agreement (DPA) with AGI, and what it covers.',
   alternates: { canonical: 'https://agiworkforce.com/dpa' },
 };
 
@@ -38,7 +37,7 @@ export default function DpaPage() {
               </tr>
               <tr>
                 <td>Subject matter</td>
-                <td>Provision of the AGI Workforce service per your subscription.</td>
+                <td>Provision of the AGI service per your subscription.</td>
               </tr>
               <tr>
                 <td>Subprocessors</td>

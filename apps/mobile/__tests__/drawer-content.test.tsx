@@ -162,9 +162,9 @@ describe('DrawerContent', () => {
     }
   });
 
-  it('renders the AGI Workforce header', () => {
+  it('renders the AGI header', () => {
     const { getByText } = renderDrawer();
-    expect(getByText('AGI Workforce')).toBeTruthy();
+    expect(getByText('AGI')).toBeTruthy();
   });
 
   it('renders the new chat button with correct accessibility label', () => {
@@ -307,7 +307,10 @@ describe('DrawerContent', () => {
     const { getByLabelText } = renderDrawer();
 
     fireEvent.press(getByLabelText('Open conversation: First Chat'));
-    expect(mockNavigate).toHaveBeenCalledWith('/(app)/chat/conv-1');
+    expect(mockNavigate).toHaveBeenCalledWith({
+      pathname: '/(app)/chat/[id]',
+      params: { id: 'conv-1' },
+    });
   });
 
   // ---- New chat ----
@@ -323,7 +326,10 @@ describe('DrawerContent', () => {
 
     await waitFor(() => {
       expect(mockCreateConversation).toHaveBeenCalledWith('New Chat');
-      expect(mockPush).toHaveBeenCalledWith('/(app)/chat/new-conv-id');
+      expect(mockPush).toHaveBeenCalledWith({
+        pathname: '/(app)/chat/[id]',
+        params: { id: 'new-conv-id' },
+      });
     });
   });
 
@@ -337,7 +343,7 @@ describe('DrawerContent', () => {
     fireEvent.press(newChatButtons[0]);
 
     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('/(app)/(tabs)/chat');
+      expect(mockPush).toHaveBeenCalledWith({ pathname: '/(app)/(tabs)/chat' });
     });
   });
 });

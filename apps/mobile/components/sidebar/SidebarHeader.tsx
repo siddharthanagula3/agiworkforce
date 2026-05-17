@@ -19,10 +19,10 @@ export function SidebarHeader({ onSearchChange }: SidebarHeaderProps) {
   const handleNewChat = useCallback(async () => {
     try {
       await createConversation('New Chat');
-      router.push('/(app)');
+      router.push({ pathname: '/(app)' as const });
     } catch {
       // If creation fails, still navigate to home where the input is
-      router.push('/(app)');
+      router.push({ pathname: '/(app)' as const });
     }
   }, [createConversation, router]);
 
@@ -42,7 +42,7 @@ export function SidebarHeader({ onSearchChange }: SidebarHeaderProps) {
   return (
     <View className="px-4 pt-14 pb-3 gap-3 border-b border-white/5">
       <View className="flex-row items-center justify-between">
-        <Text variant="subheading">AGI Workforce</Text>
+        <Text variant="subheading">AGI</Text>
         <Pressable
           onPress={handleNewChat}
           className="p-2 rounded-lg active:bg-white/5"

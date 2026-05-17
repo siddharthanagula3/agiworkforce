@@ -1,12 +1,12 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Download | AGI Workforce',
+  title: 'Download | AGI',
   description:
-    'Download AGI Workforce for macOS, Windows, and Linux. A native desktop AI assistant with browser automation, multi-model chat, and AI skills. Free during early access.',
+    'Download AGI for macOS, Windows, and Linux. A native desktop AI assistant with browser automation, multi-model chat, and AI skills. Free during early access.',
   keywords: [
     'download AI app',
-    'AGI Workforce download',
+    'AGI download',
     'AI desktop app',
     'macOS AI',
     'Windows AI',
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     'desktop automation',
   ],
   openGraph: {
-    title: 'Download AGI Workforce Desktop App',
+    title: 'Download AGI Desktop App',
     description:
       'Get the native desktop AI assistant for macOS, Windows, and Linux. Free to download during early access.',
     type: 'website',
@@ -24,13 +24,13 @@ export const metadata: Metadata = {
         url: '/app-preview.png',
         width: 1200,
         height: 630,
-        alt: 'Download AGI Workforce for macOS, Windows, and Linux',
+        alt: 'Download AGI for macOS, Windows, and Linux',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Download AGI Workforce Desktop App',
+    title: 'Download AGI Desktop App',
     description:
       'Native AI desktop assistant for macOS, Windows, and Linux. Free during early access.',
     images: ['/app-preview.png'],
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
 const downloadJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
-  name: 'AGI Workforce',
+  name: 'AGI',
   applicationCategory: 'BusinessApplication',
   operatingSystem: 'macOS, Windows, Linux',
   downloadUrl: 'https://agiworkforce.com/download',

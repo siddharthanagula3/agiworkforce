@@ -8,5 +8,5 @@ import { Redirect } from 'expo-router';
  * the Home tab still works correctly.
  */
 export default function HomeTabRedirect() {
-  return <Redirect href={'/(app)/(tabs)/chat' as '/(app)'} />;
+  return <Redirect href={{ pathname: '/(app)/(tabs)/chat' as const }} />;
 }

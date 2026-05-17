@@ -36,7 +36,16 @@ jest.mock('react-native-reanimated', () => {
 jest.mock('lucide-react-native', () => {
   const { Text } = require('react-native');
   const icon = () => <Text>icon</Text>;
-  return { Monitor: icon, X: icon, Code: icon, PenLine: icon, Search: icon };
+  // Export real lucide names; TaskChips imports Image (not ImageIcon) and Code2
+  return {
+    Monitor: icon,
+    X: icon,
+    Code2: icon,
+    PenLine: icon,
+    Search: icon,
+    Image: icon,
+    Film: icon,
+  };
 });
 
 const mockStorageGetString = jest.fn().mockReturnValue(undefined);
@@ -178,30 +187,33 @@ describe('ChatEmptyState', () => {
   });
 
   describe('prompt chips', () => {
-    it('renders 3 prompt chip buttons', () => {
+    it('renders 6 prompt chip buttons', () => {
       const { getByLabelText } = render(<ChatEmptyState />);
-      expect(getByLabelText('Code prompt')).toBeTruthy();
-      expect(getByLabelText('Write prompt')).toBeTruthy();
-      expect(getByLabelText('Research prompt')).toBeTruthy();
+      expect(getByLabelText('Code mode')).toBeTruthy();
+      expect(getByLabelText('Write mode')).toBeTruthy();
+      expect(getByLabelText('Research mode')).toBeTruthy();
+      expect(getByLabelText('Image mode')).toBeTruthy();
+      expect(getByLabelText('Video mode')).toBeTruthy();
+      expect(getByLabelText('Computer mode')).toBeTruthy();
     });
 
     it('calls onSelectPrompt with correct text when Code chip is tapped', () => {
       const onSelectPrompt = jest.fn();
       const { getByLabelText } = render(<ChatEmptyState onSelectPrompt={onSelectPrompt} />);
-      fireEvent.press(getByLabelText('Code prompt'));
+      fireEvent.press(getByLabelText('Code mode'));
       expect(onSelectPrompt).toHaveBeenCalledWith('Help me write a function that...');
     });
 
     it('calls onSelectPrompt with correct text when Write chip is tapped', () => {
       const onSelectPrompt = jest.fn();
       const { getByLabelText } = render(<ChatEmptyState onSelectPrompt={onSelectPrompt} />);
-      fireEvent.press(getByLabelText('Write prompt'));
+      fireEvent.press(getByLabelText('Write mode'));
       expect(onSelectPrompt).toHaveBeenCalledWith('Write a professional email about...');
     });
 
     it('does not crash when onSelectPrompt is not provided', () => {
       const { getByLabelText } = render(<ChatEmptyState />);
-      expect(() => fireEvent.press(getByLabelText('Code prompt'))).not.toThrow();
+      expect(() => fireEvent.press(getByLabelText('Code mode'))).not.toThrow();
     });
   });
 

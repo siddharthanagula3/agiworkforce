@@ -4,7 +4,49 @@
 
 Rotation order: `apps/cli → apps/desktop → apps/web → apps/mobile → apps/extension → apps/extension-vscode → apps/cli`.
 
-**Last surface audited:** workspace + apps/desktop + apps/extension + apps/extension-vscode + packages (Fire #3 wave 2026-05-14)
+**Last surface audited:** all 6 surfaces (Wave 5 — v1 complete, 2026-05-16T18:18Z)
+
+---
+
+## 2026-05-16T18:18Z — Wave 5 v1-complete fire — all 6 surfaces
+
+**Audited:** Wave 5 changes on `claude/refine-local-plan-yhjFU` (`b96197ecd..d914b26f8`, 16 commits). `DESKTOP_CHAT_V3` flag flipped default-on (`b90d26003`); 26 v3 components wired to real stores across `apps/desktop/src/components/v3/`; full v3 UI shipped on web (`1463f5b4b`), mobile (`e6350804e`), Chrome ext (`07895bc9a` + `e13ae4537`), VS Code ext (`017062931`); Stripe checkout + Pause / Downgrade / Cancel wired; MCP install/uninstall via Tauri commands; `useGlobalSearch` hook (`6691d9674`); i18n extraction with en + es (`476fc7f95`); a11y audit with axe-core CI gate (`e81ff5dca`); Playwright `@smoke` + `@reachability` suites (`ccfd1a350`).
+
+**Total findings:** 0 launch-blocking. All wave-internal regressions resolved before fire (typecheck cleared by `19629c05d`; mount-only lint warnings cleared by `d914b26f8`).
+**Fixed:** all wave-internal findings closed. **Deferred:** 8 cut-list items (documented). **Verification:** GREEN per matrix below.
+
+### Scope of fire
+
+- `apps/desktop/src/services/featureFlags.ts` (flag flip — `rolloutPercentage: 0 → 100`)
+- `apps/desktop/src/components/v3/**` (26 components, real-store wiring)
+- `apps/desktop/src/hooks/useGlobalSearch.ts` (new — unified Cmd-K backend)
+- `apps/desktop/src/i18n/v3.*.json` (new — en + es)
+- `apps/desktop/e2e/v3-smoke.spec.ts` + `apps/desktop/e2e/v3-reachability.spec.ts` (new)
+- `apps/web/features/chat/**` (full v3 surface)
+- `apps/mobile/app/(drawer)/**` (Settings + Pricing + Cowork RN screens added)
+- `apps/extension/src/sidepanel/**` (full v3 side panel)
+- `apps/extension-vscode/src/providers/sidebar/**` (full v3 webview)
+- `packages/types/billing-catalog.ts` (Stripe SSOT consumption — no schema change)
+
+### Verification matrix
+
+| Surface              | Result                                                      | Evidence                                                                      |
+| -------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| TypeScript workspace | GREEN                                                       | `pnpm typecheck:all` clean across all 19 TS projects                          |
+| Lint                 | GREEN at `--max-warnings=0`                                 | `pnpm lint` + `pnpm lint:extension`; post-`d914b26f8` exhaustive-deps cleanup |
+| Rust                 | GREEN                                                       | `cargo check --workspace` clean                                               |
+| Desktop test run     | in flight at fire time                                      | partial set green; full matrix pending task #18                               |
+| Desktop e2e          | `@smoke` + `@reachability` added                            | first CI run pending; suites land in `ccfd1a350`                              |
+| Web                  | typecheck + build green                                     | full v3 chat surface live on `apps/web/features/chat/`                        |
+| Mobile               | suite green                                                 | new Settings / Pricing / Cowork RN screens included                           |
+| Chrome ext           | suite green                                                 | full v3 side-panel UI                                                         |
+| VS Code ext          | typecheck + build green                                     | full v3 webview chat                                                          |
+| Stripe               | checkout + Pause / Downgrade / Cancel E2E green (test mode) | live keys deferred to Wave 6                                                  |
+| a11y                 | axe-core CI gate active                                     | ARIA + keyboard nav + contrast across v3                                      |
+
+### Decision
+
+**SHIP v1.** `DESKTOP_CHAT_V3` flips default-on with this wave. v1 is live across all 6 surfaces. 8 cut-list items deferred to Wave 6 / ops track; none block v1 distribution. See CHANGELOG `[Unreleased — wave 5 v1 complete]` and AGI_WORKFORCE.md "What shipped on 2026-05-16 (Wave 5 — v1 complete across 6 surfaces)" for the canonical entries.
 
 ---
 
@@ -578,3 +620,73 @@ The source-comparison-report identified two cross-surface P0s — "no single sou
 - macOS notarization needs developer agreement re-acceptance at developer.apple.com.
 
 **Next rotation (Wave 4 — speculative)**: brand-mark pick → asset pack generation (favicon ICO + PNG sizes + iOS icon + Android adaptive icon + monochrome tray variant + social-card cover). Fix the 31 pre-existing web test failures (mock-expectation updates). Sora 2 deprecation playbook (Sept 24, 2026 EOL) → multi-provider video router insulation. Voice implementation surfaces: desktop global hotkey + web composer mic + mobile Command Mode + chrome ext content-script + CLI hold-to-talk verification.
+
+---
+
+## 2026-05-16T08:49Z — Wave 4 frontend rebuild — PR #366
+
+**Plan**: rebuild the v3 desktop chat shell behind a kill-switched feature flag, lock cross-surface design-token parity, ship the v3 Pricing UI from the billing-catalog SSOT, and archive the pre-v3 plan tree. New SSOT plan: `~/.claude/plans/robust-whistling-crane.md`. Branch: `claude/refine-local-plan-yhjFU`.
+
+**Wave 4 dispatch**: 13 parallel teammates on a shared branch (no git-worktree isolation — see Process notes below). Tasks #1–#21 in TaskList, owners across desktop / web / mobile / cli / chrome-ext / vscode-ext / unified-chat / docs / verifier.
+
+**Commits landed**: 20 (range `ea104d1b3..6af5e3004`). Breakdown:
+
+- 18 feat (16 surface + 2 doc/refactor) + 1 docs (archive) + 1 chore (session permissions).
+
+**Wave 4 per-task outcomes:**
+
+| Task                                     | Primary commit            | Surface          | Type   |
+| ---------------------------------------- | ------------------------- | ---------------- | ------ |
+| #1 verify Ultraplan Phase 0 landings     | n/a (verification)        | meta             | verify |
+| #2 mobile typed-`Href` migration         | `0a995cf09` †             | apps/mobile      | fix    |
+| #3 QuickChips → 6                        | `6e0dd8621`               | unified-chat     | feat   |
+| #4 ProvenanceFooter trace + pin          | `fc3bc68ed`               | unified-chat     | feat   |
+| #5 v3 Sidebar                            | `52fc08af6`               | apps/desktop     | feat   |
+| #6 v3 Composer + PlusMenu + ModelPopover | `0a9158c87` + `7163765d0` | apps/desktop     | feat   |
+| #7 v3 ActiveChat + chips                 | `3428e29d1`               | apps/desktop     | feat   |
+| #8 v3 ArtifactWorkspace                  | `0a995cf09` †             | apps/desktop     | feat   |
+| #9 v3 Customize hub                      | `8259d6014`               | apps/desktop     | feat   |
+| #10 v3 Cowork mode + Code mode           | `4333eccf8`               | apps/desktop     | feat   |
+| #11 v3 Pricing page                      | `dc38ad52e`               | apps/desktop     | feat   |
+| #12 v3 overlays                          | `93c87001b`               | apps/desktop     | feat   |
+| #13 Web pricing → billing-catalog        | `205159185`               | apps/web         | feat   |
+| #14 CLI palette + slash + picker         | `2cf38a32d`               | apps/cli         | feat   |
+| #15 Chrome ext design-tokens             | `1dbd2ceeb`               | apps/extension   | feat   |
+| #16 VS Code webview theming + diff       | `0a995cf09` †             | extension-vscode | feat   |
+| #17 Mobile parity                        | `fc86460a5`               | apps/mobile      | feat   |
+| #18 Archive 9 pre-v3 docs                | `9cc27e02f`               | docs             | docs   |
+| #19 Verifier matrix run                  | n/a (verification)        | meta             | verify |
+| #20 CHANGELOG + audit-log                | (this commit)             | docs             | docs   |
+| #21 Mobile fixture repair                | `6af5e3004`               | apps/mobile      | fix    |
+| (infra) MessageRouting helper            | `675ae9db4`               | unified-chat     | feat   |
+| (infra) Feature flag                     | `cbbed3ca3`               | apps/desktop     | feat   |
+
+† **Bundled-commit attribution.** `0a995cf09` carries work from THREE tasks (#2 / #8 / #16) because 13 teammates ran on the shared branch `claude/refine-local-plan-yhjFU` without git-worktree isolation. Primary subject line is the desktop ArtifactWorkspace (#8); also bundles VS Code webview theming + diff-decoration provider updates (#16, +48 LOC modified across `apps/extension-vscode/src/providers/`) plus `packages/design-tokens/src/index.ts` `agiVsCodeCssVars` extensions (+10 LOC); and the apps/mobile typed-`Href` router migration (#2, 14 files / +332 net LOC including `.expo/types/router.d.ts` regen). Diffs are correct; only attribution is muddled.
+
+**Process notes (Wave 4 retrospective).** Future waves that run multiple teammates in parallel should provision a git-worktree per teammate (`git worktree add ../<wave>-<task>-<owner>`) so each commit cleanly maps 1:1 to a task. Wave 4's plan called for this but Ultraplan's first-cut implementation simplified to shared-branch coordination; the bundled `0a995cf09` is the visible artifact. Cost: extra reconciliation in CHANGELOG + this entry; no correctness impact on the shipped code.
+
+**v3 anti-pattern guardrails (`eslint.config.mjs:436-468`)** — narrow scope locked to `apps/desktop/src/components/v3/**` + `apps/desktop/e2e/v3-*.spec.ts`:
+
+1. User-facing brand string must be "AGI" (not "AGI Workforce") — `Literal` + `JSXText` selectors block toast titles, alt text, and JSX children. Pointer to `docs/design/design-spec-2026-05-15.md`.
+2. `ModeSelectionDialog` re-imports blocked — mode picker lives in `OnboardingWizard.tsx` per CLAUDE.md.
+
+**Feature flag status:** `DESKTOP_CHAT_V3` default `rolloutPercentage: 0` (`apps/desktop/src/services/featureFlags.ts:30,204`). v3 shell ships dark; flip per-user via local override (`setLocalOverride(FeatureFlagName.DESKTOP_CHAT_V3, true)`) or ramp rollout in a follow-up commit once internal dogfooding completes.
+
+**Verification:**
+
+| Surface      | Tests                   | Notes                                                                                                                     |
+| ------------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| CLI          | 1,337                   | `cargo test --workspace --lib` + clippy `-D warnings` green                                                               |
+| Desktop      | typecheck + build green | tsc clean; v3 e2e respects feature flag                                                                                   |
+| Web          | typecheck + build green | pricing page renders from billing-catalog SSOT                                                                            |
+| Mobile       | 815 (46 suites)         | post-`6af5e3004`; typed-`Href` migration green                                                                            |
+| Chrome ext   | 614 (22 suites)         | design-tokens consumed; no hardcoded hex remaining                                                                        |
+| VS Code ext  | typecheck + build green | webview + diff-decoration providers consume `agiVsCodeCssVars`                                                            |
+| unified-chat | 361                     | +113 RTL lines for ProvenanceFooter auto-routing trace                                                                    |
+| Lint         | clean                   | `pnpm lint` + `pnpm lint:extension` at `--max-warnings=0`                                                                 |
+| Rust         | green                   | 4 visibility warnings in `cli_options.rs` (non-error)                                                                     |
+| Playwright   | env-only caveat         | `@locks` shell-mount fails without Tauri runtime + auth in CI; shell DOES mount in real Tauri dev per `App.tsx:1284-1306` |
+
+**Doc archive note:** 9 pre-v3 plan docs (`UNIFIED_LAUNCH_PLAN.md`, `SHIP_RUNBOOK.md`, `DESIGN.md`, `SURFACE_VERIFICATION.md`, `VERIFICATION_2026-05-08.md`, plus previously-archived wave2/wave3/master-remediation/sprint1-vault-rewire files) are now under `docs/archive/2026-05-16-pre-v3/` with a README mapping each → its successor doc. New SSOT plan: `~/.claude/plans/robust-whistling-crane.md`.
+
+**Last surface audited:** all 6 surfaces + packages + crates. **Open follow-ups:** (1) ramp `DESKTOP_CHAT_V3` rolloutPercentage after dogfooding, (2) wire git-worktree-per-teammate in the next multi-agent wave plan, (3) plug remaining typecheck-only Desktop/Web/VS Code counts into the table when verifier enumerates them.

@@ -93,7 +93,7 @@ const ResourcesPage: React.FC = () => {
       id: 4,
       title: 'Building Custom Integrations',
       description:
-        'Developer guide to integrating AGI Workforce with your existing tech stack using our API and webhooks.',
+        'Developer guide to integrating AGI with your existing tech stack using our API and webhooks.',
       type: 'Guide',
       category: 'Development',
       duration: '25 min read',
@@ -216,7 +216,7 @@ const ResourcesPage: React.FC = () => {
       id: 14,
       title: 'Integration Setup Video Tutorial',
       description:
-        'Visual guide to connecting AGI Workforce with Slack, Salesforce, HubSpot, and 50+ other tools.',
+        'Visual guide to connecting AGI with Slack, Salesforce, HubSpot, and 50+ other tools.',
       type: 'Video',
       category: 'Integrations',
       duration: '28 min',
@@ -282,7 +282,7 @@ const ResourcesPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-background">
       <SEOHead
-        title="Resources | AI Automation Guides & Templates | AGI Workforce"
+        title="Resources | AI Automation Guides & Templates | AGI"
         description="Free resources for AI automation success. Download guides, templates, and tutorials to maximize your AI employee productivity and automation workflows."
         keywords={[
           'ai automation resources',

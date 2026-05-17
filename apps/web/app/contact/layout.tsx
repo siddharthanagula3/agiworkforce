@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Contact Us | AGI Workforce',
+  title: 'Contact Us | AGI',
   description:
-    'Get in touch with AGI Automation LLC. Have questions about AGI Workforce? Our support team in Austin, TX is ready to help you with any inquiries.',
+    'Get in touch with AGI Automation LLC. Have questions about AGI? Our support team in Austin, TX is ready to help you with any inquiries.',
   keywords: [
-    'contact AGI Workforce',
+    'contact AGI',
     'AGI Automation support',
     'AI automation help',
     'customer support',
@@ -15,25 +15,24 @@ export const metadata: Metadata = {
     canonical: 'https://agiworkforce.com/contact',
   },
   openGraph: {
-    title: 'Contact Us | AGI Workforce',
-    description:
-      'Have questions about AGI Workforce? Our support team is ready to help. Contact us today.',
+    title: 'Contact Us | AGI',
+    description: 'Have questions about AGI? Our support team is ready to help. Contact us today.',
     url: 'https://agiworkforce.com/contact',
-    siteName: 'AGI Workforce',
+    siteName: 'AGI',
     type: 'website',
     images: [
       {
         url: '/app-preview.png',
         width: 1200,
         height: 630,
-        alt: 'Contact AGI Workforce',
+        alt: 'Contact AGI',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Contact Us | AGI Workforce',
-    description: 'Have questions about AGI Workforce? Get in touch with our team.',
+    title: 'Contact Us | AGI',
+    description: 'Have questions about AGI? Get in touch with our team.',
     images: ['/app-preview.png'],
     creator: '@agiworkforce',
   },
@@ -44,7 +43,7 @@ const jsonLd = {
   '@type': 'ContactPage',
   '@id': 'https://agiworkforce.com/contact',
   url: 'https://agiworkforce.com/contact',
-  name: 'Contact AGI Workforce',
+  name: 'Contact AGI',
   description: 'Get in touch with AGI Automation LLC support team.',
   mainEntity: {
     '@type': 'Organization',

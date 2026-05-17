@@ -31,6 +31,7 @@
   },
   "dependencies": {
     "@agiworkforce/browser-tool": "workspace:*",
+    "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/runtime": "workspace:*",
     "dompurify": "^3.3.3"
   },

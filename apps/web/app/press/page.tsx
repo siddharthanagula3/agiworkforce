@@ -4,9 +4,9 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Press | AGI Workforce',
+  title: 'Press | AGI',
   description:
-    'Press materials and contact for AGI Workforce — what we are, who runs it, and how to reach us.',
+    'Press materials and contact for AGI — what we are, who runs it, and how to reach us.',
   alternates: { canonical: 'https://agiworkforce.com/press' },
 };
 
@@ -18,8 +18,7 @@ export default function PressPage() {
         <section className="agi-page-hero">
           <h1 className="agi-page-h1">Press.</h1>
           <p className="agi-page-lede">
-            What AGI Workforce is and who runs it, in language a journalist or analyst can paste
-            verbatim.{' '}
+            What AGI is and who runs it, in language a journalist or analyst can paste verbatim.{' '}
             <strong>
               For interviews, demos, or quotes, email{' '}
               <a href="mailto:contact@agiworkforce.com" style={{ color: 'var(--agi-ink)' }}>
@@ -32,12 +31,12 @@ export default function PressPage() {
         <section className="agi-section">
           <p className="agi-section-eyebrow">The one-paragraph version</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
-            AGI Workforce is a multi-provider AI agent platform. The same chat surface runs across
-            desktop, web, mobile, CLI, Chrome extension, and VS Code — wired into 10+ AI providers
+            AGI is a multi-provider AI agent platform. The same chat surface runs across desktop,
+            web, mobile, CLI, Chrome extension, and VS Code — wired into 10+ AI providers
             (Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, plus local
             via Ollama and LM Studio). Users bring their own API keys, switch models
-            mid-conversation, and keep token-level history across providers. AGI Workforce is built
-            by AGI Automation LLC, an Austin-based independent shop.
+            mid-conversation, and keep token-level history across providers. AGI is built by AGI
+            Automation LLC, an Austin-based independent shop.
           </p>
         </section>
         <section className="agi-section">

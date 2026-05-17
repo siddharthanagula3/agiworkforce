@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'FAQ | AGI Workforce',
+  title: 'FAQ | AGI',
   description: 'Frequently asked questions — providers, BYOK, local mode, pricing, security.',
   alternates: { canonical: 'https://agiworkforce.com/faq' },
 };
@@ -19,7 +19,7 @@ const QA: { q: string; a: string }[] = [
     a: 'You bring your own API key. We encrypt it on your device with AES-256-GCM. Your usage is billed by the provider, not us. Zero markup.',
   },
   {
-    q: 'Can I run AGI Workforce fully offline?',
+    q: 'Can I run AGI fully offline?',
     a: 'Yes. Local mode on the desktop app uses Ollama or LM Studio. No API keys, no quotas, no internet. Free forever.',
   },
   {

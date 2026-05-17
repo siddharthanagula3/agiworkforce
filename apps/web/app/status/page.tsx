@@ -4,8 +4,8 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Status | AGI Workforce',
-  description: 'Operational status of AGI Workforce services — gateway, web, signaling, providers.',
+  title: 'Status | AGI',
+  description: 'Operational status of AGI services — gateway, web, signaling, providers.',
   alternates: { canonical: 'https://agiworkforce.com/status' },
 };
 
@@ -45,7 +45,7 @@ export default function StatusPage() {
         <section className="agi-page-hero">
           <h1 className="agi-page-h1">Status.</h1>
           <p className="agi-page-lede">
-            Operational status of every AGI Workforce service.{' '}
+            Operational status of every AGI service.{' '}
             <strong>
               For active incidents, follow{' '}
               <a

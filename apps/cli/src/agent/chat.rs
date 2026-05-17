@@ -697,7 +697,7 @@ message -- revise and call `update_plan` again.\n\n"
                 };
                 let futures = runnable.iter().map(|tc| {
                     let legacy = tool_call_to_legacy(tc);
-                    let opts = exec_opts.clone();
+                    let opts = exec_opts;
                     let id = tc.id.clone();
                     let name = tc.name.clone();
                     let args = tc.arguments.clone();
