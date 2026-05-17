@@ -51,7 +51,9 @@ const DEFAULT_API_BASE: &str = "https://agiworkforce.com";
 /// `packages/types/src/model-catalog.ts`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum UserTier {
+    #[default]
     Free,
     Hobby,
     Pro,
@@ -103,11 +105,6 @@ impl UserTier {
     }
 }
 
-impl Default for UserTier {
-    fn default() -> Self {
-        UserTier::Free
-    }
-}
 
 impl std::fmt::Display for UserTier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
