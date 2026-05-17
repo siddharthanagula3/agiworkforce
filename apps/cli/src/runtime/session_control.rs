@@ -208,8 +208,7 @@ fn resolve_managed_session_reference_in(
 ) -> Result<ResolvedManagedSessionReference> {
     match reference {
         ManagedSessionReference::Latest => latest_managed_session_in(base_dir)?
-            .ok_or_else(|| anyhow::anyhow!("No managed sessions are available"))
-            .map(|resolved| resolved),
+            .ok_or_else(|| anyhow::anyhow!("No managed sessions are available")),
         ManagedSessionReference::SessionId(session_id) => {
             let path = find_session_path_in(base_dir, &session_id).ok_or_else(|| {
                 anyhow::anyhow!(

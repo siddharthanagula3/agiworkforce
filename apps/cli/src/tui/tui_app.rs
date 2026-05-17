@@ -1083,7 +1083,7 @@ fn handle_slash_popup_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
                     // Show model picker for /model
                     if cmd_name == "/model" {
                         let all = crate::model_catalog::catalog().all();
-                        app.model_picker.open(&all, &app.model_name.clone());
+                        app.model_picker.open(all, &app.model_name.clone());
                     }
                     return InputAction::None;
                 }
@@ -1130,7 +1130,7 @@ fn handle_model_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     use super::widgets::model_picker::{handle_key, PickerAction};
 
     let all_models = crate::model_catalog::catalog().all();
-    let action = handle_key(&mut app.model_picker, key, &all_models);
+    let action = handle_key(&mut app.model_picker, key, all_models);
 
     match action {
         PickerAction::Nothing => InputAction::None,
@@ -1351,7 +1351,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 // Open the interactive model picker overlay.
                 let all = crate::model_catalog::catalog().all();
                 let current = app.model_name.clone();
-                app.model_picker.open(&all, &current);
+                app.model_picker.open(all, &current);
                 SlashResult::SystemMessage(String::new()) // picker UI handles confirmation
             } else {
                 app.session.switch_model(arg);

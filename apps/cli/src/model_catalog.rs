@@ -270,7 +270,7 @@ pub fn fast_completion_model(provider: &str) -> String {
                         .and_then(|canonical| api_model_id_for(catalog, canonical))
                 })
         })
-        .unwrap_or_else(|| pick_fallback_default_model())
+        .unwrap_or_else(pick_fallback_default_model)
 }
 
 /// Return the API model ID for the economy tier's first allowed model, as read

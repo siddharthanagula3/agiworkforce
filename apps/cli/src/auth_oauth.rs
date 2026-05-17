@@ -133,7 +133,7 @@ fn capture_redirect(listener: TcpListener, expected_state: &str) -> Result<Strin
         .next()
         .and_then(|line| line.split_whitespace().nth(1))
         .ok_or_else(|| anyhow!("malformed HTTP request"))?;
-    let qs = path.splitn(2, '?').nth(1).ok_or_else(|| anyhow!("no query string"))?;
+    let qs = path.split_once('?').map(|x| x.1).ok_or_else(|| anyhow!("no query string"))?;
     let mut code: Option<String> = None;
     let mut state: Option<String> = None;
     for kv in qs.split('&') {
