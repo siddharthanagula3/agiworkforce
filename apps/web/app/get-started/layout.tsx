@@ -1,12 +1,12 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Getting Started | AGI Workforce',
+  title: 'Getting Started | AGI',
   description:
-    'Download AGI Workforce and start chatting with AI in seconds. No setup required - just open the app and describe what you want done.',
+    'Download AGI and start chatting with AI in seconds. No setup required - just open the app and describe what you want done.',
   openGraph: {
-    title: 'Getting Started | AGI Workforce',
-    description: 'Download and start using AGI Workforce in seconds. No configuration needed.',
+    title: 'Getting Started | AGI',
+    description: 'Download and start using AGI in seconds. No configuration needed.',
     type: 'website',
     url: 'https://agiworkforce.com/get-started',
     images: [
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
         url: '/app-preview.png',
         width: 1200,
         height: 630,
-        alt: 'Getting Started with AGI Workforce',
+        alt: 'Getting Started with AGI',
       },
     ],
   },

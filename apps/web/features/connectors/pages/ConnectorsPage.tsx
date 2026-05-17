@@ -396,7 +396,7 @@ const CONNECTORS: Connector[] = [
     iconEmoji: '🎙️',
   },
 
-  // AGI Workforce Exclusive
+  // AGI Exclusive
   {
     id: 'local-filesystem',
     name: 'Local Filesystem',

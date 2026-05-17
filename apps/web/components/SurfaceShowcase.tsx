@@ -29,7 +29,7 @@ function DesktopMockup() {
             <div className="h-2.5 w-2.5 rounded-full bg-yellow-500/70" />
             <div className="h-2.5 w-2.5 rounded-full bg-green-500/70" />
           </div>
-          <span className="ml-2 text-[10px] text-zinc-500">AGI Workforce</span>
+          <span className="ml-2 text-[10px] text-zinc-500">AGI</span>
         </div>
         {/* App content */}
         <div className="flex h-80 rounded-b-lg bg-[#111]">
@@ -104,7 +104,7 @@ function DesktopMockup() {
             {/* Input bar */}
             <div className="border-t border-white/5 px-3 py-2">
               <div className="flex items-center rounded-lg bg-white/5 px-2.5 py-1.5">
-                <span className="text-[8px] text-zinc-600">Message AGI Workforce...</span>
+                <span className="text-[8px] text-zinc-600">Message AGI...</span>
                 <div className="ml-auto h-4 w-4 rounded-md bg-[#c8892a]/30 p-0.5">
                   <div className="h-full w-full rounded-sm bg-[#c8892a]" />
                 </div>
@@ -247,7 +247,7 @@ function VsCodeMockup() {
       <div className="rounded-xl border border-white/10 bg-[#1e1e1e] shadow-2xl overflow-hidden">
         {/* Title bar */}
         <div className="flex items-center bg-[#2d2d2d] px-3 py-1.5">
-          <span className="text-[10px] text-zinc-500">main.tsx - AGI Workforce - VS Code</span>
+          <span className="text-[10px] text-zinc-500">main.tsx - AGI - VS Code</span>
         </div>
         <div className="flex h-80">
           {/* Activity bar */}
@@ -414,7 +414,7 @@ function ExtensionMockup() {
           {/* Extension side panel */}
           <div className="w-48 border-l border-amber-500/20 bg-[#141310]/95 p-3 backdrop-blur-xl">
             <div className="mb-1 flex items-center justify-between">
-              <span className="text-[10px] font-bold text-amber-400">AGI Workforce</span>
+              <span className="text-[10px] font-bold text-amber-400">AGI</span>
               <span className="text-[8px] text-zinc-600">✕</span>
             </div>
             <div className="mb-3 rounded-md bg-amber-500/5 px-2 py-1">
@@ -461,7 +461,7 @@ function MobileMockup() {
         <div className="mx-1 flex flex-1 flex-col rounded-[22px] bg-[#111] p-2.5">
           {/* Header */}
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-[8px] font-bold text-white">AGI Workforce</span>
+            <span className="text-[8px] font-bold text-white">AGI</span>
             <div className="h-3 w-3 rounded-full bg-emerald-500/20">
               <div className="mx-auto mt-0.5 h-2 w-2 rounded-full bg-emerald-400 animate-[pulse_2s_infinite]" />
             </div>

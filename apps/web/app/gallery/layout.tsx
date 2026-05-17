@@ -3,18 +3,18 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Gallery',
   description:
-    'See what AGI Workforce can do. Real examples of AI automation, code generation, research, and desktop control from real users.',
+    'See what AGI can do. Real examples of AI automation, code generation, research, and desktop control from real users.',
   keywords: [
     'AI automation examples',
-    'AGI Workforce gallery',
+    'AGI gallery',
     'AI agent demos',
     'automation showcase',
     'AI use case examples',
   ],
   openGraph: {
-    title: 'Gallery | AGI Workforce',
+    title: 'Gallery | AGI',
     description:
-      'Real examples of AGI Workforce in action - code generation, research, automation, and more.',
+      'Real examples of AGI in action - code generation, research, automation, and more.',
     type: 'website',
     url: 'https://agiworkforce.com/gallery',
     images: [
@@ -22,15 +22,15 @@ export const metadata: Metadata = {
         url: '/app-preview.png',
         width: 1200,
         height: 630,
-        alt: 'AGI Workforce Gallery',
+        alt: 'AGI Gallery',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Gallery | AGI Workforce',
+    title: 'Gallery | AGI',
     description:
-      'Real examples of AGI Workforce in action - code generation, research, automation, and more.',
+      'Real examples of AGI in action - code generation, research, automation, and more.',
     images: ['/app-preview.png'],
     creator: '@agiworkforce',
   },
@@ -50,7 +50,7 @@ export default function GalleryLayout({ children }: { children: React.ReactNode 
             '@type': 'CollectionPage',
             name: 'Gallery',
             description:
-              'See what AGI Workforce can do. Real examples of AI automation, code generation, research, and desktop control.',
+              'See what AGI can do. Real examples of AI automation, code generation, research, and desktop control.',
             url: 'https://agiworkforce.com/gallery',
           }),
         }}

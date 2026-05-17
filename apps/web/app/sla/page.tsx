@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'SLA | AGI Workforce',
+  title: 'SLA | AGI',
   description: 'Service level agreement — uptime targets, response times, and credit terms.',
   alternates: { canonical: 'https://agiworkforce.com/sla' },
 };

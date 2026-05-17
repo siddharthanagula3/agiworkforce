@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Legal | AGI Workforce',
+  title: 'Legal | AGI',
   description:
     'Index of legal documents — terms, privacy, DPA, SLA, subprocessors, refund policy, accessibility, and trust posture.',
   alternates: { canonical: 'https://agiworkforce.com/legal' },
@@ -63,7 +63,7 @@ export default function LegalPage() {
         <section className="agi-page-hero">
           <h1 className="agi-page-h1">Legal.</h1>
           <p className="agi-page-lede">
-            The full set of legal and trust documents for AGI Workforce.{' '}
+            The full set of legal and trust documents for AGI.{' '}
             <strong>
               We claim only what we have completed. Anything else is on the roadmap with no date
               until there&rsquo;s a date.

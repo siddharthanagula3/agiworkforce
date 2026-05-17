@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Careers | AGI Workforce',
+  title: 'Careers | AGI',
   description: 'AGI Automation LLC is small and intentional. We do not have open roles right now.',
   alternates: { canonical: 'https://agiworkforce.com/careers' },
 };
@@ -28,8 +28,8 @@ export default function CareersPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">Use the product</h3>
               <p className="agi-reason-p">
-                Best way to get on our radar is to ship something real with AGI Workforce — agents,
-                MCP plugins, downstream tooling.
+                Best way to get on our radar is to ship something real with AGI — agents, MCP
+                plugins, downstream tooling.
               </p>
               <Link href="/download" className="agi-cta-ghost" style={{ marginTop: 4 }}>
                 Install →

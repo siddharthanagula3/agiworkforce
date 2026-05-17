@@ -4,9 +4,9 @@ import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Sales teams — AGI Workforce',
+  title: 'Sales teams — AGI',
   description:
-    'How revenue teams use AGI Workforce: research, outreach drafts, deal-room briefings, and pipeline triage across every AI provider.',
+    'How revenue teams use AGI: research, outreach drafts, deal-room briefings, and pipeline triage across every AI provider.',
   alternates: { canonical: 'https://agiworkforce.com/use-cases/sales-teams' },
 };
 

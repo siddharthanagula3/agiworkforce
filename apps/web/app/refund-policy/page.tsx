@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Refund policy | AGI Workforce',
+  title: 'Refund policy | AGI',
   description: 'When refunds are issued and how to request one.',
   alternates: { canonical: 'https://agiworkforce.com/refund-policy' },
 };

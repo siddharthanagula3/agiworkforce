@@ -1,5 +1,5 @@
 /**
- * File Operations Hook for AGI Workforce.
+ * File Operations Hook for AGI.
  *
  * Provides a comprehensive interface to file system operations via Tauri commands.
  * Handles loading states, error handling, and provides user-friendly feedback.

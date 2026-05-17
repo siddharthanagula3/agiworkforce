@@ -4,9 +4,9 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Terms of service | AGI Workforce',
+  title: 'Terms of service | AGI',
   description:
-    'Terms of service for AGI Workforce — license, account responsibilities, payment, termination.',
+    'Terms of service for AGI — license, account responsibilities, payment, termination.',
   alternates: { canonical: 'https://agiworkforce.com/terms' },
 };
 
@@ -18,7 +18,7 @@ export default function TermsPage() {
         <section className="agi-page-hero">
           <h1 className="agi-page-h1">Terms of service.</h1>
           <p className="agi-page-lede">
-            These terms govern your use of AGI Workforce.{' '}
+            These terms govern your use of AGI.{' '}
             <strong>
               Plain language summary at top, formal terms below. By installing the software or
               creating an account you accept these terms.
@@ -31,9 +31,9 @@ export default function TermsPage() {
           <p className="agi-section-eyebrow">01 — License</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             AGI Automation LLC grants you a non-exclusive, non-transferable, revocable license to
-            install and use AGI Workforce on devices you own or control, subject to these terms. The
-            software is proprietary; you may not redistribute, decompile, or reverse-engineer it
-            except as permitted by applicable law.
+            install and use AGI on devices you own or control, subject to these terms. The software
+            is proprietary; you may not redistribute, decompile, or reverse-engineer it except as
+            permitted by applicable law.
           </p>
         </section>
 
@@ -68,10 +68,10 @@ export default function TermsPage() {
         <section className="agi-section">
           <p className="agi-section-eyebrow">04 — Acceptable use</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
-            Don&rsquo;t use AGI Workforce to break the law, harass people, generate child sexual
-            abuse material, or build weapons. Don&rsquo;t reverse-engineer or stress-test the
-            service without our written consent. We reserve the right to suspend accounts that
-            violate this section.
+            Don&rsquo;t use AGI to break the law, harass people, generate child sexual abuse
+            material, or build weapons. Don&rsquo;t reverse-engineer or stress-test the service
+            without our written consent. We reserve the right to suspend accounts that violate this
+            section.
           </p>
         </section>
 
@@ -100,7 +100,7 @@ export default function TermsPage() {
             07 — Warranty disclaimer and Limitation of Liability
           </p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
-            <strong>Warranty disclaimer:</strong> AGI Workforce is provided &ldquo;AS IS&rdquo; and
+            <strong>Warranty disclaimer:</strong> AGI is provided &ldquo;AS IS&rdquo; and
             &ldquo;AS-IS&rdquo; without warranty of any kind, express or implied. We disclaim all
             implied warranties including merchantability, fitness for a particular purpose, and
             non-infringement, to the maximum extent permitted by law.
@@ -121,13 +121,13 @@ export default function TermsPage() {
           </p>
           <p className="agi-page-lede" style={{ marginTop: 16 }}>
             <strong>Arbitration:</strong> any dispute arising out of or relating to these terms or
-            your use of AGI Workforce will be resolved by binding individual arbitration
-            administered by the American Arbitration Association under its Commercial Arbitration
-            Rules, seated in Travis County, Texas. You waive any right to a jury trial or to
-            participate in a class action. You may opt out of arbitration within 30 days of first
-            accepting these terms by emailing contact@agiworkforce.com with subject
-            &ldquo;Arbitration opt-out.&rdquo; If arbitration is unavailable, disputes will be
-            resolved in the state or federal courts located in Travis County, Texas.
+            your use of AGI will be resolved by binding individual arbitration administered by the
+            American Arbitration Association under its Commercial Arbitration Rules, seated in
+            Travis County, Texas. You waive any right to a jury trial or to participate in a class
+            action. You may opt out of arbitration within 30 days of first accepting these terms by
+            emailing contact@agiworkforce.com with subject &ldquo;Arbitration opt-out.&rdquo; If
+            arbitration is unavailable, disputes will be resolved in the state or federal courts
+            located in Travis County, Texas.
           </p>
         </section>
 
@@ -137,9 +137,9 @@ export default function TermsPage() {
             <strong>Indemnification:</strong> you agree to indemnify, defend, and hold harmless AGI
             Automation LLC, its officers, employees, and agents from any claims, damages, or
             expenses (including reasonable attorneys&rsquo; fees) arising from (a) your use or
-            misuse of AGI Workforce, (b) content you submit through the service, (c) your violation
-            of these terms or applicable law, or (d) your infringement of any third-party right. We
-            reserve the right to assume the exclusive defense of any matter for which you owe us
+            misuse of AGI, (b) content you submit through the service, (c) your violation of these
+            terms or applicable law, or (d) your infringement of any third-party right. We reserve
+            the right to assume the exclusive defense of any matter for which you owe us
             indemnification.
           </p>
         </section>

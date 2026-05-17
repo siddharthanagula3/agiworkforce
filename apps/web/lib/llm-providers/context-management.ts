@@ -2,7 +2,7 @@ import 'server-only';
 import { getModelMetadataById, normalizeModelId } from '@agiworkforce/types';
 
 /**
- * Context Management Module for AGI Workforce Web App
+ * Context Management Module for AGI Web App
  *
  * Provides server-side context compaction and context editing support
  * for Anthropic Claude models. Uses the Anthropic `compact_20260112`

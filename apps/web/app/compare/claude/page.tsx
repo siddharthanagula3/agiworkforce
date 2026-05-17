@@ -4,9 +4,9 @@ import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'AGI Workforce vs Anthropic Claude | AGI Workforce',
+  title: 'AGI vs Anthropic Claude | AGI',
   description:
-    'Honest review of Anthropic Claude. Where Claude wins, where AGI Workforce wins, and how the two products differ.',
+    'Honest review of Anthropic Claude. Where Claude wins, where AGI wins, and how the two products differ.',
   alternates: { canonical: 'https://agiworkforce.com/compare/claude' },
 };
 
@@ -21,8 +21,7 @@ export default function CompareClaudePage() {
             The class of the field on long-form prose, code review, and tool use. Claude.ai itself
             is a beautifully restrained product.{' '}
             <strong>
-              The reason AGI Workforce exists is that Anthropic locks you to Claude — and we
-              don&rsquo;t.
+              The reason AGI exists is that Anthropic locks you to Claude — and we don&rsquo;t.
             </strong>
           </p>
         </section>
@@ -53,7 +52,7 @@ export default function CompareClaudePage() {
           </ul>
         </section>
         <section className="agi-section">
-          <p className="agi-section-eyebrow">Where AGI Workforce wins</p>
+          <p className="agi-section-eyebrow">Where AGI wins</p>
           <table className="agi-ledger">
             <tbody>
               <tr>
@@ -91,7 +90,7 @@ export default function CompareClaudePage() {
           </p>
           <div className="agi-cta-row">
             <Link href="/download" className="agi-cta-primary">
-              Try AGI Workforce
+              Try AGI
             </Link>
             <Link href="/compare" className="agi-cta-ghost">
               Read the other reviews →

@@ -4,8 +4,8 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Privacy policy | AGI Workforce',
-  description: 'How AGI Workforce collects, uses, and protects your data.',
+  title: 'Privacy policy | AGI',
+  description: 'How AGI collects, uses, and protects your data.',
   alternates: { canonical: 'https://agiworkforce.com/privacy' },
 };
 
@@ -181,7 +181,7 @@ export default function PrivacyPage() {
         <section className="agi-section">
           <p className="agi-section-eyebrow">07 — International transfers and EU residency</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
-            <strong>EU residency status:</strong> AGI Workforce data is hosted in the United States
+            <strong>EU residency status:</strong> AGI data is hosted in the United States
             (us-east-2) by default. We do not currently offer European residency for stored data;
             European customers&rsquo; data is transferred to and processed in the US. For EU/UK
             personal data we use Standard Contractual Clauses through our DPA — see{' '}
@@ -199,8 +199,8 @@ export default function PrivacyPage() {
         <section className="agi-section">
           <p className="agi-section-eyebrow">08 — Children</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
-            AGI Workforce is not directed at children under 13 (or 16 in the EU/UK). We do not
-            knowingly collect data from children.
+            AGI is not directed at children under 13 (or 16 in the EU/UK). We do not knowingly
+            collect data from children.
           </p>
         </section>
 

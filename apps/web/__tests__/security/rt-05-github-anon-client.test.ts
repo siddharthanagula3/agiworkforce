@@ -159,7 +159,7 @@ describe('RT-05: GitHub webhook uses service-role client in background task', ()
 
     expect(mockPostComment).toHaveBeenCalledOnce();
     const callArgs = mockPostComment.mock.calls[0] as unknown[];
-    expect(callArgs[4] as string).toContain('AGI Workforce Code Review');
+    expect(callArgs[4] as string).toContain('AGI Code Review');
   });
 
   it('posts "connect your account" when installation not found', async () => {

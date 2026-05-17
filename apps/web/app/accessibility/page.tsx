@@ -4,9 +4,9 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Accessibility | AGI Workforce',
+  title: 'Accessibility | AGI',
   description:
-    'How AGI Workforce supports accessibility — keyboard, screen-reader, prefers-reduced-motion, contrast.',
+    'How AGI supports accessibility — keyboard, screen-reader, prefers-reduced-motion, contrast.',
   alternates: { canonical: 'https://agiworkforce.com/accessibility' },
 };
 
