@@ -1,6 +1,8 @@
-# AGI Workforce
+# AGI
 
-> **Beyond one model. Beyond one surface. AGI in your hands.**
+> **All the AIs you already pay for, in one place. Beyond one model. Beyond one surface.**
+>
+> _(Public brand: **AGI** — repo path + internal packages remain `agiworkforce`. Brand simplified 2026-05-15.)_
 
 [![CLI Release](https://img.shields.io/github/v/release/siddharthanagula3/agiworkforce?filter=v-cli-*&label=cli&color=blue)](https://github.com/siddharthanagula3/agiworkforce/releases)
 [![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
@@ -8,19 +10,23 @@
 
 Multi-provider, local-first AI agent platform. One Tauri desktop app, one Next.js web at agiworkforce.com/chat, one Expo mobile companion, one Rust CLI, plus VS Code and Chrome extensions — all wired into the same chat layer with **10+ Providers**, MCP, browser automation, and computer-use.
 
-> **Launch-readiness wave 1+2 complete** — 57 commits, all surfaces verified green (2026-05-15). All six surfaces (CLI / Desktop / Web / Mobile / Chrome ext / VS Code ext) are launch-ready. See [docs/design/design-spec-2026-05-15.md](docs/design/design-spec-2026-05-15.md) for the canonical UI spec the wave was driven from.
+> **BYOK-first launch posture (2026-05-16 → 2026-08-01)** — v1 ships as **BYOK + Local only**. All paid tiers are on **email-only waitlist** until **August 1, 2026 graduation**, when caps will be set from real BYOK telemetry instead of guesses. No subscription you can be over-charged on yet.
+>
+> **Wave 4+5 complete** (2026-05-16): 38 commits / +19,659 LOC on PR #366. v3 frontend live across all 6 surfaces behind `DESKTOP_CHAT_V3=true`. **Wave 6 in flight**: $99 Pro Max tier added (6 tiers total), waitlist mechanic, BYOK polish suite, Routing-WHY badge, 5-chip trust row, memory import/export, multi-model side-by-side (Pro+ gated), Chrome + VS Code ext finalization.
 >
 > **CLI v1.0 SHIPPED** (2026-05-03). Install: `brew install siddharthanagula3/tap/agiworkforce` or see [Quick start](#quick-start) below.
 >
-> **Foundation Sprint shipped** at tag [`v0.7.0-foundation`](https://github.com/siddharthanagula3/agiworkforce/releases/tag/v0.7.0-foundation) (2026-05-13): central state pattern, message-queue priority lane, `packages/llm-runtime` (retry + stream watchdog + error classifier), outbound-worker direction inversion (`worker_registrations` + `work_units` live in Supabase), HKDF dispatch-key rotation (`rotate_dispatch_keys` RPC live), Stripe webhook idempotency RPC live in prod. All four tiers (Hobby / Pro / **Pro+** / Max) wired in Stripe.
+> **Apple notarization unblocked** (2026-05-16): PLA renewed; macOS signed + notarized builds re-enabled. Signing identity `D2PR62RLT4`.
+>
+> **Foundation Sprint shipped** at tag [`v0.7.0-foundation`](https://github.com/siddharthanagula3/agiworkforce/releases/tag/v0.7.0-foundation) (2026-05-13): central state pattern, message-queue priority lane, `packages/llm-runtime`, outbound-worker direction inversion, HKDF dispatch-key rotation, Stripe webhook idempotency RPC live in prod. Stripe wired but **dormant during waitlist period** — flips live Aug 1.
 >
 > **For contributors and AI agents:** [AGI_WORKFORCE.md](AGI_WORKFORCE.md) is the single source of truth.
 > **For builds and deployment:** [BUILD.md](BUILD.md).
 > **For PR conventions:** [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Why AGI Workforce
+## Why AGI
 
-| You want                                  | Anthropic Claude | OpenAI ChatGPT | AGI Workforce              |
+| You want                                  | Anthropic Claude | OpenAI ChatGPT | AGI                        |
 | ----------------------------------------- | ---------------- | -------------- | -------------------------- |
 | One model family                          | ✅ Claude only   | ✅ GPT only    | ✅ Pick from 10+ Providers |
 | Bring your own API key                    | ❌               | ❌             | ✅                         |
@@ -34,17 +40,18 @@ The unique slice: **multi-provider + BYOK + local LLM all in one app, on every s
 
 ## Pricing
 
-| Tier                                                                   | Price         | Available now |
-| ---------------------------------------------------------------------- | ------------- | ------------- |
-| Local-only (run Ollama / LM Studio yourself)                           | Free forever  | ✅            |
-| BYOK (bring your own API keys)                                         | Free forever  | ✅            |
-| Hobby (managed cloud, limited credits)                                 | $10/mo        | ✅            |
-| Pro (full models, higher caps)                                         | $29.99/mo     | ✅            |
-| **Pro+** (Pro pool + Opus 4.7 + GPT-5.5 daily caps + 60s Runway Gen-4) | $49.99/mo     | ✅            |
-| Max (highest caps, computer use)                                       | $299.99/mo    | ✅            |
-| Enterprise (SSO, SCIM, custom retention)                               | Contact sales | Contact sales |
+| Tier                                                                                 | Monthly       | Available now (until 2026-08-01)    |
+| ------------------------------------------------------------------------------------ | ------------- | ----------------------------------- |
+| Local-only (run Ollama / LM Studio yourself)                                         | Free forever  | ✅ Live                             |
+| BYOK (bring your own API keys to Anthropic/OpenAI/Google/etc.)                       | Free forever  | ✅ Live                             |
+| Hobby (managed cloud, limited credits)                                               | $10           | 📝 Waitlist — graduates Aug 1, 2026 |
+| Pro (full models, higher caps)                                                       | $29.99        | 📝 Waitlist — graduates Aug 1, 2026 |
+| **Pro+** (Pro pool + Opus 4.7 + GPT-5.5 daily caps + 60s Runway Gen-4 + voice 1500m) | $49.99        | 📝 Waitlist — graduates Aug 1, 2026 |
+| **Pro Max** (NEW — uninterrupted deep-work tier, 4-model compare, priority routing)  | **$99**       | 📝 Waitlist — graduates Aug 1, 2026 |
+| Max (highest caps, computer use, voice unlimited)                                    | $299.99       | 📝 Waitlist — graduates Aug 1, 2026 |
+| Enterprise (SSO, SCIM, custom retention)                                             | Contact sales | Contact sales                       |
 
-See [docs/PRICING.md](docs/PRICING.md) for details.
+**Why waitlist?** We're collecting 60-90 days of real BYOK telemetry before committing to per-tier caps. No subscription is sold during the waitlist period — pay your AI providers directly with your own keys. See [docs/PRICING.md](docs/PRICING.md) for the full capability matrix.
 
 ## Quick start
 
