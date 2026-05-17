@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'CLI — The operator’s command line | AGI Workforce',
+  title: 'CLI — The operator’s command line | AGI',
   description:
     'Pure Rust. Ratatui TUI. Same engine that powers every other surface. The CLI is the product; the apps are surfaces over it.',
   alternates: { canonical: 'https://agiworkforce.com/cli' },

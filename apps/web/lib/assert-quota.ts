@@ -1,7 +1,7 @@
 /**
  * assert-quota.ts
  *
- * Per-request quota helper for the AGI Workforce web API.
+ * Per-request quota helper for the AGI web API.
  *
  * Design constraints (per tasks/auto-routing-spec.md §1, §3 and Vercel rules):
  *

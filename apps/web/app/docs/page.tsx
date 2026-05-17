@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Documentation | AGI Workforce',
+  title: 'Documentation | AGI',
   description:
     'Reference material for every surface — desktop, mobile, CLI, web, Chrome extension, VS Code extension.',
   alternates: { canonical: 'https://agiworkforce.com/docs' },
@@ -90,7 +90,7 @@ export default function DocsPage() {
         <section className="agi-page-hero">
           <h1 className="agi-page-h1">Documentation.</h1>
           <p className="agi-page-lede">
-            Reference material for every surface AGI Workforce ships.{' '}
+            Reference material for every surface AGI ships.{' '}
             <strong>
               Detailed protocol, API, and CLI reference lives on GitHub. The pages below cover the
               concepts most users need.

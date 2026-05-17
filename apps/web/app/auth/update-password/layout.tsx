@@ -1,8 +1,8 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Update Password | AGI Workforce',
-  description: 'Update your AGI Workforce account password.',
+  title: 'Update Password | AGI',
+  description: 'Update your AGI account password.',
   robots: {
     index: false, // Don't index password update page
   },

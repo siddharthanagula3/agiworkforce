@@ -4,8 +4,8 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Security | AGI Workforce',
-  description: 'How AGI Workforce protects your keys, your data, and your tool execution.',
+  title: 'Security | AGI',
+  description: 'How AGI protects your keys, your data, and your tool execution.',
   alternates: { canonical: 'https://agiworkforce.com/security' },
 };
 

@@ -144,7 +144,7 @@ export default function Error({
         <div className="container mx-auto px-4 flex flex-col items-center gap-4">
           <div className="flex items-center gap-2 font-bold">
             <Bot className="h-5 w-5 text-zinc-500" />
-            <span className="text-zinc-500">AGI Workforce</span>
+            <span className="text-zinc-500">AGI</span>
           </div>
           <div className="text-sm text-zinc-600">
             &copy; {new Date().getFullYear()} AGI Automation LLC. All rights reserved.

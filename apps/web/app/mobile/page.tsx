@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Mobile — Phone as commander, desktop as agent | AGI Workforce',
+  title: 'Mobile — Phone as commander, desktop as agent | AGI',
   description:
     'Tap a task on your phone. Your desktop runs it with full tool access. Watch the trace come back over Realtime. App Store and Google Play coming soon.',
   alternates: { canonical: 'https://agiworkforce.com/mobile' },

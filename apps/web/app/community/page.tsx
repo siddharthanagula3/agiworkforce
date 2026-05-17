@@ -3,7 +3,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Community | AGI Workforce',
+  title: 'Community | AGI',
   description: 'Where to find us — GitHub for code and issues, email for everything else.',
   alternates: { canonical: 'https://agiworkforce.com/community' },
 };

@@ -3,9 +3,9 @@ import Link from 'next/link';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'MCP Directory | AGI Workforce',
+  title: 'MCP Directory | AGI',
   description:
-    'Browse community-built MCP servers for databases, APIs, developer tools, and more. Connect any MCP-compatible server to AGI Workforce.',
+    'Browse community-built MCP servers for databases, APIs, developer tools, and more. Connect any MCP-compatible server to AGI.',
   alternates: { canonical: '/connectors/mcp-directory' },
 };
 

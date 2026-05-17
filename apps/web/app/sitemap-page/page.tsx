@@ -4,8 +4,8 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Sitemap | AGI Workforce',
-  description: 'Every public page on AGI Workforce, organized.',
+  title: 'Sitemap | AGI',
+  description: 'Every public page on AGI, organized.',
   alternates: { canonical: 'https://agiworkforce.com/sitemap-page' },
 };
 

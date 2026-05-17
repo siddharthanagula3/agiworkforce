@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Trust | AGI Workforce',
+  title: 'Trust | AGI',
   description: 'Compliance, audits, and security posture — with honest dates.',
   alternates: { canonical: 'https://agiworkforce.com/trust' },
 };
