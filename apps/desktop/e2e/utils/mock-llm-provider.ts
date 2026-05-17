@@ -238,6 +238,37 @@ export class MockLLMProvider {
       });
       this.registeredRoutes.add('**/api/chat/stream');
 
+      // Layer 4: Pre-populate the unified-chat store with an active conversation
+      // so useChat.addMsg can actually append the user message. Without this,
+      // hostBridge is undefined in Playwright web mode, addMsg silently no-ops
+      // (line 65 if-check), convId stays null, useChat.sendMessage aborts with
+      // "Failed to create conversation" toast, and no LLM call ever fires.
+      // The chat store uses zustand+persist with key `unified-chat-store`.
+      await this.page.addInitScript(() => {
+        const conversationId = 'e2e-mock-conversation';
+        const chatStoreState = {
+          state: {
+            activeConversationId: conversationId,
+            conversations: [
+              {
+                id: conversationId,
+                title: 'E2E Test Conversation',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              },
+            ],
+            messagesByConversation: { [conversationId]: [] },
+            isStreaming: false,
+            streamingContent: '',
+            streamingReasoning: '',
+            activeMode: 'chat',
+            webSearchEnabled: false,
+          },
+          version: 1,
+        };
+        localStorage.setItem('unified-chat-store', JSON.stringify(chatStoreState));
+      });
+
       await this.page.addInitScript(() => {
         if (!window.__TAURI__) {
           window.__TAURI__ = {} as any;
