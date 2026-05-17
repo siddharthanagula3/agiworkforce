@@ -5,6 +5,7 @@
 #![allow(clippy::doc_overindented_list_items)]
 #![allow(clippy::question_mark)]
 #![allow(clippy::ptr_arg)]
+#![allow(clippy::result_large_err)]
 
 // Active modules — core CLI functionality
 pub mod design_system;
