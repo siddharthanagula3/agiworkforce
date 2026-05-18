@@ -42,6 +42,8 @@ interface ExecutionState {
 const abortControllers = new Map<string, AbortController>();
 const MAX_ABORT_CONTROLLERS = 50;
 const streamingConversations = new Set<string>();
+/** Tracks conversation IDs that were cancelled before streaming started. */
+const cancelledBeforeStream = new Set<string>();
 const MAX_RETRY_ATTEMPTS = 3;
 const thinkingStartTimes = new Map<string, number>();
 const MAX_UPLOAD_RETRIES = 2;
@@ -120,6 +122,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       existingController.abort();
       abortControllers.delete(conversationId);
     }
+    // Clear any stale cancellation flag from a previous stop-before-stream for this conversation.
+    cancelledBeforeStream.delete(conversationId);
 
     let uploadedAttachments: MessageAttachment[] | undefined;
     if (attachments && attachments.length > 0) {
@@ -257,6 +261,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           : c,
       ),
     }));
+
+    // Guard: if stopStreaming was called before we reached this point, bail out.
+    if (cancelledBeforeStream.has(conversationId)) {
+      cancelledBeforeStream.delete(conversationId);
+      return;
+    }
 
     set({ isStreaming: true, streamingContent: '', streamingReasoning: '' });
 
@@ -472,6 +482,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     if (!targetId) {
       const cid = msgState.currentConversationId;
       if (cid) {
+        // Mark as cancelled so a sendMessage coroutine that hasn't added to
+        // streamingConversations yet (still awaiting pre-stream async ops) will
+        // bail out when it reaches the isStreaming=true set point.
+        cancelledBeforeStream.add(cid);
         const msgs = msgState.messages[cid] ?? [];
         const hasStreaming = msgs.some((m) => m.isStreaming);
         if (hasStreaming) {
