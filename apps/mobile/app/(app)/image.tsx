@@ -120,6 +120,7 @@ export default function ImageScreen() {
         ) : (
           <View style={styles.options}>
             <Pressable
+              testID="image-picker-library-btn"
               onPress={pickFromLibrary}
               style={({ pressed }) => [
                 styles.optionCard,
