@@ -112,6 +112,13 @@ jest.mock('lucide-react-native', () => {
     Sun: icon,
     Moon: icon,
     Monitor: icon,
+    Mic: icon,
+    Wifi: icon,
+    HardDrive: icon,
+    Globe: icon,
+    EyeOff: icon,
+    Info: icon,
+    Key: icon,
   };
 });
 
