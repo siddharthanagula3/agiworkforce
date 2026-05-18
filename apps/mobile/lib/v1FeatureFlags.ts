@@ -23,6 +23,9 @@ export const FEATURES = {
   /** Master switch — true = v1 local-only mode is active. */
   v1LocalOnly: true,
 
+  /** Projects tab — ships in v1 per FOUNDER DECISION 2026-05-18. */
+  projects: true,
+
   /** Cloud chat / conversation sync to Supabase. */
   cloudChat: false,
 
