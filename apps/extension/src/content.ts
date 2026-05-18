@@ -28,7 +28,7 @@ import { discoverAllTools, callTool, watchForToolChanges } from './webmcp';
 import { extractPageMetadata } from './page-metadata';
 import type { PageMetadata } from './page-metadata';
 import { detectNLWeb } from './nlweb';
-import { setupInPagePanel } from './inPagePanel/setup';
+import { setupInPagePanel } from './features/content/in-page-panel/setup';
 
 import type { ConsoleLogEntry } from './types';
 
