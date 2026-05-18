@@ -1,0 +1,26 @@
+Phase 6 CLI — lsp/ caller enumeration
+Generated: 2026-05-18 before pilot 7 move
+
+=== RISK ASSESSMENT ===
+Wildcard lsp imports:           NONE
+Exhaustive match on lsp types:  NONE
+External callers:               1 file (features/exec/tools/task_registry.rs)
+
+=== CALL-SITES ===
+  features/exec/tools/task_registry.rs:560  — crate::lsp::server_for_extension(ext)
+  features/exec/tools/task_registry.rs:568  — crate::lsp::LspClient::spawn(...)
+  features/exec/tools/task_registry.rs:626  — crate::lsp::server_for_extension(ext)
+  features/exec/tools/task_registry.rs:630  — crate::lsp::LspClient::spawn(...)
+
+INTERNAL SELF-REF (moves with directory):
+  lsp/client.rs:14 — use crate::lsp::types::Diagnostic;
+  Safe: crate::lsp path preserved by lib.rs re-export.
+
+=== PUBLIC PATHS USED ===
+  crate::lsp::server_for_extension  — fn in lsp/mod.rs or re-exported from client.rs
+  crate::lsp::LspClient             — struct in lsp/client.rs
+
+=== CONCLUSION ===
+4 external call-sites in 1 file. All crate::lsp:: prefixed. Re-export
+`pub use platform::lsp` in lib.rs preserves both paths. Zero downstream
+source edits required.
