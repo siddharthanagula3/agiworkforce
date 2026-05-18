@@ -99,9 +99,10 @@ pub mod a2a_ws;
 pub mod memory_pipeline; // used by agent/mod.rs + agent/chat.rs + agent/prompt.rs
 pub mod skill_learner; // used by agent/chat.rs session-end hook
 
-// A2A protocol — recently promoted from single-file to submodule; active Sprint B target.
+// A2A protocol — lives at features::a2a; re-exported here so 6 call-sites in
+// a2a_ws.rs, agent/mod.rs, and repl/mod.rs resolve unchanged.
 #[allow(dead_code)] // PHASE2: expose `agiworkforce a2a serve/discover/delegate`
-pub mod a2a;
+pub use features::a2a;
 
 // Phase 6 reorg — feature/platform/data layers.
 // features/ has a real mod.rs; submodules migrate here incrementally.
