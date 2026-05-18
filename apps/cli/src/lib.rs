@@ -82,8 +82,10 @@ pub mod tool_search;
 pub mod marketplace;
 #[allow(dead_code)] // PHASE2: SDK stdin-reader surface ships in Sprint B (headless mode hardening)
 pub mod sdk_io; // used by OneShotOutputMode::JsonEvents in lib.rs
+// policy lives at platform::policy; re-exported here so existing PHASE2 references
+// (and any future callers) using `crate::policy::*` continue to resolve unchanged.
 #[allow(dead_code)] // PHASE2: Gemini-style declarative TOML tool-rule eval not yet wired into agent
-pub mod policy; // workspace TOML policy engine
+pub use platform::policy;
 #[allow(dead_code)] // PHASE2: WS transport for a2a — wraps jsonrpc::handle_request over persistent WS connections
 pub mod a2a_ws;
 pub mod memory_pipeline; // used by agent/mod.rs + agent/chat.rs + agent/prompt.rs
