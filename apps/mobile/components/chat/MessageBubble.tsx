@@ -32,6 +32,7 @@ import { MessageEditModal } from './MessageEditModal';
 import { renderMarkdownContent } from './MessageContentRenderer';
 import { ProvenanceFooter } from './ProvenanceFooter';
 import { PerformanceChip } from './PerformanceChip';
+import { ReportFlagButton } from './ReportFlagButton';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/lib/theme';
@@ -466,6 +467,15 @@ export const MessageBubble = memo(function MessageBubble({
                 tier={message.runtimeTier}
                 tokensPerSecond={message.tokensPerSecond}
                 firstTokenLatencyMs={message.firstTokenLatencyMs}
+              />
+            )}
+
+            {/* Report/flag — Google Play GenAI policy: required on every assistant turn */}
+            {isAssistant && !message.isStreaming && message.content.trim() && (
+              <ReportFlagButton
+                messageId={message.id}
+                conversationId={(message.metadata?.conversationId as string) ?? message.id}
+                contentExcerpt={message.content}
               />
             )}
           </View>
