@@ -4,7 +4,7 @@ import * as path from 'path';
 import { SidebarProvider } from '../features/sidebar-webview';
 import { AgiDiagnosticsProvider } from '../providers/diagnosticsProvider';
 import { DiffDecorationProvider } from '../providers/diffDecorationProvider';
-import { ConversationStore } from '../storage/conversationStore';
+import { ConversationStore } from '../data/conversationStore';
 import {
   ConversationTreeProvider,
   ConversationTreeItem,
@@ -14,7 +14,7 @@ import { AgentModePanel } from '../providers/agentModeProvider';
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
 import { ModelMetricsPanel } from '../services/modelMetrics';
 import { getDesktopBridge } from '../features/desktop-bridge';
-import { getCheckpointManager } from '../services/checkpointManager';
+import { getCheckpointManager } from '../data/checkpointManager';
 import { showOriginalContext, getPatchOutputChannel } from '../services/patchEngine';
 import { runInlineCommand } from './runInlineCommand';
 import { resolveTier } from '../services/tierResolver';

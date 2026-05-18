@@ -14,7 +14,7 @@ import * as https from 'https';
 import { URL } from 'url';
 import { getModelMetrics } from '../services/modelMetrics';
 import { normalizeConfiguredModelId } from '../services/modelConstants';
-import { getTokenCounter } from '../services/tokenCounter';
+import { getTokenCounter } from '../data/tokenCounter';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

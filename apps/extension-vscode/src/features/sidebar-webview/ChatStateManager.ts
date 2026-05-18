@@ -16,11 +16,11 @@ import {
   AgiWorkforceApiError,
   type LlmChatMessage,
 } from '../../utils/api';
-import { getVSCodeSendQueue } from '../../services/sendQueue';
-import { type ConversationStore } from '../../storage/conversationStore';
+import { getVSCodeSendQueue } from '../../data/sendQueue';
+import { type ConversationStore } from '../../data/conversationStore';
 import { type ConversationTreeProvider } from '../trees';
 import { type DiffDecorationProvider } from '../../providers/diffDecorationProvider';
-import { getContextBuilder } from '../../services/contextBuilder';
+import { getContextBuilder } from '../../data/contextBuilder';
 import {
   normalizeConfiguredModelId,
   getModelProviderInfo,
@@ -33,12 +33,8 @@ import {
   type UsageMeter,
 } from '@agiworkforce/types';
 import { Config } from '../../utils/config';
-import {
-  resolveUsageMeter,
-  formatManagedUsageLabel,
-  daysUntilReset,
-} from '../../services/usageMeter';
-import { getTokenCounter } from '../../services/tokenCounter';
+import { resolveUsageMeter, formatManagedUsageLabel, daysUntilReset } from '../../data/usageMeter';
+import { getTokenCounter } from '../../data/tokenCounter';
 import { guardProviderSwitch } from '../../services/providerSwitchGuard';
 import { resolveTier } from '../../services/tierResolver';
 

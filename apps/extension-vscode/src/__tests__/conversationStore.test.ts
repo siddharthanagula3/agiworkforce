@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ConversationStore } from '../storage/conversationStore';
+import { ConversationStore } from '../data/conversationStore';
 import { sessionHistoryRelativeTime } from '../extension';
 import { ExtensionContext } from './__mocks__/vscode';
 
