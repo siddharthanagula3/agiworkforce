@@ -7,21 +7,21 @@
  */
 
 import * as vscode from 'vscode';
-import { type ConversationStore } from '../storage/conversationStore';
-import { type ConversationTreeProvider } from '../features/trees';
-import { type DiffDecorationProvider } from './diffDecorationProvider';
-import { normalizeConfiguredModelId } from '../services/modelConstants';
-import { Config } from '../utils/config';
-import { ChatStateManager } from './sidebar/ChatStateManager';
-import { getWebviewContent, getNonce } from './sidebar/webviewContent';
+import { type ConversationStore } from '../../storage/conversationStore';
+import { type ConversationTreeProvider } from '../trees';
+import { type DiffDecorationProvider } from '../../providers/diffDecorationProvider';
+import { normalizeConfiguredModelId } from '../../services/modelConstants';
+import { Config } from '../../utils/config';
+import { ChatStateManager } from './ChatStateManager';
+import { getWebviewContent, getNonce } from './webviewContent';
 
 // Re-export for chatEditorPanel.ts (imported from ./sidebarProvider)
-export { getWebviewContent, getNonce, escapeHtml } from './sidebar/webviewContent';
+export { getWebviewContent, getNonce, escapeHtml } from './webviewContent';
 export type {
   WebviewToExtMessage,
   ExtToWebviewMessage,
   UsageMeterWebviewPayload,
-} from './sidebar/ChatStateManager';
+} from './ChatStateManager';
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
