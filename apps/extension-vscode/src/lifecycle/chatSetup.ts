@@ -1,14 +1,14 @@
 import * as vscode from 'vscode';
 import { registerChatParticipant } from '../features/chat-participant';
 import { SidebarProvider } from '../features/sidebar-webview';
-import { ConversationStore } from '../storage/conversationStore';
+import { ConversationStore } from '../data/conversationStore';
 import {
   ConversationTreeProvider,
   ContextPanelProvider,
   setContextPanelInstance,
 } from '../features/trees';
 import { type DiffDecorationProvider } from '../providers/diffDecorationProvider';
-import { WorkspaceIndexer } from '../services/workspaceIndexer';
+import { WorkspaceIndexer } from '../data/workspaceIndexer';
 
 export interface ChatState {
   conversationStore: ConversationStore;

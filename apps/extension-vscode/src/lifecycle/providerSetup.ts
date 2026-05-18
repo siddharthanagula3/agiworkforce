@@ -5,7 +5,7 @@ import { AgiInlineCompletionProvider } from '../features/inline-completions';
 import { AgiCodeLensProvider } from '../features/code-lens';
 import { AgiDiagnosticsProvider } from '../providers/diagnosticsProvider';
 import { DiffDecorationProvider } from '../providers/diffDecorationProvider';
-import { activateTokenCounter } from '../services/tokenCounter';
+import { activateTokenCounter } from '../data/tokenCounter';
 import { activateTerminal } from '../providers/terminalProvider';
 import { activateErrorExplainer } from '../providers/errorExplainerProvider';
 import { Config } from '../utils/config';

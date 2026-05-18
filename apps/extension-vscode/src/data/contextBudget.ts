@@ -14,7 +14,7 @@ import {
   DEFAULT_CONTEXT_LIMIT,
   CHARS_PER_TOKEN,
   normalizeConfiguredModelId,
-} from './modelConstants';
+} from '../services/modelConstants';
 
 // ─── Budget modes ────────────────────────────────────────────────────────────
 

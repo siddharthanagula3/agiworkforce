@@ -14,7 +14,7 @@ import { getDesktopBridge, activateDesktopBridge } from './features/desktop-brid
 import { initModelMetrics } from './services/modelMetrics';
 import { normalizeConfiguredModelId } from './services/modelConstants';
 import { initSubsystemHealth, runBoot, recordFailure } from './services/subsystemHealth';
-import { initCheckpointManager } from './services/checkpointManager';
+import { initCheckpointManager } from './data/checkpointManager';
 import { validateAdvancedFeatureFlags } from './lifecycle/advancedFeatures';
 import { setupChat } from './lifecycle/chatSetup';
 import { setupProviders } from './lifecycle/providerSetup';
