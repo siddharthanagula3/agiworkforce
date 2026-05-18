@@ -100,6 +100,48 @@ export default function Home() {
           <AgiChatDemo />
         </section>
 
+        {/* Mobile launch announcement banner */}
+        <section className="agi-section" style={{ paddingTop: 0 }}>
+          <div
+            className="agi-callout"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 20,
+              flexWrap: 'wrap',
+            }}
+          >
+            <div>
+              <p
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                  color: 'var(--agi-amber)',
+                  margin: '0 0 8px',
+                }}
+              >
+                Launching 2026-08-16
+              </p>
+              <h2 className="agi-callout-h" style={{ marginBottom: 6 }}>
+                AGI Mobile is coming.
+              </h2>
+              <p className="agi-callout-p">
+                Free. On-device AI for iOS and Android. Works in airplane mode. No subscription.
+              </p>
+            </div>
+            <a
+              href="/mobile"
+              className="agi-cta-primary"
+              style={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+            >
+              Learn more &rarr;
+            </a>
+          </div>
+        </section>
+
         <MarketingFooter />
       </main>
     </div>
