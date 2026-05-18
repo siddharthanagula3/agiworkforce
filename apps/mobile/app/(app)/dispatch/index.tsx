@@ -24,6 +24,7 @@ import { useConnectionStore } from '@/stores/connectionStore';
 import { useDispatchStore } from '@/stores/dispatchStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { DispatchMessage } from '@/stores/dispatchStore';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 // ---------------------------------------------------------------------------
 // DispatchHeader — shows desktop connection status
@@ -520,6 +521,8 @@ export default function DispatchScreen() {
   const handleClearThread = useCallback(() => {
     clearThread();
   }, [clearThread]);
+
+  if (!FEATURES.dispatch) return null;
 
   // Show pairing prompt if never paired
   if (showPairingPrompt) {

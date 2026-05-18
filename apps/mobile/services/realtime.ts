@@ -2,6 +2,7 @@ import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/
 import { supabase, getCurrentUser } from './supabase';
 import { useChatStore } from '@/stores/chatStore';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 /**
  * Supabase Realtime subscription service for cross-surface sync.
@@ -161,6 +162,7 @@ function handleMessageChange(
  * Returns an unsubscribe function.
  */
 export async function subscribeToRealtime(): Promise<() => void> {
+  if (!FEATURES.cloudChat) return () => {};
   // Clean up any existing channels before creating new ones to prevent duplicate subscriptions
   unsubscribeFromRealtime();
 
