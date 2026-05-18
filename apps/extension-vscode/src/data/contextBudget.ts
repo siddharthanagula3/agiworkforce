@@ -14,7 +14,7 @@ import {
   DEFAULT_CONTEXT_LIMIT,
   CHARS_PER_TOKEN,
   normalizeConfiguredModelId,
-} from '../services/modelConstants';
+} from '../features/model-picker/modelConstants';
 
 // ─── Budget modes ────────────────────────────────────────────────────────────
 

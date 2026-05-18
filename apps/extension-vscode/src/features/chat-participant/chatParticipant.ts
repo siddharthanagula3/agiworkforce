@@ -23,7 +23,7 @@ import {
 import { type ConversationStore } from '../../data/conversationStore';
 import { type ConversationTreeProvider, getContextPanelProvider } from '../trees';
 import { getContextBuilder } from '../../data/contextBuilder';
-import { normalizeConfiguredModelId } from '../../services/modelConstants';
+import { normalizeConfiguredModelId } from '../model-picker/modelConstants';
 import { getWorkspaceDisplayName } from '../../utils/workspaceFolders';
 import { Config } from '../../utils/config';
 

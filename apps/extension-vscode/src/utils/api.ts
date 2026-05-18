@@ -12,8 +12,8 @@ import * as vscode from 'vscode';
 import * as http from 'http';
 import * as https from 'https';
 import { URL } from 'url';
-import { getModelMetrics } from '../services/modelMetrics';
-import { normalizeConfiguredModelId } from '../services/modelConstants';
+import { getModelMetrics } from '../features/model-picker/modelMetrics';
+import { normalizeConfiguredModelId } from '../features/model-picker/modelConstants';
 import { getTokenCounter } from '../data/tokenCounter';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
