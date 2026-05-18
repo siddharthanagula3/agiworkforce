@@ -1,5 +1,14 @@
 /**
- * features/chat-participant/ — @agi chat participant + /explain /fix /refactor /tests /docs /model subcommands.
- * Phase 6 reorg placeholder. Will re-export from chatParticipant.ts once moved here.
+ * features/chat-participant/ — @agi chat participant registered in VS Code Chat panel.
+ * Handles /explain /fix /refactor /tests /docs /model slash commands.
+ * Streams from AGI Workforce API with fallback to vscode.lm.
  */
-export {};
+export {
+  createChatHandler,
+  registerChatParticipant,
+  buildSystemPrompt,
+  buildUserMessage,
+  gatherEditorContext,
+  historyToMessages,
+} from './chatParticipant';
+export type { EditorContext } from './chatParticipant';
