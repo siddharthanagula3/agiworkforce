@@ -9,6 +9,8 @@ import { detectCapabilities } from './capabilities.js';
 import { tier1Generate } from './tier1.js';
 import { tier2Generate } from './tier2.js';
 import { tier3Generate } from './tier3.js';
+import { getDefaultModel, getLiteModeModel } from './catalog.js';
+import type { ExecutorchPreset } from '@agiworkforce/types';
 
 // Cached capability snapshot — refreshed on demand or app resume.
 let _caps: DeviceCapabilities | null = null;
@@ -51,6 +53,19 @@ export async function selectTier(opts: {
   );
 }
 
+function resolvePreset(modelId: string | undefined): ExecutorchPreset | null {
+  if (!modelId) {
+    const def = getDefaultModel();
+    return def.executorchPreset ?? null;
+  }
+  // Look up by id — check default, then lite
+  const def = getDefaultModel();
+  if (def.id === modelId) return def.executorchPreset ?? null;
+  const lite = getLiteModeModel();
+  if (lite?.id === modelId) return lite.executorchPreset ?? null;
+  return null;
+}
+
 // Top-level generate: selects tier then dispatches to the right adapter.
 export async function localGenerate(
   modelPath: string | undefined,
@@ -71,10 +86,15 @@ export async function localGenerate(
   }
 
   if (caps.tier2Available) {
-    try {
-      return await tier2Generate(modelPath, opts);
-    } catch (err) {
-      console.warn('[local-llm] Tier 2 failed, falling back to Tier 3:', err);
+    const preset = resolvePreset(modelPath);
+    if (preset) {
+      try {
+        return await tier2Generate(preset, opts);
+      } catch (err) {
+        console.warn('[local-llm] Tier 2 failed, falling back to Tier 3:', err);
+      }
+    } else {
+      console.warn('[local-llm] No executorchPreset for model, skipping Tier 2:', modelPath);
     }
   }
 

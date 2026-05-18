@@ -1,5 +1,11 @@
 import type { OnDeviceModel } from '@agiworkforce/types';
 
+// Executorch CDN prefix and version tag — these mirror the constants baked into
+// react-native-executorch 0.8.4's modelUrls.ts. If the package is upgraded,
+// verify these match the new VERSION_TAG so artifact URLs stay in sync.
+const ET_URL_PREFIX = 'https://huggingface.co/software-mansion/react-native-executorch';
+const ET_VERSION_TAG = 'v0.8.0';
+
 // License note for Qwen2.5-VL-3B: research report claims Apache-2.0, but the
 // memory lock (v1-model-selection-final-2026-05-18.md) flags it as potentially
 // "Qwen License (not Apache 2.0)" — verify checkpoint before Wave 0 ship.
@@ -23,6 +29,12 @@ const CATALOG: OnDeviceModel[] = [
     license: 'Apache-2.0',
     role: 'default',
     shipsInV1: true,
+    executorchPreset: {
+      modelName: 'qwen3-4b-quantized',
+      modelSource: `${ET_URL_PREFIX}-qwen-3/${ET_VERSION_TAG}/qwen-3-4B/quantized/qwen3_4b_8da4w.pte`,
+      tokenizerSource: `${ET_URL_PREFIX}-qwen-3/${ET_VERSION_TAG}/tokenizer.json`,
+      tokenizerConfigSource: `${ET_URL_PREFIX}-qwen-3/${ET_VERSION_TAG}/tokenizer_config.json`,
+    },
   },
   {
     id: 'qwen2.5-vl-3b-instruct',
@@ -66,11 +78,11 @@ const CATALOG: OnDeviceModel[] = [
     shipsInV1: false,
   },
   {
-    id: 'llama-3.2-1b-instruct-qlora',
+    id: 'llama-3.2-1b-instruct-spinquant',
     displayName: 'AGI Lite',
     family: 'llama3.2',
     paramCountB: 1.0,
-    fileSizeBytes: 1_181_116_006, // ~1.1 GB (QLoRA / SpinQuant variant)
+    fileSizeBytes: 1_181_116_006, // ~1.1 GB SpinQuant variant
     supportedRuntimes: ['executorch', 'llama-rn'],
     contextWindow: 131_072,
     capabilities: {
@@ -84,6 +96,12 @@ const CATALOG: OnDeviceModel[] = [
     role: 'lite-mode',
     shipsInV1: true,
     liteMode: true,
+    executorchPreset: {
+      modelName: 'llama-3.2-1b-spinquant',
+      modelSource: `${ET_URL_PREFIX}-llama-3.2/${ET_VERSION_TAG}/llama-3.2-1B/spinquant/llama3_2_spinquant.pte`,
+      tokenizerSource: `${ET_URL_PREFIX}-llama-3.2/${ET_VERSION_TAG}/tokenizer.json`,
+      tokenizerConfigSource: `${ET_URL_PREFIX}-llama-3.2/${ET_VERSION_TAG}/tokenizer_config.json`,
+    },
   },
   {
     id: 'apple-foundation-models',

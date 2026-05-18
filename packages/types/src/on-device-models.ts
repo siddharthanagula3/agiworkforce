@@ -7,6 +7,14 @@ export type OnDeviceRuntime =
 
 export type OnDeviceTier = 1 | 2 | 3;
 
+/** Subset of the react-native-executorch preset constant shape needed for LLMModule.fromModelName. */
+export interface ExecutorchPreset {
+  modelName: string;
+  modelSource: string;
+  tokenizerSource: string;
+  tokenizerConfigSource: string;
+}
+
 export interface OnDeviceModel {
   id: string;
   displayName: string;
@@ -32,4 +40,6 @@ export interface OnDeviceModel {
     | 'system-multimodal';
   shipsInV1: boolean;
   liteMode?: boolean;
+  /** Pre-built ExecuTorch preset for react-native-executorch LLMModule. Present when 'executorch' is in supportedRuntimes. */
+  executorchPreset?: ExecutorchPreset;
 }
