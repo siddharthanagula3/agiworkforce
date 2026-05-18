@@ -31,6 +31,7 @@ import { CollapsibleSources } from './CollapsibleSources';
 import { MessageEditModal } from './MessageEditModal';
 import { renderMarkdownContent } from './MessageContentRenderer';
 import { ProvenanceFooter } from './ProvenanceFooter';
+import { PerformanceChip } from './PerformanceChip';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/lib/theme';
@@ -456,6 +457,16 @@ export const MessageBubble = memo(function MessageBubble({
             {/* Provenance badge: "On device" or "Cloud · {Provider}" */}
             {provenance && (
               <ProvenanceFooter provider={provenance.provider} model={provenance.model} />
+            )}
+
+            {/* Performance chip — on-device inference metadata */}
+            {isAssistant && !message.isStreaming && message.runtimeTier && message.model && (
+              <PerformanceChip
+                model={message.model}
+                tier={message.runtimeTier}
+                tokensPerSecond={message.tokensPerSecond}
+                firstTokenLatencyMs={message.firstTokenLatencyMs}
+              />
             )}
           </View>
         </View>

@@ -12,7 +12,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, MoreHorizontal, WifiOff } from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
+import { DrawerActions } from '@react-navigation/native';
+import { MoreHorizontal, WifiOff, SquarePen, Menu, Cpu } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
@@ -26,10 +28,14 @@ import { ThinkingBottomSheet } from '@/components/chat/ThinkingBottomSheet';
 import { PaywallBottomSheet } from '@/components/chat/PaywallBottomSheet';
 import { ModelPickerSheet } from '@/components/model-picker/ModelPickerSheet';
 import { VoiceConversationScreen } from '@/components/voice/VoiceConversationScreen';
+import { ModeToggle } from '@/components/chat/ModeToggle';
+import { CloudWaitlistSheet } from '@/components/waitlist/CloudWaitlistSheet';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/stores/modelStore';
 import { useAgentStore } from '@/stores/agentStore';
+import { useWaitlistStore } from '@/stores/waitlistStore';
+import { joinWaitlist } from '@/services/waitlist';
 import { getModelById, isAutoMode } from '@/lib/models';
 import { useVoicePlayback } from '@/hooks/useVoicePlayback';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
@@ -48,6 +54,7 @@ export default function ChatScreen() {
   // useLocalSearchParams can return string | string[] -- narrow to string
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
+  const navigation = useNavigation();
   const modelPickerRef = useRef<BottomSheet>(null);
   const exportSheetRef = useRef<BottomSheet>(null);
   const addToChatRef = useRef<BottomSheet>(null);
@@ -353,6 +360,42 @@ export default function ChatScreen() {
   const [voiceModeVisible, setVoiceModeVisible] = useState(false);
   const [renameModalVisible, setRenameModalVisible] = useState(false);
   const [renameText, setRenameText] = useState('');
+  const [waitlistSheetVisible, setWaitlistSheetVisible] = useState(false);
+
+  const waitlistJoined = useWaitlistStore((s) => s.joined);
+  const waitlistRank = useWaitlistStore((s) => s.rank);
+  const markWaitlistJoined = useWaitlistStore((s) => s.markJoined);
+
+  const handleOpenWaitlist = useCallback(() => {
+    setWaitlistSheetVisible(true);
+  }, []);
+
+  const handleCloseWaitlist = useCallback(() => {
+    setWaitlistSheetVisible(false);
+  }, []);
+
+  const handleWaitlistSubmit = useCallback(
+    async (submission: { email: string; country: string | null }) => {
+      const result = await joinWaitlist({
+        email: submission.email,
+        country: submission.country ?? undefined,
+      });
+      markWaitlistJoined(
+        { email: submission.email, country: submission.country ?? undefined },
+        result,
+      );
+      return result;
+    },
+    [markWaitlistJoined],
+  );
+
+  const handleNewChat = useCallback(() => {
+    router.push('/(app)' as Parameters<typeof router.push>[0]);
+  }, [router]);
+
+  const handleOpenDrawer = useCallback(() => {
+    navigation.dispatch(DrawerActions.openDrawer());
+  }, [navigation]);
 
   const handleQuoteReply = useCallback((message: ChatMessage) => {
     setQuotedMessage(message);
@@ -519,7 +562,7 @@ export default function ChatScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
-        {/* Minimal header: back + spacer + menu dots */}
+        {/* Chat header: hamburger left, ModeToggle center, new-chat + menu right */}
         <View
           style={{
             flexDirection: 'row',
@@ -531,26 +574,66 @@ export default function ChatScreen() {
             borderBottomColor: colors.border,
           }}
         >
-          {/* Back button */}
+          {/* Hamburger — opens drawer */}
           <Pressable
-            onPress={handleBack}
-            className="p-2 rounded-lg active:bg-white/5"
-            accessibilityLabel="Go back"
+            onPress={handleOpenDrawer}
+            style={{ padding: 8, borderRadius: 8 }}
+            accessibilityLabel="Open menu"
             accessibilityRole="button"
           >
-            <ChevronLeft size={22} color={colors.textSecondary} />
+            <Menu size={22} color={colors.textSecondary} />
           </Pressable>
 
-          {/* Menu dots */}
-          <Pressable
-            onPress={handleMenuPress}
-            className="p-2 rounded-lg active:bg-white/5"
-            accessibilityLabel="Conversation menu"
-            accessibilityRole="button"
-          >
-            <MoreHorizontal size={20} color={colors.textSecondary} />
-          </Pressable>
+          {/* ModeToggle — centered */}
+          <ModeToggle
+            cloudJoined={waitlistJoined}
+            waitlistRank={waitlistRank}
+            onTapCloud={handleOpenWaitlist}
+          />
+
+          {/* Right side: new-chat + conversation menu */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Pressable
+              onPress={handleNewChat}
+              style={{ padding: 8, borderRadius: 8 }}
+              accessibilityLabel="New chat"
+              accessibilityRole="button"
+            >
+              <SquarePen size={20} color={colors.textSecondary} />
+            </Pressable>
+            <Pressable
+              onPress={handleMenuPress}
+              style={{ padding: 8, borderRadius: 8 }}
+              accessibilityLabel="Conversation menu"
+              accessibilityRole="button"
+            >
+              <MoreHorizontal size={20} color={colors.textSecondary} />
+            </Pressable>
+          </View>
         </View>
+
+        {/* On-device shield badge — shown when conversation is empty */}
+        {conversationMessages.length === 0 && (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              alignSelf: 'center',
+              gap: 6,
+              paddingHorizontal: 12,
+              paddingVertical: 5,
+              borderRadius: 20,
+              backgroundColor: 'rgba(62, 184, 196, 0.12)',
+              marginTop: 10,
+            }}
+            accessibilityLabel="On-device mode active"
+          >
+            <Cpu size={12} color={colors.teal} strokeWidth={1.8} />
+            <Text style={{ fontSize: 12, color: colors.teal, fontWeight: '500' }}>
+              On-device · Private · Works offline
+            </Text>
+          </View>
+        )}
 
         {/* Offline banner */}
         {!isOnline && (
@@ -652,6 +735,13 @@ export default function ChatScreen() {
           requiredTier={paywallError?.requiredTier ?? 'hobby'}
           reason={paywallError?.reason}
           onDismiss={clearPaywallError}
+        />
+
+        {/* Cloud waitlist sheet — shown when user taps locked Cloud in ModeToggle */}
+        <CloudWaitlistSheet
+          visible={waitlistSheetVisible}
+          onClose={handleCloseWaitlist}
+          onSubmit={handleWaitlistSubmit}
         />
 
         {/* Mid-conversation mode-switch confirmation */}
