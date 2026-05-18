@@ -1,7 +1,11 @@
 //! Plan mode feature — real model-driven plan → approve → execute flow.
 //!
-//! The live implementation lives at crate::plan_mode (apps/cli/src/plan_mode.rs).
-//! This module is a placeholder; plan_mode.rs will be moved here as the
-//! pilot migration in Phase 6 Step 4.
+//! Sprint B4 plan: model writes a Plan via the `update_plan` tool; the user
+//! reviews and approves before mutating tools (Bash/Edit/Write/apply_patch/MCP)
+//! are unlocked. Mirrors the Codex `update_plan` tool surface.
 //!
-//! Currently empty — plan_mode.rs pilot migration is imminent.
+//! PILOT MIGRATION (Phase 6 Step 4): plan_mode.rs moved here from apps/cli/src/.
+//! All crate-internal callers use `crate::plan_mode::Plan` which is re-exported
+//! from lib.rs for backward compatibility.
+
+pub mod plan_mode;
