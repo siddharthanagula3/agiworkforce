@@ -26,7 +26,9 @@ pub mod errors;
 // using `crate::hooks::*` continue to resolve unchanged.
 pub use features::hooks::hooks as hooks;
 pub mod markdown;
-pub mod lsp;
+// lsp lives at platform::lsp; re-exported here so all 4 call-sites
+// in features/exec/tools/task_registry.rs resolve unchanged.
+pub use platform::lsp;
 pub mod mcp;
 pub mod memory;
 #[allow(dead_code)] // FOUNDATION: cross-surface send-pipeline contract; CLI integrations wire through Sprint B (REPL drain + SDK headless)

@@ -17,3 +17,8 @@ pub mod policy;
 // worktree, mod. crate::runtime re-exported from lib.rs; all 5 submodule paths
 // (session_control, tool_catalog, worktree, session, advisor) resolve unchanged.
 pub mod runtime;
+
+// PILOT 7 (Phase 6): lsp/ moved here from apps/cli/src/.
+// 3 files: client, types, mod. crate::lsp re-exported from lib.rs.
+// 4 call-sites in features/exec/tools/task_registry.rs resolve unchanged.
+pub mod lsp;
