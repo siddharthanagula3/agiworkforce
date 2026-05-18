@@ -1,33 +1,3 @@
-import * as React from 'react';
-import * as SeparatorPrimitive from '@radix-ui/react-separator';
-import { cn } from '../../lib/utils';
-
-// React 19 ref-as-prop pattern - no forwardRef needed
-interface SeparatorProps extends React.ComponentPropsWithoutRef<typeof SeparatorPrimitive.Root> {
-  ref?: React.Ref<React.ElementRef<typeof SeparatorPrimitive.Root>>;
-}
-
-function Separator({
-  className,
-  orientation = 'horizontal',
-  decorative = true,
-  ref,
-  ...props
-}: SeparatorProps) {
-  return (
-    <SeparatorPrimitive.Root
-      ref={ref}
-      decorative={decorative}
-      orientation={orientation}
-      className={cn(
-        'shrink-0 bg-border',
-        orientation === 'horizontal' ? 'h-[1px] w-full' : 'h-full w-[1px]',
-        className,
-      )}
-      {...props}
-    />
-  );
-}
-Separator.displayName = SeparatorPrimitive.Root.displayName;
-
-export { Separator };
+// Legacy stub — component moved to src/ui/Separator.tsx in Phase 5 reorg.
+// DO NOT add code here. This file exists only so existing '../ui/Separator' imports resolve.
+export * from '../../ui/Separator';
