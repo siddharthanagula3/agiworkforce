@@ -16,7 +16,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import WebSocket from 'ws';
-import { getExtensionVersion } from '../utils/version';
+import { getExtensionVersion } from '../../utils/version';
 
 // ─── Bridge auth token (VSCODE-03) ──────────────────────────────────────────
 

@@ -11,7 +11,7 @@ import {
   ALLOWED_BRIDGE_COMMANDS,
   ALLOWED_INBOUND_TYPES,
   ALLOWED_OUTBOUND_TYPES,
-} from '../services/desktopBridge';
+} from '../features/desktop-bridge';
 
 describe('ALLOWED_INBOUND_TYPES', () => {
   it('includes the auth handshake reply', () => {
