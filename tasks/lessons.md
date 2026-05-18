@@ -21,3 +21,22 @@ The VS Code audit agent counted only `registerCommand` calls in `extension.ts` a
 ### Lesson 5: False alarm classification requires deeper verification
 
 Initial P0-2 (48 ghost commands) was wrong. Before marking something P0, always verify by running the test or doing a wider grep. The lesson: don't trust agent findings without spot-checking the claim against the actual code.
+
+## 2026-05-18: Root-level reference docs need post-launch review
+
+### Lesson 6: Three large root-level docs predate the reference-index reorg
+
+At the time the mobile-pilot reorg branch was created, three large untracked-or-tracked files sit at repo root:
+- `REFERENCE_INDEX.md` (~230 KB)
+- `REFERENCE_STRUCTURE.md` (~16 KB)
+- `MASTER_PLAN.md` (~205 KB)
+
+These were left untouched by the One-Source Reorg Phase 3 (mobile pilot, per founder directive on 2026-05-18). They are likely superseded by the new `reference-index/` tree + `docs/PRD.md` V5 but a careful diff is needed before deletion or relocation.
+
+**Action item for post-launch (post-2026-08-16):** read the three files end-to-end, diff them against:
+- `reference-index/README.md` (new)
+- `reference-index/mobile-code-index.json` (new)
+- `docs/PRD.md` V5
+- `AGI_WORKFORCE.md`
+
+Then either: (a) archive to `_archive/`, (b) merge unique content into the canonical sources, or (c) delete. Do not touch during the launch crunch — too many engineers may still be referencing them.
