@@ -13,6 +13,7 @@ import { QuickSchedule } from '@/components/schedules/QuickSchedule';
 import { useScheduleStore } from '@/stores/scheduleStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/lib/theme';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 export default function SchedulesScreen() {
   const router = useRouter();
@@ -81,6 +82,8 @@ export default function SchedulesScreen() {
     },
     [schedules, deleteSchedule],
   );
+
+  if (!FEATURES.schedules) return null;
 
   // Loading skeleton
   if (loading && schedules.length === 0) {
