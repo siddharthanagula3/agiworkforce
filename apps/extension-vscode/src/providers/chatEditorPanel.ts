@@ -18,13 +18,13 @@ import {
   AgiWorkforceApiError,
   type LlmChatMessage,
 } from '../utils/api';
-import { getVSCodeSendQueue } from '../services/sendQueue';
-import { getContextBuilder } from '../services/contextBuilder';
+import { getVSCodeSendQueue } from '../data/sendQueue';
+import { getContextBuilder } from '../data/contextBuilder';
 import { normalizeConfiguredModelId, getModelProviderInfo } from '../services/modelConstants';
 import { PROVIDER_DISPLAY, type AgentMode, type Effort } from '@agiworkforce/types';
 import { Config } from '../utils/config';
-import { resolveUsageMeter, formatManagedUsageLabel, daysUntilReset } from '../services/usageMeter';
-import { getTokenCounter } from '../services/tokenCounter';
+import { resolveUsageMeter, formatManagedUsageLabel, daysUntilReset } from '../data/usageMeter';
+import { getTokenCounter } from '../data/tokenCounter';
 import { guardProviderSwitch } from '../services/providerSwitchGuard';
 import { resolveTier } from '../services/tierResolver';
 import { getWebviewContent, getNonce } from '../features/sidebar-webview';

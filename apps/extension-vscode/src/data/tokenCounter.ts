@@ -13,7 +13,7 @@ import {
   MODEL_COST_RATES,
   DEFAULT_BLENDED_RATE,
   normalizeConfiguredModelId,
-} from './modelConstants';
+} from '../services/modelConstants';
 
 export class TokenCounter implements vscode.Disposable {
   private _promptTokens = 0;

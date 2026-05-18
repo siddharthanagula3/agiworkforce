@@ -8,10 +8,10 @@ import * as path from 'path';
 import { chatCompletion, type LlmChatMessage } from '../../utils/api';
 import { getActiveWorkspaceFolderSync } from '../../utils/workspaceFolders';
 import { Config } from '../../utils/config';
-import { WorkspaceIndexer } from '../../services/workspaceIndexer';
-import { getContextBuilder } from '../../services/contextBuilder';
+import { WorkspaceIndexer } from '../../data/workspaceIndexer';
+import { getContextBuilder } from '../../data/contextBuilder';
 import { getContextPanelProvider } from '../../features/trees';
-import { getContextBudget } from '../../services/contextBudget';
+import { getContextBudget } from '../../data/contextBudget';
 import { parsePatchBlocks, type PatchBlock } from '../../services/patchEngine';
 
 export { parsePatchBlocks };

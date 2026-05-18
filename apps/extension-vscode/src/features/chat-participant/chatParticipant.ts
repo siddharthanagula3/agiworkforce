@@ -20,9 +20,9 @@ import {
   AgiWorkforcePaywallError,
   type LlmChatMessage,
 } from '../../utils/api';
-import { type ConversationStore } from '../../storage/conversationStore';
+import { type ConversationStore } from '../../data/conversationStore';
 import { type ConversationTreeProvider, getContextPanelProvider } from '../trees';
-import { getContextBuilder } from '../../services/contextBuilder';
+import { getContextBuilder } from '../../data/contextBuilder';
 import { normalizeConfiguredModelId } from '../../services/modelConstants';
 import { getWorkspaceDisplayName } from '../../utils/workspaceFolders';
 import { Config } from '../../utils/config';
