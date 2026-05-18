@@ -46,7 +46,9 @@ pub mod skills;
 pub mod subagent;
 pub mod subagent_v2;
 pub mod teams;
-pub mod tools;
+// tools lives at features::exec::tools; re-exported here so all 42 call-sites
+// using `crate::tools::*` continue to resolve unchanged.
+pub use features::exec::tools as tools;
 pub mod tui;
 pub mod voice;
 
