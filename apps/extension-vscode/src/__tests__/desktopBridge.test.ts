@@ -9,8 +9,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { DesktopBridge } from '../services/desktopBridge';
-import type { BridgeMessage } from '../services/desktopBridge';
+import { DesktopBridge } from '../features/desktop-bridge';
+import type { BridgeMessage } from '../features/desktop-bridge';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

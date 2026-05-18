@@ -13,7 +13,7 @@ import { ContextPanelProvider } from '../providers/contextPanelProvider';
 import { AgentModePanel } from '../providers/agentModeProvider';
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
 import { ModelMetricsPanel } from '../services/modelMetrics';
-import { getDesktopBridge } from '../services/desktopBridge';
+import { getDesktopBridge } from '../features/desktop-bridge';
 import { getCheckpointManager } from '../services/checkpointManager';
 import { showOriginalContext, getPatchOutputChannel } from '../services/patchEngine';
 import { runInlineCommand } from './runInlineCommand';
