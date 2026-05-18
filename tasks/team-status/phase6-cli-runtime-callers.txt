@@ -1,0 +1,43 @@
+Phase 6 CLI — runtime/ caller enumeration
+Generated: 2026-05-18 before pilot 5 move
+
+=== RISK ASSESSMENT ===
+Wildcard runtime imports (runtime::*):           NONE
+Exhaustive match on any runtime enum:            NONE (no enums in runtime/)
+tokio::runtime noise hits filtered:              2 (tui/bottom_pane files — NOT crate::runtime)
+
+=== PER-FILE DISTRIBUTION (27 call-sites across 11 real files) ===
+   7  repl/registry.rs         — session_control (list, load, delete, fork, resolve, dir)
+   5  agent/mod.rs             — tool_catalog x3, session_control x1, session x1
+   4  tools/git.rs             — worktree x3 (enter, exit, list)
+   2  tools/task_registry.rs   — advisor x2 (AdvisorRequest, consult)
+   2  sessions.rs              — session x1, session_control x1 (named imports)
+   1  tui/tui_app.rs           — session x1 (ManagedSession type in fn sig)
+   1  tools/web.rs             — tool_catalog x1 (all_builtin_tool_definitions)
+   1  tool_search.rs           — tool_catalog x1 (in test mod)
+   1  runtime/tool_distillation.rs — tool_catalog x1 (internal self-ref, moves with dir)
+   1  repl/mod.rs              — session x1 (ManagedSession type alias)
+   1  agent/chat.rs            — tool_catalog x1 (effective_tool_definitions)
+   1  agent/prompt.rs          — tool_catalog x1 (all_builtin_tool_definitions)
+
+=== SUBMODULE PATHS USED ===
+   9  crate::runtime::session_control
+   8  crate::runtime::tool_catalog
+   4  crate::runtime::worktree
+   4  crate::runtime::session
+   2  crate::runtime::advisor
+
+=== NOISE FILTERED (tokio::runtime, NOT crate::runtime) ===
+   tui/bottom_pane/chat_composer_voice.rs:13:   use tokio::runtime::Handle;
+   tui/bottom_pane/composer/key_handling.rs:38: use tokio::runtime::Handle;
+
+=== INTERNAL SELF-REFERENCE (safe — moves with directory) ===
+   runtime/tool_distillation.rs:93: use crate::runtime::tool_catalog::built_in_tool_definitions;
+   This resolves correctly after move: crate::runtime still points to
+   platform::runtime via the re-export in lib.rs.
+
+=== CONCLUSION ===
+All 27 real call-sites use `crate::runtime::<submod>::` paths. The re-export
+`pub use platform::runtime` in lib.rs preserves all 5 submodule paths
+(session_control, tool_catalog, worktree, session, advisor) without any
+downstream source edits. Safe to move.
