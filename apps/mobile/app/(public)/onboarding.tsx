@@ -236,7 +236,7 @@ export default function OnboardingScreen() {
     setScreen('download');
     setDownloadProgress(0);
 
-    // TODO(model-catalog-engineer): add downloadUrl + checksum + format to OnDeviceModel,
+    // TODO(model-catalog-engineer): add downloadUrl + checksum + format + runtime to OnDeviceModel,
     // then replace this stub with the real call:
     //
     //   import { downloadModel, cancelDownload, ModelDownloadError } from '@/services/modelDownload';
@@ -246,8 +246,8 @@ export default function OnboardingScreen() {
     //     downloadUrl: recommendedModel.downloadUrl,   // not yet in catalog
     //     checksum: recommendedModel.checksum,         // not yet in catalog
     //     fileSizeBytes: recommendedModel.fileSizeBytes,
-    //     runtime: 'executorch',
-    //     format: 'gguf',
+    //     runtime: recommendedModel.supportedRuntimes[0],  // authoritative from catalog
+    //     format: recommendedModel.format,                 // authoritative from catalog
     //     wifiOnly: !cellularEnabled,                  // wire cellular toggle state here
     //     onProgress(downloaded, total, speedBps) {
     //       setDownloadProgress((downloaded / total) * 100);
@@ -279,7 +279,7 @@ export default function OnboardingScreen() {
   }, [finishOnboarding]);
 
   return (
-    <SafeAreaView testID="onboarding-root" style={{ flex: 1, backgroundColor: '#1a1915' }}>
+    <SafeAreaView testID="onboarding-root" style={{ flex: 1, backgroundColor: colors.background }}>
       <Reanimated.View
         key={screen}
         entering={FadeIn.duration(280)}
@@ -329,7 +329,10 @@ function HeroScreen({
   onStartChatting: () => void;
 }) {
   return (
-    <View testID="onboarding-hero-screen" style={styles.heroRoot}>
+    <View
+      testID="onboarding-hero-screen"
+      style={[styles.heroRoot, { backgroundColor: colors.background }]}
+    >
       {/* Brand mark — neutral geometric circle (no burst / spiral / sparkle) */}
       <View style={styles.brandMark}>
         <View style={[styles.brandDot, { backgroundColor: colors.teal }]} />
@@ -363,7 +366,7 @@ function HeroScreen({
         />
         <TrustChip
           icon={<Shield size={14} color={colors.teal} />}
-          label="DPDP Act 2023"
+          label="DPDP Act 2023 compliant"
           colors={colors}
         />
       </View>
@@ -376,7 +379,7 @@ function HeroScreen({
         accessibilityLabel="Start chatting"
         style={[styles.ctaBtn, { backgroundColor: colors.teal }]}
       >
-        <Text style={styles.ctaBtnText}>Start chatting</Text>
+        <Text style={[styles.ctaBtnText, { color: colors.black }]}>Start chatting</Text>
       </Pressable>
 
       {/* Footer — exact copy per lock */}
@@ -506,7 +509,10 @@ function DeviceTierScreen({
             <View
               style={[
                 styles.toggleThumb,
-                { transform: [{ translateX: cellularEnabled ? 20 : 2 }] },
+                {
+                  backgroundColor: colors.white,
+                  transform: [{ translateX: cellularEnabled ? 20 : 2 }],
+                },
               ]}
             />
           </View>
@@ -521,18 +527,21 @@ function DeviceTierScreen({
         accessibilityLabel={model.needsDownload ? 'Download model' : 'Continue'}
         style={[styles.ctaBtn, { backgroundColor: colors.teal, marginTop: 24 }]}
       >
-        <Text style={styles.ctaBtnText}>
+        <Text style={[styles.ctaBtnText, { color: colors.black }]}>
           {model.needsDownload
             ? `Download model (${formatBytes(model.fileSizeBytes)})`
             : 'Continue'}
         </Text>
       </Pressable>
 
-      {/* Secondary: model picker — screen not yet built, TODO wire when available */}
+      {/* Secondary: model picker — TODO wire to model-picker screen when built */}
       <Pressable
         testID="device-tier-pick-model-btn"
         accessibilityRole="button"
         accessibilityLabel="Pick a different model"
+        onPress={() => {
+          /* TODO: navigate to model picker screen */
+        }}
         style={styles.secondaryBtn}
       >
         <Text style={[styles.secondaryBtnText, { color: colors.textMuted }]}>
@@ -695,7 +704,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
-    backgroundColor: '#1a1915',
   },
   brandMark: {
     width: 80,
@@ -752,7 +760,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   ctaBtnText: {
-    color: '#000',
     fontWeight: '600',
     fontSize: 17,
   },
@@ -830,7 +837,6 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#fff',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
