@@ -306,12 +306,6 @@ export interface ExtendedMessageMetadata {
  * Valid subscription status values.
  */
 export type SubscriptionStatus = 'none' | 'active' | 'past_due' | 'canceled' | 'trialing';
-
-/**
- * Valid plan tier values.
- */
-export type PlanTier = 'free' | 'hobby' | 'pro' | 'max' | 'enterprise' | 'none';
-
 // ============================================================================
 // DOMPurify Config Types
 // ============================================================================

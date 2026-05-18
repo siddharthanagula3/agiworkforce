@@ -42,7 +42,7 @@ Concretely, Phase 4 batches must satisfy: after each commit
 - All 8 provider packages typecheck + test + build GREEN.
 - `apps/desktop` and `apps/extension-vscode` typecheck GREEN.
 - `apps/extension` build GREEN.
-- `apps/web` and `apps/mobile` typecheck **no worse** than baseline (same error set, same count).
+- `apps/web` (13 errors) and `apps/mobile` (30 errors) typecheck **no worse** than baseline; error-set diff against `phase4-baseline-{web,mobile}-errors.txt` must be empty.
 
 ## Notes for inventory phase
 
