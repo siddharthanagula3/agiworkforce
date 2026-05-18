@@ -9,7 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { activate } from '../extension';
-import { __resetSubsystemHealthForTests } from '../services/subsystemHealth';
+import { __resetSubsystemHealthForTests } from '../core/subsystemHealth';
 
 function makeMockContext(): vscode.ExtensionContext {
   return {

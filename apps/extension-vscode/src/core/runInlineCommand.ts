@@ -9,7 +9,7 @@ import * as vscode from 'vscode';
 import { Config } from '../utils/config';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
 import { applyLlmEdit } from '../utils/applyEdit';
-import * as telemetry from '../services/telemetry';
+import * as telemetry from './telemetry';
 
 export type InlineCommand = 'explain' | 'fix' | 'refactor' | 'tests' | 'docs';
 
