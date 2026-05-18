@@ -29,10 +29,9 @@ import {
   composeFirstRunDisclosure,
   isDisclosureSatisfied,
   recordDisclosureAcceptance,
-  DISCLOSURE_LEDGER_KEY,
   type DisclosureCopy,
-  type DisclosureLedger,
 } from '@agiworkforce/compliance';
+import { mmkvDisclosureLedger } from '@/services/complianceLedger';
 import {
   detectCapabilities,
   getDefaultModel,
@@ -41,23 +40,17 @@ import {
 } from '@agiworkforce/local-llm';
 import type { OnDeviceModel } from '@agiworkforce/types';
 
-// ---------------------------------------------------------------------------
-// MMKV-backed disclosure ledger (mobile surface)
-// ---------------------------------------------------------------------------
-const mmkvLedger: DisclosureLedger = {
-  read() {
-    const raw = storage.getString(DISCLOSURE_LEDGER_KEY);
-    if (!raw) return null;
-    try {
-      return JSON.parse(raw) as ReturnType<typeof mmkvLedger.read>;
-    } catch {
-      return null;
-    }
-  },
-  write(record) {
-    storage.set(DISCLOSURE_LEDGER_KEY, JSON.stringify(record));
-  },
-};
+// Apple 5.1.2(i) requires enumerating every named third-party AI provider the
+// surface may route to. Omit Custom and Chinese-HQ providers (they get their
+// own chineseHqProviderRows section). Keep updated when providers change.
+const DISCLOSURE_PROVIDERS = [
+  'Anthropic',
+  'OpenAI',
+  'Google',
+  'xAI',
+  'Perplexity',
+  'Mistral',
+] as const;
 
 // ---------------------------------------------------------------------------
 // Device tier derived from DeviceCapabilities
@@ -198,7 +191,7 @@ export default function OnboardingScreen() {
   // Hero CTA → disclosure gate
   // ---------------------------------------------------------------------------
   const handleHeroCTA = useCallback(async () => {
-    const alreadySatisfied = isDisclosureSatisfied(mmkvLedger, false);
+    const alreadySatisfied = isDisclosureSatisfied(mmkvDisclosureLedger, false);
     if (alreadySatisfied) {
       setScreen('device-tier');
       return;
@@ -206,7 +199,7 @@ export default function OnboardingScreen() {
     const copy = composeFirstRunDisclosure({
       surface: 'mobile',
       offersManagedCloud: false,
-      thirdPartyAiProviders: [],
+      thirdPartyAiProviders: [...DISCLOSURE_PROVIDERS],
     });
     setDisclosureCopy(copy);
     setDisclosureVisible(true);
@@ -216,10 +209,12 @@ export default function OnboardingScreen() {
     if (!disclosureCopy) return;
     setDisclosureVisible(false);
     await recordDisclosureAcceptance({
-      ledger: mmkvLedger,
+      ledger: mmkvDisclosureLedger,
       copy: disclosureCopy,
       surface: 'mobile',
-      managedCloudAccepted: false,
+      // true even in v1 local-only: gate uses requireManagedCloud:false so this
+      // field is never evaluated now, and future cloud gate won't block returning users.
+      managedCloudAccepted: true,
       chineseHqProvidersAccepted: [],
     });
     setScreen('device-tier');
