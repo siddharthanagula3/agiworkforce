@@ -1,0 +1,2413 @@
+{
+  "generated_at": "2026-05-18T20:02:40.602Z",
+  "repo_root": "/Users/siddhartha/Desktop/agiworkforce-reorg-mobile-pilot",
+  "scope": "apps/mobile/",
+  "excluded_dirs": [
+    "node_modules",
+    ".expo",
+    "android",
+    "ios",
+    "__tests__",
+    "__mocks__",
+    "dist",
+    "build",
+    ".next"
+  ],
+  "total_files": 266,
+  "files": [
+    {
+      "path": "apps/mobile/app.config.js",
+      "current_dir": "app.config.js",
+      "proposed_dir": "unclassified",
+      "role_guess": "unknown",
+      "imports_in_count": 0,
+      "imports_out_count": 0,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/app/_layout.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 23,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/app/(app)/_layout.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 4,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/app/(app)/(tabs)/_layout.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 1,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/app/(app)/(tabs)/agents.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 14,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/app/(app)/(tabs)/chat.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 23,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/app/(app)/(tabs)/index.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 1,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/app/(app)/(tabs)/projects.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 8,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/app/(app)/(tabs)/settings.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 15,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/app/(app)/+error.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 6,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/app/(app)/about.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 11,
+      "owner_role": "marketing-engineer"
+    },
+    {
+      "path": "apps/mobile/app/(app)/account.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 16,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/app/(app)/agents/[id].tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 21,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/app/(app)/agents/index.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 12,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/app/(app)/billing/index.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 13,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/app/(app)/camera.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 11,
+      "owner_role": "vision-engineer"
+    },
+    {
+      "path": "apps/mobile/app/(app)/chat/[id].tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 34,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/app/(app)/companion/agent/[id].tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 15,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/app/(app)/companion/index.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 17,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/app/(app)/compare.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 13,
+      "owner_role": "compare-engineer"
+    },
+    {
+      "path": "apps/mobile/app/(app)/connectors/index.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 9,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/app/(app)/dispatch/index.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 13,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/app/(app)/feedback.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 9,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/app/(app)/image.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 9,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/app/(app)/index.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 1,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/app/(app)/messaging/index.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 13,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/app/(app)/notifications/index.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 13,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/app/(app)/profile/index.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 21,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/app/(app)/scan.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 13,
+      "owner_role": "vision-engineer"
+    },
+    {
+      "path": "apps/mobile/app/(app)/schedules/create.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 11,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/app/(app)/schedules/index.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 16,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/app/(app)/settings/auto-approve.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 12,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/app/(app)/settings/capabilities.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 12,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/app/(app)/settings/index.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 1,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/app/(app)/settings/integrations.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 16,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/app/(app)/settings/memory-import.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 14,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/app/(app)/settings/memory.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 13,
+      "owner_role": "memory-engineer"
+    },
+    {
+      "path": "apps/mobile/app/(app)/settings/notifications.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 11,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/app/(app)/settings/personalization.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 10,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/app/(app)/share-preview.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 9,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/app/(app)/skills/index.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 7,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/app/(app)/translate.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 7,
+      "owner_role": "translate-engineer"
+    },
+    {
+      "path": "apps/mobile/app/(app)/usage.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 12,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/app/(app)/voice.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 18,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/app/(app)/widget-setup.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 8,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/app/(auth)/_layout.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 2,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/app/(auth)/login.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 6,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/app/(auth)/reset-password.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 8,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/app/(public)/_layout.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 1,
+      "owner_role": "onboarding-engineer"
+    },
+    {
+      "path": "apps/mobile/app/(public)/age-gate.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 7,
+      "owner_role": "onboarding-engineer"
+    },
+    {
+      "path": "apps/mobile/app/(public)/onboarding.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 13,
+      "owner_role": "onboarding-engineer"
+    },
+    {
+      "path": "apps/mobile/app/+error.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 3,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/app/+not-found.tsx",
+      "current_dir": "app",
+      "proposed_dir": "app",
+      "role_guess": "expo-route",
+      "imports_in_count": 0,
+      "imports_out_count": 3,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/babel.config.js",
+      "current_dir": "babel.config.js",
+      "proposed_dir": "unclassified",
+      "role_guess": "unknown",
+      "imports_in_count": 0,
+      "imports_out_count": 0,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/components/agents/AgentCard.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 2,
+      "imports_out_count": 8,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/agents/AgentStatusBadge.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 2,
+      "imports_out_count": 6,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/agents/ToolTimeline.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 6,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/auth/LoginForm.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 5,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/auth/OAuthButtons.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 10,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/billing/UpsellCard.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 7,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/chat/AddToChatSheet.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 2,
+      "imports_out_count": 17,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/ApprovalCard.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 7,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/ArtifactFullScreen.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 9,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/AttachmentPreview.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 5,
+      "imports_out_count": 8,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/AutoApproveToggle.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 0,
+      "imports_out_count": 5,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/ChatEmptyState.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 10,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/ChatInput.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 3,
+      "imports_out_count": 19,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/CitationChip.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 4,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/CodeBlockCopyButton.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 6,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/CollapsibleSources.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 6,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/CommandPalette.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 6,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/ContextWarningChip.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 0,
+      "imports_out_count": 6,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/ConversationExportSheet.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 7,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/ConversationStarters.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 0,
+      "imports_out_count": 8,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/FileExportButton.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 10,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/GeneratedImage.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 8,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/ImageFullScreen.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 10,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/ImageGenProgress.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 6,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/InlineArtifactCard.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 5,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/InlineToolCall.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 7,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/MessageBubble.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 33,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/MessageContentRenderer.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 4,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/MessageEditModal.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 3,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/MessageList.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 12,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/ModelSelectorButton.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 8,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/PaywallBottomSheet.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 7,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/ProjectSelectorBar.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 7,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/ProvenanceFooter.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 3,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/QuotedReplyBar.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 5,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/ReportFlagButton.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 5,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/SendButton.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 4,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/StatusStep.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 5,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/StreamingIndicator.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 2,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/StyleSelector.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 10,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/TaskChips.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 2,
+      "imports_out_count": 4,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/TemporaryChatToggle.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 0,
+      "imports_out_count": 6,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/ThinkingBottomSheet.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 5,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/ThinkingLine.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 5,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/ToolAccessSelector.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 10,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/ToolCallCard.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 0,
+      "imports_out_count": 6,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/chat/TypingIndicator.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 3,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/companion/AgentDashboard.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 2,
+      "imports_out_count": 16,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/companion/CompanionDemoWalkthrough.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 8,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/companion/ConnectionStateViews.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 6,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/companion/DesktopInfoCard.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 9,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/companion/ExecutionStream.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 7,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/companion/PairingStatus.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 6,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/companion/QRScanner.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 8,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/companion/StatusBanners.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 5,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/Composer/Composer.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 0,
+      "imports_out_count": 5,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/components/connectors/connectorData.ts",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 2,
+      "imports_out_count": 0,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/connectors/ConnectorItem.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 7,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/drawer/DrawerContent.tsx",
+      "current_dir": "components",
+      "proposed_dir": "ui",
+      "role_guess": "shared-component",
+      "imports_in_count": 1,
+      "imports_out_count": 11,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/components/image/ImageWithQuestion.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 11,
+      "owner_role": "vision-engineer"
+    },
+    {
+      "path": "apps/mobile/components/integrations/DeviceIntegrationStatus.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 8,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/integrations/PlatformCard.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 2,
+      "imports_out_count": 7,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/messaging/ConnectedBadge.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 4,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/messaging/PlatformCard.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 7,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/messaging/PlatformSetupSheet.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 2,
+      "imports_out_count": 9,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/model-picker/AutoModeCard.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 7,
+      "owner_role": "model-catalog-engineer"
+    },
+    {
+      "path": "apps/mobile/components/model-picker/ModelPickerSheet.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 4,
+      "imports_out_count": 14,
+      "owner_role": "model-catalog-engineer"
+    },
+    {
+      "path": "apps/mobile/components/model-picker/ModelRow.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 10,
+      "owner_role": "model-catalog-engineer"
+    },
+    {
+      "path": "apps/mobile/components/model-picker/ProviderLogo.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 3,
+      "owner_role": "model-catalog-engineer"
+    },
+    {
+      "path": "apps/mobile/components/onboarding/ByokConsentModal.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 0,
+      "imports_out_count": 7,
+      "owner_role": "onboarding-engineer"
+    },
+    {
+      "path": "apps/mobile/components/onboarding/FirstRunDisclosureModal.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 5,
+      "owner_role": "onboarding-engineer"
+    },
+    {
+      "path": "apps/mobile/components/onboarding/ModeCard.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 0,
+      "imports_out_count": 5,
+      "owner_role": "onboarding-engineer"
+    },
+    {
+      "path": "apps/mobile/components/Paywall/ProPlusPaywall.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 7,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/projects/ProjectCard.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 7,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/schedules/QuickSchedule.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 5,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/schedules/RecurrencePicker.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 7,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/schedules/ScheduleCard.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 14,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/schedules/ScheduleForm.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 13,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/schedules/ScheduleRunHistory.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 7,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/components/settings/AddMemorySheet.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 6,
+      "owner_role": "settings-by-screen"
+    },
+    {
+      "path": "apps/mobile/components/settings/MemoryItem.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 9,
+      "owner_role": "settings-by-screen"
+    },
+    {
+      "path": "apps/mobile/components/shared/ApprovalModal.tsx",
+      "current_dir": "components",
+      "proposed_dir": "ui",
+      "role_guess": "shared-component",
+      "imports_in_count": 1,
+      "imports_out_count": 11,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/components/shared/ConnectionStatus.tsx",
+      "current_dir": "components",
+      "proposed_dir": "ui",
+      "role_guess": "shared-component",
+      "imports_in_count": 1,
+      "imports_out_count": 6,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/components/shared/DesktopCompanionWidget.tsx",
+      "current_dir": "components",
+      "proposed_dir": "ui",
+      "role_guess": "shared-component",
+      "imports_in_count": 1,
+      "imports_out_count": 12,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/components/sidebar/AutoTagBadge.tsx",
+      "current_dir": "components",
+      "proposed_dir": "ui",
+      "role_guess": "shared-component",
+      "imports_in_count": 1,
+      "imports_out_count": 3,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/components/sidebar/ConversationItem.tsx",
+      "current_dir": "components",
+      "proposed_dir": "ui",
+      "role_guess": "shared-component",
+      "imports_in_count": 1,
+      "imports_out_count": 15,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/components/sidebar/ConversationList.tsx",
+      "current_dir": "components",
+      "proposed_dir": "ui",
+      "role_guess": "shared-component",
+      "imports_in_count": 1,
+      "imports_out_count": 9,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/components/sidebar/SearchBar.tsx",
+      "current_dir": "components",
+      "proposed_dir": "ui",
+      "role_guess": "shared-component",
+      "imports_in_count": 1,
+      "imports_out_count": 4,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/components/sidebar/Sidebar.tsx",
+      "current_dir": "components",
+      "proposed_dir": "ui",
+      "role_guess": "shared-component",
+      "imports_in_count": 0,
+      "imports_out_count": 0,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/components/sidebar/SidebarHeader.tsx",
+      "current_dir": "components",
+      "proposed_dir": "ui",
+      "role_guess": "shared-component",
+      "imports_in_count": 0,
+      "imports_out_count": 7,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/components/sidebar/TagFilter.tsx",
+      "current_dir": "components",
+      "proposed_dir": "ui",
+      "role_guess": "shared-component",
+      "imports_in_count": 1,
+      "imports_out_count": 9,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/components/ui/avatar.tsx",
+      "current_dir": "components",
+      "proposed_dir": "ui",
+      "role_guess": "ui-primitive",
+      "imports_in_count": 1,
+      "imports_out_count": 2,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/components/ui/badge.tsx",
+      "current_dir": "components",
+      "proposed_dir": "ui",
+      "role_guess": "ui-primitive",
+      "imports_in_count": 19,
+      "imports_out_count": 2,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/components/ui/bottom-sheet.tsx",
+      "current_dir": "components",
+      "proposed_dir": "ui",
+      "role_guess": "ui-primitive",
+      "imports_in_count": 1,
+      "imports_out_count": 2,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/components/ui/button.tsx",
+      "current_dir": "components",
+      "proposed_dir": "ui",
+      "role_guess": "ui-primitive",
+      "imports_in_count": 21,
+      "imports_out_count": 4,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/components/ui/card.tsx",
+      "current_dir": "components",
+      "proposed_dir": "ui",
+      "role_guess": "ui-primitive",
+      "imports_in_count": 24,
+      "imports_out_count": 1,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/components/ui/input.tsx",
+      "current_dir": "components",
+      "proposed_dir": "ui",
+      "role_guess": "ui-primitive",
+      "imports_in_count": 4,
+      "imports_out_count": 3,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/components/ui/separator.tsx",
+      "current_dir": "components",
+      "proposed_dir": "ui",
+      "role_guess": "ui-primitive",
+      "imports_in_count": 18,
+      "imports_out_count": 1,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/components/ui/skeleton.tsx",
+      "current_dir": "components",
+      "proposed_dir": "ui",
+      "role_guess": "ui-primitive",
+      "imports_in_count": 3,
+      "imports_out_count": 1,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/components/ui/switch.tsx",
+      "current_dir": "components",
+      "proposed_dir": "ui",
+      "role_guess": "ui-primitive",
+      "imports_in_count": 6,
+      "imports_out_count": 5,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/components/ui/text.tsx",
+      "current_dir": "components",
+      "proposed_dir": "ui",
+      "role_guess": "ui-primitive",
+      "imports_in_count": 130,
+      "imports_out_count": 1,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/components/voice/RecordingOverlay.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 8,
+      "owner_role": "voice-engineer"
+    },
+    {
+      "path": "apps/mobile/components/voice/VoiceConversationScreen.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 2,
+      "imports_out_count": 13,
+      "owner_role": "voice-engineer"
+    },
+    {
+      "path": "apps/mobile/components/voice/VoiceInputButton.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 9,
+      "owner_role": "voice-engineer"
+    },
+    {
+      "path": "apps/mobile/components/voice/VoiceRecording.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 0,
+      "imports_out_count": 8,
+      "owner_role": "voice-engineer"
+    },
+    {
+      "path": "apps/mobile/components/voice/VoiceReview.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 0,
+      "imports_out_count": 9,
+      "owner_role": "voice-engineer"
+    },
+    {
+      "path": "apps/mobile/components/voice/VoiceSelector.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 10,
+      "owner_role": "voice-engineer"
+    },
+    {
+      "path": "apps/mobile/components/voice/Waveform.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 4,
+      "imports_out_count": 2,
+      "owner_role": "voice-engineer"
+    },
+    {
+      "path": "apps/mobile/components/waitlist/CloudWaitlistSheet.tsx",
+      "current_dir": "components",
+      "proposed_dir": "features",
+      "role_guess": "feature-component",
+      "imports_in_count": 1,
+      "imports_out_count": 5,
+      "owner_role": "waitlist-engineer"
+    },
+    {
+      "path": "apps/mobile/hooks/useBiometricGate.ts",
+      "current_dir": "hooks",
+      "proposed_dir": "core",
+      "role_guess": "hook",
+      "imports_in_count": 1,
+      "imports_out_count": 4,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/hooks/useNetworkStatus.ts",
+      "current_dir": "hooks",
+      "proposed_dir": "core",
+      "role_guess": "hook",
+      "imports_in_count": 1,
+      "imports_out_count": 4,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/hooks/useTheme.ts",
+      "current_dir": "hooks",
+      "proposed_dir": "core",
+      "role_guess": "hook",
+      "imports_in_count": 48,
+      "imports_out_count": 4,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/hooks/useVoicePlayback.ts",
+      "current_dir": "hooks",
+      "proposed_dir": "core",
+      "role_guess": "hook",
+      "imports_in_count": 1,
+      "imports_out_count": 3,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/jest.config.js",
+      "current_dir": "jest.config.js",
+      "proposed_dir": "unclassified",
+      "role_guess": "unknown",
+      "imports_in_count": 0,
+      "imports_out_count": 0,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/jest.setup.js",
+      "current_dir": "jest.setup.js",
+      "proposed_dir": "unclassified",
+      "role_guess": "unknown",
+      "imports_in_count": 0,
+      "imports_out_count": 0,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/lib/abortSignal.ts",
+      "current_dir": "lib",
+      "proposed_dir": "core",
+      "role_guess": "utility",
+      "imports_in_count": 2,
+      "imports_out_count": 0,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/lib/biometricFlagStore.ts",
+      "current_dir": "lib",
+      "proposed_dir": "core",
+      "role_guess": "utility",
+      "imports_in_count": 2,
+      "imports_out_count": 2,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/lib/clipboard.ts",
+      "current_dir": "lib",
+      "proposed_dir": "core",
+      "role_guess": "utility",
+      "imports_in_count": 5,
+      "imports_out_count": 0,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/lib/constants.ts",
+      "current_dir": "lib",
+      "proposed_dir": "core",
+      "role_guess": "utility",
+      "imports_in_count": 10,
+      "imports_out_count": 0,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/lib/contentFilter.ts",
+      "current_dir": "lib",
+      "proposed_dir": "core",
+      "role_guess": "utility",
+      "imports_in_count": 0,
+      "imports_out_count": 0,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/lib/deviceId.ts",
+      "current_dir": "lib",
+      "proposed_dir": "core",
+      "role_guess": "utility",
+      "imports_in_count": 1,
+      "imports_out_count": 2,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/lib/dispatchAgentValidator.ts",
+      "current_dir": "lib",
+      "proposed_dir": "core",
+      "role_guess": "utility",
+      "imports_in_count": 1,
+      "imports_out_count": 1,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/lib/dispatchHmac.ts",
+      "current_dir": "lib",
+      "proposed_dir": "core",
+      "role_guess": "utility",
+      "imports_in_count": 1,
+      "imports_out_count": 1,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/lib/markdown.ts",
+      "current_dir": "lib",
+      "proposed_dir": "core",
+      "role_guess": "utility",
+      "imports_in_count": 0,
+      "imports_out_count": 0,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/lib/mmkv.ts",
+      "current_dir": "lib",
+      "proposed_dir": "storage",
+      "role_guess": "storage-primitive",
+      "imports_in_count": 28,
+      "imports_out_count": 4,
+      "owner_role": "storage-engineer"
+    },
+    {
+      "path": "apps/mobile/lib/models.ts",
+      "current_dir": "lib",
+      "proposed_dir": "features",
+      "role_guess": "feature-data",
+      "imports_in_count": 17,
+      "imports_out_count": 0,
+      "owner_role": "model-catalog-engineer"
+    },
+    {
+      "path": "apps/mobile/lib/pinning.ts",
+      "current_dir": "lib",
+      "proposed_dir": "core",
+      "role_guess": "utility",
+      "imports_in_count": 1,
+      "imports_out_count": 0,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/lib/providerStreamClient.ts",
+      "current_dir": "lib",
+      "proposed_dir": "core",
+      "role_guess": "utility",
+      "imports_in_count": 1,
+      "imports_out_count": 1,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/lib/safeOpenURL.ts",
+      "current_dir": "lib",
+      "proposed_dir": "core",
+      "role_guess": "utility",
+      "imports_in_count": 8,
+      "imports_out_count": 1,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/lib/secureStorage.ts",
+      "current_dir": "lib",
+      "proposed_dir": "storage",
+      "role_guess": "storage-primitive",
+      "imports_in_count": 1,
+      "imports_out_count": 2,
+      "owner_role": "storage-engineer"
+    },
+    {
+      "path": "apps/mobile/lib/sendQueue.ts",
+      "current_dir": "lib",
+      "proposed_dir": "core",
+      "role_guess": "utility",
+      "imports_in_count": 1,
+      "imports_out_count": 1,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/lib/tagUtils.ts",
+      "current_dir": "lib",
+      "proposed_dir": "core",
+      "role_guess": "utility",
+      "imports_in_count": 1,
+      "imports_out_count": 1,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/lib/theme.ts",
+      "current_dir": "lib",
+      "proposed_dir": "ui",
+      "role_guess": "theme",
+      "imports_in_count": 92,
+      "imports_out_count": 1,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/lib/v1FeatureFlags.ts",
+      "current_dir": "lib",
+      "proposed_dir": "core",
+      "role_guess": "feature-flags",
+      "imports_in_count": 32,
+      "imports_out_count": 0,
+      "owner_role": "cloud-mode-gate-engineer"
+    },
+    {
+      "path": "apps/mobile/lib/voicePresets.ts",
+      "current_dir": "lib",
+      "proposed_dir": "core",
+      "role_guess": "utility",
+      "imports_in_count": 1,
+      "imports_out_count": 0,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/metro.config.js",
+      "current_dir": "metro.config.js",
+      "proposed_dir": "unclassified",
+      "role_guess": "unknown",
+      "imports_in_count": 0,
+      "imports_out_count": 0,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/nativewind-env.d.ts",
+      "current_dir": "nativewind-env.d.ts",
+      "proposed_dir": "unclassified",
+      "role_guess": "unknown",
+      "imports_in_count": 0,
+      "imports_out_count": 0,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/scripts/screenshots/pipeline.ts",
+      "current_dir": "scripts",
+      "proposed_dir": "unclassified",
+      "role_guess": "script",
+      "imports_in_count": 0,
+      "imports_out_count": 3,
+      "owner_role": "test-engineer"
+    },
+    {
+      "path": "apps/mobile/scripts/screenshots/specs/01-multi-provider.spec.ts",
+      "current_dir": "scripts",
+      "proposed_dir": "unclassified",
+      "role_guess": "script",
+      "imports_in_count": 0,
+      "imports_out_count": 3,
+      "owner_role": "test-engineer"
+    },
+    {
+      "path": "apps/mobile/services/ageGate.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 2,
+      "imports_out_count": 1,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/services/api.ts",
+      "current_dir": "services",
+      "proposed_dir": "integrations",
+      "role_guess": "http-or-sdk",
+      "imports_in_count": 19,
+      "imports_out_count": 5,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/services/autotag.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 5,
+      "imports_out_count": 1,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/services/backgroundFetch.ts",
+      "current_dir": "services",
+      "proposed_dir": "platform",
+      "role_guess": "background-adapter",
+      "imports_in_count": 1,
+      "imports_out_count": 5,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/services/billing.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 2,
+      "imports_out_count": 2,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/services/companion.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 5,
+      "imports_out_count": 4,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/services/companionNotifications.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 2,
+      "imports_out_count": 4,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/services/contentReport.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 1,
+      "imports_out_count": 2,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/services/contextBudgeter.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 2,
+      "imports_out_count": 3,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/services/conversationSync.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 1,
+      "imports_out_count": 4,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/services/desktopStatus.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 1,
+      "imports_out_count": 3,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/services/deviceIntegrations.ts",
+      "current_dir": "services",
+      "proposed_dir": "platform",
+      "role_guess": "device-adapter",
+      "imports_in_count": 3,
+      "imports_out_count": 3,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/services/dispatchRealtime.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 1,
+      "imports_out_count": 9,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/services/docParser.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 2,
+      "imports_out_count": 1,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/services/fileCreation.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 2,
+      "imports_out_count": 3,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/services/healthData.ts",
+      "current_dir": "services",
+      "proposed_dir": "platform",
+      "role_guess": "health-adapter",
+      "imports_in_count": 4,
+      "imports_out_count": 3,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/services/heartbeat.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 1,
+      "imports_out_count": 3,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/services/imagegen.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 1,
+      "imports_out_count": 2,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/services/languageQA.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 0,
+      "imports_out_count": 0,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/services/mcp.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 0,
+      "imports_out_count": 3,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/services/memory.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 0,
+      "imports_out_count": 1,
+      "owner_role": "memory-engineer"
+    },
+    {
+      "path": "apps/mobile/services/memoryCompactor.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 0,
+      "imports_out_count": 2,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/services/memoryImport.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 1,
+      "imports_out_count": 0,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/services/messaging.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 3,
+      "imports_out_count": 2,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/services/modelCatalog.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 1,
+      "imports_out_count": 4,
+      "owner_role": "model-catalog-engineer"
+    },
+    {
+      "path": "apps/mobile/services/notifications.ts",
+      "current_dir": "services",
+      "proposed_dir": "platform",
+      "role_guess": "push-adapter",
+      "imports_in_count": 5,
+      "imports_out_count": 8,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/services/ocr.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 1,
+      "imports_out_count": 1,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/services/offlineQueue.ts",
+      "current_dir": "services",
+      "proposed_dir": "storage",
+      "role_guess": "offline-queue",
+      "imports_in_count": 2,
+      "imports_out_count": 1,
+      "owner_role": "storage-engineer"
+    },
+    {
+      "path": "apps/mobile/services/ragChunker.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 0,
+      "imports_out_count": 2,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/services/ragIndex.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 0,
+      "imports_out_count": 2,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/services/realtime.ts",
+      "current_dir": "services",
+      "proposed_dir": "integrations",
+      "role_guess": "realtime",
+      "imports_in_count": 1,
+      "imports_out_count": 5,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/services/schedules.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 1,
+      "imports_out_count": 3,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/services/secureFetch.ts",
+      "current_dir": "services",
+      "proposed_dir": "integrations",
+      "role_guess": "http-or-sdk",
+      "imports_in_count": 7,
+      "imports_out_count": 1,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/services/skills.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 0,
+      "imports_out_count": 4,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/services/streaming.ts",
+      "current_dir": "services",
+      "proposed_dir": "integrations",
+      "role_guess": "native-bridge",
+      "imports_in_count": 2,
+      "imports_out_count": 6,
+      "owner_role": "native-runtime-engineer"
+    },
+    {
+      "path": "apps/mobile/services/supabase.ts",
+      "current_dir": "services",
+      "proposed_dir": "integrations",
+      "role_guess": "http-or-sdk",
+      "imports_in_count": 17,
+      "imports_out_count": 4,
+      "owner_role": "waitlist-engineer"
+    },
+    {
+      "path": "apps/mobile/services/tierGuard.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 1,
+      "imports_out_count": 1,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/services/translateService.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 1,
+      "imports_out_count": 2,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/services/tts.ts",
+      "current_dir": "services",
+      "proposed_dir": "platform",
+      "role_guess": "tts-adapter",
+      "imports_in_count": 4,
+      "imports_out_count": 1,
+      "owner_role": "voice-engineer"
+    },
+    {
+      "path": "apps/mobile/services/usage.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 1,
+      "imports_out_count": 2,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/services/vision.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 2,
+      "imports_out_count": 2,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/services/voice.ts",
+      "current_dir": "services",
+      "proposed_dir": "platform",
+      "role_guess": "voice-adapter",
+      "imports_in_count": 5,
+      "imports_out_count": 4,
+      "owner_role": "voice-engineer"
+    },
+    {
+      "path": "apps/mobile/services/voiceInput.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 1,
+      "imports_out_count": 2,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/services/voiceOutput.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 1,
+      "imports_out_count": 1,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/services/waitlist.ts",
+      "current_dir": "services",
+      "proposed_dir": "features",
+      "role_guess": "feature-service",
+      "imports_in_count": 2,
+      "imports_out_count": 1,
+      "owner_role": "waitlist-engineer"
+    },
+    {
+      "path": "apps/mobile/storage/docChunks.ts",
+      "current_dir": "storage",
+      "proposed_dir": "storage",
+      "role_guess": "data-boundary",
+      "imports_in_count": 1,
+      "imports_out_count": 2,
+      "owner_role": "storage-engineer"
+    },
+    {
+      "path": "apps/mobile/storage/index.ts",
+      "current_dir": "storage",
+      "proposed_dir": "storage",
+      "role_guess": "data-boundary",
+      "imports_in_count": 0,
+      "imports_out_count": 0,
+      "owner_role": "storage-engineer"
+    },
+    {
+      "path": "apps/mobile/storage/memory.ts",
+      "current_dir": "storage",
+      "proposed_dir": "storage",
+      "role_guess": "data-boundary",
+      "imports_in_count": 1,
+      "imports_out_count": 2,
+      "owner_role": "storage-engineer"
+    },
+    {
+      "path": "apps/mobile/storage/migrations.ts",
+      "current_dir": "storage",
+      "proposed_dir": "storage",
+      "role_guess": "data-boundary",
+      "imports_in_count": 0,
+      "imports_out_count": 0,
+      "owner_role": "storage-engineer"
+    },
+    {
+      "path": "apps/mobile/stores/agentControlStore.ts",
+      "current_dir": "stores",
+      "proposed_dir": "features",
+      "role_guess": "feature-store",
+      "imports_in_count": 1,
+      "imports_out_count": 4,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/stores/agentStore.ts",
+      "current_dir": "stores",
+      "proposed_dir": "features",
+      "role_guess": "feature-store",
+      "imports_in_count": 18,
+      "imports_out_count": 5,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/stores/authStore.ts",
+      "current_dir": "stores",
+      "proposed_dir": "features",
+      "role_guess": "feature-store",
+      "imports_in_count": 7,
+      "imports_out_count": 6,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/stores/chat/chatExecutionStore.ts",
+      "current_dir": "stores",
+      "proposed_dir": "features",
+      "role_guess": "feature-store",
+      "imports_in_count": 2,
+      "imports_out_count": 11,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/stores/chat/chatMessageStore.ts",
+      "current_dir": "stores",
+      "proposed_dir": "features",
+      "role_guess": "feature-store",
+      "imports_in_count": 1,
+      "imports_out_count": 6,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/stores/chat/chatViewStore.ts",
+      "current_dir": "stores",
+      "proposed_dir": "features",
+      "role_guess": "feature-store",
+      "imports_in_count": 2,
+      "imports_out_count": 3,
+      "owner_role": "chat-screen-engineer"
+    },
+    {
+      "path": "apps/mobile/stores/chatStore.ts",
+      "current_dir": "stores",
+      "proposed_dir": "features",
+      "role_guess": "feature-store",
+      "imports_in_count": 22,
+      "imports_out_count": 7,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/stores/connectionStore.ts",
+      "current_dir": "stores",
+      "proposed_dir": "features",
+      "role_guess": "feature-store",
+      "imports_in_count": 12,
+      "imports_out_count": 14,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/stores/crossDeviceStore.ts",
+      "current_dir": "stores",
+      "proposed_dir": "features",
+      "role_guess": "feature-store",
+      "imports_in_count": 0,
+      "imports_out_count": 3,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/stores/desktopStatusStore.ts",
+      "current_dir": "stores",
+      "proposed_dir": "features",
+      "role_guess": "feature-store",
+      "imports_in_count": 2,
+      "imports_out_count": 3,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/stores/dispatchStore.ts",
+      "current_dir": "stores",
+      "proposed_dir": "features",
+      "role_guess": "feature-store",
+      "imports_in_count": 6,
+      "imports_out_count": 5,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/stores/integrationStore.ts",
+      "current_dir": "stores",
+      "proposed_dir": "features",
+      "role_guess": "feature-store",
+      "imports_in_count": 2,
+      "imports_out_count": 7,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/stores/memoryStore.ts",
+      "current_dir": "stores",
+      "proposed_dir": "features",
+      "role_guess": "feature-store",
+      "imports_in_count": 5,
+      "imports_out_count": 3,
+      "owner_role": "memory-engineer"
+    },
+    {
+      "path": "apps/mobile/stores/messagingStore.ts",
+      "current_dir": "stores",
+      "proposed_dir": "features",
+      "role_guess": "feature-store",
+      "imports_in_count": 4,
+      "imports_out_count": 3,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/stores/modelStore.ts",
+      "current_dir": "stores",
+      "proposed_dir": "features",
+      "role_guess": "feature-store",
+      "imports_in_count": 13,
+      "imports_out_count": 5,
+      "owner_role": "model-catalog-engineer"
+    },
+    {
+      "path": "apps/mobile/stores/notificationPrefsStore.ts",
+      "current_dir": "stores",
+      "proposed_dir": "features",
+      "role_guess": "feature-store",
+      "imports_in_count": 2,
+      "imports_out_count": 4,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/stores/projectStore.ts",
+      "current_dir": "stores",
+      "proposed_dir": "features",
+      "role_guess": "feature-store",
+      "imports_in_count": 7,
+      "imports_out_count": 3,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/stores/scheduleStore.ts",
+      "current_dir": "stores",
+      "proposed_dir": "features",
+      "role_guess": "feature-store",
+      "imports_in_count": 9,
+      "imports_out_count": 3,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/stores/settingsStore.ts",
+      "current_dir": "stores",
+      "proposed_dir": "features",
+      "role_guess": "feature-store",
+      "imports_in_count": 43,
+      "imports_out_count": 4,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/stores/tierStore.ts",
+      "current_dir": "stores",
+      "proposed_dir": "features",
+      "role_guess": "feature-store",
+      "imports_in_count": 4,
+      "imports_out_count": 7,
+      "owner_role": "cloud-mode-gate"
+    },
+    {
+      "path": "apps/mobile/stores/waitlistStore.ts",
+      "current_dir": "stores",
+      "proposed_dir": "features",
+      "role_guess": "feature-store",
+      "imports_in_count": 1,
+      "imports_out_count": 4,
+      "owner_role": "waitlist-engineer"
+    },
+    {
+      "path": "apps/mobile/tailwind.config.js",
+      "current_dir": "tailwind.config.js",
+      "proposed_dir": "unclassified",
+      "role_guess": "unknown",
+      "imports_in_count": 0,
+      "imports_out_count": 0,
+      "owner_role": "unassigned"
+    },
+    {
+      "path": "apps/mobile/types/chat.ts",
+      "current_dir": "types",
+      "proposed_dir": "core",
+      "role_guess": "type-defs",
+      "imports_in_count": 32,
+      "imports_out_count": 1,
+      "owner_role": "TL"
+    },
+    {
+      "path": "apps/mobile/types/navigation.ts",
+      "current_dir": "types",
+      "proposed_dir": "core",
+      "role_guess": "type-defs",
+      "imports_in_count": 0,
+      "imports_out_count": 0,
+      "owner_role": "TL"
+    }
+  ]
+}
