@@ -138,7 +138,12 @@ export function ImageWithQuestion({ imageUri, onClose }: ImageWithQuestionProps)
         >
           {answer ? (
             <View style={styles.answerWrap}>
-              <Text style={[styles.answerText, { color: c.textPrimary }]}>{answer}</Text>
+              <Text
+                testID="image-with-question-answer"
+                style={[styles.answerText, { color: c.textPrimary }]}
+              >
+                {answer}
+              </Text>
               {result && !isRunning ? (
                 <PerformanceChip
                   model={visionRouteLabel(result.route)}
@@ -153,6 +158,7 @@ export function ImageWithQuestion({ imageUri, onClose }: ImageWithQuestionProps)
         {/* Composer */}
         <View style={[styles.composer, { borderColor: c.border }]}>
           <TextInput
+            testID="image-with-question-input"
             value={question}
             onChangeText={setQuestion}
             placeholder="Ask about this image..."
@@ -166,6 +172,7 @@ export function ImageWithQuestion({ imageUri, onClose }: ImageWithQuestionProps)
             blurOnSubmit={false}
           />
           <Pressable
+            testID="image-with-question-send-btn"
             onPress={handleSend}
             disabled={isRunning || !question.trim()}
             style={[
