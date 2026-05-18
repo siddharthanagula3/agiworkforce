@@ -21,6 +21,14 @@ After each batch commit, the following must hold:
 
 If any of these regresses, the batch is reverted.
 
-## Open questions for founder (none yet)
+**All 5 batches executed without any regression.** Web and mobile error sets are byte-identical to the captured baselines in `phase4-baseline-{web,mobile}-errors.txt`.
 
-—
+## Open questions for founder
+
+1. **Path X vs Path Y for runtime split.** I executed Path Y (state stays in universal barrel; only `agentContext` moves to `runtime/node`). Inventory proved state has no Node-built-in dependency and 2 consumers; Path X would require migrating those 2 desktop files. Path Y is lower-risk and achieves the polyfill removal. If you want pure Path X (state + context both in `node.ts`), it's a ~10 LOC follow-up. See `reference-index/phase4-runtime-split-proposal.md` § Open question.
+
+2. **Whether to address the casing-collision blocker in mobile.** `apps/mobile/app/(app)/chat/[id].tsx:22` imports `@/components/composer/Composer` but a sibling file uses `Composer/Composer` — pre-existing baseline error, breaks the mobile bundle. Out of Phase 4 scope (apps/mobile/ source). I'd recommend a Phase 4.5 single-file fix (rename to lowercase consistently) before Phase 5 begins.
+
+3. **Whether to address the web FormData TS2740 error** in `apps/web/app/api/llm/v1/audio/transcriptions/route.ts:118` similarly. Same flavor of blocker; gates Web's `next build`.
+
+4. **Phase 5 start order recommendation: Web first, then Desktop, then Mobile, then Extensions, then CLI.** See final-state doc § "Recommended Phase 5 start order".
