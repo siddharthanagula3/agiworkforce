@@ -4,8 +4,8 @@ import {
   AgiWorkforcePaywallError,
   chatCompletion,
   type LlmChatMessage,
-} from '../utils/api';
-import { Config } from '../utils/config';
+} from '../../utils/api';
+import { Config } from '../../utils/config';
 
 const MIN_PREFIX_CHARS = 3;
 const MAX_CONTEXT_LINES = 80;
