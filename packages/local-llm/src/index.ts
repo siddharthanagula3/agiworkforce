@@ -7,7 +7,13 @@ export { detectCapabilities, isThermallyThrottled } from './capabilities.js';
 export { tier1Generate } from './tier1.js';
 export { tier2LoadModel, tier2Generate } from './tier2.js';
 export { tier3LoadModel, tier3Generate, tier3Release } from './tier3.js';
-export { getModelById, getModelsByTier, getAllModels } from './catalog.js';
+export {
+  getModelById,
+  getModelsForRole,
+  getShippableModels,
+  getDefaultModel,
+  getLiteModeModel,
+} from './catalog.js';
 export type {
   LocalRuntimeName,
   LocalRuntimeTier,
