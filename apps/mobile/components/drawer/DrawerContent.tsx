@@ -39,7 +39,8 @@ const CHAT_NAV_ITEMS: {
     label: 'Projects',
     icon: FolderOpen,
     route: '/(app)/(tabs)/projects',
-    show: FEATURES.cloudChat,
+    // FOUNDER DECISION 2026-05-18: Projects ships in v1.
+    show: FEATURES.projects,
   },
   {
     key: 'dispatch',
