@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { AgiCodeActionProvider, CODE_ACTION_KINDS } from '../providers/codeActionProvider';
 import { AgiHoverProvider } from '../features/hover';
 import { AgiInlineCompletionProvider } from '../features/inline-completions';
-import { AgiCodeLensProvider } from '../providers/codeLensProvider';
+import { AgiCodeLensProvider } from '../features/code-lens';
 import { AgiDiagnosticsProvider } from '../providers/diagnosticsProvider';
 import { DiffDecorationProvider } from '../providers/diffDecorationProvider';
 import { activateTokenCounter } from '../services/tokenCounter';

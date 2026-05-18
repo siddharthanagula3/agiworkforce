@@ -1,5 +1,5 @@
 /**
- * features/code-lens/ — CodeLensProvider.
- * Phase 6 reorg placeholder. Will re-export from codeLensProvider.ts once moved here.
+ * features/code-lens/ — CodeLensProvider showing inline AI action lenses above functions.
+ * Gated by agiWorkforce.codeLensEnabled setting. Provides Explain / Fix / Tests lenses.
  */
-export {};
+export { AgiCodeLensProvider } from './codeLensProvider';
