@@ -64,6 +64,7 @@ jest.mock('@agiworkforce/types', () => ({
 
 import { useTierStore } from '../stores/tierStore';
 import { api } from '../services/api';
+import { FEATURES } from '../lib/v1FeatureFlags';
 
 // Retrieve the mock function reference AFTER imports (the factory ran during hoisting)
 const mockApiGet = api.get as jest.Mock;
@@ -112,7 +113,11 @@ describe('tierStore defaults', () => {
   });
 });
 
-describe('refreshTier — success cases', () => {
+// refreshTier() is a no-op when FEATURES.billing = false (v1 local-only).
+// These tests verify cloud billing behaviour and are skipped in v1 config.
+const describeRefreshTier = FEATURES.billing ? describe : describe.skip;
+
+describeRefreshTier('refreshTier — success cases', () => {
   it('hydrates tier from /api/auth/me plan field', async () => {
     mockApiGet.mockResolvedValueOnce({ plan: { tier: 'hobby' } });
 
@@ -202,7 +207,7 @@ describe('refreshTier — failure cases', () => {
   });
 });
 
-describe('refreshTier — concurrent call de-duplication', () => {
+describeRefreshTier('refreshTier — concurrent call de-duplication', () => {
   it('skips a second concurrent call if one is already in flight', async () => {
     // Make the first call slow so the second call sees isRefreshing=true
     let resolveFirst!: (v: unknown) => void;

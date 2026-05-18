@@ -71,6 +71,10 @@ jest.mock('lucide-react-native', () => ({
   Link: jest.fn().mockReturnValue(null),
   Settings: jest.fn().mockReturnValue(null),
   Plus: jest.fn().mockReturnValue(null),
+  Brain: jest.fn().mockReturnValue(null),
+  Key: jest.fn().mockReturnValue(null),
+  Info: jest.fn().mockReturnValue(null),
+  User: jest.fn().mockReturnValue(null),
 }));
 
 jest.mock('@react-navigation/drawer', () => ({}));
@@ -86,12 +90,22 @@ jest.mock('../components/shared/DesktopCompanionWidget', () => ({
 import { DrawerContent } from '../components/drawer/DrawerContent';
 import { useChatStore } from '../stores/chatStore';
 import { useAuthStore } from '../stores/authStore';
+import { FEATURES } from '../lib/v1FeatureFlags';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-const NAV_LABELS = ['Chat', 'Skills', 'Projects', 'Dispatch', 'Connectors', 'Settings'];
+// In v1 local-only mode, Dispatch and Connectors are feature-gated out.
+// This list reflects what actually renders in the current feature config.
+const NAV_LABELS = [
+  'Chat',
+  'Skills',
+  ...(FEATURES.projects ? ['Projects'] : []),
+  ...(FEATURES.dispatch ? ['Dispatch'] : []),
+  ...(FEATURES.connectorsCloudOnly ? ['Connectors'] : []),
+  'Settings',
+];
 
 function renderDrawer() {
   // DrawerContent receives DrawerContentComponentProps but only uses hooks internally
@@ -154,7 +168,7 @@ describe('DrawerContent', () => {
 
   // ---- Rendering ----
 
-  it('renders all 6 navigation items', () => {
+  it('renders visible navigation items per v1 feature config', () => {
     const { getByText } = renderDrawer();
 
     for (const label of NAV_LABELS) {
@@ -291,16 +305,25 @@ describe('DrawerContent', () => {
   // ---- Navigation interactions ----
 
   it('navigates to the correct route when a nav item is tapped', () => {
-    const { getByLabelText } = renderDrawer();
+    const { getByLabelText, queryByLabelText } = renderDrawer();
 
     fireEvent.press(getByLabelText('Skills'));
     expect(mockNavigate).toHaveBeenCalledWith('/(app)/skills');
 
-    fireEvent.press(getByLabelText('Dispatch'));
-    expect(mockNavigate).toHaveBeenCalledWith('/(app)/dispatch');
+    // Dispatch + Connectors are gated behind FEATURES.dispatch / FEATURES.connectorsCloudOnly
+    if (FEATURES.dispatch) {
+      fireEvent.press(getByLabelText('Dispatch'));
+      expect(mockNavigate).toHaveBeenCalledWith('/(app)/dispatch');
+    } else {
+      expect(queryByLabelText('Dispatch')).toBeNull();
+    }
 
-    fireEvent.press(getByLabelText('Connectors'));
-    expect(mockNavigate).toHaveBeenCalledWith('/(app)/connectors');
+    if (FEATURES.connectorsCloudOnly) {
+      fireEvent.press(getByLabelText('Connectors'));
+      expect(mockNavigate).toHaveBeenCalledWith('/(app)/connectors');
+    } else {
+      expect(queryByLabelText('Connectors')).toBeNull();
+    }
   });
 
   it('navigates to a conversation when a recent is tapped', () => {
