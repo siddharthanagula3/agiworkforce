@@ -4,6 +4,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 import Animated, {
   FadeIn,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
@@ -47,6 +48,7 @@ interface MemoryItemProps {
 }
 
 export function MemoryItem({ memory, onEdit, onDelete, onTogglePin }: MemoryItemProps) {
+  const reducedMotion = useReducedMotion();
   const [expanded, setExpanded] = useState(false);
 
   // Animated opacity for expand/collapse
@@ -78,7 +80,7 @@ export function MemoryItem({ memory, onEdit, onDelete, onTogglePin }: MemoryItem
   );
 
   return (
-    <Animated.View entering={FadeIn.duration(200)}>
+    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(200)}>
       <Swipeable renderRightActions={renderRightActions} overshootRight={false}>
         <Card variant="default" className="mb-2">
           {/* Top row: fact text + actions */}

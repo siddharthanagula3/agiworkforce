@@ -147,7 +147,11 @@ function ToggleRow({
 }) {
   const c = useThemeColors();
   return (
-    <View className="flex-row items-center justify-between py-3.5 px-4">
+    <View
+      className="flex-row items-center justify-between py-3.5 px-4"
+      accessible
+      accessibilityLabel={`${label}, ${value ? 'on' : 'off'}`}
+    >
       <View className="flex-row items-center gap-3">
         <Icon size={18} color={c.textSecondary} />
         <Text className="text-[15px]" style={{ color: c.textPrimary }}>

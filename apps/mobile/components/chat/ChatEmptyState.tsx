@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Pressable } from 'react-native';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { Monitor, X } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
@@ -45,6 +45,7 @@ export function ChatEmptyState({
   const fullName = useSettingsStore((s) => s.personalization.fullName);
   const displayName = nickname || fullName?.split(' ')[0] || '';
 
+  const reducedMotion = useReducedMotion();
   const [bannerVisible, setBannerVisible] = useState(false);
 
   useEffect(() => {
@@ -68,7 +69,7 @@ export function ChatEmptyState({
       {/* Desktop pairing banner (first launch only) */}
       {bannerVisible && (
         <Animated.View
-          entering={FadeInDown.duration(300).delay(400)}
+          entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(400)}
           style={{
             position: 'absolute',
             top: 16,
@@ -111,7 +112,7 @@ export function ChatEmptyState({
       )}
 
       {/* Display headline */}
-      <Animated.View entering={FadeIn.duration(500)}>
+      <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(500)}>
         <Text
           style={{
             fontSize: 28,
@@ -127,7 +128,7 @@ export function ChatEmptyState({
 
       {/* Subtitle — only shown when no display name, otherwise headline is already personal */}
       {!displayName && (
-        <Animated.View entering={FadeIn.duration(500).delay(150)}>
+        <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(500).delay(150)}>
           <Text
             style={{
               fontSize: 15,
@@ -143,7 +144,7 @@ export function ChatEmptyState({
 
       {/* Task chips — image chip navigates to the image-with-question screen */}
       <Animated.View
-        entering={FadeIn.duration(500).delay(300)}
+        entering={reducedMotion ? undefined : FadeIn.duration(500).delay(300)}
         style={{ marginTop: 32, width: '100%' }}
       >
         <TaskChips
