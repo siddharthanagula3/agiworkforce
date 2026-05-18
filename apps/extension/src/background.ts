@@ -39,7 +39,7 @@ import {
   browserActionToPageActions,
   type ComputerUseAction,
   type BrowserAction,
-} from './browserTool';
+} from './features/content/browserTool';
 
 interface BackgroundState {
   isNativeConnected: boolean;
