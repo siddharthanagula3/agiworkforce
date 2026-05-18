@@ -1,10 +1,10 @@
 import { useCallback } from 'react';
 import { View, Pressable, ScrollView } from 'react-native';
-import { Code2, PenLine, Search, Image as ImageIcon, Film, Monitor } from 'lucide-react-native';
+import { Code2, PenLine, Search, Image as ImageIcon, Film, Monitor, ScanText } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/hooks/useTheme';
 
-export type TaskChipType = 'code' | 'write' | 'research' | 'image' | 'video' | 'computer';
+export type TaskChipType = 'code' | 'write' | 'research' | 'image' | 'video' | 'computer' | 'scan';
 
 interface ChipDef {
   type: TaskChipType;
@@ -13,6 +13,7 @@ interface ChipDef {
 }
 
 const CHIPS: ChipDef[] = [
+  { type: 'scan', label: 'Scan', Icon: ScanText },
   { type: 'code', label: 'Code', Icon: Code2 },
   { type: 'write', label: 'Write', Icon: PenLine },
   { type: 'research', label: 'Research', Icon: Search },
