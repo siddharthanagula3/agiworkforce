@@ -6,7 +6,7 @@
  */
 
 import * as vscode from 'vscode';
-import { type ConversationStore, type StoredConversation } from '../storage/conversationStore';
+import { type ConversationStore, type StoredConversation } from '../../storage/conversationStore';
 
 export class ConversationTreeItem extends vscode.TreeItem {
   constructor(public readonly conversation: StoredConversation) {

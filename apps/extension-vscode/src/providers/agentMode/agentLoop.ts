@@ -10,7 +10,7 @@ import { getActiveWorkspaceFolderSync } from '../../utils/workspaceFolders';
 import { Config } from '../../utils/config';
 import { WorkspaceIndexer } from '../../services/workspaceIndexer';
 import { getContextBuilder } from '../../services/contextBuilder';
-import { getContextPanelProvider } from '../contextPanelProvider';
+import { getContextPanelProvider } from '../../features/trees';
 import { getContextBudget } from '../../services/contextBudget';
 import { parsePatchBlocks, type PatchBlock } from '../../services/patchEngine';
 

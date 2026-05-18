@@ -18,7 +18,7 @@ import {
 } from '../../utils/api';
 import { getVSCodeSendQueue } from '../../services/sendQueue';
 import { type ConversationStore } from '../../storage/conversationStore';
-import { type ConversationTreeProvider } from '../conversationTreeProvider';
+import { type ConversationTreeProvider } from '../../features/trees';
 import { type DiffDecorationProvider } from '../diffDecorationProvider';
 import { getContextBuilder } from '../../services/contextBuilder';
 import {

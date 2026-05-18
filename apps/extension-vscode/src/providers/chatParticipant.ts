@@ -21,12 +21,11 @@ import {
   type LlmChatMessage,
 } from '../utils/api';
 import { type ConversationStore } from '../storage/conversationStore';
-import { type ConversationTreeProvider } from './conversationTreeProvider';
+import { type ConversationTreeProvider, getContextPanelProvider } from '../features/trees';
 import { getContextBuilder } from '../services/contextBuilder';
 import { normalizeConfiguredModelId } from '../services/modelConstants';
 import { getWorkspaceDisplayName } from '../utils/workspaceFolders';
 import { Config } from '../utils/config';
-import { getContextPanelProvider } from './contextPanelProvider';
 
 // ─── Context gathering ────────────────────────────────────────────────────────
 

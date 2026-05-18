@@ -2,8 +2,11 @@ import * as vscode from 'vscode';
 import { registerChatParticipant } from '../providers/chatParticipant';
 import { SidebarProvider } from '../providers/sidebarProvider';
 import { ConversationStore } from '../storage/conversationStore';
-import { ConversationTreeProvider } from '../providers/conversationTreeProvider';
-import { ContextPanelProvider, setContextPanelInstance } from '../providers/contextPanelProvider';
+import {
+  ConversationTreeProvider,
+  ContextPanelProvider,
+  setContextPanelInstance,
+} from '../features/trees';
 import { type DiffDecorationProvider } from '../providers/diffDecorationProvider';
 import { WorkspaceIndexer } from '../services/workspaceIndexer';
 
