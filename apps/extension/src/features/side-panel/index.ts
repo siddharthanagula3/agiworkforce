@@ -1,5 +1,12 @@
 /**
- * side-panel feature barrel — side panel UI, markdown renderer, voice.
- * Planned inhabitants: side_panel.ts, side_panel/markdown.ts, side_panel/voice.ts.
- * Currently empty — files will be moved here in subsequent phases.
+ * side-panel feature barrel — markdown renderer + voice input.
+ *
+ * Exports:
+ *   - markdown: renderMarkdown, sanitizeHtml, ensureDomPurifyHook
+ *   - voice: setupVoiceInput
+ *
+ * Note: side_panel.ts (the MV3 entry point) stays at src root per
+ * vite.config.ts rollupOptions.input constraint.
  */
+export * from './markdown';
+export * from './voice';

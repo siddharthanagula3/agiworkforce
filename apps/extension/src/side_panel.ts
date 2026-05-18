@@ -18,8 +18,8 @@ import {
   type HistoryMessage,
   type ConversationEntry,
 } from './conversation-history';
-import { sanitizeHtml, renderMarkdown } from './side_panel/markdown';
-import { setupVoiceInput } from './side_panel/voice';
+import { sanitizeHtml, renderMarkdown } from './features/side-panel/markdown';
+import { setupVoiceInput } from './features/side-panel/voice';
 import {
   Terminal,
   FileText,
