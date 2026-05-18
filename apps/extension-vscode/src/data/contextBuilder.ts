@@ -12,7 +12,7 @@
 import * as vscode from 'vscode';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { getActiveWorkspaceFolderSync } from '../utils/workspaceFolders';
+import { getActiveWorkspaceFolderSync } from '../platform/workspaceFolders';
 
 const execFileAsync = promisify(execFile);
 

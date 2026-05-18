@@ -5,7 +5,7 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { getActiveWorkspaceFolderSync } from '../../utils/workspaceFolders';
+import { getActiveWorkspaceFolderSync } from '../../platform/workspaceFolders';
 import { getCheckpointManager } from '../../data/checkpointManager';
 import {
   applyPatchBatch,

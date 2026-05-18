@@ -32,7 +32,7 @@ import {
   type Effort,
   type UsageMeter,
 } from '@agiworkforce/types';
-import { Config } from '../../utils/config';
+import { Config } from '../../platform/config';
 import { resolveUsageMeter, formatManagedUsageLabel, daysUntilReset } from '../../data/usageMeter';
 import { getTokenCounter } from '../../data/tokenCounter';
 import { guardProviderSwitch } from '../../integrations/providerSwitchGuard';

@@ -6,7 +6,7 @@
  */
 
 import * as vscode from 'vscode';
-import { Config } from '../utils/config';
+import { Config } from '../platform/config';
 import { getApiKey } from '../utils/api';
 import { getDesktopBridge } from '../features/desktop-bridge';
 

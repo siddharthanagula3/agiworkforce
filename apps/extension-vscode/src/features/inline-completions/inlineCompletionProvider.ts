@@ -5,7 +5,7 @@ import {
   chatCompletion,
   type LlmChatMessage,
 } from '../../utils/api';
-import { Config } from '../../utils/config';
+import { Config } from '../../platform/config';
 
 const MIN_PREFIX_CHARS = 3;
 const MAX_CONTEXT_LINES = 80;

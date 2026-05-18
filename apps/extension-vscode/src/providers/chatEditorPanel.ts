@@ -25,7 +25,7 @@ import {
   getModelProviderInfo,
 } from '../features/model-picker/modelConstants';
 import { PROVIDER_DISPLAY, type AgentMode, type Effort } from '@agiworkforce/types';
-import { Config } from '../utils/config';
+import { Config } from '../platform/config';
 import { resolveUsageMeter, formatManagedUsageLabel, daysUntilReset } from '../data/usageMeter';
 import { getTokenCounter } from '../data/tokenCounter';
 import { guardProviderSwitch } from '../integrations/providerSwitchGuard';
