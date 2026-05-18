@@ -120,6 +120,9 @@ const config = {
     ],
     'expo-document-picker',
     'expo-sharing',
+    // Tier 3 universal fallback: llama.rn config plugin wires native GGUF runtime.
+    // Models downloaded at runtime into Documents/models/ — not bundled in the binary.
+    'llama.rn',
   ],
   updates: {
     fallbackToCacheTimeout: 0,

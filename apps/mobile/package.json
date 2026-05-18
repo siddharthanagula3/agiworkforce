@@ -14,10 +14,16 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx --cache --cache-strategy content --cache-location .cache/eslint",
     "test": "jest --runInBand --detectOpenHandles --openHandlesTimeout=5000",
-    "test:local": "jest --runInBand --detectOpenHandles --openHandlesTimeout=5000"
+    "test:local": "jest --runInBand --detectOpenHandles --openHandlesTimeout=5000",
+    "screenshots": "tsx scripts/screenshots/pipeline.ts all",
+    "screenshots:ios": "tsx scripts/screenshots/pipeline.ts ios",
+    "screenshots:android": "tsx scripts/screenshots/pipeline.ts android",
+    "screenshots:composite": "tsx scripts/screenshots/compositor.ts --recompose-all"
   },
   "dependencies": {
+    "@agiworkforce/compliance": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
+    "@agiworkforce/local-llm": "workspace:*",
     "@agiworkforce/mcp": "workspace:*",
     "@agiworkforce/runtime": "workspace:*",
     "@agiworkforce/skills": "workspace:*",
@@ -58,8 +64,11 @@
     "expo-task-manager": "~55.0.15",
     "expo-updates": "~55.0.21",
     "expo-web-browser": "~55.0.15",
+    "llama.rn": "^0.10.0",
     "lucide-react-native": "^0.577.0",
     "nativewind": "^4.2.3",
+    "react-native-executorch": "^1.0.0",
+    "react-native-executorch-expo-resource-fetcher": "^1.0.0",
     "react": "19.2.0",
     "react-native": "0.84.0",
     "react-native-gesture-handler": "~2.30.0",
@@ -89,7 +98,10 @@
       "reactNativeDirectoryCheck": {
         "exclude": [
           "react-native-webrtc",
-          "expo-av"
+          "expo-av",
+          "react-native-executorch",
+          "react-native-executorch-expo-resource-fetcher",
+          "llama.rn"
         ]
       }
     }
