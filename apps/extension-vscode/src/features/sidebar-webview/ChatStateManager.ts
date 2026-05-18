@@ -18,8 +18,8 @@ import {
 } from '../../utils/api';
 import { getVSCodeSendQueue } from '../../services/sendQueue';
 import { type ConversationStore } from '../../storage/conversationStore';
-import { type ConversationTreeProvider } from '../../features/trees';
-import { type DiffDecorationProvider } from '../diffDecorationProvider';
+import { type ConversationTreeProvider } from '../trees';
+import { type DiffDecorationProvider } from '../../providers/diffDecorationProvider';
 import { getContextBuilder } from '../../services/contextBuilder';
 import {
   normalizeConfiguredModelId,

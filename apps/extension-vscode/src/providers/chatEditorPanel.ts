@@ -27,7 +27,7 @@ import { resolveUsageMeter, formatManagedUsageLabel, daysUntilReset } from '../s
 import { getTokenCounter } from '../services/tokenCounter';
 import { guardProviderSwitch } from '../services/providerSwitchGuard';
 import { resolveTier } from '../services/tierResolver';
-import { getWebviewContent, getNonce } from './sidebarProvider';
+import { getWebviewContent, getNonce } from '../features/sidebar-webview';
 
 // ─── Panel singleton ──────────────────────────────────────────────────────────
 

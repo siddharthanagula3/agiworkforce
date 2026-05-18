@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { SidebarProvider } from '../providers/sidebarProvider';
+import { SidebarProvider } from '../features/sidebar-webview';
 import { AgiDiagnosticsProvider } from '../providers/diagnosticsProvider';
 import { DiffDecorationProvider } from '../providers/diffDecorationProvider';
 import { ConversationStore } from '../storage/conversationStore';

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { registerChatParticipant } from '../features/chat-participant';
-import { SidebarProvider } from '../providers/sidebarProvider';
+import { SidebarProvider } from '../features/sidebar-webview';
 import { ConversationStore } from '../storage/conversationStore';
 import {
   ConversationTreeProvider,
