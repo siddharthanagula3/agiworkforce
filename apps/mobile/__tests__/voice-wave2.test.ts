@@ -98,26 +98,22 @@ describe('voiceOutput service', () => {
 });
 
 describe('VoiceInput.getPlatformSTTBackend platform detection', () => {
+  // getPlatformSTTBackend reads Platform.OS at call time, not at module load time.
+  // Overriding the already-mocked Platform object's OS property is sufficient —
+  // no module isolation required.
   const originalOS = Platform.OS;
 
   afterAll(() => {
-    Object.defineProperty(Platform, 'OS', { get: () => originalOS });
+    Object.defineProperty(Platform, 'OS', { get: () => originalOS, configurable: true });
   });
 
   it('returns ios-speech on ios', () => {
-    Object.defineProperty(Platform, 'OS', { get: () => 'ios' });
-    jest.isolateModules(() => {
-      // re-import to pick up platform change
-      const mod = jest.requireActual<typeof VoiceInput>('@/services/voiceInput');
-      expect(mod.getPlatformSTTBackend()).toBe('ios-speech');
-    });
+    Object.defineProperty(Platform, 'OS', { get: () => 'ios', configurable: true });
+    expect(VoiceInput.getPlatformSTTBackend()).toBe('ios-speech');
   });
 
   it('returns android-speech-recognizer on android', () => {
-    Object.defineProperty(Platform, 'OS', { get: () => 'android' });
-    jest.isolateModules(() => {
-      const mod = jest.requireActual<typeof VoiceInput>('@/services/voiceInput');
-      expect(mod.getPlatformSTTBackend()).toBe('android-speech-recognizer');
-    });
+    Object.defineProperty(Platform, 'OS', { get: () => 'android', configurable: true });
+    expect(VoiceInput.getPlatformSTTBackend()).toBe('android-speech-recognizer');
   });
 });
