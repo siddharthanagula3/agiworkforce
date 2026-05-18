@@ -10,6 +10,7 @@
 import { useConnectionStore } from '@/stores/connectionStore';
 import type { ConnectionQuality } from '@/stores/connectionStore';
 import type { RiskLevel } from '@/types/chat';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -137,6 +138,7 @@ const RECONNECT_DEBOUNCE_MS = 3_000;
  * - When reconnecting: ticks countdown and auto-retries when it hits 0
  */
 export function startHealthChecks(): void {
+  if (!FEATURES.companion) return;
   stopHealthChecks();
 
   // Heartbeat ping — desktop should respond with pong control message

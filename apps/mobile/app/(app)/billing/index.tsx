@@ -10,6 +10,7 @@ import { api } from '@/services/api';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
 import type { BillingPlanTier, BillingInterval } from '@agiworkforce/types';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 // ---------------------------------------------------------------------------
 // Tier display config (feature bullets read at render time, not hardcoded prices)
@@ -261,6 +262,8 @@ export default function PricingScreen() {
     },
     [interval, upgrading],
   );
+
+  if (!FEATURES.billing) return null;
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>

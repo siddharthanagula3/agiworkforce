@@ -19,6 +19,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/useTheme';
 import { supabase } from '@/services/supabase';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 export default function ResetPasswordScreen() {
   const { colors: themeColors } = useTheme();
@@ -127,6 +128,8 @@ export default function ResetPasswordScreen() {
       setLoading(false);
     }
   };
+
+  if (!FEATURES.auth) return null;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }}>

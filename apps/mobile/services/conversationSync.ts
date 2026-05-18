@@ -13,6 +13,7 @@
 import { AppState, type AppStateStatus } from 'react-native';
 import { supabase, getCurrentUser } from './supabase';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -438,6 +439,8 @@ export class MobileConversationSyncService {
 let _instance: MobileConversationSyncService | null = null;
 
 export function getMobileSyncService(): MobileConversationSyncService {
+  if (!FEATURES.crossDeviceSync)
+    throw new Error('conversationSync: cloud sync not available in v1');
   if (!_instance) {
     _instance = new MobileConversationSyncService();
   }

@@ -3,8 +3,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { LoginForm } from '@/components/auth/LoginForm';
 import { OAuthButtons } from '@/components/auth/OAuthButtons';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 export default function LoginScreen() {
+  if (!FEATURES.auth) return null;
   return (
     <SafeAreaView className="flex-1 bg-surface-base">
       <KeyboardAvoidingView

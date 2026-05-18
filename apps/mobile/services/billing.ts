@@ -6,6 +6,7 @@
  * before being opened (HIGH-MOB-02 allowlist in lib/safeOpenURL.ts).
  */
 import { api } from './api';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 export interface PortalSessionResult {
   /** One-time Stripe Customer Portal URL (validated by caller before opening). */
@@ -17,6 +18,7 @@ export interface PortalSessionResult {
  * Throws if the network call fails or the backend returns a non-200 status.
  */
 export async function fetchPortalSessionUrl(): Promise<string> {
+  if (!FEATURES.billing) throw new Error('billing: cloud billing not available in v1');
   const data = await api.post<PortalSessionResult>('/api/billing/portal-session');
   if (!data.url) {
     throw new Error('billing: portal-session response missing url field');

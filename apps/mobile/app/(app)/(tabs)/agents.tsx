@@ -11,6 +11,7 @@ import { ConnectionStatusBar } from '@/components/shared/ConnectionStatus';
 import { useAgentStore } from '@/stores/agentStore';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { colors } from '@/lib/theme';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 /**
  * Agents tab -- redirects to Dispatch when no agents are active.
@@ -56,6 +57,8 @@ export default function AgentsTabScreen() {
     sendControl('request_agents_refresh');
     setTimeout(() => setRefreshing(false), 1500);
   }, [connectionStatus, sendControl]);
+
+  if (!FEATURES.agents) return null;
 
   return (
     <SafeAreaView className="flex-1 bg-surface-base" edges={['top']}>

@@ -236,8 +236,26 @@ export default function OnboardingScreen() {
     setScreen('download');
     setDownloadProgress(0);
 
-    // TODO(storage-engineer task #22): Replace with real download hook.
-    // Expected: startModelDownload(modelId, { onProgress(pct: number), onSpeed(mbps: number), onComplete, onError })
+    // TODO(model-catalog-engineer): add downloadUrl + checksum + format to OnDeviceModel,
+    // then replace this stub with the real call:
+    //
+    //   import { downloadModel, cancelDownload, ModelDownloadError } from '@/services/modelDownload';
+    //   downloadModel({
+    //     modelId: recommendedModel.id,
+    //     displayName: recommendedModel.displayName,
+    //     downloadUrl: recommendedModel.downloadUrl,   // not yet in catalog
+    //     checksum: recommendedModel.checksum,         // not yet in catalog
+    //     fileSizeBytes: recommendedModel.fileSizeBytes,
+    //     runtime: 'executorch',
+    //     format: 'gguf',
+    //     wifiOnly: !cellularEnabled,                  // wire cellular toggle state here
+    //     onProgress(downloaded, total, speedBps) {
+    //       setDownloadProgress((downloaded / total) * 100);
+    //       setDownloadSpeedMBs(Math.round(speedBps / (1024 * 1024)));
+    //     },
+    //   }).then(finishOnboarding).catch(handleDownloadError);
+    //
+    // Simulated progress until catalog fields are available:
     let progress = 0;
     downloadTimerRef.current = setInterval(() => {
       progress += 1.2;

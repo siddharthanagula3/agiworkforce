@@ -1,4 +1,5 @@
 import { api } from './api';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 export interface MessagingConfigResponse {
   connections: Array<{
@@ -26,6 +27,7 @@ export interface TestConnectionResponse {
  * Fetch all messaging platform connections for the authenticated user.
  */
 export function getMessagingConfig(): Promise<MessagingConfigResponse> {
+  if (!FEATURES.messaging) return Promise.reject(new Error('messaging: not available in v1'));
   return api.get<MessagingConfigResponse>('/api/messaging/config');
 }
 

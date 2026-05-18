@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { View, useWindowDimensions, RefreshControl, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FlashList } from '@shopify/flash-list';
 import { ArrowLeft, Bot } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -37,10 +38,7 @@ export default function AgentsScreen() {
   const handleRefresh = useCallback(() => {
     if (connectionStatus !== 'connected') return;
     setRefreshing(true);
-    // Request the desktop to push a fresh agents snapshot
     sendControl('request_agents_refresh');
-    // Auto-clear the spinner after a short delay since the response
-    // arrives via the WebRTC data channel (no direct await)
     setTimeout(() => setRefreshing(false), 1500);
   }, [connectionStatus, sendControl]);
 
@@ -48,6 +46,8 @@ export default function AgentsScreen() {
     if (router.canGoBack()) router.back();
     else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
   }, [router]);
+
+  if (!FEATURES.agents) return null;
 
   return (
     <SafeAreaView className="flex-1 bg-surface-base">
