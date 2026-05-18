@@ -1,5 +1,6 @@
 /**
  * features/inline-completions/ — InlineCompletionItemProvider.
- * Phase 6 reorg placeholder. Will re-export from inlineCompletionProvider.ts once moved here.
+ * Triggered on every keystroke (pattern: '**'), gated by agiWorkforce.inlineCompletions.enabled.
+ * Caches completions for 15s (up to 16 entries) to avoid redundant API calls.
  */
-export {};
+export { AgiInlineCompletionProvider } from './inlineCompletionProvider';
