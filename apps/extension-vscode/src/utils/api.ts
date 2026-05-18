@@ -751,7 +751,7 @@ export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<Tier
 // via the `agiWorkforce.useProviderStream: true` setting. Requires a
 // Supabase JWT in SecretStorage (set via "AGI Workforce: Set Supabase JWT").
 
-import { streamFromProvider } from '../services/providerStreamClient';
+import { streamFromProvider } from '../integrations/providerStreamClient';
 
 type ProviderStreamId = 'anthropic' | 'openai' | 'google' | 'ollama';
 

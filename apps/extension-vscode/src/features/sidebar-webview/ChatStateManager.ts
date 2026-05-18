@@ -35,8 +35,8 @@ import {
 import { Config } from '../../utils/config';
 import { resolveUsageMeter, formatManagedUsageLabel, daysUntilReset } from '../../data/usageMeter';
 import { getTokenCounter } from '../../data/tokenCounter';
-import { guardProviderSwitch } from '../../services/providerSwitchGuard';
-import { resolveTier } from '../../services/tierResolver';
+import { guardProviderSwitch } from '../../integrations/providerSwitchGuard';
+import { resolveTier } from '../../integrations/tierResolver';
 
 // ─── Message types (shared protocol) ─────────────────────────────────────────
 
