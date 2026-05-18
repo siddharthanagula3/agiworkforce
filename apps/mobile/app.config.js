@@ -125,6 +125,7 @@ const config = {
         cameraPermission: 'Allow $(DISPLAYNAME) to access your camera.',
       },
     ],
+    'expo-sqlite',
     'expo-updates',
     'expo-web-browser',
     [
