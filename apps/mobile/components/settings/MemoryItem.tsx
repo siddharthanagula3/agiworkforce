@@ -7,47 +7,15 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { Pencil, Trash2 } from 'lucide-react-native';
+import { Pencil, Trash2, Pin, PinOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { colors } from '@/lib/theme';
 import type { MemoryEntry } from '@/stores/memoryStore';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Category badge colors */
-const CATEGORY_COLORS: Record<string, 'teal' | 'purple' | 'blue' | 'yellow' | 'green' | 'gray'> = {
-  coding: 'teal',
-  research: 'purple',
-  writing: 'blue',
-  preferences: 'yellow',
-  general: 'green',
-};
-
-function getCategoryColor(
-  category: string | null,
-): 'teal' | 'purple' | 'blue' | 'yellow' | 'green' | 'gray' {
-  if (!category) return 'gray';
-  return CATEGORY_COLORS[category.toLowerCase()] ?? 'gray';
-}
-
-/** Source label colors — always gray to stay subtle */
-const SOURCE_LABELS: Record<string, string> = {
-  mobile: 'Mobile',
-  desktop: 'Desktop',
-  web: 'Web',
-  auto: 'Auto',
-};
-
-/** Format relative time from an ISO string */
-function formatRelativeTime(isoString: string): string {
-  const now = Date.now();
-  const then = new Date(isoString).getTime();
-  const diffMs = now - then;
-
+function formatRelativeTime(ts: number): string {
+  const diffMs = Date.now() - ts;
   if (diffMs < 0) return 'just now';
 
   const seconds = Math.floor(diffMs / 1_000);
@@ -68,21 +36,17 @@ function formatRelativeTime(isoString: string): string {
   const months = Math.floor(days / 30);
   if (months < 12) return `${months}mo ago`;
 
-  const years = Math.floor(months / 12);
-  return `${years}y ago`;
+  return `${Math.floor(months / 12)}y ago`;
 }
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 interface MemoryItemProps {
   memory: MemoryEntry;
   onEdit: (memory: MemoryEntry) => void;
   onDelete: (id: string) => void;
+  onTogglePin: (id: string) => void;
 }
 
-export function MemoryItem({ memory, onEdit, onDelete }: MemoryItemProps) {
+export function MemoryItem({ memory, onEdit, onDelete, onTogglePin }: MemoryItemProps) {
   const [expanded, setExpanded] = useState(false);
 
   // Animated opacity for expand/collapse
@@ -117,12 +81,12 @@ export function MemoryItem({ memory, onEdit, onDelete }: MemoryItemProps) {
     <Animated.View entering={FadeIn.duration(200)}>
       <Swipeable renderRightActions={renderRightActions} overshootRight={false}>
         <Card variant="default" className="mb-2">
-          {/* Top row: content + edit button */}
+          {/* Top row: fact text + actions */}
           <View className="flex-row items-start gap-2">
             <Pressable
               onPress={toggleExpand}
               className="flex-1"
-              accessibilityLabel={`Memory: ${memory.content.slice(0, 80)}`}
+              accessibilityLabel={`Memory: ${memory.fact.slice(0, 80)}`}
               accessibilityRole="button"
               accessibilityHint={expanded ? 'Tap to collapse' : 'Tap to expand'}
             >
@@ -130,37 +94,47 @@ export function MemoryItem({ memory, onEdit, onDelete }: MemoryItemProps) {
                 className="text-sm text-white leading-5"
                 numberOfLines={expanded ? undefined : 3}
               >
-                {memory.content}
+                {memory.fact}
               </Text>
 
-              {/* Expanded content indicator */}
-              {!expanded && memory.content.length > 150 && (
+              {!expanded && memory.fact.length > 150 && (
                 <Text className="text-xs text-teal-400 mt-1">Tap to expand</Text>
               )}
             </Pressable>
 
-            <Pressable
-              onPress={() => onEdit(memory)}
-              className="p-1.5 rounded-md active:bg-white/5"
-              accessibilityLabel="Edit memory"
-              accessibilityRole="button"
-            >
-              <Pencil size={14} color={colors.textMuted} />
-            </Pressable>
+            <View className="flex-row gap-1 items-center">
+              <Pressable
+                onPress={() => onTogglePin(memory.id)}
+                className="p-1.5 rounded-md active:bg-white/5"
+                accessibilityLabel={memory.pinned ? 'Unpin memory' : 'Pin memory'}
+                accessibilityRole="button"
+              >
+                {memory.pinned ? (
+                  <PinOff size={14} color={colors.teal} />
+                ) : (
+                  <Pin size={14} color={colors.textMuted} />
+                )}
+              </Pressable>
+
+              <Pressable
+                onPress={() => onEdit(memory)}
+                className="p-1.5 rounded-md active:bg-white/5"
+                accessibilityLabel="Edit memory"
+                accessibilityRole="button"
+              >
+                <Pencil size={14} color={colors.textMuted} />
+              </Pressable>
+            </View>
           </View>
 
-          {/* Expanded extra content (animated) */}
           {expanded && <Animated.View style={expandStyle} className="mt-1" />}
 
           {/* Bottom row: badges + timestamp */}
           <View className="flex-row items-center mt-2.5 gap-2">
-            {memory.category && (
-              <Badge label={memory.category} color={getCategoryColor(memory.category)} />
-            )}
-            <Badge label={SOURCE_LABELS[memory.source] ?? memory.source} color="gray" />
+            {memory.pinned && <Badge label="Pinned" color="teal" />}
             <View className="flex-1" />
             <Text className="text-[10px] text-white/30">
-              {formatRelativeTime(memory.updatedAt)}
+              {formatRelativeTime(memory.created_at)}
             </Text>
           </View>
         </Card>

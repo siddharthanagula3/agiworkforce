@@ -5,6 +5,7 @@ import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
 import { streamChat, type StreamDelta } from '@/services/streaming';
 import { useProjectStore } from '@/stores/projectStore';
+import { retrieveMemoryContext } from '@/stores/memoryStore';
 import type { ChatMessage, MessageAttachment } from '@/types/chat';
 import type { Attachment } from '@/components/chat/AttachmentPreview';
 import type { UploadFileInput, UploadFileResult } from '@/services/api';
@@ -223,6 +224,20 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       if (activeProject?.instructions?.trim()) {
         historyMessages.unshift({ role: 'system', content: activeProject.instructions.trim() });
       }
+    }
+
+    // Inject top-K relevant memory facts as system context (on-device, graceful fallback)
+    try {
+      const memFacts = await retrieveMemoryContext(content, 5);
+      if (memFacts.length > 0) {
+        const memBlock = [
+          'User memory (retrieved for this turn — treat as background context):',
+          ...memFacts.map((f, i) => `${i + 1}. ${f.fact}`),
+        ].join('\n');
+        historyMessages.unshift({ role: 'system', content: memBlock });
+      }
+    } catch {
+      // Non-fatal: memory retrieval failure must never block a chat turn.
     }
 
     msgStore.setState((state) => {

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, TextInput, Pressable, ScrollView } from 'react-native';
+import { View, TextInput } from 'react-native';
 import BottomSheet, {
   BottomSheetBackdrop,
   type BottomSheetBackdropProps,
@@ -9,43 +9,19 @@ import { Button } from '@/components/ui/button';
 import { colors } from '@/lib/theme';
 import type { MemoryEntry } from '@/stores/memoryStore';
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const CATEGORIES = ['General', 'Coding', 'Research', 'Writing', 'Preferences'] as const;
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 interface AddMemorySheetProps {
-  /** Ref to control open/close from parent */
-
   sheetRef: React.RefObject<BottomSheet | null>;
-  /** If provided, pre-populate fields for editing */
   editingMemory: MemoryEntry | null;
-  /** Called when the user saves a new memory */
   onSave: (content: string, category?: string) => void;
-  /** Called when the user updates an existing memory */
   onUpdate: (id: string, content: string) => void;
 }
 
 export function AddMemorySheet({ sheetRef, editingMemory, onSave, onUpdate }: AddMemorySheetProps) {
   const snapPoints = useMemo(() => ['50%'], []);
-
   const [content, setContent] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  // Pre-populate when editing
   useEffect(() => {
-    if (editingMemory) {
-      setContent(editingMemory.content);
-      setSelectedCategory(editingMemory.category);
-    } else {
-      setContent('');
-      setSelectedCategory(null);
-    }
+    setContent(editingMemory ? editingMemory.fact : '');
   }, [editingMemory]);
 
   const isEditing = editingMemory !== null;
@@ -53,22 +29,17 @@ export function AddMemorySheet({ sheetRef, editingMemory, onSave, onUpdate }: Ad
 
   const handleSave = useCallback(() => {
     if (!canSave) return;
-
     if (isEditing && editingMemory) {
       onUpdate(editingMemory.id, content.trim());
     } else {
-      onSave(content.trim(), selectedCategory ?? undefined);
+      onSave(content.trim());
     }
-
-    // Reset form and close
     setContent('');
-    setSelectedCategory(null);
     sheetRef.current?.close();
-  }, [canSave, isEditing, editingMemory, content, selectedCategory, onSave, onUpdate, sheetRef]);
+  }, [canSave, isEditing, editingMemory, content, onSave, onUpdate, sheetRef]);
 
   const handleCancel = useCallback(() => {
     setContent('');
-    setSelectedCategory(null);
     sheetRef.current?.close();
   }, [sheetRef]);
 
@@ -117,42 +88,6 @@ export function AddMemorySheet({ sheetRef, editingMemory, onSave, onUpdate }: Ad
           accessibilityHint="Enter what the AI should remember"
         />
       </View>
-
-      {/* Category picker (only for new memories) */}
-      {!isEditing && (
-        <View className="px-4 mb-4">
-          <Text className="text-xs text-white/50 mb-2">Category</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 8 }}
-          >
-            {CATEGORIES.map((cat) => {
-              const isSelected = selectedCategory?.toLowerCase() === cat.toLowerCase();
-              return (
-                <Pressable
-                  key={cat}
-                  onPress={() => setSelectedCategory(isSelected ? null : cat.toLowerCase())}
-                  className={`px-3 py-1.5 rounded-full border ${
-                    isSelected ? 'border-teal-500/50 bg-teal-500/15' : 'border-white/10 bg-white/5'
-                  }`}
-                  accessibilityLabel={`Category: ${cat}`}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isSelected }}
-                >
-                  <Text
-                    className={`text-xs font-medium ${
-                      isSelected ? 'text-teal-400' : 'text-white/60'
-                    }`}
-                  >
-                    {cat}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
-      )}
 
       {/* Action buttons */}
       <View className="flex-row gap-3 px-4">

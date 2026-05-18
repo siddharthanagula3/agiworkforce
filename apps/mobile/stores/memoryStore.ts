@@ -1,212 +1,239 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage } from '@/lib/mmkv';
+import * as Crypto from 'expo-crypto';
 import {
-  fetchMemories as apiFetchMemories,
-  createMemory as apiCreateMemory,
-  updateMemory as apiUpdateMemory,
-  deleteMemory as apiDeleteMemory,
-  searchMemories as apiSearchMemories,
-  triggerSync as apiTriggerSync,
-} from '@/services/memory';
-import type { MemoryEntry } from '@/services/memory';
+  insertMemoryFact,
+  listMemoryFacts,
+  deleteMemoryFact,
+  updateMemoryFact,
+  togglePinMemoryFact,
+  searchMemoryByText,
+  searchMemoryByEmbedding,
+} from '@/storage/memory';
+import type { MemoryFact } from '@/storage/types';
 
-export type { MemoryEntry };
+export type { MemoryFact };
+
+// Re-export as MemoryEntry alias for backwards compat with UI components
+export type MemoryEntry = MemoryFact;
 
 interface MemoryState {
-  /** All memory entries */
-  entries: MemoryEntry[];
-  /** Whether memories are being fetched */
+  entries: MemoryFact[];
+  filteredEntries: MemoryFact[];
   loading: boolean;
-  /** Whether a sync is in progress */
-  syncing: boolean;
-  /** Error message from the last failed operation */
   error: string | null;
-  /** Timestamp of the last successful sync */
-  lastSyncAt: string | null;
-  /** Current search query */
   searchQuery: string;
-  /** Entries filtered by search (populated by searchMemories or local filter) */
-  filteredEntries: MemoryEntry[];
+  // legacy compat — local-only
+  syncing: boolean;
+  lastSyncAt: string | null;
 
-  // --- Actions ---
   fetchMemories: () => Promise<void>;
-  addMemory: (content: string, category?: string) => Promise<void>;
-  updateMemory: (id: string, content: string) => Promise<void>;
+  addMemory: (fact: string, _category?: string) => Promise<void>;
+  updateMemory: (id: string, fact: string) => Promise<void>;
   deleteMemory: (id: string) => Promise<void>;
-  searchMemories: (query: string) => Promise<void>;
-  syncMemories: () => Promise<void>;
+  togglePin: (id: string) => Promise<void>;
   setSearchQuery: (query: string) => void;
+  searchMemories: (query: string, embedding?: Float32Array) => Promise<void>;
+  bulkInsert: (facts: string[]) => Promise<{ inserted: number; skipped: number }>;
+  syncMemories: () => Promise<void>;
   clearError: () => void;
 }
 
-export const useMemoryStore = create<MemoryState>()(
-  persist(
-    (set, get) => ({
-      entries: [],
-      loading: false,
-      syncing: false,
-      error: null,
-      lastSyncAt: null,
-      searchQuery: '',
-      filteredEntries: [],
+export const useMemoryStore = create<MemoryState>()((set, get) => ({
+  entries: [],
+  filteredEntries: [],
+  loading: false,
+  error: null,
+  searchQuery: '',
+  syncing: false,
+  lastSyncAt: null,
 
-      fetchMemories: async () => {
-        set({ loading: true, error: null });
-        try {
-          const entries = await apiFetchMemories();
-          set({ entries, loading: false });
+  fetchMemories: async () => {
+    set({ loading: true, error: null });
+    try {
+      const entries = await listMemoryFacts({ limit: 500 });
+      set({ entries, loading: false });
 
-          // Re-apply local search filter if active
-          const { searchQuery } = get();
-          if (searchQuery.trim()) {
-            const q = searchQuery.toLowerCase();
-            set({
-              filteredEntries: entries.filter((e) => e.content.toLowerCase().includes(q)),
-            });
-          } else {
-            set({ filteredEntries: [] });
-          }
-        } catch (error) {
-          console.warn('Failed to fetch memories:', error);
-          set({
-            loading: false,
-            error: error instanceof Error ? error.message : 'Failed to fetch memories',
-          });
-        }
-      },
+      const { searchQuery } = get();
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        set({ filteredEntries: entries.filter((e) => e.fact.toLowerCase().includes(q)) });
+      } else {
+        set({ filteredEntries: [] });
+      }
+    } catch (err) {
+      set({
+        loading: false,
+        error: err instanceof Error ? err.message : 'Failed to load memories',
+      });
+    }
+  },
 
-      addMemory: async (content, category) => {
-        set({ error: null });
-        try {
-          const memory = await apiCreateMemory(content, category);
-          set((state) => ({
-            entries: [memory, ...state.entries],
-          }));
-        } catch (error) {
-          console.warn('Failed to add memory:', error);
-          set({
-            error: error instanceof Error ? error.message : 'Failed to add memory',
-          });
-        }
-      },
+  addMemory: async (fact, _category) => {
+    set({ error: null });
+    try {
+      const id = Crypto.randomUUID();
+      const newFact: Omit<MemoryFact, 'pinned'> & { pinned?: boolean } = {
+        id,
+        fact: fact.trim(),
+        source_conversation_id: null,
+        pinned: false,
+        created_at: Date.now(),
+      };
+      await insertMemoryFact(newFact);
+      set((state) => ({
+        entries: [{ ...newFact, pinned: false }, ...state.entries],
+      }));
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : 'Failed to add memory' });
+    }
+  },
 
-      updateMemory: async (id, content) => {
-        set({ error: null });
+  updateMemory: async (id, fact) => {
+    set({ error: null });
+    set((state) => ({
+      entries: state.entries.map((e) => (e.id === id ? { ...e, fact } : e)),
+      filteredEntries: state.filteredEntries.map((e) => (e.id === id ? { ...e, fact } : e)),
+    }));
+    try {
+      await updateMemoryFact(id, fact.trim());
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : 'Failed to update memory' });
+      await get().fetchMemories();
+    }
+  },
 
-        // Optimistic update
-        set((state) => ({
-          entries: state.entries.map((e) =>
-            e.id === id ? { ...e, content, updatedAt: new Date().toISOString() } : e,
-          ),
-        }));
+  deleteMemory: async (id) => {
+    set({ error: null });
+    const prev = get().entries;
+    const prevFiltered = get().filteredEntries;
+    set((state) => ({
+      entries: state.entries.filter((e) => e.id !== id),
+      filteredEntries: state.filteredEntries.filter((e) => e.id !== id),
+    }));
+    try {
+      await deleteMemoryFact(id);
+    } catch (err) {
+      set({
+        entries: prev,
+        filteredEntries: prevFiltered,
+        error: err instanceof Error ? err.message : 'Failed to delete memory',
+      });
+    }
+  },
 
-        try {
-          const updated = await apiUpdateMemory(id, content);
-          set((state) => ({
-            entries: state.entries.map((e) => (e.id === id ? updated : e)),
-          }));
-        } catch (error) {
-          console.warn('Failed to update memory:', error);
-          // Revert will happen on next fetch
-          set({
-            error: error instanceof Error ? error.message : 'Failed to update memory',
-          });
-        }
-      },
+  togglePin: async (id) => {
+    const current = get().entries.find((e) => e.id === id);
+    if (!current) return;
+    const pinned = !current.pinned;
+    set((state) => ({
+      entries: state.entries
+        .map((e) => (e.id === id ? { ...e, pinned } : e))
+        .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.created_at - a.created_at),
+    }));
+    try {
+      await togglePinMemoryFact(id, pinned);
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : 'Failed to update pin' });
+      await get().fetchMemories();
+    }
+  },
 
-      deleteMemory: async (id) => {
-        set({ error: null });
+  setSearchQuery: (query) => {
+    set({ searchQuery: query });
+    if (!query.trim()) {
+      set({ filteredEntries: [] });
+      return;
+    }
+    const q = query.toLowerCase();
+    set((state) => ({
+      filteredEntries: state.entries.filter((e) => e.fact.toLowerCase().includes(q)),
+    }));
+  },
 
-        // Optimistic removal — save both for rollback
-        const previousEntries = get().entries;
-        const previousFiltered = get().filteredEntries;
-        set((state) => ({
-          entries: state.entries.filter((e) => e.id !== id),
-          filteredEntries: state.filteredEntries.filter((e) => e.id !== id),
-        }));
+  searchMemories: async (query, embedding) => {
+    if (!query.trim()) {
+      set({ filteredEntries: [], searchQuery: '' });
+      return;
+    }
+    set({ searchQuery: query, error: null });
+    try {
+      if (embedding) {
+        const ids = await searchMemoryByEmbedding(embedding);
+        const allEntries = get().entries;
+        const idSet = new Set(ids);
+        set({ filteredEntries: allEntries.filter((e) => idSet.has(e.id)) });
+      } else {
+        const results = await searchMemoryByText(query);
+        set({ filteredEntries: results });
+      }
+    } catch (err) {
+      const q = query.toLowerCase();
+      set((state) => ({
+        filteredEntries: state.entries.filter((e) => e.fact.toLowerCase().includes(q)),
+        error: err instanceof Error ? err.message : 'Search failed',
+      }));
+    }
+  },
 
-        try {
-          await apiDeleteMemory(id);
-        } catch (error) {
-          console.warn('Failed to delete memory:', error);
-          // Revert both entries and filteredEntries on failure
-          set({
-            entries: previousEntries,
-            filteredEntries: previousFiltered,
-            error: error instanceof Error ? error.message : 'Failed to delete memory',
-          });
-        }
-      },
+  bulkInsert: async (facts) => {
+    let inserted = 0;
+    let skipped = 0;
+    for (const fact of facts) {
+      const trimmed = fact.trim();
+      if (trimmed.length < 3) {
+        skipped++;
+        continue;
+      }
+      try {
+        const id = Crypto.randomUUID();
+        await insertMemoryFact({
+          id,
+          fact: trimmed,
+          source_conversation_id: null,
+          pinned: false,
+          created_at: Date.now(),
+        });
+        inserted++;
+      } catch {
+        skipped++;
+      }
+    }
+    await get().fetchMemories();
+    return { inserted, skipped };
+  },
 
-      searchMemories: async (query) => {
-        if (!query.trim()) {
-          set({ filteredEntries: [], searchQuery: '' });
-          return;
-        }
+  syncMemories: async () => {
+    await get().fetchMemories();
+  },
 
-        set({ searchQuery: query, error: null });
+  clearError: () => set({ error: null }),
+}));
 
-        try {
-          const results = await apiSearchMemories(query);
-          set({ filteredEntries: results });
-        } catch (error) {
-          console.warn('Failed to search memories:', error);
-          // Fall back to local filtering
-          const q = query.toLowerCase();
-          set((state) => ({
-            filteredEntries: state.entries.filter((e) => e.content.toLowerCase().includes(q)),
-            error: error instanceof Error ? error.message : 'Failed to search memories',
-          }));
-        }
-      },
+// ---------------------------------------------------------------------------
+// Context retrieval — top-K facts for chat context injection
+// ---------------------------------------------------------------------------
 
-      syncMemories: async () => {
-        set({ syncing: true, error: null });
-        try {
-          await apiTriggerSync();
-          const entries = await apiFetchMemories();
-          set({
-            entries,
-            syncing: false,
-            lastSyncAt: new Date().toISOString(),
-          });
-        } catch (error) {
-          console.warn('Failed to sync memories:', error);
-          set({
-            syncing: false,
-            error: error instanceof Error ? error.message : 'Failed to sync memories',
-          });
-        }
-      },
+export async function retrieveMemoryContext(
+  query: string,
+  k = 5,
+  embedding?: Float32Array,
+): Promise<MemoryFact[]> {
+  if (embedding) {
+    try {
+      const ids = await searchMemoryByEmbedding(embedding, k);
+      if (ids.length > 0) {
+        const allFacts = await listMemoryFacts({ limit: 500 });
+        const idSet = new Set(ids);
+        return allFacts.filter((f) => idSet.has(f.id)).slice(0, k);
+      }
+    } catch {
+      // fall through to text search
+    }
+  }
 
-      setSearchQuery: (query) => {
-        set({ searchQuery: query });
-        if (!query.trim()) {
-          set({ filteredEntries: [] });
-          return;
-        }
-        // Local filter while the user types
-        const q = query.toLowerCase();
-        set((state) => ({
-          filteredEntries: state.entries.filter((e) => e.content.toLowerCase().includes(q)),
-        }));
-      },
+  const textResults = await searchMemoryByText(query, k);
+  if (textResults.length > 0) return textResults;
 
-      clearError: () => {
-        set({ error: null });
-      },
-    }),
-    {
-      name: 'memory-store',
-      storage: createJSONStorage(() => mmkvStorage),
-      onRehydrateStorage: () => (_state, error) => {
-        if (error) console.warn('[memoryStore] Hydration failed:', error);
-      },
-      partialize: (state) => ({
-        entries: state.entries,
-        lastSyncAt: state.lastSyncAt,
-      }),
-    },
-  ),
-);
+  // Fallback: pinned facts first, then most recent
+  return listMemoryFacts({ limit: k });
+}
