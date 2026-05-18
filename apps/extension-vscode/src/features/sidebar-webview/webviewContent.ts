@@ -6,7 +6,7 @@
  */
 
 import * as vscode from 'vscode';
-import { MODEL_PICKER_OPTIONS } from '../../services/modelConstants';
+import { MODEL_PICKER_OPTIONS } from '../model-picker/modelConstants';
 import { AGENT_MODE_LABEL, EFFORT_LABEL, type AgentMode, type Effort } from '@agiworkforce/types';
 import { agiVsCodeCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
 

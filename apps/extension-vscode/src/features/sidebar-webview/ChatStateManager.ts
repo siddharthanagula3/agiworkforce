@@ -25,7 +25,7 @@ import {
   normalizeConfiguredModelId,
   getModelProviderInfo,
   buildGroupedQuickPickItems,
-} from '../../services/modelConstants';
+} from '../model-picker/modelConstants';
 import {
   PROVIDER_DISPLAY,
   type AgentMode,

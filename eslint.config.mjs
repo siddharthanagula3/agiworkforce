@@ -784,7 +784,7 @@ export default [
 
       // Mobile + VS Code extension surfaces.
       // FIXME: P1-MODEL-CATALOG-MIGRATION (Wave 2 mobile+vscode sweep)
-      'apps/extension-vscode/src/services/modelConstants.ts',
+      'apps/extension-vscode/src/features/model-picker/modelConstants.ts',
       'apps/mobile/lib/models.ts',
 
       // Shared packages.
