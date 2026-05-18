@@ -24,65 +24,72 @@ jest.mock('react-native', () => ({
   Platform: { OS: 'ios' },
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+/* eslint-disable @typescript-eslint/no-require-imports */
 const {
-  getAllModels,
   getModelById,
-  getModelsByTier,
+  getShippableModels,
+  getModelsForRole,
 } = require('@agiworkforce/local-llm/src/catalog');
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { detectCapabilities } = require('@agiworkforce/local-llm/src/capabilities');
+/* eslint-enable @typescript-eslint/no-require-imports */
+
+// System-tier model IDs (OS-resident, not downloaded) — at least one must exist.
+const SYSTEM_TIER_IDS = ['apple-foundation-models', 'gemini-nano-aicore'];
 
 describe('local-llm: catalog', () => {
-  it('returns all models including system', () => {
-    const models = getAllModels();
+  it('returns all shippable models including at least one system-tier entry', () => {
+    const models = getShippableModels();
     expect(models.length).toBeGreaterThanOrEqual(5);
     const ids = models.map((m: { id: string }) => m.id);
-    expect(ids).toContain('system');
-    expect(ids).toContain('qwen2.5-1.5b-instruct-q4_k_m');
-    expect(ids).toContain('llama-3.2-3b-instruct-q4');
-    expect(ids).toContain('gemma-3-4b-vision-q4');
-    expect(ids).toContain('whisper-base-en');
+    // At least one system-tier model (platform-dependent) must be present
+    expect(SYSTEM_TIER_IDS.some((id: string) => ids.includes(id))).toBe(true);
+    // Standard downloadable models must be present
+    expect(ids).toContain('qwen3-4b-instruct-2507');
+    expect(ids).toContain('llama-3.2-1b-instruct-spinquant');
+    expect(ids).toContain('qwen2.5-vl-3b-instruct');
   });
 
   it('all catalog entries have a license field', () => {
-    const models = getAllModels();
+    const models = getShippableModels();
     for (const model of models) {
       expect(typeof model.license).toBe('string');
       expect(model.license.length).toBeGreaterThan(0);
     }
   });
 
-  it('system model: sizeBytes=0, tier=[1]', () => {
-    const sys = getModelById('system');
-    expect(sys.sizeBytes).toBe(0);
-    expect(sys.supportedTiers).toEqual([1]);
+  it('system-tier models: fileSizeBytes=0, role=system-multimodal', () => {
+    const systemModels = getModelsForRole('system-multimodal');
+    expect(systemModels.length).toBeGreaterThanOrEqual(1);
+    for (const sys of systemModels) {
+      expect(sys.fileSizeBytes).toBe(0);
+      expect(sys.role).toBe('system-multimodal');
+    }
   });
 
-  it('download models support tier 2 and 3', () => {
-    const qwen = getModelById('qwen2.5-1.5b-instruct-q4_k_m');
-    expect(qwen.supportedTiers).toContain(2);
-    expect(qwen.supportedTiers).toContain(3);
-    const llama = getModelById('llama-3.2-3b-instruct-q4');
-    expect(llama.supportedTiers).toContain(2);
-    expect(llama.supportedTiers).toContain(3);
+  it('download models have non-zero fileSizeBytes and executorch/llama-rn runtime support', () => {
+    const qwen = getModelById('qwen3-4b-instruct-2507');
+    expect(qwen).toBeDefined();
+    expect(qwen.fileSizeBytes).toBeGreaterThan(0);
+    expect(qwen.supportedRuntimes).toContain('executorch');
+    const llama = getModelById('llama-3.2-1b-instruct-spinquant');
+    expect(llama).toBeDefined();
+    expect(llama.fileSizeBytes).toBeGreaterThan(0);
+    expect(llama.supportedRuntimes).toContain('executorch');
   });
 
-  it('getModelsByTier(1) returns only system', () => {
-    const tier1 = getModelsByTier(1);
-    expect(tier1.every((m: { supportedTiers: number[] }) => m.supportedTiers.includes(1))).toBe(
-      true,
-    );
-    expect(tier1.some((m: { id: string }) => m.id === 'system')).toBe(true);
+  it('getModelsForRole(system-multimodal) returns system-tier entries', () => {
+    const systemTier = getModelsForRole('system-multimodal');
+    expect(systemTier.every((m: { role: string }) => m.role === 'system-multimodal')).toBe(true);
+    expect(systemTier.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('getModelsByTier(2) excludes system', () => {
-    const tier2 = getModelsByTier(2);
-    expect(tier2.some((m: { id: string }) => m.id === 'system')).toBe(false);
+  it('getModelsForRole(default) excludes system-multimodal entries', () => {
+    const defaultModels = getModelsForRole('default');
+    expect(defaultModels.every((m: { role: string }) => m.role !== 'system-multimodal')).toBe(true);
   });
 
-  it('throws on unknown model id', () => {
-    expect(() => getModelById('totally-fake-model')).toThrow(/Unknown local model/);
+  it('returns undefined for unknown model id', () => {
+    expect(getModelById('totally-fake-model')).toBeUndefined();
   });
 });
 
