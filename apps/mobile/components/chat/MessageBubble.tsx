@@ -30,13 +30,39 @@ import { CitationChip } from './CitationChip';
 import { CollapsibleSources } from './CollapsibleSources';
 import { MessageEditModal } from './MessageEditModal';
 import { renderMarkdownContent } from './MessageContentRenderer';
+import { ProvenanceFooter } from './ProvenanceFooter';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/lib/theme';
+import { getModelById, isAutoMode, PROVIDERS } from '@/lib/models';
+import { providerLabels } from '@agiworkforce/types';
 import type { ChatMessage, Artifact } from '@/types/chat';
 
 /** Reaction state: cycles thumbsUp -> thumbsDown -> null */
 type ReactionType = 'thumbsUp' | 'thumbsDown' | null;
+
+const LOCAL_PROVIDERS = new Set(['ollama', 'lmstudio']);
+
+/** Returns provenance strings for an assistant message's model field. */
+function getProvenance(model?: string): { provider?: string; model?: string } | null {
+  if (!model) return null;
+  if (isAutoMode(model)) return { provider: 'Cloud', model: 'Auto' };
+
+  const def = getModelById(model);
+  if (!def) return null;
+
+  if (LOCAL_PROVIDERS.has(def.provider)) {
+    return { provider: 'On device' };
+  }
+
+  const providerDef = PROVIDERS.find((p) => p.id === def.provider);
+  const providerLabel =
+    providerDef?.name ??
+    providerLabels[def.provider as keyof typeof providerLabels] ??
+    def.provider;
+
+  return { provider: `Cloud · ${providerLabel}` };
+}
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -69,6 +95,7 @@ export const MessageBubble = memo(function MessageBubble({
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
+  const provenance = isAssistant && !message.isStreaming ? getProvenance(message.model) : null;
   const [expandedArtifact, setExpandedArtifact] = useState<Artifact | null>(null);
   const [fullScreenImageUrl, setFullScreenImageUrl] = useState<string | null>(null);
   const [showExportSheet, setShowExportSheet] = useState(false);
@@ -425,6 +452,11 @@ export const MessageBubble = memo(function MessageBubble({
                 ))}
               </View>
             ) : null}
+
+            {/* Provenance badge: "On device" or "Cloud · {Provider}" */}
+            {provenance && (
+              <ProvenanceFooter provider={provenance.provider} model={provenance.model} />
+            )}
           </View>
         </View>
       </Pressable>

@@ -19,6 +19,7 @@ import type BottomSheet from '@gorhom/bottom-sheet';
 import { MessageList } from '@/components/chat/MessageList';
 import { Composer } from '@/components/Composer/Composer';
 import { QuotedReplyBar } from '@/components/chat/QuotedReplyBar';
+import { ModeSwitchModal, type AppMode } from '@/components/chat/ModeSwitchModal';
 import { AddToChatSheet } from '@/components/chat/AddToChatSheet';
 import { ConversationExportSheet } from '@/components/chat/ConversationExportSheet';
 import { ThinkingBottomSheet } from '@/components/chat/ThinkingBottomSheet';
@@ -29,6 +30,7 @@ import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/stores/modelStore';
 import { useAgentStore } from '@/stores/agentStore';
+import { getModelById, isAutoMode } from '@/lib/models';
 import { useVoicePlayback } from '@/hooks/useVoicePlayback';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { offlineQueue } from '@/services/offlineQueue';
@@ -55,6 +57,12 @@ export default function ChatScreen() {
   const [quotedMessage, setQuotedMessage] = useState<ChatMessage | null>(null);
   const [thinkingSheetIndex, setThinkingSheetIndex] = useState(-1);
   const [thinkingContent, setThinkingContent] = useState('');
+  const [modeSwitchState, setModeSwitchState] = useState<{
+    visible: boolean;
+    fromMode: AppMode;
+    toMode: AppMode;
+    pendingModelId: string;
+  }>({ visible: false, fromMode: 'cloud', toMode: 'cloud', pendingModelId: '' });
   const paywallSheetRef = useRef<import('@gorhom/bottom-sheet').default>(null);
   const { isOnline, queueSize } = useNetworkStatus();
 
@@ -189,6 +197,57 @@ export default function ChatScreen() {
 
   const handleOpenModelPicker = useCallback(() => {
     modelPickerRef.current?.snapToIndex(0);
+  }, []);
+
+  const LOCAL_PROVIDERS = new Set(['ollama', 'lmstudio']);
+
+  const resolveAppMode = useCallback(
+    (modelId: string): AppMode => {
+      if (isAutoMode(modelId)) return 'cloud';
+      const def = getModelById(modelId);
+      if (!def) return 'cloud';
+      return LOCAL_PROVIDERS.has(def.provider) ? 'local' : 'cloud';
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  const handleModelSelect = useCallback(
+    (newModelId: string) => {
+      const hasMessages = conversationMessages.length > 0;
+      if (!hasMessages) {
+        useModelStore.getState().setModel(newModelId);
+        modelPickerRef.current?.close();
+        return;
+      }
+
+      const currentMode = resolveAppMode(selectedModel);
+      const nextMode = resolveAppMode(newModelId);
+
+      if (currentMode !== nextMode) {
+        modelPickerRef.current?.close();
+        setModeSwitchState({
+          visible: true,
+          fromMode: currentMode,
+          toMode: nextMode,
+          pendingModelId: newModelId,
+        });
+        return;
+      }
+
+      useModelStore.getState().setModel(newModelId);
+      modelPickerRef.current?.close();
+    },
+    [conversationMessages.length, selectedModel, resolveAppMode],
+  );
+
+  const handleModeSwitchConfirm = useCallback(() => {
+    useModelStore.getState().setModel(modeSwitchState.pendingModelId);
+    setModeSwitchState((s) => ({ ...s, visible: false }));
+  }, [modeSwitchState.pendingModelId]);
+
+  const handleModeSwitchCancel = useCallback(() => {
+    setModeSwitchState((s) => ({ ...s, visible: false }));
   }, []);
 
   const handleOpenAddToChat = useCallback(() => {
@@ -563,7 +622,7 @@ export default function ChatScreen() {
         />
 
         {/* Model picker bottom sheet */}
-        <ModelPickerSheet sheetRef={modelPickerRef} />
+        <ModelPickerSheet sheetRef={modelPickerRef} onSelect={handleModelSelect} />
 
         {/* Voice conversation full-screen overlay */}
         <VoiceConversationScreen
@@ -593,6 +652,15 @@ export default function ChatScreen() {
           requiredTier={paywallError?.requiredTier ?? 'hobby'}
           reason={paywallError?.reason}
           onDismiss={clearPaywallError}
+        />
+
+        {/* Mid-conversation mode-switch confirmation */}
+        <ModeSwitchModal
+          visible={modeSwitchState.visible}
+          fromMode={modeSwitchState.fromMode}
+          toMode={modeSwitchState.toMode}
+          onConfirm={handleModeSwitchConfirm}
+          onCancel={handleModeSwitchCancel}
         />
 
         {/* Rename modal (Android — Alert.prompt is iOS-only) */}
