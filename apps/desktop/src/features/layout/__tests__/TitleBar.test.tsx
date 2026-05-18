@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DockPosition, WindowActions } from '../../../hooks/useWindowManager';
-import { TooltipProvider } from '../../ui/Tooltip';
+import { TooltipProvider } from '../../../ui/Tooltip';
 import TitleBar from '../TitleBar';
 
 vi.mock('framer-motion', () => ({
