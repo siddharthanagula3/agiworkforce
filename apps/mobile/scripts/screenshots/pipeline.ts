@@ -33,8 +33,10 @@ interface DeviceClass {
 
 const DEVICES: DeviceClass[] = [
   // iOS — order matches App Store Connect required classes
+  // 6.9" class added for iPhone 16 Pro Max (App Store Connect 2026)
+  { platform: 'ios', className: '6.9', simulator: 'iPhone 16 Pro Max', width: 1320, height: 2868 },
   { platform: 'ios', className: '6.7', simulator: 'iPhone 17 Pro Max', width: 1290, height: 2796 },
-  { platform: 'ios', className: '6.5', simulator: 'iPhone 11 Pro Max', width: 1242, height: 2688 },
+  { platform: 'ios', className: '6.5', simulator: 'iPhone 15 Pro', width: 1242, height: 2688 },
   { platform: 'ios', className: '5.5', simulator: 'iPhone 8 Plus', width: 1242, height: 2208 },
   {
     platform: 'ios',
@@ -50,27 +52,27 @@ const DEVICES: DeviceClass[] = [
     width: 1668,
     height: 2388,
   },
-  // Android — phone + 2 tablets
+  // Android — phone + 2 tablets (API 35 AVDs for Play Console 2026)
   {
     platform: 'android',
     className: 'phone',
-    simulator: 'pixel_8_pro_api_34',
+    simulator: 'pixel_8_api_35',
     width: 1080,
     height: 2400,
   },
   {
     platform: 'android',
     className: 'tablet-10',
-    simulator: 'pixel_tablet_api_34',
+    simulator: 'pixel_tablet_api_35',
     width: 1920,
     height: 1200,
   },
   {
     platform: 'android',
     className: 'tablet-7',
-    simulator: 'pixel_7_api_34_landscape',
-    width: 1280,
-    height: 800,
+    simulator: 'Nexus_7_2013_API_35',
+    width: 1200,
+    height: 1920,
   },
 ];
 
@@ -82,7 +84,12 @@ interface Screenshot {
   subhead: string;
 }
 
-const SCREENSHOTS: Screenshot[] = [
+/**
+ * Wave 1 screenshots (v1 BYOK-multi-provider positioning).
+ * Retained for historical reference and any future BYOK-mode build.
+ * These specs are not run by default in the v1 local-only build.
+ */
+const SCREENSHOTS_WAVE1: Screenshot[] = [
   {
     id: '01',
     name: 'multi-provider',
@@ -127,6 +134,62 @@ const SCREENSHOTS: Screenshot[] = [
   },
 ];
 
+/**
+ * Wave 4 screenshots (v1 local-only + on-device + India-first positioning).
+ * These are the 6 canonical slots used for all 48 store captures
+ * (30 iOS + 18 Android). Spec details in store-listing/screenshots/specs/IOS-01..30
+ * and AND-01..18.
+ *
+ * Slot 5 differs by platform:
+ *   iOS  → HealthKit steps chat  (spec: 05-healthkit-ios.spec.ts)
+ *   Android → Health Connect chat (spec: 05-health-connect-android.spec.ts)
+ */
+const SCREENSHOTS: Screenshot[] = [
+  {
+    id: '01',
+    name: 'offline-chat',
+    spec: '01-offline-chat.spec.ts',
+    heading: 'AI that works offline',
+    subhead: 'Runs on your phone. No Wi-Fi. No sign-up.',
+  },
+  {
+    id: '02',
+    name: 'model-picker',
+    spec: '02-model-picker.spec.ts',
+    heading: '10+ models. One conversation.',
+    subhead: 'Switch Claude, GPT, Gemini any turn.',
+  },
+  {
+    id: '03',
+    name: 'privacy-screen',
+    spec: '03-privacy-screen.spec.ts',
+    heading: 'Private by design',
+    subhead: 'No cloud. No tracking. Data stays on device.',
+  },
+  {
+    id: '04',
+    name: 'voice-recording',
+    spec: '04-voice-recording.spec.ts',
+    heading: 'Speak. AI listens.',
+    subhead: 'On-device transcription. No audio uploaded.',
+  },
+  {
+    // Platform-specific spec resolved in captureForDevice()
+    id: '05',
+    name: 'health-data-chat',
+    spec: '05-health-data-chat.spec.ts',
+    heading: 'AI meets your health data',
+    subhead: 'Steps, sleep, heart rate. Stays on device.',
+  },
+  {
+    id: '06',
+    name: 'free-plan',
+    spec: '06-free-plan.spec.ts',
+    heading: 'Free. Forever. No catch.',
+    subhead: 'On-device AI. No subscription. No cloud needed.',
+  },
+];
+
 const ROOT = resolve(__dirname, '..', '..');
 const OUT = join(ROOT, 'store-listing', 'screenshots', 'captures');
 
@@ -142,6 +205,19 @@ function bootSimulator(device: DeviceClass) {
     execSync(`emulator -avd ${device.simulator} -no-snapshot -no-audio &`, { stdio: 'ignore' });
     execSync('adb wait-for-device');
   }
+}
+
+/**
+ * Resolve the Detox spec file for a given screenshot slot + device.
+ * Slot 05 ("health-data-chat") is platform-specific:
+ *   iOS  → 05-healthkit-ios.spec.ts
+ *   Android → 05-health-connect-android.spec.ts
+ */
+function resolveSpec(s: Screenshot, d: DeviceClass): string {
+  if (s.id === '05') {
+    return d.platform === 'ios' ? '05-healthkit-ios.spec.ts' : '05-health-connect-android.spec.ts';
+  }
+  return s.spec;
 }
 
 function runDetoxSpec(device: DeviceClass, spec: string, rawOut: string) {
@@ -177,8 +253,9 @@ function captureForDevice(device: DeviceClass) {
   for (const s of SCREENSHOTS) {
     const rawOut = join(classDir, 'raw', `${s.id}-${s.name}.png`);
     const finalOut = join(classDir, 'final', `${s.id}-${s.name}.png`);
-    console.log(`  -> ${s.id}-${s.name}`);
-    runDetoxSpec(device, s.spec, rawOut);
+    const spec = resolveSpec(s, device);
+    console.log(`  -> ${s.id}-${s.name} (${spec})`);
+    runDetoxSpec(device, spec, rawOut);
     composite(rawOut, finalOut, s, device);
   }
 }
