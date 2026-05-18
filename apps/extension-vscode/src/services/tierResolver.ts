@@ -13,7 +13,7 @@
 
 import * as vscode from 'vscode';
 import { type UIPlanTier, tierAtLeast } from '@agiworkforce/types';
-import { getDesktopBridge } from './desktopBridge';
+import { getDesktopBridge } from '../features/desktop-bridge';
 
 // ─── Tier type ────────────────────────────────────────────────────────────────
 
