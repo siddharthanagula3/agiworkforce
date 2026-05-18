@@ -9,15 +9,20 @@ import {
   type ProviderId,
   type CapabilityTier,
 } from '@agiworkforce/types';
-import { getExtensionSendQueue } from './sendQueue';
-import { clearChildren, setText, createElementWith, setChild } from './dom-helpers';
+import { getExtensionSendQueue } from './features/native-bridge/sendQueue';
+import {
+  clearChildren,
+  setText,
+  createElementWith,
+  setChild,
+} from './features/content/dom-helpers';
 import {
   saveConversation,
   listConversations,
   deleteConversation,
   type HistoryMessage,
   type ConversationEntry,
-} from './conversation-history';
+} from './features/background/conversation-history';
 import { sanitizeHtml, renderMarkdown } from './features/side-panel/markdown';
 import { setupVoiceInput } from './features/side-panel/voice';
 import {
