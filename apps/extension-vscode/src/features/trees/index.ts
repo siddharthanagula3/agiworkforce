@@ -1,5 +1,12 @@
 /**
- * features/trees/ — History tree (conversationTreeProvider) + Context Files tree (contextPanelProvider).
- * Phase 6 reorg placeholder. Will re-export from those files once moved here.
+ * features/trees/ — Sidebar tree providers.
+ * ConversationTreeProvider: history tree (agi-workforce.conversations view).
+ * ContextPanelProvider: context files tree (agi-workforce.contextPanel view).
  */
-export {};
+export { ConversationTreeItem, ConversationTreeProvider } from './conversationTreeProvider';
+export {
+  ContextItem,
+  ContextPanelProvider,
+  setContextPanelInstance,
+  getContextPanelProvider,
+} from './contextPanelProvider';

@@ -8,7 +8,7 @@
 
 import * as vscode from 'vscode';
 import { type ConversationStore } from '../storage/conversationStore';
-import { type ConversationTreeProvider } from './conversationTreeProvider';
+import { type ConversationTreeProvider } from '../features/trees';
 import { type DiffDecorationProvider } from './diffDecorationProvider';
 import { normalizeConfiguredModelId } from '../services/modelConstants';
 import { Config } from '../utils/config';
