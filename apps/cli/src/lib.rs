@@ -59,7 +59,9 @@ pub mod model_catalog;
 pub mod models_cache;
 pub mod oauth;
 pub mod onboarding;
-pub mod plugins;
+// plugins lives at features::plugins::plugins; re-exported here so all
+// internal callers using `crate::plugins::*` continue to resolve unchanged.
+pub use features::plugins::plugins as plugins;
 pub mod project_registry;
 pub mod project_scope;
 pub mod review;
