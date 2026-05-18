@@ -1,0 +1,639 @@
+/**
+ * Settings Screen — v3 layout
+ *
+ * Sections: Account / AI Configuration / Connections / Voice / Preferences / About
+ * Voice section shows on-device default banner + locked "Never train" toggle.
+ */
+import { useCallback, useRef } from 'react';
+import { View, SectionList, Pressable, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import Constants from 'expo-constants';
+import {
+  User,
+  CreditCard,
+  BarChart3,
+  Brain,
+  Zap,
+  Shield,
+  Smartphone,
+  Link2,
+  Palette,
+  Volume2,
+  Bell,
+  UserCog,
+  Vibrate,
+  HelpCircle,
+  Lock,
+  FileText,
+  LogOut,
+  ChevronRight,
+  Sun,
+  Moon,
+  Monitor,
+  Mic,
+  type LucideIcon,
+} from 'lucide-react-native';
+import type BottomSheet from '@gorhom/bottom-sheet';
+import { Text } from '@/components/ui/text';
+import { Switch } from '@/components/ui/switch';
+import { useAuthStore } from '@/stores/authStore';
+import { useSettingsStore, type ThemeMode } from '@/stores/settingsStore';
+import { useConnectionStore } from '@/stores/connectionStore';
+import { useModelStore } from '@/stores/modelStore';
+import { openExternalUrl } from '@/lib/safeOpenURL';
+import { useThemeColors } from '@/hooks/useTheme';
+import { VoiceSelector } from '@/components/voice/VoiceSelector';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+type SettingItemType =
+  | 'navigation'
+  | 'toggle'
+  | 'theme'
+  | 'signout'
+  | 'version'
+  | 'voice-header'
+  | 'cloud-whisper-waitlist';
+
+interface SettingItem {
+  key: string;
+  icon: LucideIcon;
+  label: string;
+  type: SettingItemType;
+  value?: string;
+  toggleValue?: boolean;
+  onToggle?: (v: boolean) => void;
+  onPress?: () => void;
+  destructive?: boolean;
+}
+
+interface SettingSection {
+  title: string;
+  data: SettingItem[];
+}
+
+// ---------------------------------------------------------------------------
+// Theme mode labels
+// ---------------------------------------------------------------------------
+
+const THEME_LABELS: Record<ThemeMode, string> = {
+  dark: 'Dark',
+  light: 'Light',
+  system: 'System',
+};
+
+const THEME_ICONS: Record<ThemeMode, LucideIcon> = {
+  dark: Moon,
+  light: Sun,
+  system: Monitor,
+};
+
+// ---------------------------------------------------------------------------
+// Row components
+// ---------------------------------------------------------------------------
+
+function NavigationRow({
+  icon: Icon,
+  label,
+  value,
+  onPress,
+  destructive,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value?: string;
+  onPress?: () => void;
+  destructive?: boolean;
+}) {
+  const c = useThemeColors();
+  return (
+    <Pressable
+      className="flex-row items-center justify-between py-3.5 px-4 active:bg-white/5"
+      onPress={onPress}
+      accessibilityLabel={label}
+      accessibilityRole="button"
+    >
+      <View className="flex-row items-center gap-3">
+        <Icon size={18} color={destructive ? c.agentError : c.textSecondary} />
+        <Text className="text-[15px]" style={{ color: destructive ? c.agentError : c.textPrimary }}>
+          {label}
+        </Text>
+      </View>
+      <View className="flex-row items-center gap-1.5">
+        {value ? (
+          <Text className="text-[13px]" style={{ color: c.textMuted }}>
+            {value}
+          </Text>
+        ) : null}
+        {!destructive && <ChevronRight size={16} color={c.textMuted} />}
+      </View>
+    </Pressable>
+  );
+}
+
+function ToggleRow({
+  icon: Icon,
+  label,
+  value,
+  onValueChange,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: boolean;
+  onValueChange: (v: boolean) => void;
+}) {
+  const c = useThemeColors();
+  return (
+    <View
+      className="flex-row items-center justify-between py-3.5 px-4"
+      accessible
+      accessibilityLabel={`${label}, ${value ? 'on' : 'off'}`}
+    >
+      <View className="flex-row items-center gap-3">
+        <Icon size={18} color={c.textSecondary} />
+        <Text className="text-[15px]" style={{ color: c.textPrimary }}>
+          {label}
+        </Text>
+      </View>
+      <Switch value={value} onValueChange={onValueChange} />
+    </View>
+  );
+}
+
+function ThemeRow({
+  currentMode,
+  onSelect,
+}: {
+  currentMode: ThemeMode;
+  onSelect: (mode: ThemeMode) => void;
+}) {
+  const c = useThemeColors();
+  return (
+    <View className="py-3.5 px-4">
+      <View className="flex-row items-center gap-3 mb-3">
+        <Palette size={18} color={c.textSecondary} />
+        <Text className="text-[15px]" style={{ color: c.textPrimary }}>
+          Appearance
+        </Text>
+      </View>
+      <View className="flex-row gap-2">
+        {(['dark', 'light', 'system'] as ThemeMode[]).map((mode) => {
+          const Icon = THEME_ICONS[mode];
+          const selected = currentMode === mode;
+          return (
+            <Pressable
+              key={mode}
+              onPress={() => onSelect(mode)}
+              className="flex-1 items-center gap-1.5 py-2.5 rounded-lg"
+              style={{
+                backgroundColor: selected ? 'rgba(33,128,141,0.15)' : 'transparent',
+                borderWidth: selected ? 1 : 0,
+                borderColor: selected ? 'rgba(33,128,141,0.3)' : 'transparent',
+              }}
+              accessibilityLabel={THEME_LABELS[mode]}
+              accessibilityRole="radio"
+              accessibilityState={{ selected }}
+            >
+              <Icon size={16} color={selected ? c.teal : c.textMuted} />
+              <Text className="text-xs" style={{ color: selected ? c.teal : c.textSecondary }}>
+                {THEME_LABELS[mode]}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function VersionRow() {
+  const c = useThemeColors();
+  const version = Constants.expoConfig?.version ?? '1.0.0';
+  const buildNumber =
+    Constants.expoConfig?.ios?.buildNumber ??
+    Constants.expoConfig?.android?.versionCode?.toString() ??
+    '1';
+  return (
+    <View className="items-center py-4">
+      <Text className="text-[11px]" style={{ color: c.textMuted }}>
+        v{version} Build {buildNumber}
+      </Text>
+    </View>
+  );
+}
+
+function VoiceHeaderRow() {
+  const c = useThemeColors();
+  return (
+    <View style={{ marginHorizontal: 16, marginVertical: 8 }}>
+      {/* On-device default banner */}
+      <View
+        style={{
+          backgroundColor: `${c.teal}18`,
+          borderWidth: 1,
+          borderColor: `${c.teal}33`,
+          borderRadius: 12,
+          padding: 12,
+          marginBottom: 12,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <Mic size={14} color={c.teal} />
+          <Text style={{ fontSize: 13, fontWeight: '600', color: c.teal }}>
+            On-device by default
+          </Text>
+        </View>
+        <Text style={{ fontSize: 12, color: c.textSecondary, lineHeight: 17 }}>
+          Voice transcription runs locally on your device. Audio is never sent to training servers.
+        </Text>
+      </View>
+
+      {/* Locked "Never train" toggle */}
+      <View
+        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+        accessibilityLabel="Never use voice for training — always on"
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Lock size={16} color={c.textSecondary} />
+          <View>
+            <Text style={{ fontSize: 14, color: c.textPrimary }}>Never use for training</Text>
+            <Text style={{ fontSize: 11, color: c.textMuted }}>Locked — cannot be disabled</Text>
+          </View>
+        </View>
+        <View
+          style={{
+            width: 44,
+            height: 26,
+            borderRadius: 13,
+            backgroundColor: c.teal,
+            justifyContent: 'center',
+            alignItems: 'flex-end',
+            paddingHorizontal: 3,
+            opacity: 0.7,
+          }}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: true, disabled: true }}
+        >
+          <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' }} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Cloud Whisper waitlist row — greyed-out, non-interactive
+// ---------------------------------------------------------------------------
+
+function CloudWhisperWaitlistRow() {
+  const c = useThemeColors();
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        opacity: 0.45,
+      }}
+      accessible
+      accessibilityLabel="Cloud Whisper — opens after waitlist, not yet available"
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <Mic size={16} color={c.textSecondary} />
+        <View>
+          <Text style={{ fontSize: 14, color: c.textPrimary }}>Cloud Whisper</Text>
+          <Text style={{ fontSize: 11, color: c.textMuted }}>Opens after waitlist</Text>
+        </View>
+      </View>
+      <View
+        style={{
+          paddingHorizontal: 8,
+          paddingVertical: 3,
+          borderRadius: 6,
+          backgroundColor: 'rgba(255,255,255,0.06)',
+          borderWidth: 1,
+          borderColor: 'rgba(255,255,255,0.1)',
+        }}
+      >
+        <Text style={{ fontSize: 10, color: c.textMuted, fontWeight: '600' }}>WAITLIST</Text>
+      </View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Separator between rows (inside a section)
+// ---------------------------------------------------------------------------
+
+function RowSeparator() {
+  const c = useThemeColors();
+  return <View className="h-px mx-4" style={{ backgroundColor: c.border }} />;
+}
+
+// ---------------------------------------------------------------------------
+// Screen
+// ---------------------------------------------------------------------------
+
+export default function SettingsTabScreen() {
+  const router = useRouter();
+  const { signOut } = useAuthStore();
+  const connectionStatus = useConnectionStore((s) => s.status);
+  const selectedModel = useModelStore((s) => s.selectedModel);
+  const voiceSelectorRef = useRef<BottomSheet>(null);
+  const { hapticsEnabled, themeMode, setHapticsEnabled, setThemeMode } = useSettingsStore();
+  const c = useThemeColors();
+
+  // ---- Handlers ----
+
+  const handleSignOut = useCallback(() => {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign Out', style: 'destructive', onPress: signOut },
+    ]);
+  }, [signOut]);
+
+  const push = useCallback(
+    (path: string) => () => {
+      router.push(path as Parameters<typeof router.push>[0]);
+    },
+    [router],
+  );
+
+  // ---- Section data ----
+
+  const sections: SettingSection[] = [
+    {
+      title: 'Account',
+      data: [
+        {
+          key: 'profile',
+          icon: User,
+          label: 'Profile',
+          type: 'navigation',
+          onPress: push('/(app)/profile'),
+        },
+        {
+          key: 'subscription',
+          icon: CreditCard,
+          label: 'Subscription',
+          type: 'navigation',
+          onPress: push('/(app)/billing'),
+        },
+        {
+          key: 'usage',
+          icon: BarChart3,
+          label: 'Usage',
+          type: 'navigation',
+          onPress: push('/(app)/usage'),
+        },
+      ],
+    },
+    {
+      title: 'AI Configuration',
+      data: [
+        {
+          key: 'default-model',
+          icon: Brain,
+          label: 'Default Model',
+          type: 'navigation',
+          value: selectedModel,
+          onPress: () => {
+            router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
+          },
+        },
+        {
+          key: 'capabilities',
+          icon: Zap,
+          label: 'Capabilities',
+          type: 'navigation',
+          onPress: push('/(app)/settings/capabilities'),
+        },
+        {
+          key: 'auto-approve',
+          icon: Shield,
+          label: 'Auto-Approve',
+          type: 'navigation',
+          onPress: push('/(app)/settings/auto-approve'),
+        },
+      ],
+    },
+    {
+      title: 'Connections',
+      data: [
+        {
+          key: 'desktop-pairing',
+          icon: Smartphone,
+          label: 'Desktop Pairing',
+          type: 'navigation',
+          value: connectionStatus === 'connected' ? 'Connected' : undefined,
+          onPress: push('/(app)/companion'),
+        },
+        {
+          key: 'connectors',
+          icon: Link2,
+          label: 'Connectors',
+          type: 'navigation',
+          onPress: push('/(app)/connectors'),
+        },
+      ],
+    },
+    {
+      title: 'Voice',
+      data: [
+        {
+          key: 'voice-header',
+          icon: Mic,
+          label: '',
+          type: 'voice-header',
+        },
+        {
+          key: 'voice-language',
+          icon: Volume2,
+          label: 'Voice & Language',
+          type: 'navigation',
+          onPress: () => voiceSelectorRef.current?.snapToIndex(0),
+        },
+        {
+          key: 'cloud-whisper',
+          icon: Mic,
+          label: '',
+          type: 'cloud-whisper-waitlist',
+        },
+      ],
+    },
+    {
+      title: 'Preferences',
+      data: [
+        {
+          key: 'appearance',
+          icon: Palette,
+          label: 'Appearance',
+          type: 'theme',
+        },
+        {
+          key: 'notifications',
+          icon: Bell,
+          label: 'Notifications',
+          type: 'navigation',
+          onPress: push('/(app)/settings/notifications'),
+        },
+        {
+          key: 'personalization',
+          icon: UserCog,
+          label: 'Personalization',
+          type: 'navigation',
+          onPress: push('/(app)/settings/personalization'),
+        },
+        {
+          key: 'haptic-feedback',
+          icon: Vibrate,
+          label: 'Haptic Feedback',
+          type: 'toggle',
+          toggleValue: hapticsEnabled,
+          onToggle: setHapticsEnabled,
+        },
+      ],
+    },
+    {
+      title: 'About',
+      data: [
+        {
+          key: 'help-faq',
+          icon: HelpCircle,
+          label: 'Help & FAQ',
+          type: 'navigation',
+          onPress: () => {
+            void openExternalUrl('https://agiworkforce.com/help');
+          },
+        },
+        {
+          key: 'privacy-policy',
+          icon: Lock,
+          label: 'Privacy Policy',
+          type: 'navigation',
+          onPress: () => {
+            void openExternalUrl('https://agiworkforce.com/privacy');
+          },
+        },
+        {
+          key: 'terms-of-service',
+          icon: FileText,
+          label: 'Terms of Service',
+          type: 'navigation',
+          onPress: () => {
+            void openExternalUrl('https://agiworkforce.com/terms');
+          },
+        },
+        {
+          key: 'sign-out',
+          icon: LogOut,
+          label: 'Sign Out',
+          type: 'signout',
+          destructive: true,
+          onPress: handleSignOut,
+        },
+        {
+          key: 'version',
+          icon: HelpCircle,
+          label: '',
+          type: 'version',
+        },
+      ],
+    },
+  ];
+
+  // ---- Render ----
+
+  const renderItem = useCallback(
+    ({ item, index, section }: { item: SettingItem; index: number; section: SettingSection }) => {
+      const isLast = index === section.data.length - 1;
+      const showSeparator =
+        !isLast &&
+        item.type !== 'version' &&
+        item.type !== 'voice-header' &&
+        item.type !== 'cloud-whisper-waitlist';
+
+      if (item.type === 'version') return <VersionRow />;
+      if (item.type === 'voice-header') return <VoiceHeaderRow />;
+      if (item.type === 'cloud-whisper-waitlist') return <CloudWhisperWaitlistRow />;
+
+      return (
+        <>
+          {item.type === 'toggle' && item.onToggle ? (
+            <ToggleRow
+              icon={item.icon}
+              label={item.label}
+              value={item.toggleValue ?? false}
+              onValueChange={item.onToggle}
+            />
+          ) : item.type === 'theme' ? (
+            <ThemeRow currentMode={themeMode} onSelect={setThemeMode} />
+          ) : item.type === 'signout' ? (
+            <NavigationRow icon={item.icon} label={item.label} onPress={item.onPress} destructive />
+          ) : (
+            <NavigationRow
+              icon={item.icon}
+              label={item.label}
+              value={item.value}
+              onPress={item.onPress}
+            />
+          )}
+          {showSeparator && <RowSeparator />}
+        </>
+      );
+    },
+    [themeMode, setThemeMode],
+  );
+
+  const renderSectionHeader = useCallback(
+    ({ section }: { section: SettingSection }) => (
+      <View className="pt-5 pb-1.5 px-4">
+        <Text
+          className="text-[11px] uppercase tracking-wider font-semibold"
+          style={{ color: c.textMuted }}
+        >
+          {section.title}
+        </Text>
+      </View>
+    ),
+    [c],
+  );
+
+  const renderSectionFooter = useCallback(() => null, []);
+
+  const keyExtractor = useCallback((item: SettingItem) => item.key, []);
+
+  return (
+    <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
+      {/* Header */}
+      <View className="flex-row items-center px-4 h-12">
+        <Text
+          variant="subheading"
+          className="text-lg font-semibold"
+          style={{ color: c.textPrimary }}
+        >
+          Settings
+        </Text>
+      </View>
+
+      <SectionList
+        sections={sections}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
+        renderSectionHeader={renderSectionHeader}
+        renderSectionFooter={renderSectionFooter}
+        stickySectionHeadersEnabled={false}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 40 }}
+        style={{ backgroundColor: c.surfaceBase }}
+      />
+
+      <VoiceSelector ref={voiceSelectorRef} />
+    </SafeAreaView>
+  );
+}
