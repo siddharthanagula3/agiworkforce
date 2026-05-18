@@ -21,6 +21,7 @@ export type {
   ChatMessage,
   GenerateOptions,
   GenerateResult,
+  LLMTool,
   LocalModel,
   LocalModelId,
 } from './types.js';

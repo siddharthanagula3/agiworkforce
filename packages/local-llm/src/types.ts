@@ -18,11 +18,19 @@ export interface ChatMessage {
   content: string;
 }
 
+/**
+ * Opaque tool descriptor passed to the model's chat template.
+ * Shape depends on the model — Qwen3 uses the Qwen-Agent JSON schema.
+ * Only has effect when the model's tokenizer_config.json includes a tool-call template.
+ */
+export type LLMTool = object;
+
 export interface GenerateOptions {
   prompt: string;
   systemPrompt?: string;
   messages?: ChatMessage[];
   requestId?: string;
+  tools?: LLMTool[];
   onToken?: (token: string) => void;
   onDone?: (opts: { aborted: boolean; reason?: string }) => void;
 }
