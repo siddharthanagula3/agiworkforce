@@ -123,6 +123,9 @@ const config = {
     // Tier 3 universal fallback: llama.rn config plugin wires native GGUF runtime.
     // Models downloaded at runtime into Documents/models/ — not bundled in the binary.
     'llama.rn',
+    // Tier 1 Android: wires AGIAICoreModule + AGIAICorePackage into the generated android/ project.
+    // Injects com.google.mlkit:genai-common gradle dep + registers AGIAICorePackage in MainApplication.kt.
+    './native/android/withAGIAICore.cjs',
   ],
   updates: {
     fallbackToCacheTimeout: 0,
