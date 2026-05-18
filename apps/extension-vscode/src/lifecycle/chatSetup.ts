@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { registerChatParticipant } from '../providers/chatParticipant';
+import { registerChatParticipant } from '../features/chat-participant';
 import { SidebarProvider } from '../providers/sidebarProvider';
 import { ConversationStore } from '../storage/conversationStore';
 import {
