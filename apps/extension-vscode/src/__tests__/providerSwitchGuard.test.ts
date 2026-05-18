@@ -8,8 +8,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { extractProvider, guardProviderSwitch } from '../services/providerSwitchGuard';
-import { tierAtLeast, TIER_ORDER } from '../services/tierResolver';
+import { extractProvider, guardProviderSwitch } from '../integrations/providerSwitchGuard';
+import { tierAtLeast, TIER_ORDER } from '../integrations/tierResolver';
 
 // ─── extractProvider ──────────────────────────────────────────────────────────
 

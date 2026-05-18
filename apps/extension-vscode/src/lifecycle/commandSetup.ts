@@ -15,10 +15,10 @@ import { ChatEditorPanel } from '../providers/chatEditorPanel';
 import { ModelMetricsPanel } from '../services/modelMetrics';
 import { getDesktopBridge } from '../features/desktop-bridge';
 import { getCheckpointManager } from '../data/checkpointManager';
-import { showOriginalContext, getPatchOutputChannel } from '../services/patchEngine';
+import { showOriginalContext, getPatchOutputChannel } from '../integrations/patchEngine';
 import { runInlineCommand } from './runInlineCommand';
-import { resolveTier } from '../services/tierResolver';
-import { guardProviderSwitch } from '../services/providerSwitchGuard';
+import { resolveTier } from '../integrations/tierResolver';
+import { guardProviderSwitch } from '../integrations/providerSwitchGuard';
 import { getActiveWorkspaceFolder, shellQuoteForCurrentPlatform } from '../utils/workspaceFolders';
 import {
   getApiKey,
