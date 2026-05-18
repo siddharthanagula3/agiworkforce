@@ -15,7 +15,7 @@
 import * as vscode from 'vscode';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
 import { applyLlmEdit } from '../utils/applyEdit';
-import { logEvent, logError, TelemetryEvents } from '../services/telemetry';
+import { logEvent, logError, TelemetryEvents } from '../core/telemetry';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 

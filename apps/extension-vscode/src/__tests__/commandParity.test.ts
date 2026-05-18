@@ -16,7 +16,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { activate } from '../extension';
-import { __resetSubsystemHealthForTests } from '../services/subsystemHealth';
+import { __resetSubsystemHealthForTests } from '../core/subsystemHealth';
 
 interface DeclaredCommand {
   command: string;
