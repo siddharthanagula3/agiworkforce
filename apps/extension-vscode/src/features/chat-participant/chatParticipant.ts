@@ -24,8 +24,8 @@ import { type ConversationStore } from '../../data/conversationStore';
 import { type ConversationTreeProvider, getContextPanelProvider } from '../trees';
 import { getContextBuilder } from '../../data/contextBuilder';
 import { normalizeConfiguredModelId } from '../model-picker/modelConstants';
-import { getWorkspaceDisplayName } from '../../utils/workspaceFolders';
-import { Config } from '../../utils/config';
+import { getWorkspaceDisplayName } from '../../platform/workspaceFolders';
+import { Config } from '../../platform/config';
 
 // ─── Context gathering ────────────────────────────────────────────────────────
 

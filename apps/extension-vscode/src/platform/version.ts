@@ -15,7 +15,5 @@ const FALLBACK_VERSION = '0.3.0';
  * Returns the current extension version string.
  */
 export function getExtensionVersion(): string {
-  return (
-    vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON?.version ?? FALLBACK_VERSION
-  );
+  return vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON?.version ?? FALLBACK_VERSION;
 }

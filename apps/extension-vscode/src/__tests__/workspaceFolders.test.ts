@@ -14,7 +14,7 @@ import {
   getWorkspaceDisplayName,
   getWorkspaceFolderForUri,
   isPathInWorkspace,
-} from '../utils/workspaceFolders';
+} from '../platform/workspaceFolders';
 
 const folderA = {
   uri: vscode.Uri.file('/repo/proj-frontend'),

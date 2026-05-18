@@ -8,7 +8,7 @@ import { DiffDecorationProvider } from '../providers/diffDecorationProvider';
 import { activateTokenCounter } from '../data/tokenCounter';
 import { activateTerminal } from '../providers/terminalProvider';
 import { activateErrorExplainer } from '../providers/errorExplainerProvider';
-import { Config } from '../utils/config';
+import { Config } from '../platform/config';
 
 export interface ProviderState {
   diffDecorationProvider: DiffDecorationProvider;
