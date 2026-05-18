@@ -529,6 +529,23 @@ export default [
     },
   },
 
+  // Expo config plugins (CommonJS Node.js scripts loaded via require() by expo prebuild)
+  {
+    files: ['apps/mobile/native/**/*.cjs'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: {
+        require: 'readonly',
+        module: 'readonly',
+        exports: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        process: 'readonly',
+        console: 'readonly',
+      },
+    },
+  },
+
   // Browser extension files
   {
     files: ['apps/extension/**/*.js', 'apps/extension/**/*.ts', 'apps/extension/**/*.tsx'],
