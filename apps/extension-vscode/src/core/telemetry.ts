@@ -9,7 +9,7 @@
  */
 
 import * as vscode from 'vscode';
-import { normalizeConfiguredModelId } from '../services/modelConstants';
+import { normalizeConfiguredModelId } from '../features/model-picker/modelConstants';
 import { getExtensionVersion } from '../utils/version';
 
 // ─── Event names ─────────────────────────────────────────────────────────────

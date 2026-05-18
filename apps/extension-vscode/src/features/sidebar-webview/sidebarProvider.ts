@@ -10,7 +10,7 @@ import * as vscode from 'vscode';
 import { type ConversationStore } from '../../data/conversationStore';
 import { type ConversationTreeProvider } from '../trees';
 import { type DiffDecorationProvider } from '../../providers/diffDecorationProvider';
-import { normalizeConfiguredModelId } from '../../services/modelConstants';
+import { normalizeConfiguredModelId } from '../model-picker/modelConstants';
 import { Config } from '../../utils/config';
 import { ChatStateManager } from './ChatStateManager';
 import { getWebviewContent, getNonce } from './webviewContent';

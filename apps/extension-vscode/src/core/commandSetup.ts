@@ -12,7 +12,7 @@ import {
 } from '../features/trees';
 import { AgentModePanel } from '../providers/agentModeProvider';
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
-import { ModelMetricsPanel } from '../services/modelMetrics';
+import { ModelMetricsPanel } from '../features/model-picker/modelMetrics';
 import { getDesktopBridge } from '../features/desktop-bridge';
 import { getCheckpointManager } from '../data/checkpointManager';
 import { showOriginalContext, getPatchOutputChannel } from '../integrations/patchEngine';
@@ -34,7 +34,7 @@ import {
   normalizeConfiguredModelId,
   buildGroupedQuickPickItems,
   type GroupedQuickPickItem,
-} from '../services/modelConstants';
+} from '../features/model-picker/modelConstants';
 import * as telemetry from './telemetry';
 function sessionHistoryRelativeTime(timestamp: number): string {
   const diff = Date.now() - timestamp;
