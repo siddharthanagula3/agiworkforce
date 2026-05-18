@@ -5,9 +5,15 @@
  * `Provider` is imported from `@agiworkforce/types` — the single source of truth
  * for all LLM provider identifiers across the monorepo.
  *
- * `Conversation`, `ChatMessage`, and `ModelInfo` extend the shared base shapes
- * with fields specific to the chat package's UI concerns (pinning, archiving,
- * inline citations, streaming state, and the full provider union).
+ * `Conversation`, `ChatMessage`, and `ModelInfo` here are **UI-tier shapes**
+ * tailored to chat-component rendering needs (inline citations, thinking
+ * blocks, streaming state, routing trace, attachments rendered inline, etc.).
+ *
+ * They are intentionally **siblings**, not subtypes, of the wire/storage
+ * shapes in `@agiworkforce/types` (`ChatMessage`, `Conversation` in
+ * `packages/types/src/chat.ts`). Mapping between the two is the responsibility
+ * of the chat hook layer (`useChat`, `useSendMessage`) when persisting messages
+ * or fetching them back from storage.
  *
  * @module types
  */

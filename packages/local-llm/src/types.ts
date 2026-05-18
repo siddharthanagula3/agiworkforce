@@ -13,6 +13,14 @@ export interface DeviceCapabilities {
   tier3Available: true;
 }
 
+/**
+ * Minimal chat-message shape used as the input to local LLM templated prompts
+ * (Foundation Models, AICore, ExecuTorch, Llama.rn). This is intentionally a
+ * sibling — not a subtype — of the wire/storage `ChatMessage` in
+ * `@agiworkforce/types`: this one carries only what the model's tokenizer
+ * chat template needs (role + text content). Mapping from the platform
+ * ChatMessage to this minimal form happens at the on-device-runtime entry.
+ */
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
