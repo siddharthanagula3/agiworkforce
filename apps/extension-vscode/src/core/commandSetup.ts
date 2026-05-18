@@ -35,7 +35,7 @@ import {
   buildGroupedQuickPickItems,
   type GroupedQuickPickItem,
 } from '../services/modelConstants';
-import * as telemetry from '../services/telemetry';
+import * as telemetry from './telemetry';
 function sessionHistoryRelativeTime(timestamp: number): string {
   const diff = Date.now() - timestamp;
   const minutes = Math.floor(diff / 60_000);
