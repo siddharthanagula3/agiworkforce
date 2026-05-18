@@ -3,6 +3,7 @@ import { View, Pressable, StatusBar, useWindowDimensions } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  useReducedMotion,
   withSpring,
   withRepeat,
   withSequence,
@@ -183,6 +184,7 @@ export function VoiceConversationScreen({
   onClose,
   onSendMessage,
 }: VoiceConversationScreenProps) {
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const selectedVoiceId = useSettingsStore((s) => s.selectedVoiceId);
@@ -357,8 +359,9 @@ export function VoiceConversationScreen({
 
   return (
     <Animated.View
-      entering={SlideInDown.springify().damping(18)}
-      exiting={SlideOutDown.springify().damping(18)}
+      testID="voice-conversation-screen"
+      entering={reducedMotion ? undefined : SlideInDown.springify().damping(18)}
+      exiting={reducedMotion ? undefined : SlideOutDown.springify().damping(18)}
       className="absolute inset-0 z-50"
       style={{ backgroundColor: '#050508' }}
     >
@@ -387,7 +390,13 @@ export function VoiceConversationScreen({
         <Text className="text-white/40 text-sm mb-4">{config.sublabel}</Text>
 
         {/* Center orb — tap to interact */}
-        <Pressable onPress={handleOrbPress} accessibilityLabel={config.label}>
+        <Pressable
+          testID="voice-conversation-orb"
+          onPress={handleOrbPress}
+          accessibilityLabel={config.label}
+          accessibilityRole="button"
+          accessibilityHint="Tap to start, stop, or interrupt voice conversation"
+        >
           <CenterOrb phase={phase} audioLevel={audioLevel} />
         </Pressable>
 
@@ -436,6 +445,7 @@ export function VoiceConversationScreen({
 
         {/* End call button */}
         <Pressable
+          testID="voice-conversation-end-call"
           onPress={handleEndCall}
           className="w-16 h-16 rounded-full items-center justify-center active:opacity-80"
           style={{ backgroundColor: colors.agentError }}

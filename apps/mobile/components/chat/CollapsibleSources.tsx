@@ -105,6 +105,7 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
             : `View ${sources.length} ${sources.length === 1 ? 'source' : 'sources'}`
         }
         accessibilityRole="button"
+        accessibilityState={{ expanded }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Paperclip size={14} color={themeColors.textMuted} />
