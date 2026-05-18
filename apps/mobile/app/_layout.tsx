@@ -38,6 +38,7 @@ import { subscribeToDispatch, unsubscribeFromDispatch } from '@/services/dispatc
 import { startDesktopStatusPolling } from '@/services/desktopStatus';
 import { useChatStore } from '@/stores/chatStore';
 import { isAgeGateConfirmed } from '@/services/ageGate';
+import { OfflineBanner } from '@/components/edge-cases/OfflineBanner';
 import '../global.css';
 
 export default function RootLayout() {
@@ -524,6 +525,8 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <StatusBar style={statusBarStyle} />
         <Slot />
+        {/* Global offline banner — renders above all content when NetInfo is offline */}
+        <OfflineBanner />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
