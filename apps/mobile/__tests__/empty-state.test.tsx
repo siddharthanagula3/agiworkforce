@@ -37,15 +37,20 @@ jest.mock('lucide-react-native', () => {
   const { Text } = require('react-native');
   const icon = () => <Text>icon</Text>;
   // Export real lucide names; TaskChips imports Image (not ImageIcon) and Code2
-  return {
-    Monitor: icon,
-    X: icon,
-    Code2: icon,
-    PenLine: icon,
-    Search: icon,
-    Image: icon,
-    Film: icon,
-  };
+  return new Proxy(
+    {
+      Monitor: icon,
+      X: icon,
+      Code2: icon,
+      PenLine: icon,
+      Search: icon,
+      Image: icon,
+      Film: icon,
+      ScanText: icon,
+      Languages: icon,
+    },
+    { get: (target, prop) => target[prop as keyof typeof target] ?? icon },
+  );
 });
 
 const mockStorageGetString = jest.fn().mockReturnValue(undefined);
@@ -187,14 +192,16 @@ describe('ChatEmptyState', () => {
   });
 
   describe('prompt chips', () => {
-    it('renders 6 prompt chip buttons', () => {
+    it('renders all prompt chip buttons', () => {
       const { getByLabelText } = render(<ChatEmptyState />);
+      expect(getByLabelText('Scan mode')).toBeTruthy();
       expect(getByLabelText('Code mode')).toBeTruthy();
       expect(getByLabelText('Write mode')).toBeTruthy();
       expect(getByLabelText('Research mode')).toBeTruthy();
       expect(getByLabelText('Image mode')).toBeTruthy();
       expect(getByLabelText('Video mode')).toBeTruthy();
       expect(getByLabelText('Computer mode')).toBeTruthy();
+      expect(getByLabelText('Translate mode')).toBeTruthy();
     });
 
     it('calls onSelectPrompt with correct text when Code chip is tapped', () => {
