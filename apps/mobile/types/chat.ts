@@ -112,6 +112,12 @@ export interface ChatMessage extends Omit<CanonicalChatMessage, 'attachments'> {
   isQueued?: boolean;
   /** ID of the corresponding offlineQueue entry (cleared after successful send) */
   offlineQueueId?: string;
+  /** On-device performance — tokens per second (populated after first token) */
+  tokensPerSecond?: number;
+  /** On-device performance — first-token latency in milliseconds */
+  firstTokenLatencyMs?: number;
+  /** Runtime tier: 'Tier 1' | 'Tier 2' | 'Tier 3' */
+  runtimeTier?: import('@/components/chat/PerformanceChip').RuntimeTier;
 }
 
 export interface ConversationSummary {

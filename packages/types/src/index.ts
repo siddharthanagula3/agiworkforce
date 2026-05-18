@@ -128,3 +128,6 @@ export * from './provider-adapter';
 
 // Design-system shared contracts (provider identity, effort, agent mode, settings IA, etc.)
 export * from './design-system';
+
+// On-device model catalog types (Path C architecture — local LLM type system)
+export * from './on-device-models';
