@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { View, Pressable } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Monitor, X } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { TaskChips, type TaskChipType } from '@/components/chat/TaskChips';
 import { storage } from '@/lib/mmkv';
@@ -14,7 +15,7 @@ const CHIP_PROMPTS: Record<TaskChipType, string> = {
   code: 'Help me write a function that...',
   write: 'Write a professional email about...',
   research: 'Research and summarize the latest on...',
-  image: 'Generate an image of...',
+  image: '',
   video: 'Create a video script for...',
   computer: 'Help me automate a task on my computer...',
 };
@@ -37,6 +38,7 @@ export function ChatEmptyState({
   onChipSelect,
   activeChip,
 }: ChatEmptyStateProps) {
+  const router = useRouter();
   const nickname = useSettingsStore((s) => s.personalization.nickname);
   const fullName = useSettingsStore((s) => s.personalization.fullName);
   const displayName = nickname || fullName?.split(' ')[0] || '';
@@ -137,7 +139,7 @@ export function ChatEmptyState({
         </Animated.View>
       )}
 
-      {/* 6 task chips — Code/Write/Research/Image/Video/Computer */}
+      {/* Task chips — image chip navigates to the image-with-question screen */}
       <Animated.View
         entering={FadeIn.duration(500).delay(300)}
         style={{ marginTop: 32, width: '100%' }}
@@ -145,6 +147,10 @@ export function ChatEmptyState({
         <TaskChips
           activeChip={activeChip}
           onChipPress={(chip) => {
+            if (chip === 'image') {
+              router.push('/(app)/image' as Parameters<typeof router.push>[0]);
+              return;
+            }
             onChipSelect?.(chip);
             onSelectPrompt?.(CHIP_PROMPTS[chip]);
           }}
