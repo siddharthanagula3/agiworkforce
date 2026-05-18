@@ -22,7 +22,9 @@ pub mod context;
 pub mod conversations;
 pub mod daemon;
 pub mod errors;
-pub mod hooks;
+// hooks lives at features::hooks::hooks; re-exported here so all 20 call-sites
+// using `crate::hooks::*` continue to resolve unchanged.
+pub use features::hooks::hooks as hooks;
 pub mod markdown;
 pub mod lsp;
 pub mod mcp;
