@@ -12,7 +12,7 @@ import {
   handleSaveShortcut,
   handleListShortcuts,
   handleDeleteShortcut,
-} from './background/shortcuts';
+} from './features/background/shortcuts';
 import {
   loadScheduledTasks,
   saveScheduledTasks,
@@ -22,7 +22,7 @@ import {
   handleDeleteScheduledTask,
   restoreScheduledTaskAlarms,
   TASK_ALARM_PREFIX,
-} from './background/tasks';
+} from './features/background/tasks';
 import { getPlatformPrompt } from './platform-prompts';
 import {
   streamFromProvider,
