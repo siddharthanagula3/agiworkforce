@@ -16,7 +16,7 @@ import {
   getPatchOutputChannel,
   type PatchBlock,
   type BatchResult,
-} from '../../services/patchEngine';
+} from '../../integrations/patchEngine';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

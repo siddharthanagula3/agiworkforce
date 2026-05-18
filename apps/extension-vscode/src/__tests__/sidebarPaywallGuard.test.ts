@@ -11,8 +11,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { guardProviderSwitch } from '../services/providerSwitchGuard';
-import { resolveTier, type Tier } from '../services/tierResolver';
+import { guardProviderSwitch } from '../integrations/providerSwitchGuard';
+import { resolveTier, type Tier } from '../integrations/tierResolver';
 import * as vscode from 'vscode';
 
 // ─── Mock tierResolver bridge fetch so integration tests are offline ──────────
