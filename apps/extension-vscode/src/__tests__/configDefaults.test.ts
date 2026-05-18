@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { __CONFIG_DEFAULTS } from '../utils/config';
+import { __CONFIG_DEFAULTS } from '../platform/config';
 
 interface PkgConfigContrib {
   type: string;

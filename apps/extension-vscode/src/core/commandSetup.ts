@@ -19,7 +19,10 @@ import { showOriginalContext, getPatchOutputChannel } from '../integrations/patc
 import { runInlineCommand } from './runInlineCommand';
 import { resolveTier } from '../integrations/tierResolver';
 import { guardProviderSwitch } from '../integrations/providerSwitchGuard';
-import { getActiveWorkspaceFolder, shellQuoteForCurrentPlatform } from '../utils/workspaceFolders';
+import {
+  getActiveWorkspaceFolder,
+  shellQuoteForCurrentPlatform,
+} from '../platform/workspaceFolders';
 import {
   getApiKey,
   setApiKey,
@@ -28,8 +31,8 @@ import {
   clearSupabaseJwt,
   fetchTierInfo,
 } from '../utils/api';
-import { getExtensionVersion } from '../utils/version';
-import { Config } from '../utils/config';
+import { getExtensionVersion } from '../platform/version';
+import { Config } from '../platform/config';
 import {
   normalizeConfiguredModelId,
   buildGroupedQuickPickItems,

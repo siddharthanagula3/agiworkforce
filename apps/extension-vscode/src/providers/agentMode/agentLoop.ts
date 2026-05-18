@@ -6,8 +6,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { chatCompletion, type LlmChatMessage } from '../../utils/api';
-import { getActiveWorkspaceFolderSync } from '../../utils/workspaceFolders';
-import { Config } from '../../utils/config';
+import { getActiveWorkspaceFolderSync } from '../../platform/workspaceFolders';
+import { Config } from '../../platform/config';
 import { WorkspaceIndexer } from '../../data/workspaceIndexer';
 import { getContextBuilder } from '../../data/contextBuilder';
 import { getContextPanelProvider } from '../../features/trees';

@@ -8,7 +8,7 @@
 import * as vscode from 'vscode';
 import { getApiKey } from './utils/api';
 import { fetchTierInfo } from './utils/api';
-import { Config } from './utils/config';
+import { Config } from './platform/config';
 import { AgentModePanel } from './providers/agentModeProvider';
 import { getDesktopBridge, activateDesktopBridge } from './features/desktop-bridge';
 import { initModelMetrics } from './features/model-picker/modelMetrics';
