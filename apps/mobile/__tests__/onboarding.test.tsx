@@ -1,10 +1,18 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 /**
- * Onboarding Screen — component tests
+ * Onboarding Screen — component tests (v1 local-only rewrite)
  *
- * PRD-MOBILE §11 3-branch flow:
- *   Welcome → Mode picker → Branch A (Local) / Branch B (Cloud) / Branch C (Decide later)
- * Apple 5.1.2(i) consent modal: fires before provider list, not pre-checked, cancel safe.
+ * PRD-MOBILE §11 3-screen flow:
+ *   Screen 1 (Hero) → disclosure modal → Screen 2 (Device tier) → Screen 3 (Download)
+ *
+ * Locked (2026-05-18):
+ *   - No cloud branch, no login button, no BYOK
+ *   - Hero tagline: "AGI runs on your device."
+ *   - Footer: "Made by AGI Automation LLC · Delaware, USA"
+ *   - Compliance disclosure fires before screen 2 (Article 50(1) + Apple 5.1.2(i))
+ *
+ * Tests that relied on the old 4-branch flow (welcome/mode-picker/cloud/BYOK)
+ * were replaced here when onboarding-engineer rewrote the component in task #16.
  */
 
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
@@ -48,19 +56,9 @@ jest.mock('lucide-react-native', () => {
   const { Text } = require('react-native');
   const icon = ({ testID }: { testID?: string }) => <Text testID={testID}>icon</Text>;
   return {
-    Sparkles: icon,
     Cpu: icon,
-    Cloud: icon,
-    Smartphone: icon,
-    Monitor: icon,
-    ArrowLeftRight: icon,
-    ChevronRight: icon,
-    ChevronDown: icon,
-    ChevronUp: icon,
-    ArrowLeft: icon,
-    Check: icon,
-    ExternalLink: icon,
-    X: icon,
+    Plane: icon,
+    Shield: icon,
   };
 });
 
@@ -78,17 +76,64 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-const mockSecureGet = jest.fn().mockResolvedValue(null);
-const mockSecureSet = jest.fn().mockResolvedValue(undefined);
-jest.mock('expo-secure-store', () => ({
-  getItemAsync: (...args: unknown[]) => mockSecureGet(...args),
-  setItemAsync: (...args: unknown[]) => mockSecureSet(...args),
-  WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY',
+// Compliance package — control disclosure satisfied / not satisfied
+const mockIsDisclosureSatisfied = jest.fn().mockReturnValue(false);
+const mockComposeFirstRunDisclosure = jest.fn().mockReturnValue({
+  title: 'Before you continue',
+  summary: 'This app processes your data on-device.',
+  article50_1: 'Article 50(1) of the EU AI Act...',
+  sourceUrl: 'https://eur-lex.europa.eu',
+  acceptLabel: 'Continue',
+  declineLabel: 'Not now',
+  thirdPartyAiProviders: [],
+  offersManagedCloud: false,
+});
+const mockRecordDisclosureAcceptance = jest.fn().mockResolvedValue(undefined);
+jest.mock('@agiworkforce/compliance', () => ({
+  composeFirstRunDisclosure: (...args: unknown[]) => mockComposeFirstRunDisclosure(...args),
+  isDisclosureSatisfied: (...args: unknown[]) => mockIsDisclosureSatisfied(...args),
+  recordDisclosureAcceptance: (...args: unknown[]) => mockRecordDisclosureAcceptance(...args),
+  DISCLOSURE_LEDGER_KEY: 'disclosure_ledger',
 }));
 
-jest.mock('../lib/safeOpenURL', () => ({
-  openExternalUrl: jest.fn().mockResolvedValue(true),
-  isAllowedExternalUrl: jest.fn().mockReturnValue(true),
+// Local LLM catalog stub
+jest.mock('@agiworkforce/local-llm', () => ({
+  detectCapabilities: jest.fn().mockResolvedValue({
+    totalRAMMB: 4096,
+    tier1Available: false,
+    tier2Available: true,
+  }),
+  getDefaultModel: jest.fn().mockReturnValue({
+    id: 'qwen2.5-1.5b-instruct-q4_k_m',
+    displayName: 'Qwen 2.5 1.5B',
+    family: 'qwen',
+    paramCountB: 1.5,
+    fileSizeBytes: 1_073_741_824,
+    supportedRuntimes: ['gguf'],
+    contextWindow: 32768,
+    capabilities: {
+      text: true,
+      visionIn: false,
+      audioIn: false,
+      toolCalls: true,
+      structuredOutput: true,
+    },
+    license: 'Apache-2.0',
+    role: 'default',
+    shipsInV1: true,
+  }),
+  getShippableModels: jest.fn().mockReturnValue([]),
+}));
+
+// expo-constants
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: {
+    platform: {
+      ios: { model: 'iPhone14', systemVersion: '18.0' },
+    },
+    deviceName: 'Test iPhone',
+  },
 }));
 
 // ---------------------------------------------------------------------------
@@ -101,344 +146,186 @@ import OnboardingScreen from '../app/(public)/onboarding';
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('Onboarding', () => {
+describe('Onboarding (v1 local-only)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockSecureGet.mockResolvedValue(null);
+    mockIsDisclosureSatisfied.mockReturnValue(false);
   });
 
   // -------------------------------------------------------------------------
-  // Welcome screen
+  // Hero screen
   // -------------------------------------------------------------------------
 
-  describe('Welcome screen (initial)', () => {
+  describe('Hero screen (initial)', () => {
     it('renders with testID onboarding-root', () => {
       const { getByTestId } = render(<OnboardingScreen />);
       expect(getByTestId('onboarding-root')).toBeTruthy();
     });
 
-    it('shows welcome screen testID', () => {
+    it('shows hero screen testID', () => {
       const { getByTestId } = render(<OnboardingScreen />);
-      expect(getByTestId('welcome-screen')).toBeTruthy();
+      expect(getByTestId('onboarding-hero-screen')).toBeTruthy();
     });
 
-    it('shows "Continue" button', () => {
+    it('shows wordmark "AGI"', () => {
       const { getByTestId } = render(<OnboardingScreen />);
-      expect(getByTestId('welcome-continue-btn')).toBeTruthy();
+      expect(getByTestId('hero-wordmark')).toBeTruthy();
     });
 
-    it('shows "Sign In" button', () => {
+    it('shows exact locked tagline', () => {
       const { getByTestId } = render(<OnboardingScreen />);
-      expect(getByTestId('welcome-sign-in-btn')).toBeTruthy();
+      expect(getByTestId('hero-tagline')).toBeTruthy();
     });
 
-    it('"Sign In" sets onboarding-done and navigates to login', () => {
+    it('shows locked footer copy', () => {
       const { getByTestId } = render(<OnboardingScreen />);
-      fireEvent.press(getByTestId('welcome-sign-in-btn'));
-      expect(mockStorageSet).toHaveBeenCalledWith('onboarding-done', 'true');
-      expect(mockReplace).toHaveBeenCalledWith({ pathname: '/(auth)/login' });
+      expect(getByTestId('hero-footer')).toBeTruthy();
     });
 
-    it('"Continue" navigates to mode picker', () => {
+    it('shows "Start chatting" button', () => {
       const { getByTestId } = render(<OnboardingScreen />);
-      fireEvent.press(getByTestId('welcome-continue-btn'));
-      expect(getByTestId('mode-picker-screen')).toBeTruthy();
+      expect(getByTestId('hero-start-chatting-btn')).toBeTruthy();
+    });
+
+    it('does NOT show device-tier screen on initial render', () => {
+      const { queryByTestId } = render(<OnboardingScreen />);
+      expect(queryByTestId('onboarding-device-tier-screen')).toBeNull();
+    });
+
+    it('does NOT show download screen on initial render', () => {
+      const { queryByTestId } = render(<OnboardingScreen />);
+      expect(queryByTestId('onboarding-download-screen')).toBeNull();
     });
   });
 
   // -------------------------------------------------------------------------
-  // Mode picker
+  // Disclosure modal gate (Apple 5.1.2(i) + Article 50(1))
   // -------------------------------------------------------------------------
 
-  describe('Mode picker screen', () => {
-    function renderAtModePicker() {
+  describe('Disclosure modal gate', () => {
+    it('tapping "Start chatting" shows disclosure modal when not previously satisfied', async () => {
+      mockIsDisclosureSatisfied.mockReturnValue(false);
+      const { getByTestId } = render(<OnboardingScreen />);
+      await act(async () => {
+        fireEvent.press(getByTestId('hero-start-chatting-btn'));
+        await Promise.resolve();
+      });
+      // Modal becomes visible — disclosure-accept-btn is from FirstRunDisclosureModal
+      await waitFor(() => expect(getByTestId('disclosure-accept-btn')).toBeTruthy());
+    });
+
+    it('accepting the disclosure advances to device-tier screen', async () => {
+      mockIsDisclosureSatisfied.mockReturnValue(false);
+      const { getByTestId } = render(<OnboardingScreen />);
+      await act(async () => {
+        fireEvent.press(getByTestId('hero-start-chatting-btn'));
+        await Promise.resolve();
+      });
+      await waitFor(() => getByTestId('disclosure-accept-btn'));
+      await act(async () => {
+        fireEvent.press(getByTestId('disclosure-accept-btn'));
+        await Promise.resolve();
+      });
+      await waitFor(() => expect(getByTestId('onboarding-device-tier-screen')).toBeTruthy());
+    });
+
+    it('accepting the disclosure calls recordDisclosureAcceptance', async () => {
+      mockIsDisclosureSatisfied.mockReturnValue(false);
+      const { getByTestId } = render(<OnboardingScreen />);
+      await act(async () => {
+        fireEvent.press(getByTestId('hero-start-chatting-btn'));
+        await Promise.resolve();
+      });
+      await waitFor(() => getByTestId('disclosure-accept-btn'));
+      await act(async () => {
+        fireEvent.press(getByTestId('disclosure-accept-btn'));
+        await Promise.resolve();
+      });
+      expect(mockRecordDisclosureAcceptance).toHaveBeenCalled();
+    });
+
+    it('declining the disclosure keeps user on hero screen', async () => {
+      mockIsDisclosureSatisfied.mockReturnValue(false);
+      const { getByTestId, queryByTestId } = render(<OnboardingScreen />);
+      await act(async () => {
+        fireEvent.press(getByTestId('hero-start-chatting-btn'));
+        await Promise.resolve();
+      });
+      await waitFor(() => getByTestId('disclosure-decline-btn'));
+      await act(async () => {
+        fireEvent.press(getByTestId('disclosure-decline-btn'));
+      });
+      await waitFor(() => {
+        expect(getByTestId('onboarding-hero-screen')).toBeTruthy();
+        expect(queryByTestId('onboarding-device-tier-screen')).toBeNull();
+      });
+    });
+
+    it('skips modal when disclosure is already satisfied', async () => {
+      mockIsDisclosureSatisfied.mockReturnValue(true);
+      const { getByTestId } = render(<OnboardingScreen />);
+      await act(async () => {
+        fireEvent.press(getByTestId('hero-start-chatting-btn'));
+        await Promise.resolve();
+      });
+      await waitFor(() => expect(getByTestId('onboarding-device-tier-screen')).toBeTruthy());
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Device-tier screen (Screen 2)
+  // -------------------------------------------------------------------------
+
+  describe('Device-tier screen', () => {
+    async function renderAtDeviceTier() {
+      mockIsDisclosureSatisfied.mockReturnValue(true);
       const utils = render(<OnboardingScreen />);
-      fireEvent.press(utils.getByTestId('welcome-continue-btn'));
+      await act(async () => {
+        fireEvent.press(utils.getByTestId('hero-start-chatting-btn'));
+        await Promise.resolve();
+      });
+      await waitFor(() => utils.getByTestId('onboarding-device-tier-screen'));
       return utils;
     }
 
-    it('shows three mode cards', () => {
-      const { getByTestId } = renderAtModePicker();
-      expect(getByTestId('mode-local-card')).toBeTruthy();
-      expect(getByTestId('mode-cloud-card')).toBeTruthy();
-      expect(getByTestId('mode-decide-later-card')).toBeTruthy();
+    it('shows device-tier screen testID', async () => {
+      const { getByTestId } = await renderAtDeviceTier();
+      expect(getByTestId('onboarding-device-tier-screen')).toBeTruthy();
     });
 
-    it('local mode is pre-selected', () => {
-      const { getByTestId } = renderAtModePicker();
-      expect(getByTestId('mode-local-card').props.accessibilityState?.selected).toBe(true);
+    it('shows device-tier headline testID', async () => {
+      const { getByTestId } = await renderAtDeviceTier();
+      expect(getByTestId('device-tier-headline')).toBeTruthy();
     });
 
-    it('tapping cloud card selects it', () => {
-      const { getByTestId } = renderAtModePicker();
-      fireEvent.press(getByTestId('mode-cloud-card'));
-      expect(getByTestId('mode-cloud-card').props.accessibilityState?.selected).toBe(true);
+    it('shows download button', async () => {
+      const { getByTestId } = await renderAtDeviceTier();
+      expect(getByTestId('device-tier-download-btn')).toBeTruthy();
     });
 
-    it('"Decide later" goes directly to login', () => {
-      const { getByTestId } = renderAtModePicker();
-      fireEvent.press(getByTestId('mode-decide-later-card'));
-      fireEvent.press(getByTestId('mode-picker-confirm-btn'));
-      expect(mockStorageSet).toHaveBeenCalledWith('onboarding-done', 'true');
-      expect(mockStorageSet).toHaveBeenCalledWith('onboarding-mode', 'decide_later');
-      expect(mockReplace).toHaveBeenCalledWith({ pathname: '/(auth)/login' });
-    });
-
-    it('back button returns to welcome screen', () => {
-      const { getByTestId } = renderAtModePicker();
-      fireEvent.press(getByTestId('onboarding-back-btn'));
-      expect(getByTestId('welcome-screen')).toBeTruthy();
+    it('shows pick-a-different-model button', async () => {
+      const { getByTestId } = await renderAtDeviceTier();
+      expect(getByTestId('device-tier-pick-model-btn')).toBeTruthy();
     });
   });
 
   // -------------------------------------------------------------------------
-  // Branch A: Local
-  // -------------------------------------------------------------------------
-
-  describe('Branch A: Local', () => {
-    function renderAtLocalModelPicker() {
-      const utils = render(<OnboardingScreen />);
-      fireEvent.press(utils.getByTestId('welcome-continue-btn'));
-      fireEvent.press(utils.getByTestId('mode-picker-confirm-btn'));
-      return utils;
-    }
-
-    it('shows local model picker', () => {
-      const { getByTestId } = renderAtLocalModelPicker();
-      expect(getByTestId('local-model-picker-screen')).toBeTruthy();
-    });
-
-    it('shows System, Fast, Capable model options', () => {
-      const { getByTestId } = renderAtLocalModelPicker();
-      expect(getByTestId('local-model-system')).toBeTruthy();
-      expect(getByTestId('local-model-fast')).toBeTruthy();
-      expect(getByTestId('local-model-capable')).toBeTruthy();
-    });
-
-    it('System model goes to ready without download screen', () => {
-      const { getByTestId } = renderAtLocalModelPicker();
-      fireEvent.press(getByTestId('local-model-system'));
-      fireEvent.press(getByTestId('local-model-download-btn'));
-      expect(getByTestId('local-ready-screen')).toBeTruthy();
-    });
-
-    it('"Open chat" on local-ready finishes onboarding as local mode', () => {
-      const { getByTestId } = renderAtLocalModelPicker();
-      fireEvent.press(getByTestId('local-model-system'));
-      fireEvent.press(getByTestId('local-model-download-btn'));
-      fireEvent.press(getByTestId('local-ready-screen-open-chat-btn'));
-      expect(mockStorageSet).toHaveBeenCalledWith('onboarding-done', 'true');
-      expect(mockStorageSet).toHaveBeenCalledWith('onboarding-mode', 'local');
-      expect(mockReplace).toHaveBeenCalledWith({ pathname: '/(auth)/login' });
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // Branch B: Cloud + 5.1.2(i) consent
-  // -------------------------------------------------------------------------
-
-  describe('Branch B: Cloud — Apple 5.1.2(i) consent', () => {
-    function renderAtCloudBranch() {
-      const utils = render(<OnboardingScreen />);
-      fireEvent.press(utils.getByTestId('welcome-continue-btn'));
-      fireEvent.press(utils.getByTestId('mode-cloud-card'));
-      return utils;
-    }
-
-    it('consent modal is not visible before user enters Cloud branch', () => {
-      const { getByTestId } = renderAtCloudBranch();
-      expect(getByTestId('byok-consent-modal').props.visible).toBe(false);
-    });
-
-    it('consent modal appears when user confirms Cloud mode (no prior consent)', async () => {
-      const { getByTestId } = renderAtCloudBranch();
-      await act(async () => {
-        fireEvent.press(getByTestId('mode-picker-confirm-btn'));
-        await Promise.resolve();
-      });
-      await waitFor(() => {
-        expect(getByTestId('byok-consent-modal').props.visible).toBe(true);
-      });
-    });
-
-    it('consent modal has title "Connecting to AI providers"', async () => {
-      const { getByTestId } = renderAtCloudBranch();
-      await act(async () => {
-        fireEvent.press(getByTestId('mode-picker-confirm-btn'));
-        await Promise.resolve();
-      });
-      await waitFor(() => expect(getByTestId('byok-consent-modal-title')).toBeTruthy());
-    });
-
-    it('consent modal has all three body paragraphs', async () => {
-      const { getByTestId } = renderAtCloudBranch();
-      await act(async () => {
-        fireEvent.press(getByTestId('mode-picker-confirm-btn'));
-        await Promise.resolve();
-      });
-      await waitFor(() => {
-        expect(getByTestId('byok-consent-body-p1')).toBeTruthy();
-        expect(getByTestId('byok-consent-body-p2')).toBeTruthy();
-        expect(getByTestId('byok-consent-body-p3')).toBeTruthy();
-      });
-    });
-
-    it('consent modal renders the provider table', async () => {
-      const { getByTestId } = renderAtCloudBranch();
-      await act(async () => {
-        fireEvent.press(getByTestId('mode-picker-confirm-btn'));
-        await Promise.resolve();
-      });
-      await waitFor(() => expect(getByTestId('byok-consent-provider-table')).toBeTruthy());
-    });
-
-    it('accept and cancel buttons are present (accept not pre-toggled)', async () => {
-      const { getByTestId } = renderAtCloudBranch();
-      await act(async () => {
-        fireEvent.press(getByTestId('mode-picker-confirm-btn'));
-        await Promise.resolve();
-      });
-      await waitFor(() => {
-        expect(getByTestId('byok-consent-accept-btn')).toBeTruthy();
-        expect(getByTestId('byok-consent-cancel-btn')).toBeTruthy();
-      });
-    });
-
-    it('cancel stays on mode picker — no functionality lost', async () => {
-      const { getByTestId } = renderAtCloudBranch();
-      await act(async () => {
-        fireEvent.press(getByTestId('mode-picker-confirm-btn'));
-        await Promise.resolve();
-      });
-      await waitFor(() => getByTestId('byok-consent-cancel-btn'));
-      await act(async () => {
-        fireEvent.press(getByTestId('byok-consent-cancel-btn'));
-      });
-      await waitFor(() => {
-        expect(getByTestId('byok-consent-modal').props.visible).toBe(false);
-        expect(getByTestId('mode-picker-screen')).toBeTruthy();
-      });
-    });
-
-    it('cancel via close icon also stays on mode picker', async () => {
-      const { getByTestId } = renderAtCloudBranch();
-      await act(async () => {
-        fireEvent.press(getByTestId('mode-picker-confirm-btn'));
-        await Promise.resolve();
-      });
-      await waitFor(() => getByTestId('byok-consent-cancel-icon'));
-      await act(async () => {
-        fireEvent.press(getByTestId('byok-consent-cancel-icon'));
-      });
-      await waitFor(() => expect(getByTestId('mode-picker-screen')).toBeTruthy());
-    });
-
-    it('accept persists consent to SecureStore and unlocks provider picker', async () => {
-      const { getByTestId } = renderAtCloudBranch();
-      await act(async () => {
-        fireEvent.press(getByTestId('mode-picker-confirm-btn'));
-        await Promise.resolve();
-      });
-      await waitFor(() => getByTestId('byok-consent-accept-btn'));
-      await act(async () => {
-        fireEvent.press(getByTestId('byok-consent-accept-btn'));
-        await Promise.resolve();
-      });
-      await waitFor(() => {
-        expect(mockSecureSet).toHaveBeenCalledWith(
-          'byok_consent_accepted_at',
-          expect.any(String),
-          expect.objectContaining({ keychainAccessible: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY' }),
-        );
-        expect(getByTestId('cloud-provider-picker-screen')).toBeTruthy();
-      });
-    });
-
-    it('prior consent (within 30d) skips modal', async () => {
-      mockSecureGet.mockResolvedValue(String(Date.now() - 60 * 60 * 1000));
-      const { getByTestId } = renderAtCloudBranch();
-      await act(async () => {
-        fireEvent.press(getByTestId('mode-picker-confirm-btn'));
-        await Promise.resolve();
-      });
-      await waitFor(() => expect(getByTestId('cloud-provider-picker-screen')).toBeTruthy());
-    });
-
-    it('selecting Anthropic advances to cloud-ready screen', async () => {
-      mockSecureGet.mockResolvedValue(String(Date.now() - 60 * 60 * 1000));
-      const { getByTestId } = renderAtCloudBranch();
-      await act(async () => {
-        fireEvent.press(getByTestId('mode-picker-confirm-btn'));
-        await Promise.resolve();
-      });
-      await waitFor(() => getByTestId('cloud-provider-picker-screen'));
-      fireEvent.press(getByTestId('cloud-provider-anthropic'));
-      expect(getByTestId('cloud-ready-screen')).toBeTruthy();
-    });
-
-    it('"Open chat" on cloud-ready finishes onboarding as cloud mode', async () => {
-      mockSecureGet.mockResolvedValue(String(Date.now() - 60 * 60 * 1000));
-      const { getByTestId } = renderAtCloudBranch();
-      await act(async () => {
-        fireEvent.press(getByTestId('mode-picker-confirm-btn'));
-        await Promise.resolve();
-      });
-      await waitFor(() => getByTestId('cloud-provider-picker-screen'));
-      fireEvent.press(getByTestId('cloud-provider-anthropic'));
-      fireEvent.press(getByTestId('cloud-ready-screen-open-chat-btn'));
-      expect(mockStorageSet).toHaveBeenCalledWith('onboarding-done', 'true');
-      expect(mockStorageSet).toHaveBeenCalledWith('onboarding-mode', 'cloud');
-      expect(mockReplace).toHaveBeenCalledWith({ pathname: '/(auth)/login' });
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // Branch C: Decide later
-  // -------------------------------------------------------------------------
-
-  describe('Branch C: Decide later', () => {
-    it('jumps to login without any modal or intermediate screen', () => {
-      const { getByTestId } = render(<OnboardingScreen />);
-      fireEvent.press(getByTestId('welcome-continue-btn'));
-      fireEvent.press(getByTestId('mode-decide-later-card'));
-      fireEvent.press(getByTestId('mode-picker-confirm-btn'));
-      expect(mockReplace).toHaveBeenCalledWith({ pathname: '/(auth)/login' });
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // Detox-testable selector audit
+  // testID coverage (Detox acceptance gates)
   // -------------------------------------------------------------------------
 
   describe('testID coverage (Detox acceptance gates)', () => {
-    const welcomeIds = [
+    const heroIds = [
       'onboarding-root',
-      'welcome-screen',
-      'welcome-title',
-      'welcome-subtitle',
-      'welcome-continue-btn',
-      'welcome-sign-in-btn',
+      'onboarding-hero-screen',
+      'hero-wordmark',
+      'hero-tagline',
+      'hero-start-chatting-btn',
+      'hero-footer',
     ];
 
-    it.each(welcomeIds)('testID "%s" exists on welcome screen', (id) => {
+    it.each(heroIds)('testID "%s" exists on hero screen', (id) => {
       const { getByTestId } = render(<OnboardingScreen />);
       expect(getByTestId(id)).toBeTruthy();
-    });
-
-    it('mode picker testIDs exist', () => {
-      const { getByTestId } = render(<OnboardingScreen />);
-      fireEvent.press(getByTestId('welcome-continue-btn'));
-      expect(getByTestId('mode-picker-screen')).toBeTruthy();
-      expect(getByTestId('mode-picker-title')).toBeTruthy();
-      expect(getByTestId('mode-picker-confirm-btn')).toBeTruthy();
-      expect(getByTestId('mode-local-card')).toBeTruthy();
-      expect(getByTestId('mode-cloud-card')).toBeTruthy();
-      expect(getByTestId('mode-decide-later-card')).toBeTruthy();
-    });
-
-    it('byok-consent-modal is in the tree', () => {
-      const { getByTestId } = render(<OnboardingScreen />);
-      expect(getByTestId('byok-consent-modal')).toBeTruthy();
     });
   });
 });

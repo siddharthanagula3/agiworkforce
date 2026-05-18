@@ -1,5 +1,6 @@
 module.exports = {
   preset: 'jest-expo',
+  testPathIgnorePatterns: ['/node_modules/', 'scripts/screenshots/specs/'],
   // Runs BEFORE jest-expo's setup to fix missing UIManager mock
   setupFiles: ['./jest.setup.js'],
   // @testing-library/react-native v13+ auto-extends jest matchers — no explicit setup needed
