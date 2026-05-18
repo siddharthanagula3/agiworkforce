@@ -3,7 +3,7 @@ import { View, Pressable, Alert, Platform, Modal, TextInput } from 'react-native
 import { useRouter } from 'expo-router';
 import { MessageSquare, Pin, Trash2 } from 'lucide-react-native';
 import { Swipeable } from 'react-native-gesture-handler';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { AutoTagBadge } from '@/components/sidebar/AutoTagBadge';
@@ -38,6 +38,7 @@ export function ConversationItem({
   const deleteConversation = useChatStore((s) => s.deleteConversation);
   const renameConversation = useChatStore((s) => s.renameConversation);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+  const reducedMotion = useReducedMotion();
   const [renameVisible, setRenameVisible] = useState(false);
   const [renameText, setRenameText] = useState('');
 
@@ -173,7 +174,7 @@ export function ConversationItem({
         overshootRight={false}
         overshootLeft={false}
       >
-        <Animated.View entering={FadeIn.duration(200)}>
+        <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(200)}>
           <Pressable
             onPress={handlePress}
             onLongPress={handleLongPress}

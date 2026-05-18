@@ -1,5 +1,5 @@
 import { View, Pressable } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { FolderOpen, Check } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/lib/theme';
@@ -15,11 +15,16 @@ interface ProjectCardProps {
 }
 
 export function ProjectCard({ project, index, isActive, onPress, onLongPress }: ProjectCardProps) {
+  const reducedMotion = useReducedMotion();
   return (
     <Animated.View
-      entering={FadeInDown.duration(300)
-        .delay(index * 60)
-        .springify()}
+      entering={
+        reducedMotion
+          ? undefined
+          : FadeInDown.duration(300)
+              .delay(index * 60)
+              .springify()
+      }
     >
       <Pressable
         onPress={() => onPress(project.id)}

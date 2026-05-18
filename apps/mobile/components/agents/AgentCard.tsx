@@ -1,5 +1,5 @@
 import { View, Pressable } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { Bot } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { AgentStatusBadge } from './AgentStatusBadge';
@@ -21,14 +21,19 @@ const STATUS_BAR_COLOR: Record<Agent['status'], string> = {
 };
 
 export function AgentCard({ agent, index, onPress }: AgentCardProps) {
+  const reducedMotion = useReducedMotion();
   const barColor = STATUS_BAR_COLOR[agent.status];
   const lastUpdated = agent.updatedAt ?? agent.startedAt;
 
   return (
     <Animated.View
-      entering={FadeInDown.duration(300)
-        .delay(index * 80)
-        .springify()}
+      entering={
+        reducedMotion
+          ? undefined
+          : FadeInDown.duration(300)
+              .delay(index * 80)
+              .springify()
+      }
     >
       <Pressable
         onPress={() => onPress(agent.id)}

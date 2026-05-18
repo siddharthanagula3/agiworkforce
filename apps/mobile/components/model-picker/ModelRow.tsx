@@ -1,7 +1,7 @@
 import { View, Pressable, Switch } from 'react-native';
 import { Star, Brain } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -51,6 +51,7 @@ export function ModelRow({
   onToggleFavorite,
   onToggleThinking,
 }: ModelRowProps) {
+  const reducedMotion = useReducedMotion();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
   const providerDisplay = PROVIDER_DISPLAY[model.provider as ProviderId];
@@ -128,8 +129,8 @@ export function ModelRow({
       {/* Per-model thinking toggle — shown when model is selected + expanded */}
       {isExpanded && canToggleThinking && (
         <Animated.View
-          entering={FadeIn.duration(150)}
-          exiting={FadeOut.duration(100)}
+          entering={reducedMotion ? undefined : FadeIn.duration(150)}
+          exiting={reducedMotion ? undefined : FadeOut.duration(100)}
           className="flex-row items-center justify-between pl-[52px] pr-4 pb-3"
         >
           <View className="flex-row items-center gap-1.5">
