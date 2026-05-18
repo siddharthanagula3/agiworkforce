@@ -89,6 +89,26 @@ pub mod skill_learner; // used by agent/chat.rs session-end hook
 #[allow(dead_code)] // PHASE2: expose `agiworkforce a2a serve/discover/delegate`
 pub mod a2a;
 
+// Phase 6 reorg — skeleton modules (placeholders; files migrate here incrementally).
+// Each sub-mod.rs documents what will live there and the migration order.
+// Do NOT add live pub re-exports here until the corresponding file is actually moved.
+#[allow(dead_code)]
+pub mod features {
+    pub mod exec {}       // target: apply_patch, notebook_edit, review, tool_search, runtime/
+    pub mod repl {}       // target: repl/, voice, sdk_io/
+    pub mod session {}    // target: memory, skills, agents, subagent, teams, onboarding, a2a
+    pub mod mcp {}        // target: mcp/ (after Sprint B stabilises)
+    pub mod hooks {}      // target: hooks.rs (next pilot after plan)
+    pub mod plugins {}    // target: plugins.rs
+    pub mod plan {}       // target: plan_mode.rs (CURRENT PILOT)
+    pub mod tui {}        // target: tui/ (last; excluded from early pilots)
+    pub mod providers {}  // target: provider, auth*, oauth*, models/, routing/
+}
+#[allow(dead_code)]
+pub mod platform {}       // target: sandbox, exec_policy, lsp/, output, design_system, safety/, policy/
+#[allow(dead_code)]
+pub mod data {}           // target: config, sessions, conversations, model_catalog, sync
+
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use colored::Colorize;
