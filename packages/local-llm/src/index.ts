@@ -2,18 +2,18 @@
 // PRD-MOBILE §8 §9. Tier 1 = Apple Foundation Models / Gemini Nano AICore.
 // Tier 2 = react-native-executorch. Tier 3 = llama.rn (universal fallback).
 
-export { localGenerate, selectTier, getCapabilities, refreshCapabilities } from './selector.js';
-export { detectCapabilities, isThermallyThrottled } from './capabilities.js';
-export { tier1Generate } from './tier1.js';
-export { tier2LoadModel, tier2Generate, tier2Release } from './tier2.js';
-export { tier3LoadModel, tier3Generate, tier3Release } from './tier3.js';
+export { localGenerate, selectTier, getCapabilities, refreshCapabilities } from './selector';
+export { detectCapabilities, isThermallyThrottled } from './capabilities';
+export { tier1Generate } from './tier1';
+export { tier2LoadModel, tier2Generate, tier2Release } from './tier2';
+export { tier3LoadModel, tier3Generate, tier3Release } from './tier3';
 export {
   getModelById,
   getModelsForRole,
   getShippableModels,
   getDefaultModel,
   getLiteModeModel,
-} from './catalog.js';
+} from './catalog';
 export type {
   LocalRuntimeName,
   LocalRuntimeTier,
@@ -24,4 +24,4 @@ export type {
   LLMTool,
   LocalModel,
   LocalModelId,
-} from './types.js';
+} from './types';

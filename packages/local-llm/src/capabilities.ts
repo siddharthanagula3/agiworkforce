@@ -1,5 +1,5 @@
 import { NativeModules, Platform } from 'react-native';
-import type { DeviceCapabilities } from './types.js';
+import type { DeviceCapabilities } from './types';
 
 const TIER2_MIN_RAM_MB = 3500;
 

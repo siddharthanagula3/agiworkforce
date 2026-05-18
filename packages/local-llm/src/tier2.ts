@@ -1,5 +1,5 @@
 import type { ExecutorchPreset } from '@agiworkforce/types';
-import type { GenerateOptions, GenerateResult } from './types.js';
+import type { GenerateOptions, GenerateResult } from './types';
 
 // react-native-executorch 0.8.4 exports LLMModule (not ETLLMModule).
 // LLMModule wraps LLMController and provides generate(), configure(), interrupt().

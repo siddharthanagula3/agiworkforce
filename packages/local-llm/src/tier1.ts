@@ -1,5 +1,5 @@
 import { NativeModules, NativeEventEmitter, Platform } from 'react-native';
-import type { GenerateOptions, GenerateResult } from './types.js';
+import type { GenerateOptions, GenerateResult } from './types';
 
 export async function tier1Generate(opts: GenerateOptions): Promise<GenerateResult> {
   const requestId = opts.requestId ?? String(Date.now());
