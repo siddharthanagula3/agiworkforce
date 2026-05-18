@@ -45,6 +45,7 @@ import { DeviceIntegrationStatus } from '@/components/integrations/DeviceIntegra
 import { useIntegrationStore } from '@/stores/integrationStore';
 import { PlatformSetupSheet } from '@/components/messaging/PlatformSetupSheet';
 import type { MessagingPlatform } from '@/stores/messagingStore';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 // ---------------------------------------------------------------------------
 // Helpers (unchanged from original)
@@ -271,6 +272,8 @@ export default function IntegrationsScreen() {
       { text: 'OK' },
     ]);
   }, []);
+
+  if (!FEATURES.connectorsCloudOnly) return null;
 
   const connectedCount = platforms.filter((p) => p.connected).length;
 

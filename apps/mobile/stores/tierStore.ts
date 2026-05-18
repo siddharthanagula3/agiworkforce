@@ -19,6 +19,7 @@ import { mmkvStorage } from '@/lib/mmkv';
 import { api } from '@/services/api';
 import { normalizeBillingPlanTier } from '@agiworkforce/types';
 import type { BillingPlanTier } from '@agiworkforce/types';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -83,6 +84,7 @@ export const useTierStore = create<TierState>()(
       currentConversationProvider: null,
 
       refreshTier: async () => {
+        if (!FEATURES.billing) return;
         // js-early-exit: skip if already refreshing
         if (get().isRefreshing) return;
 

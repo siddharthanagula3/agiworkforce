@@ -35,6 +35,7 @@ import { setupCompanionNotifications } from '@/services/companionNotifications';
 import { startMobileHeartbeat, logApprovalDecision } from '@/services/heartbeat';
 import { supabase } from '@/services/supabase';
 import { useThemeColors } from '@/hooks/useTheme';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 export default function CompanionScreen() {
   const colors = useThemeColors();
@@ -165,6 +166,8 @@ export default function CompanionScreen() {
     },
     [approvalModalReject, currentApproval],
   );
+
+  if (!FEATURES.companion) return null;
 
   if (showScanner) {
     return <QRScanner onScan={handleScan} onClose={() => setShowScanner(false)} />;

@@ -10,6 +10,7 @@ import { PlatformCard } from '@/components/messaging/PlatformCard';
 import { PlatformSetupSheet } from '@/components/messaging/PlatformSetupSheet';
 import { useMessagingStore, type MessagingPlatform } from '@/stores/messagingStore';
 import { useThemeColors } from '@/hooks/useTheme';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 export default function MessagingScreen() {
   const colors = useThemeColors();
@@ -71,6 +72,8 @@ export default function MessagingScreen() {
     if (router.canGoBack()) router.back();
     else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
   }, [router]);
+
+  if (!FEATURES.messaging) return null;
 
   return (
     <SafeAreaView className="flex-1 bg-surface-base">

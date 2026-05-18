@@ -31,6 +31,7 @@ import { useModelStore } from '@/stores/modelStore';
 import { colors } from '@/lib/theme';
 import { sendAgentCommand, sendApprovalResponse, getRiskBadgeColor } from '@/services/companion';
 import type { ApprovalRequest, StatusStep, ToolCall } from '@/types/chat';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 // ---------------------------------------------------------------------------
 // Progress Bar
@@ -292,6 +293,8 @@ export default function AgentDetailScreen() {
       Alert.alert('Error', 'Could not create a new conversation. Please try again.');
     }
   }, [agent, createConversation, sendMessage, selectedModel, router, hapticsEnabled]);
+
+  if (!FEATURES.agents) return null;
 
   if (!agent) {
     return (
