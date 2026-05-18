@@ -19,7 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { MessageList } from '@/components/chat/MessageList';
-import { Composer } from '@/components/Composer/Composer';
+import { Composer } from '@/components/composer/Composer';
 import { QuotedReplyBar } from '@/components/chat/QuotedReplyBar';
 import { ModeSwitchModal, type AppMode } from '@/components/chat/ModeSwitchModal';
 import { AddToChatSheet } from '@/components/chat/AddToChatSheet';
@@ -584,12 +584,14 @@ export default function ChatScreen() {
             <Menu size={22} color={colors.textSecondary} />
           </Pressable>
 
-          {/* ModeToggle — centered */}
-          <ModeToggle
-            cloudJoined={waitlistJoined}
-            waitlistRank={waitlistRank}
-            onTapCloud={handleOpenWaitlist}
-          />
+          {/* ModeToggle — flex:1 ensures true center regardless of left/right widths */}
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <ModeToggle
+              cloudJoined={waitlistJoined}
+              waitlistRank={waitlistRank}
+              onTapCloud={handleOpenWaitlist}
+            />
+          </View>
 
           {/* Right side: new-chat + conversation menu */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -623,7 +625,7 @@ export default function ChatScreen() {
               paddingHorizontal: 12,
               paddingVertical: 5,
               borderRadius: 20,
-              backgroundColor: 'rgba(62, 184, 196, 0.12)',
+              backgroundColor: `${colors.teal}1F`,
               marginTop: 10,
             }}
             accessibilityLabel="On-device mode active"
