@@ -101,6 +101,8 @@ export function computeUnigramBLEU(hypothesis: string, reference: string): numbe
  * Suitable for morphologically rich languages like Hindi.
  */
 export function computeChrF(hypothesis: string, reference: string, n = 6): number {
+  // Fast path: identical strings always score 1.0 regardless of length vs n.
+  if (hypothesis === reference && hypothesis.length > 0) return 1.0;
   const hypNgrams = charNgrams(hypothesis, n);
   const refNgrams = charNgrams(reference, n);
   if (hypNgrams.size === 0 || refNgrams.size === 0) return 0;
