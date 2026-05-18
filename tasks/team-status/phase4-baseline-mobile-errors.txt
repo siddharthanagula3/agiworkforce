@@ -1,0 +1,30 @@
+app/(app)/chat/[id].tsx(22,26): error TS1261: Already included file name '/Users/siddhartha/Desktop/agiworkforce-phase4-contracts/apps/mobile/components/composer/Composer.tsx' differs from file name '/Users/siddhartha/Desktop/agiworkforce-phase4-contracts/apps/mobile/components/Composer/Composer.tsx' only in casing.
+app/(app)/chat/[id].tsx(24,47): error TS2307: Cannot find module '@/components/chat/ModeSwitchModal' or its corresponding type declarations.
+app/(app)/chat/[id].tsx(31,28): error TS2307: Cannot find module '@/components/chat/ModeToggle' or its corresponding type declarations.
+app/(app)/voice.tsx(30,33): error TS2307: Cannot find module '@/components/chat/PerformanceChip' or its corresponding type declarations.
+app/(public)/onboarding.tsx(34,38): error TS2307: Cannot find module '@/services/complianceLedger' or its corresponding type declarations.
+app/_layout.tsx(264,28): error TS2322: Type '"/(public)/age-gate"' is not assignable to type '"/(app)/companion" | "/(app)" | "/(app)/(tabs)/chat" | "/(app)/(tabs)/agents" | "/(app)/(tabs)/projects" | "/(app)/(tabs)/settings" | "/(app)/agents" | "/(app)/about" | ... 27 more ... | "/(app)/companion/agent/[id]"'.
+app/_layout.tsx(283,28): error TS2322: Type '"/(public)/age-gate"' is not assignable to type '"/(app)/companion" | "/(app)" | "/(app)/(tabs)/chat" | "/(app)/(tabs)/agents" | "/(app)/(tabs)/projects" | "/(app)/(tabs)/settings" | "/(app)/agents" | "/(app)/about" | ... 27 more ... | "/(app)/companion/agent/[id]"'.
+components/chat/MessageBubble.tsx(34,33): error TS2307: Cannot find module './PerformanceChip' or its corresponding type declarations.
+components/image/ImageWithQuestion.tsx(26,33): error TS2307: Cannot find module '@/components/chat/PerformanceChip' or its corresponding type declarations.
+components/image/ImageWithQuestion.tsx(30,34): error TS2307: Cannot find module '@/components/chat/PerformanceChip' or its corresponding type declarations.
+components/model-picker/ModelPickerSheet.tsx(19,32): error TS1261: Already included file name '/Users/siddhartha/Desktop/agiworkforce-phase4-contracts/apps/mobile/components/paywall/ProPlusPaywall.tsx' differs from file name '/Users/siddhartha/Desktop/agiworkforce-phase4-contracts/apps/mobile/components/Paywall/ProPlusPaywall.tsx' only in casing.
+components/voice/VoiceReview.tsx(14,33): error TS2307: Cannot find module '@/components/chat/PerformanceChip' or its corresponding type declarations.
+services/healthKitQuery.ts(2,60): error TS2307: Cannot find module './healthKitPermission' or its corresponding type declarations.
+services/healthKitQuery.ts(257,62): error TS2366: Function lacks ending return statement and return type does not include 'undefined'.
+services/ragIndex.ts(14,23): error TS2307: Cannot find module '../storage/db' or its corresponding type declarations.
+services/vision.ts(20,35): error TS2307: Cannot find module '@/storage/installedModels' or its corresponding type declarations.
+storage/docChunks.ts(1,23): error TS2307: Cannot find module './db' or its corresponding type declarations.
+storage/index.ts(1,41): error TS2307: Cannot find module './db' or its corresponding type declarations.
+storage/index.ts(14,8): error TS2307: Cannot find module './types' or its corresponding type declarations.
+storage/index.ts(15,15): error TS2307: Cannot find module './conversations' or its corresponding type declarations.
+storage/index.ts(16,15): error TS2307: Cannot find module './messages' or its corresponding type declarations.
+storage/index.ts(18,15): error TS2307: Cannot find module './installedModels' or its corresponding type declarations.
+storage/index.ts(19,15): error TS2307: Cannot find module './providerKeys' or its corresponding type declarations.
+storage/index.ts(20,15): error TS2307: Cannot find module './customInstructions' or its corresponding type declarations.
+storage/index.ts(21,15): error TS2307: Cannot find module './settingsDb' or its corresponding type declarations.
+storage/index.ts(22,15): error TS2307: Cannot find module './telemetry' or its corresponding type declarations.
+storage/memory.ts(6,23): error TS2307: Cannot find module './db' or its corresponding type declarations.
+storage/memory.ts(7,33): error TS2307: Cannot find module './types' or its corresponding type declarations.
+stores/memoryStore.ts(12,33): error TS2307: Cannot find module '@/storage/types' or its corresponding type declarations.
+types/chat.ts(120,24): error TS2307: Cannot find module '@/components/chat/PerformanceChip' or its corresponding type declarations.
