@@ -1,17 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  View,
-  Pressable,
-  TextInput,
-  FlatList,
-  RefreshControl,
-  ActivityIndicator,
-  ScrollView,
-} from 'react-native';
+import { View, Pressable, TextInput, FlatList, RefreshControl, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { ArrowLeft, Brain, RefreshCw, Search, X, Plus } from 'lucide-react-native';
+import { ArrowLeft, Brain, Search, X, Plus, Upload } from 'lucide-react-native';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -24,44 +16,12 @@ import { colors } from '@/lib/theme';
 // Constants
 // ---------------------------------------------------------------------------
 
-const FILTER_CATEGORIES = [
-  'All',
-  'Coding',
-  'Research',
-  'Writing',
-  'Preferences',
-  'General',
-] as const;
+const FILTER_CATEGORIES = ['All', 'Pinned'] as const;
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function formatSyncTime(isoString: string | null): string {
-  if (!isoString) return 'Never synced';
-
-  const now = Date.now();
-  const then = new Date(isoString).getTime();
-  const diffMs = now - then;
-
-  if (diffMs < 0) return 'Just now';
-
-  const seconds = Math.floor(diffMs / 1_000);
-  if (seconds < 60) return 'Just now';
-
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+function formatCount(n: number): string {
+  if (n === 1) return '1 memory';
+  return `${n} memories`;
 }
-
-// ---------------------------------------------------------------------------
-// Screen
-// ---------------------------------------------------------------------------
 
 export default function MemoryScreen() {
   const router = useRouter();
@@ -75,15 +35,13 @@ export default function MemoryScreen() {
     entries,
     filteredEntries,
     loading,
-    syncing,
     error,
-    lastSyncAt,
     searchQuery,
     fetchMemories,
     addMemory,
     updateMemory,
     deleteMemory,
-    syncMemories,
+    togglePin,
     setSearchQuery,
     clearError,
   } = useMemoryStore();
@@ -107,7 +65,7 @@ export default function MemoryScreen() {
 
     if (activeFilter === 'All') return source;
 
-    return source.filter((e) => e.category?.toLowerCase() === activeFilter.toLowerCase());
+    return source.filter((e) => e.pinned);
   }, [entries, filteredEntries, searchQuery, activeFilter]);
 
   // Handlers
@@ -128,9 +86,16 @@ export default function MemoryScreen() {
     fetchMemories();
   }, [fetchMemories]);
 
-  const handleSync = useCallback(() => {
-    syncMemories();
-  }, [syncMemories]);
+  const handleTogglePin = useCallback(
+    (id: string) => {
+      togglePin(id);
+    },
+    [togglePin],
+  );
+
+  const handleImportPress = useCallback(() => {
+    router.push('/(app)/settings/memory-import' as Parameters<typeof router.push>[0]);
+  }, [router]);
 
   const handleAddPress = useCallback(() => {
     setEditingMemory(null);
@@ -150,8 +115,8 @@ export default function MemoryScreen() {
   );
 
   const handleSave = useCallback(
-    (content: string, category?: string) => {
-      addMemory(content, category);
+    (content: string, _category?: string) => {
+      addMemory(content);
     },
     [addMemory],
   );
@@ -166,9 +131,14 @@ export default function MemoryScreen() {
   // Render helpers
   const renderItem = useCallback(
     ({ item }: { item: MemoryEntry }) => (
-      <MemoryItem memory={item} onEdit={handleEdit} onDelete={handleDelete} />
+      <MemoryItem
+        memory={item}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        onTogglePin={handleTogglePin}
+      />
     ),
-    [handleEdit, handleDelete],
+    [handleEdit, handleDelete, handleTogglePin],
   );
 
   const keyExtractor = useCallback((item: MemoryEntry) => item.id, []);
@@ -184,23 +154,18 @@ export default function MemoryScreen() {
           Memory
         </Text>
         <Pressable
-          onPress={handleSync}
-          disabled={syncing}
+          onPress={handleImportPress}
           className="p-2 rounded-lg active:bg-white/5"
-          accessibilityLabel="Sync memories"
+          accessibilityLabel="Import memories"
         >
-          {syncing ? (
-            <ActivityIndicator size="small" color={colors.teal} />
-          ) : (
-            <RefreshCw size={18} color={colors.textSecondary} />
-          )}
+          <Upload size={18} color={colors.textSecondary} />
         </Pressable>
       </View>
 
-      {/* Sync status bar */}
+      {/* Count subtitle */}
       <View className="px-4 mb-2">
         <Text className="text-[11px] text-white/30">
-          {syncing ? 'Syncing...' : `Last synced: ${formatSyncTime(lastSyncAt)}`}
+          {loading ? 'Loading…' : formatCount(entries.length)}
         </Text>
       </View>
 
@@ -266,7 +231,7 @@ export default function MemoryScreen() {
       {loading && entries.length === 0 ? (
         <LoadingSkeleton />
       ) : displayedEntries.length === 0 ? (
-        <EmptyState hasSearch={searchText.length > 0} />
+        <EmptyState hasSearch={searchText.length > 0} isPinnedFilter={activeFilter === 'Pinned'} />
       ) : (
         <FlatList
           data={displayedEntries}
@@ -328,19 +293,27 @@ function LoadingSkeleton() {
   );
 }
 
-function EmptyState({ hasSearch }: { hasSearch: boolean }) {
+function EmptyState({
+  hasSearch,
+  isPinnedFilter,
+}: {
+  hasSearch: boolean;
+  isPinnedFilter: boolean;
+}) {
   return (
     <View className="flex-1 items-center justify-center px-8">
       <View className="w-20 h-20 rounded-2xl bg-white/5 items-center justify-center mb-4">
         <Brain size={36} color={colors.textMuted} />
       </View>
       <Text variant="subheading" className="text-center mb-1.5">
-        {hasSearch ? 'No results found' : 'No memories yet'}
+        {hasSearch ? 'No results found' : isPinnedFilter ? 'No pinned memories' : 'No memories yet'}
       </Text>
       <Text className="text-white/40 text-sm text-center leading-5">
         {hasSearch
           ? 'Try a different search term'
-          : 'Your AI will learn from conversations\nand you can add notes manually.'}
+          : isPinnedFilter
+            ? 'Pin a memory to keep it at the top'
+            : 'Add notes manually or import from another app.'}
       </Text>
     </View>
   );
