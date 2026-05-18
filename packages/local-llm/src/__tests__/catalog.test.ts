@@ -75,7 +75,7 @@ describe('on-device catalog: getLiteModeModel', () => {
     expect(model).toBeDefined();
     expect(model!.liteMode).toBe(true);
     expect(model!.role).toBe('lite-mode');
-    expect(model!.id).toBe('llama-3.2-1b-instruct-qlora');
+    expect(model!.id).toBe('llama-3.2-1b-instruct-spinquant');
   });
 });
 
