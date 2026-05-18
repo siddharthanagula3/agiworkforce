@@ -3,9 +3,9 @@
 **Branch:** `claude/reorg-mobile-pilot-2026-05-18`
 **Worktree:** `/Users/siddhartha/Desktop/agiworkforce-reorg-mobile-pilot`
 **Owner:** Reorg supervisor (Claude)
-**Status:** complete — awaiting founder review
+**Status:** waitlist + feedback + compare migrated — awaiting founder review
 **Started:** 2026-05-18
-**Completed:** 2026-05-18
+**Last update:** 2026-05-18 (after expansion to feedback + compare)
 
 ## Why this exists
 
@@ -14,28 +14,41 @@ This file is the coordination point for the structural-reorg work so we don't co
 
 ## In-flight scope (Phase 3, pilot)
 
-Single feature: **`waitlist`**. Chosen because it is stable (Wave 0 task #14 complete) and unlikely to be re-edited during the pilot window.
+Three features migrated to the canonical layer-map. All single-feature, low-risk targets that exercised the temp-barrel pattern + the Expo route-wrapper pattern.
 
-### Files this branch touched
+### Files this branch touched (cumulative)
+
+#### Migration 1 — waitlist (commit `c18f16d74`)
 
 | Action  | Old path                                                  | New path                                                       |
 | ------- | --------------------------------------------------------- | -------------------------------------------------------------- |
 | move    | `apps/mobile/services/waitlist.ts`                        | `apps/mobile/src/features/waitlist/service.ts`                 |
 | move    | `apps/mobile/stores/waitlistStore.ts`                     | `apps/mobile/src/features/waitlist/store.ts`                   |
 | move    | `apps/mobile/components/waitlist/CloudWaitlistSheet.tsx`  | `apps/mobile/src/features/waitlist/CloudWaitlistSheet.tsx`     |
-| barrel  | `apps/mobile/services/waitlist.ts`                        | re-exports from `@/src/features/waitlist/service`              |
-| barrel  | `apps/mobile/stores/waitlistStore.ts`                     | re-exports from `@/src/features/waitlist/store`                |
-| barrel  | `apps/mobile/components/waitlist/CloudWaitlistSheet.tsx`  | re-exports from `@/src/features/waitlist/CloudWaitlistSheet`   |
+| barrel  | `apps/mobile/services/waitlist.ts`                        | `export * from '@/src/features/waitlist/service'`              |
+| barrel  | `apps/mobile/stores/waitlistStore.ts`                     | `export * from '@/src/features/waitlist/store'`                |
+| barrel  | `apps/mobile/components/waitlist/CloudWaitlistSheet.tsx`  | `export * from '@/src/features/waitlist/CloudWaitlistSheet'`   |
 | add     | `apps/mobile/src/features/waitlist/index.ts`              | public feature barrel                                          |
 
-Plus the bootstrap scaffolding for `apps/mobile/src/{entry,core,features,platform,integrations,storage,ui}/` (one placeholder `index.ts` per layer + `apps/mobile/src/README.md` describing the layer map and migration pattern + `apps/mobile/src/.eslint-import-boundaries.example.json` documenting future hard-enforce rules).
+Internal-import normalization on moved files:
+- `service.ts` line 1: `from './supabase'` → `from '@/services/supabase'`
+- `store.ts` line 4: `from '@/services/waitlist'` → `from './service'`
 
-### Internal-import normalization on the moved files
+#### Migration 2 — feedback (commit `4a6aeb810`)
 
-Two import-path edits inside the moved files, made so the new module graph doesn't round-trip through the legacy aliases. These are NOT call-site rewrites — they're 1-line corrections inside the implementation files we just moved:
+| Action     | Old path                                | New path                                       |
+| ---------- | --------------------------------------- | ---------------------------------------------- |
+| move       | `apps/mobile/app/(app)/feedback.tsx`    | `apps/mobile/src/features/feedback/index.tsx`  |
+| wrapper    | `apps/mobile/app/(app)/feedback.tsx`    | `export { default } from '@/src/features/feedback'` |
 
-- `apps/mobile/src/features/waitlist/service.ts`: line 1, `from './supabase'` → `from '@/services/supabase'` (the original relative was relative to the old location).
-- `apps/mobile/src/features/waitlist/store.ts`: line 4, `from '@/services/waitlist'` → `from './service'` (avoid round-trip through the temp barrel).
+#### Migration 3 — compare (commit `d156c53d9`)
+
+| Action     | Old path                                | New path                                       |
+| ---------- | --------------------------------------- | ---------------------------------------------- |
+| move       | `apps/mobile/app/(app)/compare.tsx`     | `apps/mobile/src/features/compare/index.tsx`   |
+| wrapper    | `apps/mobile/app/(app)/compare.tsx`     | `export { default } from '@/src/features/compare'` |
+
+Plus the bootstrap scaffolding for `apps/mobile/src/{entry,core,features,platform,integrations,storage,ui}/` from commit `f37a29a3f`.
 
 ## Active-edit zones we are AVOIDING (per founder directive)
 
@@ -53,46 +66,63 @@ We did NOT touch any of:
 - model-picker/** files
 - performance/** files
 
-We also did NOT touch the 2 call sites that consume waitlist symbols. They continue to import through the legacy paths, which now route through the barrels:
-- `apps/mobile/app/(app)/chat/[id].tsx` — 3 imports (`@/components/waitlist/CloudWaitlistSheet`, `@/stores/waitlistStore`, `@/services/waitlist`)
-- `apps/mobile/__tests__/waitlist.test.ts` — 2 relative imports
-- `apps/mobile/__tests__/waitlist-sheet-rank.test.tsx` — 1 alias import
+Note: `compare.tsx` **reads** from `@/components/chat/ChatInput` and `@/components/model-picker/ModelPickerSheet`. This is allowed — the rule is about *editing* banned-zone files, not about consumers that import from them. After moving compare to `src/features/compare/`, those imports continue to resolve unchanged.
+
+## Patterns proven
+
+| Pattern                                  | Used for                              | Notes                                                                  |
+| ---------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------- |
+| `export * from '<new-path>'`             | waitlist (services, stores, components) | Re-exports named exports. Use when old path has no default export, or the default is not Expo-route-significant. |
+| `export { default } from '<new-path>'`   | feedback, compare (Expo routes)       | Required for Expo route wrappers so the router picks up the screen.    |
+| `git mv` + leave wrapper at OLD path     | all three                             | History tracks rename; consumers keep working through wrapper.         |
+| One-feature-per-commit                   | all three                             | Reviewable diff. Easy to revert.                                       |
 
 ## Gate results
 
-| Stage                              | Command                                                            | Result   | Commit       |
-| ---------------------------------- | ------------------------------------------------------------------ | -------- | ------------ |
-| Step 1: bootstrap                  | n/a (filesystem only)                                              | PASS     | `4c7151033`  |
-| Step 2: mobile code index          | n/a (generator script + output)                                    | PASS     | `fe0e0c615`  |
-| Step 3: skeleton                   | `pnpm --filter @agiworkforce/mobile typecheck`                     | PASS \*  | `f37a29a3f`  |
-| Step 4: waitlist move (typecheck)  | `pnpm --filter @agiworkforce/mobile typecheck`                     | PASS \*  | `c18f16d74`  |
-| Step 4: waitlist move (test)       | `pnpm --filter @agiworkforce/mobile test -- --testPathPattern waitlist` | PASS 24/24 | `c18f16d74`  |
-| Step 5: verifier                   | independent diff review (6 invariants)                             | PASS     | n/a          |
+| Stage                              | Command                                                                | Result        | Commit       |
+| ---------------------------------- | ---------------------------------------------------------------------- | ------------- | ------------ |
+| Step 1: bootstrap                  | n/a (filesystem only)                                                  | PASS          | `4c7151033`  |
+| Step 2: mobile code index          | n/a (generator script + output)                                        | PASS          | `fe0e0c615`  |
+| Step 3: skeleton                   | `pnpm --filter @agiworkforce/mobile typecheck`                         | PASS \*       | `f37a29a3f`  |
+| Step 4: waitlist (typecheck)       | `pnpm --filter @agiworkforce/mobile typecheck`                         | PASS \*       | `c18f16d74`  |
+| Step 4: waitlist (test)            | `pnpm --filter @agiworkforce/mobile test -- --testPathPattern waitlist` | PASS 24/24    | `c18f16d74`  |
+| Step 5: verifier                   | independent diff review (6 invariants)                                 | PASS          | n/a          |
+| Step 6: status doc finalize        | n/a                                                                    | PASS          | `3b947d563`  |
+| Expansion: feedback (typecheck)    | `pnpm --filter @agiworkforce/mobile typecheck`                         | PASS \*       | `4a6aeb810`  |
+| Expansion: feedback (test, full)   | `pnpm --filter @agiworkforce/mobile test`                              | PASS \*\*     | `4a6aeb810`  |
+| Expansion: compare (typecheck)     | `pnpm --filter @agiworkforce/mobile typecheck`                         | PASS \*       | `d156c53d9`  |
+| Expansion: compare (test, full)    | `pnpm --filter @agiworkforce/mobile test`                              | PASS \*\*     | `d156c53d9`  |
 
-\* "PASS" for typecheck = no NEW errors vs the pre-change baseline. The mobile tsc baseline has 30 pre-existing errors caused by uncommitted teammate files (`storage/db`, `PerformanceChip`, `ModeToggle`, `ModeSwitchModal`, `complianceLedger`, `healthKitPermission`, plus 2 casing-mismatch import bugs in `chat[id].tsx` and `model-picker/ModelPickerSheet.tsx`, plus 1 route-type issue with `/(public)/age-gate`). None of these are caused by, or affected by, this reorg. Diff between baseline and final error sets: 0.
+\* "PASS" for typecheck = no NEW errors vs the pre-change baseline. The mobile tsc baseline has 30 pre-existing errors caused by uncommitted teammate files (`storage/db`, `PerformanceChip`, `ModeToggle`, `ModeSwitchModal`, `complianceLedger`, `healthKitPermission`), plus 2 casing-mismatch bugs in tracked code, plus 1 route-typing issue. None caused by, or affected by, this reorg. Diff between baseline and final error sets: 0 across all three migrations.
+
+\*\* "PASS" for full test = 48 suites pass / 9 fail / 878 tests pass / 0 individual failures — identical failed-suite SET to pre-change baseline. The 9 failing suites are pre-existing baseline failures from the same uncommitted-storage issues blocking typecheck (`storage/db` chain triggers cascading failures in chatStore, drawer-content, doc-qa, tool-access-selector, onboarding, style-selector, add-to-chat, chat-store-additions, healthkit).
 
 ## Mitigations applied
 
 1. Work runs in an isolated `git worktree` (`/Users/siddhartha/Desktop/agiworkforce-reorg-mobile-pilot`). Original tree at `/Users/siddhartha/Desktop/agiworkforce` is not touched.
-2. All commits use explicit paths only — no `git add -A`, no `git add .`, no `git commit -a`. Verified across all 4 reorg commits.
+2. All commits use explicit paths only — no `git add -A`, no `git add .`, no `git commit -a`. Verified across all 7 reorg commits.
 3. Lint-staged race risk: zero, because the worktree starts clean and we commit one logical change at a time.
 4. Barrels at old paths preserve the public contract — active teammates' imports keep resolving (manual verification via grep + typecheck + test pass).
-5. The dirty `pnpm-lock.yaml` in the working tree (modified by `pnpm install --filter`) was NEVER staged. The committed `pnpm-lock.yaml` matches the source-branch state exactly.
+5. The dirty `pnpm-lock.yaml` in the working tree (modified by filtered `pnpm install`) was NEVER staged. The committed `pnpm-lock.yaml` matches the source-branch state exactly.
 6. Pre-existing stashes (3, owned by founder) preserved.
-7. Rebased onto latest source-branch tip (`a3c836998`) after `pnpm install` lockfile drift was detected — final reorg HEAD `c18f16d74` is up-to-date with `claude/refine-local-plan-yhjFU`.
+7. Rebased onto latest source-branch tip when needed to stay current.
 
 ## Recommended next pilot feature
 
-Out of the four founder-shortlist options (`models`, `compare`, `account`, `feedback`), **`feedback`** is the safest next move:
+Out of the remaining route-leaf candidates, the safest target is **`share-preview`** — `apps/mobile/app/(app)/share-preview.tsx`. TL-owned, route leaf, 9 outgoing imports (modest), no active-edit dependencies expected. Single-file migration with the proven Expo-route-wrapper pattern.
 
-| Candidate | Files | Owner | Risk |
-|---|---|---|---|
-| `account` | `app/(app)/account.tsx` | cloud-mode-gate | High — gated for v1, status uncertain |
-| `compare` | `app/(app)/compare.tsx` | compare-engineer | Low-Medium — single file, isolated screen, owner appears inactive |
-| `models` | `app/(app)/models.tsx`, `components/model-picker/*`, `lib/models.ts`, `services/modelCatalog.ts`, `stores/modelStore.ts` | model-catalog-engineer | **HIGH — model-picker is in the founder's banned list and engineer is active** |
-| `feedback` | `app/(app)/feedback.tsx` | TL | Low — single file, TL-owned (stable), no other consumers |
+### Second-best alternatives (in order of safety)
 
-Recommendation: **`feedback`** for the next single-feature migration. It is 1 file owned by TL with no parallel teammate edits. After that, `compare` is the next-safest.
+1. `widget-setup.tsx` — TL-owned, 8 imports, but marked "(defer)" in the orchestration plan. Half-built; migration might surface awkward imports.
+2. `+error.tsx` — TL-owned, 6 imports. **Special caution**: Expo treats `+error.tsx` as a special-named route for error boundaries. The wrapper pattern should work (Expo resolves by filename, not content), but worth a careful read of Expo router docs before the move. Defer until needed.
+3. `settings/personalization.tsx` — TL-owned, 10 imports. Settings sub-route. Safe but slightly higher dependency surface than share-preview.
+
+### Definitely AVOID
+
+- All `_layout.tsx` files — they are Expo's route-container files, cannot be moved without breaking the router contract.
+- All `cloud-mode-gate` owned files (79 files) — they are gated/dead-code for v1 per the locked v1-local-only directive. Moving them adds friction with no value until cloud is enabled.
+- All active-edit-zone files (chat, vision, voice, translate, memory, onboarding, compliance, healthkit, skills, projects, model-picker, performance).
+- All `services/*` files with high incoming-import counts (e.g. `services/supabase.ts` has 17 incoming) until the consumer migration is planned.
 
 ## Communication protocol
 
@@ -101,6 +131,14 @@ Recommendation: **`feedback`** for the next single-feature migration. It is 1 fi
 - If a gate fails, the delegate STOPs and reports — does not retry blindly.
 - Supervisor sends a SendMessage update every 30 min while delegates are working.
 
-## Verifier verdict
+## Verifier verdict (post-expansion)
 
-PASS (6/6 invariants). See parent-agent final report for details. Recommend founder review on the branch, then approve/request expansion to the next pilot feature.
+Both expansion migrations applied the same proven pattern with zero regression. Each commit:
+- Single file moved + single wrapper created
+- Identical exported component (default), identical implementation
+- Typecheck: 30 errors → 30 errors (no diff)
+- Test: 48p/9f → 48p/9f (identical failed-suite set)
+- Public route URL unchanged (`/feedback`, `/compare`)
+- Commit touches only the 2 paths it owns
+
+Recommend founder review on the branch, then approve or request changes.
