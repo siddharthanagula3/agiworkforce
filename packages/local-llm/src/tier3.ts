@@ -1,4 +1,4 @@
-import type { GenerateOptions, GenerateResult } from './types.js';
+import type { GenerateOptions, GenerateResult } from './types';
 
 // Tier 3 adapter: llama.rn (universal fallback, iOS 15+ / Android 10+).
 // Dynamic require for tree-shaking parity with tier2.

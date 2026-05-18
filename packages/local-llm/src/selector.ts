@@ -4,12 +4,12 @@ import type {
   GenerateResult,
   LocalRuntimeName,
   LocalRuntimeTier,
-} from './types.js';
-import { detectCapabilities } from './capabilities.js';
-import { tier1Generate } from './tier1.js';
-import { tier2Generate } from './tier2.js';
-import { tier3Generate } from './tier3.js';
-import { getDefaultModel, getLiteModeModel } from './catalog.js';
+} from './types';
+import { detectCapabilities } from './capabilities';
+import { tier1Generate } from './tier1';
+import { tier2Generate } from './tier2';
+import { tier3Generate } from './tier3';
+import { getDefaultModel, getLiteModeModel } from './catalog';
 import type { ExecutorchPreset } from '@agiworkforce/types';
 
 // Cached capability snapshot — refreshed on demand or app resume.

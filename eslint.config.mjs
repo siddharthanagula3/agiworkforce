@@ -531,7 +531,7 @@ export default [
 
   // Expo config plugins (CommonJS Node.js scripts loaded via require() by expo prebuild)
   {
-    files: ['apps/mobile/native/**/*.cjs'],
+    files: ['apps/mobile/native/**/*.cjs', 'apps/mobile/lib/polyfills/**/*.cjs'],
     languageOptions: {
       sourceType: 'commonjs',
       globals: {
