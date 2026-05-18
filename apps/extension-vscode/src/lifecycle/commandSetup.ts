@@ -8,8 +8,8 @@ import { ConversationStore } from '../storage/conversationStore';
 import {
   ConversationTreeProvider,
   ConversationTreeItem,
-} from '../providers/conversationTreeProvider';
-import { ContextPanelProvider } from '../providers/contextPanelProvider';
+  ContextPanelProvider,
+} from '../features/trees';
 import { AgentModePanel } from '../providers/agentModeProvider';
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
 import { ModelMetricsPanel } from '../services/modelMetrics';
