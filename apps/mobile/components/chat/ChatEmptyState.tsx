@@ -19,6 +19,7 @@ const CHIP_PROMPTS: Record<TaskChipType, string> = {
   image: '',
   video: 'Create a video script for...',
   computer: 'Help me automate a task on my computer...',
+  translate: '',
 };
 
 interface ChatEmptyStateProps {
@@ -154,6 +155,10 @@ export function ChatEmptyState({
             }
             if (chip === 'image') {
               router.push('/(app)/image' as Parameters<typeof router.push>[0]);
+              return;
+            }
+            if (chip === 'translate') {
+              router.push('/(app)/translate' as Parameters<typeof router.push>[0]);
               return;
             }
             onChipSelect?.(chip);
