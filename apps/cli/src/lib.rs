@@ -68,7 +68,9 @@ pub mod project_registry;
 pub mod project_scope;
 pub mod review;
 pub mod routing;
-pub mod runtime;
+// runtime lives at platform::runtime; re-exported here so all 27 call-sites
+// using `crate::runtime::<submod>::*` continue to resolve unchanged.
+pub use platform::runtime;
 pub mod sandbox;
 pub mod shell_snapshot;
 pub mod sync;
