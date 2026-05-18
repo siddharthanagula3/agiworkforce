@@ -12,6 +12,7 @@ import { colors } from '@/lib/theme';
 const MMKV_PAIRING_BANNER_KEY = 'dismissedDesktopPairingBanner';
 
 const CHIP_PROMPTS: Record<TaskChipType, string> = {
+  scan: '',
   code: 'Help me write a function that...',
   write: 'Write a professional email about...',
   research: 'Research and summarize the latest on...',
@@ -147,6 +148,10 @@ export function ChatEmptyState({
         <TaskChips
           activeChip={activeChip}
           onChipPress={(chip) => {
+            if (chip === 'scan') {
+              router.push('/(app)/scan' as Parameters<typeof router.push>[0]);
+              return;
+            }
             if (chip === 'image') {
               router.push('/(app)/image' as Parameters<typeof router.push>[0]);
               return;
