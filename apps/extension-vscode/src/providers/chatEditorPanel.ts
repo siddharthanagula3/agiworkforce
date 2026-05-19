@@ -23,6 +23,8 @@ import { getContextBuilder } from '../services/contextBuilder';
 import { normalizeConfiguredModelId, getModelProviderInfo } from '../services/modelConstants';
 import { PROVIDER_DISPLAY, type AgentMode, type Effort } from '@agiworkforce/types';
 import { Config } from '../utils/config';
+import { isSensitiveFile } from '../utils/pathSafety';
+import { parseWebviewMessage } from '../protocol/webviewMessages';
 import { resolveUsageMeter, formatManagedUsageLabel, daysUntilReset } from '../services/usageMeter';
 import { getTokenCounter } from '../services/tokenCounter';
 import { guardProviderSwitch } from '../services/providerSwitchGuard';
@@ -105,7 +107,15 @@ export class ChatEditorPanel {
 
     this._disposables.push(
       this._panel.webview.onDidReceiveMessage(async (msg) => {
-        await this._handleWebviewMessage(msg);
+        // PR-3C (F-11): runtime-validate webview → extension messages.
+        const parsed = parseWebviewMessage(msg);
+        if (parsed === undefined) {
+          console.warn('[AGI Workforce] dropping malformed webview message', msg);
+          return;
+        }
+        // Bridge exactOptionalPropertyTypes gap via unknown cast — Zod
+        // inferred type is structurally a superset of the local handler's.
+        await this._handleWebviewMessage(parsed as unknown as { type: string; payload?: unknown });
       }),
     );
 
@@ -307,25 +317,57 @@ export class ChatEditorPanel {
     let totalFileChars = 0;
     const MAX_TOTAL_FILE_CHARS = 20_000;
     let fileRefMatch: RegExpExecArray | null;
+    // PR-2C (F-07): cap to N=5 @file resolutions per turn.
+    const MAX_FILE_REFS = 5;
+    let fileRefCount = 0;
     while ((fileRefMatch = fileRefPattern.exec(text)) !== null) {
       const ref = fileRefMatch[1];
       if (!ref || seenRefs.has(ref)) continue;
       seenRefs.add(ref);
+      if (fileRefCount >= MAX_FILE_REFS) {
+        contextBlocks.push(
+          `<file_content path="(limit-reached)">[skipped: max ${MAX_FILE_REFS} @file refs per turn]</file_content>`,
+        );
+        break;
+      }
       if (totalFileChars >= MAX_TOTAL_FILE_CHARS) break;
+      if (isSensitiveFile(ref)) {
+        contextBlocks.push(
+          `<file_content path="${ref.replace(/"/g, '&quot;')}">[refused: matches sensitive-file denylist]</file_content>`,
+        );
+        fileRefCount++;
+        continue;
+      }
       try {
         const files = await vscode.workspace.findFiles(`**/${ref}`, '**/node_modules/**', 1);
         if (files.length > 0) {
+          const resolvedPath = files[0]!.fsPath;
+          if (isSensitiveFile(resolvedPath)) {
+            contextBlocks.push(
+              `<file_content path="${ref.replace(/"/g, '&quot;')}">[refused: resolved path matches sensitive-file denylist]</file_content>`,
+            );
+            fileRefCount++;
+            continue;
+          }
           const doc = await vscode.workspace.openTextDocument(files[0]!);
           const rawContent = doc.getText();
           if (rawContent.includes('\x00')) {
-            contextBlocks.push(`<file_content path="${ref}">[binary file skipped]</file_content>`);
+            contextBlocks.push(
+              `<file_content path="${ref.replace(/"/g, '&quot;')}">[binary file skipped]</file_content>`,
+            );
+            fileRefCount++;
             continue;
           }
           const remaining = MAX_TOTAL_FILE_CHARS - totalFileChars;
           const sliced = rawContent.slice(0, Math.min(5000, remaining));
           totalFileChars += sliced.length;
-          const escaped = sliced.replace(/<\/file_content>/g, '&lt;/file_content&gt;');
-          contextBlocks.push(`<file_content path="${ref}">\n${escaped}\n</file_content>`);
+          const escaped = sliced.replace(/<\/?file_content[^>]*>/gi, (m) =>
+            m.replace(/</g, '&lt;').replace(/>/g, '&gt;'),
+          );
+          contextBlocks.push(
+            `<file_content path="${ref.replace(/"/g, '&quot;')}">\n${escaped}\n</file_content>`,
+          );
+          fileRefCount++;
         }
       } catch {
         // file not found — skip

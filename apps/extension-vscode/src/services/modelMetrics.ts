@@ -242,10 +242,11 @@ export class ModelMetricsPanel {
 }
 
 function getNonce(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  for (let i = 0; i < 32; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
-  return result;
+  // PR-5A (F-20): nonces must be unpredictable to defeat CSP-defeat XSS.
+  // Using a CSPRNG (randomBytes) instead of Math.random.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { randomBytes } = require('crypto') as typeof import('crypto');
+  return randomBytes(24).toString('base64url');
 }
 
 function escapeHtml(text: string): string {

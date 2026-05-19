@@ -27,30 +27,71 @@ const MAX_CAPTURE_CHARS = 8000;
 // ─── Command safety (VSCODE-04) ───────────────────────────────────────────────
 
 /**
- * Patterns that indicate a dangerous shell construct.
- * We block these even in trusted workspaces when the command comes from
- * an LLM suggestion, because prompt injection can control LLM output.
+ * PR-3B (F-14): allowlist of permitted first-token commands. Switched from
+ * a blocklist (incomplete by construction — missed `git reset --hard`,
+ * `find -delete`, zero-width unicode bypasses, etc.) to a positive
+ * allowlist of common build/test/VCS commands. LLM-suggested commands
+ * whose first token is not in this set are refused outright.
  */
-const DANGEROUS_SHELL_PATTERNS = [
-  /\$\(/, // command substitution $(...)
-  /`/, // backtick substitution
-  /;/, // command chaining ;
-  /&&/, // conditional chaining &&
-  /\|\|/, // conditional chaining ||
-  />>?/, // output redirect (> or >>)
-  /</, // input redirect
-  /\|/, // pipe
-  /\.\./, // path traversal (..)
+const ALLOWED_COMMAND_FIRST_TOKENS = new Set([
+  'git',
+  'npm',
+  'pnpm',
+  'yarn',
+  'npx',
+  'cargo',
+  'rustup',
+  'rustc',
+  'pytest',
+  'python',
+  'python3',
+  'pip',
+  'pip3',
+  'node',
+  'deno',
+  'bun',
+  'tsc',
+  'eslint',
+  'prettier',
+  'make',
+  'gradle',
+  'mvn',
+  'go',
+  'ruby',
+  'bundle',
+  'rake',
+]);
+
+/** Patterns that are destructive even within an allowed-tool invocation. */
+const DESTRUCTIVE_INNER_PATTERNS = [
+  /\b--force\b/i,
+  /\b-f\b/i, // `git checkout -f`, `git push -f`
+  /\breset\s+--hard\b/i,
+  /\bclean\s+-[fdq]+/i,
+  /\bpush\s+--force/i,
+  /\bpush\s+-f\b/i,
+  /\b-delete\b/, // find -delete
 ];
 
-/** Denylist of inherently destructive command prefixes / patterns. */
-const DESTRUCTIVE_COMMAND_PATTERNS = [
-  /^rm\s+-rf?\s/i, // rm -rf
-  /^:\(\)\s*\{/, // fork bomb
-  /^sudo\s+rm/i, // sudo rm
-  /^mkfs/i, // format filesystem
-  /^dd\s+if=/i, // dd disk write
-];
+/**
+ * Zero-width / invisible Unicode characters used to hide commands.
+ * Stripped before allowlist matching so a zero-width-space-prefixed
+ * `rm -rf /` cannot bypass the check.
+ *
+ * Built via `new RegExp(...)` with `\u` escapes so the source file does
+ * not contain literal invisible chars (which `no-irregular-whitespace`
+ * would flag — and which would also be invisible to code reviewers).
+ *
+ * Ranges covered:
+ *   U+200B–U+200F  (zero-width space, ZWNJ, ZWJ, LTR/RTL marks)
+ *   U+202A–U+202E  (LTR/RTL embedding / override)
+ *   U+2060–U+206F  (word joiner, invisible separators)
+ *   U+FEFF         (zero-width no-break space / BOM)
+ */
+const INVISIBLE_UNICODE_CHARS = new RegExp(
+  '[\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u206F\\uFEFF]',
+  'g',
+);
 
 /**
  * ANSI escape code pattern — strip before displaying or executing.
@@ -68,18 +109,25 @@ export function validateSuggestedCommand(cmd: string): string | undefined {
     return 'Command is empty.';
   }
 
-  // Strip ANSI before checking
-  const clean = cmd.replace(ANSI_ESCAPE, '').trim();
+  // Strip ANSI + invisible unicode before checking.
+  const clean = cmd.replace(ANSI_ESCAPE, '').replace(INVISIBLE_UNICODE_CHARS, '').trim();
 
-  for (const pattern of DANGEROUS_SHELL_PATTERNS) {
-    if (pattern.test(clean)) {
-      return `Command rejected: contains unsafe shell construct matching ${pattern}.`;
-    }
+  // Refuse shell metacharacters that allow chaining or substitution.
+  // Even within an allowed first token, $(...) or ; can run anything.
+  const SHELL_META = /[$`;|&<>]|&&|\|\|/;
+  if (SHELL_META.test(clean)) {
+    return 'Command rejected: contains shell metacharacters ($, `, ;, &, |, <, >).';
   }
 
-  for (const pattern of DESTRUCTIVE_COMMAND_PATTERNS) {
+  // PR-3B (F-14): allowlist-first by first token.
+  const firstToken = clean.split(/\s+/)[0]?.toLowerCase() ?? '';
+  if (!ALLOWED_COMMAND_FIRST_TOKENS.has(firstToken)) {
+    return `Command rejected: "${firstToken}" is not in the AI-suggestion allowlist. Allowed: ${[...ALLOWED_COMMAND_FIRST_TOKENS].sort().join(', ')}.`;
+  }
+
+  for (const pattern of DESTRUCTIVE_INNER_PATTERNS) {
     if (pattern.test(clean)) {
-      return `Command rejected: matches destructive command pattern.`;
+      return `Command rejected: matches destructive pattern (${pattern}).`;
     }
   }
 
