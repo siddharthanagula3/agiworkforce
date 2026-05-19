@@ -1,0 +1,21 @@
+/*
+ * side_panel.css — minimal static styles for the side-panel host page.
+ *
+ * M-08 audit 2026-05-19: extracted from the inline <style> block in
+ * side_panel.html so the manifest CSP can drop 'unsafe-inline' from
+ * style-src. Most of the side panel's styling is still injected
+ * dynamically by side_panel.ts:injectStyles via Constructable
+ * Stylesheets (`document.adoptedStyleSheets`), which is CSP-compliant
+ * (no <style> tag is created).
+ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+html,
+body {
+  height: 100%;
+  background: var(--agi-ext-bg, #1a1915);
+}
