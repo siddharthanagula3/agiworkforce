@@ -1,0 +1,123 @@
+/**
+ * webviewMessages.ts — Zod schemas for messages crossing the
+ * webview ↔ extension trust boundary.
+ *
+ * Audit finding F-11 / F-17: previously, the message handler used
+ * `as { type: 'setMode'; payload: ... }` TypeScript casts with no
+ * runtime validation. A compromised webview (via XSS in the renderer
+ * or any future CSP relaxation) could spoof `{type:'setMode',
+ * payload:{mode:'bypass'}}` and silently downgrade the user's agent
+ * mode to bypass-all-prompts.
+ *
+ * Every webview → extension postMessage must now safeParse through
+ * `WebviewToExtSchema` before any action is taken.
+ *
+ * The discriminated union mirrors `WebviewToExtMessage` in
+ * `src/providers/sidebar/ChatStateManager.ts:47-69`.
+ */
+
+import { z } from 'zod';
+
+// Shared atoms ---------------------------------------------------------
+
+export const AgentModeSchema = z.enum(['ask', 'auto', 'plan', 'bypass']);
+export const EffortSchema = z.enum(['low', 'medium', 'high', 'max']);
+
+// Webview → Extension --------------------------------------------------
+
+const sendMessage = z.object({
+  type: z.literal('sendMessage'),
+  payload: z.object({
+    text: z.string().min(1).max(100_000),
+    model: z.string().min(1).max(200).optional(),
+  }),
+});
+
+const setApiKey = z.object({
+  type: z.literal('setApiKey'),
+  payload: z.object({
+    key: z.string().min(1).max(4096),
+  }),
+});
+
+const clearApiKey = z.object({ type: z.literal('clearApiKey') });
+const ready = z.object({ type: z.literal('ready') });
+const getModel = z.object({ type: z.literal('getModel') });
+const openSettings = z.object({ type: z.literal('openSettings') });
+const cancel = z.object({ type: z.literal('cancel') });
+const shareDiagnostics = z.object({ type: z.literal('shareDiagnostics') });
+const clearConversation = z.object({ type: z.literal('clearConversation') });
+const openActionSheet = z.object({ type: z.literal('openActionSheet') });
+const openModePicker = z.object({ type: z.literal('openModePicker') });
+const openEffortPicker = z.object({ type: z.literal('openEffortPicker') });
+const dismissUsageMeter = z.object({ type: z.literal('dismissUsageMeter') });
+const restoreUsageMeter = z.object({ type: z.literal('restoreUsageMeter') });
+const upgradeClicked = z.object({ type: z.literal('upgradeClicked') });
+const openModelPopover = z.object({ type: z.literal('openModelPopover') });
+const openFilePicker = z.object({ type: z.literal('openFilePicker') });
+
+const fileSearch = z.object({
+  type: z.literal('fileSearch'),
+  payload: z.object({
+    query: z.string().min(1).max(500),
+  }),
+});
+
+const setMode = z.object({
+  type: z.literal('setMode'),
+  payload: z.object({ mode: AgentModeSchema }),
+});
+
+const setEffort = z.object({
+  type: z.literal('setEffort'),
+  payload: z.object({ effort: EffortSchema }),
+});
+
+const selectModel = z.object({
+  type: z.literal('selectModel'),
+  payload: z.object({ modelId: z.string().min(1).max(200) }),
+});
+
+const proposeDiff = z.object({
+  type: z.literal('proposeDiff'),
+  payload: z.object({
+    code: z.string().max(500_000),
+    language: z.string().max(100),
+  }),
+});
+
+export const WebviewToExtSchema = z.discriminatedUnion('type', [
+  sendMessage,
+  setApiKey,
+  clearApiKey,
+  ready,
+  getModel,
+  openSettings,
+  cancel,
+  fileSearch,
+  shareDiagnostics,
+  clearConversation,
+  openActionSheet,
+  openModePicker,
+  openEffortPicker,
+  setMode,
+  setEffort,
+  dismissUsageMeter,
+  restoreUsageMeter,
+  upgradeClicked,
+  openModelPopover,
+  selectModel,
+  proposeDiff,
+  openFilePicker,
+]);
+
+export type WebviewToExtMessage = z.infer<typeof WebviewToExtSchema>;
+
+/**
+ * Parse an incoming webview message safely. Returns either the typed
+ * message or undefined (callers should log + ignore on undefined).
+ */
+export function parseWebviewMessage(raw: unknown): WebviewToExtMessage | undefined {
+  const result = WebviewToExtSchema.safeParse(raw);
+  return result.success ? result.data : undefined;
+}

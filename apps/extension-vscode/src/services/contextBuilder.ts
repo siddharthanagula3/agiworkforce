@@ -13,6 +13,7 @@ import * as vscode from 'vscode';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { getActiveWorkspaceFolderSync } from '../utils/workspaceFolders';
+import { redactSecrets } from './telemetry';
 
 const execFileAsync = promisify(execFile);
 
@@ -198,7 +199,11 @@ export class ContextBuilder {
         if (truncatedDiff.length > MAX_GIT_DIFF_CHARS) {
           truncatedDiff = truncatedDiff.slice(0, MAX_GIT_DIFF_CHARS) + '\n... (truncated)';
         }
-        parts.push(`\nDiff summary:\n${truncatedDiff}`);
+        // PR-2C (F-07): redact common secret patterns (JWT, sk-*, AKIA, ghp_,
+        // etc.) before forwarding the diff to LLM context. The user may
+        // have staged secret-containing changes that have not yet been
+        // committed; without this, those secrets land in upstream prompts.
+        parts.push(`\nDiff summary:\n${redactSecrets(truncatedDiff)}`);
       }
 
       return parts.join('\n');

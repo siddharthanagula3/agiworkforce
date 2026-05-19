@@ -9,6 +9,18 @@
  * - Auto-reconnect with exponential backoff (1s, 2s, 4s, 8s max)
  * - Graceful degradation when bridge is down
  * - Clear notification when bridge disconnects with "Reconnect" action button
+ *
+ * PR-4A (F-08, F-21) — IN PROGRESS, cross-surface:
+ *   The current ws://127.0.0.1:8787/ws transport is reachable by any local
+ *   process running as the same user (the bridge token at ~/.agiworkforce/
+ *   bridge-token is 0600 — protects against OTHER users but not same-user
+ *   processes). The migration target is a Unix domain socket (POSIX,
+ *   0600 perms) / Named Pipe (Windows, per-session ACL). That change
+ *   requires coordinated updates in apps/desktop/src-tauri/ which writes
+ *   the bridge server. Plan: ship socket support behind a feature flag
+ *   (`agiWorkforce.desktopBridge.transport: 'socket' | 'tcp'`) once the
+ *   desktop side lands, then default to 'socket' one release later, then
+ *   remove TCP. Rate limiting (this file) is in place independently.
  */
 
 import * as fs from 'fs';
@@ -17,6 +29,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import WebSocket from 'ws';
 import { getExtensionVersion } from '../utils/version';
+import { parseBridgeInbound } from '../protocol/bridgeMessages';
 
 // ─── Bridge auth token (VSCODE-03) ──────────────────────────────────────────
 
@@ -396,7 +409,21 @@ export class DesktopBridge implements vscode.Disposable {
 
       this._ws.onmessage = (event) => {
         try {
-          const raw = JSON.parse(String(event.data)) as BridgeMessage;
+          const parsedRaw = JSON.parse(String(event.data));
+          // PR-3C (F-17): Zod-validate inbound bridge frames. Previously a
+          // TS cast — payload shapes were never runtime-checked.
+          const validated = parseBridgeInbound(parsedRaw);
+          if (validated === undefined) {
+            console.warn(`[AGI Workforce Bridge] dropping malformed inbound frame:`, parsedRaw);
+            return;
+          }
+          // Build a BridgeMessage envelope for downstream handlers that
+          // still expect the older shape with payload as Record.
+          const raw: BridgeMessage = {
+            type: validated.type,
+            payload: 'payload' in validated ? (validated.payload as Record<string, unknown>) : {},
+            timestamp: validated.timestamp ?? Date.now(),
+          };
 
           // VSCODE-03: drop messages with unknown types (message-type allowlist).
           if (!ALLOWED_INBOUND_TYPES.has(raw.type)) {
@@ -671,6 +698,33 @@ function shouldDispatch(key: string): boolean {
   return true;
 }
 
+// PR-4A (F-08): per-command rate limit. A counterparty that has obtained
+// the bridge token (e.g. a malicious local process reading the 0600 token
+// file) cannot flood `desktop:run-command` to spam Agent Mode windows or
+// cycle through allowed commands. Limit: 30 commands/min/key.
+const COMMAND_RATE_WINDOW_MS = 60_000;
+const COMMAND_RATE_LIMIT = 30;
+const _commandWindow = new Map<string, number[]>();
+
+function withinCommandRateLimit(key: string): boolean {
+  const now = Date.now();
+  const window = _commandWindow.get(key) ?? [];
+  // Drop entries older than the window.
+  const fresh = window.filter((t) => now - t < COMMAND_RATE_WINDOW_MS);
+  if (fresh.length >= COMMAND_RATE_LIMIT) {
+    _commandWindow.set(key, fresh);
+    return false;
+  }
+  fresh.push(now);
+  _commandWindow.set(key, fresh);
+  // Bound the map size — drop oldest keys past a generous ceiling.
+  if (_commandWindow.size > 256) {
+    const oldest = _commandWindow.keys().next().value;
+    if (oldest !== undefined && oldest !== key) _commandWindow.delete(oldest);
+  }
+  return true;
+}
+
 /**
  * Register built-in message handlers on the given bridge instance.
  * Returns the disposable so callers can track and dispose it explicitly.
@@ -723,6 +777,13 @@ function registerBridgeHandlersTracked(
         if (commandId) {
           if (!ALLOWED_BRIDGE_COMMANDS.has(commandId)) {
             console.warn(`[AGI Workforce Bridge] blocked disallowed command: ${commandId}`);
+            break;
+          }
+          // PR-4A (F-08): per-command rate limit on top of the 50ms debounce.
+          if (!withinCommandRateLimit(`run-command:${commandId}`)) {
+            console.warn(
+              `[AGI Workforce Bridge] rate-limit exceeded for ${commandId} — dropping invocation`,
+            );
             break;
           }
           // Security: never forward args from the WS payload — attacker-controlled
