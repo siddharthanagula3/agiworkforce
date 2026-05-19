@@ -84,6 +84,31 @@ const eslintConfig = defineConfig([
       'react/no-unescaped-entities': 'off',
     },
   },
+  // WEB-37 (audit 2026-05-19): forbid `dangerouslySetInnerHTML` in
+  // dynamic-content surfaces (features/**, components/**). JSON-LD in
+  // server-component layouts (app/**/layout.tsx and app/**/page.tsx) is
+  // exempt because the content is developer-authored at build time.
+  // The 5 legitimate dynamic sites (DOMPurify-sanitized artifact / mermaid
+  // / katex render, and static-const marketing showcase) carry per-line
+  // eslint-disable comments with WEB-37 justification.
+  {
+    files: ['features/**/*.{ts,tsx}', 'components/**/*.{ts,tsx}'],
+    ignores: [
+      'shared/utils/html-sanitizer.ts',
+      '**/*.{test,spec}.{ts,tsx}',
+      '**/__tests__/**',
+    ],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']",
+          message:
+            'dangerouslySetInnerHTML can introduce XSS. Sanitize via DOMPurify (@shared/utils/html-sanitizer) and add a per-line eslint-disable with WEB-37 justification, or render via JSX.',
+        },
+      ],
+    },
+  },
   // WEB-18 (audit 2026-05-19): forbid `auth.getSession()` in server-component
   // auth gates. getSession() returns unverified cached cookie data; auth gates
   // must use auth.getUser() which re-validates the JWT signature with the
