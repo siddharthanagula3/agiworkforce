@@ -25,14 +25,15 @@ import {
   getModelProviderInfo,
 } from '../features/model-picker/modelConstants';
 import { PROVIDER_DISPLAY, type AgentMode, type Effort } from '@agiworkforce/types';
-import { Config } from '../utils/config';
+// AUDIT-FIX: vscode-reorg
+import { Config } from '../platform/config';
 import { isSensitiveFile } from '../utils/pathSafety';
 import { parseWebviewMessage } from '../protocol/webviewMessages';
-import { resolveUsageMeter, formatManagedUsageLabel, daysUntilReset } from '../services/usageMeter';
-import { getTokenCounter } from '../services/tokenCounter';
-import { guardProviderSwitch } from '../services/providerSwitchGuard';
-import { resolveTier } from '../services/tierResolver';
-import { getWebviewContent, getNonce } from './sidebarProvider';
+import { resolveUsageMeter, formatManagedUsageLabel, daysUntilReset } from '../data/usageMeter';
+import { getTokenCounter } from '../data/tokenCounter';
+import { guardProviderSwitch } from '../integrations/providerSwitchGuard';
+import { resolveTier } from '../integrations/tierResolver';
+import { getWebviewContent, getNonce } from '../features/sidebar-webview/sidebarProvider';
 
 // ─── Panel singleton ──────────────────────────────────────────────────────────
 

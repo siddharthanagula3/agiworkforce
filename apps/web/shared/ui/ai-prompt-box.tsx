@@ -74,7 +74,7 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
   visualizerBars = 32,
 }) => {
   const [time, setTime] = React.useState(0);
-  const timerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Generate stable bar styles once per bar count using useMemo
   const barStyles = React.useMemo(() => generateBarStyles(visualizerBars), [visualizerBars]);

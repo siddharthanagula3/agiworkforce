@@ -304,7 +304,7 @@ export class SubscriptionService {
     }
 
     const stripe = new Stripe(stripeKey, {
-      apiVersion: STRIPE_API_VERSION as Stripe.LatestApiVersion,
+      apiVersion: STRIPE_API_VERSION,
     });
 
     try {

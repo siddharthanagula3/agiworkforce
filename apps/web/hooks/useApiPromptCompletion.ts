@@ -95,7 +95,7 @@ export function useApiPromptCompletion(
 
   // Refs for managing async operations
   const abortControllerRef = useRef<AbortController | null>(null);
-  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastInputRef = useRef<string>('');
   const cooldownUntilRef = useRef(0);
   // AUDIT-007-009 fix: Track mount state to prevent state updates after unmount

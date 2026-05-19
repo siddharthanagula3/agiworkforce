@@ -18,7 +18,7 @@ function getStripeClient(): Stripe {
     throw createError.serviceUnavailable('STRIPE_SECRET_KEY is not configured');
   }
   return new Stripe(key, {
-    apiVersion: STRIPE_API_VERSION as Stripe.LatestApiVersion,
+    apiVersion: STRIPE_API_VERSION,
   });
 }
 

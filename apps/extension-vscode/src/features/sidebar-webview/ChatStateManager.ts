@@ -32,16 +32,13 @@ import {
   type Effort,
   type UsageMeter,
 } from '@agiworkforce/types';
-import { Config } from '../../utils/config';
+// AUDIT-FIX: vscode-reorg
+import { Config } from '../../platform/config';
 import { isSensitiveFile } from '../../utils/pathSafety';
-import {
-  resolveUsageMeter,
-  formatManagedUsageLabel,
-  daysUntilReset,
-} from '../../services/usageMeter';
-import { getTokenCounter } from '../../services/tokenCounter';
-import { guardProviderSwitch } from '../../services/providerSwitchGuard';
-import { resolveTier } from '../../services/tierResolver';
+import { resolveUsageMeter, formatManagedUsageLabel, daysUntilReset } from '../../data/usageMeter';
+import { getTokenCounter } from '../../data/tokenCounter';
+import { guardProviderSwitch } from '../../integrations/providerSwitchGuard';
+import { resolveTier } from '../../integrations/tierResolver';
 
 // ─── Message types (shared protocol) ─────────────────────────────────────────
 

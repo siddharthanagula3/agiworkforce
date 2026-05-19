@@ -35,7 +35,7 @@ const stateChangeCallbacks: Set<StateChangeCallback> = new Set();
 
 // Cleanup
 let unsubscribeFromQueue: (() => void) | null = null;
-let syncRetryTimeout: NodeJS.Timeout | null = null;
+let syncRetryTimeout: ReturnType<typeof setTimeout> | null = null;
 let isInitialized = false;
 
 /**
@@ -123,7 +123,7 @@ function notifyStateChange(): void {
 /**
  * Debounce timer for sync
  */
-let syncDebounceTimer: NodeJS.Timeout | null = null;
+let syncDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 const SYNC_DEBOUNCE_MS = 2000; // Wait 2s after coming online before syncing
 
 /**

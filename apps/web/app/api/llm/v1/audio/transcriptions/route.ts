@@ -115,7 +115,7 @@ async function handleTranscriptions(request: NextRequest) {
 
   let formData: FormData;
   try {
-    formData = await request.formData();
+    formData = (await request.formData()) as unknown as FormData;
   } catch (err) {
     logger.error({ err }, 'Failed to parse transcription form data');
     return NextResponse.json(

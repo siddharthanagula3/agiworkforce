@@ -112,7 +112,7 @@ const DEFAULT_CONFIG: LockoutConfig = {
 class AccountLockoutService {
   private config: LockoutConfig;
   private inMemoryStore: Map<string, InMemoryLockoutEntry> = new Map();
-  private cleanupInterval: NodeJS.Timeout | null = null;
+  private cleanupInterval: ReturnType<typeof setTimeout> | null = null;
 
   constructor(config: Partial<LockoutConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };

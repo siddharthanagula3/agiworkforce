@@ -28,8 +28,9 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import WebSocket from 'ws';
-import { getExtensionVersion } from '../utils/version';
-import { parseBridgeInbound } from '../protocol/bridgeMessages';
+// AUDIT-FIX: vscode-reorg
+import { getExtensionVersion } from '../../platform/version';
+import { parseBridgeInbound } from '../../protocol/bridgeMessages';
 
 // ─── Bridge auth token (VSCODE-03) ──────────────────────────────────────────
 

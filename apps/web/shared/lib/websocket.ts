@@ -52,15 +52,15 @@ export class WebSocketClient {
   private handlers: WebSocketEventHandlers = {};
   private status: WebSocketStatus = 'disconnected';
   private reconnectAttempts = 0;
-  private reconnectTimer: NodeJS.Timeout | null = null;
-  private heartbeatTimer: NodeJS.Timeout | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
   private messageQueue: WebSocketMessage[] = [];
   private pendingMessages = new Map<
     string,
     {
       resolve: (value: unknown) => void;
       reject: (reason: unknown) => void;
-      timeout: NodeJS.Timeout;
+      timeout: ReturnType<typeof setTimeout>;
     }
   >();
 
