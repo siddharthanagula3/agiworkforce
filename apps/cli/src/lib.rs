@@ -22,9 +22,13 @@ pub mod context;
 pub mod conversations;
 pub mod daemon;
 pub mod errors;
-pub mod hooks;
+// hooks lives at features::hooks::hooks; re-exported here so all 20 call-sites
+// using `crate::hooks::*` continue to resolve unchanged.
+pub use features::hooks::hooks as hooks;
 pub mod markdown;
-pub mod lsp;
+// lsp lives at platform::lsp; re-exported here so all 4 call-sites
+// in features/exec/tools/task_registry.rs resolve unchanged.
+pub use platform::lsp;
 pub mod mcp;
 pub mod memory;
 #[allow(dead_code)] // FOUNDATION: cross-surface send-pipeline contract; CLI integrations wire through Sprint B (REPL drain + SDK headless)
@@ -33,7 +37,9 @@ pub mod models;
 pub mod output;
 pub mod output_styles;
 pub mod permissions;
-pub mod plan_mode;
+// plan_mode lives at features::plan::plan_mode; re-exported here so all
+// internal callers using `crate::plan_mode::*` continue to resolve unchanged.
+pub use features::plan::plan_mode;
 pub mod provider;
 pub mod repl;
 pub mod safety;
@@ -42,7 +48,9 @@ pub mod skills;
 pub mod subagent;
 pub mod subagent_v2;
 pub mod teams;
-pub mod tools;
+// tools lives at features::exec::tools; re-exported here so all 42 call-sites
+// using `crate::tools::*` continue to resolve unchanged.
+pub use features::exec::tools as tools;
 pub mod tui;
 pub mod voice;
 
@@ -57,12 +65,16 @@ pub mod model_catalog;
 pub mod models_cache;
 pub mod oauth;
 pub mod onboarding;
-pub mod plugins;
+// plugins lives at features::plugins::plugins; re-exported here so all
+// internal callers using `crate::plugins::*` continue to resolve unchanged.
+pub use features::plugins::plugins as plugins;
 pub mod project_registry;
 pub mod project_scope;
 pub mod review;
 pub mod routing;
-pub mod runtime;
+// runtime lives at platform::runtime; re-exported here so all 27 call-sites
+// using `crate::runtime::<submod>::*` continue to resolve unchanged.
+pub use platform::runtime;
 pub mod sandbox;
 pub mod shell_snapshot;
 pub mod sync;
@@ -78,16 +90,28 @@ pub mod tool_search;
 pub mod marketplace;
 #[allow(dead_code)] // PHASE2: SDK stdin-reader surface ships in Sprint B (headless mode hardening)
 pub mod sdk_io; // used by OneShotOutputMode::JsonEvents in lib.rs
+// policy lives at platform::policy; re-exported here so existing PHASE2 references
+// (and any future callers) using `crate::policy::*` continue to resolve unchanged.
 #[allow(dead_code)] // PHASE2: Gemini-style declarative TOML tool-rule eval not yet wired into agent
-pub mod policy; // workspace TOML policy engine
+pub use platform::policy;
 #[allow(dead_code)] // PHASE2: WS transport for a2a — wraps jsonrpc::handle_request over persistent WS connections
 pub mod a2a_ws;
 pub mod memory_pipeline; // used by agent/mod.rs + agent/chat.rs + agent/prompt.rs
 pub mod skill_learner; // used by agent/chat.rs session-end hook
 
-// A2A protocol — recently promoted from single-file to submodule; active Sprint B target.
+// A2A protocol — lives at features::a2a; re-exported here so 6 call-sites in
+// a2a_ws.rs, agent/mod.rs, and repl/mod.rs resolve unchanged.
 #[allow(dead_code)] // PHASE2: expose `agiworkforce a2a serve/discover/delegate`
-pub mod a2a;
+pub use features::a2a;
+
+// Phase 6 reorg — feature/platform/data layers.
+// features/ has a real mod.rs; submodules migrate here incrementally.
+// platform/ and data/ are placeholders (mod.rs exists, empty for now).
+pub mod features;
+#[allow(dead_code)]
+pub mod platform;
+#[allow(dead_code)]
+pub mod data;
 
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
