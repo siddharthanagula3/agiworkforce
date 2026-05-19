@@ -18,6 +18,16 @@
 
 const FRONTMATTER_FENCE = /^---\s*\r?\n([\s\S]*?)\r?\n---\s*\r?\n?/;
 
+// AUDIT-FIX: H-1 — prototype pollution guard.
+const RESERVED_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+export class FrontmatterError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FrontmatterError';
+  }
+}
+
 export interface ParsedFrontmatter {
   data: Record<string, unknown>;
   body: string;
@@ -36,12 +46,25 @@ export function parseFrontmatter(source: string): ParsedFrontmatter {
 
 function parseYamlBlock(text: string): Record<string, unknown> {
   const lines = text.split(/\r?\n/);
-  const root: Record<string, unknown> = {};
+  // AUDIT-FIX: H-1 — null-prototype containers + defineProperty assignment block setter-based pollution.
+  const root: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
 
   // Stack of (object, indent) so we can nest one level (sufficient for `requires:`).
   const stack: Array<{ obj: Record<string, unknown>; indent: number }> = [
     { obj: root, indent: -1 },
   ];
+
+  function assign(target: Record<string, unknown>, key: string, value: unknown): void {
+    if (RESERVED_KEYS.has(key)) {
+      throw new FrontmatterError('Reserved key: ' + key);
+    }
+    Object.defineProperty(target, key, {
+      value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
 
   // We accumulate list values for the most recent `key:` (no value on the line).
   let pendingListKey: string | null = null;
@@ -50,7 +73,7 @@ function parseYamlBlock(text: string): Record<string, unknown> {
 
   function flushList(): void {
     if (pendingListKey && pendingListTarget && pendingList.length > 0) {
-      pendingListTarget[pendingListKey] = [...pendingList];
+      assign(pendingListTarget, pendingListKey, [...pendingList]);
     }
     pendingListKey = null;
     pendingListTarget = null;
@@ -88,8 +111,8 @@ function parseYamlBlock(text: string): Record<string, unknown> {
 
     if (valueText === '') {
       // Either object or upcoming list. Probe next non-empty line context.
-      const childObj: Record<string, unknown> = {};
-      parent[key] = childObj;
+      const childObj: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+      assign(parent, key, childObj);
       stack.push({ obj: childObj, indent });
       // Also possibly a list — if next non-empty line is `- ...`, listify here.
       pendingListKey = key;
@@ -100,11 +123,11 @@ function parseYamlBlock(text: string): Record<string, unknown> {
     if (valueText.startsWith('[') && valueText.endsWith(']')) {
       const inner = valueText.slice(1, -1).trim();
       const parts = inner ? inner.split(',').map((s) => unquote(s.trim())) : [];
-      parent[key] = parts;
+      assign(parent, key, parts);
       continue;
     }
 
-    parent[key] = parseScalar(valueText);
+    assign(parent, key, parseScalar(valueText));
   }
 
   flushList();

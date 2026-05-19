@@ -15,7 +15,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { parseFrontmatter } from './frontmatter';
+import { FrontmatterError, parseFrontmatter } from './frontmatter';
 import type { Skill, SkillLayer, SkillMetadata, SkillSource } from './types';
 
 function asString(value: unknown): string | undefined {
@@ -70,7 +70,18 @@ async function loadSkillFile(
   } catch {
     return null;
   }
-  const { data, body } = parseFrontmatter(raw);
+  let data: Record<string, unknown>;
+  let body: string;
+  try {
+    ({ data, body } = parseFrontmatter(raw));
+  } catch (err) {
+    // AUDIT-FIX: H-1 — a poisoned skill (e.g. reserved-key prototype-pollution
+    // attempt) must not crash the whole skill-load; skip and continue.
+    if (err instanceof FrontmatterError) {
+      return null;
+    }
+    throw err;
+  }
   const name = asString(data['name']) ?? fallbackName;
   const description = asString(data['description']) ?? `Skill ${name} loaded from ${filePath}`;
   return {

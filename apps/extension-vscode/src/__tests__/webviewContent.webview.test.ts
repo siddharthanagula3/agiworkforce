@@ -11,7 +11,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { getWebviewContent } from '../providers/sidebar/webviewContent';
+// AUDIT-FIX: BUILD-BLOCKER
+import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
 
 // Build a minimal stub for the `webview` parameter that getWebviewContent
 // requires. We only need `cspSource` and `asWebviewUri` to return Uri-like.

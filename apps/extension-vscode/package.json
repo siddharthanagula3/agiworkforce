@@ -10,7 +10,7 @@
     "url": "https://github.com/agiworkforce/agiworkforce"
   },
   "engines": {
-    "vscode": "^1.110.0"
+    "vscode": "^1.95.0"
   },
   "preview": true,
   "pricing": "Free",
@@ -859,7 +859,7 @@
     "@types/dompurify": "^3.0.5",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^22.19.15",
-    "@types/vscode": "^1.110.0",
+    "@types/vscode": "^1.95.0",
     "@types/ws": "^8.18.0",
     "@typescript-eslint/eslint-plugin": "^8.57.2",
     "@typescript-eslint/parser": "^8.57.2",

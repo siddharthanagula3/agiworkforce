@@ -45,6 +45,16 @@ import { closeProfile, openProfile } from './profile';
 import { clearSnapshotRefs, resolveRef, takeSnapshot } from './snapshot';
 import type { BrowserAction, BrowserToolResult, BrowserSnapshot } from './types';
 
+// AUDIT-FIX: H-4 — typed error for refused navigation schemes.
+export class BrowserToolError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'BrowserToolError';
+  }
+}
+
+const ALLOWED_NAVIGATE_SCHEMES = new Set(['http:', 'https:']);
+
 export type {
   BrowserAction,
   BrowserToolResult,
@@ -95,6 +105,16 @@ export async function runBrowserAction(
         const page = await openProfile(profileName);
         clearSnapshotRefs(profileName);
         const waitUntil = action.waitFor ?? 'load';
+        // AUDIT-FIX: H-4 — refuse file:, javascript:, data:, chrome:, about:, view-source:, etc.
+        let parsedScheme: string;
+        try {
+          parsedScheme = new URL(action.url).protocol;
+        } catch {
+          throw new BrowserToolError('Refusing to navigate to malformed URL');
+        }
+        if (!ALLOWED_NAVIGATE_SCHEMES.has(parsedScheme)) {
+          throw new BrowserToolError('Refusing to navigate to non-HTTPS scheme: ' + parsedScheme);
+        }
         await page.goto(action.url, { waitUntil });
         const url = page.url();
         const title = await page.title().catch(() => '');

@@ -43,7 +43,20 @@ export const ChatCompletionRequestSchema = z.object({
             text: z.string().optional(),
             image_url: z
               .object({
-                url: z.string(),
+                // AUDIT-FIX: C-3 — schema-level SSRF gate (defense-in-depth, runtime check still at line ~321).
+                url: z.string().superRefine((value, ctx) => {
+                  try {
+                    validateUserImageUrl(value);
+                  } catch (err) {
+                    ctx.addIssue({
+                      code: z.ZodIssueCode.custom,
+                      message:
+                        err instanceof EgressPolicyError
+                          ? 'image_url blocked by egress policy'
+                          : 'invalid image_url',
+                    });
+                  }
+                }),
                 detail: z.enum(['auto', 'low', 'high']).optional(),
               })
               .optional(),
