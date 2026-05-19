@@ -1,0 +1,33 @@
+Phase 6 CLI — a2a/ caller enumeration
+Generated: 2026-05-18 before pilot 8 move
+
+=== RISK ASSESSMENT ===
+Wildcard a2a imports:                 NONE
+Exhaustive match on a2a types:        NONE
+Declared dead_code in lib.rs:         YES (#[allow(dead_code)] PHASE2)
+Live callers (not zero as assumed):   3 files — PHASE2 but wired
+
+=== CALL-SITES ===
+  a2a_ws.rs:32    — use crate::a2a::jsonrpc::{handle_request, A2aRequest, AgentCard, PeerRegistry}
+  a2a_ws.rs:77    — crate::a2a::constant_time_eq_str(provided, expected)
+  agent/mod.rs:264 — crate::a2a::AgentCard (return type)
+  agent/mod.rs:275 — crate::a2a::AgentCard { ... }
+  agent/mod.rs:276 — crate::a2a::generate_agent_id()
+  repl/mod.rs:344  — crate::a2a::handle_a2a_command(...)
+
+NOTE: a2a_ws.rs is itself also PHASE2 dead_code (#[allow(dead_code)] in lib.rs).
+a2a_ws.rs is NOT being moved in pilot 8 — it stays at src/a2a_ws.rs and
+its `crate::a2a::` calls resolve via the lib.rs re-export.
+
+=== PUBLIC PATHS USED ===
+  crate::a2a::jsonrpc::*        — (A2aRequest, AgentCard, PeerRegistry, handle_request)
+  crate::a2a::constant_time_eq_str — fn in a2a/security.rs, re-exported via a2a/mod.rs
+  crate::a2a::AgentCard         — re-export from a2a/mod.rs
+  crate::a2a::generate_agent_id — fn in a2a/mod.rs
+  crate::a2a::handle_a2a_command — fn in a2a/mod.rs
+
+=== CONCLUSION ===
+6 external call-sites across 3 files. All crate::a2a:: prefixed. Re-export
+`pub use features::a2a` in lib.rs preserves all paths. a2a_ws.rs stays at
+top-level; its callers resolve via the same re-export. Zero downstream
+source edits required.
