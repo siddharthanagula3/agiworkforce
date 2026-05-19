@@ -168,16 +168,18 @@ export function truncatePageText(raw: string, maxChars = 30_000): string {
   return collapsed.length <= maxChars ? collapsed : collapsed.slice(0, maxChars);
 }
 
-// P1-14: credit-card pattern — 13–19 digit sequences with optional separators
-const CC_PATTERN = /\b(?:\d[ \t-]?){13,19}\b/g;
-
-// P1-14: password-field-like context — "password" or "passwd" label
-const PASSWORD_LINE_PATTERN = /^.*\bpassw(?:or)?d\b.*$/gim;
-
 /**
- * Redact credit-card numbers and password-field lines from page text before
- * embedding it in a prompt.
+ * Redact credit-card numbers, password-field lines, AND all API-key /
+ * token patterns from page text before embedding it in an LLM prompt.
+ *
+ * SECURITY (H-05 audit 2026-05-19): this used to live as a local two-regex
+ * helper (CC + password lines only) and missed JWT, AWS, GitHub, Anthropic,
+ * Google, Stripe, Groq, XAI, and generic bearer-token shapes. Page text
+ * sent to the LLM frequently contains those (DevTools panels, README files,
+ * pasted curl commands). We now route through the shared
+ * `redactSecrets` from `@agiworkforce/utils`, which has the full pattern
+ * set (~14 patterns) and is mirrored in the desktop log redaction. Adding
+ * a new pattern? Edit `packages/utils/src/logger.ts` — both surfaces inherit
+ * the change.
  */
-export function redactSensitiveText(text: string): string {
-  return text.replace(CC_PATTERN, '[REDACTED]').replace(PASSWORD_LINE_PATTERN, '[REDACTED LINE]');
-}
+export { redactSecrets as redactSensitiveText } from '@agiworkforce/utils';

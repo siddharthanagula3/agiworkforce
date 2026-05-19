@@ -750,6 +750,14 @@ export interface SavedShortcut {
   name: string;
   actions: RunPageAction[];
   createdAt: number;
+  /**
+   * SECURITY (C-03 audit 2026-05-19): origin that created this shortcut.
+   * Sentinel `__extension_page__` for shortcuts saved from the side-panel UI.
+   * Real URL origins (e.g. `https://example.com`) for any future
+   * content-script-callable variant. Fire-time replay re-checks this against
+   * the current `agi_site_allowlist` and auto-deletes stale records.
+   */
+  createdByOrigin: string;
   url?: string;
   prompt?: string;
   startUrl?: string;
@@ -800,6 +808,14 @@ export interface ScheduledTask {
   prompt?: string;
   createdAt: number;
   lastRun?: number;
+  /**
+   * SECURITY (C-02 audit 2026-05-19): origin that created this task.
+   * Sentinel `__extension_page__` for tasks created from the side-panel
+   * Workflows tab. Real URL origins for any future content-script-callable
+   * variant. `executeScheduledTask` re-checks at alarm-fire time and
+   * auto-deletes tasks whose origin is no longer on `agi_site_allowlist`.
+   */
+  createdByOrigin: string;
 }
 
 export interface CreateScheduledTaskMessage extends BaseMessage {
@@ -964,6 +980,14 @@ export interface AutomationState {
   isRecording: boolean;
   recordedActions: RecordedAction[];
   connectionStatus: ConnectionStatus;
+  /**
+   * SECURITY (C-05 audit 2026-05-19): recorder defaults to selector-only.
+   * Set to true via SET_RECORDING_VALUE_CAPTURE (extension-page-only) when
+   * the user opts in. Even when true, password / cc-* / one-time-code
+   * fields are redacted, and `redactSecrets` runs over remaining values
+   * to catch API keys mid-stream.
+   */
+  captureValues: boolean;
 }
 
 export interface RecordedAction {
