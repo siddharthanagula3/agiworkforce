@@ -3,7 +3,7 @@ import { DollarSign } from 'lucide-react';
 
 import { invoke, isTauri } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/ui/Tooltip';
 
 /**
  * FIX-007 (Sprint 3): per-user daily LLM-spend tracker. Polls the

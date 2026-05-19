@@ -1,7 +1,3 @@
-import * as CollapsiblePrimitive from '@radix-ui/react-collapsible';
-
-const Collapsible = CollapsiblePrimitive.Root;
-const CollapsibleTrigger = CollapsiblePrimitive.CollapsibleTrigger;
-const CollapsibleContent = CollapsiblePrimitive.CollapsibleContent;
-
-export { Collapsible, CollapsibleTrigger, CollapsibleContent };
+// Legacy stub — component moved to src/ui/Collapsible.tsx in Phase 5 reorg.
+// DO NOT add code here. This file exists only so existing '../ui/Collapsible' imports resolve.
+export * from '../../ui/Collapsible';
