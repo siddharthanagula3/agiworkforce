@@ -1,0 +1,41 @@
+[
+  {
+    "old_path": "apps/mobile/services/waitlist.ts",
+    "new_path": "apps/mobile/src/features/waitlist/service.ts",
+    "barrel_type": "re-export",
+    "phase_added": 3,
+    "phase_added_branch": "claude/reorg-mobile-pilot-2026-05-18",
+    "phase_added_commit": "c18f16d74ae8b46d693105121aa4d28303420044",
+    "consumers_still_using_old_path": [
+      "apps/mobile/app/(app)/chat/[id].tsx:38",
+      "apps/mobile/__tests__/waitlist.test.ts:49"
+    ],
+    "ready_for_removal_when": "all consumers migrated OR phase 7"
+  },
+  {
+    "old_path": "apps/mobile/stores/waitlistStore.ts",
+    "new_path": "apps/mobile/src/features/waitlist/store.ts",
+    "barrel_type": "re-export",
+    "phase_added": 3,
+    "phase_added_branch": "claude/reorg-mobile-pilot-2026-05-18",
+    "phase_added_commit": "c18f16d74ae8b46d693105121aa4d28303420044",
+    "consumers_still_using_old_path": [
+      "apps/mobile/app/(app)/chat/[id].tsx:37",
+      "apps/mobile/__tests__/waitlist.test.ts:50"
+    ],
+    "ready_for_removal_when": "all consumers migrated OR phase 7"
+  },
+  {
+    "old_path": "apps/mobile/components/waitlist/CloudWaitlistSheet.tsx",
+    "new_path": "apps/mobile/src/features/waitlist/CloudWaitlistSheet.tsx",
+    "barrel_type": "re-export",
+    "phase_added": 3,
+    "phase_added_branch": "claude/reorg-mobile-pilot-2026-05-18",
+    "phase_added_commit": "c18f16d74ae8b46d693105121aa4d28303420044",
+    "consumers_still_using_old_path": [
+      "apps/mobile/app/(app)/chat/[id].tsx:32",
+      "apps/mobile/__tests__/waitlist-sheet-rank.test.tsx:37"
+    ],
+    "ready_for_removal_when": "all consumers migrated OR phase 7"
+  }
+]

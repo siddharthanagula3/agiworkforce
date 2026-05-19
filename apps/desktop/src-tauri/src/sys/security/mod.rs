@@ -13,6 +13,7 @@ pub mod command_validator;
 pub mod dispatch_hmac;
 pub mod dm_protection;
 pub mod encryption;
+pub mod env_filter;
 pub mod guardrails;
 pub mod log_redaction;
 pub mod machine_key;

@@ -30,6 +30,8 @@ jest.mock('react-native-reanimated', () => {
     },
     FadeIn: { duration: () => ({ delay: () => ({}) }) },
     FadeInDown: { duration: () => ({ delay: () => ({}) }) },
+    // useReducedMotion was added to ChatEmptyState.tsx — stub it for tests.
+    useReducedMotion: () => false,
   };
 });
 

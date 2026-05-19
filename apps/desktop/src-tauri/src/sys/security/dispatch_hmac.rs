@@ -72,9 +72,19 @@ pub const MAX_MESSAGE_AGE_MS: i64 = 30_000;
 pub const NONCE_CACHE_TTL_MS: i64 = 60_000;
 
 /// ISO 8601 UTC date after which unsigned messages must be rejected.
-/// Mirrors `apps/mobile/lib/dispatchHmac.ts:DISPATCH_HMAC_REQUIRED_AFTER`.
-pub const DISPATCH_HMAC_REQUIRED_AFTER: &str = "2026-06-05T00:00:00.000Z";
-const DISPATCH_HMAC_REQUIRED_AFTER_MS: i64 = 1_780_185_600_000;
+/// Mirrors `packages/types/src/dispatch.ts:DISPATCH_HMAC_REQUIRED_AFTER`
+/// (which is the canonical source — `apps/mobile/lib/dispatchHmac.ts` and
+/// `apps/desktop/src/services/dispatch.ts` import from there). All four
+/// surfaces must move together.
+///
+/// FIX-F-DISPATCH-DESYNC (audit 2026-05-19): the previous value had
+/// string="2026-06-05" but ms=1_780_185_600_000 which actually maps to
+/// 2026-05-31 — a 5-day silent desync where the real cutoff was earlier
+/// than the documented one. The string and ms are now both 2026-05-26,
+/// pulled forward to close the unsigned-acceptance window. A unit test
+/// in `fix_dispatch_hmac_cutoff_alignment_tests` now pins the alignment.
+pub const DISPATCH_HMAC_REQUIRED_AFTER: &str = "2026-05-26T00:00:00.000Z";
+const DISPATCH_HMAC_REQUIRED_AFTER_MS: i64 = 1_779_753_600_000;
 
 /// HKDF info parameter — must match the mobile peer.
 const HKDF_INFO: &[u8] = b"dispatch-hmac-v2";
@@ -543,7 +553,10 @@ mod tests {
         let mut cache = NonceCache::new();
         let now = 1_000_000_000_000 + 31_000;
         let result = verify_with_clock(&envelope, &key, &mut cache, now);
-        assert_eq!(result, Err(VerifyError::TimestampExpired(MAX_MESSAGE_AGE_MS)));
+        assert_eq!(
+            result,
+            Err(VerifyError::TimestampExpired(MAX_MESSAGE_AGE_MS))
+        );
     }
 
     #[test]
@@ -561,7 +574,10 @@ mod tests {
         // 31s before envelope ts → message claims to be from 31s in the future.
         let now = 1_700_000_000_000 - 31_000;
         let result = verify_with_clock(&envelope, &key, &mut cache, now);
-        assert_eq!(result, Err(VerifyError::TimestampExpired(MAX_MESSAGE_AGE_MS)));
+        assert_eq!(
+            result,
+            Err(VerifyError::TimestampExpired(MAX_MESSAGE_AGE_MS))
+        );
     }
 
     #[test]
@@ -711,5 +727,35 @@ mod tests {
         .unwrap();
         let s = canonical_signing_input("n", &payload, 1, "t");
         assert!(s.contains("\"payload\":{\"z\":1,\"a\":2}"));
+    }
+}
+
+#[cfg(test)]
+mod fix_dispatch_hmac_cutoff_alignment_tests {
+    //! FIX-F-DISPATCH-DESYNC (audit 2026-05-19): pin that the
+    //! `DISPATCH_HMAC_REQUIRED_AFTER` ISO 8601 string and the
+    //! `DISPATCH_HMAC_REQUIRED_AFTER_MS` integer constant agree on the same
+    //! point in time. A previous version had string="2026-06-05" but
+    //! ms=1_780_185_600_000 which actually maps to 2026-05-31 — a 5-day
+    //! silent desync where the real cutoff was earlier than the documented
+    //! one. This regression test catches any future drift between the two
+    //! representations at `cargo test` time.
+    use super::{DISPATCH_HMAC_REQUIRED_AFTER, DISPATCH_HMAC_REQUIRED_AFTER_MS};
+    use chrono::{DateTime, Utc};
+
+    #[test]
+    fn string_and_ms_constants_agree_on_the_same_instant() {
+        let parsed: DateTime<Utc> = DISPATCH_HMAC_REQUIRED_AFTER
+            .parse()
+            .expect("DISPATCH_HMAC_REQUIRED_AFTER must be a valid RFC 3339 / ISO 8601 UTC date");
+        assert_eq!(
+            parsed.timestamp_millis(),
+            DISPATCH_HMAC_REQUIRED_AFTER_MS,
+            "DISPATCH_HMAC_REQUIRED_AFTER ({}) parses to {}ms but the MS constant says {}ms — \
+             update both together",
+            DISPATCH_HMAC_REQUIRED_AFTER,
+            parsed.timestamp_millis(),
+            DISPATCH_HMAC_REQUIRED_AFTER_MS
+        );
     }
 }

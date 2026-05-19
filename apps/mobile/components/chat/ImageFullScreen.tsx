@@ -142,6 +142,7 @@ export function ImageFullScreen({ imageUrl, prompt, visible, onClose }: ImageFul
       transparent
       onRequestClose={handleClose}
       statusBarTranslucent
+      accessibilityViewIsModal
     >
       <GestureHandlerRootView style={{ flex: 1 }}>
         <View

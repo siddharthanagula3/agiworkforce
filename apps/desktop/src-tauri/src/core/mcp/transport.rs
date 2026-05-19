@@ -438,41 +438,14 @@ impl StdioTransport {
         //   - Shell startup injection (BASH_ENV, ENV, ZDOTDIR)
         //   - Information disclosure in debug builds (NODE_DEBUG, RUST_LOG)
         //   - Electron/Node.js sandbox escapes (ELECTRON_RUN_AS_NODE)
-        const BLOCKED_ENV_VARS: &[&str] = &[
-            // Shared library injection (Linux / macOS)
-            "LD_PRELOAD",
-            "LD_LIBRARY_PATH",
-            "LD_AUDIT",
-            "DYLD_INSERT_LIBRARIES",
-            "DYLD_LIBRARY_PATH",
-            "DYLD_FRAMEWORK_PATH",
-            // Node.js / Electron
-            "NODE_OPTIONS",
-            "NODE_EXTRA_CA_CERTS",
-            "NODE_DEBUG",
-            "ELECTRON_RUN_AS_NODE",
-            // Python
-            "PYTHONSTARTUP",
-            "PYTHONPATH",
-            // Ruby / Perl
-            "RUBYOPT",
-            "PERL5OPT",
-            // JVM code injection
-            "JAVA_TOOL_OPTIONS",
-            "_JAVA_OPTIONS",
-            // Shell startup injection
-            "BASH_ENV",
-            "ENV",
-            "ZDOTDIR",
-            // Info disclosure in debug builds
-            "RUST_LOG",
-        ];
+        // BATCH-5 (audit 2026-05-19): the inline `BLOCKED_ENV_VARS` constant
+        // formerly lived here. It moved to `crate::sys::security::env_filter`
+        // so this site, `sys/commands/code_execution`, and `core/agi/sandbox`
+        // all consume the same canonical list (strict superset of the prior
+        // three lists).
         let filtered_env: std::collections::HashMap<String, String> = env
             .iter()
-            .filter(|(key, _)| {
-                let upper = key.to_uppercase();
-                !BLOCKED_ENV_VARS.iter().any(|blocked| upper == *blocked)
-            })
+            .filter(|(key, _)| !crate::sys::security::env_filter::is_blocked_env_var(key))
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
 

@@ -40,7 +40,7 @@ import { invoke } from '../lib/tauri-mock';
 // ---------------------------------------------------------------------------
 
 /** ISO date after which unsigned messages are hard-rejected by Rust. */
-export const DISPATCH_HMAC_REQUIRED_AFTER = '2026-06-05T00:00:00.000Z';
+export const DISPATCH_HMAC_REQUIRED_AFTER = '2026-05-26T00:00:00.000Z';
 const DISPATCH_HMAC_REQUIRED_AFTER_MS = new Date(DISPATCH_HMAC_REQUIRED_AFTER).getTime();
 
 /** Minimum semantic version string that supports HMAC signing on mobile. */
