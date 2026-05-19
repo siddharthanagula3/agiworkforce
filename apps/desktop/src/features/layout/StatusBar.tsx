@@ -13,7 +13,7 @@ import {
 import { cn } from '../../lib/utils';
 import { formatTokens } from '../../utils/tokenCount';
 import { PROVIDER_LABELS } from '../../constants/llm';
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/ui/Tooltip';
 import type { Provider } from '../../stores/settingsStore';
 import { BudgetStatusWidget } from './BudgetStatusWidget';
 

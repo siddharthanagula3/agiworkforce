@@ -6,7 +6,7 @@ import { Label } from '../ui/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 import { useUpdater } from '../../hooks/useUpdater';
 import { useUpdaterStore } from '../../stores/updaterStore';
-import { UpdateDialog } from '../Updates/UpdateDialog';
+import { UpdateDialog } from '../../features/updates';
 
 export function UpdateSettings() {
   const {
