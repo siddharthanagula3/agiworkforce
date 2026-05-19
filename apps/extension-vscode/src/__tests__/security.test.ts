@@ -265,7 +265,7 @@ describe('VSCODE-02 — agent mode trust guard (prompt injection → auto file w
 
 // ─── VSCODE-03: bridge token — readBridgeToken unit tests ────────────────────
 
-import { readBridgeToken } from '../services/desktopBridge';
+import { readBridgeToken } from '../features/desktop-bridge/desktopBridge';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -297,7 +297,7 @@ describe('VSCODE-03 — readBridgeToken (bridge auth token loading)', () => {
   });
 
   it('ALLOWED_INBOUND_TYPES blocks unknown type', async () => {
-    const { ALLOWED_INBOUND_TYPES } = await import('../services/desktopBridge');
+    const { ALLOWED_INBOUND_TYPES } = await import('../features/desktop-bridge/desktopBridge');
     expect(ALLOWED_INBOUND_TYPES.has('desktop:show-message')).toBe(true);
     expect(ALLOWED_INBOUND_TYPES.has('desktop:run-command')).toBe(true);
     expect(ALLOWED_INBOUND_TYPES.has('auth_ok')).toBe(true);
@@ -307,7 +307,7 @@ describe('VSCODE-03 — readBridgeToken (bridge auth token loading)', () => {
   });
 
   it('ALLOWED_OUTBOUND_TYPES blocks unknown type', async () => {
-    const { ALLOWED_OUTBOUND_TYPES } = await import('../services/desktopBridge');
+    const { ALLOWED_OUTBOUND_TYPES } = await import('../features/desktop-bridge/desktopBridge');
     expect(ALLOWED_OUTBOUND_TYPES.has('vscode:connected')).toBe(true);
     expect(ALLOWED_OUTBOUND_TYPES.has('auth')).toBe(true);
     // Unknown types must NOT be in the set
