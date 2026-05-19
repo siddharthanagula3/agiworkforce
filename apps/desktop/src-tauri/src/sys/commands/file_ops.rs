@@ -272,7 +272,12 @@ fn is_path_allowed(canonical_path: &str, allowed_dirs: &[PathBuf]) -> bool {
     allowed_dirs.iter().any(|dir| {
         let dir_str = dir.to_string_lossy();
         let dir_normalized = dir_str.replace('\\', "/");
-        canonical_normalized.starts_with(&dir_normalized)
+        // FIX-F3 (audit 2026-05-19): the previous `starts_with(&dir_normalized)`
+        // matched `/Users/foo` against `/Users/foobar` (prefix lookalike).
+        // Trim trailing separator and require exact-match OR subpath-after-sep.
+        let dir_trimmed = dir_normalized.trim_end_matches('/');
+        canonical_normalized == dir_trimmed
+            || canonical_normalized.starts_with(&format!("{}/", dir_trimmed))
     })
 }
 
@@ -1495,6 +1500,55 @@ mod tests {
         assert!(is_blacklisted_path("C:\\Program Files\\app\\file.exe"));
         assert!(is_blacklisted_path("/home/user/.ssh/id_rsa"));
         assert!(!is_blacklisted_path("C:\\Users\\user\\Documents\\file.txt"));
+    }
+}
+
+#[cfg(test)]
+mod fix_f3_path_allowed_prefix_tests {
+    //! FIX-F3 (audit 2026-05-19): pin the canonical-path containment check
+    //! so a directory `/Users/foo` does NOT also allow `/Users/foobar/...`.
+    //! Prefix-vs-component bug fixed in `is_path_allowed`.
+    use super::is_path_allowed;
+    use std::path::PathBuf;
+
+    #[test]
+    fn allows_exact_match_to_dir_root() {
+        let allowed = vec![PathBuf::from("/Users/foo")];
+        assert!(is_path_allowed("/Users/foo", &allowed));
+    }
+
+    #[test]
+    fn allows_subpath_under_allowed_dir() {
+        let allowed = vec![PathBuf::from("/Users/foo")];
+        assert!(is_path_allowed("/Users/foo/bar/baz.txt", &allowed));
+    }
+
+    #[test]
+    fn rejects_prefix_lookalike_siblings() {
+        let allowed = vec![PathBuf::from("/Users/foo")];
+        assert!(!is_path_allowed("/Users/foobar/secret.txt", &allowed));
+        assert!(!is_path_allowed("/Users/foo-evil/x.txt", &allowed));
+        assert!(!is_path_allowed("/Users/foo.bak/y.txt", &allowed));
+    }
+
+    #[test]
+    fn handles_trailing_separator_in_allowed_dir() {
+        let allowed = vec![PathBuf::from("/Users/foo/")];
+        assert!(is_path_allowed("/Users/foo/file.txt", &allowed));
+        assert!(!is_path_allowed("/Users/foobar/file.txt", &allowed));
+    }
+
+    #[test]
+    fn rejects_when_no_dirs_allowed() {
+        let allowed: Vec<PathBuf> = Vec::new();
+        assert!(!is_path_allowed("/Users/foo/file.txt", &allowed));
+    }
+
+    #[test]
+    fn windows_backslash_paths_normalized() {
+        let allowed = vec![PathBuf::from("C:\\Users\\foo")];
+        assert!(is_path_allowed("C:\\Users\\foo\\file.txt", &allowed));
+        assert!(!is_path_allowed("C:\\Users\\foobar\\file.txt", &allowed));
     }
 }
 
