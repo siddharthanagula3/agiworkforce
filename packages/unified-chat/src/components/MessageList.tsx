@@ -1,11 +1,17 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { useChatStore } from '../stores/chatStore';
 import { MessageBubble } from './MessageBubble';
+import { ProvenanceFooter } from './ProvenanceFooter';
 import type { Artifact } from '../lib/types';
 
 interface MessageListProps {
   conversationId: string;
   onArtifactClick?: (artifact: Artifact) => void;
+  /**
+   * When true (default), assistant messages render a `ProvenanceFooter`
+   * below their bubble. Pass `false` to suppress.
+   */
+  showProvenanceFooter?: boolean;
 }
 
 /**
@@ -16,7 +22,11 @@ interface MessageListProps {
  */
 const STICK_TO_BOTTOM_THRESHOLD_PX = 120;
 
-export function MessageList({ conversationId, onArtifactClick }: MessageListProps) {
+export function MessageList({
+  conversationId,
+  onArtifactClick,
+  showProvenanceFooter = true,
+}: MessageListProps) {
   const messages = useChatStore((s) => s.messagesByConversation[conversationId] ?? []);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -101,13 +111,16 @@ export function MessageList({ conversationId, onArtifactClick }: MessageListProp
         {messages.map((msg, idx) => (
           <div
             key={msg.id}
-            className={`mb-4 ${msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'}`}
+            className={`mb-4 ${msg.role === 'user' ? 'flex justify-end' : 'flex flex-col items-start'}`}
           >
             <MessageBubble
               message={msg}
               isLast={idx === messages.length - 1}
               onArtifactClick={onArtifactClick}
             />
+            {showProvenanceFooter && msg.role === 'assistant' && !msg.isStreaming && (
+              <ProvenanceFooter message={msg} />
+            )}
           </div>
         ))}
         <div ref={bottomRef} />

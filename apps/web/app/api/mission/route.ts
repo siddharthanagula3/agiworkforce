@@ -121,7 +121,7 @@ function extractChatResponse(text: string): string {
  * Build the system prompt for mission decomposition.
  */
 function buildMissionSystemPrompt(): string {
-  return `You are an AI Mission Controller for AGI Workforce. Your role is to decompose complex user goals into structured task plans that can be executed by specialized AI agents.
+  return `You are an AI Mission Controller for AGI. Your role is to decompose complex user goals into structured task plans that can be executed by specialized AI agents.
 
 When a user provides a mission:
 1. Analyze the goal and break it into concrete, actionable tasks

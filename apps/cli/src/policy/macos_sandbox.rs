@@ -8,7 +8,7 @@
 //! Ported clean-room from gemini-cli's MacOsSandboxManager (Apache 2.0).
 //! Behind `cfg(target_os = "macos")`.
 
-#![cfg(target_os = "macos")]
+// cfg(target_os = "macos") declared at policy/mod.rs module gate
 #![allow(dead_code)]
 
 use std::path::PathBuf;

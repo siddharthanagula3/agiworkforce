@@ -122,7 +122,7 @@ const Header: React.FC = () => {
               🤖
             </motion.div>
             <span className="bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-xl font-bold text-transparent">
-              AGI Workforce
+              AGI
             </span>
           </Link>
 

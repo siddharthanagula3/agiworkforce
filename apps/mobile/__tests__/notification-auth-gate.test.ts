@@ -117,7 +117,7 @@ describe('handleNotificationResponse — auth gate', () => {
     // login. We assert the route equals login.
     expect(mockRouterPush).toHaveBeenCalled();
     const lastCall = mockRouterPush.mock.calls[mockRouterPush.mock.calls.length - 1];
-    expect(lastCall![0]).toBe('/(auth)/login');
+    expect(lastCall![0]).toEqual({ pathname: '/(auth)/login' });
   });
 
   it('routes to /(auth)/login when session is explicitly cleared after sign-out', () => {
@@ -134,7 +134,7 @@ describe('handleNotificationResponse — auth gate', () => {
     } as any);
     setCurrentSession(null);
     fireNotification({ type: 'agent_failed', agentId: 'agent-1' });
-    expect(mockRouterPush).toHaveBeenCalledWith('/(auth)/login');
+    expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(auth)/login' });
   });
 
   it('routes to /(app)/* when a session is present', () => {
@@ -149,7 +149,7 @@ describe('handleNotificationResponse — auth gate', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
     fireNotification({ type: 'companion_connected' });
-    expect(mockRouterPush).toHaveBeenCalledWith('/(app)/companion');
+    expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)/companion' });
   });
 
   it('does NOT navigate when notification has no data', () => {

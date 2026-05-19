@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Desktop — The native AGI Workforce app | AGI Workforce',
+  title: 'Desktop — The native AGI app | AGI',
   description:
     'A small Rust binary that runs every provider natively. Local mode runs Ollama or LM Studio without ever touching the cloud. Cloud mode brings BYOK and Realtime cross-device sync.',
   alternates: { canonical: 'https://agiworkforce.com/desktop' },

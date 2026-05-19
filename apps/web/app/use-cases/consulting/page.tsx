@@ -4,9 +4,9 @@ import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Consulting firms — AGI Workforce',
+  title: 'Consulting firms — AGI',
   description:
-    'How consulting practices use AGI Workforce: research, deliverables, data analysis, and reporting at scale across multiple AI providers.',
+    'How consulting practices use AGI: research, deliverables, data analysis, and reporting at scale across multiple AI providers.',
   alternates: { canonical: 'https://agiworkforce.com/use-cases/consulting' },
 };
 

@@ -107,8 +107,8 @@ const ApiReferencePage: React.FC = () => {
   return (
     <>
       <SEOHead
-        title="API Reference | AGI Workforce"
-        description="Complete API documentation for integrating AGI Workforce into your applications."
+        title="API Reference | AGI"
+        description="Complete API documentation for integrating AGI into your applications."
         keywords={['API', 'documentation', 'integration', 'REST API', 'developer']}
       />
 
@@ -127,8 +127,8 @@ const ApiReferencePage: React.FC = () => {
               </Badge>
               <h1 className="mb-6 text-5xl font-bold tracking-tight md:text-6xl">API Reference</h1>
               <p className="mx-auto mb-8 max-w-2xl text-xl text-muted-foreground">
-                Integrate AGI Workforce into your applications with our comprehensive REST API.
-                Build powerful AI-powered features with ease.
+                Integrate AGI into your applications with our comprehensive REST API. Build powerful
+                AI-powered features with ease.
               </p>
               <div className="flex flex-wrap justify-center gap-4">
                 <a

@@ -270,7 +270,7 @@ pub fn fast_completion_model(provider: &str) -> String {
                         .and_then(|canonical| api_model_id_for(catalog, canonical))
                 })
         })
-        .unwrap_or_else(|| pick_fallback_default_model())
+        .unwrap_or_else(pick_fallback_default_model)
 }
 
 /// Return the API model ID for the economy tier's first allowed model, as read
@@ -1302,6 +1302,74 @@ pub fn quality_tier_for_model(model_id: &str) -> Option<String> {
         .models
         .get(canonical)
         .and_then(|m| m.quality_tier.clone())
+}
+
+/// Return the three canonical Anthropic primary models for the v3 model picker,
+/// in display order: Opus (flagship) → Sonnet (balanced) → Haiku (fast).
+///
+/// Each entry is `(api_model_id, display_name, quality_tier)`.
+///
+/// Resolution: reads `taskRouting.complex_reasoning`, the default model, and
+/// `taskRouting.fast_completion` from the shared catalog's anthropic provider
+/// block.  Falls back to the legacy bundled list if models.json is unavailable.
+pub fn anthropic_primary_models() -> Vec<(String, String, String)> {
+    let Some(catalog) = shared_catalog() else {
+        return legacy_bundled_models()
+            .into_iter()
+            .filter(|m| m.provider == "anthropic")
+            .take(3)
+            .map(|m| (m.id.clone(), m.display_name.clone(), "balanced".to_string()))
+            .collect();
+    };
+
+    let anthropic = match catalog.providers.get("anthropic") {
+        Some(p) => p,
+        None => return Vec::new(),
+    };
+
+    let routing = anthropic.task_routing.as_ref();
+
+    // Collect the three canonical slot IDs (canonical key → apiModelId).
+    let slots: Vec<Option<String>> = vec![
+        // complex_reasoning → flagship (Opus)
+        routing
+            .and_then(|r| r.complex_reasoning.as_deref())
+            .and_then(|canonical| api_model_id_for(catalog, canonical)),
+        // default model → balanced (Sonnet)
+        anthropic
+            .default_model
+            .as_deref()
+            .and_then(|canonical| api_model_id_for(catalog, canonical)),
+        // fast_completion → fast (Haiku)
+        routing
+            .and_then(|r| r.fast_completion.as_deref())
+            .and_then(|canonical| api_model_id_for(catalog, canonical)),
+    ];
+
+    let mut seen = std::collections::HashSet::new();
+    slots
+        .into_iter()
+        .flatten()
+        .filter(|id| seen.insert(id.clone()))
+        .map(|api_id| {
+            // Resolve display name and quality tier from catalog.
+            let (name, tier) = catalog
+                .models
+                .values()
+                .find(|m| {
+                    m.api_model_id.as_deref().unwrap_or(&m.id) == api_id
+                        || m.id == api_id
+                })
+                .map(|m| {
+                    (
+                        m.name.clone(),
+                        m.quality_tier.clone().unwrap_or_else(|| "balanced".to_string()),
+                    )
+                })
+                .unwrap_or_else(|| (api_id.clone(), "balanced".to_string()));
+            (api_id, name, tier)
+        })
+        .collect()
 }
 
 /// Return true if a model ID is known to the bundled shared catalog.

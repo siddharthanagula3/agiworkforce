@@ -58,6 +58,7 @@ export type { ChatInterfaceProps } from './components/ChatInterface';
 
 // Components
 export { EmptyState } from './components/EmptyState';
+export type { EmptyStateProps } from './components/EmptyState';
 export { QuickChips } from './components/QuickChips';
 export type { ChipType } from './components/QuickChips';
 export { ChatInput } from './components/ChatInput';
@@ -84,6 +85,8 @@ export { ConversationHeader } from './components/ConversationHeader';
 export { ThinkingBlock } from './components/ThinkingBlock';
 export { CitationPill } from './components/CitationPill';
 export { WebSearchCard } from './components/WebSearchCard';
+export { ProvenanceFooter } from './components/ProvenanceFooter';
+export type { ProvenanceFooterProps } from './components/ProvenanceFooter';
 
 // Artifact and media components
 export { ArtifactPanel } from './components/ArtifactPanel';

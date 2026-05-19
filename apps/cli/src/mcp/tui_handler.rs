@@ -109,7 +109,7 @@ impl ElicitationHandler for TuiElicitationHandler {
             // Block this MCP-loop task until the TUI surfaces the request and
             // delivers a response via `complete()`. If the TUI tears down without
             // responding, fall back to decline.
-            rx.await.unwrap_or_else(|_| ElicitationResponse {
+            rx.await.unwrap_or(ElicitationResponse {
                 action: ElicitationAction::Decline,
                 content: None,
             })

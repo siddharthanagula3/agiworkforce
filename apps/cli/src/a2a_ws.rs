@@ -14,7 +14,7 @@
 //!   WS handshake callback rejects connections without a matching
 //!   `Authorization: Bearer <token>` header with HTTP 401.
 
-#![allow(dead_code)]
+// dead_code allow declared at lib.rs module gate
 
 use anyhow::{Context, Result};
 use futures_util::{SinkExt, StreamExt};
@@ -90,7 +90,7 @@ async fn handle_ws_connection(
             Message::Text(text) => {
                 let request_json = text.to_string();
                 let response = process_text_frame(&request_json, &registry, &self_card);
-                ws.send(Message::Text(response.into())).await?;
+                ws.send(Message::Text(response)).await?;
             }
             Message::Binary(_) => {
                 let err = serde_json::json!({
@@ -98,7 +98,7 @@ async fn handle_ws_connection(
                     "id": null,
                     "error": { "code": -32700, "message": "binary frames not supported" }
                 });
-                ws.send(Message::Text(err.to_string().into())).await?;
+                ws.send(Message::Text(err.to_string())).await?;
             }
             Message::Close(_) => break,
             _ => {}

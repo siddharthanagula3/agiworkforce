@@ -596,7 +596,7 @@ function NotificationsTab() {
       <Card className="border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
         <CardHeader>
           <CardTitle className="text-lg">Email notifications</CardTitle>
-          <CardDescription>Choose which emails you receive from AGI Workforce.</CardDescription>
+          <CardDescription>Choose which emails you receive from AGI.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {EMAIL_NOTIFICATION_ITEMS.map(({ key, label, description }, idx) => (

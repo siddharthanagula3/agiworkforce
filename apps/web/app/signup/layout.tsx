@@ -1,11 +1,11 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Create Account | AGI Workforce',
+  title: 'Create Account | AGI',
   description:
-    'Create your free AGI Workforce account and start building autonomous AI agents. No credit card required.',
+    'Create your free AGI account and start building autonomous AI agents. No credit card required.',
   openGraph: {
-    title: 'Create Account | AGI Workforce',
+    title: 'Create Account | AGI',
     description: 'Sign up for free and start automating with AI agents. Hobby plan available.',
     type: 'website',
     url: 'https://agiworkforce.com/signup',
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
         url: '/app-preview.png',
         width: 1200,
         height: 630,
-        alt: 'Sign up for AGI Workforce',
+        alt: 'Sign up for AGI',
       },
     ],
   },

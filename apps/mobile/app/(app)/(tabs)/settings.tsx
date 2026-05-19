@@ -1,8 +1,8 @@
 /**
- * Settings Screen — 5 groups, 18 items
+ * Settings Screen — v3 layout
  *
- * Organized per the mobile app spec: Account, AI Configuration,
- * Connections, Preferences, and About.
+ * Sections: Account / AI Configuration / Connections / Voice / Preferences / About
+ * Voice section shows on-device default banner + locked "Never train" toggle.
  */
 import { useCallback, useRef } from 'react';
 import { View, SectionList, Pressable, Alert } from 'react-native';
@@ -31,6 +31,7 @@ import {
   Sun,
   Moon,
   Monitor,
+  Mic,
   type LucideIcon,
 } from 'lucide-react-native';
 import type BottomSheet from '@gorhom/bottom-sheet';
@@ -40,7 +41,6 @@ import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore, type ThemeMode } from '@/stores/settingsStore';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useModelStore } from '@/stores/modelStore';
-import { api } from '@/services/api';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useThemeColors } from '@/hooks/useTheme';
 import { VoiceSelector } from '@/components/voice/VoiceSelector';
@@ -49,11 +49,13 @@ import { VoiceSelector } from '@/components/voice/VoiceSelector';
 // Types
 // ---------------------------------------------------------------------------
 
+type SettingItemType = 'navigation' | 'toggle' | 'theme' | 'signout' | 'version' | 'voice-header';
+
 interface SettingItem {
   key: string;
   icon: LucideIcon;
   label: string;
-  type: 'navigation' | 'toggle' | 'theme' | 'signout' | 'version';
+  type: SettingItemType;
   value?: string;
   toggleValue?: boolean;
   onToggle?: (v: boolean) => void;
@@ -212,6 +214,65 @@ function VersionRow() {
   );
 }
 
+function VoiceHeaderRow() {
+  const c = useThemeColors();
+  return (
+    <View style={{ marginHorizontal: 16, marginVertical: 8 }}>
+      {/* On-device default banner */}
+      <View
+        style={{
+          backgroundColor: `${c.teal}18`,
+          borderWidth: 1,
+          borderColor: `${c.teal}33`,
+          borderRadius: 12,
+          padding: 12,
+          marginBottom: 12,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <Mic size={14} color={c.teal} />
+          <Text style={{ fontSize: 13, fontWeight: '600', color: c.teal }}>
+            On-device by default
+          </Text>
+        </View>
+        <Text style={{ fontSize: 12, color: c.textSecondary, lineHeight: 17 }}>
+          Voice transcription runs locally on your device. Audio is never sent to training servers.
+        </Text>
+      </View>
+
+      {/* Locked "Never train" toggle */}
+      <View
+        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+        accessibilityLabel="Never use voice for training — always on"
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Lock size={16} color={c.textSecondary} />
+          <View>
+            <Text style={{ fontSize: 14, color: c.textPrimary }}>Never use for training</Text>
+            <Text style={{ fontSize: 11, color: c.textMuted }}>Locked — cannot be disabled</Text>
+          </View>
+        </View>
+        <View
+          style={{
+            width: 44,
+            height: 26,
+            borderRadius: 13,
+            backgroundColor: c.teal,
+            justifyContent: 'center',
+            alignItems: 'flex-end',
+            paddingHorizontal: 3,
+            opacity: 0.7,
+          }}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: true, disabled: true }}
+        >
+          <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' }} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Separator between rows (inside a section)
 // ---------------------------------------------------------------------------
@@ -243,26 +304,6 @@ export default function SettingsTabScreen() {
     ]);
   }, [signOut]);
 
-  const handleManageSubscription = useCallback(async () => {
-    try {
-      const data = await api.post<{ url: string }>('/api/portal');
-      // HIGH-MOB-02 fix: validate `data.url` against the allowlist (see
-      // lib/safeOpenURL.ts). MITM/compromised backend cannot redirect to
-      // intent://, javascript:, or phishing URLs.
-      if (data.url && (await openExternalUrl(data.url))) {
-        return;
-      }
-    } catch {
-      // Fall back to static URL
-    }
-    if (!(await openExternalUrl('https://agiworkforce.com/billing'))) {
-      Alert.alert(
-        'Error',
-        'Could not open subscription management. Please visit agiworkforce.com/billing in your browser.',
-      );
-    }
-  }, []);
-
   const push = useCallback(
     (path: string) => () => {
       router.push(path as Parameters<typeof router.push>[0]);
@@ -288,7 +329,7 @@ export default function SettingsTabScreen() {
           icon: CreditCard,
           label: 'Subscription',
           type: 'navigation',
-          onPress: handleManageSubscription,
+          onPress: push('/(app)/billing'),
         },
         {
           key: 'usage',
@@ -349,13 +390,13 @@ export default function SettingsTabScreen() {
       ],
     },
     {
-      title: 'Preferences',
+      title: 'Voice',
       data: [
         {
-          key: 'appearance',
-          icon: Palette,
-          label: 'Appearance',
-          type: 'theme',
+          key: 'voice-header',
+          icon: Mic,
+          label: '',
+          type: 'voice-header',
         },
         {
           key: 'voice-language',
@@ -363,6 +404,17 @@ export default function SettingsTabScreen() {
           label: 'Voice & Language',
           type: 'navigation',
           onPress: () => voiceSelectorRef.current?.snapToIndex(0),
+        },
+      ],
+    },
+    {
+      title: 'Preferences',
+      data: [
+        {
+          key: 'appearance',
+          icon: Palette,
+          label: 'Appearance',
+          type: 'theme',
         },
         {
           key: 'notifications',
@@ -428,7 +480,7 @@ export default function SettingsTabScreen() {
         },
         {
           key: 'version',
-          icon: HelpCircle, // unused but required by type
+          icon: HelpCircle,
           label: '',
           type: 'version',
         },
@@ -441,11 +493,14 @@ export default function SettingsTabScreen() {
   const renderItem = useCallback(
     ({ item, index, section }: { item: SettingItem; index: number; section: SettingSection }) => {
       const isLast = index === section.data.length - 1;
-      const showSeparator = !isLast && item.type !== 'version';
+      const showSeparator = !isLast && item.type !== 'version' && item.type !== 'voice-header';
 
-      // Version row
       if (item.type === 'version') {
         return <VersionRow />;
+      }
+
+      if (item.type === 'voice-header') {
+        return <VoiceHeaderRow />;
       }
 
       return (

@@ -267,7 +267,7 @@ impl CliConfig {
     /// developer clones the repo and runs `agiworkforce`, their API key is
     /// silently exfiltrated on the first LLM call.
     pub fn has_sensitive_project_overrides(project: &CliConfig) -> bool {
-        for (_name, provider) in &project.providers {
+        for provider in project.providers.values() {
             if provider.base_url.is_some() {
                 return true;
             }
