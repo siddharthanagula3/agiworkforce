@@ -2885,7 +2885,9 @@ function buildUI(): void {
           const allowed = Array.from(ALLOWED_BRIDGE_HOSTS).join(', ');
           errEl.textContent = `Only local URLs (${allowed}) are allowed`;
           bar.appendChild(errEl);
-          setTimeout(() => errEl.remove(), 4000);
+          // L-16 audit 2026-05-19: 8s gives the user time to read the
+          // error before it disappears (previous 4s was too short).
+          setTimeout(() => errEl.remove(), 8000);
         }
         return;
       }

@@ -47,8 +47,10 @@ import {
   EXTENSION_PAGE_ONLY_MESSAGE_TYPES,
   DEFAULT_AGI_BRIDGE_URL,
   ORIGIN_EXTENSION_PAGE,
+  MAX_CONTEXT_HTML_CHARS,
   validateBridgeUrl,
   validateGatewayUrl,
+  validateShortcutActions,
 } from './background/policy';
 
 interface BackgroundState {
@@ -143,7 +145,8 @@ const nlwebByTab = new Map<
 const NATIVE_HOST_NAME = 'com.agiworkforce.browser';
 const NATIVE_REQUEST_TIMEOUT_MS = 10000;
 const CONTENT_SCRIPT_FORWARD_TIMEOUT_MS = 30000;
-const MAX_CONTEXT_HTML_CHARS = 100_000;
+// MAX_CONTEXT_HTML_CHARS now imported from policy.ts (L-14 audit 2026-05-19) so
+// content.ts and background.ts share a single byte-budget constant.
 const NATIVE_CONNECT_MAX_WAIT_MS = 2000;
 const NATIVE_RECONNECT_BASE_DELAY_MS = 1000;
 const NATIVE_RECONNECT_MAX_DELAY_MS = 30000;
@@ -180,6 +183,10 @@ function clearNativeReconnectTimer(): void {
 }
 
 function resetNativeReconnectState(): void {
+  // L-07 audit 2026-05-19: `nativeReconnectGaveUp` is cleared in two paths:
+  // (a) here, on explicit manual reconnect; (b) in connectToNativeHost
+  // success block (line ~311), on handshake success. Both are intentional.
+  // Do not consolidate — they have different preconditions.
   _bgCtx.nativeReconnectAttempt = 0;
   _bgCtx.nativeReconnectGaveUp = false;
   clearNativeReconnectTimer();
@@ -376,7 +383,14 @@ function createRequestId(): string {
   return `${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
 }
 
-function sendNativeRequest(message: Record<string, unknown>): Promise<ExtensionResponse> {
+function sendNativeRequest(
+  message: Record<string, unknown>,
+  timeoutMs: number = NATIVE_REQUEST_TIMEOUT_MS,
+): Promise<ExtensionResponse> {
+  // L-04 audit 2026-05-19: accept a per-call timeoutMs. Default stays at
+  // NATIVE_REQUEST_TIMEOUT_MS (10s); long calls (chat_message, etc.)
+  // now pass 30000 explicitly instead of getting wrapped in `withTimeout`
+  // and risking double-timeouts.
   return new Promise((resolve, reject) => {
     void (async () => {
       // Allow sending during handshake (port exists but isNativeConnected not yet true)
@@ -395,8 +409,8 @@ function sendNativeRequest(message: Record<string, unknown>): Promise<ExtensionR
       const id = createRequestId();
       const timeout = setTimeout(() => {
         pendingRequests.delete(id);
-        reject(new Error(`Native request timeout after ${NATIVE_REQUEST_TIMEOUT_MS}ms`));
-      }, NATIVE_REQUEST_TIMEOUT_MS);
+        reject(new Error(`Native request timeout after ${timeoutMs}ms`));
+      }, timeoutMs);
 
       pendingRequests.set(id, { resolve, reject, timeout });
 
@@ -472,7 +486,9 @@ function handleNativeDisconnect(): void {
 
 function showNotification(title: string, message: string, tabId?: number): void {
   if (!chrome.notifications?.create) return;
-  const notifId = `agi_${Date.now()}`;
+  // L-12 audit 2026-05-19: crypto.randomUUID prefix instead of Date.now so
+  // rapid notifications don't collide.
+  const notifId = `agi_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
   chrome.notifications.create(
     notifId,
     {
@@ -617,14 +633,25 @@ async function executeScheduledTask(task: ScheduledTask): Promise<void> {
         truncatedTo: TASK_PROMPT_MAX_CHARS,
       });
     }
-    // Send as chat message via the same path as side panel
+    // Send as chat message via the same path as side panel.
+    //
+    // Arch #2 audit 2026-05-19: synthesize a sender that looks like an
+    // extension-page sender (`id === chrome.runtime.id`, `!sender.tab`) so
+    // any future origin-aware logic in `handleChatMessage` treats this as
+    // trusted UI rather than a faked content script. The prior `{} as
+    // MessageSender` was a type-cast lie that would have bypassed any
+    // future sender check on this path.
     const chatMsg: import('./types').ChatMessageMessage = {
       type: 'CHAT_MESSAGE',
       id: `task_${task.id}_${Date.now()}`,
       text: safePrompt,
       timestamp: Date.now(),
     };
-    void handleChatMessage(chatMsg, {} as chrome.runtime.MessageSender);
+    const scheduledTaskSender: chrome.runtime.MessageSender = {
+      id: chrome.runtime.id,
+      // No `tab` — emulates an extension page (popup / side panel) call.
+    };
+    void handleChatMessage(chatMsg, scheduledTaskSender);
   }
 
   // Update lastRun
@@ -1202,25 +1229,33 @@ async function handleMessageAsync(
       // probing arbitrary public URLs through the extension turned the
       // service worker into an SSRF reflector (the extension's IP, no
       // Origin header, may bypass CORS allowlists that key on Origin).
-      // Extension-page senders (popup / side panel) have no `sender.tab`
-      // and are not gated here — they're the trusted UI.
-      if (sender.tab?.url) {
-        try {
-          const senderOrigin = new URL(sender.tab.url).origin;
-          const probeOrigin = new URL(probeUrl).origin;
-          if (probeOrigin !== senderOrigin) {
-            logger.warn('Rejected cross-origin NLWEB_PROBE', {
-              senderOrigin,
-              probeOrigin,
-            });
-            return {
-              success: false,
-              error: 'NLWeb probes are restricted to the page\'s own origin.',
-            } as ExtensionResponse;
-          }
-        } catch {
-          return { success: false, error: 'Invalid probe URL' } as ExtensionResponse;
+      //
+      // Self-review #11 audit 2026-05-19: fail-closed for extension pages
+      // too. The prior implementation exempted senders with no `sender.tab`
+      // (i.e. popup / side panel). No extension-page code currently calls
+      // NLWEB_PROBE, so fail-closed costs nothing today and prevents a
+      // future caller from bypassing the SSRF check.
+      if (!sender.tab?.url) {
+        return {
+          success: false,
+          error: 'NLWeb probes can only originate from a content script.',
+        } as ExtensionResponse;
+      }
+      try {
+        const senderOrigin = new URL(sender.tab.url).origin;
+        const probeOrigin = new URL(probeUrl).origin;
+        if (probeOrigin !== senderOrigin) {
+          logger.warn('Rejected cross-origin NLWEB_PROBE', {
+            senderOrigin,
+            probeOrigin,
+          });
+          return {
+            success: false,
+            error: "NLWeb probes are restricted to the page's own origin.",
+          } as ExtensionResponse;
         }
+      } catch {
+        return { success: false, error: 'Invalid probe URL' } as ExtensionResponse;
       }
       {
         const controller = new AbortController();
@@ -1312,79 +1347,122 @@ async function handleMessageAsync(
 }
 
 /**
- * Domains where cookie operations are blocked to prevent exfiltration of
- * sensitive session tokens. Errs on the side of caution — default-deny for
- * known sensitive categories.
+ * Cookie-domain blocklist.
+ *
+ * SECURITY (M-01 audit 2026-05-19): the previous implementation matched
+ * cookie domains with bare regexes like `/bank/i` and `/stripe\.com$/i`.
+ * Two problems:
+ *   1. `/bank/i` matches any string containing "bank" — fine for legitimate
+ *      bank-named hostnames; the substring matching is preserved for that
+ *      category bucket. But the suffix-anchored regexes silently broke
+ *      under port suffixes: `/stripe\.com$/i` is anchored on the regex but
+ *      tested against `urlOrDomain.replace(/^https?:\/\//, '').split('/')[0]`
+ *      which retains `:port` — so `stripe.com:443` would fail the `$`
+ *      anchor and slip through.
+ *   2. Hostname parsing was DIY: split on `/`. URLs like `http://attacker.com\@github.com`
+ *      can confuse naive splitting on some browser parses.
+ *
+ * We now parse with `new URL`, lowercase the hostname (no port, no path,
+ * no userinfo), then match against structured {hostname, mode} entries.
+ *   - `exact`: hostname must equal the entry's value.
+ *   - `suffix`: hostname is the entry's value OR ends with `.<value>`.
+ *   - `substring`: hostname contains the value (for category bucket
+ *     keywords like "bank" that aren't suffix-anchorable).
  */
-const BLOCKED_COOKIE_DOMAINS: RegExp[] = [
-  // Financial
-  /bank/i,
-  /paypal/i,
-  /venmo/i,
-  /chase/i,
-  /wellsfargo/i,
-  /citibank/i,
-  /fidelity/i,
-  /schwab/i,
-  /stripe\.com$/i,
-  /plaid\.com$/i,
-  /coinbase/i,
-  /binance/i,
-  /kraken/i,
+type CookieBlockEntry = { value: string; mode: 'exact' | 'suffix' | 'substring' };
+
+const BLOCKED_COOKIE_DOMAINS: ReadonlyArray<CookieBlockEntry> = [
+  // Financial — substring keywords. False positives are acceptable here;
+  // a false-allow on a bank-flavored site is much worse than a false-block.
+  { value: 'bank', mode: 'substring' },
+  { value: 'paypal', mode: 'substring' },
+  { value: 'venmo', mode: 'substring' },
+  { value: 'chase', mode: 'substring' },
+  { value: 'wellsfargo', mode: 'substring' },
+  { value: 'citibank', mode: 'substring' },
+  { value: 'fidelity', mode: 'substring' },
+  { value: 'schwab', mode: 'substring' },
+  { value: 'coinbase', mode: 'substring' },
+  { value: 'binance', mode: 'substring' },
+  { value: 'kraken', mode: 'substring' },
+  { value: 'stripe.com', mode: 'suffix' },
+  { value: 'plaid.com', mode: 'suffix' },
   // Government & healthcare
-  /\.gov$/i,
-  /\.mil$/i,
-  /healthcare/i,
-  /medical/i,
-  /health\.com/i,
+  { value: 'gov', mode: 'suffix' },
+  { value: 'mil', mode: 'suffix' },
+  { value: 'healthcare', mode: 'substring' },
+  { value: 'medical', mode: 'substring' },
+  { value: 'health.com', mode: 'suffix' },
   // Cloud infrastructure & developer tools
-  /aws\.amazon\.com/i,
-  /console\.cloud\.google/i,
-  /portal\.azure/i,
-  /github\.com$/i,
-  /gitlab\.com$/i,
-  /bitbucket\.org$/i,
+  { value: 'aws.amazon.com', mode: 'suffix' },
+  { value: 'console.cloud.google.com', mode: 'suffix' },
+  { value: 'portal.azure.com', mode: 'suffix' },
+  { value: 'github.com', mode: 'suffix' },
+  { value: 'gitlab.com', mode: 'suffix' },
+  { value: 'bitbucket.org', mode: 'suffix' },
   // Auth & identity providers
-  /accounts\.google/i,
-  /login\.microsoftonline/i,
-  /auth0\.com$/i,
-  /okta\.com$/i,
+  { value: 'accounts.google.com', mode: 'suffix' },
+  { value: 'login.microsoftonline.com', mode: 'suffix' },
+  { value: 'auth0.com', mode: 'suffix' },
+  { value: 'okta.com', mode: 'suffix' },
   // Email & communication
-  /mail\.google/i,
-  /outlook\.(live|office)/i,
+  { value: 'mail.google.com', mode: 'suffix' },
+  { value: 'outlook.live.com', mode: 'suffix' },
+  { value: 'outlook.office.com', mode: 'suffix' },
   // Social media (auth tokens)
-  /facebook\.com$/i,
-  /twitter\.com$/i,
-  /x\.com$/i,
-  /instagram\.com$/i,
-  // CHROME-NEW-006 fix (2026-05-05): explicitly block the very platforms the
-  // extension *targets* for autofill / chat assistance. The agent only needs
-  // DOM-level read/write on these origins — not their session cookies. Without
-  // these entries, a malicious script running on an allowlisted page could
-  // call GET_COOKIES against `linkedin.com` / `slack.com` / `notion.so` /
-  // `figma.com` / `lever.co` and exfiltrate the user's session token, even
-  // though the regex `/health\.com/` and friends already cover unrelated
-  // categories.
-  /(^|\.)linkedin\.com$/i,
-  /(^|\.)slack\.com$/i,
-  /(^|\.)notion\.so$/i,
-  /(^|\.)figma\.com$/i,
-  /(^|\.)lever\.co$/i,
-  /(^|\.)greenhouse\.io$/i,
-  /(^|\.)workday\.com$/i,
-  // CHROME-NEW-003 fix (2026-05-04): the extension's own auth surfaces are
-  // sensitive too. An allowlisted page that calls GET_COOKIES against
-  // `https://<ref>.supabase.co` would receive Supabase auth cookies, and
-  // against `https://agiworkforce.com` would receive `agi_access_token` /
-  // `agi_refresh_token`. Block both at the cookie layer.
-  /\.supabase\.(co|io)$/i,
-  /(^|\.)agiworkforce\.com$/i,
+  { value: 'facebook.com', mode: 'suffix' },
+  { value: 'twitter.com', mode: 'suffix' },
+  { value: 'x.com', mode: 'suffix' },
+  { value: 'instagram.com', mode: 'suffix' },
+  // Platforms the extension targets — DOM-level only, never cookies.
+  // CHROME-NEW-006 (2026-05-05) + M-01 (2026-05-19): suffix mode replaces
+  // the prior `/(^|\.)linkedin\.com$/i` regexes which silently broke under
+  // port suffixes (`linkedin.com:443`).
+  // L-08 note: linkedin/lever/etc. are deliberately blocked at the COOKIE
+  // layer even though autofill targets them; autofill only writes DOM, never
+  // reads cookies.
+  { value: 'linkedin.com', mode: 'suffix' },
+  { value: 'slack.com', mode: 'suffix' },
+  { value: 'notion.so', mode: 'suffix' },
+  { value: 'figma.com', mode: 'suffix' },
+  { value: 'lever.co', mode: 'suffix' },
+  { value: 'greenhouse.io', mode: 'suffix' },
+  { value: 'workday.com', mode: 'suffix' },
+  // CHROME-NEW-003 (2026-05-04): the extension's own auth surfaces.
+  { value: 'supabase.co', mode: 'suffix' },
+  { value: 'supabase.io', mode: 'suffix' },
+  { value: 'agiworkforce.com', mode: 'suffix' },
 ];
+
+function matchCookieBlock(hostname: string, entry: CookieBlockEntry): boolean {
+  const value = entry.value.toLowerCase();
+  switch (entry.mode) {
+    case 'exact':
+      return hostname === value;
+    case 'suffix':
+      return hostname === value || hostname.endsWith(`.${value}`);
+    case 'substring':
+      return hostname.includes(value);
+  }
+}
 
 function isCookieDomainAllowed(urlOrDomain: string): boolean {
   if (!urlOrDomain) return false;
-  const domain = urlOrDomain.replace(/^https?:\/\//, '').split('/')[0] ?? '';
-  return !BLOCKED_COOKIE_DOMAINS.some((pattern) => pattern.test(domain));
+  // Parse strictly: extract just the hostname (lowercase, no port, no path,
+  // no userinfo). The prior implementation used DIY substring extraction
+  // which retained `:port` and broke suffix-anchored matchers; this is the
+  // M-01 fix.
+  let hostname: string;
+  try {
+    const normalized = urlOrDomain.includes('://')
+      ? urlOrDomain
+      : `https://${(urlOrDomain.split('/')[0] ?? '').toLowerCase()}`;
+    hostname = new URL(normalized).hostname.toLowerCase();
+  } catch {
+    return false; // fail-closed on unparseable input
+  }
+  if (!hostname) return false;
+  return !BLOCKED_COOKIE_DOMAINS.some((entry) => matchCookieBlock(hostname, entry));
 }
 
 async function handleGetCookies(
@@ -1664,7 +1742,24 @@ async function syncTabContextWithDesktop(
 
   const plannerData = (pageContextResponse.data ?? {}) as NativePageContextPlan;
   const taskId = String(plannerData.task_id ?? '');
-  const actions = Array.isArray(plannerData.actions) ? plannerData.actions : [];
+  const rawActions = Array.isArray(plannerData.actions) ? plannerData.actions : [];
+  // SECURITY (L-09 audit 2026-05-19): validate the desktop-bridge-supplied
+  // action plan before forwarding to the content script. The bridge is
+  // trusted today, but defense-in-depth: if the bridge is ever compromised
+  // (e.g., a malicious local app binds port 8787), an attacker-crafted
+  // action plan should still be rejected by the same allowlist that gates
+  // user-saved shortcuts.
+  if (rawActions.length > 0 && !validateShortcutActions(rawActions)) {
+    logger.warn('Rejected desktop-bridge plan containing unknown action type', {
+      taskId,
+      actionCount: rawActions.length,
+    });
+    return {
+      success: false,
+      error: 'Desktop plan contains an unsupported action type.',
+    } as ExtensionResponse;
+  }
+  const actions = rawActions;
 
   if (!taskId || actions.length === 0) {
     return {
@@ -1807,6 +1902,11 @@ function setupContextMenu(): void {
     return;
   }
 
+  // L-13 audit 2026-05-19: contextMenus.removeAll is async but its callback
+  // does not gate the create() calls below. Chrome serializes these
+  // internally — removeAll completes before any subsequent create() in the
+  // same task — so there's no actual race. The callback is purely for
+  // logging the (rare) removal failure.
   chrome.contextMenus.removeAll(() => {
     if (chrome.runtime.lastError) {
       logger.warn('contextMenus.removeAll failed', chrome.runtime.lastError.message);
