@@ -28,7 +28,7 @@ export const FRIENDLY_MESSAGES = {
   success: ['Done!', 'All set!', 'Got it!', 'Here you go!'],
   empty: {
     title: 'Start a conversation',
-    subtitle: 'Ask me anything - AGI Workforce is ready to help!',
+    subtitle: 'Ask me anything - AGI is ready to help!',
   },
   noResults: {
     title: "I couldn't find anything",
@@ -41,5 +41,7 @@ export const FRIENDLY_MESSAGES = {
  */
 export function getLoadingMessage(): string {
   const messages = FRIENDLY_MESSAGES.loading;
+  // WEB-13: Math.random is intentional — cosmetic loading message picker, no security relevance.
+  // eslint-disable-next-line no-restricted-syntax
   return messages[Math.floor(Math.random() * messages.length)] || messages[0] || 'Thinking...';
 }

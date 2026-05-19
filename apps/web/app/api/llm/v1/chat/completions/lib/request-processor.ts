@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
+import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
 import { logger } from '@/lib/logger';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
@@ -50,8 +51,9 @@ export const ChatCompletionRequestSchema = z.object({
         ),
       ]),
       name: z.string().optional(),
-      tool_calls: z.array(z.unknown()).optional(),
-      tool_call_id: z.string().optional(),
+      // WEB-21 (audit 2026-05-19): strict tool_calls schema replaces z.unknown.
+      tool_calls: z.array(ToolCallResponseSchema).max(32).optional(),
+      tool_call_id: z.string().max(256).optional(),
     }),
   ),
   temperature: z.number().min(0).max(2).optional(),
@@ -519,11 +521,20 @@ export async function processRequest(
   }
 
   // Egress policy: validate custom provider base URLs
+  // WEB-30 (audit 2026-05-19): extended map from 4 providers to 9 so all
+  // *_BASE_URL overrides flow through the allowlist. Pre-fix, an operator
+  // who set `ANTHROPIC_BASE_URL=http://169.254.169.254/...` (or any other
+  // unguarded provider) would bypass the egress allowlist entirely.
   const providerBaseUrlEnvMap: Record<string, string> = {
     openai: 'OPENAI_BASE_URL',
     qwen: 'QWEN_BASE_URL',
     deepseek: 'DEEPSEEK_BASE_URL',
     moonshot: 'MOONSHOT_BASE_URL',
+    anthropic: 'ANTHROPIC_BASE_URL',
+    xai: 'XAI_BASE_URL',
+    perplexity: 'PERPLEXITY_BASE_URL',
+    zhipu: 'ZHIPU_BASE_URL',
+    google: 'GOOGLE_BASE_URL',
   };
   const baseUrlEnvKey = providerBaseUrlEnvMap[provider.toLowerCase()];
   const customBaseUrl = baseUrlEnvKey ? process.env[baseUrlEnvKey] : undefined;

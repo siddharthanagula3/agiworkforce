@@ -84,6 +84,37 @@ const eslintConfig = defineConfig([
       'react/no-unescaped-entities': 'off',
     },
   },
+  // WEB-13 (audit 2026-05-19): forbid Math.random in security-sensitive paths.
+  // CSPRNG quality is required for tokens, filenames, IDs, and rollout
+  // bucketing in these directories. Use @/lib/secure-random helpers instead.
+  // The remaining non-security uses (cosmetic loading messages, retry jitter,
+  // local-only client queue IDs) carry per-line eslint-disable comments with
+  // WEB-13 justification.
+  {
+    files: [
+      'core/security/**/*.{ts,tsx}',
+      'features/chat/services/**/*.{ts,tsx}',
+      'features/chat/hooks/**/*.{ts,tsx}',
+      'lib/**/*.{ts,tsx}',
+      'app/api/**/*.{ts,tsx}',
+    ],
+    ignores: [
+      '**/*.{test,spec}.{ts,tsx}',
+      '**/__tests__/**',
+      'lib/secure-random.ts',
+    ],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "CallExpression[callee.object.name='Math'][callee.property.name='random']",
+          message:
+            'Use secureToken() / secureRandomFloat() / secureFilenameSegment() from @/lib/secure-random — Math.random is not cryptographically secure (WEB-13).',
+        },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

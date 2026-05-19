@@ -93,9 +93,16 @@ async function authenticate(
 
   // For cookie auth we still need a Bearer-token-based client to enforce RLS
   // correctly on writes. Pull the access token off the session.
+  // WEB-18 (audit 2026-05-19): explicitly re-check expires_at to defend
+  // against a TOCTOU window where getUser() succeeds but the session expires
+  // before downstream RLS-bound writes run.
   const { data: sessionData } = await supabase.auth.getSession();
-  const accessToken = sessionData.session?.access_token;
+  const session = sessionData.session;
+  const accessToken = session?.access_token;
   if (!accessToken) {
+    throw createError.unauthorized('Session expired');
+  }
+  if (session?.expires_at && session.expires_at * 1000 <= Date.now()) {
     throw createError.unauthorized('Session expired');
   }
 

@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
+import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
 import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -80,8 +81,9 @@ const V2ChatRequestSchema = z.object({
         ),
       ]),
       name: z.string().optional(),
-      tool_calls: z.array(z.unknown()).optional(),
-      tool_call_id: z.string().optional(),
+      // WEB-21 (audit 2026-05-19): strict tool_calls schema replaces z.unknown.
+      tool_calls: z.array(ToolCallResponseSchema).max(32).optional(),
+      tool_call_id: z.string().max(256).optional(),
     }),
   ),
   temperature: z.number().min(0).max(2).optional(),

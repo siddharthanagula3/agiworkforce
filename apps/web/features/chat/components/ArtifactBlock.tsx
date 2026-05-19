@@ -144,8 +144,12 @@ function HtmlBlock({ code }: { code: string }) {
             type="button"
             aria-label="Open in new tab"
             onClick={() => {
+              // WEB-25: noopener,noreferrer prevents reverse-tabnabbing; revoke
+              // the blob URL after a minute so the GC can reclaim the HTML body.
               const blob = new Blob([code], { type: 'text/html' });
-              window.open(URL.createObjectURL(blob), '_blank');
+              const url = URL.createObjectURL(blob);
+              window.open(url, '_blank', 'noopener,noreferrer');
+              setTimeout(() => URL.revokeObjectURL(url), 60_000);
             }}
             className="flex items-center gap-1 h-7 px-2 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
           >
