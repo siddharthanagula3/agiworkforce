@@ -762,37 +762,30 @@ describe('CHROME-MED-5 WebMCP tool-name validation', () => {
   });
 });
 
-// ─── CHROME-SUB-5: console buffering gated by allowlist ──────────────────────
+// ─── M-13: console-patch removed entirely (audit 2026-05-19) ────────────────
 //
-// Static-analysis test: the production source must invoke `patchConsole`
-// only via `patchConsoleIfAllowlisted`, never unconditionally. Mirrors the
-// pattern already used in the CHROME-HIGH-3 test.
+// CHROME-SUB-5 previously required the patch to be gated by allowlist; we now
+// reject the entire approach. Page-script console interception is a fingerprint
+// and an interference risk. If console-log capture is ever needed, the
+// chrome.debugger API gives a per-tab, user-opt-in path with no monkey-patch.
 
-describe('CHROME-SUB-5 console buffering gated by user allowlist', () => {
+describe('M-13 console-patch removed', () => {
   const contentSource = readFileSync(join(__dirname, '..', 'src', 'content.ts'), 'utf8');
 
-  it('initialize() does NOT call patchConsole() unconditionally', () => {
-    // The bad pattern: a bare `patchConsole();` call inside the try { ... }
-    // block in initialize(). The good pattern: `patchConsoleIfAllowlisted()`.
-    // We accept any whitespace and newlines around the bare call.
-    expect(contentSource).not.toMatch(/\n\s*try\s*\{\s*patchConsole\(\)\s*;/);
+  it('content.ts does NOT define a patchConsole function', () => {
+    expect(contentSource).not.toMatch(/function patchConsole\s*\(/);
   });
 
-  it('initialize() routes through the allowlist-gated wrapper', () => {
-    expect(contentSource).toMatch(/patchConsoleIfAllowlisted\(\)/);
+  it('content.ts does NOT define a patchConsoleIfAllowlisted function', () => {
+    expect(contentSource).not.toMatch(/function patchConsoleIfAllowlisted\s*\(/);
   });
 
-  it('patchConsoleIfAllowlisted reads agi_site_allowlist from chrome.storage.local', () => {
-    expect(contentSource).toMatch(
-      /async function patchConsoleIfAllowlisted[\s\S]*chrome\.storage\.local\.get\('agi_site_allowlist'/,
-    );
+  it('initialize() does not call any patchConsole variant', () => {
+    expect(contentSource).not.toMatch(/patchConsole\w*\(\)/);
   });
 
-  it('patchConsoleIfAllowlisted compares window.location.origin against the allowlist set', () => {
-    const fnIdx = contentSource.indexOf('async function patchConsoleIfAllowlisted');
-    const slice = contentSource.slice(fnIdx, fnIdx + 1500);
-    expect(slice).toContain('window.location.origin');
-    expect(slice).toMatch(/allowlist\.has\(/);
+  it('does not assign to console.* methods', () => {
+    expect(contentSource).not.toMatch(/console\[level\]\s*=/);
   });
 });
 
