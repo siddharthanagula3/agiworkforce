@@ -657,7 +657,7 @@ function SurfaceShowcaseStatic() {
                     <span className="mt-0.5" style={{ color: s.color }}>
                       &#8226;
                     </span>
-                                        {/* eslint-disable-next-line no-restricted-syntax -- WEB-37: `f` iterates a static developer-authored const; not user input. */}
+                    {}
                     <span dangerouslySetInnerHTML={{ __html: f }} />
                   </li>
                 ))}
@@ -796,8 +796,8 @@ export function SurfaceShowcase() {
                         <span className="mt-0.5" style={{ color: active.color }}>
                           &#8226;
                         </span>
-                                            {/* eslint-disable-next-line no-restricted-syntax -- WEB-37: `f` iterates a static developer-authored const; not user input. */}
-                    <span dangerouslySetInnerHTML={{ __html: f }} />
+                        {}
+                        <span dangerouslySetInnerHTML={{ __html: f }} />
                       </motion.li>
                     ))}
                   </ul>

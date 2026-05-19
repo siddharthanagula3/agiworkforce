@@ -74,7 +74,7 @@ function buildMockData(range: DateRange) {
   const usageSeries = generateUsageTimeSeries(days);
 
   // Model distribution — display labels only, not used for routing
-  /* eslint-disable no-restricted-syntax */
+
   const modelDistribution = [
     { label: 'claude-sonnet-4', value: Math.round(1120 * multiplier), color: 'bg-indigo-500' },
     { label: 'gpt-5.4-turbo', value: Math.round(890 * multiplier), color: 'bg-emerald-500' },
@@ -82,7 +82,6 @@ function buildMockData(range: DateRange) {
     { label: 'claude-haiku-4', value: Math.round(410 * multiplier), color: 'bg-violet-500' },
     { label: 'deepseek-r2', value: Math.round(201 * multiplier), color: 'bg-amber-500' },
   ];
-  /* eslint-enable no-restricted-syntax */
 
   // Top tools
   const topTools = [
@@ -95,10 +94,10 @@ function buildMockData(range: DateRange) {
   ];
 
   // Recent activity mock data — display labels only, not used for routing
-  /* eslint-disable no-restricted-syntax */
+
   const agents = ['Research Bot', 'Code Assistant', 'Data Analyst', 'Email Writer', 'SEO Agent'];
   const models = ['claude-sonnet-4', 'gpt-5.4-turbo', 'gemini-3.1-pro-preview', 'claude-haiku-4'];
-  /* eslint-enable no-restricted-syntax */
+
   const statuses: ActivityRow['status'][] = [
     'success',
     'success',

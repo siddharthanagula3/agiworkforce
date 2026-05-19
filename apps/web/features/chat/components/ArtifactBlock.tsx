@@ -281,7 +281,6 @@ function JsonBlock({ code }: { code: string }) {
       <pre className="overflow-x-auto bg-zinc-950 p-4 max-h-[400px]">
         <code
           className="text-sm leading-relaxed"
-          // eslint-disable-next-line no-restricted-syntax -- WEB-37: DOMPurify.sanitize applied inline.
           dangerouslySetInnerHTML={{
             __html: DOMPurify.sanitize(highlighted, { USE_PROFILES: { html: true } }),
           }}

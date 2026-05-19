@@ -329,7 +329,6 @@ export const MermaidRenderer = memo(function MermaidRenderer({
             transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
             transformOrigin: 'center center',
           }}
-          // eslint-disable-next-line no-restricted-syntax -- WEB-37: svgHtml is DOMPurify-sanitized at the setSvgHtml call above.
           dangerouslySetInnerHTML={{ __html: svgHtml }}
         />
       </div>
