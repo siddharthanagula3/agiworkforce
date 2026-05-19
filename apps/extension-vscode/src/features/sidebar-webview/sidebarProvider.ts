@@ -6,15 +6,16 @@
  * Message routing and streaming state live in sidebar/ChatStateManager.ts.
  */
 
+// AUDIT-FIX: vscode-reorg
 import * as vscode from 'vscode';
-import { type ConversationStore } from '../storage/conversationStore';
-import { type ConversationTreeProvider } from './conversationTreeProvider';
-import { type DiffDecorationProvider } from './diffDecorationProvider';
-import { normalizeConfiguredModelId } from '../services/modelConstants';
-import { Config } from '../utils/config';
-import { ChatStateManager } from './sidebar/ChatStateManager';
-import { getWebviewContent, getNonce } from './sidebar/webviewContent';
-import { parseWebviewMessage } from '../protocol/webviewMessages';
+import { type ConversationStore } from '../../data/conversationStore';
+import { type ConversationTreeProvider } from '../trees/conversationTreeProvider';
+import { type DiffDecorationProvider } from '../../providers/diffDecorationProvider';
+import { normalizeConfiguredModelId } from '../model-picker/modelConstants';
+import { Config } from '../../platform/config';
+import { ChatStateManager, type ExtToWebviewMessage } from './ChatStateManager';
+import { getWebviewContent, getNonce } from './webviewContent';
+import { parseWebviewMessage } from '../../protocol/webviewMessages';
 
 // Re-export for chatEditorPanel.ts (imported from ./sidebarProvider)
 export { getWebviewContent, getNonce, escapeHtml } from './webviewContent';
@@ -45,7 +46,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this._stateManager = new ChatStateManager(
       secrets,
       context,
-      (msg) => this._view?.webview.postMessage(msg),
+      (msg: ExtToWebviewMessage) => this._view?.webview.postMessage(msg),
       conversationStore,
       conversationTreeProvider,
       workspaceState,

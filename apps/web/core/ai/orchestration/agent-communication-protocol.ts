@@ -469,7 +469,7 @@ interface PendingRequest {
   message: AgentMessage;
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
-  timeoutId: NodeJS.Timeout;
+  timeoutId: ReturnType<typeof setTimeout>;
   sentAt: number;
 }
 

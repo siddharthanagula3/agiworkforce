@@ -12,9 +12,10 @@ import * as vscode from 'vscode';
 import * as http from 'http';
 import * as https from 'https';
 import { URL } from 'url';
-import { getModelMetrics } from '../services/modelMetrics';
-import { normalizeConfiguredModelId } from '../services/modelConstants';
-import { getTokenCounter } from '../services/tokenCounter';
+// AUDIT-FIX: vscode-reorg
+import { getModelMetrics } from '../features/model-picker/modelMetrics';
+import { normalizeConfiguredModelId } from '../features/model-picker/modelConstants';
+import { getTokenCounter } from '../data/tokenCounter';
 import { TierInfoSchema } from '../protocol/apiResponses';
 
 // ─── Types ────────────────────────────────────────────────────────────────────

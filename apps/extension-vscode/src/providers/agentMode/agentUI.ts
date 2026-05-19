@@ -5,9 +5,10 @@
 
 import * as vscode from 'vscode';
 import { resolveContained } from '@agiworkforce/utils';
-import { getActiveWorkspaceFolderSync } from '../../utils/workspaceFolders';
+// AUDIT-FIX: vscode-reorg
+import { getActiveWorkspaceFolderSync } from '../../platform/workspaceFolders';
 import { isSensitiveFile } from '../../utils/pathSafety';
-import { getCheckpointManager } from '../../services/checkpointManager';
+import { getCheckpointManager } from '../../data/checkpointManager';
 import {
   applyPatchBatch,
   storeBatchForUndo,

@@ -94,7 +94,7 @@ export async function GET(request: NextRequest) {
 
     if (stripeKey) {
       const stripe = new Stripe(stripeKey, {
-        apiVersion: STRIPE_API_VERSION as Stripe.LatestApiVersion,
+        apiVersion: STRIPE_API_VERSION,
       });
 
       // Simple API call to check connectivity

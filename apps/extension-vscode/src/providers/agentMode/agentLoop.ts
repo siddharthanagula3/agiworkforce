@@ -5,15 +5,16 @@
 
 import * as vscode from 'vscode';
 import { resolveContained } from '@agiworkforce/utils';
+// AUDIT-FIX: vscode-reorg
 import { chatCompletion, type LlmChatMessage } from '../../utils/api';
-import { getActiveWorkspaceFolderSync } from '../../utils/workspaceFolders';
+import { getActiveWorkspaceFolderSync } from '../../platform/workspaceFolders';
 import { isSensitiveFile } from '../../utils/pathSafety';
-import { Config } from '../../utils/config';
-import { WorkspaceIndexer } from '../../services/workspaceIndexer';
-import { getContextBuilder } from '../../services/contextBuilder';
-import { getContextPanelProvider } from '../contextPanelProvider';
-import { getContextBudget } from '../../services/contextBudget';
-import { parsePatchBlocks, type PatchBlock } from '../../services/patchEngine';
+import { Config } from '../../platform/config';
+import { WorkspaceIndexer } from '../../data/workspaceIndexer';
+import { getContextBuilder } from '../../data/contextBuilder';
+import { getContextPanelProvider } from '../../features/trees/contextPanelProvider';
+import { getContextBudget } from '../../data/contextBudget';
+import { parsePatchBlocks, type PatchBlock } from '../../integrations/patchEngine';
 
 export { parsePatchBlocks };
 

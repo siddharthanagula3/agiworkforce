@@ -3,7 +3,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { SidebarProvider } from '../providers/sidebarProvider';
+// AUDIT-FIX: vscode-reorg
+import { SidebarProvider } from '../features/sidebar-webview/sidebarProvider';
 import { AgiDiagnosticsProvider } from '../providers/diagnosticsProvider';
 import { DiffDecorationProvider } from '../providers/diffDecorationProvider';
 import { ConversationStore } from '../data/conversationStore';
@@ -19,9 +20,9 @@ import { getDesktopBridge } from '../features/desktop-bridge';
 import { getCheckpointManager } from '../data/checkpointManager';
 import { showOriginalContext, getPatchOutputChannel } from '../integrations/patchEngine';
 import { runInlineCommand } from './runInlineCommand';
-import { resolveTier } from '../services/tierResolver';
-import { guardProviderSwitch } from '../services/providerSwitchGuard';
-import { getActiveWorkspaceFolder } from '../utils/workspaceFolders';
+import { resolveTier } from '../integrations/tierResolver';
+import { guardProviderSwitch } from '../integrations/providerSwitchGuard';
+import { getActiveWorkspaceFolder } from '../platform/workspaceFolders';
 import {
   getApiKey,
   setApiKey,
@@ -36,8 +37,8 @@ import {
   normalizeConfiguredModelId,
   buildGroupedQuickPickItems,
   type GroupedQuickPickItem,
-} from '../services/modelConstants';
-import * as telemetry from '../services/telemetry';
+} from '../features/model-picker/modelConstants';
+import * as telemetry from './telemetry';
 
 const execFileAsync = promisify(execFile);
 
@@ -367,10 +368,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     vscode.commands.registerCommand('agi-workforce.selectModel', async () => {
       const currentModel = normalizeConfiguredModelId(Config.model());
 
-      const allItems: GroupedQuickPickItem[] = buildGroupedQuickPickItems().map((item) => ({
-        ...item,
-        picked: item.modelId !== undefined && item.modelId === currentModel,
-      }));
+      const allItems: GroupedQuickPickItem[] = buildGroupedQuickPickItems().map(
+        (item: GroupedQuickPickItem) => ({
+          ...item,
+          picked: item.modelId !== undefined && item.modelId === currentModel,
+        }),
+      );
 
       const picked = await vscode.window.showQuickPick(allItems, {
         title: 'AGI Workforce — Select Model (10+ providers)',

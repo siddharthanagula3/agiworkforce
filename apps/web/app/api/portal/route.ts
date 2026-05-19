@@ -21,7 +21,7 @@ if (!STRIPE_SECRET_KEY) {
 
 const stripe = STRIPE_SECRET_KEY
   ? new Stripe(STRIPE_SECRET_KEY, {
-      apiVersion: STRIPE_API_VERSION as Stripe.LatestApiVersion,
+      apiVersion: STRIPE_API_VERSION,
     })
   : null;
 

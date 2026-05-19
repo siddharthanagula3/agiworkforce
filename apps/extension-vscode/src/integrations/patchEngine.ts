@@ -16,7 +16,8 @@
 
 import * as vscode from 'vscode';
 import { resolveContained } from '@agiworkforce/utils';
-import { getActiveWorkspaceFolderSync } from '../utils/workspaceFolders';
+// AUDIT-FIX: vscode-reorg
+import { getActiveWorkspaceFolderSync } from '../platform/workspaceFolders';
 import { isSensitiveFile } from '../utils/pathSafety';
 
 // ─── Output channel for patch logs ────────────────────────────────────────────

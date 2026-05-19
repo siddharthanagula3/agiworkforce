@@ -34,7 +34,7 @@ class ConnectionManager {
   private connections = new Map<WebSocket, ConnectionInfo>();
   private ipConnectionCounts = new Map<string, number>();
   private closeReasonCounts = new Map<string, number>();
-  private cleanupInterval: NodeJS.Timeout | null = null;
+  private cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
   /**
    * Start the connection manager cleanup interval

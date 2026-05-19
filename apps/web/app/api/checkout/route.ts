@@ -20,7 +20,7 @@ let stripeClient: Stripe | null = null;
 function getStripe(): Stripe {
   if (!stripeClient) {
     stripeClient = new Stripe(requireEnv('STRIPE_SECRET_KEY'), {
-      apiVersion: STRIPE_API_VERSION as Stripe.LatestApiVersion,
+      apiVersion: STRIPE_API_VERSION,
     });
   }
   return stripeClient;
