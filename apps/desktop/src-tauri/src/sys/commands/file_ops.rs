@@ -482,6 +482,20 @@ pub async fn file_write(
         ));
     }
 
+    // FIX-F2 (audit 2026-05-19): require HITL on file_write so an indirect
+    // prompt-injection-driven agent cannot silently overwrite files in the
+    // user's allowed dirs (e.g. ~/Projects/.git/hooks/pre-commit,
+    // ~/.cargo/config.toml). Pattern mirrors file_delete (line 545).
+    if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
+        &app,
+        "file_write",
+        &serde_json::json!({ "path": path, "size_bytes": content.len() }),
+    )
+    .await?
+    {
+        return Err("Operation denied by user".to_string());
+    }
+
     if !check_file_permission(&path, FileOperation::Write, &state, Some(&app)).await? {
         let error = "Permission denied".to_string();
         log_file_operation(
@@ -785,6 +799,37 @@ pub async fn file_open_with_default_app(
             }
         }
         Err(e) => return Err(format!("Path does not exist or is not accessible: {}", e)),
+    }
+
+    // FIX-F4 (audit 2026-05-19): block executable extensions so an LLM that
+    // dropped a malicious binary via file_write_binary (now HITL-gated per
+    // FIX-F2) cannot chain into `open` to execute it. macOS `open` will
+    // launch .app bundles; Windows Start-Process will execute .exe/.bat/.cmd
+    // /.ps1; Linux xdg-open can execute .desktop files.
+    const EXEC_EXTENSIONS: &[&str] = &[
+        "app", "exe", "bat", "cmd", "com", "ps1", "sh", "command", "scpt", "workflow", "desktop",
+    ];
+    if let Some(ext) = canonical_path.extension().and_then(|e| e.to_str()) {
+        let lower = ext.to_ascii_lowercase();
+        if EXEC_EXTENSIONS.contains(&lower.as_str()) {
+            return Err(format!(
+                "Refusing to open executable extension '.{ext}' via default app handler. \
+                 Run via terminal_execute (HITL-gated) instead."
+            ));
+        }
+    }
+
+    // FIX-F4 (audit 2026-05-19): require HITL on open-with-default since
+    // even non-executable extensions can trigger handlers that side-effect
+    // (PDF auto-fetch, URL-handler files, etc.).
+    if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
+        &app,
+        "file_open_with_default_app",
+        &serde_json::json!({ "path": canonical_str }),
+    )
+    .await?
+    {
+        return Err("Operation denied by user".to_string());
     }
 
     if !check_file_permission(&canonical_str, FileOperation::Read, &state, Some(&app)).await? {
@@ -1609,6 +1654,18 @@ pub async fn file_write_text(
         ));
     }
 
+    // FIX-F2 (audit 2026-05-19): mirror of file_write HITL gate so the
+    // _text variant cannot bypass confirmation.
+    if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
+        &app,
+        "file_write_text",
+        &serde_json::json!({ "path": file_path, "size_bytes": content.len() }),
+    )
+    .await?
+    {
+        return Err("Operation denied by user".to_string());
+    }
+
     if !check_file_permission(&file_path, FileOperation::Write, &state, Some(&app)).await? {
         let error = "Permission denied".to_string();
         log_file_operation(
@@ -1700,6 +1757,20 @@ pub async fn file_write_binary(
 
     if base64_content.len() > 134_000_000 {
         return Err("Content too large. Maximum is 100MB decoded".to_string());
+    }
+
+    // FIX-F2 (audit 2026-05-19): mirror of file_write HITL gate. Binary
+    // writes are the higher-risk variant since they can drop arbitrary
+    // executable content; pair this with the file_open_with_default_app
+    // extension blocklist (FIX-F4) so the chain can't reach `open`.
+    if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
+        &app,
+        "file_write_binary",
+        &serde_json::json!({ "path": file_path, "encoded_size_bytes": base64_content.len() }),
+    )
+    .await?
+    {
+        return Err("Operation denied by user".to_string());
     }
 
     if !check_file_permission(&file_path, FileOperation::Write, &state, Some(&app)).await? {
