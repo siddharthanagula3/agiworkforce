@@ -29,14 +29,53 @@ import crypto from 'crypto';
 // Token TTL: 60 seconds
 const TOKEN_TTL_MS = 60 * 1000;
 
-// Encryption key derived from TOTP_ENCRYPTION_KEY env var
-// Must be 32 bytes for AES-256-GCM
+// Encryption key derived from TOTP_ENCRYPTION_KEY env var.
+// Must be 32 bytes for AES-256-GCM.
+//
+// SEV-WEB-12 / WEB-35 (audit 2026-05-19): SHA-256 is not a password-stretching
+// KDF, so if the env var is a passphrase the derived key is brute-forceable
+// against any captured ciphertext. We don't change to scrypt here because the
+// decrypting side lives in the desktop app (Tauri/Rust) and a coordinated
+// rollout is out of scope for this PR — but we can close the practical
+// exposure by REJECTING low-entropy key material at the env-var boundary.
+// Accepted inputs:
+//   - 64-char hex (32 bytes random) — preferred
+//   - any value ≥ 64 UTF-8 bytes that isn't an obvious passphrase pattern
+const MIN_KEYSOURCE_BYTES = 64;
+const HEX_32_BYTE = /^[0-9a-fA-F]{64}$/;
+
+function assertHighEntropyKeysource(name: string, value: string): void {
+  const byteLen = Buffer.byteLength(value, 'utf8');
+  if (HEX_32_BYTE.test(value)) return; // hex 32-byte secret — strong
+  if (byteLen < MIN_KEYSOURCE_BYTES) {
+    throw new Error(
+      `${name} too short: SHA-256 derivation requires ≥ ${MIN_KEYSOURCE_BYTES} UTF-8 bytes ` +
+        '(or a 64-char hex string). Generate with: ' +
+        "node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
+    );
+  }
+  // Reject the most obvious passphrase patterns. This is a coarse guard,
+  // not a full entropy estimator — operators with a real high-entropy
+  // passphrase will pass; copy-paste of "passwordpasswordpassword..." will fail.
+  if (/^([\x20-\x7e])\1+$/.test(value)) {
+    throw new Error(`${name} appears to be a single repeated character`);
+  }
+}
+
 function getEncryptionKey(): Buffer {
   const keySource = process.env['TOTP_ENCRYPTION_KEY'] || process.env['DESKTOP_TOKEN_SECRET'];
   if (!keySource) {
     throw new Error('TOTP_ENCRYPTION_KEY or DESKTOP_TOKEN_SECRET environment variable is required');
   }
-  // Derive a 32-byte key using SHA-256
+  const sourceName = process.env['TOTP_ENCRYPTION_KEY']
+    ? 'TOTP_ENCRYPTION_KEY'
+    : 'DESKTOP_TOKEN_SECRET';
+  assertHighEntropyKeysource(sourceName, keySource);
+  // If the secret is a hex 32-byte string, use it directly. Otherwise SHA-256
+  // derive (acceptable now that we've gated the input on entropy).
+  if (HEX_32_BYTE.test(keySource)) {
+    return Buffer.from(keySource, 'hex');
+  }
   return crypto.createHash('sha256').update(keySource).digest();
 }
 

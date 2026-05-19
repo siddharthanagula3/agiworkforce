@@ -4,14 +4,36 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from './logger';
 import { logRateLimitExceeded } from './security-audit';
 
-// Initialize Redis client (falls back to in-memory if not configured)
-const redis =
-  process.env['UPSTASH_REDIS_REST_URL'] && process.env['UPSTASH_REDIS_REST_TOKEN']
-    ? new Redis({
-        url: process.env['UPSTASH_REDIS_REST_URL'],
-        token: process.env['UPSTASH_REDIS_REST_TOKEN'],
-      })
-    : null;
+// SEV-WEB-13 / WEB-36 (audit 2026-05-19): Redis is REQUIRED in production
+// Vercel deployments. In-memory rate-limiting is per-function-instance, so
+// an attacker fanning out across N warm instances multiplies their effective
+// limit by N. Fail fast at module init when the deploy is missing Redis env
+// vars in a production-ish environment. Local dev and Vercel preview are
+// still allowed to run without Redis (failClosed configs already absorb that
+// safely for security-sensitive routes).
+const hasRedisEnv =
+  !!process.env['UPSTASH_REDIS_REST_URL'] && !!process.env['UPSTASH_REDIS_REST_TOKEN'];
+const vercelEnv = process.env['VERCEL_ENV']; // 'production' | 'preview' | 'development' | undefined
+const isProductionDeploy = vercelEnv === 'production' || process.env['NODE_ENV'] === 'production';
+
+if (isProductionDeploy && vercelEnv !== 'preview' && !hasRedisEnv) {
+  // Loud, fail-fast error so the deploy aborts at build-or-init time rather
+  // than silently allowing N× rate limits in serverless.
+  throw new Error(
+    'SEV-WEB-13: UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required ' +
+      'in production. In-memory rate limiting is ineffective across Vercel function ' +
+      'instances. Set the env vars on the agiworkforce project (Production + Preview).',
+  );
+}
+
+// Initialize Redis client (falls back to in-memory if not configured — only
+// safe in local dev / Vercel preview after the production guard above).
+const redis = hasRedisEnv
+  ? new Redis({
+      url: process.env['UPSTASH_REDIS_REST_URL']!,
+      token: process.env['UPSTASH_REDIS_REST_TOKEN']!,
+    })
+  : null;
 
 // AUDIT-008-016: Rate limit configurations per endpoint
 // failClosed: true = block requests when Redis unavailable (security-sensitive endpoints)
