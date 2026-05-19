@@ -15,6 +15,7 @@ import { URL } from 'url';
 import { getModelMetrics } from '../services/modelMetrics';
 import { normalizeConfiguredModelId } from '../services/modelConstants';
 import { getTokenCounter } from '../services/tokenCounter';
+import { TierInfoSchema } from '../protocol/apiResponses';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -717,19 +718,34 @@ export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<Tier
         }
         try {
           const body = Buffer.concat(chunks).toString('utf8');
-          const json = JSON.parse(body) as Record<string, unknown>;
-          const tier =
-            typeof json['tier'] === 'string'
-              ? json['tier']
-              : typeof json['plan_tier'] === 'string'
-                ? json['plan_tier']
-                : 'unknown';
-          const tierInfo: TierInfo = { tier };
-          if (typeof json['tokens_used'] === 'number') {
-            tierInfo.tokensUsed = json['tokens_used'];
+          const raw = JSON.parse(body);
+          // PR-3C (F-23): runtime-validate the tier response. A malformed
+          // upstream response now resolves to undefined rather than
+          // silently overwriting global tier state with garbage.
+          // Accept both `tier` and legacy `plan_tier` field names.
+          const candidate =
+            typeof raw === 'object' && raw !== null && !('tier' in raw) && 'plan_tier' in raw
+              ? { ...raw, tier: raw.plan_tier }
+              : raw;
+          const parsed = TierInfoSchema.safeParse(candidate);
+          if (!parsed.success) {
+            resolve(undefined);
+            return;
           }
-          if (typeof json['token_cap'] === 'number') {
-            tierInfo.tokenCap = json['token_cap'];
+          // PR-4B (F-23): cross-surface stub. When `apps/web/app/api/auth/me/route.ts`
+          // begins HMAC-signing tier responses, validate the `signature`
+          // field here against a session-bound secret stored in SecretStorage.
+          // Until the server ships signatures, we accept unsigned responses
+          // (one-release backward-compat window) but log presence/absence
+          // for telemetry.
+          // const hasSig = typeof parsed.data.signature === 'string';
+          // TODO: once server-side HMAC ships, verify hasSig && hmac matches.
+          const tierInfo: TierInfo = { tier: parsed.data.tier };
+          if (typeof parsed.data.tokens_used === 'number') {
+            tierInfo.tokensUsed = parsed.data.tokens_used;
+          }
+          if (typeof parsed.data.token_cap === 'number') {
+            tierInfo.tokenCap = parsed.data.token_cap;
           }
           resolve(tierInfo);
         } catch {

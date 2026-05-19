@@ -4,9 +4,10 @@
  */
 
 import * as vscode from 'vscode';
-import * as path from 'path';
+import { resolveContained } from '@agiworkforce/utils';
 import { chatCompletion, type LlmChatMessage } from '../../utils/api';
 import { getActiveWorkspaceFolderSync } from '../../utils/workspaceFolders';
+import { isSensitiveFile } from '../../utils/pathSafety';
 import { Config } from '../../utils/config';
 import { WorkspaceIndexer } from '../../services/workspaceIndexer';
 import { getContextBuilder } from '../../services/contextBuilder';
@@ -322,11 +323,24 @@ export async function readFiles(
 
   for (const filePath of paths) {
     try {
-      const resolvedPath = path.resolve(rootUri.fsPath, filePath);
-      if (!resolvedPath.startsWith(rootUri.fsPath + path.sep) && resolvedPath !== rootUri.fsPath) {
+      // PR-3A (F-05, F-06): single source of truth for path containment.
+      const contained = resolveContained(rootUri.fsPath, filePath);
+      if (!contained.ok) {
         results.push({
           path: filePath,
           content: `(path traversal blocked: ${filePath} resolves outside workspace)`,
+          language: 'plaintext',
+        });
+        continue;
+      }
+      const resolvedPath = contained.resolved;
+      // PR-2C (F-07): refuse to read files matching the sensitive-file
+      // denylist (.env, .pem, .ssh/, credentials). Emit a marker so the
+      // LLM observes the refusal explicitly instead of silently missing.
+      if (isSensitiveFile(resolvedPath) || isSensitiveFile(filePath)) {
+        results.push({
+          path: filePath,
+          content: `(file refused: matches sensitive-file denylist — credentials/keys/env are never read by the agent)`,
           language: 'plaintext',
         });
         continue;
@@ -341,7 +355,12 @@ export async function readFiles(
           `\n... [TRUNCATED: file is ${fullContent.length} chars, showing first ${FILE_READ_CAP}]`
         : fullContent;
       // SECURITY (VSCODE-02): wrap in untrusted_file tags so LLM treats this as data only.
-      const content = `<untrusted_file path="${filePath}">\n${rawContent}\n</untrusted_file>`;
+      // PR-2C (F-07): escape BOTH open and close tags so an attacker file
+      // cannot terminate the untrusted region.
+      const escaped = rawContent.replace(/<\/?untrusted_file[^>]*>/gi, (m) =>
+        m.replace(/</g, '&lt;').replace(/>/g, '&gt;'),
+      );
+      const content = `<untrusted_file path="${filePath.replace(/"/g, '&quot;')}">\n${escaped}\n</untrusted_file>`;
       results.push({ path: filePath, content, language: doc.languageId });
     } catch {
       results.push({
