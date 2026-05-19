@@ -585,6 +585,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         run_migration_in_transaction(conn, 62, apply_migration_v62)?;
     }
 
+    if current_version < 63 {
+        run_migration_in_transaction(conn, 63, apply_migration_v63)?;
+    }
+
     Ok(())
 }
 
@@ -5291,6 +5295,68 @@ fn apply_migration_v62(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Migration v63 (FIX-F6, audit 2026-05-19): close the
+/// remember-able-privileged-transition Lies-in-the-Loop bypass.
+///
+/// Two changes:
+/// 1. Add `never_remember INTEGER NOT NULL DEFAULT 0` column. Future entries
+///    written for tools on the NEVER_REMEMBERABLE allowlist will have this
+///    set to 1; the runtime check in tool_confirmation::respond_tool_-
+///    confirmation rejects remember_choice=true for those tools at the
+///    source so the column should always be 0 going forward — it exists
+///    as a forensic flag in case any historical write slipped through.
+///
+/// 2. DELETE every existing row whose tool_name is in NEVER_REMEMBERABLE.
+///    A prior build allowed users to check "remember this choice" for
+///    set_auto_approve_all / set_agent_mode:autopilot / execute_code etc.
+///    Those rows represent a live one-click bypass on every startup.
+///    Wiping them at migration time invalidates the bypass even for users
+///    upgrading from a vulnerable build. Wrapped in the standard
+///    run_migration_in_transaction wrapper so a partial failure rolls back.
+fn apply_migration_v63(conn: &Connection) -> Result<()> {
+    // Step 1: add the never_remember column (idempotent via PRAGMA query
+    // pattern so re-running on an environment that already has the column
+    // doesn't fail).
+    let has_column: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('remembered_tool_choices') \
+             WHERE name = 'never_remember'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    if has_column == 0 {
+        conn.execute_batch(
+            "ALTER TABLE remembered_tool_choices \
+             ADD COLUMN never_remember INTEGER NOT NULL DEFAULT 0;",
+        )?;
+    }
+
+    // Step 2: purge dangerous existing rows. The list MUST stay in lockstep
+    // with sys/commands/tool_confirmation::NEVER_REMEMBERABLE; a test in
+    // both modules pins the alignment.
+    const PURGE_TOOL_NAMES: &[&str] = &[
+        "set_auto_approve_all",
+        "set_agent_mode:autopilot",
+        "set_tool_approval_policy",
+        "execute_code",
+        "code_execute",
+        "file_write",
+        "file_write_text",
+        "file_write_binary",
+        "file_open_with_default_app",
+        "playwright_evaluate",
+        "terminal_execute",
+    ];
+    for tool_name in PURGE_TOOL_NAMES {
+        conn.execute(
+            "DELETE FROM remembered_tool_choices WHERE tool_name = ?1",
+            [tool_name],
+        )?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -5427,11 +5493,9 @@ mod tests {
         .expect("insert into conversations should succeed");
 
         let title: String = conn
-            .query_row(
-                "SELECT title FROM conversations WHERE id = 1",
-                [],
-                |row| row.get(0),
-            )
+            .query_row("SELECT title FROM conversations WHERE id = 1", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(title, "hello");
 
@@ -5444,7 +5508,9 @@ mod tests {
         .expect("insert into messages should succeed");
 
         let role: String = conn
-            .query_row("SELECT role FROM messages WHERE id = 1", [], |row| row.get(0))
+            .query_row("SELECT role FROM messages WHERE id = 1", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(role, "user");
 
@@ -5708,5 +5774,86 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM auth_sessions", [], |row| row.get(0))
             .unwrap();
         assert_eq!(row_count, 1);
+    }
+
+    /// FIX-F6 (audit 2026-05-19): pin the behaviour of migration v63 — it
+    /// must (a) add the `never_remember` column to `remembered_tool_choices`
+    /// and (b) DELETE any pre-existing row whose `tool_name` is on the
+    /// never-rememberable list. The fixture seeds rows that would represent
+    /// a live one-click LITL bypass on every startup if not purged.
+    #[test]
+    fn migration_v63_purges_dangerous_remembered_choices() {
+        let conn = Connection::open_in_memory().unwrap();
+        // Bring the DB to v62 schema by running migrations up to that point.
+        run_migrations(&conn).unwrap();
+
+        // Seed rows that represent a vulnerable historical state.
+        let dangerous_rows = [
+            ("execute_code", 1),
+            ("set_auto_approve_all", 1),
+            ("set_agent_mode:autopilot", 1),
+            ("file_write", 1),
+            ("file_open_with_default_app", 1),
+            ("playwright_evaluate", 1),
+        ];
+        // Insert safe rows too so we know v63 only deletes the dangerous ones.
+        let safe_rows = [("file_read", 1), ("browser_get_url", 1), ("git_status", 1)];
+
+        // Re-run insertions after the migrations completed: v63 has already
+        // executed once at this point, so this represents "user runs a
+        // legacy binary in parallel before upgrade" - we want to verify
+        // re-running migrations after such inserts cleans them up.
+        for (name, approved) in dangerous_rows.iter().chain(safe_rows.iter()) {
+            conn.execute(
+                "INSERT OR REPLACE INTO remembered_tool_choices (tool_name, approved, updated_at) \
+                 VALUES (?1, ?2, '2026-05-19T00:00:00Z')",
+                params![*name, *approved],
+            )
+            .unwrap();
+        }
+        // Verify all rows are present pre-purge.
+        let pre_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM remembered_tool_choices", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(pre_count, 9);
+
+        // Re-apply v63 directly (simulates a startup-time re-run).
+        apply_migration_v63(&conn).unwrap();
+
+        // Each dangerous row must be gone.
+        for (name, _) in dangerous_rows.iter() {
+            let cnt: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM remembered_tool_choices WHERE tool_name = ?1",
+                    params![*name],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(cnt, 0, "v63 should have purged remembered_tool_choices.{}", name);
+        }
+        // Safe rows must remain.
+        for (name, _) in safe_rows.iter() {
+            let cnt: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM remembered_tool_choices WHERE tool_name = ?1",
+                    params![*name],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(cnt, 1, "v63 must not touch safe remembered_tool_choices.{}", name);
+        }
+
+        // And the never_remember column must exist.
+        let column_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('remembered_tool_choices') \
+                 WHERE name = 'never_remember'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(column_count, 1);
     }
 }
