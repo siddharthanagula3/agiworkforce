@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { ToolCallResponseSchema } from './tool-calls';
+
 /** WEB-1 (audit 2026-05-03): hard cap on a single completion's max_tokens.
  *  Without this, a single authenticated request can drain a billing
  *  period - both via inflated credit reservation and via the actual
@@ -49,8 +51,10 @@ export const LLMCompletionRequestSchema = z.object({
       z.object({
         role: z.enum(['system', 'user', 'assistant', 'tool']),
         content: z.string(),
-        tool_calls: z.array(z.unknown()).optional(),
-        tool_call_id: z.string().optional(),
+        // WEB-21 (audit 2026-05-19): tool_calls strictly typed; previously
+        // `z.array(z.unknown())` let arbitrary payloads land in chat history.
+        tool_calls: z.array(ToolCallResponseSchema).max(32).optional(),
+        tool_call_id: z.string().max(256).optional(),
         multimodal_content: z.array(z.unknown()).optional(),
       }),
     )

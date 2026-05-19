@@ -4,9 +4,9 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Comparative reviews — Claude, ChatGPT, Gemini, Perplexity vs AGI Workforce',
+  title: 'Comparative reviews — Claude, ChatGPT, Gemini, Perplexity vs AGI',
   description:
-    'Honest reviews of the major AI tools and where AGI Workforce sits. The case for us is the routing across all of them.',
+    'Honest reviews of the major AI tools and where AGI sits. The case for us is the routing across all of them.',
   alternates: { canonical: 'https://agiworkforce.com/compare' },
 };
 
@@ -15,7 +15,7 @@ const REVIEWS = [
     name: 'Anthropic Claude',
     href: '/compare/claude',
     take: 'The class of the field on long-form prose, code review, and tool use. Claude.ai itself is a beautifully restrained product.',
-    where_we_lose: 'We don&rsquo;t ship Computer Use polish at Anthropic&rsquo;s Cowork level.',
+    where_we_lose: 'We don’t ship Computer Use polish at Anthropic’s Cowork level.',
     where_we_win: 'Their lock-in to Claude only is the entire reason we exist.',
   },
   {
@@ -51,8 +51,8 @@ export default function ComparePage() {
           <h1 className="agi-page-h1">Comparative reviews.</h1>
           <p className="agi-page-lede">
             The other AI tools are not bad. Several are excellent.{' '}
-            <strong>The case for AGI Workforce is the routing across all of them</strong> — that
-            lane was empty until we shipped. These reviews are honest. Where we lose, we say so.
+            <strong>The case for AGI is the routing across all of them</strong> — that lane was
+            empty until we shipped. These reviews are honest. Where we lose, we say so.
           </p>
         </section>
         <section className="agi-section">
@@ -61,18 +61,16 @@ export default function ComparePage() {
             {REVIEWS.map((r) => (
               <article key={r.name} className="agi-tier" style={{ gap: 14 }}>
                 <h2 className="agi-tier-name">{r.name}</h2>
-                <p className="agi-tier-body" dangerouslySetInnerHTML={{ __html: r.take }} />
+                <p className="agi-tier-body">{r.take}</p>
                 <ul className="agi-tier-features" style={{ marginTop: 4 }}>
-                  <li
-                    dangerouslySetInnerHTML={{
-                      __html: `<strong style="color:var(--agi-ink)">Where we lose:</strong> ${r.where_we_lose}`,
-                    }}
-                  />
-                  <li
-                    dangerouslySetInnerHTML={{
-                      __html: `<strong style="color:var(--agi-ink)">Where we win:</strong> ${r.where_we_win}`,
-                    }}
-                  />
+                  <li>
+                    <strong style={{ color: 'var(--agi-ink)' }}>Where we lose:</strong>{' '}
+                    {r.where_we_lose}
+                  </li>
+                  <li>
+                    <strong style={{ color: 'var(--agi-ink)' }}>Where we win:</strong>{' '}
+                    {r.where_we_win}
+                  </li>
                 </ul>
                 <Link href={r.href} className="agi-tier-cta agi-tier-cta--ghost">
                   Read the review →
@@ -82,7 +80,7 @@ export default function ComparePage() {
           </div>
         </section>
         <section className="agi-section">
-          <p className="agi-section-eyebrow">Where AGI Workforce sits</p>
+          <p className="agi-section-eyebrow">Where AGI sits</p>
           <table className="agi-ledger">
             <thead>
               <tr>
@@ -91,7 +89,7 @@ export default function ComparePage() {
                 <th>ChatGPT</th>
                 <th>Gemini</th>
                 <th>Perplexity</th>
-                <th>AGI Workforce</th>
+                <th>AGI</th>
               </tr>
             </thead>
             <tbody>

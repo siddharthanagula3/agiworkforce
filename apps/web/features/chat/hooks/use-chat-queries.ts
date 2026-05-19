@@ -19,6 +19,7 @@ import { chatPersistenceService } from '../services/conversation-storage';
 import type { ChatSession, ChatMessage } from '../types';
 import { toast } from 'sonner';
 import { logger } from '@shared/lib/logger';
+import { secureToken } from '@/lib/secure-random';
 import type { User } from '@supabase/supabase-js';
 
 // ============================================================================
@@ -758,8 +759,10 @@ export function useShareChatSession(): UseMutationResult<ShareSessionResult, Err
         throw new Error('You must be logged in to share a chat');
       }
 
-      // Generate share token
-      const shareToken = `${sessionId}-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      // WEB-15 (audit 2026-05-19): replaced `Math.random().toString(36)` with
+      // a 16-byte (22-char base64url) cryptographically secure token. Format
+      // stays compatible with existing share routing (sessionId-time-token).
+      const shareToken = `${sessionId}-${Date.now()}-${secureToken(16)}`;
       const shareLink = `${window.location.origin}/share/${shareToken}`;
 
       await chatPersistenceService.updateSessionSharedLink(sessionId, shareToken, user.id);

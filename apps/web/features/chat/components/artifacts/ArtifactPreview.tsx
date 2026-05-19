@@ -259,10 +259,13 @@ export function ArtifactPreview({
   };
 
   const handleOpenInNewTab = () => {
+    // WEB-25: noopener,noreferrer prevents reverse-tabnabbing; revoke the blob
+    // URL after a minute so the GC can reclaim the HTML body.
     const html = getPreviewHTML();
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
+    window.open(url, '_blank', 'noopener,noreferrer');
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
 
   const handleRefresh = () => {

@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
+import { secureToken } from '@/lib/secure-random';
 import { CreditService } from '@/lib/services/credit-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-helper';
@@ -130,7 +131,10 @@ export async function buildNonStreamResponse(
     });
   }
 
-  const responseId = `chatcmpl-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  // WEB-13 (audit 2026-05-19): switched from Math.random to a CSPRNG token.
+  // chatcmpl-* ids are not secrets but downstream observability tools dedupe
+  // by them; cryptographic uniqueness is a strict superset of "random enough".
+  const responseId = `chatcmpl-${Date.now()}-${secureToken(7)}`;
   const responseModel = usedFallback ? chatRequest.model : requestedModel;
 
   const responseHeaders: Record<string, string> = {
