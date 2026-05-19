@@ -175,9 +175,30 @@ impl ApiClient {
             request.url
         );
 
+        // AUDIT-FIX (reqwest-0.13 migration): the middleware RequestBuilder
+        // does not expose `.query()` in the feature set we ship, so encode
+        // query params directly into the URL before the builder is created.
+        let url_with_query = if request.query_params.is_empty() {
+            request.url.clone()
+        } else {
+            let qs = request
+                .query_params
+                .iter()
+                .map(|(k, v)| {
+                    format!("{}={}", urlencoding::encode(k), urlencoding::encode(v))
+                })
+                .collect::<Vec<_>>()
+                .join("&");
+            if request.url.contains('?') {
+                format!("{}&{qs}", request.url)
+            } else {
+                format!("{}?{qs}", request.url)
+            }
+        };
+
         let mut req_builder = self
             .client
-            .request(request.method.to_reqwest_method(), &request.url);
+            .request(request.method.to_reqwest_method(), &url_with_query);
 
         if let Some(timeout_ms) = request.timeout_ms {
             req_builder = req_builder.timeout(Duration::from_millis(timeout_ms));
@@ -189,10 +210,6 @@ impl ApiClient {
 
         for (key, value) in &request.headers {
             req_builder = req_builder.header(key, value);
-        }
-
-        if !request.query_params.is_empty() {
-            req_builder = req_builder.query(&request.query_params);
         }
 
         if let Some(body) = &request.body {

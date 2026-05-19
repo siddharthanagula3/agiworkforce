@@ -80,9 +80,9 @@ bson = { version = "3.1", optional = true }
 
 
 # HIGH-008: "blocking" feature removed — refresh_oauth_token is now async.
-reqwest = { version = "0.13", features = ["json", "stream", "rustls", "multipart"], default-features = false }
-reqwest-middleware = "0.3"
-reqwest-retry = "0.5"
+reqwest = { version = "0.13", features = ["json", "stream", "rustls", "multipart", "form", "query"], default-features = false }
+reqwest-middleware = "0.5"
+reqwest-retry = "0.9"
 urlencoding = "2.1"
 mime_guess = "2.0"
 bytes = "1.5"
