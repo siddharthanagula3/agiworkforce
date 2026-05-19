@@ -78,7 +78,7 @@ describe('RT-09: AuditService.getOrganizationLogs IDOR fix', () => {
 
     await expect(
       AuditService.getOrganizationLogs(mockClient, 'org-1', 'attacker-user-id'),
-    ).rejects.toThrow(/Forbidden/);
+    ).rejects.toMatchObject({ message: expect.stringContaining('Forbidden') }); // AUDIT-FIX: vitest 4.x regex arg broken
 
     const err = await AuditService.getOrganizationLogs(
       mockClient,
@@ -96,7 +96,7 @@ describe('RT-09: AuditService.getOrganizationLogs IDOR fix', () => {
 
     await expect(
       AuditService.getOrganizationLogs(mockClient, 'org-1', 'user-who-is-in-org-2'),
-    ).rejects.toThrow(/Forbidden/);
+    ).rejects.toMatchObject({ message: expect.stringContaining('Forbidden') }); // AUDIT-FIX: vitest 4.x regex arg broken
   });
 
   it('returns logs when caller IS a member of the org', async () => {

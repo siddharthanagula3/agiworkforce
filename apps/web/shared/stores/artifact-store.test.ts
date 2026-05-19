@@ -8,6 +8,25 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useArtifactStore } from './artifact-store';
 import type { ArtifactData } from '@features/chat/components/artifacts/ArtifactPreview';
 
+// AUDIT-FIX: mock supabase so shareArtifact/getSharedArtifact DB calls don't hang
+vi.mock('@shared/lib/supabase-client', () => ({
+  supabase: {
+    auth: {
+      getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'test-user' } }, error: null }),
+    },
+    from: vi.fn().mockReturnValue({
+      insert: vi.fn().mockResolvedValue({ error: null }),
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          gt: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+          }),
+        }),
+      }),
+    }),
+  },
+}));
+
 // Mock artifact data factory
 const createMockArtifact = (overrides: Partial<ArtifactData> = {}): ArtifactData => ({
   id: `artifact-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -270,7 +289,7 @@ describe('Artifact Store', () => {
       const { shareArtifact } = useArtifactStore.getState();
 
       await expect(shareArtifact('msg-123', 'non-existent')).rejects.toThrow(
-        'Message artifacts not found',
+        new Error('Message artifacts not found'), // AUDIT-FIX: vitest 4.x
       );
     });
 
@@ -281,7 +300,7 @@ describe('Artifact Store', () => {
       addArtifact(messageId, createMockArtifact());
 
       await expect(shareArtifact(messageId, 'non-existent-artifact')).rejects.toThrow(
-        'Artifact not found',
+        new Error('Artifact not found'), // AUDIT-FIX: vitest 4.x
       );
     });
 

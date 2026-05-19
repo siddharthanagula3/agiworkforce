@@ -117,11 +117,16 @@ describe('DeepSeekProvider', () => {
 
     it('should return models by capability', () => {
       const capabilities = DeepSeekProvider.getModelsByCapability();
-
-      expect(capabilities['chat']).toContain('deepseek-chat');
-      expect(capabilities['reasoning']).toContain('deepseek-reasoner');
-      expect(capabilities['coding']).toContain('deepseek-chat');
-      expect(capabilities['tools']).toContain('deepseek-chat');
+      // AUDIT-FIX: getModelsByCapability now reads from SUPPORTED_DEEPSEEK_MODELS (models.json)
+      // instead of hardcoded 'deepseek-chat'/'deepseek-reasoner' — use the live constant
+      const anyModel = SUPPORTED_DEEPSEEK_MODELS[0]!;
+      expect(capabilities['chat']).toContain(anyModel);
+      expect(capabilities['reasoning']).toContain(anyModel);
+      expect(capabilities['coding']).toContain(anyModel);
+      expect(capabilities['tools']).toContain(anyModel);
+      // all capability buckets should return the same array (every model handles all capabilities)
+      expect(capabilities['chat']).toEqual([...SUPPORTED_DEEPSEEK_MODELS]);
+      expect(capabilities['reasoning']).toEqual([...SUPPORTED_DEEPSEEK_MODELS]);
     });
   });
 
