@@ -234,8 +234,12 @@ describe('canModelHandleInput', () => {
   });
 
   it('returns false for image when model has no vision capability', () => {
-    // deepseek-chat has no vision per the router documentation
-    const result = canModelHandleInput('deepseek-chat', 'image');
+    // qwen-max is non-deprecated and has vision:false in models.json with no
+    // alias pointing it forward — a stable choice for asserting the
+    // no-vision branch. (Previous fixture deepseek-chat aliased to
+    // deepseek-v4-flash which gained vision; grok-4 itself is deprecated
+    // and aliased forward to grok-4.3 which has vision.)
+    const result = canModelHandleInput('qwen-max', 'image');
     expect(result).toBe(false);
   });
 });
