@@ -28,6 +28,7 @@ import {
   type UsageMeter,
 } from '@agiworkforce/types';
 import { Config } from '../../utils/config';
+import { isSensitiveFile } from '../../utils/pathSafety';
 import {
   resolveUsageMeter,
   formatManagedUsageLabel,
@@ -439,27 +440,65 @@ export class ChatStateManager {
     let totalFileChars = 0;
     const MAX_TOTAL_FILE_CHARS = 20_000;
     let fileRefMatch: RegExpExecArray | null;
+    // PR-2C (F-07): cap to N=5 @file resolutions per turn to prevent
+    // accidental DoS via @file spam.
+    const MAX_FILE_REFS = 5;
+    let fileRefCount = 0;
     while ((fileRefMatch = fileRefPattern.exec(text)) !== null) {
       const ref = fileRefMatch[1];
       if (!ref) continue;
       if (seenRefs.has(ref)) continue;
       seenRefs.add(ref);
+      if (fileRefCount >= MAX_FILE_REFS) {
+        contextBlocks.push(
+          `<file_content path="(limit-reached)">[skipped: max ${MAX_FILE_REFS} @file refs per turn]</file_content>`,
+        );
+        break;
+      }
       if (totalFileChars >= MAX_TOTAL_FILE_CHARS) break;
+      // PR-2C (F-07): refuse @file resolution for sensitive paths.
+      if (isSensitiveFile(ref)) {
+        contextBlocks.push(
+          `<file_content path="${ref.replace(/"/g, '&quot;')}">[refused: matches sensitive-file denylist]</file_content>`,
+        );
+        fileRefCount++;
+        continue;
+      }
       try {
         const files = await vscode.workspace.findFiles(`**/${ref}`, '**/node_modules/**', 1);
         if (files.length > 0) {
+          // PR-2C (F-13 + F-07): re-check the RESOLVED file against the
+          // sensitive denylist in case the glob matched a symlinked or
+          // alias path.
+          const resolvedPath = files[0]!.fsPath;
+          if (isSensitiveFile(resolvedPath)) {
+            contextBlocks.push(
+              `<file_content path="${ref.replace(/"/g, '&quot;')}">[refused: resolved path matches sensitive-file denylist]</file_content>`,
+            );
+            fileRefCount++;
+            continue;
+          }
           const doc = await vscode.workspace.openTextDocument(files[0]!);
           const rawContent = doc.getText();
           if (rawContent.includes('\x00')) {
-            contextBlocks.push(`<file_content path="${ref}">[binary file skipped]</file_content>`);
+            contextBlocks.push(
+              `<file_content path="${ref.replace(/"/g, '&quot;')}">[binary file skipped]</file_content>`,
+            );
+            fileRefCount++;
             continue;
           }
           const remaining = MAX_TOTAL_FILE_CHARS - totalFileChars;
           const sliced = rawContent.slice(0, Math.min(5000, remaining));
           totalFileChars += sliced.length;
-          // VSCODE-06: escape any literal </file_content> that could confuse the model
-          const escaped = sliced.replace(/<\/file_content>/g, '&lt;/file_content&gt;');
-          contextBlocks.push(`<file_content path="${ref}">\n${escaped}\n</file_content>`);
+          // PR-2C (F-07): escape BOTH open and close tags so an attacker
+          // file cannot break out of the untrusted region.
+          const escaped = sliced.replace(/<\/?file_content[^>]*>/gi, (m) =>
+            m.replace(/</g, '&lt;').replace(/>/g, '&gt;'),
+          );
+          contextBlocks.push(
+            `<file_content path="${ref.replace(/"/g, '&quot;')}">\n${escaped}\n</file_content>`,
+          );
+          fileRefCount++;
         }
       } catch {
         // File not found — skip

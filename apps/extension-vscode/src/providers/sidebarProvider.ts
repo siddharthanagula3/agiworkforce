@@ -13,6 +13,7 @@ import { normalizeConfiguredModelId } from '../services/modelConstants';
 import { Config } from '../utils/config';
 import { ChatStateManager } from './sidebar/ChatStateManager';
 import { getWebviewContent, getNonce } from './sidebar/webviewContent';
+import { parseWebviewMessage } from '../protocol/webviewMessages';
 
 // Re-export for chatEditorPanel.ts (imported from ./sidebarProvider)
 export { getWebviewContent, getNonce, escapeHtml } from './sidebar/webviewContent';
@@ -80,7 +81,20 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
     this._messageListener?.dispose();
     this._messageListener = webviewView.webview.onDidReceiveMessage(async (msg) => {
-      await this._stateManager.handleMessage(msg);
+      // PR-3C (F-11): runtime-validate every webview → extension message.
+      // A compromised webview cannot spoof e.g. {type:'setMode',
+      // payload:{mode:'bypass'}} to silently downgrade agent mode.
+      const parsed = parseWebviewMessage(msg);
+      if (parsed === undefined) {
+        console.warn('[AGI Workforce] dropping malformed webview message', msg);
+        return;
+      }
+      // The Zod-inferred type is structurally a superset of the existing
+      // WebviewToExtMessage union (optional fields include `| undefined`).
+      // Cast through unknown to bridge the exactOptionalPropertyTypes gap.
+      await this._stateManager.handleMessage(
+        parsed as unknown as Parameters<typeof this._stateManager.handleMessage>[0],
+      );
     });
 
     webviewView.onDidDispose(() => {

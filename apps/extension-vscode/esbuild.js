@@ -36,6 +36,28 @@ const buildOptions = {
   mainFields: ['main', 'module'],
 };
 
+/**
+ * Webview render bundle — markdown-it + DOMPurify, browser target.
+ * Loaded by the webview HTML via a CSP-allowed <script src> tag. Exposes
+ * `window.agiRender(markdown)` for the inline webview script to call.
+ *
+ * Audit findings F-02 / F-10: replaces the custom regex Markdown parser
+ * + custom HTML sanitizer in webviewContent.ts:1066-1181.
+ */
+/** @type {import('esbuild').BuildOptions} */
+const webviewOptions = {
+  entryPoints: [path.join(__dirname, 'src', 'webview', 'render.ts')],
+  bundle: true,
+  outfile: path.join(__dirname, 'out', 'webview', 'render.js'),
+  platform: 'browser',
+  target: 'es2020',
+  format: 'iife',
+  sourcemap: !isProduction,
+  minify: isProduction,
+  treeShaking: true,
+  logLevel: 'info',
+};
+
 function copyCodiconAssets() {
   const codiconSrc = path.join(__dirname, 'node_modules', '@vscode', 'codicons', 'dist');
   const codiconDst = path.join(__dirname, 'out', 'codicons');
@@ -52,18 +74,23 @@ async function build() {
   try {
     if (isWatch) {
       const ctx = await esbuild.context(buildOptions);
-      await ctx.watch();
+      const webviewCtx = await esbuild.context(webviewOptions);
+      await Promise.all([ctx.watch(), webviewCtx.watch()]);
       console.log('[esbuild] Watching for changes…');
     } else {
-      const result = await esbuild.build(buildOptions);
-      if (result.errors.length > 0) {
+      const [extResult, webviewResult] = await Promise.all([
+        esbuild.build(buildOptions),
+        esbuild.build(webviewOptions),
+      ]);
+      const errors = [...extResult.errors, ...webviewResult.errors];
+      if (errors.length > 0) {
         console.error('[esbuild] Build failed with errors:');
-        result.errors.forEach((e) => console.error(e));
+        errors.forEach((e) => console.error(e));
         process.exit(1);
       }
       copyCodiconAssets();
       const mode = isProduction ? 'production' : 'development';
-      console.log(`[esbuild] Build complete (${mode})`);
+      console.log(`[esbuild] Build complete (${mode}) — extension + webview render`);
     }
   } catch (/** @type {unknown} */ err) {
     console.error('[esbuild] Fatal build error:', err);

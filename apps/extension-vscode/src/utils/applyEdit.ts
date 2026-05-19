@@ -14,8 +14,13 @@ import * as vscode from 'vscode';
  * Falls back to any fenced code block if no language match found.
  */
 export function extractCodeBlock(text: string, lang: string): string | undefined {
+  // PR-3A (F-28): escape regex metacharacters in `lang` before
+  // interpolation. languageId is normally alphanumeric but a custom-
+  // language extension could register `foo|bar` etc. — without escape
+  // this would silently match unintended code blocks.
+  const escapedLang = lang.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   // Try language-specific block first
-  const langPattern = new RegExp('```(?:' + lang + ')\\s*\\n([\\s\\S]*?)```', 'i');
+  const langPattern = new RegExp('```(?:' + escapedLang + ')\\s*\\n([\\s\\S]*?)```', 'i');
   const langMatch = langPattern.exec(text);
   if (langMatch?.[1] !== undefined) {
     return langMatch[1].trimEnd();

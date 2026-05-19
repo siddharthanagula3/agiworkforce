@@ -220,7 +220,11 @@ async function checkInlineCompletionsFirstRun(context: vscode.ExtensionContext):
   if (alreadyShown === true) return;
 
   const choice = await vscode.window.showInformationMessage(
-    'AGI Workforce inline completions are now active. They suggest code as you type. Manage in Settings → AGI Workforce.',
+    'AGI Workforce inline completions are now active. On each keystroke, up to ' +
+      '~100 lines of surrounding code are sent to the AGI Workforce API for ' +
+      'suggestion. Files in the sensitive-file denylist (.env, .pem, .ssh/, ' +
+      'credentials, secrets.json, etc.) are automatically excluded. Manage in ' +
+      'Settings → AGI Workforce.',
     'Got it',
     "Don't show again",
   );

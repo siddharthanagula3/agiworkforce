@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { SidebarProvider } from '../providers/sidebarProvider';
 import { AgiDiagnosticsProvider } from '../providers/diagnosticsProvider';
 import { DiffDecorationProvider } from '../providers/diffDecorationProvider';
@@ -19,7 +21,7 @@ import { showOriginalContext, getPatchOutputChannel } from '../services/patchEng
 import { runInlineCommand } from './runInlineCommand';
 import { resolveTier } from '../services/tierResolver';
 import { guardProviderSwitch } from '../services/providerSwitchGuard';
-import { getActiveWorkspaceFolder, shellQuoteForCurrentPlatform } from '../utils/workspaceFolders';
+import { getActiveWorkspaceFolder } from '../utils/workspaceFolders';
 import {
   getApiKey,
   setApiKey,
@@ -36,6 +38,40 @@ import {
   type GroupedQuickPickItem,
 } from '../services/modelConstants';
 import * as telemetry from '../services/telemetry';
+
+const execFileAsync = promisify(execFile);
+
+/**
+ * Output channel for git/test commands invoked via execFile.
+ * PR-3B (F-12, F-19): replaces `terminal.sendText` for hardcoded commands
+ * so shell metacharacters in dynamic args (e.g. commit messages) cannot
+ * cross into the shell. Output lands in a dedicated channel rather than
+ * the integrated terminal.
+ */
+let _agiGitOutputChannel: vscode.OutputChannel | undefined;
+function getAgiGitOutputChannel(): vscode.OutputChannel {
+  if (_agiGitOutputChannel === undefined) {
+    _agiGitOutputChannel = vscode.window.createOutputChannel('AGI Workforce: Git');
+  }
+  return _agiGitOutputChannel;
+}
+
+async function runGitToOutputChannel(args: string[], cwd: string, title: string): Promise<void> {
+  const channel = getAgiGitOutputChannel();
+  channel.appendLine(`\n$ git ${args.join(' ')}`);
+  try {
+    const result = await execFileAsync('git', args, { cwd, timeout: 30_000 });
+    channel.append(result.stdout);
+    if (result.stderr) channel.append(result.stderr);
+    channel.show(true);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    channel.appendLine(`[error] ${msg}`);
+    channel.show(true);
+    vscode.window.showErrorMessage(`AGI Workforce: ${title} failed — ${msg}`);
+  }
+}
+
 function sessionHistoryRelativeTime(timestamp: number): string {
   const diff = Date.now() - timestamp;
   const minutes = Math.floor(diff / 60_000);
@@ -694,7 +730,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       if (picked === undefined) return;
 
       const confirmed = await vscode.window.showWarningMessage(
-        `Restore to checkpoint "${picked.label}"? This will discard current uncommitted changes.`,
+        `Restore to checkpoint "${picked.label}"?\n\n` +
+          `THIS WILL:\n` +
+          `  • Discard ALL uncommitted changes\n` +
+          `  • Permanently DELETE untracked files (no undo for those)\n\n` +
+          `A safety stash will be created so committed work can be recovered with "git stash list".`,
         { modal: true },
         'Restore',
       );
@@ -733,7 +773,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       if (picked === undefined) return;
 
       const confirmed = await vscode.window.showWarningMessage(
-        `Restore to checkpoint "${picked.label}"? This will discard current uncommitted changes.`,
+        `Restore to checkpoint "${picked.label}"?\n\n` +
+          `THIS WILL:\n` +
+          `  • Discard ALL uncommitted changes\n` +
+          `  • Permanently DELETE untracked files (no undo for those)\n\n` +
+          `A safety stash will be created so committed work can be recovered with "git stash list".`,
         { modal: true },
         'Restore',
       );
@@ -744,15 +788,18 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     // ── git commands ────────────────────────────────────────────────────────────
+    // PR-3B (F-12, F-19): replace `terminal.sendText` with `execFile('git', [...])`
+    // so the user's shell config (aliases, profile, RC-file sourcing) cannot
+    // affect the literal command we intend to run, and so shell metacharacters
+    // in dynamic args (commit messages) are passed as a single argv entry —
+    // never interpreted by a shell.
     vscode.commands.registerCommand('agi.git.status', async () => {
       const folder = await getActiveWorkspaceFolder();
       if (!folder) {
         vscode.window.showErrorMessage('No workspace open');
         return;
       }
-      const terminal = vscode.window.createTerminal({ name: 'AGI Git', cwd: folder.uri });
-      terminal.show();
-      terminal.sendText('git status');
+      await runGitToOutputChannel(['status'], folder.uri.fsPath, 'git status');
     }),
 
     vscode.commands.registerCommand('agi.git.diff', async () => {
@@ -761,9 +808,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         vscode.window.showErrorMessage('No workspace open');
         return;
       }
-      const terminal = vscode.window.createTerminal({ name: 'AGI Git', cwd: folder.uri });
-      terminal.show();
-      terminal.sendText('git diff');
+      await runGitToOutputChannel(['diff'], folder.uri.fsPath, 'git diff');
     }),
 
     vscode.commands.registerCommand('agi.git.commit', async () => {
@@ -798,7 +843,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           }
         }
       } catch (err) {
-        console.warn('[AGI Workforce] git ext commit failed, falling back to terminal:', err);
+        console.warn('[AGI Workforce] git ext commit failed, falling back to execFile:', err);
       }
 
       // EXTV-GIT-COMMIT: refuse in untrusted workspaces
@@ -808,9 +853,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         );
         return;
       }
-      const terminal = vscode.window.createTerminal({ name: 'AGI Git', cwd: folder.uri });
-      terminal.show();
-      terminal.sendText(`git add -u && git commit -m ${shellQuoteForCurrentPlatform(msg)}`);
+      // PR-3B (F-12): execFile passes commit message as a single argv entry.
+      // No shell interpretation. shellQuoteForCurrentPlatform is no longer
+      // load-bearing here — kept only as backup utility in workspaceFolders.
+      await runGitToOutputChannel(['add', '-u'], folder.uri.fsPath, 'git add');
+      await runGitToOutputChannel(['commit', '-m', msg], folder.uri.fsPath, 'git commit');
+      vscode.window.showInformationMessage(`AGI Workforce: committed "${msg.slice(0, 60)}"`);
     }),
 
     vscode.commands.registerCommand('agi.test.run', async () => {
@@ -829,11 +877,18 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const workspaceRoot = folder.uri.fsPath;
 
       let testCmd = 'npm test';
+      // PR-3B (F-18): JSON.parse on package.json was unguarded — a malformed
+      // file would crash the command. Wrap in try/catch; on failure, fall
+      // back to the default `npm test`.
       if (fs.existsSync(path.join(workspaceRoot, 'package.json'))) {
-        const pkg = JSON.parse(
-          fs.readFileSync(path.join(workspaceRoot, 'package.json'), 'utf8'),
-        ) as { scripts?: Record<string, string> };
-        if (pkg.scripts?.['test']) testCmd = 'npm test';
+        try {
+          const pkg = JSON.parse(
+            fs.readFileSync(path.join(workspaceRoot, 'package.json'), 'utf8'),
+          ) as { scripts?: Record<string, string> };
+          if (pkg.scripts?.['test']) testCmd = 'npm test';
+        } catch {
+          // Malformed package.json — proceed with default npm test
+        }
         if (fs.existsSync(path.join(workspaceRoot, 'pnpm-lock.yaml'))) testCmd = 'pnpm test';
         if (fs.existsSync(path.join(workspaceRoot, 'yarn.lock'))) testCmd = 'yarn test';
       }

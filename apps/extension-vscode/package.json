@@ -838,6 +838,7 @@
     "package": "node esbuild.js --production && node scripts/vsce-package.js package --no-dependencies",
     "lint": "eslint src --ext ts --cache --cache-strategy content --cache-location .cache/eslint",
     "test": "vitest run",
+    "test:webview": "vitest run --config vitest.webview.config.ts",
     "test:integration": "tsc -p tsconfig.test.json && node out/test/runTests.js",
     "typecheck": "tsc --noEmit",
     "check:refs": "tsc -b tsconfig.build.json",
@@ -848,9 +849,15 @@
   "dependencies": {
     "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/runtime": "workspace:*",
-    "ws": "^8.20.0"
+    "@agiworkforce/utils": "workspace:*",
+    "dompurify": "^3.4.0",
+    "markdown-it": "^14.1.0",
+    "ws": "^8.20.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/dompurify": "^3.0.5",
+    "@types/markdown-it": "^14.1.2",
     "@types/node": "^22.19.15",
     "@types/vscode": "^1.110.0",
     "@types/ws": "^8.18.0",
@@ -862,6 +869,7 @@
     "@vscode/vsce": "^3.7.1",
     "esbuild": "^0.27.4",
     "eslint": "^9.39.4",
+    "jsdom": "^25.0.1",
     "rimraf": "^6.0.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
