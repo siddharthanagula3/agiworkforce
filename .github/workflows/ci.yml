@@ -97,7 +97,7 @@ jobs:
         # scopes failures to NEW findings introduced by the PR so pre-existing
         # backlog does not block unrelated work. Tightened from advisory
         # `continue-on-error: true` (rollout phase complete).
-        uses: returntocorp/semgrep-action@v1
+        uses: returntocorp/semgrep-action@713efdd345f3035192eaa63f56867b88e63e4e5d # v1
         with:
           config: >-
             p/security-audit

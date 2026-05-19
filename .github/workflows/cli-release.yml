@@ -220,13 +220,13 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6 # v1
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: ${{ matrix.target }}
 
       - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           workspaces: .
           cache-on-failure: true
@@ -291,7 +291,7 @@ jobs:
           Add-Content -Path $env:GITHUB_OUTPUT -Value "archive_name=${archiveName}"
 
       - name: Upload artifact to release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@26994186c0ac3ef5cae75ac16aa32e8153525f77 # v1
         with:
           draft: true
           tag_name: ${{ needs.prepare-release.outputs.tag }}
