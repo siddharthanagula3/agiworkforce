@@ -1,72 +1,11 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage } from '@/lib/mmkv';
-import type { JoinWaitlistInput, JoinWaitlistResult } from '@/services/waitlist';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface WaitlistState {
-  joined: boolean;
-  email?: string;
-  country?: string;
-  rank?: number;
-  joinedAt?: string;
-
-  /**
-   * Called after `joinWaitlist()` resolves successfully.
-   * Records the submission and result, and timestamps the join.
-   */
-  markJoined: (
-    submission: Pick<JoinWaitlistInput, 'email' | 'country'>,
-    result: JoinWaitlistResult,
-  ) => void;
-
-  /** Clears all waitlist state (e.g. when switching accounts or resetting app). */
-  clear: () => void;
-}
-
-// ---------------------------------------------------------------------------
-// Store
-// ---------------------------------------------------------------------------
-
-export const useWaitlistStore = create<WaitlistState>()(
-  persist(
-    (set) => ({
-      joined: false,
-
-      markJoined: (submission, result) =>
-        set({
-          joined: true,
-          email: submission.email,
-          country: submission.country,
-          rank: result.rank,
-          joinedAt: new Date().toISOString(),
-        }),
-
-      clear: () =>
-        set({
-          joined: false,
-          email: undefined,
-          country: undefined,
-          rank: undefined,
-          joinedAt: undefined,
-        }),
-    }),
-    {
-      name: 'waitlist-store',
-      storage: createJSONStorage(() => mmkvStorage),
-      partialize: (state) => ({
-        joined: state.joined,
-        email: state.email,
-        country: state.country,
-        rank: state.rank,
-        joinedAt: state.joinedAt,
-      }),
-      onRehydrateStorage: () => (_state, error) => {
-        if (error) console.warn('[waitlistStore] Hydration failed:', error);
-      },
-    },
-  ),
-);
+/**
+ * Temporary barrel — kept while the mobile pilot reorg migrates callers
+ * to the new path `@/src/features/waitlist`.
+ *
+ * Real implementation lives at apps/mobile/src/features/waitlist/store.ts.
+ * Once every call site has been migrated to the new path, this barrel will
+ * be removed in a follow-up cleanup commit (see tasks/team-status/reorg-mobile-pilot.md).
+ *
+ * Do NOT add new symbols here — add them at the canonical location.
+ */
+export * from '@/src/features/waitlist/store';
