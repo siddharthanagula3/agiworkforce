@@ -102,7 +102,7 @@ export const TIMEZONES = [
 // Filter set for which catalog models appear in the schedule picker.
 // These are filter keys matched against getCoreManualModelOptions() IDs,
 // not routing literals. Suppressed until eslint.config.mjs covers this path.
-/* eslint-disable no-restricted-syntax */
+
 const SCHEDULE_MODEL_IDS = new Set([
   'claude-opus-4.6',
   'claude-sonnet-4.6',
@@ -111,7 +111,6 @@ const SCHEDULE_MODEL_IDS = new Set([
   'gemini-3.1-pro-preview',
   'gemini-3.1-flash-lite',
 ]);
-/* eslint-enable no-restricted-syntax */
 
 export const AVAILABLE_MODELS = [
   { value: 'auto-balanced', label: 'Auto (Balanced)' },

@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- Detox spec progress log goes to test runner stdout */
 /**
  * Detox spec — screenshot 01: multi-provider in one chat.
  *

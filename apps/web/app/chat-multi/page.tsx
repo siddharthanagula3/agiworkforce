@@ -87,7 +87,7 @@ export default function MultiProviderChatPage(): ReactElement {
       // effect only reads the access token to attach as a Bearer header on
       // outbound LLM-provider fan-out requests. Using getUser() instead
       // would round-trip to the auth server on every page render.
-      // eslint-disable-next-line no-restricted-syntax
+
       const { data, error } = await supabase.auth.getSession();
       if (error) {
         setAuthError(error.message);

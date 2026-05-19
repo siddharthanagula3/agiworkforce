@@ -160,7 +160,6 @@ function FormulaDisplay({ expression, isLatex }: { expression: string; isLatex: 
     return (
       <div
         className="formula-katex overflow-x-auto py-2 text-center"
-        // eslint-disable-next-line no-restricted-syntax -- WEB-37: DOMPurify.sanitize applied inline (KaTeX output via HTML-profile sanitizer).
         dangerouslySetInnerHTML={{
           __html: DOMPurify.sanitize(rendered, { USE_PROFILES: { html: true } }),
         }}
