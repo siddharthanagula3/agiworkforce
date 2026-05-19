@@ -8,6 +8,7 @@ import { ScheduleForm } from '@/components/schedules/ScheduleForm';
 import { useScheduleStore } from '@/stores/scheduleStore';
 import type { Schedule } from '@/stores/scheduleStore';
 import { colors } from '@/lib/theme';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 export default function CreateScheduleScreen() {
   const router = useRouter();
@@ -62,6 +63,8 @@ export default function CreateScheduleScreen() {
       ],
     );
   }, [existingSchedule, deleteSchedule, router]);
+
+  if (!FEATURES.schedules) return null;
 
   return (
     <SafeAreaView className="flex-1 bg-surface-base">

@@ -12,6 +12,7 @@
 import { scheduleLocalNotification } from './notifications';
 import { useNotificationPrefsStore } from '@/stores/notificationPrefsStore';
 import type { NotificationEventType, NotificationPriority } from './notifications';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -160,6 +161,7 @@ export function notifyCompanionMessage(payload: ControlPayload): void {
  * Returns a cleanup function.
  */
 export function setupCompanionNotifications(): () => void {
+  if (!FEATURES.companion) return () => {};
   return addCompanionMessageListener((payload) => {
     dispatchCompanionNotification(payload).catch((err) => {
       // Notification dispatch failure is non-critical — don't crash

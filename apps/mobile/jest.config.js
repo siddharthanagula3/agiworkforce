@@ -1,5 +1,6 @@
 module.exports = {
   preset: 'jest-expo',
+  testPathIgnorePatterns: ['/node_modules/', 'scripts/screenshots/specs/'],
   // Runs BEFORE jest-expo's setup to fix missing UIManager mock
   setupFiles: ['./jest.setup.js'],
   // @testing-library/react-native v13+ auto-extends jest matchers — no explicit setup needed
@@ -15,5 +16,10 @@ module.exports = {
     '^@/(.*)$': '<rootDir>/$1',
     // Override jest-expo preset which incorrectly resolves react to @types/react in pnpm
     '^react$': '<rootDir>/node_modules/react',
+    // Workspace packages that may not be pnpm-linked in CI: resolve src directly.
+    '^@agiworkforce/local-llm/src/(.*)$': '<rootDir>/../../packages/local-llm/src/$1',
+    '^@agiworkforce/local-llm$': '<rootDir>/../../packages/local-llm/src/index',
+    // expo-sqlite stub for storage tests until the native module is linked.
+    '^expo-sqlite$': '<rootDir>/__mocks__/expo-sqlite.js',
   },
 };
