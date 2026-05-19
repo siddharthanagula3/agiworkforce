@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Pressable, TextInput } from 'react-native';
 import Animated, {
   FadeInDown,
+  useReducedMotion,
   useSharedValue,
   useAnimatedStyle,
   withTiming,
@@ -52,6 +53,7 @@ const TYPE_ICONS: Record<ApprovalRequest['type'], typeof Terminal> = {
 };
 
 export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProps) {
+  const reducedMotion = useReducedMotion();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const autoApproveMode = useSettingsStore((s) => s.autoApproveMode);
 
@@ -151,7 +153,7 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
   }, []);
 
   return (
-    <Animated.View entering={FadeInDown.duration(300).springify()}>
+    <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(300).springify()}>
       <View
         className="rounded-xl overflow-hidden my-1"
         style={{

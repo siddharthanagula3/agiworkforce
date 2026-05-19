@@ -144,6 +144,7 @@ export function AttachmentPreview({ attachments, onRemove }: AttachmentPreviewPr
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ paddingRight: 8 }}
+          accessibilityLabel="Attached files"
         >
           {attachments.map((attachment) => (
             <AttachmentThumbnail key={attachment.id} attachment={attachment} onRemove={onRemove} />

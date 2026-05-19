@@ -262,6 +262,7 @@ export function ChatInput({
         {/* Text input -- full width, top of the card */}
         <TextInput
           ref={inputRef}
+          testID="chat.composer.input"
           style={{
             color: themeColors.textPrimary,
             fontSize: 15,
@@ -332,21 +333,25 @@ export function ChatInput({
             )}
 
             {/* Voice input button */}
-            <VoiceInputButton
-              onTranscription={handleTranscription}
-              onRecordingStart={handleRecordingStart}
-              onRecordingStop={handleRecordingStop}
-              onMetering={handleMetering}
-              onLongPress={onOpenVoiceMode}
-              disabled={isStreaming}
-            />
+            <View testID="chat.composer.mic">
+              <VoiceInputButton
+                onTranscription={handleTranscription}
+                onRecordingStart={handleRecordingStart}
+                onRecordingStop={handleRecordingStop}
+                onMetering={handleMetering}
+                onLongPress={onOpenVoiceMode}
+                disabled={isStreaming}
+              />
+            </View>
 
             {/* Send / Stop button */}
-            <SendButton
-              state={sendButtonState}
-              onPress={handleSendButtonPress}
-              disabled={!hasContent && !isStreaming}
-            />
+            <View testID="chat.composer.send">
+              <SendButton
+                state={sendButtonState}
+                onPress={handleSendButtonPress}
+                disabled={!hasContent && !isStreaming}
+              />
+            </View>
           </View>
         </View>
       </View>

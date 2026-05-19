@@ -272,7 +272,12 @@ fn is_path_allowed(canonical_path: &str, allowed_dirs: &[PathBuf]) -> bool {
     allowed_dirs.iter().any(|dir| {
         let dir_str = dir.to_string_lossy();
         let dir_normalized = dir_str.replace('\\', "/");
-        canonical_normalized.starts_with(&dir_normalized)
+        // FIX-F3 (audit 2026-05-19): the previous `starts_with(&dir_normalized)`
+        // matched `/Users/foo` against `/Users/foobar` (prefix lookalike).
+        // Trim trailing separator and require exact-match OR subpath-after-sep.
+        let dir_trimmed = dir_normalized.trim_end_matches('/');
+        canonical_normalized == dir_trimmed
+            || canonical_normalized.starts_with(&format!("{}/", dir_trimmed))
     })
 }
 
@@ -475,6 +480,20 @@ pub async fn file_write(
             "Content too large: {} bytes. Maximum is 100MB for safety",
             content.len()
         ));
+    }
+
+    // FIX-F2 (audit 2026-05-19): require HITL on file_write so an indirect
+    // prompt-injection-driven agent cannot silently overwrite files in the
+    // user's allowed dirs (e.g. ~/Projects/.git/hooks/pre-commit,
+    // ~/.cargo/config.toml). Pattern mirrors file_delete (line 545).
+    if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
+        &app,
+        "file_write",
+        &serde_json::json!({ "path": path, "size_bytes": content.len() }),
+    )
+    .await?
+    {
+        return Err("Operation denied by user".to_string());
     }
 
     if !check_file_permission(&path, FileOperation::Write, &state, Some(&app)).await? {
@@ -780,6 +799,37 @@ pub async fn file_open_with_default_app(
             }
         }
         Err(e) => return Err(format!("Path does not exist or is not accessible: {}", e)),
+    }
+
+    // FIX-F4 (audit 2026-05-19): block executable extensions so an LLM that
+    // dropped a malicious binary via file_write_binary (now HITL-gated per
+    // FIX-F2) cannot chain into `open` to execute it. macOS `open` will
+    // launch .app bundles; Windows Start-Process will execute .exe/.bat/.cmd
+    // /.ps1; Linux xdg-open can execute .desktop files.
+    const EXEC_EXTENSIONS: &[&str] = &[
+        "app", "exe", "bat", "cmd", "com", "ps1", "sh", "command", "scpt", "workflow", "desktop",
+    ];
+    if let Some(ext) = canonical_path.extension().and_then(|e| e.to_str()) {
+        let lower = ext.to_ascii_lowercase();
+        if EXEC_EXTENSIONS.contains(&lower.as_str()) {
+            return Err(format!(
+                "Refusing to open executable extension '.{ext}' via default app handler. \
+                 Run via terminal_execute (HITL-gated) instead."
+            ));
+        }
+    }
+
+    // FIX-F4 (audit 2026-05-19): require HITL on open-with-default since
+    // even non-executable extensions can trigger handlers that side-effect
+    // (PDF auto-fetch, URL-handler files, etc.).
+    if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
+        &app,
+        "file_open_with_default_app",
+        &serde_json::json!({ "path": canonical_str }),
+    )
+    .await?
+    {
+        return Err("Operation denied by user".to_string());
     }
 
     if !check_file_permission(&canonical_str, FileOperation::Read, &state, Some(&app)).await? {
@@ -1498,6 +1548,55 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+mod fix_f3_path_allowed_prefix_tests {
+    //! FIX-F3 (audit 2026-05-19): pin the canonical-path containment check
+    //! so a directory `/Users/foo` does NOT also allow `/Users/foobar/...`.
+    //! Prefix-vs-component bug fixed in `is_path_allowed`.
+    use super::is_path_allowed;
+    use std::path::PathBuf;
+
+    #[test]
+    fn allows_exact_match_to_dir_root() {
+        let allowed = vec![PathBuf::from("/Users/foo")];
+        assert!(is_path_allowed("/Users/foo", &allowed));
+    }
+
+    #[test]
+    fn allows_subpath_under_allowed_dir() {
+        let allowed = vec![PathBuf::from("/Users/foo")];
+        assert!(is_path_allowed("/Users/foo/bar/baz.txt", &allowed));
+    }
+
+    #[test]
+    fn rejects_prefix_lookalike_siblings() {
+        let allowed = vec![PathBuf::from("/Users/foo")];
+        assert!(!is_path_allowed("/Users/foobar/secret.txt", &allowed));
+        assert!(!is_path_allowed("/Users/foo-evil/x.txt", &allowed));
+        assert!(!is_path_allowed("/Users/foo.bak/y.txt", &allowed));
+    }
+
+    #[test]
+    fn handles_trailing_separator_in_allowed_dir() {
+        let allowed = vec![PathBuf::from("/Users/foo/")];
+        assert!(is_path_allowed("/Users/foo/file.txt", &allowed));
+        assert!(!is_path_allowed("/Users/foobar/file.txt", &allowed));
+    }
+
+    #[test]
+    fn rejects_when_no_dirs_allowed() {
+        let allowed: Vec<PathBuf> = Vec::new();
+        assert!(!is_path_allowed("/Users/foo/file.txt", &allowed));
+    }
+
+    #[test]
+    fn windows_backslash_paths_normalized() {
+        let allowed = vec![PathBuf::from("C:\\Users\\foo")];
+        assert!(is_path_allowed("C:\\Users\\foo\\file.txt", &allowed));
+        assert!(!is_path_allowed("C:\\Users\\foobar\\file.txt", &allowed));
+    }
+}
+
 #[tauri::command]
 pub async fn file_read_text(
     app: AppHandle,
@@ -1553,6 +1652,18 @@ pub async fn file_write_text(
             "Content too large: {} bytes. Maximum is 100MB",
             content.len()
         ));
+    }
+
+    // FIX-F2 (audit 2026-05-19): mirror of file_write HITL gate so the
+    // _text variant cannot bypass confirmation.
+    if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
+        &app,
+        "file_write_text",
+        &serde_json::json!({ "path": file_path, "size_bytes": content.len() }),
+    )
+    .await?
+    {
+        return Err("Operation denied by user".to_string());
     }
 
     if !check_file_permission(&file_path, FileOperation::Write, &state, Some(&app)).await? {
@@ -1646,6 +1757,20 @@ pub async fn file_write_binary(
 
     if base64_content.len() > 134_000_000 {
         return Err("Content too large. Maximum is 100MB decoded".to_string());
+    }
+
+    // FIX-F2 (audit 2026-05-19): mirror of file_write HITL gate. Binary
+    // writes are the higher-risk variant since they can drop arbitrary
+    // executable content; pair this with the file_open_with_default_app
+    // extension blocklist (FIX-F4) so the chain can't reach `open`.
+    if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
+        &app,
+        "file_write_binary",
+        &serde_json::json!({ "path": file_path, "encoded_size_bytes": base64_content.len() }),
+    )
+    .await?
+    {
+        return Err("Operation denied by user".to_string());
     }
 
     if !check_file_permission(&file_path, FileOperation::Write, &state, Some(&app)).await? {

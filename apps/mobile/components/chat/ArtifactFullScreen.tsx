@@ -65,6 +65,7 @@ export function ArtifactFullScreen({ artifact, visible, onClose }: ArtifactFullS
       transparent
       onRequestClose={onClose}
       statusBarTranslucent
+      accessibilityViewIsModal
     >
       <View
         style={{

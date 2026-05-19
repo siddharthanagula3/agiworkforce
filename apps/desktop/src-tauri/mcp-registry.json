@@ -101,10 +101,6 @@
         {
           "name": "playwright_fill",
           "description": "Fill in a form field"
-        },
-        {
-          "name": "playwright_evaluate",
-          "description": "Execute JavaScript in the page context"
         }
       ],
       "configuration": {

@@ -8,6 +8,7 @@ use crate::core::llm::{
     ChatMessage, LLMRequest, LLMResponse, LLMRouter, Provider, TaskType,
 };
 use crate::sys::commands::chat::AppDatabase;
+use crate::sys::security::prompt_injection::PromptInjectionDetector;
 use crate::sys::security::rate_limit::{RateLimitConfig, RateLimiter};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -64,6 +65,35 @@ impl RateLimitState {
 /// is not registered.
 fn resolve_provider_for_routing(s: &str) -> Option<Provider> {
     Provider::from_string(s)
+}
+
+/// FIX-F19 (audit 2026-05-19): wire the previously-dormant
+/// `PromptInjectionDetector` into LLM ingress. **Detect-and-log only per plan;
+/// do NOT block** — false-positive rate on legitimate code prompts is too high
+/// to gate the user's request. Emits a `tracing::warn` with the risk score,
+/// confidence, detected patterns, and recommendation so audit_logger / Sentry
+/// pick up the signal for later analysis.
+fn scan_messages_for_prompt_injection(messages: &[ChatMessage]) {
+    use std::sync::OnceLock;
+    static DETECTOR: OnceLock<PromptInjectionDetector> = OnceLock::new();
+    let detector = DETECTOR.get_or_init(PromptInjectionDetector::new);
+    for (idx, msg) in messages.iter().enumerate() {
+        if msg.role != "user" {
+            continue;
+        }
+        let analysis = detector.analyze(&msg.content);
+        if !analysis.is_safe {
+            tracing::warn!(
+                target: "agi.llm.prompt_injection",
+                message_index = idx,
+                risk_score = analysis.risk_score,
+                confidence = analysis.confidence,
+                detected_patterns = ?analysis.detected_patterns,
+                recommendation = ?analysis.recommendation,
+                "FIX-F19: prompt injection signal in user message (detect+log only, not blocking)"
+            );
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -164,6 +194,12 @@ pub async fn llm_send_message(
             ));
         }
     }
+
+    // FIX-F19 (audit 2026-05-19): scan inbound user messages for prompt
+    // injection signals. Detect-and-log only (no blocking) — emit telemetry
+    // via `tracing::warn` on `agi.llm.prompt_injection` so audit_logger picks
+    // it up. Wire-up of the previously-dormant detector.
+    scan_messages_for_prompt_injection(&request.messages);
 
     // Pre-flight authentication check for cloud credits.
     // Only require auth when user explicitly requests ManagedCloud or prefers cloud credits.

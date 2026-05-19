@@ -299,6 +299,7 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
             autoCapitalize="none"
             returnKeyType="search"
             accessibilityLabel="Search models"
+            accessibilityRole="search"
           />
           {search.length > 0 && (
             <Pressable

@@ -55,6 +55,42 @@ export function isSensitiveCategory(filePath: string): boolean {
   return SENSITIVE_CATEGORY_PATTERNS.some((re) => re.test(normalized));
 }
 
+// ─── LITL gating: sensitive-category paths require per-file review ───────────
+// PR-2B (audit F-03): even when the user selects "Accept All", patches that
+// modify these high-impact paths still require explicit diff confirmation.
+// An attacker who routes a patch to .vscode/settings.json or .github/workflows/
+// must not be able to slip past Accept All.
+const SENSITIVE_CATEGORY_PATTERNS: ReadonlyArray<RegExp> = [
+  /(^|\/)\.vscode\//i, // VS Code workspace settings, tasks
+  /(^|\/)\.github\//i, // GitHub Actions / CODEOWNERS
+  /(^|\/)\.git\//i, // Git internals
+  /(^|\/)\.gitlab\//i,
+  /(^|\/)\.gitlab-ci\.yml$/i,
+  /(^|\/)\.circleci\//i,
+  /(^|\/)Dockerfile(\.[A-Za-z0-9]+)?$/i,
+  /(^|\/)docker-compose(\.[A-Za-z0-9]+)?\.ya?ml$/i,
+  /(^|\/)package\.json$/i,
+  /(^|\/)pnpm-lock\.yaml$/i,
+  /(^|\/)yarn\.lock$/i,
+  /(^|\/)package-lock\.json$/i,
+  /(^|\/)pyproject\.toml$/i,
+  /(^|\/)Cargo\.toml$/i,
+  /(^|\/)Cargo\.lock$/i,
+  /(^|\/)tsconfig.*\.json$/i,
+  /(^|\/)vite\.config\.(ts|js|mjs)$/i,
+  /(^|\/)next\.config\.(ts|js|mjs)$/i,
+  /\.(ya?ml|toml)$/i, // any YAML/TOML — broad but config-heavy
+  /(^|\/)Makefile$/i,
+  /\.(sh|ps1|bat|cmd)$/i, // shell / batch scripts
+];
+
+export function isSensitiveCategory(filePath: string): boolean {
+  if (typeof filePath !== 'string' || filePath.length === 0) return false;
+  if (isSensitiveFile(filePath)) return true;
+  const normalized = filePath.replace(/\\/g, '/');
+  return SENSITIVE_CATEGORY_PATTERNS.some((re) => re.test(normalized));
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface FileEdit {
