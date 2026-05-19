@@ -23,6 +23,36 @@ import { supabase } from './supabase';
 
 export type SkillSummary = Pick<Skill, 'name' | 'description' | 'filePath' | 'source'>;
 
+/**
+ * Catalog entry as served by the public GitHub-indexed catalog (or local
+ * fixture during v1). Mirrors what the skills store persists.
+ */
+export interface SkillCatalogEntry {
+  /** Stable identifier, slug-ish (e.g., "writing-assistant-v1"). */
+  id: string;
+  /** Display name shown in the catalog UI. */
+  name: string;
+  /** One-line description for browse cards. */
+  description: string;
+  /** Origin: official curated catalog vs. user-imported file. */
+  source: 'catalog' | 'imported';
+  /** Catalog version string. Used to detect upgrades. */
+  version: string;
+  /** Optional author/maintainer label. */
+  author?: string;
+  /** Optional categorical tags surfaced as filter chips. */
+  tags?: string[];
+}
+
+/**
+ * Installed skill bundle — what the skillsStore persists in MMKV.
+ * Identical to the catalog entry plus an install timestamp.
+ */
+export interface InstalledSkill extends SkillCatalogEntry {
+  /** ISO-8601 install timestamp from `new Date().toISOString()`. */
+  installedAt: string;
+}
+
 async function authHeader(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;

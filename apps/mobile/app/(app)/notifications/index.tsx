@@ -35,6 +35,7 @@ import {
   type NotificationPriority,
 } from '@/services/notifications';
 import { useThemeColors } from '@/hooks/useTheme';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 // ---------------------------------------------------------------------------
 // Priority Icon
@@ -228,6 +229,8 @@ export default function NotificationCenterScreen() {
       },
     ]);
   }, [clear]);
+
+  if (!FEATURES.cloudChat) return null;
 
   return (
     <SafeAreaView className="flex-1 bg-surface-base">

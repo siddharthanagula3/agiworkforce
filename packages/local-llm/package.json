@@ -1,0 +1,24 @@
+{
+  "name": "@agiworkforce/local-llm",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@agiworkforce/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "react-native": "*"
+  },
+  "devDependencies": {
+    "@types/react-native": "*",
+    "typescript": "~5.9.3",
+    "vitest": "^3.0.0"
+  }
+}

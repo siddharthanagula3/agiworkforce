@@ -49,7 +49,14 @@ import { VoiceSelector } from '@/components/voice/VoiceSelector';
 // Types
 // ---------------------------------------------------------------------------
 
-type SettingItemType = 'navigation' | 'toggle' | 'theme' | 'signout' | 'version' | 'voice-header';
+type SettingItemType =
+  | 'navigation'
+  | 'toggle'
+  | 'theme'
+  | 'signout'
+  | 'version'
+  | 'voice-header'
+  | 'cloud-whisper-waitlist';
 
 interface SettingItem {
   key: string;
@@ -274,6 +281,48 @@ function VoiceHeaderRow() {
 }
 
 // ---------------------------------------------------------------------------
+// Cloud Whisper waitlist row — greyed-out, non-interactive
+// ---------------------------------------------------------------------------
+
+function CloudWhisperWaitlistRow() {
+  const c = useThemeColors();
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        opacity: 0.45,
+      }}
+      accessible
+      accessibilityLabel="Cloud Whisper — opens after waitlist, not yet available"
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <Mic size={16} color={c.textSecondary} />
+        <View>
+          <Text style={{ fontSize: 14, color: c.textPrimary }}>Cloud Whisper</Text>
+          <Text style={{ fontSize: 11, color: c.textMuted }}>Opens after waitlist</Text>
+        </View>
+      </View>
+      <View
+        style={{
+          paddingHorizontal: 8,
+          paddingVertical: 3,
+          borderRadius: 6,
+          backgroundColor: 'rgba(255,255,255,0.06)',
+          borderWidth: 1,
+          borderColor: 'rgba(255,255,255,0.1)',
+        }}
+      >
+        <Text style={{ fontSize: 10, color: c.textMuted, fontWeight: '600' }}>WAITLIST</Text>
+      </View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Separator between rows (inside a section)
 // ---------------------------------------------------------------------------
 
@@ -405,6 +454,12 @@ export default function SettingsTabScreen() {
           type: 'navigation',
           onPress: () => voiceSelectorRef.current?.snapToIndex(0),
         },
+        {
+          key: 'cloud-whisper',
+          icon: Mic,
+          label: '',
+          type: 'cloud-whisper-waitlist',
+        },
       ],
     },
     {
@@ -493,15 +548,15 @@ export default function SettingsTabScreen() {
   const renderItem = useCallback(
     ({ item, index, section }: { item: SettingItem; index: number; section: SettingSection }) => {
       const isLast = index === section.data.length - 1;
-      const showSeparator = !isLast && item.type !== 'version' && item.type !== 'voice-header';
+      const showSeparator =
+        !isLast &&
+        item.type !== 'version' &&
+        item.type !== 'voice-header' &&
+        item.type !== 'cloud-whisper-waitlist';
 
-      if (item.type === 'version') {
-        return <VersionRow />;
-      }
-
-      if (item.type === 'voice-header') {
-        return <VoiceHeaderRow />;
-      }
+      if (item.type === 'version') return <VersionRow />;
+      if (item.type === 'voice-header') return <VoiceHeaderRow />;
+      if (item.type === 'cloud-whisper-waitlist') return <CloudWhisperWaitlistRow />;
 
       return (
         <>

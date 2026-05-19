@@ -1,8 +1,21 @@
 // packages/types/src/design-system/provider-display.ts
 
 /**
- * Canonical provider identity used by all 6 surfaces.
- * Single source of truth — adding a provider here makes it appear in every model picker.
+ * Display-tier provider identity used by all 6 surfaces in model pickers and UI surfaces.
+ *
+ * This is the **UI subset** of the wire-level {@link Provider} union in
+ * `packages/types/src/provider.ts`. It additionally includes pseudo-identifiers
+ * (`custom-openai-compatible`, `agi-cloud`) that are not real providers in
+ * `models.json` but are needed for the model picker UI.
+ *
+ * To add a new provider that should show up in pickers:
+ *   1. Add the literal here.
+ *   2. Add a `PROVIDER_DISPLAY[id]` entry below.
+ *   3. If it's a real wire provider, also add it to {@link Provider} in `provider.ts`
+ *      and to `models.json` per the instructions there.
+ *
+ * Not the wire format. Use {@link Provider} for adapter routing and `models.json`
+ * provider keys.
  */
 export type ProviderId =
   | 'anthropic'

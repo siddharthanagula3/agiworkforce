@@ -1714,7 +1714,11 @@ describe('startHealthChecks / stopHealthChecks', () => {
     stopHealthChecks();
   });
 
-  it('sends a heartbeat ping every 30 seconds when connected', () => {
+  // startHealthChecks is a no-op when FEATURES.companion = false (v1 local-only)
+  const { FEATURES: DF } = require('../lib/v1FeatureFlags') as { FEATURES: { companion: boolean } };
+  const itCompanion = DF.companion ? it : it.skip;
+
+  itCompanion('sends a heartbeat ping every 30 seconds when connected', () => {
     setConnectionStatus('connected');
     startHealthChecks();
 

@@ -44,6 +44,7 @@ import { useAgentStore } from '@/stores/agentStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/lib/theme';
 import { sendAgentCommand, requestAgentRefresh } from '@/services/companion';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 // ---------------------------------------------------------------------------
 // Status helpers
@@ -122,6 +123,8 @@ export default function AgentDetailScreen() {
   const handleRefresh = useCallback(() => {
     requestAgentRefresh();
   }, []);
+
+  if (!FEATURES.agents) return null;
 
   // Agent not found — may have been removed
   if (!agent) {

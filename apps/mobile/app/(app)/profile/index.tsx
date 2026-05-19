@@ -28,6 +28,7 @@ import { fetchPortalSessionUrl } from '@/services/billing';
 import { isAllowedExternalUrl, openExternalUrl } from '@/lib/safeOpenURL';
 import { useThemeColors } from '@/hooks/useTheme';
 import { normalizeBillingPlanTier } from '@agiworkforce/types';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 interface UsageStats {
   totalConversations: number;
@@ -163,6 +164,8 @@ export default function ProfileScreen() {
     }
     await openExternalUrl('https://agiworkforce.com/pricing');
   }, []);
+
+  if (!FEATURES.auth) return null;
 
   const email = user?.email ?? 'Not signed in';
   const initial = email[0]?.toUpperCase() ?? 'U';

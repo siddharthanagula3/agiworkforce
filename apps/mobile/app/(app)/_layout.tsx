@@ -100,6 +100,10 @@ export default function AppLayout() {
       <Drawer.Screen name="about" options={HIDDEN} />
       <Drawer.Screen name="camera" options={HIDDEN} />
       <Drawer.Screen name="compare" options={HIDDEN} />
+      <Drawer.Screen name="scan" options={HIDDEN} />
+      <Drawer.Screen name="translate" options={HIDDEN} />
+      <Drawer.Screen name="image" options={HIDDEN} />
+      <Drawer.Screen name="voice" options={HIDDEN} />
       <Drawer.Screen name="usage" options={HIDDEN} />
       <Drawer.Screen name="widget-setup" options={HIDDEN} />
     </Drawer>

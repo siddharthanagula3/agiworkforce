@@ -1,5 +1,17 @@
 /**
  * Chat API — typed wrappers for all chat_*, conversation_*, and search_* Tauri commands.
+ *
+ * Shape note: `Conversation`, `Message`, and friends here are the **Tauri wire shapes**
+ * — they mirror exactly what the Rust SQLite-backed handlers return (numeric `id`,
+ * snake-cased `user_id` → camelCase `userId`, ISO-string timestamps). They are
+ * intentionally **siblings**, not subtypes, of the canonical cross-surface
+ * `Conversation` and `ChatMessage` in `@agiworkforce/types` (which use branded
+ * IDs and a richer cross-surface contract). Conversion between the two happens
+ * in the consumer (typically the chat stores in `apps/desktop/src/stores`).
+ *
+ * Do not "unify" these into `@agiworkforce/types::Conversation` without also
+ * updating every Rust handler return shape and migrating consumers — that's
+ * a structural refactor (Phase 5+), not a Phase 4 normalization.
  */
 
 import { command } from '@agiworkforce/runtime';

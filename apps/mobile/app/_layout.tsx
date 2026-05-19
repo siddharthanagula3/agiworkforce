@@ -37,6 +37,7 @@ import { subscribeToRealtime, unsubscribeFromRealtime } from '@/services/realtim
 import { subscribeToDispatch, unsubscribeFromDispatch } from '@/services/dispatchRealtime';
 import { startDesktopStatusPolling } from '@/services/desktopStatus';
 import { useChatStore } from '@/stores/chatStore';
+import { isAgeGateConfirmed } from '@/services/ageGate';
 import '../global.css';
 
 export default function RootLayout() {
@@ -258,7 +259,12 @@ export default function RootLayout() {
     } else if (session && inAuthGroup) {
       const onboardingDone = storage.getString('onboarding-done');
       if (!onboardingDone && !inOnboarding) {
-        router.replace({ pathname: '/(public)/onboarding' as const });
+        // Age-gate must come before onboarding on first run.
+        if (!isAgeGateConfirmed()) {
+          router.replace({ pathname: '/(public)/age-gate' as const });
+        } else {
+          router.replace({ pathname: '/(public)/onboarding' as const });
+        }
       } else {
         router.replace({ pathname: '/(app)' as const });
       }
@@ -273,7 +279,11 @@ export default function RootLayout() {
     } else if (session && !inAuthGroup && !inOnboarding) {
       const onboardingDone = storage.getString('onboarding-done');
       if (!onboardingDone) {
-        router.replace({ pathname: '/(public)/onboarding' as const });
+        if (!isAgeGateConfirmed()) {
+          router.replace({ pathname: '/(public)/age-gate' as const });
+        } else {
+          router.replace({ pathname: '/(public)/onboarding' as const });
+        }
       }
     }
   }, [session, isInitialized, isMmkvReady, segments, router]);

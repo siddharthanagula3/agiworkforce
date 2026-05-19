@@ -1,5 +1,6 @@
 import { api } from './api';
 import type { Schedule, ScheduleRun, CreateScheduleInput } from '@/stores/scheduleStore';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 /**
  * Schedule API Service
@@ -27,6 +28,7 @@ interface RunResponse {
  * Fetch all schedules for the authenticated user.
  */
 export async function fetchSchedules(): Promise<Schedule[]> {
+  if (!FEATURES.schedules) throw new Error('schedules: cloud schedules not available in v1');
   const data = await api.get<SchedulesListResponse>('/api/schedules');
   return data.schedules ?? [];
 }

@@ -28,14 +28,11 @@ export type { EventCallback, UnlistenFn } from './events';
 // HTTP transport (typically not used directly — command() handles routing)
 export { routeToCloud } from './http';
 
-// Per-command async context isolation
-export {
-  getAgentContext,
-  runWithContext,
-  deriveChildContext,
-  reestablishContextInWorker,
-} from './context';
-export type { AgentContext, AgentOrigin } from './context';
+// NOTE: agentContext / AsyncLocalStorage have moved to the subpath barrel
+// `@agiworkforce/runtime/node` (see ./node.ts). They depend on node:async_hooks
+// and were previously transitively pulled into mobile/web bundles, requiring a
+// polyfill at `apps/mobile/lib/polyfills/async_hooks.cjs`. With the split,
+// the universal entry no longer references node built-ins.
 
 // Central state architecture — createStore + onChangeAppState choke-point
 export {

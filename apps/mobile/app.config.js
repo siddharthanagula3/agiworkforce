@@ -31,6 +31,21 @@ const config = {
         'AGI Workforce accesses your calendar to help schedule tasks and set reminders through AI agents.',
       NSContactsUsageDescription:
         'AGI Workforce accesses your contacts to help compose messages and manage communications through AI.',
+      NSHealthShareUsageDescription:
+        'AGI Workforce reads health data to provide AI-powered health insights and summaries.',
+      NSSpeechRecognitionUsageDescription:
+        'AGI Workforce uses speech recognition to transcribe voice input for AI conversations.',
+      NSTranslationUsageDescription:
+        'AGI Workforce uses on-device translation to translate text between languages privately.',
+      // NSUserActivityTypes declares the activity type identifiers for App Intents / Siri.
+      // com.agiworkforce.app.intent is the base namespace for all custom intents.
+      NSUserActivityTypes: ['INSendMessageIntent', 'com.agiworkforce.app.intent'],
+    },
+    entitlements: {
+      // Siri + App Intents: required for Shortcuts app registration and Siri phrase triggers.
+      'com.apple.developer.siri': true,
+      // Apple Translate framework entitlement (required for Translation API on iOS 17.4+).
+      'com.apple.developer.natural-language.translation': true,
     },
     privacyManifests: {
       NSPrivacyAccessedAPITypes: [
@@ -110,6 +125,7 @@ const config = {
         cameraPermission: 'Allow $(DISPLAYNAME) to access your camera.',
       },
     ],
+    'expo-sqlite',
     'expo-updates',
     'expo-web-browser',
     [
@@ -120,6 +136,22 @@ const config = {
     ],
     'expo-document-picker',
     'expo-sharing',
+    // Tier 3 universal fallback: llama.rn config plugin wires native GGUF runtime.
+    // Models downloaded at runtime into Documents/models/ — not bundled in the binary.
+    'llama.rn',
+    // Tier 2 Android: wires AGITranslateModule + AGITranslatePackage into the generated android/ project.
+    // Injects com.google.mlkit:translate:17.0.3 gradle dep + registers AGITranslatePackage in MainApplication.kt.
+    './native/android/withAGITranslate.cjs',
+    // Tier 2 Android: wires AGIVisionOCR + AGIVisionOCRPackage into the generated android/ project.
+    // Injects com.google.mlkit:text-recognition:16.0.0 gradle dep + registers AGIVisionOCRPackage in MainApplication.kt.
+    './native/android/withAGIVisionOCR.cjs',
+    // iOS: copies AGIFoundationModels, AGITranslate, AGIVisionOCR, and AGIAppIntents Swift/ObjC sources
+    // into the generated ios/<AppName>/ directory and registers them with the Xcode project target.
+    // RCT_EXTERN_MODULE bridges auto-register with React Native bridge scanning — no manual list needed.
+    './native/ios/withAGINativeModulesIOS.cjs',
+    // Tier 1 Android: wires AGIAICoreModule + AGIAICorePackage into the generated android/ project.
+    // Injects com.google.mlkit:genai-common gradle dep + registers AGIAICorePackage in MainApplication.kt.
+    './native/android/withAGIAICore.cjs',
   ],
   updates: {
     fallbackToCacheTimeout: 0,

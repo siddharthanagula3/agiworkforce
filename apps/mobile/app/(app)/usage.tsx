@@ -31,6 +31,7 @@ import {
 } from '@/services/usage';
 import { api } from '@/services/api';
 import { openExternalUrl } from '@/lib/safeOpenURL';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -417,6 +418,8 @@ export default function UsageScreen() {
       [{ text: 'OK' }],
     );
   }, []);
+
+  if (!FEATURES.billing) return null;
 
   return (
     <SafeAreaView className="flex-1 bg-surface-base">

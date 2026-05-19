@@ -1,4 +1,5 @@
 import { api } from './api';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,5 +45,6 @@ export interface UsageSummary {
  * Throws on network/auth failure — callers should catch and handle gracefully.
  */
 export async function fetchUsageSummary(): Promise<UsageSummary> {
+  if (!FEATURES.billing) throw new Error('usage: cloud usage not available in v1');
   return api.get<UsageSummary>('/api/usage/summary');
 }
