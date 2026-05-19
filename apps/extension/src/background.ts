@@ -40,6 +40,16 @@ import {
   type ComputerUseAction,
   type BrowserAction,
 } from './browserTool';
+import { migrateAutofillProfile } from './autofill/filler';
+import {
+  DISCOVERY_MESSAGE_TYPES,
+  DOM_MUTATION_MESSAGE_TYPES,
+  EXTENSION_PAGE_ONLY_MESSAGE_TYPES,
+  DEFAULT_AGI_BRIDGE_URL,
+  ORIGIN_EXTENSION_PAGE,
+  validateBridgeUrl,
+  validateGatewayUrl,
+} from './background/policy';
 
 interface BackgroundState {
   isNativeConnected: boolean;
@@ -266,6 +276,12 @@ function initialize(): void {
   connectToNativeHost();
   checkDesktopConnection();
   void restoreScheduledTaskAlarms();
+  // One-shot migration of the autofill profile from chrome.storage.sync (which
+  // replicates to Google's servers) into chrome.storage.local (device-only).
+  // Idempotent and silent on storage error. See H-04 in audits/2026-05-19.
+  void migrateAutofillProfile().catch((err) => {
+    logger.debug('Autofill profile migration failed (non-fatal)', err);
+  });
 }
 
 function connectToNativeHost(): void {
@@ -515,6 +531,28 @@ async function handleReplayShortcut(
   if (!shortcut) {
     return { success: false, error: 'Shortcut not found' } as ExtensionResponse;
   }
+  // SECURITY (C-03 audit 2026-05-19): if this shortcut was created by a web
+  // page (not the trusted UI), confirm the origin is still allowlisted.
+  // Auto-delete stale records so they can't accumulate as a persistent
+  // attacker capability.
+  if (
+    shortcut.createdByOrigin &&
+    shortcut.createdByOrigin !== ORIGIN_EXTENSION_PAGE &&
+    !siteAllowlistCache.has(shortcut.createdByOrigin)
+  ) {
+    logger.warn('Auto-deleting shortcut whose origin is no longer allowlisted', {
+      shortcutId: shortcut.id,
+      createdByOrigin: shortcut.createdByOrigin,
+    });
+    await handleDeleteShortcut({
+      type: 'DELETE_SHORTCUT',
+      shortcutId: shortcut.id,
+    } as import('./types').DeleteShortcutMessage);
+    return {
+      success: false,
+      error: 'Shortcut origin is no longer on your allowlist; the shortcut was removed.',
+    } as ExtensionResponse;
+  }
   const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!activeTab?.id) {
     return { success: false, error: 'No active tab' } as ExtensionResponse;
@@ -535,6 +573,26 @@ async function handleReplayShortcut(
 // handleDeleteScheduledTask, restoreScheduledTaskAlarms extracted to background/tasks.ts
 
 async function executeScheduledTask(task: ScheduledTask): Promise<void> {
+  // SECURITY (C-02 audit 2026-05-19): fire-time allowlist re-check. Tasks
+  // created from a non-extension-UI origin must verify the originating
+  // origin is still on `agi_site_allowlist`. If not, auto-delete so the
+  // task does not accumulate as a persistent capability.
+  if (
+    task.createdByOrigin &&
+    task.createdByOrigin !== ORIGIN_EXTENSION_PAGE &&
+    !siteAllowlistCache.has(task.createdByOrigin)
+  ) {
+    logger.warn('Auto-deleting scheduled task whose origin is no longer allowlisted', {
+      taskId: task.id,
+      createdByOrigin: task.createdByOrigin,
+    });
+    await handleDeleteScheduledTask({
+      type: 'DELETE_SCHEDULED_TASK',
+      taskId: task.id,
+    } as import('./types').DeleteScheduledTaskMessage);
+    return;
+  }
+
   logger.info('Executing scheduled task', { id: task.id, name: task.name });
 
   if (task.shortcutId) {
@@ -593,7 +651,7 @@ async function executeScheduledTask(task: ScheduledTask): Promise<void> {
 // side panel) are already trusted via the `!sender.tab` branch in
 // isAllowlistedSender(). Content scripts on arbitrary pages must NOT receive
 // responses to fingerprinting probes.
-const DISCOVERY_MESSAGE_TYPES = new Set<string>();
+// DISCOVERY_MESSAGE_TYPES now imported from `./background/policy` (audit 2026-05-19).
 let siteAllowlistCache = new Set<string>();
 chrome.storage.local
   .get('agi_site_allowlist')
@@ -632,61 +690,12 @@ function isAllowlistedSender(
   return siteAllowlistCache.has(origin);
 }
 
-// EXT-3 (audit 2026-05-03): same-tab restriction for DOM-mutation
-// commands. Even with an allowlisted origin, a malicious page must
-// not be able to drive DOM mutation in a different tab.
-// SECURITY (H-2): EVALUATE_SCRIPT removed. It had no handler in content.ts and
-// its presence in this set made a future accidental eval()-based handler look
-// "intentional" to reviewers. Do NOT re-add — content scripts must never
-// expose an eval() surface. Use EXECUTE_SCRIPT + ALLOWED_SCRIPT_OPERATIONS instead.
-//
-// CHROME-NEW-002 fix (2026-05-04 audit): the prior set covered only `TYPE`,
-// `CLICK`, storage, and `SUBMIT_FORM`. Every other content-script handler
-// in `content.ts:222-274` (`SELECT_OPTION`, `CHECK`, `UNCHECK`, `FOCUS`,
-// `BLUR`, `HOVER`, `SCROLL`, `DRAG_DROP`, `CLICK_AT_COORDINATES`) was
-// forwarded to any caller-supplied `tabId` with no same-tab check. An
-// allowlisted page (e.g., a compromised LinkedIn / Lever clone) could send
-// `{ type: 'SELECT_OPTION', tabId: <banking>, selector: '#amount',
-// value: '10000' }` and drive a different tab. We now gate every
-// DOM-mutation-class message through `senderTabAllowedToMutate`. Recording
-// types (`START_RECORDING` / `STOP_RECORDING`) read state and aren't
-// mutations, so they remain outside this set.
-const DOM_MUTATION_MESSAGE_TYPES = new Set<string>([
-  'TYPE',
-  'CLICK',
-  'SET_LOCAL_STORAGE',
-  'CLEAR_LOCAL_STORAGE',
-  'SUBMIT_FORM',
-  // Added 2026-05-04 — every type below has a handler in content.ts that
-  // observably mutates the target tab's DOM or page state.
-  'SELECT_OPTION',
-  'CHECK',
-  'UNCHECK',
-  'FOCUS',
-  'BLUR',
-  'HOVER',
-  'SCROLL',
-  'DRAG_DROP',
-  'CLICK_AT_COORDINATES',
-  'EXECUTE_SCRIPT',
-  // CHROME-NEW-005 fix (2026-05-05): compound action types must also be
-  // gated by `senderTabAllowedToMutate`. `RUN_PAGE_ACTIONS` is a batch
-  // executor that internally invokes any of the simple types above —
-  // without this guard, an allowlisted origin could send
-  // `{ type: 'RUN_PAGE_ACTIONS', tabId: <other-tab>, actions: [...] }` and
-  // drive a different tab's DOM. `AUTO_FILL_JOB_APPLICATION` is the
-  // LinkedIn / Lever autofill entry point and writes to form fields.
-  'RUN_PAGE_ACTIONS',
-  'AUTO_FILL_JOB_APPLICATION',
-  // P0-D fix (2026-05-08): these three types have content-script handlers
-  // that mutate the target tab's DOM (dispatch MouseEvent/simulate context-menu/
-  // write form fields). Without this guard, an allowlisted origin could send
-  // `{ type: 'DOUBLE_CLICK', tabId: <other-tab>, selector: '#btn' }` and drive
-  // a different tab's DOM.
-  'DOUBLE_CLICK',
-  'RIGHT_CLICK',
-  'FILL_FORM',
-]);
+// DOM_MUTATION_MESSAGE_TYPES is now sourced from `./background/policy` so the
+// side panel, tests, and any other consumer share one source of truth. See the
+// policy module's comment for the historical fix history (EXT-3, H-2,
+// CHROME-NEW-002, CHROME-NEW-005, P0-D). Adding a new content-script handler
+// that writes DOM? Add the wire-message type to `DOM_MUTATION_MESSAGE_TYPES`
+// in `policy.ts`.
 
 function senderTabAllowedToMutate(
   sender: chrome.runtime.MessageSender,
@@ -721,6 +730,25 @@ function handleMessage(
         'This site is not on your AGI Workforce allowlist. Add it from the extension popup to enable automation here.',
     } as ExtensionResponse);
     return false;
+  }
+
+  // SECURITY (C-02 / C-03 audit 2026-05-19): some message types create
+  // persistent state (chrome.alarms, chrome.storage.local shortcuts) that
+  // outlives the originating tab and survives removal from the allowlist.
+  // These must originate from a trusted extension page (popup / side panel /
+  // options), never from a content script — even on an allowlisted origin.
+  if (EXTENSION_PAGE_ONLY_MESSAGE_TYPES.has(msg.type)) {
+    if (sender.tab || sender.id !== chrome.runtime.id) {
+      logger.warn('Rejected extension-page-only message from non-UI sender', {
+        url: sender?.tab?.url,
+        type: msg.type,
+      });
+      sendResponse({
+        success: false,
+        error: 'This action requires the extension UI.',
+      } as ExtensionResponse);
+      return false;
+    }
   }
 
   // EXT-3: block cross-tab DOM mutation.
@@ -870,10 +898,25 @@ async function handleMessageAsync(
     }
 
     case 'CAPTURE_SCREENSHOT': {
+      // SECURITY (H-09 audit 2026-05-19): only capture the sender's own tab.
+      // The previous implementation fell back to `chrome.tabs.query({active:
+      // true})`, which let an allowlisted content script wait for the user to
+      // switch tabs and then exfiltrate a screenshot of whatever was visible.
+      // Extension pages (popup / side panel) have `!sender.tab` — they must
+      // explicitly include `tabId` in the message, which is resolved upstream.
       let resolvedTabId = tabId;
       let resolvedWindowId = windowId;
 
-      if (!resolvedTabId || resolvedWindowId === undefined) {
+      if (sender.tab) {
+        // Content-script sender — restrict to its own tab regardless of the
+        // tabId passed in the message body. This closes the cross-tab
+        // capture path.
+        resolvedTabId = sender.tab.id;
+        resolvedWindowId = sender.tab.windowId;
+      } else if (!resolvedTabId || resolvedWindowId === undefined) {
+        // Extension-page sender (popup / side panel) with no explicit tabId:
+        // fall back to the active tab so the popup's "capture page" button
+        // still works.
         const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
         resolvedTabId = resolvedTabId ?? activeTab?.id;
         resolvedWindowId = resolvedWindowId ?? activeTab?.windowId;
@@ -962,7 +1005,8 @@ async function handleMessageAsync(
 
     case 'START_RECORDING':
     case 'STOP_RECORDING':
-    case 'GET_RECORDED_ACTIONS': {
+    case 'GET_RECORDED_ACTIONS':
+    case 'SET_RECORDING_VALUE_CAPTURE' as ExtensionMessage['type']: {
       let resolvedTabId = tabId;
       if (!resolvedTabId) {
         const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -1152,6 +1196,31 @@ async function handleMessageAsync(
       }
       if (!isAllowedProbeUrl(probeUrl)) {
         return { success: false, error: 'Probe URL not allowed' } as ExtensionResponse;
+      }
+      // SECURITY (H-01 audit 2026-05-19): restrict NLWEB_PROBE to the
+      // sender's own origin. Discovery is intrinsically same-origin —
+      // probing arbitrary public URLs through the extension turned the
+      // service worker into an SSRF reflector (the extension's IP, no
+      // Origin header, may bypass CORS allowlists that key on Origin).
+      // Extension-page senders (popup / side panel) have no `sender.tab`
+      // and are not gated here — they're the trusted UI.
+      if (sender.tab?.url) {
+        try {
+          const senderOrigin = new URL(sender.tab.url).origin;
+          const probeOrigin = new URL(probeUrl).origin;
+          if (probeOrigin !== senderOrigin) {
+            logger.warn('Rejected cross-origin NLWEB_PROBE', {
+              senderOrigin,
+              probeOrigin,
+            });
+            return {
+              success: false,
+              error: 'NLWeb probes are restricted to the page\'s own origin.',
+            } as ExtensionResponse;
+          }
+        } catch {
+          return { success: false, error: 'Invalid probe URL' } as ExtensionResponse;
+        }
       }
       {
         const controller = new AbortController();
@@ -1912,6 +1981,20 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (!/^https?:\/\//i.test(url)) {
     return;
   }
+  // SECURITY (H-06 audit 2026-05-19): the previous listener fired for every
+  // http(s) tab regardless of allowlist, shipping innerText to the desktop
+  // bridge for pages the user never authorized. Gate on the same
+  // `siteAllowlistCache` that controls message dispatch. Non-allowlisted
+  // origins get no implicit page-context sync.
+  let origin: string;
+  try {
+    origin = new URL(url).origin;
+  } catch {
+    return;
+  }
+  if (!siteAllowlistCache.has(origin)) {
+    return;
+  }
 
   void syncTabContextWithDesktop(tabId, 'tab_updated').catch((error) => {
     logger.debug('Tab update context sync skipped', error);
@@ -1962,14 +2045,9 @@ async function captureCurrentPage(): Promise<void> {
   }
 }
 
-/** Default AGI bridge base URL — overridden by chrome.storage.local `agi_bridge_url`.
- *  Port 8787 is the canonical AGI Workforce desktop bridge port (matches VS Code ext + desktop). */
-const DEFAULT_AGI_BRIDGE_URL = 'http://localhost:8787';
-
-/** Allowed bridge URL hostnames — only local connections to the desktop app are permitted.
- *  `0.0.0.0` removed (SEV-CHEXT-09): on Linux it routes to LAN-bound services, defeating the
- *  loopback-only contract. Use the explicit loopback addresses only. */
-const ALLOWED_BRIDGE_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+// DEFAULT_AGI_BRIDGE_URL and ALLOWED_BRIDGE_HOSTS are now imported from
+// `./background/policy` so side-panel, pairing, and tests share one source
+// of truth. See H-02 in audits/2026-05-19.
 
 /** Maximum response body size for NLWEB probe requests (256 KB). */
 const MAX_PROBE_RESPONSE_BYTES = 262_144;
@@ -2018,35 +2096,9 @@ function isAllowedProbeUrl(raw: string): boolean {
   }
 }
 
-/**
- * Validate that a bridge URL points to a local address.
- * Returns the normalized URL if valid, null if rejected.
- */
-function validateBridgeUrl(raw: string): string | null {
-  try {
-    // Normalize protocol for URL parsing
-    const normalized = raw.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://');
-    const parsed = new URL(normalized);
-
-    // Only allow http/https schemes
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      logger.warn('Bridge URL rejected: unsupported protocol', { protocol: parsed.protocol });
-      return null;
-    }
-
-    // Only allow local hostnames — never route bridge traffic to remote servers
-    if (!ALLOWED_BRIDGE_HOSTS.has(parsed.hostname)) {
-      logger.warn('Bridge URL rejected: non-local hostname', { hostname: parsed.hostname });
-      return null;
-    }
-
-    // Strip trailing slash
-    return normalized.replace(/\/$/, '');
-  } catch {
-    logger.warn('Bridge URL rejected: invalid URL', { raw });
-    return null;
-  }
-}
+// validateBridgeUrl is now imported from `./background/policy` (audit 2026-05-19).
+// The function deliberately does not log here — it's called from multiple
+// surfaces (background, side panel, pairing); log at the call site instead.
 
 /**
  * Resolve the configured bridge URL from storage, falling back to the default.
@@ -2094,33 +2146,10 @@ const VALID_PROVIDER_IDS: ReadonlySet<ProviderStreamProvider> = new Set([
   'ollama',
 ]);
 
-// SECURITY (C-1): Gateway URL allowlist. The agi_gateway_url key in
-// chrome.storage.local is writable by any allowlisted page. We therefore
-// validate the stored value against a strict allowlist rather than trusting the
-// raw storage value. Only https://api.agiworkforce.com and its subdomains are
-// accepted. localhost is never accepted for the gateway (bridge URL is separate
-// and validated by validateBridgeUrl).
-const GATEWAY_URL_ALLOWLIST_EXACT = new Set<string>(['https://api.agiworkforce.com']);
-const GATEWAY_URL_SUBDOMAIN_SUFFIX = '.agiworkforce.com';
-
-/**
- * Returns the validated gateway origin or null.
- * Accepts: https://api.agiworkforce.com, https://<sub>.agiworkforce.com
- * Rejects: http:// (JWT would be plaintext), any non-agiworkforce.com host.
- */
-function validateGatewayUrl(raw: string): string | null {
-  if (!raw) return null;
-  try {
-    const parsed = new URL(raw);
-    if (parsed.protocol !== 'https:') return null;
-    const origin = `https://${parsed.host}`;
-    if (GATEWAY_URL_ALLOWLIST_EXACT.has(origin)) return origin;
-    if (parsed.hostname.endsWith(GATEWAY_URL_SUBDOMAIN_SUFFIX)) return origin;
-    return null;
-  } catch {
-    return null;
-  }
-}
+// validateGatewayUrl is now imported from `./background/policy` (M-02 audit
+// 2026-05-19). The function deliberately uses an EXACT-match allowlist —
+// no open subdomain rule — to prevent compromise of any delegated subdomain
+// from compromising the JWT pipeline.
 
 interface ProviderStreamSettings {
   enabled: boolean;

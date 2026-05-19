@@ -127,15 +127,28 @@ export function renderMarkdown(text: string): string {
   // SECURITY (M-1): entity-encode link text before interpolation so that a
   // model response like [<img onerror=…>](url) cannot inject HTML even if a
   // downstream DOMPurify pass is skipped or removed in a future refactor.
+  // SECURITY (C-04 audit 2026-05-19): percent-encode the four characters
+  // that break out of an HTML attribute (`"`, `'`, `<`, `>`) inside the
+  // URL before interpolating into `href="..."`. The prior fix encoded the
+  // link text but left the URL raw, so a model response like
+  // `[click](https://e.com" onerror="alert(1))` would inject an attribute
+  // (caught today only by DOMPurify; the M-1 comment's "future refactor"
+  // concern applies here too).
   html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match: string, text: string, url: string) => {
-    const safeUrl = /^https?:\/\//i.test(url.trim()) ? url : '#';
+    const rawUrl = url.trim();
+    const safeUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : '#';
+    const encodedHref = safeUrl
+      .replace(/"/g, '%22')
+      .replace(/'/g, '%27')
+      .replace(/</g, '%3C')
+      .replace(/>/g, '%3E');
     const encodedText = text
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
-    return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${encodedText}</a>`;
+    return `<a href="${encodedHref}" target="_blank" rel="noopener noreferrer">${encodedText}</a>`;
   });
 
   html = html
