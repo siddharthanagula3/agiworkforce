@@ -29,14 +29,17 @@ import { extractPageMetadata } from './page-metadata';
 import type { PageMetadata } from './page-metadata';
 import { detectNLWeb } from './nlweb';
 import { setupInPagePanel } from './inPagePanel/setup';
-import { validateShortcutActions } from './background/policy';
-import { redactSecrets } from '@agiworkforce/utils';
+import {
+  validateShortcutActions,
+  MAX_CONTEXT_HTML_CHARS,
+  sanitizePageText,
+} from './background/policy';
 
 import type { ConsoleLogEntry } from './types';
 
-const MAX_CONTEXT_HTML_CHARS = 100_000;
-const MAX_CONSOLE_BUFFER = 200;
-const MAX_CONSOLE_ENTRY_CHARS = 1000;
+// MAX_CONTEXT_HTML_CHARS now imported from policy.ts (L-14 audit 2026-05-19).
+// MAX_CONSOLE_BUFFER removed with the patchConsole feature (M-13 audit 2026-05-19).
+// MAX_CONSOLE_ENTRY_CHARS removed with the patchConsole feature (M-13 audit 2026-05-19).
 const PAGE_EXTRACTION_TIMEOUT_MS = 5_000;
 /** Skip outerHTML extraction when the DOM exceeds this many elements to avoid
  *  multi-second event-loop stalls on pathological SPAs. */
@@ -68,23 +71,9 @@ const MAX_DOM_ELEMENTS_FOR_EXTRACTION = 50_000;
  * 2. Elapsed-time: discard if extraction itself took longer than
  *    PAGE_EXTRACTION_TIMEOUT_MS (DOM access is synchronous and uninterruptible).
  */
-/**
- * Invisible Unicode characters commonly used as vehicles for indirect prompt
- * injection (Greshake 2023 / EchoLeak CVE-2025-32711 / ASCII-smuggling —
- * Embrace The Red 2024):
- *
- *   - U+200B..U+200D (ZWSP, ZWNJ, ZWJ)
- *   - U+FEFF (zero-width no-break space / BOM)
- *   - U+202A..U+202E (LRE/RLE/PDF/LRO/RLO bidi overrides)
- *   - U+2066..U+2069 (LRI/RLI/FSI/PDI isolation controls)
- *   - U+FE00..U+FE0F (Variation selectors)
- *   - U+E0000..U+E007F (Tag characters — the "ASCII smuggling" range)
- */
-const INVISIBLE_UNICODE_RE =
-  // The character class deliberately contains the invisible chars we want
-  // to strip — disable lints that would flag them as accidentally typed.
-  // eslint-disable-next-line no-misleading-character-class, no-irregular-whitespace
-  /[​-‍﻿‪-‮⁦-⁩︀-️]|[\u{E0000}-\u{E007F}]/gu;
+// INVISIBLE_UNICODE_RE and sanitizePageText are now imported from
+// `./background/policy` so tests can share the exact regex and redaction
+// chain that production uses. See self-review #1 in the audit (2026-05-19).
 
 function extractPageHtmlSafely(): string {
   try {
@@ -102,18 +91,14 @@ function extractPageHtmlSafely(): string {
       logger.warn('Page-text extraction timed out, using empty content');
       return '';
     }
-    // SECURITY (H-06 audit 2026-05-19): strip invisible Unicode classes used
-    // for indirect prompt injection BEFORE collapsing whitespace.
-    const stripped = rawText.replace(INVISIBLE_UNICODE_RE, '');
-    // Collapse runs of whitespace so the byte budget covers more semantic content.
-    const collapsed = stripped
+    // SECURITY (H-06 audit 2026-05-19, self-review #1 audit 2026-05-19):
+    // collapse whitespace, then route through the policy module's
+    // sanitizePageText helper \u2014 single pure function shared with tests.
+    const collapsed = rawText
       .replace(/[\t \u00a0]+/g, ' ')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
-    // SECURITY (H-06 audit 2026-05-19): run the shared redactSecrets redactor
-    // so JWTs / API keys / DB credentials the user happened to be viewing
-    // never reach the LLM via page-context sync.
-    const redacted = redactSecrets(collapsed);
+    const redacted = sanitizePageText(collapsed);
     return redacted.substring(0, MAX_CONTEXT_HTML_CHARS);
   } catch (e) {
     logger.debug('Failed to extract page text (CSP or DOM error)', e);
@@ -169,17 +154,24 @@ function initialize(): void {
   // so there is no need to call syncPageContext() separately here.
   void notifyTabReady();
 
-  // SECURITY (chrome-SUB-5, audit 2026-05-05): the previous implementation
-  // patched `console.*` on EVERY page the content script ran on (`<all_urls>`
-  // — which is every http(s) page the user visits). The buffered logs were
-  // exposed to the desktop bridge via `GET_CONSOLE_LOGS`. A user navigating
-  // a bank site, healthcare portal, or any page that logs partial session
-  // state would have those entries forwarded to the LLM.
-  // Mitigation: only patch console for origins the user explicitly allowlisted
-  // for automation. Non-allowlisted origins skip the patch entirely.
-  void patchConsoleIfAllowlisted().catch((err) => {
-    logger.debug('patchConsoleIfAllowlisted failed (non-fatal)', err);
-  });
+  // SECURITY (M-13 audit 2026-05-19): console-patch removed entirely.
+  //
+  // The previous design monkey-patched `console.*` on allowlisted pages so
+  // GET_CONSOLE_LOGS could return buffered output. Two problems remained
+  // even with the chrome-SUB-5 allowlist gate:
+  //   1. Page scripts can detect the patch (`console.log.toString()` differs)
+  //      — a fingerprint of "AGI Workforce is recording this page".
+  //   2. Replacing the page's own `console` interferes with any page-level
+  //      tool that hooks `console` (Babel-loader source-map injectors,
+  //      logging libraries, dev-tool extensions).
+  //
+  // Console-log capture is now opt-out by default. If a future product
+  // flow needs the data, it can request via chrome.debugger / DevTools
+  // Protocol which is a documented per-tab API the user must explicitly
+  // attach to.
+  //
+  // Existing GET_CONSOLE_LOGS / CLEAR_CONSOLE_LOGS handlers still answer
+  // (returning the empty buffer) so callers don't crash.
 
   try {
     initWebMCP();
@@ -1507,6 +1499,12 @@ async function handleClickAtCoordinates(
 ): Promise<ExtensionResponse> {
   try {
     const { x, y, button = 'left' } = message;
+    // M-15 audit 2026-05-19: explicit bounds check. `elementFromPoint`
+    // returns null for out-of-viewport coordinates, but a NaN / Infinity
+    // input would propagate through and silently fail. Reject early.
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) {
+      return { success: false, error: `Coordinates (${x}, ${y}) out of bounds` };
+    }
     const buttonIndex = button === 'right' ? 2 : button === 'middle' ? 1 : 0;
     const target = document.elementFromPoint(x, y);
     if (!target) {
@@ -1701,19 +1699,27 @@ function showRecordingIndicator(): void {
 
   const shadow = host.attachShadow({ mode: 'closed' });
   const style = document.createElement('style');
+  // Self-review #6 audit 2026-05-19: visually differentiate value-capture
+  // mode from selector-only via the pill background. Red (danger) means
+  // "values being recorded — passwords/cc dropped, others redacted";
+  // amber means "selector only — values never captured".
+  const isValueMode = automationState.captureValues;
+  const bgColor = isValueMode ? 'rgba(30,10,10,0.88)' : 'rgba(40,30,5,0.88)';
+  const accentColor = isValueMode ? '#ef4444' : '#f59e0b';
+  const borderColor = isValueMode ? 'rgba(220,38,38,0.5)' : 'rgba(245,158,11,0.5)';
   style.textContent = `
     .agi-rec-dot {
       display:inline-flex;align-items:center;gap:6px;
-      background:rgba(30,10,10,0.88);color:#ef4444;
+      background:${bgColor};color:${accentColor};
       font-family:-apple-system,BlinkMacSystemFont,sans-serif;
       font-size:12px;font-weight:600;letter-spacing:0.04em;
       padding:5px 12px;border-radius:20px;
-      border:1px solid rgba(220,38,38,0.5);
+      border:1px solid ${borderColor};
       user-select:none;
     }
     .agi-rec-circle {
       width:9px;height:9px;border-radius:50%;
-      background:#ef4444;flex-shrink:0;/* --agi-ext-danger */
+      background:${accentColor};flex-shrink:0;
       animation:agi-rec-pulse 1.1s ease-in-out infinite;
     }
     @keyframes agi-rec-pulse {
@@ -1848,8 +1854,11 @@ function handleSetRecordingValueCapture(message: { enabled?: unknown }): Extensi
 }
 
 function handleStartRecording(): ExtensionResponse {
+  // L-03 audit 2026-05-19: `automationState.recordedActions` is the legacy
+  // typed-state field; `_userRecordedActions` is the live buffer the
+  // recording listeners actually mutate. Resetting both implied dual
+  // ownership; reset only the live buffer here.
   automationState.isRecording = true;
-  automationState.recordedActions = [];
   _userRecordedActions.length = 0;
 
   detachRecordingListeners(); // defensive cleanup in case of double-start
@@ -1908,73 +1917,10 @@ async function checkConnectionStatus(): Promise<void> {
 
 let _indicatorShadow: ShadowRoot | null = null;
 
-/**
- * Wraps `patchConsole` with a same-origin allowlist gate. See chrome-SUB-5
- * comment at the call site in initialize(). Failing the gate is silent — the
- * extension simply doesn't buffer console output for this page.
- */
-async function patchConsoleIfAllowlisted(): Promise<void> {
-  let allowlist: Set<string>;
-  try {
-    const res = await chrome.storage.local.get('agi_site_allowlist');
-    const list = (res as Record<string, unknown>)['agi_site_allowlist'];
-    allowlist = new Set(Array.isArray(list) ? (list as string[]) : []);
-  } catch (e) {
-    logger.debug('Could not read agi_site_allowlist for console gating', e);
-    return;
-  }
-  const origin = window.location.origin;
-  if (!allowlist.has(origin)) {
-    logger.debug('Console buffering skipped — origin not on user allowlist', { origin });
-    return;
-  }
-  patchConsole();
-}
-
-/** Monkey-patch console to capture page logs. Our own logger is excluded via prefix check. */
-function patchConsole(): void {
-  const levels: Array<'log' | 'warn' | 'error' | 'info' | 'debug'> = [
-    'log',
-    'warn',
-    'error',
-    'info',
-    'debug',
-  ];
-
-  for (const level of levels) {
-    // eslint-disable-next-line no-console
-    const original = console[level];
-    // eslint-disable-next-line no-console
-    console[level] = (...args: unknown[]) => {
-      original.apply(console, args);
-
-      const firstArg = args[0];
-      if (typeof firstArg === 'string' && firstArg.startsWith('[AGI Workforce]')) return;
-
-      const message = args
-        .map((a) => {
-          if (typeof a === 'string') return a;
-          try {
-            return JSON.stringify(a);
-          } catch {
-            return String(a);
-          }
-        })
-        .join(' ')
-        .slice(0, MAX_CONSOLE_ENTRY_CHARS);
-
-      consoleLogBuffer.push({
-        level,
-        message,
-        timestamp: Date.now(),
-      });
-
-      while (consoleLogBuffer.length > MAX_CONSOLE_BUFFER) {
-        consoleLogBuffer.shift();
-      }
-    };
-  }
-}
+// SECURITY (M-13 audit 2026-05-19): patchConsole / patchConsoleIfAllowlisted
+// removed. See the comment in initialize() for the rationale. The
+// `consoleLogBuffer` and GET_CONSOLE_LOGS handlers remain so existing
+// callers continue to receive a (now always empty) buffer.
 
 /** Shadow DOM prevents page CSS/JS from hiding or detecting the indicator. */
 function addAutomationIndicator(): void {

@@ -479,6 +479,14 @@ describe('discoverAllTools', () => {
 // ═════════════════════════════════════════════════════════════════════════════════
 
 describe('callTool', () => {
+  // M-06 audit 2026-05-19: the declarative-form fallback now prompts the
+  // user via window.confirm before submitting. Tests stub confirm to
+  // return true so the existing assertions about successful submission
+  // continue to hold.
+  beforeEach(() => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+  });
+
   it('invokes via modelContextTesting.executeTool when available', async () => {
     const executeTool = vi.fn().mockResolvedValue(JSON.stringify({ answer: 42 }));
     stubModelContextTesting({ executeTool });

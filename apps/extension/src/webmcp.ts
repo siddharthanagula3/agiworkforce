@@ -1,4 +1,5 @@
 import { logger } from './utils';
+import { safeJsonParse, MAX_WEBMCP_SCHEMA_BYTES } from './background/policy';
 
 /** Escape a string for use inside a CSS attribute selector value (double-quoted). */
 function escapeAttrValue(value: string): string {
@@ -150,14 +151,13 @@ export function discoverImperativeTools(): WebMCPToolInfo[] {
     try {
       const registered = testing.listTools();
       for (const tool of registered) {
-        let parsedSchema: Record<string, unknown> | undefined;
-        if (tool.inputSchema) {
-          try {
-            parsedSchema = JSON.parse(tool.inputSchema);
-          } catch {
-            // Schema not parseable, skip
-          }
-        }
+        // M-03 audit 2026-05-19: page-supplied schemas can be arbitrarily
+        // large. Cap at MAX_WEBMCP_SCHEMA_BYTES (64 KB) so a hostile page
+        // can't DoS the content script with a multi-MB schema. safeJsonParse
+        // returns undefined on oversize / parse-failure; we drop those tools.
+        const parsedSchema = tool.inputSchema
+          ? safeJsonParse<Record<string, unknown>>(tool.inputSchema, MAX_WEBMCP_SCHEMA_BYTES)
+          : undefined;
         tools.push({
           name: tool.name,
           description: tool.description,
@@ -251,10 +251,13 @@ export async function callTool(request: WebMCPCallToolRequest): Promise<WebMCPCa
   if (testing && typeof testing.executeTool === 'function') {
     try {
       const resultJson = await testing.executeTool(name, JSON.stringify(args));
-      return {
-        success: true,
-        result: resultJson ? JSON.parse(resultJson) : null,
-      };
+      // M-03: page-tool result must respect the same size cap as the input
+      // schema. Oversize results become `null` rather than throwing or
+      // burning CPU on the parse.
+      const parsedResult = resultJson
+        ? (safeJsonParse(resultJson, MAX_WEBMCP_SCHEMA_BYTES) ?? null)
+        : null;
+      return { success: true, result: parsedResult };
     } catch (e) {
       return {
         success: false,
@@ -293,6 +296,29 @@ export async function callTool(request: WebMCPCallToolRequest): Promise<WebMCPCa
   ) as HTMLFormElement | null;
   if (form) {
     try {
+      // SECURITY (M-06 audit 2026-05-19): the form-fallback path fills
+      // page-supplied form fields with model-supplied argument values and
+      // submits — bypassing the user's confirmation. A poisoned tool
+      // description (Invariant Labs TPA / CyberArk "Poison Everywhere")
+      // can social-engineer the model into supplying attacker-shaped
+      // values. Surface a confirmation showing the tool name and the
+      // submitted values before requestSubmit().
+      //
+      // The autofill path uses the same pattern (content.ts handleAutoFillJobApplication
+      // line ~1252-1263). Both paths require window.confirm before any
+      // submission.
+      const argLines = Object.entries(args)
+        .map(([k, v]) => `  ${k}: ${String(v).slice(0, 120)}`)
+        .join('\n');
+      const confirmed = window.confirm(
+        `AGI Workforce: tool "${name}" wants to submit this form:\n\n${argLines}\n\nClick OK to submit, or Cancel to abort.`,
+      );
+      if (!confirmed) {
+        return {
+          success: false,
+          error: 'User cancelled the tool invocation.',
+        };
+      }
       // Fill form fields from args
       for (const [key, value] of Object.entries(args)) {
         const field = form.querySelector(`[name="${escapeAttrValue(key)}"]`) as

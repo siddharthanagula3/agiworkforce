@@ -1,4 +1,5 @@
 import { logger } from './utils';
+import { safeJsonParse, MAX_JSON_LD_BYTES } from './background/policy';
 
 export interface PageMetadata {
   url: string;
@@ -23,13 +24,14 @@ function extractJsonLd(): unknown[] {
   for (const script of scripts) {
     const text = script.textContent;
     if (!text) continue;
-
-    try {
-      const parsed: unknown = JSON.parse(text);
-      results.push(parsed);
-    } catch (e) {
-      logger.warn('Failed to parse JSON-LD block', e);
+    // M-03 audit 2026-05-19: cap per-script-block size so a hostile page
+    // with multi-MB JSON-LD cannot stall the parser.
+    const parsed = safeJsonParse<unknown>(text, MAX_JSON_LD_BYTES);
+    if (parsed === undefined) {
+      logger.warn('Skipped JSON-LD block (oversize or unparseable)');
+      continue;
     }
+    results.push(parsed);
   }
 
   return results;
@@ -137,17 +139,15 @@ function extractSchemaTypes(): string[] {
   }
 
   // Also extract @type from JSON-LD (already parsed above, but we
-  // call this separately so callers can get types without full JSON-LD)
+  // call this separately so callers can get types without full JSON-LD).
+  // M-03 audit 2026-05-19: same size cap as extractJsonLd.
   const scripts = document.querySelectorAll('script[type="application/ld+json"]');
   for (const script of scripts) {
     const text = script.textContent;
     if (!text) continue;
-
-    try {
-      const parsed: unknown = JSON.parse(text);
+    const parsed = safeJsonParse<unknown>(text, MAX_JSON_LD_BYTES);
+    if (parsed !== undefined) {
       collectJsonLdTypes(parsed, types);
-    } catch {
-      // Already logged in extractJsonLd
     }
   }
 
