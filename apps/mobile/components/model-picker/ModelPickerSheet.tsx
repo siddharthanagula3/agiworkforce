@@ -16,7 +16,7 @@ import { fetchModelCatalog } from '@/services/modelCatalog';
 import { colors } from '@/lib/theme';
 import { PROVIDER_DISPLAY, type ProviderId } from '@agiworkforce/types';
 import { guardProviderSwitch } from '@/services/tierGuard';
-import { ProPlusPaywall } from '@/components/paywall/ProPlusPaywall';
+import { ProPlusPaywall } from '@/components/Paywall/ProPlusPaywall';
 
 // ---------------------------------------------------------------------------
 // Helpers
