@@ -183,7 +183,12 @@ export function injectAiGeneratedMetaTag(args: {
     ...(args.generatedAt !== undefined ? { generatedAt: args.generatedAt } : {}),
   });
   // Strip any prior agi:ai-generated meta tag — idempotent.
-  const stripped = args.html.replace(/<meta\s+name="agi:ai-generated"[^>]*>\s*/gi, '');
+  // AUDIT-FIX: alert-474 — bound whitespace and attribute-tail runs to
+  // mitigate polynomial-redos when the input contains many `<meta>` prefixes.
+  const stripped = args.html.replace(
+    /<meta[ \t]{1,32}name="agi:ai-generated"[^>]{0,2048}>[ \t\r\n]{0,32}/gi,
+    '',
+  );
 
   // Try to inject inside <head>.
   const headMatch = stripped.match(/<head[^>]*>/i);

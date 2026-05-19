@@ -288,7 +288,11 @@ function renderInline(text: string): React.ReactNode {
   const parts: React.ReactNode[] = [];
   // Handle [text](url), ~~strikethrough~~, **bold**, *italic*, `code`
   // Use [^~], [^*], [^`] negated classes instead of .+?/.* to prevent ReDoS
-  const regex = /(\[([^\]]+)\]\(([^)]+)\)|~~[^~]+~~|\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g;
+  // AUDIT-FIX: alert-449 — bound the negated-class quantifiers so adversarial
+  // input cannot produce polynomial backtracking even though each alternative
+  // is already non-overlapping. 4 KB per inline span is far above realistic.
+  const regex =
+    /(\[([^\]]{1,4096})\]\(([^)]{1,4096})\)|~~[^~]{1,4096}~~|\*\*[^*]{1,4096}\*\*|\*[^*]{1,4096}\*|`[^`]{1,4096}`)/g;
   let last = 0;
   let match: RegExpExecArray | null;
 

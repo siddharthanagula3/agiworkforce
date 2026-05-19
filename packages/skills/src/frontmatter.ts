@@ -16,7 +16,12 @@
  * caller site — but this covers OpenClaw's skill schema 100%.
  */
 
-const FRONTMATTER_FENCE = /^---\s*\r?\n([\s\S]*?)\r?\n---\s*\r?\n?/;
+// AUDIT-FIX: alert-399 — bound whitespace runs to avoid polynomial-redos.
+// `^---<spaces>\n` opens the fence, `\n---<spaces>\n<blank lines>` closes it.
+// Limiting each whitespace run to 64 keeps the regex linear-time on adversarial
+// input while preserving the historic permissive trailing-blank behavior.
+const FRONTMATTER_FENCE =
+  /^---[ \t]{0,32}\r?\n([\s\S]{0,131072}?)\r?\n---[ \t]{0,32}(?:\r?\n[ \t]{0,256}){0,64}/;
 
 // AUDIT-FIX: H-1 — prototype pollution guard.
 const RESERVED_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
@@ -81,7 +86,8 @@ function parseYamlBlock(text: string): Record<string, unknown> {
   }
 
   for (const rawLine of lines) {
-    const stripped = rawLine.replace(/\s+$/, '');
+    // AUDIT-FIX: alert-400 — bound trailing-whitespace strip.
+    const stripped = rawLine.replace(/\s{1,4096}$/, '');
     if (!stripped.trim()) {
       flushList();
       continue;
@@ -90,7 +96,9 @@ function parseYamlBlock(text: string): Record<string, unknown> {
     const indent = leadingSpaces(stripped);
 
     // List entry?
-    const listMatch = /^\s*-\s+(.*)$/.exec(stripped);
+    // AUDIT-FIX: alert-401 — bound the leading-whitespace and post-dash
+    // whitespace runs so the regex is linear-time on adversarial input.
+    const listMatch = /^[ \t]{0,256}-[ \t]{1,256}(.{0,4096})$/.exec(stripped);
     if (listMatch && pendingListKey) {
       pendingList.push(unquote(listMatch[1] ?? ''));
       continue;
@@ -104,7 +112,12 @@ function parseYamlBlock(text: string): Record<string, unknown> {
     }
     const parent = stack[stack.length - 1]!.obj;
 
-    const keyValueMatch = /^\s*([A-Za-z0-9_$-]+)\s*:(?:\s*(.*))?$/.exec(stripped);
+    // AUDIT-FIX: alert-402 — bound whitespace runs and key/value lengths
+    // to defeat polynomial-redos on adversarial frontmatter.
+    const keyValueMatch =
+      /^[ \t]{0,256}([A-Za-z0-9_$-]{1,128})[ \t]{0,256}:(?:[ \t]{0,256}(.{0,8192}))?$/.exec(
+        stripped,
+      );
     if (!keyValueMatch) continue;
     const key = keyValueMatch[1] ?? '';
     const valueText = (keyValueMatch[2] ?? '').trim();
