@@ -180,9 +180,18 @@ pub enum PluginSource {
     Local(PathBuf),
     Git { url: String, branch: Option<String> },
 }
+
+// AUDIT-FIX: H-16 — supply-chain integrity claim required on install.
+pub enum PluginIntegrity {
+    PinnedSha256(String),
+    Sigstore(PathBuf),
+    UnsafeSkip,
+}
+
 pub struct PluginInstallRequest {
     pub source: PluginSource,
     pub name: String,
+    pub integrity: PluginIntegrity, // AUDIT-FIX: H-16
 }
 pub enum PluginInstallOutcome {
     Installed { path: PathBuf, format: Option<ManifestFormat> },
@@ -564,6 +573,12 @@ impl PluginsManager {
             return PluginInstallOutcome::Failed { error };
         }
 
+        // AUDIT-FIX: H-16 — verify integrity claim before accepting the plugin tree.
+        if let Err(error) = verify_plugin_integrity(&target, &req.integrity) {
+            let _ = std::fs::remove_dir_all(&target);
+            return PluginInstallOutcome::Failed { error };
+        }
+
         // Post-install: validate that the copied plugin has a recognized
         // manifest. If not, roll back the install + report which paths
         // we tried.
@@ -584,6 +599,87 @@ impl PluginsManager {
             }
         }
     }
+}
+
+// AUDIT-FIX: H-16 — supply-chain integrity gate. SHA-256 is verified locally;
+// Sigstore sidecar verification stub returns an error until the `sigstore`
+// crate is wired in (introducing it here would be an undocumented dep).
+fn verify_plugin_integrity(
+    target: &Path,
+    integrity: &PluginIntegrity,
+) -> Result<(), String> {
+    match integrity {
+        PluginIntegrity::PinnedSha256(expected) => {
+            let actual = hash_dir_tree_sha256(target).map_err(|e| e.to_string())?;
+            if actual.eq_ignore_ascii_case(expected.trim_start_matches("sha256:")) {
+                Ok(())
+            } else {
+                Err(format!(
+                    "integrity mismatch: expected sha256:{}, got sha256:{}",
+                    expected.trim_start_matches("sha256:"),
+                    actual
+                ))
+            }
+        }
+        PluginIntegrity::Sigstore(sidecar) => {
+            if !sidecar.exists() {
+                return Err(format!(
+                    "sigstore sidecar not found at: {}",
+                    sidecar.display()
+                ));
+            }
+            Err(
+                "sigstore verification not yet wired (re-run with --integrity sha256:<hex> or --unsafe-no-integrity)"
+                    .to_string(),
+            )
+        }
+        PluginIntegrity::UnsafeSkip => {
+            eprintln!(
+                "WARNING: installing plugin without integrity verification (--unsafe-no-integrity)"
+            );
+            Ok(())
+        }
+    }
+}
+
+fn hash_dir_tree_sha256(root: &Path) -> std::io::Result<String> {
+    use sha2::{Digest, Sha256};
+    let mut entries: Vec<PathBuf> = Vec::new();
+    collect_files(root, &mut entries)?;
+    entries.sort();
+    let mut hasher = Sha256::new();
+    for entry in entries {
+        let rel = entry.strip_prefix(root).unwrap_or(&entry);
+        hasher.update(rel.to_string_lossy().as_bytes());
+        hasher.update([0u8]);
+        let bytes = std::fs::read(&entry)?;
+        hasher.update(&bytes);
+        hasher.update([0u8]);
+    }
+    Ok(hex_encode(&hasher.finalize()))
+}
+
+fn collect_files(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let ft = entry.file_type()?;
+        if ft.is_dir() {
+            collect_files(&entry.path(), out)?;
+        } else if ft.is_file() {
+            out.push(entry.path());
+        }
+    }
+    Ok(())
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        s.push(HEX[(b >> 4) as usize] as char);
+        s.push(HEX[(b & 0xf) as usize] as char);
+    }
+    s
 }
 
 /// Pull `headers = { ... }` out of an MCP server config's catch-all `extra`

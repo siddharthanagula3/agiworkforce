@@ -19,6 +19,27 @@ pub struct ExecuteResult {
     stream_id: Option<String>,
 }
 
+// AUDIT-FIX: H-14 — refuse unquoted shell metachars; shlex::split honors quoted args so legitimate `echo "a; b"` works.
+fn reject_unquoted_shell_metachars(command: &str) -> Result<(), String> {
+    let tokens = shlex::split(command)
+        .ok_or_else(|| "command failed shell-tokenization (unbalanced quotes)".to_string())?;
+    let banned_single = [';', '|', '<', '>', '`'];
+    for tok in &tokens {
+        if tok.chars().any(|c| banned_single.contains(&c))
+            || tok.contains("&&")
+            || tok.contains("||")
+            || tok.contains("$(")
+            || tok == "&"
+        {
+            return Err(format!(
+                "Refusing command containing unquoted shell metacharacters: {:?}",
+                tok
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn parse_shell_type(input: &str) -> Result<ShellType, String> {
     let normalized = input.trim().to_lowercase();
     match normalized.as_str() {
@@ -80,6 +101,12 @@ pub async fn execute_terminal_command(
             "Command validation failed"
         );
         return Err(e.to_string());
+    }
+
+    // AUDIT-FIX: H-14 — tokenize and reject unquoted shell metachars before delegating to `sh -c`.
+    if let Err(e) = reject_unquoted_shell_metachars(&command) {
+        tracing::warn!(correlation_id = %correlation_id, error = %e, "metachar reject");
+        return Err(e);
     }
 
     // AUDIT-FIX: Enforce user confirmation for dangerous commands

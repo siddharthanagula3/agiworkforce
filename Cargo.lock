@@ -266,7 +266,7 @@ dependencies = [
  "rdev",
  "redis",
  "regex",
- "reqwest 0.12.28",
+ "reqwest 0.13.2",
  "reqwest-middleware",
  "reqwest-retry",
  "roxmltree",
@@ -5310,7 +5310,6 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.26.4",
  "tower-service",
- "webpki-roots 1.0.5",
 ]
 
 [[package]]
@@ -9248,6 +9247,7 @@ version = "0.11.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "434b42fec591c96ef50e21e886936e66d3cc3f737104fdb9b737c40ffb94c098"
 dependencies = [
+ "aws-lc-rs",
  "bytes",
  "getrandom 0.3.4",
  "lru-slab",
@@ -10124,8 +10124,6 @@ dependencies = [
  "native-tls",
  "percent-encoding",
  "pin-project-lite",
- "quinn",
- "rustls 0.23.36",
  "rustls-pki-types",
  "serde",
  "serde_json",
@@ -10133,7 +10131,6 @@ dependencies = [
  "sync_wrapper 1.0.2",
  "tokio",
  "tokio-native-tls",
- "tokio-rustls 0.26.4",
  "tokio-util",
  "tower",
  "tower-http",
@@ -10143,7 +10140,6 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-streams 0.4.2",
  "web-sys",
- "webpki-roots 1.0.5",
 ]
 
 [[package]]
@@ -10164,8 +10160,10 @@ dependencies = [
  "hyper-util",
  "js-sys",
  "log",
+ "mime_guess",
  "percent-encoding",
  "pin-project-lite",
+ "quinn",
  "rustls 0.23.36",
  "rustls-pki-types",
  "rustls-platform-verifier",

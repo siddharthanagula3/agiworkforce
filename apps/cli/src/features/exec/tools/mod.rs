@@ -51,6 +51,16 @@ pub struct ToolResult {
     pub output: String,
 }
 
+impl ToolResult {
+    // AUDIT-FIX: H-8 — marker accessor for callers; web_fetch wraps output in <web_fetch_result untrusted="true" ...>.
+    #[allow(dead_code)]
+    pub fn is_untrusted(&self) -> bool {
+        self.output
+            .trim_start()
+            .starts_with("<web_fetch_result untrusted=\"true\"")
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct ToolExecOptions {
     pub require_confirmation: bool,

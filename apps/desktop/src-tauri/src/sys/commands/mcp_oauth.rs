@@ -335,9 +335,10 @@ impl McpOAuthProvider {
         }
     }
 
-    /// Get the deep link redirect URI for this provider
-    pub fn redirect_uri(&self) -> String {
-        format!("agiworkforce://oauth/mcp/{}", self.as_str())
+    /// Build the RFC 8252 §7.3 loopback redirect URI for this provider at `port`.
+    pub fn redirect_uri(&self, port: u16) -> String {
+        // AUDIT-FIX: H-3 — loopback HTTP listener replaces hijackable custom scheme.
+        format!("http://127.0.0.1:{}/oauth/callback", port)
     }
 }
 
@@ -408,15 +409,11 @@ struct PkceChallenge {
 
 impl PkceChallenge {
     fn generate() -> Self {
-        // Generate a random 64-character code verifier
-        let code_verifier: String = (0..64)
-            .map(|_| {
-                let idx = rand::random::<usize>() % 62;
-                b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"[idx] as char
-            })
-            .collect();
+        // AUDIT-FIX: H-2 — 32 bytes of OsRng entropy → base64url-no-pad (43 chars), no modulo bias.
+        let mut verifier_bytes = [0u8; 32];
+        OsRng.fill_bytes(&mut verifier_bytes);
+        let code_verifier = general_purpose::URL_SAFE_NO_PAD.encode(verifier_bytes);
 
-        // Generate code challenge using SHA-256
         let mut hasher = Sha256::new();
         hasher.update(code_verifier.as_bytes());
         let hash = hasher.finalize();
@@ -435,6 +432,7 @@ struct PendingOAuthFlow {
     provider: McpOAuthProvider,
     code_verifier: String,
     created_at: u64,
+    redirect_uri: String, // AUDIT-FIX: H-3 — captured loopback URI
 }
 
 // ============================================================================
@@ -795,7 +793,16 @@ pub async fn mcp_oauth_start(
 
     // Build authorization URL
     let scopes = oauth_provider.default_scopes().join(" ");
-    let redirect_uri = oauth_provider.redirect_uri();
+    // AUDIT-FIX: H-3 — bind a loopback listener; use its assigned port in the redirect URI.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .map_err(|e| format!("Failed to bind loopback OAuth listener: {}", e))?;
+    let port = listener
+        .local_addr()
+        .map_err(|e| format!("Failed to read loopback port: {}", e))?
+        .port();
+    drop(listener); // listener is reopened on the callback handler invocation
+    let redirect_uri = oauth_provider.redirect_uri(port);
 
     let mut auth_url = format!(
         "{}?client_id={}&redirect_uri={}&response_type=code&state={}&scope={}",
@@ -844,6 +851,7 @@ pub async fn mcp_oauth_start(
                 provider: oauth_provider,
                 code_verifier: pkce.code_verifier,
                 created_at: McpOAuthState::now(),
+                redirect_uri: redirect_uri.clone(), // AUDIT-FIX: H-3
             },
         );
     }
@@ -908,8 +916,8 @@ pub async fn mcp_oauth_callback(
     // Get client credentials
     let (client_id, client_secret) = get_client_credentials(oauth_provider)?;
 
-    // Exchange code for tokens
-    let redirect_uri = oauth_provider.redirect_uri();
+    // Exchange code for tokens (AUDIT-FIX: H-3 — use the loopback URI captured at start)
+    let redirect_uri = pending_flow.redirect_uri.clone();
 
     let mut params = HashMap::new();
     params.insert("grant_type", "authorization_code");
@@ -2024,16 +2032,16 @@ mod tests {
     #[test]
     fn test_redirect_uri() {
         assert_eq!(
-            McpOAuthProvider::GitHub.redirect_uri(),
-            "agiworkforce://oauth/mcp/github"
+            McpOAuthProvider::GitHub.redirect_uri(54321),
+            "http://127.0.0.1:54321/oauth/callback"
         );
         assert_eq!(
-            McpOAuthProvider::Google.redirect_uri(),
-            "agiworkforce://oauth/mcp/google"
+            McpOAuthProvider::Google.redirect_uri(54321),
+            "http://127.0.0.1:54321/oauth/callback"
         );
         assert_eq!(
-            McpOAuthProvider::Slack.redirect_uri(),
-            "agiworkforce://oauth/mcp/slack"
+            McpOAuthProvider::Slack.redirect_uri(54321),
+            "http://127.0.0.1:54321/oauth/callback"
         );
     }
 
