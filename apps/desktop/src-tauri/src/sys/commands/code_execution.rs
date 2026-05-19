@@ -1,41 +1,16 @@
 use crate::core::agi::sandbox::{ExecutionConfig, SandboxManager};
+use crate::sys::security::env_filter::filter_blocked_env_vars;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 const DEFAULT_MEMORY_LIMIT_MB: u64 = 512;
 const MAX_OUTPUT_BYTES: usize = 1024 * 1024; // 1 MiB cap on stdout/stderr
 
-/// Environment variables that must never be overridden by user-supplied code.
-///
-/// - `LD_PRELOAD` / `DYLD_INSERT_LIBRARIES`: library injection attacks
-/// - `LD_LIBRARY_PATH` / `DYLD_LIBRARY_PATH`: library search path hijacking
-/// - `PATH`: arbitrary binary execution
-/// - `HOME`, `SHELL`, `USER`, `LOGNAME`: identity spoofing
-const BLOCKED_ENV_VARS: &[&str] = &[
-    "LD_PRELOAD",
-    "LD_LIBRARY_PATH",
-    "DYLD_INSERT_LIBRARIES",
-    "DYLD_LIBRARY_PATH",
-    "PATH",
-    "HOME",
-    "SHELL",
-    "USER",
-    "LOGNAME",
-];
-
-/// Remove dangerous environment variables from a user-supplied map.
-fn filter_blocked_env_vars(
-    env_vars: Option<HashMap<String, String>>,
-) -> Option<HashMap<String, String>> {
-    env_vars.map(|vars| {
-        vars.into_iter()
-            .filter(|(key, _)| {
-                let upper = key.to_uppercase();
-                !BLOCKED_ENV_VARS.contains(&upper.as_str())
-            })
-            .collect()
-    })
-}
+// BATCH-5 (audit 2026-05-19): `BLOCKED_ENV_VARS` + `filter_blocked_env_vars`
+// formerly lived inline here. They moved to
+// `crate::sys::security::env_filter` so this module, `core::agi::sandbox`,
+// and `core::mcp::transport` all consume the same canonical list. The new
+// central list is a strict superset of the previous inline 9-var list.
 
 /// Truncate a string to at most `max_bytes` bytes, appending a note if truncated.
 fn truncate_output(s: String, max_bytes: usize) -> String {
