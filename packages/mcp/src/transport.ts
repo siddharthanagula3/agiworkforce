@@ -12,6 +12,14 @@ import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 
 import type { McpServerConfig } from './types';
 
+// AUDIT-FIX: H-5 — stdio transport spawn-guard error.
+export class MCPTransportError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'MCPTransportError';
+  }
+}
+
 function coerceEnv(
   env: Record<string, string | number | boolean> | undefined,
 ): Record<string, string> | undefined {
@@ -36,6 +44,14 @@ function coerceHeaders(
 
 export function resolveMcpTransport(config: McpServerConfig): Transport {
   if (config.command) {
+    // AUDIT-FIX: H-5 — never spawn an arbitrary local command without consent or a signed manifest.
+    const consentMatches =
+      !!config.userConsent && config.userConsent.for_command === config.command;
+    if (!config.signedManifest && !consentMatches) {
+      throw new MCPTransportError(
+        'Stdio transport requires signed manifest or explicit user consent',
+      );
+    }
     const env = coerceEnv(config.env);
     return new StdioClientTransport({
       command: config.command,

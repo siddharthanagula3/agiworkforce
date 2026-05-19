@@ -14,6 +14,19 @@ import type { StreamChunk } from '@agiworkforce/types';
 
 import type { OllamaChatStreamChunk } from './types';
 
+// AUDIT-FIX: M-1 — structural validation guard + sentinel for parse/schema failures.
+function isOllamaChatStreamChunk(value: unknown): value is OllamaChatStreamChunk {
+  if (typeof value !== 'object' || value === null) return false;
+  const message = (value as { message?: unknown }).message;
+  if (message !== undefined && (typeof message !== 'object' || message === null)) return false;
+  return true;
+}
+
+const PARSE_ERROR_SENTINEL: OllamaChatStreamChunk = {
+  done: true,
+  done_reason: 'stop',
+} as OllamaChatStreamChunk;
+
 export async function* parseOllamaStream(
   body: ReadableStream<Uint8Array>,
 ): AsyncIterable<OllamaChatStreamChunk> {
@@ -31,20 +44,35 @@ export async function* parseOllamaStream(
         const line = buffer.slice(0, newlineIdx).trim();
         buffer = buffer.slice(newlineIdx + 1);
         if (!line) continue;
+        // AUDIT-FIX: M-1 — parse + validate; emit sentinel chunk on either failure.
+        let parsed: unknown;
         try {
-          yield JSON.parse(line) as OllamaChatStreamChunk;
+          parsed = JSON.parse(line);
         } catch {
-          // Skip malformed line; Ollama is normally well-behaved here.
+          yield PARSE_ERROR_SENTINEL;
+          continue;
         }
+        if (!isOllamaChatStreamChunk(parsed)) {
+          yield PARSE_ERROR_SENTINEL;
+          continue;
+        }
+        yield parsed;
       }
     }
     // Flush trailing buffer (no trailing newline).
     const trailing = buffer.trim();
     if (trailing) {
+      let parsed: unknown;
       try {
-        yield JSON.parse(trailing) as OllamaChatStreamChunk;
+        parsed = JSON.parse(trailing);
       } catch {
-        // ignore
+        yield PARSE_ERROR_SENTINEL;
+        return;
+      }
+      if (isOllamaChatStreamChunk(parsed)) {
+        yield parsed;
+      } else {
+        yield PARSE_ERROR_SENTINEL;
       }
     }
   } finally {

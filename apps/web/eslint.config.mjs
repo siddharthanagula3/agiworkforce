@@ -93,11 +93,7 @@ const eslintConfig = defineConfig([
   // eslint-disable comments with WEB-37 justification.
   {
     files: ['features/**/*.{ts,tsx}', 'components/**/*.{ts,tsx}'],
-    ignores: [
-      'shared/utils/html-sanitizer.ts',
-      '**/*.{test,spec}.{ts,tsx}',
-      '**/__tests__/**',
-    ],
+    ignores: ['shared/utils/html-sanitizer.ts', '**/*.{test,spec}.{ts,tsx}', '**/__tests__/**'],
     rules: {
       'no-restricted-syntax': [
         'error',
@@ -145,19 +141,39 @@ const eslintConfig = defineConfig([
       'lib/**/*.{ts,tsx}',
       'app/api/**/*.{ts,tsx}',
     ],
-    ignores: [
-      '**/*.{test,spec}.{ts,tsx}',
-      '**/__tests__/**',
-      'lib/secure-random.ts',
+    ignores: ['**/*.{test,spec}.{ts,tsx}', '**/__tests__/**', 'lib/secure-random.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "CallExpression[callee.object.name='Math'][callee.property.name='random']",
+          message:
+            'Use secureToken() / secureRandomFloat() / secureFilenameSegment() from @/lib/secure-random — Math.random is not cryptographically secure (WEB-13).',
+        },
+      ],
+    },
+  },
+  // AUDIT-FIX: TEXT/HTML-BLOB — forbid `new Blob([...], { type: 'text/html' })`.
+  // Downloads of attacker-controlled HTML via the `download` attribute are an XSS
+  // vector (rendered by the browser when opened locally). Use 'text/plain' or
+  // 'application/octet-stream' instead.
+  {
+    files: [
+      'app/**/*.{ts,tsx}',
+      'components/**/*.{ts,tsx}',
+      'features/**/*.{ts,tsx}',
+      'lib/**/*.{ts,tsx}',
+      'shared/**/*.{ts,tsx}',
     ],
+    ignores: ['**/*.{test,spec}.{ts,tsx}', '**/__tests__/**'],
     rules: {
       'no-restricted-syntax': [
         'error',
         {
           selector:
-            "CallExpression[callee.object.name='Math'][callee.property.name='random']",
+            'NewExpression[callee.name="Blob"] ObjectExpression Property[key.name="type"][value.value=/text\\/html/]',
           message:
-            'Use secureToken() / secureRandomFloat() / secureFilenameSegment() from @/lib/secure-random — Math.random is not cryptographically secure (WEB-13).',
+            "Use 'text/plain' or 'application/octet-stream' for Blob; text/html in a Blob allows XSS via download attribute.",
         },
       ],
     },

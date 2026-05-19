@@ -809,6 +809,14 @@ export class CSPManager {
 // Secure Storage Utility
 // ========================================
 
+// AUDIT-FIX: C-5 / H-18 — thrown when a caller attempts encrypted storage without an active key.
+export class SecureStorageUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SecureStorageUnavailableError';
+  }
+}
+
 export class SecureStorage {
   private static readonly ENCRYPTION_KEY_NAME = 'agi_secure_key';
   /** In-memory cache for the non-extractable CryptoKey handle. */
@@ -856,10 +864,10 @@ export class SecureStorage {
     try {
       const encryptionKey = await this.getEncryptionKey();
       if (!encryptionKey) {
-        console.warn(
-          '[SecureStorage] Encryption unavailable — refusing to store data in plaintext',
+        // AUDIT-FIX: C-5 — never silently fall back to plaintext writes.
+        throw new SecureStorageUnavailableError(
+          'Encryption key unavailable; refusing plaintext write',
         );
-        return false;
       }
 
       const iv = window.crypto.getRandomValues(new Uint8Array(12));
@@ -879,6 +887,8 @@ export class SecureStorage {
       localStorage.setItem(key, btoa(JSON.stringify(encryptedData)));
       return true;
     } catch (error) {
+      // AUDIT-FIX: C-5 — surface unavailability so callers route to loading/empty state.
+      if (error instanceof SecureStorageUnavailableError) throw error;
       console.error('Secure storage set failed:', error);
       return false;
     }
@@ -886,16 +896,18 @@ export class SecureStorage {
 
   // Retrieve and decrypt data
   static async getItem<T = unknown>(key: string): Promise<T | null> {
+    const storedData = localStorage.getItem(key);
+    if (!storedData) return null;
+
+    const encryptionKey = await this.getEncryptionKey();
+    if (!encryptionKey) {
+      // AUDIT-FIX: C-5 / H-18 — never read attacker-controlled plaintext as if it were trusted JSON.
+      throw new SecureStorageUnavailableError(
+        'Encryption key unavailable; refusing plaintext read',
+      );
+    }
+
     try {
-      const storedData = localStorage.getItem(key);
-      if (!storedData) return null;
-
-      const encryptionKey = await this.getEncryptionKey();
-      if (!encryptionKey) {
-        // Fallback to regular localStorage
-        return JSON.parse(storedData);
-      }
-
       const encryptedData = JSON.parse(atob(storedData));
       const iv = new Uint8Array(encryptedData.iv);
       const data = new Uint8Array(encryptedData.data);
@@ -910,13 +922,7 @@ export class SecureStorage {
       return JSON.parse(decryptedString);
     } catch (error) {
       console.error('Secure storage get failed:', error);
-      // Try fallback to regular parsing
-      try {
-        const storedData = localStorage.getItem(key);
-        return storedData ? JSON.parse(storedData) : null;
-      } catch {
-        return null;
-      }
+      return null;
     }
   }
 

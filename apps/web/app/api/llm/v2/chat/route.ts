@@ -22,6 +22,8 @@ import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
+// AUDIT-FIX: C-3
+import { validateUserImageUrl, EgressPolicyError } from '@/lib/egress-policy';
 import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -73,7 +75,20 @@ const V2ChatRequestSchema = z.object({
             text: z.string().optional(),
             image_url: z
               .object({
-                url: z.string(),
+                // AUDIT-FIX: C-3 — block SSRF via image URLs.
+                url: z.string().superRefine((value, ctx) => {
+                  try {
+                    validateUserImageUrl(value);
+                  } catch (err) {
+                    ctx.addIssue({
+                      code: z.ZodIssueCode.custom,
+                      message:
+                        err instanceof EgressPolicyError
+                          ? 'image_url blocked by egress policy'
+                          : 'invalid image_url',
+                    });
+                  }
+                }),
                 detail: z.enum(['auto', 'low', 'high']).optional(),
               })
               .optional(),
