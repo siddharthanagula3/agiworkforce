@@ -2,8 +2,8 @@ import { AlertCircle, ArrowRight, Check, Download, Loader2, RefreshCw, X } from 
 import { useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { useUpdater } from '../../hooks/useUpdater';
-import { Button } from '../ui/Button';
+import { useUpdater } from './useUpdater';
+import { Button } from '../../components/ui/Button';
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '../ui/Dialog';
+} from '../../components/ui/Dialog';
 import { cn } from '../../lib/utils';
 
 interface UpdateDialogProps {
