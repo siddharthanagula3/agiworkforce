@@ -17,6 +17,43 @@ use tauri::{Emitter, State};
 use tokio::sync::oneshot;
 use tracing::{debug, info, warn};
 
+/// FIX-F6 (audit 2026-05-19): tools that MUST NEVER have a "remember this
+/// choice" persisted. Closes the Lies-in-the-Loop class bypass where a user
+/// once clicking "Approve and remember" on a privileged-transition prompt
+/// (or any high-blast destructive tool) would silently auto-approve every
+/// subsequent invocation across restarts, persisted in
+/// `remembered_tool_choices`. Migration v63 wipes any historical rows for
+/// these tools at startup; the runtime check in
+/// [`ToolConfirmationState::remember_choice`] rejects new writes.
+///
+/// **Keep in lockstep with `data::db::migrations::apply_migration_v63`** —
+/// a unit test in `fix_f6_never_rememberable_alignment_tests` pins this.
+pub const NEVER_REMEMBERABLE: &[&str] = &[
+    // Privileged-mode transitions — flipping these silently is the
+    // canonical LITL bypass.
+    "set_auto_approve_all",
+    "set_agent_mode:autopilot",
+    "set_tool_approval_policy",
+    // High-blast destructive primitives — should always prompt fresh.
+    "execute_code",
+    "code_execute",
+    "file_write",
+    "file_write_text",
+    "file_write_binary",
+    "file_open_with_default_app",
+    "terminal_execute",
+    // Tools that emit JS into arbitrary visited pages (Lethal Trifecta
+    // exfil primitive). Removed from default registry per F8 but listed
+    // here so any re-introduction still cannot be remembered.
+    "playwright_evaluate",
+];
+
+/// Returns `true` when `tool_name` is eligible to have a remembered choice
+/// persisted. Currently the inverse of [`NEVER_REMEMBERABLE`] membership.
+pub fn is_tool_remember_eligible(tool_name: &str) -> bool {
+    !NEVER_REMEMBERABLE.iter().any(|blocked| *blocked == tool_name)
+}
+
 /// Agent execution mode controlling which tools are permitted.
 ///
 /// - **Safe**: Only read-only, non-destructive tools are allowed.
@@ -87,9 +124,10 @@ impl ToolConfirmationState {
 
     fn load_choices_from_db(&self, db_conn: &Arc<StdMutex<Connection>>) {
         let Ok(conn) = db_conn.lock() else { return };
-        let Ok(mut stmt) = conn.prepare(
-            "SELECT tool_name, approved FROM remembered_tool_choices",
-        ) else { return };
+        let Ok(mut stmt) = conn.prepare("SELECT tool_name, approved FROM remembered_tool_choices")
+        else {
+            return;
+        };
         let rows = stmt.query_map([], |row| {
             let name: String = row.get(0)?;
             let approved: i32 = row.get(1)?;
@@ -253,7 +291,25 @@ impl ToolConfirmationState {
     }
 
     /// Store a remembered choice for a tool (in-memory + persisted to SQLite).
+    ///
+    /// FIX-F6 (audit 2026-05-19): silently a no-op (with a warn-level log)
+    /// when `tool_name` is in [`NEVER_REMEMBERABLE`]. Closes the LITL-class
+    /// bypass where a single "Approve and remember" click on a privileged
+    /// transition or destructive tool would silently auto-approve every
+    /// subsequent invocation across restarts. Defense-in-depth: the runtime
+    /// check here rejects writes regardless of how the frontend was
+    /// compromised, AND migration v63 wipes any historical rows for these
+    /// tools from prior builds.
     pub fn remember_choice(&self, tool_name: &str, approved: bool) {
+        if !is_tool_remember_eligible(tool_name) {
+            warn!(
+                "[ToolConfirmation] FIX-F6: refusing to persist remembered choice for \
+                 non-rememberable tool '{}' (would have stored approved={}). Tool must \
+                 prompt fresh on every invocation.",
+                tool_name, approved
+            );
+            return;
+        }
         self.remembered_choices
             .lock()
             .insert(tool_name.to_string(), approved);
@@ -1350,5 +1406,99 @@ mod tests {
             "glob_search",
             AgentMode::Plan
         ));
+    }
+}
+
+#[cfg(test)]
+mod fix_f6_never_rememberable_alignment_tests {
+    //! FIX-F6 (audit 2026-05-19): pin the never-rememberable enforcement.
+    //!
+    //! Two layers:
+    //! 1. `is_tool_remember_eligible` correctly inverts NEVER_REMEMBERABLE.
+    //! 2. `ToolConfirmationState::remember_choice` silently no-ops for
+    //!    non-eligible tools regardless of the `approved` value.
+    //!
+    //! Keep in lockstep with `data::db::migrations::apply_migration_v63`'s
+    //! PURGE_TOOL_NAMES — this test list MUST match that list 1:1.
+    use super::{is_tool_remember_eligible, ToolConfirmationState, NEVER_REMEMBERABLE};
+
+    /// Every entry expected on NEVER_REMEMBERABLE. Diverging from this would
+    /// either (a) hide a regression where a high-blast tool became remember-
+    /// able again, or (b) silently break the dispatcher contract with
+    /// migration v63.
+    const EXPECTED_NEVER_REMEMBERABLE: &[&str] = &[
+        "set_auto_approve_all",
+        "set_agent_mode:autopilot",
+        "set_tool_approval_policy",
+        "execute_code",
+        "code_execute",
+        "file_write",
+        "file_write_text",
+        "file_write_binary",
+        "file_open_with_default_app",
+        "terminal_execute",
+        "playwright_evaluate",
+    ];
+
+    #[test]
+    fn never_rememberable_list_matches_expected_exactly() {
+        let mut actual: Vec<&str> = NEVER_REMEMBERABLE.to_vec();
+        let mut expected: Vec<&str> = EXPECTED_NEVER_REMEMBERABLE.to_vec();
+        actual.sort_unstable();
+        expected.sort_unstable();
+        assert_eq!(
+            actual, expected,
+            "NEVER_REMEMBERABLE drifted from EXPECTED_NEVER_REMEMBERABLE. \
+             If this is intentional, also update apply_migration_v63's \
+             PURGE_TOOL_NAMES in data/db/migrations.rs in the same commit."
+        );
+    }
+
+    #[test]
+    fn is_tool_remember_eligible_rejects_every_never_rememberable_entry() {
+        for &name in NEVER_REMEMBERABLE {
+            assert!(
+                !is_tool_remember_eligible(name),
+                "{} should be ineligible for remember",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn is_tool_remember_eligible_accepts_safe_tools() {
+        for safe in &["file_read", "browser_get_url", "git_status", "grep_search"] {
+            assert!(
+                is_tool_remember_eligible(safe),
+                "{} should be eligible for remember",
+                safe
+            );
+        }
+    }
+
+    #[test]
+    fn remember_choice_silently_no_ops_for_never_rememberable_tools() {
+        let state = ToolConfirmationState::new();
+        for &name in NEVER_REMEMBERABLE {
+            // Attempt to persist a remembered "always approve" for a
+            // dangerous tool. Should be silently rejected (with a warn log
+            // we don't assert on here).
+            state.remember_choice(name, true);
+            assert_eq!(
+                state.get_remembered_choice(name),
+                None,
+                "remember_choice should have refused to persist {}",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn remember_choice_persists_safe_tools() {
+        let state = ToolConfirmationState::new();
+        state.remember_choice("file_read", true);
+        assert_eq!(state.get_remembered_choice("file_read"), Some(true));
+        state.remember_choice("git_status", false);
+        assert_eq!(state.get_remembered_choice("git_status"), Some(false));
     }
 }
