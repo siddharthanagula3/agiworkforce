@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { Clock } from 'lucide-react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { TapGestureHandler, State } from 'react-native-gesture-handler';
 import type { TapGestureHandlerStateChangeEvent } from 'react-native-gesture-handler';
 import { Image } from 'expo-image';
@@ -106,6 +106,7 @@ export const MessageBubble = memo(function MessageBubble({
   const [reaction, setReaction] = useState<ReactionType>(null);
   const { width } = useWindowDimensions();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+  const reducedMotion = useReducedMotion();
 
   const handleExpandArtifact = useCallback((artifact: Artifact) => {
     setExpandedArtifact(artifact);
@@ -271,7 +272,8 @@ export const MessageBubble = memo(function MessageBubble({
 
   const messageContent = (
     <Animated.View
-      entering={FadeInDown.duration(200).springify()}
+      testID={isAssistant && message.isStreaming ? 'chat.message.assistant.streaming' : undefined}
+      entering={reducedMotion ? undefined : FadeInDown.duration(200).springify()}
       className={`px-4 py-3 ${isAssistant ? 'bg-white/[0.02]' : ''}`}
     >
       <Pressable

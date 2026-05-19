@@ -23,8 +23,19 @@ export function MessageEditModal({
   onSubmit,
 }: MessageEditModalProps) {
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      accessibilityViewIsModal
+    >
+      <Pressable
+        style={styles.backdrop}
+        onPress={onClose}
+        accessibilityLabel="Dismiss edit dialog"
+        accessibilityRole="button"
+      >
         <Pressable style={styles.dialog} onPress={() => undefined}>
           <Text style={styles.dialogTitle}>Edit Message</Text>
           <TextInput
@@ -35,6 +46,8 @@ export function MessageEditModal({
             autoFocus
             placeholderTextColor="rgba(255,255,255,0.3)"
             placeholder="Edit your message…"
+            accessibilityLabel="Edit message text"
+            accessibilityHint="Modify your message then tap Send"
           />
           <View style={styles.buttonRow}>
             <Pressable

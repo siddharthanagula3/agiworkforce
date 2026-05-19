@@ -130,7 +130,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "@cocal/google-calendar-mcp"],
+                &["-y", "--ignore-scripts", "@cocal/google-calendar-mcp"],
                 &[("GOOGLE_OAUTH_CREDENTIALS", "<from_oauth:google>")],
             ),
             Some("https://console.cloud.google.com/apis/credentials"),
@@ -145,7 +145,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "@modelcontextprotocol/server-gdrive"],
+                &["-y", "--ignore-scripts", "@modelcontextprotocol/server-gdrive"],
                 &[("GDRIVE_OAUTH_TOKEN", "<from_oauth:google>")],
             ),
             Some("https://console.cloud.google.com/apis/credentials"),
@@ -160,7 +160,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "@gongrzhe/server-gmail-autoauth-mcp"],
+                &["-y", "--ignore-scripts", "@gongrzhe/server-gmail-autoauth-mcp"],
                 &[("GMAIL_OAUTH_PATH", "<from_oauth:google>")],
             ),
             Some("https://console.cloud.google.com/apis/credentials"),
@@ -175,7 +175,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "@shivaduke28/google-docs-mcp"],
+                &["-y", "--ignore-scripts", "@shivaduke28/google-docs-mcp"],
                 &[("GOOGLE_DOCS_OAUTH_TOKEN", "<from_oauth:google>")],
             ),
             Some("https://console.cloud.google.com/apis/credentials"),
@@ -190,7 +190,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "outlook-mcp-device-flow"],
+                &["-y", "--ignore-scripts", "outlook-mcp-device-flow"],
                 &[
                     ("OUTLOOK_CLIENT_ID", "<from_oauth:microsoft>"),
                     ("OUTLOOK_TENANT_ID", "common"),
@@ -208,7 +208,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "@notionhq/notion-mcp-server"],
+                &["-y", "--ignore-scripts", "@notionhq/notion-mcp-server"],
                 &[("OPENAPI_MCP_HEADERS", "<from_oauth:notion>")],
             ),
             Some("https://www.notion.so/my-integrations"),
@@ -223,7 +223,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "todoist-mcp"],
+                &["-y", "--ignore-scripts", "todoist-mcp"],
                 &[("API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://todoist.com/app/settings/integrations/developer"),
@@ -238,7 +238,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "airtable-mcp-server"],
+                &["-y", "--ignore-scripts", "airtable-mcp-server"],
                 &[("AIRTABLE_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://airtable.com/account"),
@@ -253,7 +253,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "@mondaydotcomorg/monday-api-mcp"],
+                &["-y", "--ignore-scripts", "@mondaydotcomorg/monday-api-mcp"],
                 &[("monday_token", "YOUR_API_KEY")],
             ),
             Some("https://monday.com/developers/apps"),
@@ -268,7 +268,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-clickup"],
+                &["-y", "--ignore-scripts", "mcp-clickup"],
                 &[("CLICKUP_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://clickup.com/integrations"),
@@ -283,7 +283,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "mcp-asana"],
+                &["-y", "--ignore-scripts", "mcp-asana"],
                 &[("ASANA_ACCESS_TOKEN", "<from_oauth:asana>")],
             ),
             Some("https://app.asana.com/0/developer-console"),
@@ -298,7 +298,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "mcp-basecamp"],
+                &["-y", "--ignore-scripts", "mcp-basecamp"],
                 &[("BASECAMP_ACCESS_TOKEN", "<from_oauth:basecamp>")],
             ),
             Some("https://launchpad.37signals.com/integrations"),
@@ -313,7 +313,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-trello"],
+                &["-y", "--ignore-scripts", "mcp-trello"],
                 &[
                     ("TRELLO_API_KEY", "YOUR_API_KEY"),
                     ("TRELLO_TOKEN", "YOUR_TOKEN"),
@@ -331,7 +331,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "mcp-confluence"],
+                &["-y", "--ignore-scripts", "mcp-confluence"],
                 &[("CONFLUENCE_OAUTH_TOKEN", "<from_oauth:atlassian>")],
             ),
             Some("https://id.atlassian.com/manage-profile/security/api-tokens"),
@@ -347,7 +347,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "@modelcontextprotocol/server-github"],
+                &["-y", "--ignore-scripts", "@modelcontextprotocol/server-github"],
                 &[("GITHUB_PERSONAL_ACCESS_TOKEN", "<from_oauth:github>")],
             ),
             Some("https://github.com/settings/tokens"),
@@ -362,7 +362,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "@modelcontextprotocol/server-gitlab"],
+                &["-y", "--ignore-scripts", "@modelcontextprotocol/server-gitlab"],
                 &[("GITLAB_PERSONAL_ACCESS_TOKEN", "YOUR_API_KEY")],
             ),
             Some("https://gitlab.com/-/user_settings/personal_access_tokens"),
@@ -377,7 +377,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-linear"],
+                &["-y", "--ignore-scripts", "mcp-linear"],
                 &[("LINEAR_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://linear.app/settings/api"),
@@ -392,7 +392,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "@sentry/mcp-server"],
+                &["-y", "--ignore-scripts", "@sentry/mcp-server"],
                 &[("SENTRY_AUTH_TOKEN", "YOUR_API_KEY")],
             ),
             Some("https://sentry.io/settings/account/api/auth-tokens/"),
@@ -407,7 +407,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-vercel"],
+                &["-y", "--ignore-scripts", "mcp-vercel"],
                 &[("VERCEL_TOKEN", "YOUR_API_KEY")],
             ),
             Some("https://vercel.com/account/tokens"),
@@ -422,7 +422,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "@supabase/mcp-server-supabase"],
+                &["-y", "--ignore-scripts", "@supabase/mcp-server-supabase"],
                 &[
                     ("SUPABASE_URL", "YOUR_PROJECT_URL"),
                     ("SUPABASE_KEY", "YOUR_API_KEY"),
@@ -440,7 +440,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "@henkey/postgres-mcp-server"],
+                &["-y", "--ignore-scripts", "@henkey/postgres-mcp-server"],
                 &[("DATABASE_URL", "YOUR_DATABASE_URL")],
             ),
             None,
@@ -455,7 +455,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mongodb-mcp-server"],
+                &["-y", "--ignore-scripts", "mongodb-mcp-server"],
                 &[("MONGODB_URI", "YOUR_CONNECTION_URI")],
             ),
             Some("https://cloud.mongodb.com/"),
@@ -471,7 +471,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "@caobing122/jira-mcp-server"],
+                &["-y", "--ignore-scripts", "@caobing122/jira-mcp-server"],
                 &[("JIRA_OAUTH_TOKEN", "<from_oauth:atlassian>")],
             ),
             Some("https://id.atlassian.com/manage-profile/security/api-tokens"),
@@ -487,7 +487,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "@modelcontextprotocol/server-slack"],
+                &["-y", "--ignore-scripts", "@modelcontextprotocol/server-slack"],
                 &[("SLACK_BOT_TOKEN", "<from_oauth:slack>")],
             ),
             Some("https://api.slack.com/apps"),
@@ -502,7 +502,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-discord"],
+                &["-y", "--ignore-scripts", "mcp-discord"],
                 &[("DISCORD_BOT_TOKEN", "YOUR_API_KEY")],
             ),
             Some("https://discord.com/developers/applications"),
@@ -517,7 +517,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "teams-mcp-server"],
+                &["-y", "--ignore-scripts", "teams-mcp-server"],
                 &[("TEAMS_OAUTH_TOKEN", "<from_oauth:microsoft>")],
             ),
             Some("https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps"),
@@ -532,7 +532,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "twilio-mcp"],
+                &["-y", "--ignore-scripts", "twilio-mcp"],
                 &[
                     ("TWILIO_ACCOUNT_SID", "YOUR_ACCOUNT_SID"),
                     ("TWILIO_AUTH_TOKEN", "YOUR_AUTH_TOKEN"),
@@ -550,7 +550,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "sendgrid-mcp"],
+                &["-y", "--ignore-scripts", "sendgrid-mcp"],
                 &[("SENDGRID_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://app.sendgrid.com/settings/api_keys"),
@@ -565,7 +565,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "mcp-intercom"],
+                &["-y", "--ignore-scripts", "mcp-intercom"],
                 &[("INTERCOM_ACCESS_TOKEN", "<from_oauth:intercom>")],
             ),
             Some("https://app.intercom.com/a/developer-signup"),
@@ -580,7 +580,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "mcp-zoom"],
+                &["-y", "--ignore-scripts", "mcp-zoom"],
                 &[("ZOOM_ACCESS_TOKEN", "<from_oauth:zoom>")],
             ),
             Some("https://marketplace.zoom.us/develop/create"),
@@ -595,7 +595,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-front"],
+                &["-y", "--ignore-scripts", "mcp-front"],
                 &[("FRONT_API_TOKEN", "YOUR_API_KEY")],
             ),
             Some("https://app.frontapp.com/settings/tools/api"),
@@ -611,7 +611,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "@iflow-mcp/mcp-server-google-analytics"],
+                &["-y", "--ignore-scripts", "@iflow-mcp/mcp-server-google-analytics"],
                 &[
                     ("GOOGLE_CLIENT_EMAIL", "YOUR_CLIENT_EMAIL"),
                     ("GOOGLE_PRIVATE_KEY", "YOUR_PRIVATE_KEY"),
@@ -630,7 +630,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-mixpanel"],
+                &["-y", "--ignore-scripts", "mcp-mixpanel"],
                 &[("MIXPANEL_API_SECRET", "YOUR_API_KEY")],
             ),
             Some("https://mixpanel.com/settings/project#serviceaccounts"),
@@ -645,7 +645,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-amplitude"],
+                &["-y", "--ignore-scripts", "mcp-amplitude"],
                 &[("AMPLITUDE_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://analytics.amplitude.com/settings/profile"),
@@ -660,7 +660,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-posthog"],
+                &["-y", "--ignore-scripts", "mcp-posthog"],
                 &[
                     ("POSTHOG_API_KEY", "YOUR_API_KEY"),
                     ("POSTHOG_HOST", "https://app.posthog.com"),
@@ -679,7 +679,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "mcp-dropbox"],
+                &["-y", "--ignore-scripts", "mcp-dropbox"],
                 &[("DROPBOX_ACCESS_TOKEN", "<from_oauth:dropbox>")],
             ),
             Some("https://www.dropbox.com/developers/apps"),
@@ -694,7 +694,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "mcp-box"],
+                &["-y", "--ignore-scripts", "mcp-box"],
                 &[("BOX_ACCESS_TOKEN", "<from_oauth:box>")],
             ),
             Some("https://developer.box.com/console"),
@@ -709,7 +709,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-s3"],
+                &["-y", "--ignore-scripts", "mcp-s3"],
                 &[
                     ("AWS_ACCESS_KEY_ID", "YOUR_ACCESS_KEY"),
                     ("AWS_SECRET_ACCESS_KEY", "YOUR_SECRET_KEY"),
@@ -728,7 +728,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "@sethdouglasford/mcp-figma"],
+                &["-y", "--ignore-scripts", "@sethdouglasford/mcp-figma"],
                 &[("FIGMA_ACCESS_TOKEN", "<from_oauth:figma>")],
             ),
             Some("https://www.figma.com/developers/api#access-tokens"),
@@ -743,7 +743,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "mcp-canva"],
+                &["-y", "--ignore-scripts", "mcp-canva"],
                 &[("CANVA_ACCESS_TOKEN", "<from_oauth:canva>")],
             ),
             Some("https://www.canva.com/developers/"),
@@ -758,7 +758,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "mcp-miro"],
+                &["-y", "--ignore-scripts", "mcp-miro"],
                 &[("MIRO_ACCESS_TOKEN", "<from_oauth:miro>")],
             ),
             Some("https://miro.com/app/settings/user-profile/apps"),
@@ -774,7 +774,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "mcp-salesforce"],
+                &["-y", "--ignore-scripts", "mcp-salesforce"],
                 &[("SALESFORCE_ACCESS_TOKEN", "<from_oauth:salesforce>")],
             ),
             Some("https://login.salesforce.com/"),
@@ -789,7 +789,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-hubspot"],
+                &["-y", "--ignore-scripts", "mcp-hubspot"],
                 &[("HUBSPOT_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://app.hubspot.com/developer/"),
@@ -804,7 +804,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-attio"],
+                &["-y", "--ignore-scripts", "mcp-attio"],
                 &[("ATTIO_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://app.attio.com/settings/developers"),
@@ -819,7 +819,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-apollo"],
+                &["-y", "--ignore-scripts", "mcp-apollo"],
                 &[("APOLLO_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://app.apollo.io/#/settings/integrations/api"),
@@ -834,7 +834,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-common-room"],
+                &["-y", "--ignore-scripts", "mcp-common-room"],
                 &[("COMMON_ROOM_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://app.commonroom.io/settings/api"),
@@ -850,7 +850,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "@stripe/mcp"],
+                &["-y", "--ignore-scripts", "@stripe/mcp"],
                 &[("STRIPE_SECRET_KEY", "YOUR_API_KEY")],
             ),
             Some("https://dashboard.stripe.com/apikeys"),
@@ -865,7 +865,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "shopify-mcp-server"],
+                &["-y", "--ignore-scripts", "shopify-mcp-server"],
                 &[
                     ("SHOPIFY_ACCESS_TOKEN", "YOUR_API_KEY"),
                     ("MYSHOPIFY_DOMAIN", "YOUR_STORE_URL"),
@@ -883,7 +883,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "zd-mcp-server"],
+                &["-y", "--ignore-scripts", "zd-mcp-server"],
                 &[
                     ("ZENDESK_SUBDOMAIN", "YOUR_SUBDOMAIN"),
                     ("ZENDESK_EMAIL", "YOUR_EMAIL"),
@@ -903,7 +903,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-plaid"],
+                &["-y", "--ignore-scripts", "mcp-plaid"],
                 &[
                     ("PLAID_CLIENT_ID", "YOUR_CLIENT_ID"),
                     ("PLAID_SECRET", "YOUR_SECRET"),
@@ -921,7 +921,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-airwallex"],
+                &["-y", "--ignore-scripts", "mcp-airwallex"],
                 &[("AIRWALLEX_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://www.airwallex.com/app/account/apiKeys"),
@@ -936,7 +936,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-factset"],
+                &["-y", "--ignore-scripts", "mcp-factset"],
                 &[
                     ("FACTSET_USERNAME", "YOUR_USERNAME"),
                     ("FACTSET_API_KEY", "YOUR_API_KEY"),
@@ -954,7 +954,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-pitchbook"],
+                &["-y", "--ignore-scripts", "mcp-pitchbook"],
                 &[("PITCHBOOK_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://pitchbook.com/data/api"),
@@ -969,7 +969,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-moodys"],
+                &["-y", "--ignore-scripts", "mcp-moodys"],
                 &[("MOODYS_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://www.economy.com/products/api"),
@@ -984,7 +984,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-lseg"],
+                &["-y", "--ignore-scripts", "mcp-lseg"],
                 &[("LSEG_APP_KEY", "YOUR_APP_KEY")],
             ),
             Some("https://developers.lseg.com/"),
@@ -999,7 +999,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-aiera"],
+                &["-y", "--ignore-scripts", "mcp-aiera"],
                 &[("AIERA_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://aiera.com/"),
@@ -1014,7 +1014,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-bigdata"],
+                &["-y", "--ignore-scripts", "mcp-bigdata"],
                 &[("BIGDATA_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://bigdata.com/"),
@@ -1029,7 +1029,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-daloopa"],
+                &["-y", "--ignore-scripts", "mcp-daloopa"],
                 &[("DALOOPA_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://www.daloopa.com/"),
@@ -1045,7 +1045,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-mailchimp"],
+                &["-y", "--ignore-scripts", "mcp-mailchimp"],
                 &[("MAILCHIMP_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://us1.admin.mailchimp.com/account/api/"),
@@ -1060,7 +1060,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-activecampaign"],
+                &["-y", "--ignore-scripts", "mcp-activecampaign"],
                 &[
                     ("ACTIVECAMPAIGN_URL", "YOUR_ACCOUNT_URL"),
                     ("ACTIVECAMPAIGN_API_KEY", "YOUR_API_KEY"),
@@ -1078,7 +1078,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-ahrefs"],
+                &["-y", "--ignore-scripts", "mcp-ahrefs"],
                 &[("AHREFS_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://ahrefs.com/api"),
@@ -1093,7 +1093,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-airops"],
+                &["-y", "--ignore-scripts", "mcp-airops"],
                 &[("AIROPS_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://app.airops.com/settings/api"),
@@ -1108,7 +1108,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-bitly"],
+                &["-y", "--ignore-scripts", "mcp-bitly"],
                 &[("BITLY_ACCESS_TOKEN", "YOUR_API_KEY")],
             ),
             Some("https://app.bitly.com/settings/api/"),
@@ -1124,7 +1124,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-snowflake"],
+                &["-y", "--ignore-scripts", "mcp-snowflake"],
                 &[
                     ("SNOWFLAKE_ACCOUNT", "YOUR_ACCOUNT"),
                     ("SNOWFLAKE_USER", "YOUR_USER"),
@@ -1143,7 +1143,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-databricks"],
+                &["-y", "--ignore-scripts", "mcp-databricks"],
                 &[
                     ("DATABRICKS_HOST", "YOUR_WORKSPACE_URL"),
                     ("DATABRICKS_TOKEN", "YOUR_API_KEY"),
@@ -1161,7 +1161,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "mcp-bigquery"],
+                &["-y", "--ignore-scripts", "mcp-bigquery"],
                 &[("BIGQUERY_OAUTH_TOKEN", "<from_oauth:google>")],
             ),
             Some("https://console.cloud.google.com/bigquery"),
@@ -1177,7 +1177,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-circleci"],
+                &["-y", "--ignore-scripts", "mcp-circleci"],
                 &[("CIRCLECI_TOKEN", "YOUR_API_KEY")],
             ),
             Some("https://app.circleci.com/settings/user/tokens"),
@@ -1192,7 +1192,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-jenkins"],
+                &["-y", "--ignore-scripts", "mcp-jenkins"],
                 &[
                     ("JENKINS_URL", "YOUR_JENKINS_URL"),
                     ("JENKINS_USER", "YOUR_USER"),
@@ -1211,7 +1211,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-terraform"],
+                &["-y", "--ignore-scripts", "mcp-terraform"],
                 &[("TFE_TOKEN", "YOUR_API_KEY")],
             ),
             Some("https://app.terraform.io/app/settings/tokens"),
@@ -1226,7 +1226,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-pagerduty"],
+                &["-y", "--ignore-scripts", "mcp-pagerduty"],
                 &[("PAGERDUTY_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://support.pagerduty.com/docs/api-access-keys"),
@@ -1241,7 +1241,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-datadog"],
+                &["-y", "--ignore-scripts", "mcp-datadog"],
                 &[
                     ("DD_API_KEY", "YOUR_API_KEY"),
                     ("DD_APP_KEY", "YOUR_APP_KEY"),
@@ -1259,7 +1259,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-newrelic"],
+                &["-y", "--ignore-scripts", "mcp-newrelic"],
                 &[("NEW_RELIC_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://one.newrelic.com/launcher/api-keys-ui.api-keys-launcher"),
@@ -1274,7 +1274,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-railway"],
+                &["-y", "--ignore-scripts", "mcp-railway"],
                 &[("RAILWAY_TOKEN", "YOUR_API_KEY")],
             ),
             Some("https://railway.app/account/tokens"),
@@ -1289,7 +1289,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-render"],
+                &["-y", "--ignore-scripts", "mcp-render"],
                 &[("RENDER_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://dashboard.render.com/u/settings#api-keys"),
@@ -1304,7 +1304,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-flyio"],
+                &["-y", "--ignore-scripts", "mcp-flyio"],
                 &[("FLY_API_TOKEN", "YOUR_API_KEY")],
             ),
             Some("https://fly.io/user/personal_access_tokens"),
@@ -1319,7 +1319,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-cloudflare"],
+                &["-y", "--ignore-scripts", "mcp-cloudflare"],
                 &[("CLOUDFLARE_API_TOKEN", "YOUR_API_KEY")],
             ),
             Some("https://dash.cloudflare.com/profile/api-tokens"),
@@ -1335,7 +1335,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-zapier"],
+                &["-y", "--ignore-scripts", "mcp-zapier"],
                 &[("ZAPIER_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://zapier.com/app/developer"),
@@ -1349,7 +1349,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             ConnectorCategory::Research,
             "microscope",
             AuthType::None,
-            stdio_config("npx", &["-y", "mcp-pubmed"], &[]),
+            stdio_config("npx", &["-y", "--ignore-scripts", "mcp-pubmed"], &[]),
             None,
             Some("https://pubmed.ncbi.nlm.nih.gov/"),
         ),
@@ -1360,7 +1360,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             ConnectorCategory::Research,
             "flask-conical",
             AuthType::None,
-            stdio_config("npx", &["-y", "mcp-biorxiv"], &[]),
+            stdio_config("npx", &["-y", "--ignore-scripts", "mcp-biorxiv"], &[]),
             None,
             Some("https://api.biorxiv.org/"),
         ),
@@ -1373,7 +1373,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-benchling"],
+                &["-y", "--ignore-scripts", "mcp-benchling"],
                 &[
                     ("BENCHLING_TENANT", "YOUR_TENANT"),
                     ("BENCHLING_API_KEY", "YOUR_API_KEY"),
@@ -1391,7 +1391,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-10x-genomics"],
+                &["-y", "--ignore-scripts", "mcp-10x-genomics"],
                 &[("TENX_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://cloud.10xgenomics.com/"),
@@ -1406,7 +1406,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "mcp-biorender"],
+                &["-y", "--ignore-scripts", "mcp-biorender"],
                 &[("BIORENDER_ACCESS_TOKEN", "<from_oauth:biorender>")],
             ),
             Some("https://biorender.com/"),
@@ -1422,7 +1422,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-fireflies"],
+                &["-y", "--ignore-scripts", "mcp-fireflies"],
                 &[("FIREFLIES_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://app.fireflies.ai/integrations"),
@@ -1438,7 +1438,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-huggingface"],
+                &["-y", "--ignore-scripts", "mcp-huggingface"],
                 &[("HUGGINGFACE_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://huggingface.co/settings/tokens"),
@@ -1453,7 +1453,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-elevenlabs"],
+                &["-y", "--ignore-scripts", "mcp-elevenlabs"],
                 &[("ELEVENLABS_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://elevenlabs.io/app/settings/api-keys"),
@@ -1469,7 +1469,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "mcp-wordpress"],
+                &["-y", "--ignore-scripts", "mcp-wordpress"],
                 &[("WORDPRESS_ACCESS_TOKEN", "<from_oauth:wordpress>")],
             ),
             Some("https://developer.wordpress.com/apps/"),
@@ -1484,7 +1484,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "mcp-webflow"],
+                &["-y", "--ignore-scripts", "mcp-webflow"],
                 &[("WEBFLOW_API_TOKEN", "YOUR_API_KEY")],
             ),
             Some("https://webflow.com/dashboard/account/integrations"),

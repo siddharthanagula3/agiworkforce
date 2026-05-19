@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { View, Modal, Pressable, TextInput, ScrollView } from 'react-native';
-import Animated, { FadeIn, SlideInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, SlideInDown, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
   Check,
@@ -53,6 +53,7 @@ const TYPE_ICONS: Record<ApprovalRequest['type'], typeof Terminal> = {
  * Can be mounted at the root layout and shown from anywhere via props.
  */
 export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: ApprovalModalProps) {
+  const reducedMotion = useReducedMotion();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectInput, setShowRejectInput] = useState(false);
@@ -113,7 +114,7 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
         <Pressable className="flex-1" onPress={handleDismiss} />
 
         <Animated.View
-          entering={SlideInDown.duration(300).springify()}
+          entering={reducedMotion ? undefined : SlideInDown.duration(300).springify()}
           className="rounded-t-3xl overflow-hidden"
           style={{ backgroundColor: colors.surfaceElevated, maxHeight: '80%' }}
         >

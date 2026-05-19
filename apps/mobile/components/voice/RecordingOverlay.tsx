@@ -3,6 +3,7 @@ import { View, Pressable } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  useReducedMotion,
   withRepeat,
   withTiming,
   FadeIn,
@@ -43,11 +44,16 @@ function formatDuration(ms: number): string {
 }
 
 function PulsingDot() {
+  const reducedMotion = useReducedMotion();
   const opacity = useSharedValue(1);
 
   useEffect(() => {
-    opacity.value = withRepeat(withTiming(0.3, { duration: 800 }), -1, true);
-  }, [opacity]);
+    if (reducedMotion) {
+      opacity.value = 1;
+    } else {
+      opacity.value = withRepeat(withTiming(0.3, { duration: 800 }), -1, true);
+    }
+  }, [opacity, reducedMotion]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
@@ -99,6 +105,8 @@ export function RecordingOverlay({
       exiting={FadeOut.duration(150)}
       className="absolute inset-x-0 bottom-0 px-4 pb-4 pt-3"
       style={{ backgroundColor: 'rgba(15, 15, 15, 0.95)' }}
+      accessibilityRole="alert"
+      accessibilityLabel="Recording in progress"
     >
       {/* Top row: pulsing dot + "Recording..." + timer */}
       <View className="flex-row items-center justify-center gap-2 mb-3">

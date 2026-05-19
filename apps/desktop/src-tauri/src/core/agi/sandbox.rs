@@ -273,67 +273,22 @@ impl Sandbox {
             cmd.env("PATH", "/usr/local/bin:/usr/bin:/bin");
         }
 
-        // Add custom environment variables
+        // Add custom environment variables.
+        //
+        // BATCH-5 (audit 2026-05-19): the inline `BLOCKED_ENV_VARS` constant
+        // formerly lived here. It moved to `crate::sys::security::env_filter`
+        // so this site, `sys/commands/code_execution`, and
+        // `core/mcp/transport` all consume the same canonical list. The
+        // BASH_FUNC_* prefix check is now handled by `is_blocked_env_var`.
         if let Some(env_vars) = &config.env_vars {
-            // Blocklist of dangerous environment variables that could be used for:
-            // - Library injection attacks (LD_PRELOAD, DYLD_INSERT_LIBRARIES)
-            // - Code execution via language-specific mechanisms (PYTHONPATH, NODE_OPTIONS, etc.)
-            // - Shell behavior modification (BASH_ENV, CDPATH, GLOBIGNORE, BASH_FUNC_*)
-            const BLOCKED_ENV_VARS: &[&str] = &[
-                // Core path/home variables
-                "PATH",
-                "HOME",
-                "TMPDIR",
-                "TEMP",
-                "TMP",
-                // Linux library injection
-                "LD_PRELOAD",
-                "LD_LIBRARY_PATH",
-                // macOS library injection
-                "DYLD_INSERT_LIBRARIES",
-                "DYLD_LIBRARY_PATH",
-                "DYLD_FRAMEWORK_PATH",
-                // Language-specific code injection vectors
-                "PYTHONPATH",
-                "PYTHONSTARTUP",
-                "PYTHONHOME",
-                "NODE_OPTIONS",
-                "NODE_PATH",
-                "RUBYOPT",
-                "RUBYLIB",
-                "PERL5OPT",
-                "PERL5LIB",
-                "PERLLIB",
-                // Shell behavior modification (can execute arbitrary code)
-                "BASH_ENV",
-                "ENV",
-                "CDPATH",
-                "GLOBIGNORE",
-                "PROMPT_COMMAND",
-                "PS1",
-                "PS2",
-                "PS4",
-                // IFS manipulation can break parsing
-                "IFS",
-            ];
-
             for (key, value) in env_vars {
-                // Block exact matches from blocklist
-                let key_upper = key.to_uppercase();
-                let is_blocked = BLOCKED_ENV_VARS
-                    .iter()
-                    .any(|blocked| blocked.eq_ignore_ascii_case(key));
-
-                // Also block BASH_FUNC_* pattern (bash function export mechanism)
-                let is_bash_func = key_upper.starts_with("BASH_FUNC_");
-
-                if !is_blocked && !is_bash_func {
-                    cmd.env(key, value);
-                } else {
+                if crate::sys::security::env_filter::is_blocked_env_var(key) {
                     tracing::warn!(
                         "[Sandbox] Blocked attempt to set dangerous environment variable: {}",
                         key
                     );
+                } else {
+                    cmd.env(key, value);
                 }
             }
         }
