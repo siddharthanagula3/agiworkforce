@@ -1,6 +1,14 @@
 /**
- * @deprecated import from 'features/content/in-page-panel' instead.
- * Re-export shim — canonical source: src/features/content/in-page-panel/setup.ts
+ * In-page panel setup entry point.
+ *
+ * `setupInPagePanel()` is called by content.ts inside `initialize()`.
+ * It is gated on the `in_page_panel_enabled` chrome.storage.local flag
+ * (default: true). The user can toggle this off from the popup.
+ *
+ * Replaces the previous `injectFloatingOverlay()` call so the launcher and
+ * panel coexist in a single shadow-DOM host tree.
+ *
+ * @module inPagePanel/setup
  */
 
 import { createLauncher, loadPosition, applyPosition, attachScrollBehaviour } from './launcher';
@@ -42,28 +50,6 @@ export async function setupInPagePanel(logger?: {
 
   // Idempotency guard — content scripts run once per navigation but guard anyway
   if (document.querySelector('[data-agi-launcher]') || document.querySelector('[data-agi-panel]')) {
-    return;
-  }
-
-  // SECURITY (M-14 audit 2026-05-19): only inject the FAB launcher on
-  // allowlisted origins. The launcher was previously injected on every
-  // http(s) page regardless of allowlist; clicking it on a non-allowlisted
-  // page got the user a confusing "site not on your allowlist" error from
-  // background.handleMessage. The launcher also acts as a fingerprint
-  // (the `data-agi-launcher` attribute) on every page the user visits.
-  let allowlist: Set<string>;
-  try {
-    const res = await chrome.storage.local.get('agi_site_allowlist');
-    const list = (res as Record<string, unknown>)['agi_site_allowlist'];
-    allowlist = new Set(Array.isArray(list) ? (list as string[]) : []);
-  } catch (err) {
-    logger?.debug('Could not read agi_site_allowlist for in-page panel gating', err);
-    return;
-  }
-  if (!allowlist.has(window.location.origin)) {
-    logger?.debug('in-page panel skipped — origin not on user allowlist', {
-      origin: window.location.origin,
-    });
     return;
   }
 

@@ -17,9 +17,9 @@ import {
   deleteConversation,
   type HistoryMessage,
   type ConversationEntry,
-} from './conversation-history';
-import { sanitizeHtml, renderMarkdown } from './side_panel/markdown';
-import { setupVoiceInput } from './side_panel/voice';
+} from './features/background/conversation-history';
+import { sanitizeHtml, renderMarkdown } from './features/side-panel/markdown';
+import { setupVoiceInput } from './features/side-panel/voice';
 import {
   ALLOWED_BRIDGE_HOSTS,
   DEFAULT_AGI_BRIDGE_URL,
