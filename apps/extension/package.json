@@ -23,6 +23,7 @@
   "scripts": {
     "dev": "vite build --watch",
     "build": "vite build",
+    "pretest": "bash scripts/check-conflict-markers.sh",
     "test": "vitest run",
     "clean": "rm -rf dist",
     "package": "pnpm build && cd dist && zip -r ../extension.zip . -x '*.map'",
@@ -31,7 +32,9 @@
   },
   "dependencies": {
     "@agiworkforce/browser-tool": "workspace:*",
+    "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/runtime": "workspace:*",
+    "@agiworkforce/utils": "workspace:*",
     "dompurify": "^3.3.3"
   },
   "devDependencies": {

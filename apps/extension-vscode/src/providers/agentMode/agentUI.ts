@@ -4,8 +4,9 @@
  */
 
 import * as vscode from 'vscode';
-import * as path from 'path';
+import { resolveContained } from '@agiworkforce/utils';
 import { getActiveWorkspaceFolderSync } from '../../utils/workspaceFolders';
+import { isSensitiveFile } from '../../utils/pathSafety';
 import { getCheckpointManager } from '../../services/checkpointManager';
 import {
   applyPatchBatch,
@@ -17,6 +18,42 @@ import {
   type PatchBlock,
   type BatchResult,
 } from '../../services/patchEngine';
+
+// ─── LITL gating: sensitive-category paths require per-file review ───────────
+// PR-2B (audit F-03): even when the user selects "Accept All", patches that
+// modify these high-impact paths still require explicit diff confirmation.
+// An attacker who routes a patch to .vscode/settings.json or .github/workflows/
+// must not be able to slip past Accept All.
+const SENSITIVE_CATEGORY_PATTERNS: ReadonlyArray<RegExp> = [
+  /(^|\/)\.vscode\//i, // VS Code workspace settings, tasks
+  /(^|\/)\.github\//i, // GitHub Actions / CODEOWNERS
+  /(^|\/)\.git\//i, // Git internals
+  /(^|\/)\.gitlab\//i,
+  /(^|\/)\.gitlab-ci\.yml$/i,
+  /(^|\/)\.circleci\//i,
+  /(^|\/)Dockerfile(\.[A-Za-z0-9]+)?$/i,
+  /(^|\/)docker-compose(\.[A-Za-z0-9]+)?\.ya?ml$/i,
+  /(^|\/)package\.json$/i,
+  /(^|\/)pnpm-lock\.yaml$/i,
+  /(^|\/)yarn\.lock$/i,
+  /(^|\/)package-lock\.json$/i,
+  /(^|\/)pyproject\.toml$/i,
+  /(^|\/)Cargo\.toml$/i,
+  /(^|\/)Cargo\.lock$/i,
+  /(^|\/)tsconfig.*\.json$/i,
+  /(^|\/)vite\.config\.(ts|js|mjs)$/i,
+  /(^|\/)next\.config\.(ts|js|mjs)$/i,
+  /\.(ya?ml|toml)$/i, // any YAML/TOML — broad but config-heavy
+  /(^|\/)Makefile$/i,
+  /\.(sh|ps1|bat|cmd)$/i, // shell / batch scripts
+];
+
+export function isSensitiveCategory(filePath: string): boolean {
+  if (typeof filePath !== 'string' || filePath.length === 0) return false;
+  if (isSensitiveFile(filePath)) return true;
+  const normalized = filePath.replace(/\\/g, '/');
+  return SENSITIVE_CATEGORY_PATTERNS.some((re) => re.test(normalized));
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -92,11 +129,12 @@ export class AgentUI {
     const edits: FileEdit[] = [];
 
     for (const req of editRequests) {
-      const resolvedPath = path.resolve(rootUri.fsPath, req.filePath);
-      if (!resolvedPath.startsWith(rootUri.fsPath + path.sep) && resolvedPath !== rootUri.fsPath) {
-        throw new Error('Path traversal detected: file path outside workspace');
+      // PR-3A (F-05, F-06): single source of truth for path containment.
+      const contained = resolveContained(rootUri.fsPath, req.filePath);
+      if (!contained.ok) {
+        throw new Error(`Path traversal detected: ${req.filePath} (${contained.reason})`);
       }
-      const fileUri = vscode.Uri.file(resolvedPath);
+      const fileUri = vscode.Uri.file(contained.resolved);
       let originalContent = '';
       let language = 'plaintext';
 
@@ -149,53 +187,85 @@ export class AgentUI {
       return;
     }
 
-    if (selected.some((s) => s.label === ACCEPT_ALL_LABEL)) {
-      await this.applyEdits(edits, batchId, edits.length);
-      return;
-    }
-
     if (selected.some((s) => s.label === REJECT_ALL_LABEL)) {
       this.postMessage({ type: 'systemMessage', text: 'All proposed changes rejected.' });
       return;
     }
 
-    const selectedEdits = selected
-      .filter((s): s is EditPickItem & { edit: FileEdit } => s.edit !== undefined)
-      .map((s) => s.edit);
+    let selectedEdits: FileEdit[];
+    if (selected.some((s) => s.label === ACCEPT_ALL_LABEL)) {
+      selectedEdits = edits;
+    } else {
+      selectedEdits = selected
+        .filter((s): s is EditPickItem & { edit: FileEdit } => s.edit !== undefined)
+        .map((s) => s.edit);
+    }
 
     if (selectedEdits.length === 0) {
       this.postMessage({ type: 'systemMessage', text: 'No files selected. Edits cancelled.' });
       return;
     }
 
-    for (const edit of selectedEdits) {
-      const originalUri = edit.uri.with({ scheme: 'agi-original', query: batchId });
-      const modifiedUri = edit.uri.with({ scheme: 'agi-modified', query: batchId });
+    // PR-2B (F-03 LITL gate): partition edits into sensitive vs safe.
+    // Sensitive-category edits (.vscode/, .github/, package.json, etc.)
+    // ALWAYS require per-file diff review — even under "Accept All". This
+    // closes the indirect-prompt-injection vector where an attacker repo
+    // can route a patch to .vscode/settings.json and the user clicks
+    // Accept All without seeing the diff.
+    const sensitive = selectedEdits.filter((e) => isSensitiveCategory(e.filePath));
+    const safe = selectedEdits.filter((e) => !isSensitiveCategory(e.filePath));
 
-      this.originalContents.set(originalUri.toString(), edit.originalContent);
-      this.modifiedContents.set(modifiedUri.toString(), edit.newContent);
+    // Fast path: no sensitive edits, no review needed.
+    if (sensitive.length === 0 && selected.some((s) => s.label === ACCEPT_ALL_LABEL)) {
+      await this.applyEdits(safe, batchId, edits.length);
+      return;
+    }
 
-      await vscode.commands.executeCommand(
-        'vscode.diff',
-        originalUri,
-        modifiedUri,
-        `AGI Agent: ${edit.filePath} (Preview)`,
-        { preview: true },
+    // Slow path: show diffs for every edit that needs review.
+    // Under Accept All with mixed contents, only sensitive needs review;
+    // safe edits are applied silently afterwards.
+    const toReview = selected.some((s) => s.label === ACCEPT_ALL_LABEL) ? sensitive : selectedEdits;
+
+    if (toReview.length > 0) {
+      const sensitiveBadge =
+        sensitive.length > 0
+          ? `\n${sensitive.length} edit(s) target sensitive paths (.vscode, .github, configs) — per-file review required.`
+          : '';
+
+      for (const edit of toReview) {
+        const originalUri = edit.uri.with({ scheme: 'agi-original', query: batchId });
+        const modifiedUri = edit.uri.with({ scheme: 'agi-modified', query: batchId });
+
+        this.originalContents.set(originalUri.toString(), edit.originalContent);
+        this.modifiedContents.set(modifiedUri.toString(), edit.newContent);
+
+        await vscode.commands.executeCommand(
+          'vscode.diff',
+          originalUri,
+          modifiedUri,
+          `AGI Agent: ${edit.filePath}${isSensitiveCategory(edit.filePath) ? ' [SENSITIVE]' : ''} (Preview)`,
+          { preview: true },
+        );
+      }
+
+      const confirmChoice = await vscode.window.showWarningMessage(
+        `Apply changes to ${toReview.length} file(s)?${sensitiveBadge}`,
+        { modal: true },
+        'Apply',
+        'Cancel',
       );
+
+      if (confirmChoice !== 'Apply') {
+        this.postMessage({ type: 'systemMessage', text: 'Edits cancelled after review.' });
+        return;
+      }
     }
 
-    const confirmChoice = await vscode.window.showInformationMessage(
-      `Apply changes to ${selectedEdits.length} file(s)?`,
-      { modal: false },
-      'Apply',
-      'Cancel',
-    );
-
-    if (confirmChoice === 'Apply') {
-      await this.applyEdits(selectedEdits, batchId, edits.length);
-    } else {
-      this.postMessage({ type: 'systemMessage', text: 'Edits cancelled after review.' });
-    }
+    // Apply: safe edits (if any) + reviewed edits.
+    const toApply = selected.some((s) => s.label === ACCEPT_ALL_LABEL)
+      ? [...safe, ...sensitive]
+      : selectedEdits;
+    await this.applyEdits(toApply, batchId, edits.length);
   }
 
   async handlePatchRequests(patchRequests: PatchBlock[]): Promise<void> {
@@ -268,6 +338,36 @@ export class AgentUI {
     if (patchesToApply.length === 0) {
       this.postMessage({ type: 'systemMessage', text: 'No patches selected.' });
       return;
+    }
+
+    // PR-2B (F-03 LITL gate): if any patch targets a sensitive-category
+    // path AND the user chose Accept All, force a modal confirmation
+    // listing the sensitive files before applying.
+    const sensitivePatches = patchesToApply.filter((p) => isSensitiveCategory(p.filePath));
+    if (sensitivePatches.length > 0 && selected.some((s) => s.label === ACCEPT_LABEL)) {
+      const sensitiveFiles = [...new Set(sensitivePatches.map((p) => p.filePath))];
+      const confirm = await vscode.window.showWarningMessage(
+        `${sensitivePatches.length} patch(es) modify sensitive paths and need explicit confirmation:\n\n` +
+          sensitiveFiles.map((f) => `  • ${f}`).join('\n') +
+          `\n\nThese paths can change tool config, CI workflows, or build behavior. Confirm to apply.`,
+        { modal: true },
+        'Apply Sensitive Patches',
+      );
+      if (confirm !== 'Apply Sensitive Patches') {
+        // Drop sensitive patches; keep the safe ones.
+        patchesToApply = patchesToApply.filter((p) => !isSensitiveCategory(p.filePath));
+        if (patchesToApply.length === 0) {
+          this.postMessage({
+            type: 'systemMessage',
+            text: 'Patches cancelled: all proposed changes targeted sensitive paths.',
+          });
+          return;
+        }
+        this.postMessage({
+          type: 'systemMessage',
+          text: `Sensitive patches rejected. Applying remaining ${patchesToApply.length} safe patch(es).`,
+        });
+      }
     }
 
     const checkpointMgr = getCheckpointManager();
@@ -479,15 +579,15 @@ export class AgentUI {
     if (folder === undefined) return;
 
     const rootUri = folder.uri;
-    const resolvedPath = path.resolve(rootUri.fsPath, patch.filePath);
-    if (!resolvedPath.startsWith(rootUri.fsPath + path.sep) && resolvedPath !== rootUri.fsPath) {
+    const contained = resolveContained(rootUri.fsPath, patch.filePath);
+    if (!contained.ok) {
       this.postMessage({
         type: 'error',
         text: `Path traversal blocked: ${patch.filePath} resolves outside workspace.`,
       });
       return;
     }
-    const fileUri = vscode.Uri.file(resolvedPath);
+    const fileUri = vscode.Uri.file(contained.resolved);
 
     let currentContent: string;
     try {
@@ -553,15 +653,15 @@ export class AgentUI {
     if (folder === undefined) return;
 
     const rootUri = folder.uri;
-    const resolvedPath = path.resolve(rootUri.fsPath, patch.filePath);
-    if (!resolvedPath.startsWith(rootUri.fsPath + path.sep) && resolvedPath !== rootUri.fsPath) {
+    const contained = resolveContained(rootUri.fsPath, patch.filePath);
+    if (!contained.ok) {
       this.postMessage({
         type: 'error',
         text: `Path traversal blocked: ${patch.filePath} resolves outside workspace.`,
       });
       return;
     }
-    const fileUri = vscode.Uri.file(resolvedPath);
+    const fileUri = vscode.Uri.file(contained.resolved);
 
     let document: vscode.TextDocument;
     try {

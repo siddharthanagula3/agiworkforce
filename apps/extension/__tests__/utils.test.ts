@@ -492,24 +492,36 @@ describe('formUtils', () => {
   });
 
   describe('submitForm', () => {
-    it('submits the given form and returns true', () => {
+    it('submits the given form via requestSubmit and returns true (L-02)', () => {
+      // L-02 audit 2026-05-19: production now prefers requestSubmit() so
+      // framework-level onSubmit handlers (CSRF tokens, validation) fire.
       document.body.innerHTML = '<form id="f"></form>';
       const form = document.getElementById('f') as HTMLFormElement;
-      form.submit = vi.fn();
+      form.requestSubmit = vi.fn();
       expect(formUtils.submitForm(form)).toBe(true);
-      expect(form.submit).toHaveBeenCalled();
+      expect(form.requestSubmit).toHaveBeenCalled();
     });
 
-    it('submits the first form when no form argument is given', () => {
+    it('submits the first form when no form argument is given (L-02)', () => {
       document.body.innerHTML = '<form id="first"></form><form id="second"></form>';
       const first = document.getElementById('first') as HTMLFormElement;
       const second = document.getElementById('second') as HTMLFormElement;
-      first.submit = vi.fn();
-      second.submit = vi.fn();
+      first.requestSubmit = vi.fn();
+      second.requestSubmit = vi.fn();
 
       formUtils.submitForm(null);
-      expect(first.submit).toHaveBeenCalled();
-      expect(second.submit).not.toHaveBeenCalled();
+      expect(first.requestSubmit).toHaveBeenCalled();
+      expect(second.requestSubmit).not.toHaveBeenCalled();
+    });
+
+    it('falls back to submit() when requestSubmit is missing', () => {
+      document.body.innerHTML = '<form id="legacy"></form>';
+      const form = document.getElementById('legacy') as HTMLFormElement;
+      // Simulate an environment without requestSubmit (old Chrome / jsdom variants).
+      (form as unknown as { requestSubmit?: undefined }).requestSubmit = undefined;
+      form.submit = vi.fn();
+      expect(formUtils.submitForm(form)).toBe(true);
+      expect(form.submit).toHaveBeenCalled();
     });
 
     it('returns true even when no form is present in the document', () => {
@@ -680,17 +692,25 @@ describe('validators', () => {
       expect(validators.isValidSelector('div > span.active[aria-label]')).toBe(true);
     });
 
-    it('returns false for an invalid CSS selector', () => {
-      expect(validators.isValidSelector('##invalid')).toBe(false);
+    it('rejects selectors containing expression-injection metacharacters (M-11)', () => {
+      // After M-11 (audit 2026-05-19): validation is character-class based,
+      // not parseability based. We REJECT chars that should never appear in
+      // a real CSS selector and ACCEPT well-shaped strings even if they'd
+      // throw at parse time. The trade-off: bounded validation cost and no
+      // DoS via expensive selectors like `* * * * * * * *` on huge DOMs.
+      expect(validators.isValidSelector('{evil}')).toBe(false);
+      expect(validators.isValidSelector('foo; bar')).toBe(false);
+      expect(validators.isValidSelector('`tickmark`')).toBe(false);
     });
 
-    it('returns false for an empty string', () => {
-      // document.querySelector('') throws in some environments
-      // The function catches and returns false
-      const result = validators.isValidSelector('');
-      // '' is technically valid in some jsdom versions but semantically useless
-      // We just assert no exception is thrown
-      expect(typeof result).toBe('boolean');
+    it('returns false for an empty string (M-11)', () => {
+      // Empty selectors fail the length check.
+      expect(validators.isValidSelector('')).toBe(false);
+    });
+
+    it('returns false for an overly long selector (M-11 DoS guard)', () => {
+      // 2049 chars exceeds the cap; bounded validation cost.
+      expect(validators.isValidSelector('a'.repeat(2049))).toBe(false);
     });
   });
 

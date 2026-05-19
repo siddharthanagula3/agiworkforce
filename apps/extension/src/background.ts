@@ -40,6 +40,18 @@ import {
   type ComputerUseAction,
   type BrowserAction,
 } from './browserTool';
+import { migrateAutofillProfile } from './autofill/filler';
+import {
+  DISCOVERY_MESSAGE_TYPES,
+  DOM_MUTATION_MESSAGE_TYPES,
+  EXTENSION_PAGE_ONLY_MESSAGE_TYPES,
+  DEFAULT_AGI_BRIDGE_URL,
+  ORIGIN_EXTENSION_PAGE,
+  MAX_CONTEXT_HTML_CHARS,
+  validateBridgeUrl,
+  validateGatewayUrl,
+  validateShortcutActions,
+} from './background/policy';
 
 interface BackgroundState {
   isNativeConnected: boolean;
@@ -133,7 +145,8 @@ const nlwebByTab = new Map<
 const NATIVE_HOST_NAME = 'com.agiworkforce.browser';
 const NATIVE_REQUEST_TIMEOUT_MS = 10000;
 const CONTENT_SCRIPT_FORWARD_TIMEOUT_MS = 30000;
-const MAX_CONTEXT_HTML_CHARS = 100_000;
+// MAX_CONTEXT_HTML_CHARS now imported from policy.ts (L-14 audit 2026-05-19) so
+// content.ts and background.ts share a single byte-budget constant.
 const NATIVE_CONNECT_MAX_WAIT_MS = 2000;
 const NATIVE_RECONNECT_BASE_DELAY_MS = 1000;
 const NATIVE_RECONNECT_MAX_DELAY_MS = 30000;
@@ -170,6 +183,10 @@ function clearNativeReconnectTimer(): void {
 }
 
 function resetNativeReconnectState(): void {
+  // L-07 audit 2026-05-19: `nativeReconnectGaveUp` is cleared in two paths:
+  // (a) here, on explicit manual reconnect; (b) in connectToNativeHost
+  // success block (line ~311), on handshake success. Both are intentional.
+  // Do not consolidate — they have different preconditions.
   _bgCtx.nativeReconnectAttempt = 0;
   _bgCtx.nativeReconnectGaveUp = false;
   clearNativeReconnectTimer();
@@ -266,6 +283,12 @@ function initialize(): void {
   connectToNativeHost();
   checkDesktopConnection();
   void restoreScheduledTaskAlarms();
+  // One-shot migration of the autofill profile from chrome.storage.sync (which
+  // replicates to Google's servers) into chrome.storage.local (device-only).
+  // Idempotent and silent on storage error. See H-04 in audits/2026-05-19.
+  void migrateAutofillProfile().catch((err) => {
+    logger.debug('Autofill profile migration failed (non-fatal)', err);
+  });
 }
 
 function connectToNativeHost(): void {
@@ -360,7 +383,14 @@ function createRequestId(): string {
   return `${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
 }
 
-function sendNativeRequest(message: Record<string, unknown>): Promise<ExtensionResponse> {
+function sendNativeRequest(
+  message: Record<string, unknown>,
+  timeoutMs: number = NATIVE_REQUEST_TIMEOUT_MS,
+): Promise<ExtensionResponse> {
+  // L-04 audit 2026-05-19: accept a per-call timeoutMs. Default stays at
+  // NATIVE_REQUEST_TIMEOUT_MS (10s); long calls (chat_message, etc.)
+  // now pass 30000 explicitly instead of getting wrapped in `withTimeout`
+  // and risking double-timeouts.
   return new Promise((resolve, reject) => {
     void (async () => {
       // Allow sending during handshake (port exists but isNativeConnected not yet true)
@@ -379,8 +409,8 @@ function sendNativeRequest(message: Record<string, unknown>): Promise<ExtensionR
       const id = createRequestId();
       const timeout = setTimeout(() => {
         pendingRequests.delete(id);
-        reject(new Error(`Native request timeout after ${NATIVE_REQUEST_TIMEOUT_MS}ms`));
-      }, NATIVE_REQUEST_TIMEOUT_MS);
+        reject(new Error(`Native request timeout after ${timeoutMs}ms`));
+      }, timeoutMs);
 
       pendingRequests.set(id, { resolve, reject, timeout });
 
@@ -456,7 +486,9 @@ function handleNativeDisconnect(): void {
 
 function showNotification(title: string, message: string, tabId?: number): void {
   if (!chrome.notifications?.create) return;
-  const notifId = `agi_${Date.now()}`;
+  // L-12 audit 2026-05-19: crypto.randomUUID prefix instead of Date.now so
+  // rapid notifications don't collide.
+  const notifId = `agi_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
   chrome.notifications.create(
     notifId,
     {
@@ -515,6 +547,28 @@ async function handleReplayShortcut(
   if (!shortcut) {
     return { success: false, error: 'Shortcut not found' } as ExtensionResponse;
   }
+  // SECURITY (C-03 audit 2026-05-19): if this shortcut was created by a web
+  // page (not the trusted UI), confirm the origin is still allowlisted.
+  // Auto-delete stale records so they can't accumulate as a persistent
+  // attacker capability.
+  if (
+    shortcut.createdByOrigin &&
+    shortcut.createdByOrigin !== ORIGIN_EXTENSION_PAGE &&
+    !siteAllowlistCache.has(shortcut.createdByOrigin)
+  ) {
+    logger.warn('Auto-deleting shortcut whose origin is no longer allowlisted', {
+      shortcutId: shortcut.id,
+      createdByOrigin: shortcut.createdByOrigin,
+    });
+    await handleDeleteShortcut({
+      type: 'DELETE_SHORTCUT',
+      shortcutId: shortcut.id,
+    } as import('./types').DeleteShortcutMessage);
+    return {
+      success: false,
+      error: 'Shortcut origin is no longer on your allowlist; the shortcut was removed.',
+    } as ExtensionResponse;
+  }
   const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!activeTab?.id) {
     return { success: false, error: 'No active tab' } as ExtensionResponse;
@@ -535,6 +589,26 @@ async function handleReplayShortcut(
 // handleDeleteScheduledTask, restoreScheduledTaskAlarms extracted to background/tasks.ts
 
 async function executeScheduledTask(task: ScheduledTask): Promise<void> {
+  // SECURITY (C-02 audit 2026-05-19): fire-time allowlist re-check. Tasks
+  // created from a non-extension-UI origin must verify the originating
+  // origin is still on `agi_site_allowlist`. If not, auto-delete so the
+  // task does not accumulate as a persistent capability.
+  if (
+    task.createdByOrigin &&
+    task.createdByOrigin !== ORIGIN_EXTENSION_PAGE &&
+    !siteAllowlistCache.has(task.createdByOrigin)
+  ) {
+    logger.warn('Auto-deleting scheduled task whose origin is no longer allowlisted', {
+      taskId: task.id,
+      createdByOrigin: task.createdByOrigin,
+    });
+    await handleDeleteScheduledTask({
+      type: 'DELETE_SCHEDULED_TASK',
+      taskId: task.id,
+    } as import('./types').DeleteScheduledTaskMessage);
+    return;
+  }
+
   logger.info('Executing scheduled task', { id: task.id, name: task.name });
 
   if (task.shortcutId) {
@@ -559,14 +633,25 @@ async function executeScheduledTask(task: ScheduledTask): Promise<void> {
         truncatedTo: TASK_PROMPT_MAX_CHARS,
       });
     }
-    // Send as chat message via the same path as side panel
+    // Send as chat message via the same path as side panel.
+    //
+    // Arch #2 audit 2026-05-19: synthesize a sender that looks like an
+    // extension-page sender (`id === chrome.runtime.id`, `!sender.tab`) so
+    // any future origin-aware logic in `handleChatMessage` treats this as
+    // trusted UI rather than a faked content script. The prior `{} as
+    // MessageSender` was a type-cast lie that would have bypassed any
+    // future sender check on this path.
     const chatMsg: import('./types').ChatMessageMessage = {
       type: 'CHAT_MESSAGE',
       id: `task_${task.id}_${Date.now()}`,
       text: safePrompt,
       timestamp: Date.now(),
     };
-    void handleChatMessage(chatMsg, {} as chrome.runtime.MessageSender);
+    const scheduledTaskSender: chrome.runtime.MessageSender = {
+      id: chrome.runtime.id,
+      // No `tab` — emulates an extension page (popup / side panel) call.
+    };
+    void handleChatMessage(chatMsg, scheduledTaskSender);
   }
 
   // Update lastRun
@@ -593,7 +678,7 @@ async function executeScheduledTask(task: ScheduledTask): Promise<void> {
 // side panel) are already trusted via the `!sender.tab` branch in
 // isAllowlistedSender(). Content scripts on arbitrary pages must NOT receive
 // responses to fingerprinting probes.
-const DISCOVERY_MESSAGE_TYPES = new Set<string>();
+// DISCOVERY_MESSAGE_TYPES now imported from `./background/policy` (audit 2026-05-19).
 let siteAllowlistCache = new Set<string>();
 chrome.storage.local
   .get('agi_site_allowlist')
@@ -632,61 +717,12 @@ function isAllowlistedSender(
   return siteAllowlistCache.has(origin);
 }
 
-// EXT-3 (audit 2026-05-03): same-tab restriction for DOM-mutation
-// commands. Even with an allowlisted origin, a malicious page must
-// not be able to drive DOM mutation in a different tab.
-// SECURITY (H-2): EVALUATE_SCRIPT removed. It had no handler in content.ts and
-// its presence in this set made a future accidental eval()-based handler look
-// "intentional" to reviewers. Do NOT re-add — content scripts must never
-// expose an eval() surface. Use EXECUTE_SCRIPT + ALLOWED_SCRIPT_OPERATIONS instead.
-//
-// CHROME-NEW-002 fix (2026-05-04 audit): the prior set covered only `TYPE`,
-// `CLICK`, storage, and `SUBMIT_FORM`. Every other content-script handler
-// in `content.ts:222-274` (`SELECT_OPTION`, `CHECK`, `UNCHECK`, `FOCUS`,
-// `BLUR`, `HOVER`, `SCROLL`, `DRAG_DROP`, `CLICK_AT_COORDINATES`) was
-// forwarded to any caller-supplied `tabId` with no same-tab check. An
-// allowlisted page (e.g., a compromised LinkedIn / Lever clone) could send
-// `{ type: 'SELECT_OPTION', tabId: <banking>, selector: '#amount',
-// value: '10000' }` and drive a different tab. We now gate every
-// DOM-mutation-class message through `senderTabAllowedToMutate`. Recording
-// types (`START_RECORDING` / `STOP_RECORDING`) read state and aren't
-// mutations, so they remain outside this set.
-const DOM_MUTATION_MESSAGE_TYPES = new Set<string>([
-  'TYPE',
-  'CLICK',
-  'SET_LOCAL_STORAGE',
-  'CLEAR_LOCAL_STORAGE',
-  'SUBMIT_FORM',
-  // Added 2026-05-04 — every type below has a handler in content.ts that
-  // observably mutates the target tab's DOM or page state.
-  'SELECT_OPTION',
-  'CHECK',
-  'UNCHECK',
-  'FOCUS',
-  'BLUR',
-  'HOVER',
-  'SCROLL',
-  'DRAG_DROP',
-  'CLICK_AT_COORDINATES',
-  'EXECUTE_SCRIPT',
-  // CHROME-NEW-005 fix (2026-05-05): compound action types must also be
-  // gated by `senderTabAllowedToMutate`. `RUN_PAGE_ACTIONS` is a batch
-  // executor that internally invokes any of the simple types above —
-  // without this guard, an allowlisted origin could send
-  // `{ type: 'RUN_PAGE_ACTIONS', tabId: <other-tab>, actions: [...] }` and
-  // drive a different tab's DOM. `AUTO_FILL_JOB_APPLICATION` is the
-  // LinkedIn / Lever autofill entry point and writes to form fields.
-  'RUN_PAGE_ACTIONS',
-  'AUTO_FILL_JOB_APPLICATION',
-  // P0-D fix (2026-05-08): these three types have content-script handlers
-  // that mutate the target tab's DOM (dispatch MouseEvent/simulate context-menu/
-  // write form fields). Without this guard, an allowlisted origin could send
-  // `{ type: 'DOUBLE_CLICK', tabId: <other-tab>, selector: '#btn' }` and drive
-  // a different tab's DOM.
-  'DOUBLE_CLICK',
-  'RIGHT_CLICK',
-  'FILL_FORM',
-]);
+// DOM_MUTATION_MESSAGE_TYPES is now sourced from `./background/policy` so the
+// side panel, tests, and any other consumer share one source of truth. See the
+// policy module's comment for the historical fix history (EXT-3, H-2,
+// CHROME-NEW-002, CHROME-NEW-005, P0-D). Adding a new content-script handler
+// that writes DOM? Add the wire-message type to `DOM_MUTATION_MESSAGE_TYPES`
+// in `policy.ts`.
 
 function senderTabAllowedToMutate(
   sender: chrome.runtime.MessageSender,
@@ -721,6 +757,25 @@ function handleMessage(
         'This site is not on your AGI Workforce allowlist. Add it from the extension popup to enable automation here.',
     } as ExtensionResponse);
     return false;
+  }
+
+  // SECURITY (C-02 / C-03 audit 2026-05-19): some message types create
+  // persistent state (chrome.alarms, chrome.storage.local shortcuts) that
+  // outlives the originating tab and survives removal from the allowlist.
+  // These must originate from a trusted extension page (popup / side panel /
+  // options), never from a content script — even on an allowlisted origin.
+  if (EXTENSION_PAGE_ONLY_MESSAGE_TYPES.has(msg.type)) {
+    if (sender.tab || sender.id !== chrome.runtime.id) {
+      logger.warn('Rejected extension-page-only message from non-UI sender', {
+        url: sender?.tab?.url,
+        type: msg.type,
+      });
+      sendResponse({
+        success: false,
+        error: 'This action requires the extension UI.',
+      } as ExtensionResponse);
+      return false;
+    }
   }
 
   // EXT-3: block cross-tab DOM mutation.
@@ -870,10 +925,25 @@ async function handleMessageAsync(
     }
 
     case 'CAPTURE_SCREENSHOT': {
+      // SECURITY (H-09 audit 2026-05-19): only capture the sender's own tab.
+      // The previous implementation fell back to `chrome.tabs.query({active:
+      // true})`, which let an allowlisted content script wait for the user to
+      // switch tabs and then exfiltrate a screenshot of whatever was visible.
+      // Extension pages (popup / side panel) have `!sender.tab` — they must
+      // explicitly include `tabId` in the message, which is resolved upstream.
       let resolvedTabId = tabId;
       let resolvedWindowId = windowId;
 
-      if (!resolvedTabId || resolvedWindowId === undefined) {
+      if (sender.tab) {
+        // Content-script sender — restrict to its own tab regardless of the
+        // tabId passed in the message body. This closes the cross-tab
+        // capture path.
+        resolvedTabId = sender.tab.id;
+        resolvedWindowId = sender.tab.windowId;
+      } else if (!resolvedTabId || resolvedWindowId === undefined) {
+        // Extension-page sender (popup / side panel) with no explicit tabId:
+        // fall back to the active tab so the popup's "capture page" button
+        // still works.
         const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
         resolvedTabId = resolvedTabId ?? activeTab?.id;
         resolvedWindowId = resolvedWindowId ?? activeTab?.windowId;
@@ -962,7 +1032,8 @@ async function handleMessageAsync(
 
     case 'START_RECORDING':
     case 'STOP_RECORDING':
-    case 'GET_RECORDED_ACTIONS': {
+    case 'GET_RECORDED_ACTIONS':
+    case 'SET_RECORDING_VALUE_CAPTURE' as ExtensionMessage['type']: {
       let resolvedTabId = tabId;
       if (!resolvedTabId) {
         const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -1153,6 +1224,39 @@ async function handleMessageAsync(
       if (!isAllowedProbeUrl(probeUrl)) {
         return { success: false, error: 'Probe URL not allowed' } as ExtensionResponse;
       }
+      // SECURITY (H-01 audit 2026-05-19): restrict NLWEB_PROBE to the
+      // sender's own origin. Discovery is intrinsically same-origin —
+      // probing arbitrary public URLs through the extension turned the
+      // service worker into an SSRF reflector (the extension's IP, no
+      // Origin header, may bypass CORS allowlists that key on Origin).
+      //
+      // Self-review #11 audit 2026-05-19: fail-closed for extension pages
+      // too. The prior implementation exempted senders with no `sender.tab`
+      // (i.e. popup / side panel). No extension-page code currently calls
+      // NLWEB_PROBE, so fail-closed costs nothing today and prevents a
+      // future caller from bypassing the SSRF check.
+      if (!sender.tab?.url) {
+        return {
+          success: false,
+          error: 'NLWeb probes can only originate from a content script.',
+        } as ExtensionResponse;
+      }
+      try {
+        const senderOrigin = new URL(sender.tab.url).origin;
+        const probeOrigin = new URL(probeUrl).origin;
+        if (probeOrigin !== senderOrigin) {
+          logger.warn('Rejected cross-origin NLWEB_PROBE', {
+            senderOrigin,
+            probeOrigin,
+          });
+          return {
+            success: false,
+            error: "NLWeb probes are restricted to the page's own origin.",
+          } as ExtensionResponse;
+        }
+      } catch {
+        return { success: false, error: 'Invalid probe URL' } as ExtensionResponse;
+      }
       {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
@@ -1243,79 +1347,122 @@ async function handleMessageAsync(
 }
 
 /**
- * Domains where cookie operations are blocked to prevent exfiltration of
- * sensitive session tokens. Errs on the side of caution — default-deny for
- * known sensitive categories.
+ * Cookie-domain blocklist.
+ *
+ * SECURITY (M-01 audit 2026-05-19): the previous implementation matched
+ * cookie domains with bare regexes like `/bank/i` and `/stripe\.com$/i`.
+ * Two problems:
+ *   1. `/bank/i` matches any string containing "bank" — fine for legitimate
+ *      bank-named hostnames; the substring matching is preserved for that
+ *      category bucket. But the suffix-anchored regexes silently broke
+ *      under port suffixes: `/stripe\.com$/i` is anchored on the regex but
+ *      tested against `urlOrDomain.replace(/^https?:\/\//, '').split('/')[0]`
+ *      which retains `:port` — so `stripe.com:443` would fail the `$`
+ *      anchor and slip through.
+ *   2. Hostname parsing was DIY: split on `/`. URLs like `http://attacker.com\@github.com`
+ *      can confuse naive splitting on some browser parses.
+ *
+ * We now parse with `new URL`, lowercase the hostname (no port, no path,
+ * no userinfo), then match against structured {hostname, mode} entries.
+ *   - `exact`: hostname must equal the entry's value.
+ *   - `suffix`: hostname is the entry's value OR ends with `.<value>`.
+ *   - `substring`: hostname contains the value (for category bucket
+ *     keywords like "bank" that aren't suffix-anchorable).
  */
-const BLOCKED_COOKIE_DOMAINS: RegExp[] = [
-  // Financial
-  /bank/i,
-  /paypal/i,
-  /venmo/i,
-  /chase/i,
-  /wellsfargo/i,
-  /citibank/i,
-  /fidelity/i,
-  /schwab/i,
-  /stripe\.com$/i,
-  /plaid\.com$/i,
-  /coinbase/i,
-  /binance/i,
-  /kraken/i,
+type CookieBlockEntry = { value: string; mode: 'exact' | 'suffix' | 'substring' };
+
+const BLOCKED_COOKIE_DOMAINS: ReadonlyArray<CookieBlockEntry> = [
+  // Financial — substring keywords. False positives are acceptable here;
+  // a false-allow on a bank-flavored site is much worse than a false-block.
+  { value: 'bank', mode: 'substring' },
+  { value: 'paypal', mode: 'substring' },
+  { value: 'venmo', mode: 'substring' },
+  { value: 'chase', mode: 'substring' },
+  { value: 'wellsfargo', mode: 'substring' },
+  { value: 'citibank', mode: 'substring' },
+  { value: 'fidelity', mode: 'substring' },
+  { value: 'schwab', mode: 'substring' },
+  { value: 'coinbase', mode: 'substring' },
+  { value: 'binance', mode: 'substring' },
+  { value: 'kraken', mode: 'substring' },
+  { value: 'stripe.com', mode: 'suffix' },
+  { value: 'plaid.com', mode: 'suffix' },
   // Government & healthcare
-  /\.gov$/i,
-  /\.mil$/i,
-  /healthcare/i,
-  /medical/i,
-  /health\.com/i,
+  { value: 'gov', mode: 'suffix' },
+  { value: 'mil', mode: 'suffix' },
+  { value: 'healthcare', mode: 'substring' },
+  { value: 'medical', mode: 'substring' },
+  { value: 'health.com', mode: 'suffix' },
   // Cloud infrastructure & developer tools
-  /aws\.amazon\.com/i,
-  /console\.cloud\.google/i,
-  /portal\.azure/i,
-  /github\.com$/i,
-  /gitlab\.com$/i,
-  /bitbucket\.org$/i,
+  { value: 'aws.amazon.com', mode: 'suffix' },
+  { value: 'console.cloud.google.com', mode: 'suffix' },
+  { value: 'portal.azure.com', mode: 'suffix' },
+  { value: 'github.com', mode: 'suffix' },
+  { value: 'gitlab.com', mode: 'suffix' },
+  { value: 'bitbucket.org', mode: 'suffix' },
   // Auth & identity providers
-  /accounts\.google/i,
-  /login\.microsoftonline/i,
-  /auth0\.com$/i,
-  /okta\.com$/i,
+  { value: 'accounts.google.com', mode: 'suffix' },
+  { value: 'login.microsoftonline.com', mode: 'suffix' },
+  { value: 'auth0.com', mode: 'suffix' },
+  { value: 'okta.com', mode: 'suffix' },
   // Email & communication
-  /mail\.google/i,
-  /outlook\.(live|office)/i,
+  { value: 'mail.google.com', mode: 'suffix' },
+  { value: 'outlook.live.com', mode: 'suffix' },
+  { value: 'outlook.office.com', mode: 'suffix' },
   // Social media (auth tokens)
-  /facebook\.com$/i,
-  /twitter\.com$/i,
-  /x\.com$/i,
-  /instagram\.com$/i,
-  // CHROME-NEW-006 fix (2026-05-05): explicitly block the very platforms the
-  // extension *targets* for autofill / chat assistance. The agent only needs
-  // DOM-level read/write on these origins — not their session cookies. Without
-  // these entries, a malicious script running on an allowlisted page could
-  // call GET_COOKIES against `linkedin.com` / `slack.com` / `notion.so` /
-  // `figma.com` / `lever.co` and exfiltrate the user's session token, even
-  // though the regex `/health\.com/` and friends already cover unrelated
-  // categories.
-  /(^|\.)linkedin\.com$/i,
-  /(^|\.)slack\.com$/i,
-  /(^|\.)notion\.so$/i,
-  /(^|\.)figma\.com$/i,
-  /(^|\.)lever\.co$/i,
-  /(^|\.)greenhouse\.io$/i,
-  /(^|\.)workday\.com$/i,
-  // CHROME-NEW-003 fix (2026-05-04): the extension's own auth surfaces are
-  // sensitive too. An allowlisted page that calls GET_COOKIES against
-  // `https://<ref>.supabase.co` would receive Supabase auth cookies, and
-  // against `https://agiworkforce.com` would receive `agi_access_token` /
-  // `agi_refresh_token`. Block both at the cookie layer.
-  /\.supabase\.(co|io)$/i,
-  /(^|\.)agiworkforce\.com$/i,
+  { value: 'facebook.com', mode: 'suffix' },
+  { value: 'twitter.com', mode: 'suffix' },
+  { value: 'x.com', mode: 'suffix' },
+  { value: 'instagram.com', mode: 'suffix' },
+  // Platforms the extension targets — DOM-level only, never cookies.
+  // CHROME-NEW-006 (2026-05-05) + M-01 (2026-05-19): suffix mode replaces
+  // the prior `/(^|\.)linkedin\.com$/i` regexes which silently broke under
+  // port suffixes (`linkedin.com:443`).
+  // L-08 note: linkedin/lever/etc. are deliberately blocked at the COOKIE
+  // layer even though autofill targets them; autofill only writes DOM, never
+  // reads cookies.
+  { value: 'linkedin.com', mode: 'suffix' },
+  { value: 'slack.com', mode: 'suffix' },
+  { value: 'notion.so', mode: 'suffix' },
+  { value: 'figma.com', mode: 'suffix' },
+  { value: 'lever.co', mode: 'suffix' },
+  { value: 'greenhouse.io', mode: 'suffix' },
+  { value: 'workday.com', mode: 'suffix' },
+  // CHROME-NEW-003 (2026-05-04): the extension's own auth surfaces.
+  { value: 'supabase.co', mode: 'suffix' },
+  { value: 'supabase.io', mode: 'suffix' },
+  { value: 'agiworkforce.com', mode: 'suffix' },
 ];
+
+function matchCookieBlock(hostname: string, entry: CookieBlockEntry): boolean {
+  const value = entry.value.toLowerCase();
+  switch (entry.mode) {
+    case 'exact':
+      return hostname === value;
+    case 'suffix':
+      return hostname === value || hostname.endsWith(`.${value}`);
+    case 'substring':
+      return hostname.includes(value);
+  }
+}
 
 function isCookieDomainAllowed(urlOrDomain: string): boolean {
   if (!urlOrDomain) return false;
-  const domain = urlOrDomain.replace(/^https?:\/\//, '').split('/')[0] ?? '';
-  return !BLOCKED_COOKIE_DOMAINS.some((pattern) => pattern.test(domain));
+  // Parse strictly: extract just the hostname (lowercase, no port, no path,
+  // no userinfo). The prior implementation used DIY substring extraction
+  // which retained `:port` and broke suffix-anchored matchers; this is the
+  // M-01 fix.
+  let hostname: string;
+  try {
+    const normalized = urlOrDomain.includes('://')
+      ? urlOrDomain
+      : `https://${(urlOrDomain.split('/')[0] ?? '').toLowerCase()}`;
+    hostname = new URL(normalized).hostname.toLowerCase();
+  } catch {
+    return false; // fail-closed on unparseable input
+  }
+  if (!hostname) return false;
+  return !BLOCKED_COOKIE_DOMAINS.some((entry) => matchCookieBlock(hostname, entry));
 }
 
 async function handleGetCookies(
@@ -1595,7 +1742,24 @@ async function syncTabContextWithDesktop(
 
   const plannerData = (pageContextResponse.data ?? {}) as NativePageContextPlan;
   const taskId = String(plannerData.task_id ?? '');
-  const actions = Array.isArray(plannerData.actions) ? plannerData.actions : [];
+  const rawActions = Array.isArray(plannerData.actions) ? plannerData.actions : [];
+  // SECURITY (L-09 audit 2026-05-19): validate the desktop-bridge-supplied
+  // action plan before forwarding to the content script. The bridge is
+  // trusted today, but defense-in-depth: if the bridge is ever compromised
+  // (e.g., a malicious local app binds port 8787), an attacker-crafted
+  // action plan should still be rejected by the same allowlist that gates
+  // user-saved shortcuts.
+  if (rawActions.length > 0 && !validateShortcutActions(rawActions)) {
+    logger.warn('Rejected desktop-bridge plan containing unknown action type', {
+      taskId,
+      actionCount: rawActions.length,
+    });
+    return {
+      success: false,
+      error: 'Desktop plan contains an unsupported action type.',
+    } as ExtensionResponse;
+  }
+  const actions = rawActions;
 
   if (!taskId || actions.length === 0) {
     return {
@@ -1738,6 +1902,11 @@ function setupContextMenu(): void {
     return;
   }
 
+  // L-13 audit 2026-05-19: contextMenus.removeAll is async but its callback
+  // does not gate the create() calls below. Chrome serializes these
+  // internally — removeAll completes before any subsequent create() in the
+  // same task — so there's no actual race. The callback is purely for
+  // logging the (rare) removal failure.
   chrome.contextMenus.removeAll(() => {
     if (chrome.runtime.lastError) {
       logger.warn('contextMenus.removeAll failed', chrome.runtime.lastError.message);
@@ -1912,6 +2081,20 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (!/^https?:\/\//i.test(url)) {
     return;
   }
+  // SECURITY (H-06 audit 2026-05-19): the previous listener fired for every
+  // http(s) tab regardless of allowlist, shipping innerText to the desktop
+  // bridge for pages the user never authorized. Gate on the same
+  // `siteAllowlistCache` that controls message dispatch. Non-allowlisted
+  // origins get no implicit page-context sync.
+  let origin: string;
+  try {
+    origin = new URL(url).origin;
+  } catch {
+    return;
+  }
+  if (!siteAllowlistCache.has(origin)) {
+    return;
+  }
 
   void syncTabContextWithDesktop(tabId, 'tab_updated').catch((error) => {
     logger.debug('Tab update context sync skipped', error);
@@ -1962,14 +2145,9 @@ async function captureCurrentPage(): Promise<void> {
   }
 }
 
-/** Default AGI bridge base URL — overridden by chrome.storage.local `agi_bridge_url`.
- *  Port 8787 is the canonical AGI Workforce desktop bridge port (matches VS Code ext + desktop). */
-const DEFAULT_AGI_BRIDGE_URL = 'http://localhost:8787';
-
-/** Allowed bridge URL hostnames — only local connections to the desktop app are permitted.
- *  `0.0.0.0` removed (SEV-CHEXT-09): on Linux it routes to LAN-bound services, defeating the
- *  loopback-only contract. Use the explicit loopback addresses only. */
-const ALLOWED_BRIDGE_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+// DEFAULT_AGI_BRIDGE_URL and ALLOWED_BRIDGE_HOSTS are now imported from
+// `./background/policy` so side-panel, pairing, and tests share one source
+// of truth. See H-02 in audits/2026-05-19.
 
 /** Maximum response body size for NLWEB probe requests (256 KB). */
 const MAX_PROBE_RESPONSE_BYTES = 262_144;
@@ -2018,35 +2196,9 @@ function isAllowedProbeUrl(raw: string): boolean {
   }
 }
 
-/**
- * Validate that a bridge URL points to a local address.
- * Returns the normalized URL if valid, null if rejected.
- */
-function validateBridgeUrl(raw: string): string | null {
-  try {
-    // Normalize protocol for URL parsing
-    const normalized = raw.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://');
-    const parsed = new URL(normalized);
-
-    // Only allow http/https schemes
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      logger.warn('Bridge URL rejected: unsupported protocol', { protocol: parsed.protocol });
-      return null;
-    }
-
-    // Only allow local hostnames — never route bridge traffic to remote servers
-    if (!ALLOWED_BRIDGE_HOSTS.has(parsed.hostname)) {
-      logger.warn('Bridge URL rejected: non-local hostname', { hostname: parsed.hostname });
-      return null;
-    }
-
-    // Strip trailing slash
-    return normalized.replace(/\/$/, '');
-  } catch {
-    logger.warn('Bridge URL rejected: invalid URL', { raw });
-    return null;
-  }
-}
+// validateBridgeUrl is now imported from `./background/policy` (audit 2026-05-19).
+// The function deliberately does not log here — it's called from multiple
+// surfaces (background, side panel, pairing); log at the call site instead.
 
 /**
  * Resolve the configured bridge URL from storage, falling back to the default.
@@ -2094,33 +2246,10 @@ const VALID_PROVIDER_IDS: ReadonlySet<ProviderStreamProvider> = new Set([
   'ollama',
 ]);
 
-// SECURITY (C-1): Gateway URL allowlist. The agi_gateway_url key in
-// chrome.storage.local is writable by any allowlisted page. We therefore
-// validate the stored value against a strict allowlist rather than trusting the
-// raw storage value. Only https://api.agiworkforce.com and its subdomains are
-// accepted. localhost is never accepted for the gateway (bridge URL is separate
-// and validated by validateBridgeUrl).
-const GATEWAY_URL_ALLOWLIST_EXACT = new Set<string>(['https://api.agiworkforce.com']);
-const GATEWAY_URL_SUBDOMAIN_SUFFIX = '.agiworkforce.com';
-
-/**
- * Returns the validated gateway origin or null.
- * Accepts: https://api.agiworkforce.com, https://<sub>.agiworkforce.com
- * Rejects: http:// (JWT would be plaintext), any non-agiworkforce.com host.
- */
-function validateGatewayUrl(raw: string): string | null {
-  if (!raw) return null;
-  try {
-    const parsed = new URL(raw);
-    if (parsed.protocol !== 'https:') return null;
-    const origin = `https://${parsed.host}`;
-    if (GATEWAY_URL_ALLOWLIST_EXACT.has(origin)) return origin;
-    if (parsed.hostname.endsWith(GATEWAY_URL_SUBDOMAIN_SUFFIX)) return origin;
-    return null;
-  } catch {
-    return null;
-  }
-}
+// validateGatewayUrl is now imported from `./background/policy` (M-02 audit
+// 2026-05-19). The function deliberately uses an EXACT-match allowlist —
+// no open subdomain rule — to prevent compromise of any delegated subdomain
+// from compromising the JWT pipeline.
 
 interface ProviderStreamSettings {
   enabled: boolean;

@@ -110,21 +110,49 @@ export const FileEdit = svg(
   '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>',
 );
 
+/** Copy — copy to clipboard */
+export const Copy = svg(
+  '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+);
+
+/** Square — stop streaming */
+export const Square = svg('<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>');
+
 /**
  * Render a Lucide SVG string as an inline SVG element with the given size.
  * The element uses currentColor so it inherits its parent's color.
  * Size is applied as width/height style to preserve the viewBox aspect ratio.
+ *
+ * L-11 audit 2026-05-19: parses via DOMParser (image/svg+xml) and imports
+ * the root element rather than assigning to `innerHTML`. Both paths are
+ * safe for our static SVG literals, but the DOMParser route avoids the
+ * HTML-parser branch entirely — defense-in-depth against any future
+ * refactor that accidentally passes attacker-controlled SVG through.
  */
+const svgParser = typeof DOMParser !== 'undefined' ? new DOMParser() : null;
+
 export function renderIcon(svgString: string, size: number, extraClass?: string): HTMLElement {
   const wrapper = document.createElement('span');
   wrapper.className = `agi-icon${extraClass ? ' ' + extraClass : ''}`;
   wrapper.style.cssText = `display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;flex-shrink:0;`;
-  // Safe: all SVG strings in this module are static literals, not user input.
-  wrapper.innerHTML = svgString;
-  const svgEl = wrapper.querySelector('svg');
-  if (svgEl) {
-    svgEl.style.width = `${size}px`;
-    svgEl.style.height = `${size}px`;
+
+  if (svgParser) {
+    try {
+      const doc = svgParser.parseFromString(svgString, 'image/svg+xml');
+      const svgEl = doc.documentElement;
+      // parseerror appears as the root in some browsers when the input is bad.
+      if (svgEl.nodeName.toLowerCase() === 'svg') {
+        const imported = document.importNode(svgEl, true) as unknown as SVGSVGElement;
+        imported.style.width = `${size}px`;
+        imported.style.height = `${size}px`;
+        wrapper.appendChild(imported);
+        return wrapper;
+      }
+    } catch {
+      // Fall through to safe text rendering below.
+    }
   }
+  // No DOMParser available (test/SSR/legacy) — render nothing rather than
+  // injecting raw markup. Static call sites should never hit this path.
   return wrapper;
 }

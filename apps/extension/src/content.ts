@@ -29,12 +29,17 @@ import { extractPageMetadata } from './page-metadata';
 import type { PageMetadata } from './page-metadata';
 import { detectNLWeb } from './nlweb';
 import { setupInPagePanel } from './inPagePanel/setup';
+import {
+  validateShortcutActions,
+  MAX_CONTEXT_HTML_CHARS,
+  sanitizePageText,
+} from './background/policy';
 
 import type { ConsoleLogEntry } from './types';
 
-const MAX_CONTEXT_HTML_CHARS = 100_000;
-const MAX_CONSOLE_BUFFER = 200;
-const MAX_CONSOLE_ENTRY_CHARS = 1000;
+// MAX_CONTEXT_HTML_CHARS now imported from policy.ts (L-14 audit 2026-05-19).
+// MAX_CONSOLE_BUFFER removed with the patchConsole feature (M-13 audit 2026-05-19).
+// MAX_CONSOLE_ENTRY_CHARS removed with the patchConsole feature (M-13 audit 2026-05-19).
 const PAGE_EXTRACTION_TIMEOUT_MS = 5_000;
 /** Skip outerHTML extraction when the DOM exceeds this many elements to avoid
  *  multi-second event-loop stalls on pathological SPAs. */
@@ -66,6 +71,10 @@ const MAX_DOM_ELEMENTS_FOR_EXTRACTION = 50_000;
  * 2. Elapsed-time: discard if extraction itself took longer than
  *    PAGE_EXTRACTION_TIMEOUT_MS (DOM access is synchronous and uninterruptible).
  */
+// INVISIBLE_UNICODE_RE and sanitizePageText are now imported from
+// `./background/policy` so tests can share the exact regex and redaction
+// chain that production uses. See self-review #1 in the audit (2026-05-19).
+
 function extractPageHtmlSafely(): string {
   try {
     const elementCount = document.querySelectorAll('*').length;
@@ -82,12 +91,15 @@ function extractPageHtmlSafely(): string {
       logger.warn('Page-text extraction timed out, using empty content');
       return '';
     }
-    // Collapse runs of whitespace so the byte budget covers more semantic content.
+    // SECURITY (H-06 audit 2026-05-19, self-review #1 audit 2026-05-19):
+    // collapse whitespace, then route through the policy module's
+    // sanitizePageText helper \u2014 single pure function shared with tests.
     const collapsed = rawText
       .replace(/[\t \u00a0]+/g, ' ')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
-    return collapsed.substring(0, MAX_CONTEXT_HTML_CHARS);
+    const redacted = sanitizePageText(collapsed);
+    return redacted.substring(0, MAX_CONTEXT_HTML_CHARS);
   } catch (e) {
     logger.debug('Failed to extract page text (CSP or DOM error)', e);
     return '';
@@ -114,6 +126,10 @@ const automationState: AutomationState = {
   isRecording: false,
   recordedActions: [],
   connectionStatus: 'disconnected',
+  // SECURITY (C-05 audit 2026-05-19): default selector-only recording.
+  // Flipped via SET_RECORDING_VALUE_CAPTURE which the message router
+  // restricts to extension-page senders (EXTENSION_PAGE_ONLY_MESSAGE_TYPES).
+  captureValues: false,
 };
 let lastPointerTarget: Element | null = null;
 
@@ -138,17 +154,24 @@ function initialize(): void {
   // so there is no need to call syncPageContext() separately here.
   void notifyTabReady();
 
-  // SECURITY (chrome-SUB-5, audit 2026-05-05): the previous implementation
-  // patched `console.*` on EVERY page the content script ran on (`<all_urls>`
-  // — which is every http(s) page the user visits). The buffered logs were
-  // exposed to the desktop bridge via `GET_CONSOLE_LOGS`. A user navigating
-  // a bank site, healthcare portal, or any page that logs partial session
-  // state would have those entries forwarded to the LLM.
-  // Mitigation: only patch console for origins the user explicitly allowlisted
-  // for automation. Non-allowlisted origins skip the patch entirely.
-  void patchConsoleIfAllowlisted().catch((err) => {
-    logger.debug('patchConsoleIfAllowlisted failed (non-fatal)', err);
-  });
+  // SECURITY (M-13 audit 2026-05-19): console-patch removed entirely.
+  //
+  // The previous design monkey-patched `console.*` on allowlisted pages so
+  // GET_CONSOLE_LOGS could return buffered output. Two problems remained
+  // even with the chrome-SUB-5 allowlist gate:
+  //   1. Page scripts can detect the patch (`console.log.toString()` differs)
+  //      — a fingerprint of "AGI Workforce is recording this page".
+  //   2. Replacing the page's own `console` interferes with any page-level
+  //      tool that hooks `console` (Babel-loader source-map injectors,
+  //      logging libraries, dev-tool extensions).
+  //
+  // Console-log capture is now opt-out by default. If a future product
+  // flow needs the data, it can request via chrome.debugger / DevTools
+  // Protocol which is a documented per-tab API the user must explicitly
+  // attach to.
+  //
+  // Existing GET_CONSOLE_LOGS / CLEAR_CONSOLE_LOGS handlers still answer
+  // (returning the empty buffer) so callers don't crash.
 
   try {
     initWebMCP();
@@ -302,6 +325,11 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
 
     case 'GET_RECORDED_ACTIONS':
       return handleGetRecordedActions();
+
+    case 'SET_RECORDING_VALUE_CAPTURE' as ExtensionMessage['type']:
+      return handleSetRecordingValueCapture(
+        message as unknown as { enabled?: unknown },
+      );
 
     case 'WEBMCP_DISCOVER_TOOLS':
       return handleWebMCPDiscoverTools();
@@ -624,6 +652,21 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
 async function handleRunPageActions(message: RunPageActionsMessage): Promise<ExtensionResponse> {
   const taskId = message.taskId || `task_${Date.now()}`;
   const actions = Array.isArray(message.actions) ? message.actions : [];
+  // SECURITY (C-03 audit 2026-05-19): defense-in-depth — re-validate every
+  // action type before executing the plan. handleSaveShortcut now rejects
+  // bad action types at save time, but stored shortcuts from older
+  // extension versions (pre-validator) may still contain unknown types.
+  // Reject the entire plan rather than the existing per-action `default`
+  // path which silently skipped them while still running siblings.
+  if (actions.length > 0 && !validateShortcutActions(actions)) {
+    return {
+      success: false,
+      taskId,
+      error: 'Plan contains an unsupported action type.',
+      actionsPerformed: 0,
+      duration: 0,
+    } as ExtensionResponse;
+  }
   const startedAt = Date.now();
   const results: ActionExecutionResult[] = [];
   let actionsPerformed = 0;
@@ -1456,6 +1499,12 @@ async function handleClickAtCoordinates(
 ): Promise<ExtensionResponse> {
   try {
     const { x, y, button = 'left' } = message;
+    // M-15 audit 2026-05-19: explicit bounds check. `elementFromPoint`
+    // returns null for out-of-viewport coordinates, but a NaN / Infinity
+    // input would propagate through and silently fail. Reject early.
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) {
+      return { success: false, error: `Coordinates (${x}, ${y}) out of bounds` };
+    }
     const buttonIndex = button === 'right' ? 2 : button === 'middle' ? 1 : 0;
     const target = document.elementFromPoint(x, y);
     if (!target) {
@@ -1484,7 +1533,23 @@ async function handleClickAtCoordinates(
   }
 }
 
-function buildAccessibilityNode(element: Element, depth: number = 0): Record<string, unknown> {
+// SECURITY (M-12 audit 2026-05-19): cap the total number of nodes in the
+// generated accessibility tree. Without this, a hostile page with 100K+
+// nested elements would generate a multi-MB JSON serialization that
+// crosses the message boundary and stalls the renderer.
+const MAX_ACCESSIBILITY_TREE_NODES = 5000;
+
+interface AccessibilityWalkState {
+  count: number;
+  truncated: boolean;
+}
+
+function buildAccessibilityNode(
+  element: Element,
+  state: AccessibilityWalkState,
+  depth: number = 0,
+): Record<string, unknown> {
+  state.count += 1;
   const rect = element.getBoundingClientRect();
   const role = element.getAttribute('role') || element.tagName.toLowerCase();
   const label =
@@ -1507,10 +1572,14 @@ function buildAccessibilityNode(element: Element, depth: number = 0): Record<str
     children: [],
   };
 
-  if (depth < 8) {
+  if (depth < 8 && state.count < MAX_ACCESSIBILITY_TREE_NODES) {
     const childNodes: Record<string, unknown>[] = [];
     for (const child of Array.from(element.children)) {
-      childNodes.push(buildAccessibilityNode(child, depth + 1));
+      if (state.count >= MAX_ACCESSIBILITY_TREE_NODES) {
+        state.truncated = true;
+        break;
+      }
+      childNodes.push(buildAccessibilityNode(child, state, depth + 1));
     }
     node['children'] = childNodes;
   }
@@ -1521,8 +1590,14 @@ function buildAccessibilityNode(element: Element, depth: number = 0): Record<str
 function handleBuildAccessibilityTree(): ExtensionResponse {
   try {
     const root = document.body || document.documentElement;
-    const tree = buildAccessibilityNode(root);
-    return { success: true, data: tree } as ExtensionResponse;
+    const state: AccessibilityWalkState = { count: 0, truncated: false };
+    const tree = buildAccessibilityNode(root, state);
+    return {
+      success: true,
+      data: tree,
+      truncated: state.truncated,
+      nodeCount: state.count,
+    } as ExtensionResponse;
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
@@ -1542,6 +1617,49 @@ interface UserRecordedAction {
 }
 
 const _userRecordedActions: UserRecordedAction[] = [];
+
+// ─── C-05 recorded-value sanitization ─────────────────────────────────────────
+//
+// Local secret-pattern list. Mirrors the shared `redactSecrets` in
+// `packages/utils/src/logger.ts` so the recorder doesn't need a workspace dep
+// until Phase C2 lands. The patterns intentionally overlap with that helper —
+// when C2 ships, this can switch to `import { redactSecrets } from '@agiworkforce/utils'`
+// and the locally-defined REC_REDACTION_PATTERNS can be deleted.
+const REC_REDACTION_PATTERNS: ReadonlyArray<{ pattern: RegExp; replacement: string }> = [
+  { pattern: /sk-ant-[a-zA-Z0-9_-]{20,}/g, replacement: '[REDACTED_ANTHROPIC_KEY]' },
+  { pattern: /sk-[a-zA-Z0-9_-]{20,}/g, replacement: '[REDACTED_API_KEY]' },
+  { pattern: /AIzaSy[a-zA-Z0-9_-]{33}/g, replacement: '[REDACTED_GOOGLE_KEY]' },
+  { pattern: /AKIA[A-Z0-9]{16}/g, replacement: '[REDACTED_AWS_KEY]' },
+  { pattern: /gh[ps]_[a-zA-Z0-9]{36,}/g, replacement: '[REDACTED_GITHUB_TOKEN]' },
+  { pattern: /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, replacement: '[REDACTED_JWT]' },
+];
+
+/**
+ * Returns null for fields that should not be recorded at all (passwords),
+ * `'[REDACTED]'` for fields whose autocomplete declares sensitive content,
+ * and a secret-redacted string for everything else.
+ */
+function sanitizeRecordedValue(
+  target: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+): string | null {
+  if (target instanceof HTMLInputElement && target.type === 'password') {
+    return null; // never record password fields, even with [REDACTED] marker
+  }
+  const autocomplete = (target.getAttribute('autocomplete') ?? '').toLowerCase();
+  if (
+    /^cc-/.test(autocomplete) ||
+    autocomplete === 'current-password' ||
+    autocomplete === 'new-password' ||
+    autocomplete === 'one-time-code'
+  ) {
+    return '[REDACTED]';
+  }
+  let value = target.value ?? '';
+  for (const { pattern, replacement } of REC_REDACTION_PATTERNS) {
+    value = value.replace(pattern, replacement);
+  }
+  return value;
+}
 
 let _recordingClickListener: ((e: MouseEvent) => void) | null = null;
 let _recordingInputListener: ((e: Event) => void) | null = null;
@@ -1581,19 +1699,27 @@ function showRecordingIndicator(): void {
 
   const shadow = host.attachShadow({ mode: 'closed' });
   const style = document.createElement('style');
+  // Self-review #6 audit 2026-05-19: visually differentiate value-capture
+  // mode from selector-only via the pill background. Red (danger) means
+  // "values being recorded — passwords/cc dropped, others redacted";
+  // amber means "selector only — values never captured".
+  const isValueMode = automationState.captureValues;
+  const bgColor = isValueMode ? 'rgba(30,10,10,0.88)' : 'rgba(40,30,5,0.88)';
+  const accentColor = isValueMode ? '#ef4444' : '#f59e0b';
+  const borderColor = isValueMode ? 'rgba(220,38,38,0.5)' : 'rgba(245,158,11,0.5)';
   style.textContent = `
     .agi-rec-dot {
       display:inline-flex;align-items:center;gap:6px;
-      background:rgba(30,10,10,0.88);color:#f87171;
+      background:${bgColor};color:${accentColor};
       font-family:-apple-system,BlinkMacSystemFont,sans-serif;
       font-size:12px;font-weight:600;letter-spacing:0.04em;
       padding:5px 12px;border-radius:20px;
-      border:1px solid rgba(220,38,38,0.5);
+      border:1px solid ${borderColor};
       user-select:none;
     }
     .agi-rec-circle {
       width:9px;height:9px;border-radius:50%;
-      background:#ef4444;flex-shrink:0;
+      background:${accentColor};flex-shrink:0;
       animation:agi-rec-pulse 1.1s ease-in-out infinite;
     }
     @keyframes agi-rec-pulse {
@@ -1606,7 +1732,12 @@ function showRecordingIndicator(): void {
   const circle = document.createElement('div');
   circle.className = 'agi-rec-circle';
   badge.appendChild(circle);
-  badge.appendChild(document.createTextNode('REC'));
+  // SECURITY (C-05 audit 2026-05-19): make the capture mode visible to the
+  // user. "REC" alone hid the difference between selector-only and
+  // value-capture sessions; a value-capture recording can persist API
+  // keys / form contents to chrome.storage.local.
+  const modeLabel = automationState.captureValues ? 'REC (values)' : 'REC (selector only)';
+  badge.appendChild(document.createTextNode(modeLabel));
   shadow.appendChild(style);
   shadow.appendChild(badge);
   document.body.appendChild(host);
@@ -1641,12 +1772,23 @@ function attachRecordingListeners(): void {
       !(target instanceof HTMLSelectElement)
     )
       return;
-    _userRecordedActions.push({
+    // SECURITY (C-05 audit 2026-05-19): selector-only by default. When the
+    // user opts in to value capture, password / cc-* / one-time-code /
+    // current-password / new-password fields are redacted, and the
+    // remaining value is run through redactSecrets to catch API-key-shaped
+    // tokens the user might type into a tracked input.
+    const action: UserRecordedAction = {
       type: 'input',
       selector: buildCssSelector(target),
-      value: target.value,
       timestamp: Date.now(),
-    });
+    };
+    if (automationState.captureValues) {
+      const sanitizedValue = sanitizeRecordedValue(target);
+      if (sanitizedValue !== null) {
+        action.value = sanitizedValue;
+      }
+    }
+    _userRecordedActions.push(action);
   };
 
   // Throttle scroll recording — at most one entry per 500 ms.
@@ -1699,9 +1841,24 @@ function detachRecordingListeners(): void {
   }
 }
 
+function handleSetRecordingValueCapture(message: { enabled?: unknown }): ExtensionResponse {
+  const enabled = message.enabled === true;
+  automationState.captureValues = enabled;
+  // Re-render the indicator if we're currently recording so the user can
+  // see the change immediately.
+  if (automationState.isRecording) {
+    hideRecordingIndicator();
+    showRecordingIndicator();
+  }
+  return { success: true, captureValues: enabled } as ExtensionResponse;
+}
+
 function handleStartRecording(): ExtensionResponse {
+  // L-03 audit 2026-05-19: `automationState.recordedActions` is the legacy
+  // typed-state field; `_userRecordedActions` is the live buffer the
+  // recording listeners actually mutate. Resetting both implied dual
+  // ownership; reset only the live buffer here.
   automationState.isRecording = true;
-  automationState.recordedActions = [];
   _userRecordedActions.length = 0;
 
   detachRecordingListeners(); // defensive cleanup in case of double-start
@@ -1760,73 +1917,10 @@ async function checkConnectionStatus(): Promise<void> {
 
 let _indicatorShadow: ShadowRoot | null = null;
 
-/**
- * Wraps `patchConsole` with a same-origin allowlist gate. See chrome-SUB-5
- * comment at the call site in initialize(). Failing the gate is silent — the
- * extension simply doesn't buffer console output for this page.
- */
-async function patchConsoleIfAllowlisted(): Promise<void> {
-  let allowlist: Set<string>;
-  try {
-    const res = await chrome.storage.local.get('agi_site_allowlist');
-    const list = (res as Record<string, unknown>)['agi_site_allowlist'];
-    allowlist = new Set(Array.isArray(list) ? (list as string[]) : []);
-  } catch (e) {
-    logger.debug('Could not read agi_site_allowlist for console gating', e);
-    return;
-  }
-  const origin = window.location.origin;
-  if (!allowlist.has(origin)) {
-    logger.debug('Console buffering skipped — origin not on user allowlist', { origin });
-    return;
-  }
-  patchConsole();
-}
-
-/** Monkey-patch console to capture page logs. Our own logger is excluded via prefix check. */
-function patchConsole(): void {
-  const levels: Array<'log' | 'warn' | 'error' | 'info' | 'debug'> = [
-    'log',
-    'warn',
-    'error',
-    'info',
-    'debug',
-  ];
-
-  for (const level of levels) {
-    // eslint-disable-next-line no-console
-    const original = console[level];
-    // eslint-disable-next-line no-console
-    console[level] = (...args: unknown[]) => {
-      original.apply(console, args);
-
-      const firstArg = args[0];
-      if (typeof firstArg === 'string' && firstArg.startsWith('[AGI Workforce]')) return;
-
-      const message = args
-        .map((a) => {
-          if (typeof a === 'string') return a;
-          try {
-            return JSON.stringify(a);
-          } catch {
-            return String(a);
-          }
-        })
-        .join(' ')
-        .slice(0, MAX_CONSOLE_ENTRY_CHARS);
-
-      consoleLogBuffer.push({
-        level,
-        message,
-        timestamp: Date.now(),
-      });
-
-      while (consoleLogBuffer.length > MAX_CONSOLE_BUFFER) {
-        consoleLogBuffer.shift();
-      }
-    };
-  }
-}
+// SECURITY (M-13 audit 2026-05-19): patchConsole / patchConsoleIfAllowlisted
+// removed. See the comment in initialize() for the rationale. The
+// `consoleLogBuffer` and GET_CONSOLE_LOGS handlers remain so existing
+// callers continue to receive a (now always empty) buffer.
 
 /** Shadow DOM prevents page CSS/JS from hiding or detecting the indicator. */
 function addAutomationIndicator(): void {
@@ -1847,7 +1941,7 @@ function addAutomationIndicator(): void {
     .agi-indicator {
       width: 40px;
       height: 40px;
-      background: radial-gradient(circle, #667eea 0%, #764ba2 100%);
+      background: radial-gradient(circle, #21808d 0%, #da7756 100%);
       border-radius: 50%;
       display: flex;
       align-items: center;
@@ -1855,7 +1949,7 @@ function addAutomationIndicator(): void {
       color: white;
       font-size: 20px;
       cursor: pointer;
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      box-shadow: 0 4px 12px rgba(33, 128, 141, 0.3);
       font-family: system-ui, -apple-system, sans-serif;
       user-select: none;
       pointer-events: all;
@@ -1886,8 +1980,8 @@ function updateIndicatorStatus(): void {
   if (indicator) {
     const isConnected = automationState.connectionStatus === 'connected';
     indicator.style.background = isConnected
-      ? 'radial-gradient(circle, #28a745 0%, #20c997 100%)'
-      : 'radial-gradient(circle, #dc3545 0%, #fd7e14 100%)';
+      ? 'radial-gradient(circle, #16a34a 0%, #22c55e 100%)'
+      : 'radial-gradient(circle, #dc2626 0%, #ef4444 100%)';
   }
 }
 
@@ -2023,6 +2117,7 @@ const VALID_MESSAGE_TYPES = new Set([
   'START_RECORDING',
   'STOP_RECORDING',
   'GET_RECORDED_ACTIONS',
+  'SET_RECORDING_VALUE_CAPTURE',
   // WebMCP
   'WEBMCP_DISCOVER_TOOLS',
   'WEBMCP_CALL_TOOL',

@@ -3,19 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AGI Workforce</title>
-    <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-      html,
-      body {
-        height: 100%;
-        background: #0f0f14;
-      }
-    </style>
+    <title>AGI</title>
+    <!--
+      M-08 audit 2026-05-19: minimal reset CSS extracted to side_panel.css.
+      The rest of the side panel's styles are injected dynamically by
+      side_panel.ts:injectStyles via Constructable Stylesheets
+      (`document.adoptedStyleSheets`), which is CSP-compliant — no <style>
+      tag is created at runtime.
+    -->
+    <link rel="stylesheet" href="./side_panel.css" />
   </head>
   <body>
     <script type="module" src="./side_panel.js"></script>

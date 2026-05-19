@@ -6,6 +6,13 @@ import {
   type LlmChatMessage,
 } from '../utils/api';
 import { Config } from '../utils/config';
+import { isSensitiveFile } from '../utils/pathSafety';
+
+// PR-2D (F-09): in addition to the canonical sensitive-file denylist,
+// refuse inline completion in any file whose name suggests it holds
+// secrets/credentials — even if not matched by the exact regex set.
+const SECRETY_NAME_PATTERN =
+  /(secret|credential|password|passwd|apikey|api[_-]key|token|private[_-]key)/i;
 
 const MIN_PREFIX_CHARS = 3;
 const MAX_CONTEXT_LINES = 80;
@@ -98,6 +105,15 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
     token: vscode.CancellationToken,
   ): Promise<vscode.InlineCompletionList | vscode.InlineCompletionItem[] | undefined> {
     if (!Config.inlineCompletionsEnabled() || this.paywallSuppressed) {
+      return [];
+    }
+
+    // PR-2D (F-09): refuse inline completions in sensitive files so that
+    // .env, .pem, .ssh/, credentials, etc. never flow to the LLM API
+    // on each keystroke. Also catches name-based hints
+    // (`my-secret.ts`, `apikey.config`) via the substring pattern.
+    const fsPath = document.uri.fsPath;
+    if (isSensitiveFile(fsPath) || SECRETY_NAME_PATTERN.test(fsPath)) {
       return [];
     }
 
