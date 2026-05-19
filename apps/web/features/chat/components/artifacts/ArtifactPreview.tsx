@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { Button } from '@shared/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
 import {
@@ -24,6 +24,8 @@ import {
 } from '@shared/ui/dropdown-menu';
 import { sanitizeArtifact, sanitizeSVG, hasXSSRisk } from '@shared/utils/html-sanitizer';
 import { Alert, AlertDescription } from '@shared/ui/alert';
+import { SandboxedIframe } from '../SandboxedIframe';
+import type { ArtifactRenderPayload, ArtifactKind } from '@/lib/artifact-sandbox';
 
 export interface ArtifactVersion {
   id: string;
@@ -75,7 +77,8 @@ export function ArtifactPreview({
   const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [securityWarning, setSecurityWarning] = useState(false);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  // WEB-13 / WEB-20: bumped on refresh to force iframe re-mount.
+  const [refreshKey, setRefreshKey] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const getPreviewHTML = useCallback((): string => {
@@ -198,19 +201,31 @@ export function ArtifactPreview({
     }
   }, [artifact]);
 
-  // Update iframe content when artifact changes
-  useEffect(() => {
-    if (activeTab === 'preview' && iframeRef.current) {
-      const iframe = iframeRef.current;
-      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-
-      if (iframeDoc) {
-        iframeDoc.open();
-        iframeDoc.write(getPreviewHTML());
-        iframeDoc.close();
-      }
+  // WEB-13 / WEB-20: build the cross-origin sandbox payload from the artifact.
+  // SandboxedIframe will post this to sandbox.agiworkforce.com (if configured)
+  // or fall back to a same-origin srcDoc iframe with sandbox="allow-scripts"
+  // (no allow-same-origin).
+  const sandboxPayload = useMemo<ArtifactRenderPayload>(() => {
+    const content =
+      artifact.versions && artifact.currentVersion !== undefined
+        ? artifact!.versions[artifact.currentVersion]!.content
+        : artifact.content;
+    const sanitized = sanitizeArtifact(content, artifact.type);
+    const kind: ArtifactKind =
+      artifact.type === 'code' ? 'code' : (artifact.type as ArtifactKind);
+    switch (artifact.type) {
+      case 'html':
+        return { type: 'render', kind: 'html', html: sanitized, runScripts: true };
+      case 'react':
+        return { type: 'render', kind: 'react', code: sanitized };
+      case 'svg':
+        return { type: 'render', kind: 'svg', svg: sanitizeSVG(content) };
+      case 'mermaid':
+        return { type: 'render', kind: 'mermaid', code: content };
+      default:
+        return { type: 'render', kind, text: content };
     }
-  }, [artifact.content, artifact.currentVersion, activeTab, getPreviewHTML]);
+  }, [artifact]);
 
   const handleCopy = async () => {
     const content =
@@ -269,15 +284,9 @@ export function ArtifactPreview({
   };
 
   const handleRefresh = () => {
-    if (iframeRef.current) {
-      const iframe = iframeRef.current;
-      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-      if (iframeDoc) {
-        iframeDoc.open();
-        iframeDoc.write(getPreviewHTML());
-        iframeDoc.close();
-      }
-    }
+    // WEB-13: bump refreshKey to re-mount the SandboxedIframe; the new
+    // iframe load triggers a fresh sandbox-ready + payload post.
+    setRefreshKey((k) => k + 1);
   };
 
   const handleFullscreen = () => {
@@ -436,11 +445,12 @@ export function ArtifactPreview({
         {canPreview && (
           <TabsContent value="preview" className="m-0 p-0">
             <div className={cn('bg-white', isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[500px]')}>
-              <iframe
-                ref={iframeRef}
+              <SandboxedIframe
+                payload={sandboxPayload}
+                fallbackSrcDoc={getPreviewHTML()}
                 title={artifact.title || 'Artifact Preview'}
-                sandbox="allow-scripts allow-same-origin"
                 className="h-full w-full border-0"
+                refreshKey={refreshKey}
               />
             </div>
           </TabsContent>

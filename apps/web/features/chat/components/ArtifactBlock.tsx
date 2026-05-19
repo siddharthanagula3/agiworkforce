@@ -16,11 +16,13 @@
  *   content  – the full assistant message text
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState } from 'react';
 import { Copy, Check, ExternalLink, RefreshCw } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import dynamic from 'next/dynamic';
 import { cn } from '@shared/lib/utils';
+import { SandboxedIframe } from './SandboxedIframe';
+import type { ArtifactRenderPayload } from '@/lib/artifact-sandbox';
 
 // Mermaid is ~250KB. Only loaded when a message actually contains a `mermaid`
 // fenced code block — saves the cost on every chat session without diagrams.
@@ -94,17 +96,17 @@ function CopyButton({ text, className }: { text: string; className?: string }) {
 
 // ─── HTML block ──────────────────────────────────────────────────────────────
 
+/**
+ * WEB-13 (audit 2026-05-19): renders LLM HTML inside the cross-origin
+ * sandbox (`sandbox.agiworkforce.com`) when `NEXT_PUBLIC_SANDBOX_ORIGIN`
+ * is configured. Falls back to a same-origin `srcDoc` iframe with
+ * `sandbox="allow-scripts"` (no `allow-same-origin`) when the subdomain
+ * isn't deployed yet — strictly safer than the previous dual-flag state.
+ */
 function HtmlBlock({ code }: { code: string }) {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [key, setKey] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  const writeToIframe = useCallback(() => {
-    const iframe = iframeRef.current;
-    if (!iframe) return;
-    const doc = iframe.contentDocument ?? iframe.contentWindow?.document;
-    if (!doc) return;
-
-    const html = `<!DOCTYPE html>
+  const fallbackSrcDoc = `<!DOCTYPE html>
 <html>
   <head>
     <meta charset="UTF-8">
@@ -112,20 +114,19 @@ function HtmlBlock({ code }: { code: string }) {
     <meta http-equiv="Content-Security-Policy"
           content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https:;
                    script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net;
-                   style-src 'self' 'unsafe-inline' https:;">
+                   style-src 'self' 'unsafe-inline' https:;
+                   connect-src 'none';">
     <style>body { margin: 0; padding: 16px; font-family: system-ui, -apple-system, sans-serif; }</style>
   </head>
   <body>${code}</body>
 </html>`;
 
-    doc.open();
-    doc.write(html);
-    doc.close();
-  }, [code]);
-
-  useEffect(() => {
-    writeToIframe();
-  }, [writeToIframe, key]);
+  const payload: ArtifactRenderPayload = {
+    type: 'render',
+    kind: 'html',
+    html: code,
+    runScripts: true,
+  };
 
   return (
     <div className="my-3 overflow-hidden rounded-lg border border-border">
@@ -135,7 +136,7 @@ function HtmlBlock({ code }: { code: string }) {
           <button
             type="button"
             aria-label="Refresh preview"
-            onClick={() => setKey((k) => k + 1)}
+            onClick={() => setRefreshKey((k) => k + 1)}
             className="flex items-center gap-1 h-7 px-2 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
           >
             <RefreshCw className="h-3 w-3" aria-hidden="true" />
@@ -159,11 +160,12 @@ function HtmlBlock({ code }: { code: string }) {
         </div>
       </div>
       <div className="h-[340px] bg-white">
-        <iframe
-          ref={iframeRef}
+        <SandboxedIframe
+          payload={payload}
+          fallbackSrcDoc={fallbackSrcDoc}
           title="HTML preview"
-          sandbox="allow-scripts allow-same-origin"
           className="h-full w-full border-0"
+          refreshKey={refreshKey}
         />
       </div>
     </div>

