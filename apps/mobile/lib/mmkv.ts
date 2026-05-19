@@ -22,6 +22,25 @@ const MMKV_INSTANCE_ID = 'agiworkforce-mobile';
 /** Module-level singleton — replaced with an encrypted instance by initMmkvEncryption(). */
 let _storage: MMKV | null = null;
 
+// AUDIT-FIX: MMKV-RACE — drain queue once encrypted storage is ready so
+// stores using `skipHydration` can rehydrate from real persisted state
+// rather than racing default values against the first post-init setItem.
+let readyCallbacks: Array<() => void> = [];
+
+/**
+ * Register a callback to fire as soon as encrypted MMKV is open. Fires
+ * synchronously if storage is already initialised. Used by Zustand stores
+ * that opted into `skipHydration: true` to trigger `useStore.persist.rehydrate()`
+ * at the right moment.
+ */
+export function whenMmkvReady(cb: () => void): void {
+  if (_storage) {
+    cb();
+    return;
+  }
+  readyCallbacks.push(cb);
+}
+
 /**
  * Lazily get the MMKV instance.
  * If encryption has not been initialised yet (first JS frame before the async
@@ -30,7 +49,6 @@ let _storage: MMKV | null = null;
  */
 function getStorage(): MMKV {
   if (!_storage) {
-    console.warn('[mmkv] Storage not yet initialized, returning no-op');
     return new Proxy({} as MMKV, {
       get: () => () => undefined,
     });
@@ -98,6 +116,18 @@ export async function initMmkvEncryption(): Promise<void> {
   }
 
   _storage = new MMKV({ id: MMKV_INSTANCE_ID, encryptionKey: key });
+
+  // AUDIT-FIX: MMKV-RACE — drain pending readiness callbacks so stores
+  // configured with `skipHydration: true` can now call rehydrate().
+  const queued = readyCallbacks;
+  readyCallbacks = [];
+  queued.forEach((cb) => {
+    try {
+      cb();
+    } catch (err) {
+      console.warn('[mmkv] whenMmkvReady callback threw:', err);
+    }
+  });
 }
 
 /**

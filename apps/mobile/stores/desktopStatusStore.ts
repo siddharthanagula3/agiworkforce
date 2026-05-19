@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage } from '@/lib/mmkv';
+import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
 
 /** How recently a heartbeat must be to consider the desktop "online" (ms). */
 const ONLINE_THRESHOLD_MS = 90_000;
@@ -54,6 +54,8 @@ export const useDesktopStatusStore = create<DesktopStatusState>()(
     {
       name: 'desktop-status-store',
       storage: createJSONStorage(() => mmkvStorage),
+      // AUDIT-FIX: MMKV-RACE
+      skipHydration: true,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[desktopStatusStore] Hydration failed:', error);
       },
@@ -65,3 +67,7 @@ export const useDesktopStatusStore = create<DesktopStatusState>()(
     },
   ),
 );
+
+whenMmkvReady(() => {
+  useDesktopStatusStore.persist.rehydrate();
+});

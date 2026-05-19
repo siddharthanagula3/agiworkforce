@@ -46,6 +46,7 @@ describe('recognizeText', () => {
 
 describe('TaskChipType includes scan', () => {
   it('exports scan as a valid chip type', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { TaskChips } = require('../components/chat/TaskChips');
     expect(TaskChips).toBeDefined();
   });

@@ -89,6 +89,7 @@ const mockSignInWithIdToken = _SupabaseMock.supabase.auth.signInWithIdToken;
 
 // mmkv is not used by authStore but may be imported transitively.
 jest.mock('../lib/mmkv', () => ({
+  whenMmkvReady: jest.fn((cb) => cb()),
   mmkvStorage: {
     getItem: jest.fn().mockReturnValue(null),
     setItem: jest.fn(),

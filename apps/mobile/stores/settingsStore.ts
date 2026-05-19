@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage } from '@/lib/mmkv';
+import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
 import type { AutoApproveMode } from '@/types/chat';
 
 export type ThemeMode = 'dark' | 'light' | 'system';
@@ -136,9 +136,15 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: 'settings-store',
       storage: createJSONStorage(() => mmkvStorage),
+      // AUDIT-FIX: MMKV-RACE — defer rehydration until encrypted MMKV is open.
+      skipHydration: true,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[settingsStore] Hydration failed:', error);
       },
     },
   ),
 );
+
+whenMmkvReady(() => {
+  useSettingsStore.persist.rehydrate();
+});

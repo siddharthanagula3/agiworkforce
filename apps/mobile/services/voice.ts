@@ -1,22 +1,152 @@
-import { Audio, type AudioMode } from 'expo-av';
+// AUDIT-FIX: STT-WIRE
+/**
+ * Voice service — thin facade over services/voiceInput.ts (on-device STT).
+ *
+ * The cloud Whisper + Deepgram helpers below are retained for v1.1 (cloud chat)
+ * and gated behind FEATURES.cloudChat — they throw {@link CloudVoiceDisabledError}
+ * in v1.
+ */
+
+import { Platform } from 'react-native';
 import { API_URL, TIMEOUTS } from '@/lib/constants';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 import { supabase } from './supabase';
 import { secureFetch } from './secureFetch';
+import {
+  startCapture,
+  stopCapture,
+  cancelCapture,
+  isCapturing,
+  getLatestPartial,
+  type VoiceInputMeteringEvent,
+  type OnDeviceTranscriptResult,
+} from './voiceInput';
+export { VoiceCaptureError, type VoicePartialResult } from './voiceInput';
 
-// CRIT-MOB-02 fix (2026-05-04): ephemeral Deepgram token endpoint.
-// The backend mints a short-lived (<60s) Deepgram temp token scoped to a
-// single usage. The master Deepgram key never leaves the server.
-interface EphemeralTokenResponse {
-  token: string;
-  expiresAt: number; // unix ms
+export class CloudVoiceDisabledError extends Error {
+  constructor(feature: string) {
+    super(`[voice] ${feature} requires FEATURES.cloudChat (v1.1+).`);
+    this.name = 'CloudVoiceDisabledError';
+  }
+}
+
+// Re-exports used by the rest of the app under the legacy names.
+export type VoiceMeteringEvent = VoiceInputMeteringEvent & {
+  /** Always false here — recognition completion is delivered via the on-device callback. */
+  isDoneRecording: boolean;
+};
+
+export interface TranscriptionResult {
+  text: string;
+}
+
+type MeteringCallback = (event: VoiceMeteringEvent) => void;
+
+let _lastResult: OnDeviceTranscriptResult | null = null;
+let _activeCapturePromise: Promise<OnDeviceTranscriptResult> | null = null;
+
+/** Re-exported for callers that wired permission UX into the chat input. */
+export async function checkPermission(): Promise<boolean> {
+  const { requestMicPermission } = await import('./voiceInput');
+  return requestMicPermission();
 }
 
 /**
- * Request a short-lived Deepgram token from the backend.
- * Valid for ~60 seconds. Use immediately for transcription.
- * Throws on network error or backend unavailability.
+ * Start on-device recording + recognition. The optional `onMetering` callback
+ * receives a synthetic VoiceMeteringEvent on each volume sample so the existing
+ * RecordingOverlay UI keeps working without code changes.
+ */
+export async function startRecording(onMetering?: MeteringCallback): Promise<void> {
+  if (_activeCapturePromise) {
+    throw new Error('Recording already in progress');
+  }
+  _lastResult = null;
+  const meteringAdapter = onMetering
+    ? (ev: VoiceInputMeteringEvent) =>
+        onMetering({
+          metering: ev.metering,
+          durationMillis: ev.durationMillis,
+          isDoneRecording: false,
+        })
+    : undefined;
+
+  _activeCapturePromise = startCapture(meteringAdapter).then((result) => {
+    _lastResult = result;
+    return result;
+  });
+  _activeCapturePromise.catch(() => {
+    // Caller of stopRecording / transcribe handles errors.
+  });
+}
+
+/**
+ * Stop recording and return the recognized transcript URI placeholder.
+ *
+ * Legacy callers expected a file URI for upload. With on-device STT there's
+ * no audio file to upload — the transcript is already available. We return
+ * an empty string for compatibility; `transcribe()` consults the in-memory
+ * result instead.
+ */
+export async function stopRecording(): Promise<string> {
+  if (!_activeCapturePromise) {
+    throw new Error('No recording in progress');
+  }
+  await stopCapture();
+  try {
+    await _activeCapturePromise;
+  } finally {
+    _activeCapturePromise = null;
+  }
+  return '';
+}
+
+/** Cancel an in-progress recording without producing a transcript. */
+export async function cancelRecording(): Promise<void> {
+  if (!_activeCapturePromise) return;
+  await cancelCapture();
+  try {
+    await _activeCapturePromise;
+  } catch {
+    // expected — cancelCapture rejects the inner promise
+  }
+  _activeCapturePromise = null;
+  _lastResult = null;
+}
+
+/** Mirror of the legacy isRecording() helper. */
+export function isRecording(): boolean {
+  return isCapturing();
+}
+
+/**
+ * Return the transcript from the just-finished on-device recognition.
+ * The `uri` argument is ignored — kept for API compatibility.
+ */
+export async function transcribe(_uri: string): Promise<TranscriptionResult> {
+  void _uri;
+  if (_lastResult) {
+    return { text: _lastResult.text };
+  }
+  return { text: getLatestPartial() };
+}
+
+// ---------------------------------------------------------------------------
+// Cloud paths (gated behind FEATURES.cloudChat — v1.1+)
+// ---------------------------------------------------------------------------
+
+interface EphemeralTokenResponse {
+  token: string;
+  expiresAt: number;
+}
+
+/**
+ * Request a short-lived Deepgram token from the backend (cloud-only).
+ * @throws CloudVoiceDisabledError when FEATURES.cloudChat is false.
  */
 export async function getDeepgramEphemeralToken(): Promise<string> {
+  if (!FEATURES.cloudChat) {
+    throw new CloudVoiceDisabledError('getDeepgramEphemeralToken');
+  }
   const { data } = await supabase.auth.getSession();
   const authToken = data.session?.access_token;
 
@@ -37,7 +167,6 @@ export async function getDeepgramEphemeralToken(): Promise<string> {
       const body = await response.text();
       throw new Error(`Voice token request failed: HTTP ${response.status} — ${body}`);
     }
-
     const result = (await response.json()) as EphemeralTokenResponse;
     return result.token;
   } finally {
@@ -45,266 +174,17 @@ export async function getDeepgramEphemeralToken(): Promise<string> {
   }
 }
 
-/**
- * Voice recording and speech-to-text service.
- * Uses expo-av for recording and the API gateway Whisper endpoint for transcription.
- */
-
-/** Recording quality preset for voice messages */
-const RECORDING_OPTIONS: Audio.RecordingOptions = {
-  isMeteringEnabled: true,
-  android: {
-    extension: '.m4a',
-    outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-    audioEncoder: Audio.AndroidAudioEncoder.AAC,
-    sampleRate: 44100,
-    numberOfChannels: 1,
-    bitRate: 128000,
-  },
-  ios: {
-    extension: '.m4a',
-    outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
-    audioQuality: Audio.IOSAudioQuality.HIGH,
-    sampleRate: 44100,
-    numberOfChannels: 1,
-    bitRate: 128000,
-    linearPCMBitDepth: 16,
-    linearPCMIsBigEndian: false,
-    linearPCMIsFloat: false,
-  },
-  web: {
-    mimeType: 'audio/webm',
-    bitsPerSecond: 128000,
-  },
-};
-
-/** Audio mode for recording */
-const RECORDING_MODE: Partial<AudioMode> = {
-  allowsRecordingIOS: true,
-  playsInSilentModeIOS: true,
-  staysActiveInBackground: false,
-  shouldDuckAndroid: true,
-};
-
-/** Audio mode for playback */
-const PLAYBACK_MODE: Partial<AudioMode> = {
-  allowsRecordingIOS: false,
-  playsInSilentModeIOS: true,
-  staysActiveInBackground: false,
-  shouldDuckAndroid: true,
-};
-
-export interface TranscriptionResult {
-  text: string;
-}
-
-export interface VoiceMeteringEvent {
-  /** Metering level in dB (-160 to 0) */
-  metering: number;
-  /** Duration in milliseconds */
-  durationMillis: number;
-  /** Whether recording is complete */
-  isDoneRecording: boolean;
-}
-
-type MeteringCallback = (event: VoiceMeteringEvent) => void;
-
-let activeRecording: Audio.Recording | null = null;
-let meteringInterval: ReturnType<typeof setInterval> | null = null;
-
-/**
- * Check and request microphone permission.
- * Returns true if permission is granted.
- */
-export async function checkPermission(): Promise<boolean> {
-  const { status: existingStatus } = await Audio.getPermissionsAsync();
-  if (existingStatus === 'granted') return true;
-
-  const { status } = await Audio.requestPermissionsAsync();
-  return status === 'granted';
-}
-
-/**
- * Start audio recording.
- * Optionally provide a callback for metering updates (~60fps).
- * @throws if permission denied or recording already active
- */
-export async function startRecording(onMetering?: MeteringCallback): Promise<void> {
-  if (activeRecording) {
-    throw new Error('Recording already in progress');
-  }
-
-  const permitted = await checkPermission();
-  if (!permitted) {
-    throw new Error('Microphone permission denied');
-  }
-
-  await Audio.setAudioModeAsync(RECORDING_MODE);
-
-  const recording = new Audio.Recording();
-  try {
-    await recording.prepareToRecordAsync(RECORDING_OPTIONS);
-    await recording.startAsync();
-  } catch (error) {
-    // Clean up the recording object if prepare or start fails
-    clearMeteringInterval();
-    try {
-      await recording.stopAndUnloadAsync();
-    } catch {
-      // Ignore cleanup errors
-    }
-    throw error;
-  }
-
-  activeRecording = recording;
-
-  // Metering polling (~15 fps is sufficient for smooth UI)
-  if (onMetering) {
-    meteringInterval = setInterval(async () => {
-      if (!activeRecording) return;
-      try {
-        const status = await activeRecording.getStatusAsync();
-        if (status.isRecording) {
-          onMetering({
-            metering: status.metering ?? -160,
-            durationMillis: status.durationMillis,
-            isDoneRecording: false,
-          });
-        }
-      } catch {
-        // Recording may have been stopped between check and status call
-      }
-    }, 67); // ~15fps
-  }
-}
-
-/**
- * Stop recording and return the file URI.
- * @returns Local file URI of the recorded audio
- */
-export async function stopRecording(): Promise<string> {
-  if (!activeRecording) {
-    throw new Error('No recording in progress');
-  }
-
-  clearMeteringInterval();
-
-  const recording = activeRecording;
-  activeRecording = null; // Clear before async ops to prevent stale reference
-
-  await recording.stopAndUnloadAsync();
-  await Audio.setAudioModeAsync(PLAYBACK_MODE);
-
-  const uri = recording.getURI();
-
-  if (!uri) {
-    throw new Error('Recording failed: no URI returned');
-  }
-
-  return uri;
-}
-
-/**
- * Cancel the current recording without saving.
- */
-export async function cancelRecording(): Promise<void> {
-  if (!activeRecording) return;
-
-  clearMeteringInterval();
-
-  try {
-    await activeRecording.stopAndUnloadAsync();
-  } catch {
-    // Ignore errors during cancel
-  }
-
-  await Audio.setAudioModeAsync(PLAYBACK_MODE);
-  activeRecording = null;
-}
-
-/**
- * Check if a recording is currently in progress.
- */
-export function isRecording(): boolean {
-  return activeRecording !== null;
-}
-
-/**
- * Upload recorded audio to the Whisper transcription endpoint.
- * @param uri - Local file URI from stopRecording()
- * @returns Transcribed text
- */
-export async function transcribe(uri: string): Promise<TranscriptionResult> {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
-
-  // Build multipart form data
-  // React Native's FormData accepts { uri, type, name } objects for file uploads.
-  // The standard Blob type doesn't apply; cast to `any` for the RN-specific API.
-  const formData = new FormData();
-  const filePayload: { uri: string; type: string; name: string } = {
-    uri,
-    type: 'audio/m4a',
-    name: 'recording.m4a',
-  };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  formData.append('audio', filePayload as any);
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), TIMEOUTS.UPLOAD);
-
-  try {
-    const response = await secureFetch(`${API_URL}/api/voice/transcribe`, {
-      method: 'POST',
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        // Let fetch set Content-Type with boundary for multipart
-      },
-      body: formData,
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(`Transcription failed: HTTP ${response.status} — ${body}`);
-    }
-
-    const result = (await response.json()) as TranscriptionResult;
-    return result;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-/** Clean up metering interval */
-function clearMeteringInterval() {
-  if (meteringInterval) {
-    clearInterval(meteringInterval);
-    meteringInterval = null;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Deepgram direct transcription (via server-issued ephemeral token)
-// ---------------------------------------------------------------------------
 const DEEPGRAM_ENDPOINT = 'https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true';
 
 /**
- * Transcribe a local audio URI directly via Deepgram's pre-recorded API.
- * Used for hold-to-record PTT.
- *
- * CRIT-MOB-02 (2026-05-04): The caller must obtain an ephemeral token from
- * the backend via `getDeepgramEphemeralToken()` — never pass a long-lived API
- * key. The token is valid for ~60 seconds and cannot be used to mint further
- * tokens or access Deepgram's admin API.
- *
- * @param uri           - Local file URI (m4a) from stopRecording()
- * @param ephemeralToken - Short-lived Deepgram token from getDeepgramEphemeralToken()
- * @returns Transcript string (empty string on silence/failure)
+ * Transcribe a local audio URI directly via Deepgram (cloud-only).
+ * @throws CloudVoiceDisabledError when FEATURES.cloudChat is false.
  */
 export async function transcribeWithDeepgram(uri: string, ephemeralToken: string): Promise<string> {
+  if (!FEATURES.cloudChat) {
+    throw new CloudVoiceDisabledError('transcribeWithDeepgram');
+  }
   const formData = new FormData();
-  // React Native FormData accepts { uri, type, name } for file blobs.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   formData.append('audio', { uri, type: 'audio/m4a', name: 'recording.m4a' } as any);
 
@@ -322,17 +202,14 @@ export async function transcribeWithDeepgram(uri: string, ephemeralToken: string
     if (!response.ok) {
       throw new Error(`Deepgram transcription failed (HTTP ${response.status})`);
     }
-
     const data = (await response.json()) as {
-      results?: {
-        channels?: Array<{
-          alternatives?: Array<{ transcript?: string }>;
-        }>;
-      };
+      results?: { channels?: Array<{ alternatives?: Array<{ transcript?: string }> }> };
     };
-
     return data?.results?.channels?.[0]?.alternatives?.[0]?.transcript?.trim() ?? '';
   } finally {
     clearTimeout(timeoutId);
   }
 }
+
+// Suppress unused-platform warning until cloud paths re-enable Platform-specific logic.
+void Platform;

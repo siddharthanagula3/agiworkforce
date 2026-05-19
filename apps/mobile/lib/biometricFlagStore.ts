@@ -51,22 +51,25 @@ interface BiometricFlagState {
   setEnabled: (next: boolean) => Promise<void>;
 }
 
+// AUDIT-FIX: H-10 — fail-CLOSED default. The in-memory `enabled` field starts
+// at `true` so any UI rendered before hydration completes treats the device
+// as locked. Hydration may downgrade the flag to `false` only when the user
+// previously opted out (SecureStore returns the literal string 'false').
 export const useBiometricFlag = create<BiometricFlagState>((set) => ({
   hydrated: false,
-  enabled: false,
+  enabled: true,
   hydrate: async () => {
     try {
       const stored = await SecureStore.getItemAsync(STORAGE_KEY);
-      // Only the literal string 'true' enables the gate — anything else
-      // (null, 'false', legacy garbage) keeps it disabled. We store as
-      // string because SecureStore's API is string-only.
-      set({ hydrated: true, enabled: stored === 'true' });
+      // The flag is enabled by default. A persisted 'false' is the only way
+      // to disable it. Null / unparseable values are treated as enabled so
+      // a corrupt write can never silently unlock the app.
+      set({ hydrated: true, enabled: stored !== 'false' });
     } catch (err) {
       console.warn('[biometricFlag] SecureStore read failed:', err);
-      // Fail-closed-ish: mark hydrated so the app can boot, but leave
-      // enabled=false so we don't lock the user out of an app that has a
-      // broken SecureStore on the device.
-      set({ hydrated: true, enabled: false });
+      // Fail-CLOSED: keep enabled=true so the gate stays up. Mark hydrated
+      // so the app can still boot past the splash.
+      set({ hydrated: true, enabled: true });
     }
   },
   setEnabled: async (next: boolean) => {

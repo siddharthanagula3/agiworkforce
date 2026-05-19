@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage } from '@/lib/mmkv';
+import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
 import { SignalingClient } from '@agiworkforce/utils';
 import type { SignalingEvent, SignalKind } from '@agiworkforce/types';
 import { RTCPeerConnection, RTCSessionDescription, RTCIceCandidate } from 'react-native-webrtc';
@@ -154,11 +154,15 @@ let dataChannel: RTCDataChannelType | null = null;
 
 /**
  * Parse the pairing code from a QR string.
- * Accepts raw codes or the `agiw:XXXXXXXX` format.
- * Normalizes to uppercase to match server-generated codes (`/^[A-Z0-9]{8}$/`).
+ * Accepts raw codes or the `agiw:XXXXXXXXXXXX` format.
+ *
+ * AUDIT-FIX: H-12 — server now mints 12-char codes (62^12 ≈ 71 bits IKM).
+ * We strip out human-readable separators (spaces or '-') that the desktop
+ * UI may print to display the code as 3 groups of 4. Matches against
+ * `/^[A-Z0-9]{12}$/`; 8-char codes are accepted transitionally.
  */
 function parsePairingCode(raw: string): string {
-  const trimmed = raw.trim();
+  const trimmed = raw.trim().replace(/[\s-]/g, '');
   if (trimmed.startsWith('agiw:')) {
     return trimmed.slice(5).toUpperCase();
   }
@@ -852,6 +856,8 @@ export const useConnectionStore = create<ConnectionState>()(
     {
       name: 'connection-store',
       storage: createJSONStorage(() => mmkvStorage),
+      // AUDIT-FIX: MMKV-RACE
+      skipHydration: true,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[connectionStore] Hydration failed:', error);
       },
@@ -863,6 +869,10 @@ export const useConnectionStore = create<ConnectionState>()(
     },
   ),
 );
+
+whenMmkvReady(() => {
+  useConnectionStore.persist.rehydrate();
+});
 
 /**
  * Convert raw signaling error strings to user-friendly messages.

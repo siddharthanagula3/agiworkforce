@@ -360,11 +360,12 @@ export class DeepSeekProvider {
    * Get models by capability
    */
   static getModelsByCapability(): Record<string, string[]> {
+    const all = [...SUPPORTED_DEEPSEEK_MODELS];
     return {
-      chat: ['deepseek-chat'],
-      reasoning: ['deepseek-reasoner'],
-      coding: ['deepseek-chat', 'deepseek-reasoner'],
-      tools: ['deepseek-chat', 'deepseek-reasoner'],
+      chat: all,
+      reasoning: all,
+      coding: all,
+      tools: all,
     };
   }
 }

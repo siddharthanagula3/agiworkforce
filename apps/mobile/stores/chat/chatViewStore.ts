@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage } from '@/lib/mmkv';
+import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
 
 /** Chat mode — determines how the AI processes the conversation. */
 export type ChatMode = 'chat' | 'research' | 'create';
@@ -140,6 +140,8 @@ export const useChatViewStore = create<ViewState>()(
     {
       name: 'chat-view-store',
       storage: createJSONStorage(() => mmkvStorage),
+      // AUDIT-FIX: MMKV-RACE
+      skipHydration: true,
       partialize: (state) => ({
         chatMode: state.chatMode,
         chatStyle: state.chatStyle,
@@ -149,3 +151,7 @@ export const useChatViewStore = create<ViewState>()(
     },
   ),
 );
+
+whenMmkvReady(() => {
+  useChatViewStore.persist.rehydrate();
+});

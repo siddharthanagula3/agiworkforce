@@ -104,8 +104,12 @@ export function QRPairingCard() {
       {hasCode && (
         <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-center">
           <p className="text-xs uppercase tracking-wide text-slate-500">Pairing code</p>
+          {/* AUDIT-FIX: H-12 — display 12-char codes as 3 groups of 4 for
+              readability; the mobile parser strips spaces when scanned. */}
           <p className="mt-1 text-2xl font-bold font-mono tracking-widest text-slate-900">
-            {pairingCode}
+            {pairingCode && pairingCode.length === 12
+              ? `${pairingCode.slice(0, 4)} ${pairingCode.slice(4, 8)} ${pairingCode.slice(8, 12)}`
+              : pairingCode}
           </p>
           {expiresMessage && (
             <p className="mt-1 text-xs text-slate-500">Expires {expiresMessage}</p>

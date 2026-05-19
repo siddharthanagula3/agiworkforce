@@ -33,7 +33,7 @@
  * SESSION SECRET DERIVATION (HKDF-SHA-256)
  * ---------------------------------------------------------------------------
  *
- *   IKM  = UTF-8(pairingCode)               // ≥8 uppercase alphanumeric chars
+ *   IKM  = UTF-8(pairingCode)               // 12 uppercase alphanumeric chars (AUDIT-FIX: H-12)
  *   Salt = UTF-8(sessionSalt)               // random per connect() call, not secret
  *   Info = UTF-8("dispatch-hmac-v2")
  *
@@ -264,7 +264,10 @@ async function hkdfExpand(prk: Uint8Array, infoBytes: Uint8Array): Promise<Uint8
  *   PRK = HMAC-SHA-256(salt=UTF8(sessionSalt), IKM=UTF8(pairingCode))
  *   OKM = HMAC-SHA-256(PRK, UTF8("dispatch-hmac-v2") ∥ 0x01)
  *
- * @param pairingCode - 8-char alphanumeric pairing code (pre-shared key)
+ * @param pairingCode - 12-char alphanumeric pairing code (pre-shared key, AUDIT-FIX: H-12).
+ *
+ * Future work: replace the shared-password scheme with a PAKE such as
+ * OPAQUE or SRP so the IKM is never recoverable from the pairing transcript.
  * @param sessionSalt - Random per-session salt (not secret; sent in metadata)
  * @returns hex-encoded 32-byte derived key
  */

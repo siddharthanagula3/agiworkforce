@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage } from '@/lib/mmkv';
+import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
 import { api } from '@/services/api';
 import { useProjectStore } from '@/stores/projectStore';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
@@ -232,6 +232,8 @@ export const useChatMessageStore = create<MessageState>()(
     {
       name: 'chat-message-store',
       storage: createJSONStorage(() => mmkvStorage),
+      // AUDIT-FIX: MMKV-RACE
+      skipHydration: true,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[chatMessageStore] Hydration failed:', error);
       },
@@ -251,3 +253,7 @@ export const useChatMessageStore = create<MessageState>()(
     },
   ),
 );
+
+whenMmkvReady(() => {
+  useChatMessageStore.persist.rehydrate();
+});

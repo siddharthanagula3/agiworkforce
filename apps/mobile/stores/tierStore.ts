@@ -15,7 +15,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage } from '@/lib/mmkv';
+import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
 import { api } from '@/services/api';
 import { normalizeBillingPlanTier } from '@agiworkforce/types';
 import type { BillingPlanTier } from '@agiworkforce/types';
@@ -113,6 +113,8 @@ export const useTierStore = create<TierState>()(
     {
       name: 'tier-store',
       storage: createJSONStorage(() => mmkvStorage),
+      // AUDIT-FIX: MMKV-RACE
+      skipHydration: true,
       // Persist only the cached tier value, not the in-flight flag.
       // currentConversationProvider is intentionally excluded — it is session-
       // scoped and must reset on cold start rather than rehydrate from disk.
@@ -126,3 +128,7 @@ export const useTierStore = create<TierState>()(
     },
   ),
 );
+
+whenMmkvReady(() => {
+  useTierStore.persist.rehydrate();
+});

@@ -59,6 +59,7 @@ const mockStorageGetString = jest.fn().mockReturnValue(undefined);
 const mockStorageSet = jest.fn();
 
 jest.mock('../lib/mmkv', () => ({
+  whenMmkvReady: jest.fn((cb) => cb()),
   storage: {
     getString: (...args: unknown[]) => mockStorageGetString(...args),
     set: (...args: unknown[]) => mockStorageSet(...args),
