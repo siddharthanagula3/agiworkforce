@@ -8,19 +8,18 @@
 import * as vscode from 'vscode';
 import { getApiKey } from './utils/api';
 import { fetchTierInfo } from './utils/api';
-import { Config } from './utils/config';
+import { Config } from './platform/config';
 import { AgentModePanel } from './providers/agentModeProvider';
-import { getDesktopBridge } from './services/desktopBridge';
-import { activateDesktopBridge } from './services/desktopBridge';
-import { initModelMetrics } from './services/modelMetrics';
-import { normalizeConfiguredModelId } from './services/modelConstants';
-import { initSubsystemHealth, runBoot, recordFailure } from './services/subsystemHealth';
-import { initCheckpointManager } from './services/checkpointManager';
-import { validateAdvancedFeatureFlags } from './lifecycle/advancedFeatures';
-import { setupChat } from './lifecycle/chatSetup';
-import { setupProviders } from './lifecycle/providerSetup';
-import { setupCommands } from './lifecycle/commandSetup';
-import * as telemetry from './services/telemetry';
+import { getDesktopBridge, activateDesktopBridge } from './features/desktop-bridge';
+import { initModelMetrics } from './features/model-picker/modelMetrics';
+import { normalizeConfiguredModelId } from './features/model-picker/modelConstants';
+import { initSubsystemHealth, runBoot, recordFailure } from './core/subsystemHealth';
+import { initCheckpointManager } from './data/checkpointManager';
+import { validateAdvancedFeatureFlags } from './core/advancedFeatures';
+import { setupChat } from './core/chatSetup';
+import { setupProviders } from './core/providerSetup';
+import { setupCommands } from './core/commandSetup';
+import * as telemetry from './core/telemetry';
 
 // ─── Activation ───────────────────────────────────────────────────────────────
 

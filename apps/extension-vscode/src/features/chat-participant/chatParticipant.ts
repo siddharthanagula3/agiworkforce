@@ -19,14 +19,13 @@ import {
   AgiWorkforceApiError,
   AgiWorkforcePaywallError,
   type LlmChatMessage,
-} from '../utils/api';
-import { type ConversationStore } from '../storage/conversationStore';
-import { type ConversationTreeProvider } from './conversationTreeProvider';
-import { getContextBuilder } from '../services/contextBuilder';
-import { normalizeConfiguredModelId } from '../services/modelConstants';
-import { getWorkspaceDisplayName } from '../utils/workspaceFolders';
-import { Config } from '../utils/config';
-import { getContextPanelProvider } from './contextPanelProvider';
+} from '../../utils/api';
+import { type ConversationStore } from '../../data/conversationStore';
+import { type ConversationTreeProvider, getContextPanelProvider } from '../trees';
+import { getContextBuilder } from '../../data/contextBuilder';
+import { normalizeConfiguredModelId } from '../model-picker/modelConstants';
+import { getWorkspaceDisplayName } from '../../platform/workspaceFolders';
+import { Config } from '../../platform/config';
 
 // ─── Context gathering ────────────────────────────────────────────────────────
 

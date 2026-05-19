@@ -1,0 +1,36 @@
+/**
+ * core/ — Extension activation lifecycle, command registry, telemetry, subsystem health.
+ *
+ * Phase 6 reorg: moved from lifecycle/, registry/, and services/ (telemetry + subsystemHealth).
+ */
+export {
+  validateAdvancedFeatureFlags,
+  updateBridgeReachabilityStatus,
+  clearBridgeReachabilityStatus,
+} from './advancedFeatures';
+export { setupChat, type ChatState } from './chatSetup';
+export { setupCommands, type CommandDeps } from './commandSetup';
+export {
+  registerCommands,
+  type Command,
+  type CommandDeps as RegistryCommandDeps,
+  REGISTRY_COMMANDS,
+} from './commands';
+export { setupProviders, type ProviderState } from './providerSetup';
+export { runInlineCommand, commandLabel, type InlineCommand } from './runInlineCommand';
+export {
+  initSubsystemHealth,
+  runBoot,
+  runBootAsync,
+  recordFailure,
+  getFailureCount,
+  __resetSubsystemHealthForTests,
+} from './subsystemHealth';
+export {
+  activate as activateTelemetry,
+  logEvent,
+  logError,
+  redactSecrets,
+  TelemetryEvents,
+  __resetTelemetryForTests,
+} from './telemetry';

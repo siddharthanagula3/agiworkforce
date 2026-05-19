@@ -17,7 +17,7 @@ import {
   getPatchOutputChannel,
   type PatchBlock,
   type BatchResult,
-} from '../../services/patchEngine';
+} from '../../integrations/patchEngine';
 
 // ─── LITL gating: sensitive-category paths require per-file review ───────────
 // PR-2B (audit F-03): even when the user selects "Accept All", patches that

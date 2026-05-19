@@ -16,16 +16,16 @@ import {
   AgiWorkforceApiError,
   type LlmChatMessage,
 } from '../../utils/api';
-import { getVSCodeSendQueue } from '../../services/sendQueue';
-import { type ConversationStore } from '../../storage/conversationStore';
-import { type ConversationTreeProvider } from '../conversationTreeProvider';
-import { type DiffDecorationProvider } from '../diffDecorationProvider';
-import { getContextBuilder } from '../../services/contextBuilder';
+import { getVSCodeSendQueue } from '../../data/sendQueue';
+import { type ConversationStore } from '../../data/conversationStore';
+import { type ConversationTreeProvider } from '../trees';
+import { type DiffDecorationProvider } from '../../providers/diffDecorationProvider';
+import { getContextBuilder } from '../../data/contextBuilder';
 import {
   normalizeConfiguredModelId,
   getModelProviderInfo,
   buildGroupedQuickPickItems,
-} from '../../services/modelConstants';
+} from '../model-picker/modelConstants';
 import {
   PROVIDER_DISPLAY,
   type AgentMode,
