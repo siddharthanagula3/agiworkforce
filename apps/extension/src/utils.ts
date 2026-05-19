@@ -246,13 +246,17 @@ export const formUtils = {
 
   submitForm(form: HTMLFormElement | null = null): boolean {
     try {
-      if (form) {
-        form.submit();
-      } else {
-        const forms = this.getForms();
-        const firstForm = forms[0];
-        if (firstForm) {
-          firstForm.submit();
+      // L-02 audit 2026-05-19: use requestSubmit() so framework-level
+      // onSubmit handlers (CSRF-token injection, validation hooks) fire.
+      // Bare `form.submit()` bypasses them entirely.
+      const target = form ?? this.getForms()[0] ?? null;
+      if (target) {
+        if (typeof target.requestSubmit === 'function') {
+          target.requestSubmit();
+        } else {
+          // Very old browsers — fall back to submit(). MV3 min Chrome 132
+          // supports requestSubmit, so this should never trigger in prod.
+          target.submit();
         }
       }
       return true;
@@ -322,12 +326,25 @@ export const validators = {
   },
 
   isValidSelector(selector: string): boolean {
-    try {
-      document.querySelector(selector);
-      return true;
-    } catch {
+    // SECURITY (M-11 audit 2026-05-19): validate selector SYNTAX only, never
+    // execute it. The previous implementation called `document.querySelector`
+    // just to check parseability — but querySelector runs the selector
+    // against the entire DOM, which a malicious page or LLM-supplied selector
+    // can use as a DoS vector (e.g. `* * * * * * * *` on a deep tree).
+    //
+    // We do a conservative character-class check and a length cap. The cost
+    // is a few legitimate edge-case selectors (e.g. exotic attribute
+    // selectors with rare characters), traded for bounded validation cost.
+    if (typeof selector !== 'string' || selector.length === 0 || selector.length > 2048) {
       return false;
     }
+    // Disallow expression-injection metacharacters that should never appear
+    // in a CSS selector but show up in eval-shaped strings.
+    if (/[;{}`]/.test(selector)) return false;
+    // Accept characters that legitimately appear in CSS selectors. This is
+    // intentionally narrower than the full CSS grammar — false-rejects are
+    // preferable to false-accepts here.
+    return /^[\w\-#.[\]"'=:()*\s>+~\\,^$|@]+$/.test(selector);
   },
 
   sanitizeInput(input: string): string {

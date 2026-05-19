@@ -29,6 +29,8 @@ import { extractPageMetadata } from './page-metadata';
 import type { PageMetadata } from './page-metadata';
 import { detectNLWeb } from './nlweb';
 import { setupInPagePanel } from './inPagePanel/setup';
+import { validateShortcutActions } from './background/policy';
+import { redactSecrets } from '@agiworkforce/utils';
 
 import type { ConsoleLogEntry } from './types';
 
@@ -66,6 +68,24 @@ const MAX_DOM_ELEMENTS_FOR_EXTRACTION = 50_000;
  * 2. Elapsed-time: discard if extraction itself took longer than
  *    PAGE_EXTRACTION_TIMEOUT_MS (DOM access is synchronous and uninterruptible).
  */
+/**
+ * Invisible Unicode characters commonly used as vehicles for indirect prompt
+ * injection (Greshake 2023 / EchoLeak CVE-2025-32711 / ASCII-smuggling —
+ * Embrace The Red 2024):
+ *
+ *   - U+200B..U+200D (ZWSP, ZWNJ, ZWJ)
+ *   - U+FEFF (zero-width no-break space / BOM)
+ *   - U+202A..U+202E (LRE/RLE/PDF/LRO/RLO bidi overrides)
+ *   - U+2066..U+2069 (LRI/RLI/FSI/PDI isolation controls)
+ *   - U+FE00..U+FE0F (Variation selectors)
+ *   - U+E0000..U+E007F (Tag characters — the "ASCII smuggling" range)
+ */
+const INVISIBLE_UNICODE_RE =
+  // The character class deliberately contains the invisible chars we want
+  // to strip — disable lints that would flag them as accidentally typed.
+  // eslint-disable-next-line no-misleading-character-class, no-irregular-whitespace
+  /[​-‍﻿‪-‮⁦-⁩︀-️]|[\u{E0000}-\u{E007F}]/gu;
+
 function extractPageHtmlSafely(): string {
   try {
     const elementCount = document.querySelectorAll('*').length;
@@ -82,12 +102,19 @@ function extractPageHtmlSafely(): string {
       logger.warn('Page-text extraction timed out, using empty content');
       return '';
     }
+    // SECURITY (H-06 audit 2026-05-19): strip invisible Unicode classes used
+    // for indirect prompt injection BEFORE collapsing whitespace.
+    const stripped = rawText.replace(INVISIBLE_UNICODE_RE, '');
     // Collapse runs of whitespace so the byte budget covers more semantic content.
-    const collapsed = rawText
+    const collapsed = stripped
       .replace(/[\t \u00a0]+/g, ' ')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
-    return collapsed.substring(0, MAX_CONTEXT_HTML_CHARS);
+    // SECURITY (H-06 audit 2026-05-19): run the shared redactSecrets redactor
+    // so JWTs / API keys / DB credentials the user happened to be viewing
+    // never reach the LLM via page-context sync.
+    const redacted = redactSecrets(collapsed);
+    return redacted.substring(0, MAX_CONTEXT_HTML_CHARS);
   } catch (e) {
     logger.debug('Failed to extract page text (CSP or DOM error)', e);
     return '';
@@ -114,6 +141,10 @@ const automationState: AutomationState = {
   isRecording: false,
   recordedActions: [],
   connectionStatus: 'disconnected',
+  // SECURITY (C-05 audit 2026-05-19): default selector-only recording.
+  // Flipped via SET_RECORDING_VALUE_CAPTURE which the message router
+  // restricts to extension-page senders (EXTENSION_PAGE_ONLY_MESSAGE_TYPES).
+  captureValues: false,
 };
 let lastPointerTarget: Element | null = null;
 
@@ -302,6 +333,11 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
 
     case 'GET_RECORDED_ACTIONS':
       return handleGetRecordedActions();
+
+    case 'SET_RECORDING_VALUE_CAPTURE' as ExtensionMessage['type']:
+      return handleSetRecordingValueCapture(
+        message as unknown as { enabled?: unknown },
+      );
 
     case 'WEBMCP_DISCOVER_TOOLS':
       return handleWebMCPDiscoverTools();
@@ -624,6 +660,21 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
 async function handleRunPageActions(message: RunPageActionsMessage): Promise<ExtensionResponse> {
   const taskId = message.taskId || `task_${Date.now()}`;
   const actions = Array.isArray(message.actions) ? message.actions : [];
+  // SECURITY (C-03 audit 2026-05-19): defense-in-depth — re-validate every
+  // action type before executing the plan. handleSaveShortcut now rejects
+  // bad action types at save time, but stored shortcuts from older
+  // extension versions (pre-validator) may still contain unknown types.
+  // Reject the entire plan rather than the existing per-action `default`
+  // path which silently skipped them while still running siblings.
+  if (actions.length > 0 && !validateShortcutActions(actions)) {
+    return {
+      success: false,
+      taskId,
+      error: 'Plan contains an unsupported action type.',
+      actionsPerformed: 0,
+      duration: 0,
+    } as ExtensionResponse;
+  }
   const startedAt = Date.now();
   const results: ActionExecutionResult[] = [];
   let actionsPerformed = 0;
@@ -1484,7 +1535,23 @@ async function handleClickAtCoordinates(
   }
 }
 
-function buildAccessibilityNode(element: Element, depth: number = 0): Record<string, unknown> {
+// SECURITY (M-12 audit 2026-05-19): cap the total number of nodes in the
+// generated accessibility tree. Without this, a hostile page with 100K+
+// nested elements would generate a multi-MB JSON serialization that
+// crosses the message boundary and stalls the renderer.
+const MAX_ACCESSIBILITY_TREE_NODES = 5000;
+
+interface AccessibilityWalkState {
+  count: number;
+  truncated: boolean;
+}
+
+function buildAccessibilityNode(
+  element: Element,
+  state: AccessibilityWalkState,
+  depth: number = 0,
+): Record<string, unknown> {
+  state.count += 1;
   const rect = element.getBoundingClientRect();
   const role = element.getAttribute('role') || element.tagName.toLowerCase();
   const label =
@@ -1507,10 +1574,14 @@ function buildAccessibilityNode(element: Element, depth: number = 0): Record<str
     children: [],
   };
 
-  if (depth < 8) {
+  if (depth < 8 && state.count < MAX_ACCESSIBILITY_TREE_NODES) {
     const childNodes: Record<string, unknown>[] = [];
     for (const child of Array.from(element.children)) {
-      childNodes.push(buildAccessibilityNode(child, depth + 1));
+      if (state.count >= MAX_ACCESSIBILITY_TREE_NODES) {
+        state.truncated = true;
+        break;
+      }
+      childNodes.push(buildAccessibilityNode(child, state, depth + 1));
     }
     node['children'] = childNodes;
   }
@@ -1521,8 +1592,14 @@ function buildAccessibilityNode(element: Element, depth: number = 0): Record<str
 function handleBuildAccessibilityTree(): ExtensionResponse {
   try {
     const root = document.body || document.documentElement;
-    const tree = buildAccessibilityNode(root);
-    return { success: true, data: tree } as ExtensionResponse;
+    const state: AccessibilityWalkState = { count: 0, truncated: false };
+    const tree = buildAccessibilityNode(root, state);
+    return {
+      success: true,
+      data: tree,
+      truncated: state.truncated,
+      nodeCount: state.count,
+    } as ExtensionResponse;
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
@@ -1542,6 +1619,49 @@ interface UserRecordedAction {
 }
 
 const _userRecordedActions: UserRecordedAction[] = [];
+
+// ─── C-05 recorded-value sanitization ─────────────────────────────────────────
+//
+// Local secret-pattern list. Mirrors the shared `redactSecrets` in
+// `packages/utils/src/logger.ts` so the recorder doesn't need a workspace dep
+// until Phase C2 lands. The patterns intentionally overlap with that helper —
+// when C2 ships, this can switch to `import { redactSecrets } from '@agiworkforce/utils'`
+// and the locally-defined REC_REDACTION_PATTERNS can be deleted.
+const REC_REDACTION_PATTERNS: ReadonlyArray<{ pattern: RegExp; replacement: string }> = [
+  { pattern: /sk-ant-[a-zA-Z0-9_-]{20,}/g, replacement: '[REDACTED_ANTHROPIC_KEY]' },
+  { pattern: /sk-[a-zA-Z0-9_-]{20,}/g, replacement: '[REDACTED_API_KEY]' },
+  { pattern: /AIzaSy[a-zA-Z0-9_-]{33}/g, replacement: '[REDACTED_GOOGLE_KEY]' },
+  { pattern: /AKIA[A-Z0-9]{16}/g, replacement: '[REDACTED_AWS_KEY]' },
+  { pattern: /gh[ps]_[a-zA-Z0-9]{36,}/g, replacement: '[REDACTED_GITHUB_TOKEN]' },
+  { pattern: /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, replacement: '[REDACTED_JWT]' },
+];
+
+/**
+ * Returns null for fields that should not be recorded at all (passwords),
+ * `'[REDACTED]'` for fields whose autocomplete declares sensitive content,
+ * and a secret-redacted string for everything else.
+ */
+function sanitizeRecordedValue(
+  target: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+): string | null {
+  if (target instanceof HTMLInputElement && target.type === 'password') {
+    return null; // never record password fields, even with [REDACTED] marker
+  }
+  const autocomplete = (target.getAttribute('autocomplete') ?? '').toLowerCase();
+  if (
+    /^cc-/.test(autocomplete) ||
+    autocomplete === 'current-password' ||
+    autocomplete === 'new-password' ||
+    autocomplete === 'one-time-code'
+  ) {
+    return '[REDACTED]';
+  }
+  let value = target.value ?? '';
+  for (const { pattern, replacement } of REC_REDACTION_PATTERNS) {
+    value = value.replace(pattern, replacement);
+  }
+  return value;
+}
 
 let _recordingClickListener: ((e: MouseEvent) => void) | null = null;
 let _recordingInputListener: ((e: Event) => void) | null = null;
@@ -1606,7 +1726,12 @@ function showRecordingIndicator(): void {
   const circle = document.createElement('div');
   circle.className = 'agi-rec-circle';
   badge.appendChild(circle);
-  badge.appendChild(document.createTextNode('REC'));
+  // SECURITY (C-05 audit 2026-05-19): make the capture mode visible to the
+  // user. "REC" alone hid the difference between selector-only and
+  // value-capture sessions; a value-capture recording can persist API
+  // keys / form contents to chrome.storage.local.
+  const modeLabel = automationState.captureValues ? 'REC (values)' : 'REC (selector only)';
+  badge.appendChild(document.createTextNode(modeLabel));
   shadow.appendChild(style);
   shadow.appendChild(badge);
   document.body.appendChild(host);
@@ -1641,12 +1766,23 @@ function attachRecordingListeners(): void {
       !(target instanceof HTMLSelectElement)
     )
       return;
-    _userRecordedActions.push({
+    // SECURITY (C-05 audit 2026-05-19): selector-only by default. When the
+    // user opts in to value capture, password / cc-* / one-time-code /
+    // current-password / new-password fields are redacted, and the
+    // remaining value is run through redactSecrets to catch API-key-shaped
+    // tokens the user might type into a tracked input.
+    const action: UserRecordedAction = {
       type: 'input',
       selector: buildCssSelector(target),
-      value: target.value,
       timestamp: Date.now(),
-    });
+    };
+    if (automationState.captureValues) {
+      const sanitizedValue = sanitizeRecordedValue(target);
+      if (sanitizedValue !== null) {
+        action.value = sanitizedValue;
+      }
+    }
+    _userRecordedActions.push(action);
   };
 
   // Throttle scroll recording — at most one entry per 500 ms.
@@ -1697,6 +1833,18 @@ function detachRecordingListeners(): void {
     window.removeEventListener('popstate', _recordingNavListener);
     _recordingNavListener = null;
   }
+}
+
+function handleSetRecordingValueCapture(message: { enabled?: unknown }): ExtensionResponse {
+  const enabled = message.enabled === true;
+  automationState.captureValues = enabled;
+  // Re-render the indicator if we're currently recording so the user can
+  // see the change immediately.
+  if (automationState.isRecording) {
+    hideRecordingIndicator();
+    showRecordingIndicator();
+  }
+  return { success: true, captureValues: enabled } as ExtensionResponse;
 }
 
 function handleStartRecording(): ExtensionResponse {
@@ -2023,6 +2171,7 @@ const VALID_MESSAGE_TYPES = new Set([
   'START_RECORDING',
   'STOP_RECORDING',
   'GET_RECORDED_ACTIONS',
+  'SET_RECORDING_VALUE_CAPTURE',
   // WebMCP
   'WEBMCP_DISCOVER_TOOLS',
   'WEBMCP_CALL_TOOL',

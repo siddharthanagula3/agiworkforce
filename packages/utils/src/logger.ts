@@ -25,6 +25,11 @@ const REDACTION_PATTERNS: readonly { pattern: RegExp; replacement: string }[] = 
   { pattern: /gh[ps]_[a-zA-Z0-9]{36,}/g, replacement: '[REDACTED_GITHUB_TOKEN]' },
   { pattern: /github_pat_[a-zA-Z0-9_]{22,}/g, replacement: '[REDACTED_GITHUB_TOKEN]' },
   { pattern: /xai-[a-zA-Z0-9]{20,}/g, replacement: '[REDACTED_XAI_KEY]' },
+  // JWT (header.payload.signature) — ported from extension recorder (C-05).
+  {
+    pattern: /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g,
+    replacement: '[REDACTED_JWT]',
+  },
   { pattern: /bearer\s+[a-zA-Z0-9._\-/+=]{20,}/gi, replacement: 'Bearer [REDACTED_TOKEN]' },
   {
     pattern:
@@ -35,6 +40,13 @@ const REDACTION_PATTERNS: readonly { pattern: RegExp; replacement: string }[] = 
     pattern: /(postgres|mysql|mongodb|redis):\/\/[^:]+:[^@]+@/gi,
     replacement: '$1://[CREDENTIALS_REDACTED]@',
   },
+  // Page-context redactor patterns ported from
+  // `apps/extension/src/inPagePanel/pageActions.ts` (H-05 audit 2026-05-19).
+  // Credit-card number sequences (13-19 digits with optional separators).
+  { pattern: /\b(?:\d[ \t-]?){13,19}\b/g, replacement: '[REDACTED]' },
+  // Lines containing the word "password" or "passwd" (case-insensitive,
+  // multi-line) — used to mask form labels that drag the value with them.
+  { pattern: /^.*\bpassw(?:or)?d\b.*$/gim, replacement: '[REDACTED LINE]' },
 ];
 
 /** Apply the redaction patterns to any value safe-stringified. */
