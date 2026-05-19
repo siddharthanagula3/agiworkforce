@@ -18,6 +18,9 @@ const config = {
     supportsTablet: true,
     bundleIdentifier: 'com.agiworkforce.app',
     buildNumber: '1',
+    // AUDIT-FIX: H-11 — declare apex + www so iOS verifies the AASA file on
+    // /.well-known/ before any Universal-Link tap is routed to the app.
+    associatedDomains: ['applinks:agiworkforce.com', 'applinks:www.agiworkforce.com'],
     infoPlist: {
       NSCameraUsageDescription:
         'AGI Workforce uses the camera to scan QR codes for desktop pairing and to send images to AI for analysis.',
@@ -91,6 +94,19 @@ const config = {
         category: ['android.intent.category.DEFAULT'],
         data: [{ mimeType: 'text/plain' }, { mimeType: 'image/*' }],
       },
+      // AUDIT-FIX: H-11 — verified Android App Link for https://agiworkforce.com/*.
+      // autoVerify=true forces the OS to fetch /.well-known/assetlinks.json
+      // before this filter is honored, so an unverified third-party app
+      // cannot claim the same VIEW intent.
+      {
+        action: 'android.intent.action.VIEW',
+        autoVerify: true,
+        category: ['android.intent.category.DEFAULT', 'android.intent.category.BROWSABLE'],
+        data: [
+          { scheme: 'https', host: 'agiworkforce.com' },
+          { scheme: 'https', host: 'www.agiworkforce.com' },
+        ],
+      },
     ],
   },
   plugins: [
@@ -103,6 +119,19 @@ const config = {
         microphonePermission: 'Allow $(DISPLAYNAME) to access your microphone for voice chat.',
       },
     ],
+    // AUDIT-FIX: STT-WIRE — on-device speech recognition via iOS Speech
+    // framework / Android SpeechRecognizer. Microphone usage description is
+    // already declared above; this plugin emits NSSpeechRecognitionUsageDescription
+    // and the Android RECORD_AUDIO + manifest entries.
+    [
+      'expo-speech-recognition',
+      {
+        microphonePermission: 'Use microphone to transcribe speech to text',
+        speechRecognitionPermission: 'Recognize speech for chat input',
+        androidSpeechServicePackages: ['com.google.android.googlequicksearchbox'],
+      },
+    ],
+    'expo-localization',
     [
       'expo-notifications',
       {

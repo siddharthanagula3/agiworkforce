@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage } from '@/lib/mmkv';
+import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
 import {
   fetchSchedules as apiFetchSchedules,
   createSchedule as apiCreateSchedule,
@@ -211,6 +211,8 @@ export const useScheduleStore = create<ScheduleState>()(
     {
       name: 'schedule-store',
       storage: createJSONStorage(() => mmkvStorage),
+      // AUDIT-FIX: MMKV-RACE
+      skipHydration: true,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[scheduleStore] Hydration failed:', error);
       },
@@ -222,3 +224,7 @@ export const useScheduleStore = create<ScheduleState>()(
     },
   ),
 );
+
+whenMmkvReady(() => {
+  useScheduleStore.persist.rehydrate();
+});

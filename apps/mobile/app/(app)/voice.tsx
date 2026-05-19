@@ -236,9 +236,12 @@ export default function VoiceScreen() {
       setAudioLevel(0);
       if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-      const uri = await VoiceInput.stopCapture();
+      // AUDIT-FIX: STT-WIRE — stopCapture now resolves to void; the live
+      // transcript is captured by the recognizer and re-read from the
+      // module-local state via transcribeOnDevice('').
+      await VoiceInput.stopCapture();
       const t0 = Date.now();
-      const { text } = await VoiceInput.transcribeOnDevice(uri);
+      const { text } = await VoiceInput.transcribeOnDevice('');
       const sttMs = Date.now() - t0;
 
       if (!activeRef.current) return;

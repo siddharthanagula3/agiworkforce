@@ -1,35 +1,55 @@
+// AUDIT-FIX: STT-WIRE
 /**
  * Wave 2 voice feature tests.
- * Covers: voiceInput service, voiceOutput service contracts.
+ * Covers: voiceInput service (on-device STT), voiceOutput service contracts.
  */
 
 import { Platform } from 'react-native';
 
-// Mock expo-av
-jest.mock('expo-av', () => ({
-  Audio: {
-    requestPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
-    getPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
-    setAudioModeAsync: jest.fn().mockResolvedValue(undefined),
-    Recording: jest.fn().mockImplementation(() => ({
-      prepareToRecordAsync: jest.fn().mockResolvedValue(undefined),
-      startAsync: jest.fn().mockResolvedValue(undefined),
-      stopAndUnloadAsync: jest.fn().mockResolvedValue(undefined),
-      getStatusAsync: jest.fn().mockResolvedValue({
-        isRecording: true,
-        metering: -30,
-        durationMillis: 1000,
+jest.mock('expo-speech-recognition', () => {
+  const listenersByEvent = {};
+  const getListeners = (name) => (listenersByEvent[name] ||= []);
+  return {
+    __esModule: true,
+    ExpoSpeechRecognitionModule: {
+      start: jest.fn(),
+      stop: jest.fn(() => {
+        for (const fn of getListeners('end')) fn(null);
       }),
-      getURI: jest.fn().mockReturnValue('file:///tmp/recording.m4a'),
-    })),
-    AndroidOutputFormat: { MPEG_4: 2 },
-    AndroidAudioEncoder: { AAC: 3 },
-    IOSOutputFormat: { MPEG4AAC: 'aac' },
-    IOSAudioQuality: { HIGH: 0x60 },
-  },
+      abort: jest.fn(),
+      requestPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
+      getPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
+      supportsOnDeviceRecognition: jest.fn().mockReturnValue(true),
+      isRecognitionAvailable: jest.fn().mockReturnValue(true),
+      addListener: jest.fn((name, fn) => {
+        getListeners(name).push(fn);
+        return {
+          remove: () => {
+            listenersByEvent[name] = getListeners(name).filter((cb) => cb !== fn);
+          },
+        };
+      }),
+    },
+    __fireResult: (event) => {
+      for (const fn of getListeners('result')) fn(event);
+    },
+    __fireError: (event) => {
+      for (const fn of getListeners('error')) fn(event);
+    },
+    __fireEnd: () => {
+      for (const fn of getListeners('end')) fn(null);
+    },
+    __clearListeners: () => {
+      for (const key of Object.keys(listenersByEvent)) delete listenersByEvent[key];
+    },
+  };
+});
+
+jest.mock('expo-localization', () => ({
+  __esModule: true,
+  getLocales: jest.fn().mockReturnValue([{ languageTag: 'en-US' }]),
 }));
 
-// Mock expo-speech
 jest.mock('expo-speech', () => ({
   speak: jest.fn().mockImplementation((_text: string, opts?: { onDone?: () => void }) => {
     opts?.onDone?.();
@@ -57,7 +77,7 @@ describe('voiceInput service', () => {
     expect(VoiceInput.isCapturing()).toBe(false);
   });
 
-  it('requestMicPermission delegates to expo-av', async () => {
+  it('requestMicPermission delegates to expo-speech-recognition', async () => {
     const result = await VoiceInput.requestMicPermission();
     expect(result).toBe(true);
   });
@@ -98,9 +118,6 @@ describe('voiceOutput service', () => {
 });
 
 describe('VoiceInput.getPlatformSTTBackend platform detection', () => {
-  // getPlatformSTTBackend reads Platform.OS at call time, not at module load time.
-  // Overriding the already-mocked Platform object's OS property is sufficient —
-  // no module isolation required.
   const originalOS = Platform.OS;
 
   afterAll(() => {

@@ -66,6 +66,19 @@ const createImmediateAnimation = () => ({
 Animated.spring = () => createImmediateAnimation();
 Animated.timing = () => createImmediateAnimation();
 
+jest.mock('react-native-reanimated', () => {
+  const Reanimated = require('react-native-reanimated/mock');
+  Reanimated.useReducedMotion = () => false;
+  Reanimated.useSharedValue = (initial) => ({ value: initial });
+  Reanimated.useAnimatedStyle = (fn) => fn();
+  Reanimated.useDerivedValue = (fn) => ({ value: fn() });
+  Reanimated.withTiming = (toValue) => toValue;
+  Reanimated.withSpring = (toValue) => toValue;
+  Reanimated.runOnJS = (fn) => fn;
+  Reanimated.runOnUI = (fn) => fn;
+  return Reanimated;
+});
+
 jest.mock('expo-notifications', () => {
   const makeSubscription = () => ({ remove: jest.fn() });
 

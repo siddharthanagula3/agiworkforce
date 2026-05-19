@@ -65,6 +65,7 @@ jest.mock('lucide-react-native', () => {
 const mockStorageSet = jest.fn();
 const mockStorageGet = jest.fn().mockReturnValue(undefined);
 jest.mock('../lib/mmkv', () => ({
+  whenMmkvReady: jest.fn((cb) => cb()),
   storage: {
     getString: (...args: unknown[]) => mockStorageGet(...args),
     set: (...args: unknown[]) => mockStorageSet(...args),

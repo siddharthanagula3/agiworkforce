@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage } from '@/lib/mmkv';
+import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
 
 export interface Project {
   id: string;
@@ -77,9 +77,15 @@ export const useProjectStore = create<ProjectState>()(
     {
       name: 'project-store',
       storage: createJSONStorage(() => mmkvStorage),
+      // AUDIT-FIX: MMKV-RACE
+      skipHydration: true,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[projectStore] Hydration failed:', error);
       },
     },
   ),
 );
+
+whenMmkvReady(() => {
+  useProjectStore.persist.rehydrate();
+});

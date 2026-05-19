@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { normalizeModelId } from '@agiworkforce/types';
-import { mmkvStorage } from '@/lib/mmkv';
+import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
 import { isAutoMode, getModelById } from '@/lib/models';
 
 /** Maximum number of entries kept in the recent-models list. */
@@ -110,9 +110,15 @@ export const useModelStore = create<ModelState>()(
     {
       name: 'model-store',
       storage: createJSONStorage(() => mmkvStorage),
+      // AUDIT-FIX: MMKV-RACE
+      skipHydration: true,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[modelStore] Hydration failed:', error);
       },
     },
   ),
 );
+
+whenMmkvReady(() => {
+  useModelStore.persist.rehydrate();
+});

@@ -12,7 +12,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage } from '@/lib/mmkv';
+import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
 import type { AgentControlState, AgentMode, Effort } from '@agiworkforce/types';
 
 // ---------------------------------------------------------------------------
@@ -159,6 +159,8 @@ export const useAgentControlStore = create<AgentControlStore>()(
     {
       name: 'agent-control-store',
       storage: createJSONStorage(() => mmkvStorage),
+      // AUDIT-FIX: MMKV-RACE
+      skipHydration: true,
       version: 2,
       migrate: (persistedState, fromVersion) => {
         // v1 → v2: flat agentMode + effort migrate to byProject['__default__']
@@ -198,3 +200,7 @@ export const useAgentControlStore = create<AgentControlStore>()(
     },
   ),
 );
+
+whenMmkvReady(() => {
+  useAgentControlStore.persist.rehydrate();
+});

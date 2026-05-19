@@ -1,22 +1,9 @@
 /**
- * Regression tests for LOW-MOB-1 — biometric-lock flag in SecureStore
- * (red-team finding 2026-05).
+ * Regression tests for LOW-MOB-1 — biometric-lock flag in SecureStore.
  *
- * Pre-fix: `biometricLockEnabled` was stored in the MMKV-backed
- * `settingsStore`. If the MMKV encryption key was ever extracted,
- * an attacker could flip the flag to `false` from outside the app and
- * bypass the biometric gate without ever passing biometric auth.
- *
- * Post-fix: the flag lives in SecureStore (iOS Keychain /
- * Android EncryptedSharedPreferences with hardware-backed Keystore on
- * v23+). MMKV-key extraction does not help an attacker.
- *
- * These tests pin:
- *   - the storage key,
- *   - the accessibility option (`WHEN_UNLOCKED_THIS_DEVICE_ONLY`),
- *   - hydrate semantics (only literal 'true' enables the gate),
- *   - graceful failure on SecureStore errors (fail-CLOSED-ish: hydrated
- *     marker is set so the app boots, but enabled stays false).
+ * AUDIT-FIX: H-10 — flag defaults to ENABLED. Only a persisted 'false'
+ * disables the gate, and SecureStore failures keep enabled=true. This
+ * prevents a fail-open race during the SecureStore read.
  */
 
 const mockGetItemAsync = jest.fn();
@@ -33,15 +20,15 @@ import { useBiometricFlag, hydrateBiometricFlag } from '../lib/biometricFlagStor
 beforeEach(() => {
   mockGetItemAsync.mockReset().mockResolvedValue(null);
   mockSetItemAsync.mockReset().mockResolvedValue(undefined);
-  // Reset the in-memory state to its initial values between tests.
-  useBiometricFlag.setState({ hydrated: false, enabled: false });
+  // Reset the in-memory state to its (fail-closed) initial values between tests.
+  useBiometricFlag.setState({ hydrated: false, enabled: true });
 });
 
 describe('biometricFlagStore — initial state', () => {
-  it('starts unhydrated and disabled', () => {
+  it('starts unhydrated and ENABLED (fail-closed)', () => {
     const s = useBiometricFlag.getState();
     expect(s.hydrated).toBe(false);
-    expect(s.enabled).toBe(false);
+    expect(s.enabled).toBe(true);
   });
 });
 
@@ -54,33 +41,33 @@ describe('biometricFlagStore — hydrate', () => {
     expect(mockGetItemAsync).toHaveBeenCalledWith('agi_biometric_lock_enabled_v1');
   });
 
-  it('reads "false" → enabled=false', async () => {
+  it('reads "false" → enabled=false (only persisted opt-out disables the gate)', async () => {
     mockGetItemAsync.mockResolvedValueOnce('false');
     await useBiometricFlag.getState().hydrate();
     expect(useBiometricFlag.getState().enabled).toBe(false);
     expect(useBiometricFlag.getState().hydrated).toBe(true);
   });
 
-  it('treats null (never set) as enabled=false', async () => {
+  it('treats null (never set) as enabled=true (fail-closed default)', async () => {
     mockGetItemAsync.mockResolvedValueOnce(null);
     await useBiometricFlag.getState().hydrate();
-    expect(useBiometricFlag.getState().enabled).toBe(false);
+    expect(useBiometricFlag.getState().enabled).toBe(true);
     expect(useBiometricFlag.getState().hydrated).toBe(true);
   });
 
   it.each(['TRUE', 'True', '1', 'yes', 'on', 'enabled', ''])(
-    'treats non-literal "%s" as enabled=false (strict-equality check)',
+    'treats non-literal "%s" as enabled=true (only literal "false" disables)',
     async (stored) => {
       mockGetItemAsync.mockResolvedValueOnce(stored);
       await useBiometricFlag.getState().hydrate();
-      expect(useBiometricFlag.getState().enabled).toBe(false);
+      expect(useBiometricFlag.getState().enabled).toBe(true);
     },
   );
 
-  it('survives SecureStore read errors (fail-closed for enabled, hydrated marked true)', async () => {
+  it('survives SecureStore read errors (fail-CLOSED: enabled stays true)', async () => {
     mockGetItemAsync.mockRejectedValueOnce(new Error('keychain offline'));
     await useBiometricFlag.getState().hydrate();
-    expect(useBiometricFlag.getState().enabled).toBe(false);
+    expect(useBiometricFlag.getState().enabled).toBe(true);
     expect(useBiometricFlag.getState().hydrated).toBe(true);
   });
 
@@ -111,10 +98,11 @@ describe('biometricFlagStore — setEnabled', () => {
   });
 
   it('propagates SecureStore write errors (caller decides what to do)', async () => {
+    // Starting state per fail-closed default is enabled=true. A failed
+    // setEnabled(false) must NOT advance state, so it stays enabled=true.
     mockSetItemAsync.mockRejectedValueOnce(new Error('disk full'));
-    await expect(useBiometricFlag.getState().setEnabled(true)).rejects.toThrow('disk full');
-    // In-memory state must NOT advance if persistence failed.
-    expect(useBiometricFlag.getState().enabled).toBe(false);
+    await expect(useBiometricFlag.getState().setEnabled(false)).rejects.toThrow('disk full');
+    expect(useBiometricFlag.getState().enabled).toBe(true);
   });
 });
 

@@ -24,6 +24,7 @@
 // ---------------------------------------------------------------------------
 
 jest.mock('../lib/mmkv', () => ({
+  whenMmkvReady: jest.fn((cb) => cb()),
   mmkvStorage: {
     getItem: jest.fn().mockReturnValue(null),
     setItem: jest.fn(),

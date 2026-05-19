@@ -7,7 +7,7 @@
  */
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage } from '@/lib/mmkv';
+import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
 import type { NotificationEventType } from '@/services/notifications';
 
 // ---------------------------------------------------------------------------
@@ -170,9 +170,15 @@ export const useNotificationPrefsStore = create<NotificationPrefsState>()(
     {
       name: 'notification-prefs-store',
       storage: createJSONStorage(() => mmkvStorage),
+      // AUDIT-FIX: MMKV-RACE
+      skipHydration: true,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[notificationPrefsStore] Hydration failed:', error);
       },
     },
   ),
 );
+
+whenMmkvReady(() => {
+  useNotificationPrefsStore.persist.rehydrate();
+});
