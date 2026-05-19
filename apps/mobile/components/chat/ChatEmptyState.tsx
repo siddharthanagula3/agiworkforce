@@ -1,38 +1,41 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Pressable, ScrollView } from 'react-native';
+import { View, Pressable } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import { Monitor, X, Code, PenLine, Search } from 'lucide-react-native';
+import { Monitor, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
+import { TaskChips, type TaskChipType } from '@/components/chat/TaskChips';
 import { storage } from '@/lib/mmkv';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/lib/theme';
 
 const MMKV_PAIRING_BANNER_KEY = 'dismissedDesktopPairingBanner';
 
-interface PromptChip {
-  icon: React.ComponentType<{ size: number; color: string; strokeWidth?: number }>;
-  label: string;
-  prompt: string;
-}
-
-const PROMPT_CHIPS: PromptChip[] = [
-  { icon: Code, label: 'Code', prompt: 'Help me write a function that...' },
-  { icon: PenLine, label: 'Write', prompt: 'Write a professional email about...' },
-  { icon: Search, label: 'Research', prompt: 'Research and summarize the latest on...' },
-];
+const CHIP_PROMPTS: Record<TaskChipType, string> = {
+  code: 'Help me write a function that...',
+  write: 'Write a professional email about...',
+  research: 'Research and summarize the latest on...',
+  image: 'Generate an image of...',
+  video: 'Create a video script for...',
+  computer: 'Help me automate a task on my computer...',
+};
 
 interface ChatEmptyStateProps {
   /** Whether to show the desktop pairing banner (first launch). */
   showPairingBanner?: boolean;
   onPairDesktop?: () => void;
-  /** Called when a prompt chip is tapped — prefills the composer */
+  /** Called when a task chip is tapped — prefills the composer with a starter prompt */
   onSelectPrompt?: (prompt: string) => void;
+  /** Called when a chip is tapped — reports the active chip type */
+  onChipSelect?: (chip: TaskChipType) => void;
+  activeChip?: TaskChipType | null;
 }
 
 export function ChatEmptyState({
   showPairingBanner,
   onPairDesktop,
   onSelectPrompt,
+  onChipSelect,
+  activeChip,
 }: ChatEmptyStateProps) {
   const nickname = useSettingsStore((s) => s.personalization.nickname);
   const fullName = useSettingsStore((s) => s.personalization.fullName);
@@ -134,52 +137,19 @@ export function ChatEmptyState({
         </Animated.View>
       )}
 
-      {/* Horizontal prompt chips — 3 stateless one-tap shortcuts, no header label */}
+      {/* 6 task chips — Code/Write/Research/Image/Video/Computer */}
       <Animated.View
         entering={FadeIn.duration(500).delay(300)}
         style={{ marginTop: 32, width: '100%' }}
       >
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}
-        >
-          {PROMPT_CHIPS.map((chip) => (
-            <PromptChipButton key={chip.label} chip={chip} onPress={onSelectPrompt} />
-          ))}
-        </ScrollView>
+        <TaskChips
+          activeChip={activeChip}
+          onChipPress={(chip) => {
+            onChipSelect?.(chip);
+            onSelectPrompt?.(CHIP_PROMPTS[chip]);
+          }}
+        />
       </Animated.View>
     </View>
-  );
-}
-
-interface PromptChipButtonProps {
-  chip: PromptChip;
-  onPress?: (prompt: string) => void;
-}
-
-function PromptChipButton({ chip, onPress }: PromptChipButtonProps) {
-  const IconComponent = chip.icon;
-  return (
-    <Pressable
-      onPress={() => onPress?.(chip.prompt)}
-      style={({ pressed }) => ({
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        height: 34,
-        paddingHorizontal: 12,
-        borderWidth: 1,
-        borderColor: pressed ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.1)',
-        borderRadius: 999,
-        backgroundColor: pressed ? colors.surfaceHover : 'transparent',
-      })}
-      accessibilityLabel={`${chip.label} prompt`}
-      accessibilityRole="button"
-      accessibilityHint={`Pre-fills: ${chip.prompt}`}
-    >
-      <IconComponent size={14} color={colors.textSecondary} strokeWidth={1.75} />
-      <Text style={{ fontSize: 13, color: colors.textSecondary }}>{chip.label}</Text>
-    </Pressable>
   );
 }

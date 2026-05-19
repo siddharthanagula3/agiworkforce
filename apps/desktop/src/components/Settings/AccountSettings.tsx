@@ -4,19 +4,41 @@
  * Extracted from SettingsPanel.tsx for code organization.
  * Handles: Account info display, Credits usage, Billing status, Sign Out.
  */
-import { CreditCard, ExternalLink } from 'lucide-react';
+import { useState } from 'react';
+import { CreditCard, PauseCircle, ArrowDown, XCircle } from 'lucide-react';
 import { Button } from '../ui/Button';
-import { openPricingPage } from '../../utils/navigation';
 import { useAccountStore, useAuthStore } from '../../stores/auth';
 import type { CreditBalance } from '../../stores/auth';
+import { openBillingPortal } from '../../lib/stripeCheckout';
+import { PauseFlow } from '../v3/PauseFlow';
+import { DowngradeFlow } from '../v3/DowngradeFlow';
+import { CancelFlow } from '../v3/CancelFlow';
+import type { BillingPlanTier } from '@agiworkforce/types';
+
+type BillingModal = 'pause' | 'downgrade' | 'cancel' | null;
 
 export function AccountSettings() {
   const accountData = useAccountStore((state) => state.account);
-  const { subscriptionStatus, currentPeriodEnd, planDisplayName } = useAuthStore((s) => ({
+  const { subscriptionStatus, currentPeriodEnd, planDisplayName, plan } = useAuthStore((s) => ({
     subscriptionStatus: s.subscriptionStatus,
     currentPeriodEnd: s.currentPeriodEnd,
     planDisplayName: s.planDisplayName,
+    plan: s.plan as BillingPlanTier | undefined,
   }));
+  const [billingModal, setBillingModal] = useState<BillingModal>(null);
+  const [portalError, setPortalError] = useState<string | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
+
+  const hasActiveSubscription =
+    subscriptionStatus === 'active' || subscriptionStatus === 'trialing';
+
+  async function handleManageSubscription() {
+    setPortalLoading(true);
+    setPortalError(null);
+    const err = await openBillingPortal();
+    setPortalLoading(false);
+    if (err) setPortalError(err);
+  }
 
   const periodEndLabel = currentPeriodEnd
     ? new Date(currentPeriodEnd).toLocaleDateString(undefined, {
@@ -112,13 +134,76 @@ export function AccountSettings() {
             </div>
           )}
 
-          <Button variant="outline" size="sm" onClick={() => void openPricingPage()}>
-            <CreditCard className="mr-2 h-4 w-4" />
-            Manage Subscription
-            <ExternalLink className="ml-2 h-3.5 w-3.5 text-muted-foreground" />
-          </Button>
+          {portalError && (
+            <div className="text-xs text-destructive rounded border border-destructive/20 bg-destructive/5 px-3 py-2">
+              {portalError}
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={portalLoading}
+              onClick={() => void handleManageSubscription()}
+            >
+              <CreditCard className="mr-2 h-4 w-4" />
+              {portalLoading ? 'Opening…' : 'Manage Subscription'}
+            </Button>
+
+            {hasActiveSubscription && (
+              <>
+                <Button variant="outline" size="sm" onClick={() => setBillingModal('pause')}>
+                  <PauseCircle className="mr-2 h-4 w-4" />
+                  Pause
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setBillingModal('downgrade')}>
+                  <ArrowDown className="mr-2 h-4 w-4" />
+                  Downgrade
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setBillingModal('cancel')}
+                >
+                  <XCircle className="mr-2 h-4 w-4" />
+                  Cancel plan
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </div>
+
+      {billingModal === 'pause' && (
+        <PauseFlow
+          onClose={() => setBillingModal(null)}
+          onError={(msg) => {
+            setPortalError(msg);
+            setBillingModal(null);
+          }}
+        />
+      )}
+      {billingModal === 'downgrade' && (
+        <DowngradeFlow
+          currentTier={plan ?? 'free'}
+          onClose={() => setBillingModal(null)}
+          onError={(msg) => {
+            setPortalError(msg);
+            setBillingModal(null);
+          }}
+        />
+      )}
+      {billingModal === 'cancel' && (
+        <CancelFlow
+          onClose={() => setBillingModal(null)}
+          onError={(msg) => {
+            setPortalError(msg);
+            setBillingModal(null);
+          }}
+        />
+      )}
     </div>
   );
 }

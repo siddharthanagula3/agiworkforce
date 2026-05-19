@@ -1,13 +1,13 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Frequently Asked Questions | AGI Workforce',
+  title: 'Frequently Asked Questions | AGI',
   description:
-    'Find answers to common questions about AGI Workforce. Learn about features, pricing, platform support, security, and how to get started with AI automation.',
+    'Find answers to common questions about AGI. Learn about features, pricing, platform support, security, and how to get started with AI automation.',
   keywords: [
-    'AGI Workforce FAQ',
+    'AGI FAQ',
     'AI automation questions',
-    'AGI Workforce pricing',
+    'AGI pricing',
     'AI agents help',
     'workflow automation FAQ',
   ],
@@ -15,25 +15,24 @@ export const metadata: Metadata = {
     canonical: 'https://agiworkforce.com/faq',
   },
   openGraph: {
-    title: 'FAQ | AGI Workforce',
-    description:
-      'Find answers to common questions about AGI Workforce features, pricing, and security.',
+    title: 'FAQ | AGI',
+    description: 'Find answers to common questions about AGI features, pricing, and security.',
     url: 'https://agiworkforce.com/faq',
-    siteName: 'AGI Workforce',
+    siteName: 'AGI',
     type: 'website',
     images: [
       {
         url: '/app-preview.png',
         width: 1200,
         height: 630,
-        alt: 'AGI Workforce FAQ',
+        alt: 'AGI FAQ',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'FAQ | AGI Workforce',
-    description: 'Find answers to common questions about AGI Workforce.',
+    title: 'FAQ | AGI',
+    description: 'Find answers to common questions about AGI.',
     images: ['/app-preview.png'],
     creator: '@agiworkforce',
   },
@@ -45,31 +44,31 @@ const jsonLd = {
   '@type': 'FAQPage',
   '@id': 'https://agiworkforce.com/faq',
   url: 'https://agiworkforce.com/faq',
-  name: 'AGI Workforce FAQ',
-  description: 'Frequently asked questions about AGI Workforce',
+  name: 'AGI FAQ',
+  description: 'Frequently asked questions about AGI',
   mainEntity: [
     {
       '@type': 'Question',
-      name: 'What is AGI Workforce?',
+      name: 'What is AGI?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'AGI Workforce is a desktop app where you simply tell the AI what you want done, and it autonomously completes the task. No setup wizards, no configuration screens - just open the app and start chatting. Everything the AI does is reversible, so you can always undo if something goes wrong.',
+        text: 'AGI is a desktop app where you simply tell the AI what you want done, and it autonomously completes the task. No setup wizards, no configuration screens - just open the app and start chatting. Everything the AI does is reversible, so you can always undo if something goes wrong.',
       },
     },
     {
       '@type': 'Question',
-      name: 'How is AGI Workforce different from other AI tools?',
+      name: 'How is AGI different from other AI tools?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'AGI Workforce is designed for non-technical users who want results, not configuration. You describe your goal in plain English, and the AI figures out the steps. Unlike tools that require you to build workflows or approve every action, our AI works autonomously with a unique undo-based safety model - everything is reversible, so you can experiment freely.',
+        text: 'AGI is designed for non-technical users who want results, not configuration. You describe your goal in plain English, and the AI figures out the steps. Unlike tools that require you to build workflows or approve every action, our AI works autonomously with a unique undo-based safety model - everything is reversible, so you can experiment freely.',
       },
     },
     {
       '@type': 'Question',
-      name: 'Do I need technical knowledge to use AGI Workforce?',
+      name: 'Do I need technical knowledge to use AGI?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'Absolutely not. AGI Workforce is built specifically for non-technical users. There are no settings screens to configure, no technical jargon to learn. Just describe what you want in your own words and the AI handles everything. Error messages are in plain English, and you can always say "undo" if something goes wrong.',
+        text: 'Absolutely not. AGI is built specifically for non-technical users. There are no settings screens to configure, no technical jargon to learn. Just describe what you want in your own words and the AI handles everything. Error messages are in plain English, and you can always say "undo" if something goes wrong.',
       },
     },
     {
@@ -101,7 +100,7 @@ const jsonLd = {
       name: 'Which operating systems are supported?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'AGI Workforce is available for macOS, Windows, and Linux. We provide native builds optimized for each platform, ensuring the best performance and integration with your operating system.',
+        text: 'AGI is available for macOS, Windows, and Linux. We provide native builds optimized for each platform, ensuring the best performance and integration with your operating system.',
       },
     },
     {
@@ -114,10 +113,10 @@ const jsonLd = {
     },
     {
       '@type': 'Question',
-      name: 'Does AGI Workforce work offline?',
+      name: 'Does AGI work offline?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'Yes, AGI Workforce supports offline operation when using local AI models through Ollama. Cloud-based AI providers require an internet connection, but your local workflows and data remain accessible offline.',
+        text: 'Yes, AGI supports offline operation when using local AI models through Ollama. Cloud-based AI providers require an internet connection, but your local workflows and data remain accessible offline.',
       },
     },
     {
@@ -125,7 +124,7 @@ const jsonLd = {
       name: 'How is my data protected?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'Your data stays on your device by default. All credentials are encrypted using AES-256-GCM and stored in your system keychain. We use a managed proxy model for LLM calls, so you pay AGI Workforce directly - no need to manage your own API keys from OpenAI or Anthropic.',
+        text: 'Your data stays on your device by default. All credentials are encrypted using AES-256-GCM and stored in your system keychain. We use a managed proxy model for LLM calls, so you pay AGI directly - no need to manage your own API keys from OpenAI or Anthropic.',
       },
     },
     {
@@ -141,7 +140,7 @@ const jsonLd = {
       name: 'Which AI providers are supported?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'AGI Workforce supports models from OpenAI, Anthropic, Google, xAI, DeepSeek, Alibaba, and local models via Ollama. You pay AGI Workforce directly - we handle the billing complexity so you never need to manage multiple API subscriptions.',
+        text: 'AGI supports models from OpenAI, Anthropic, Google, xAI, DeepSeek, Alibaba, and local models via Ollama. You pay AGI directly - we handle the billing complexity so you never need to manage multiple API subscriptions.',
       },
     },
     {
@@ -165,7 +164,7 @@ const jsonLd = {
       name: 'Do I need to build workflows or configure anything?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'No! Unlike traditional automation tools with drag-and-drop builders, AGI Workforce uses a chat-first approach. You describe your goal in plain English and the AI determines the steps. No visual workflow builders, no configuration screens, no technical setup.',
+        text: 'No! Unlike traditional automation tools with drag-and-drop builders, AGI uses a chat-first approach. You describe your goal in plain English and the AI determines the steps. No visual workflow builders, no configuration screens, no technical setup.',
       },
     },
   ],

@@ -49,8 +49,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const data = await fetchSharedConversation(id);
   const title = data?.title ?? 'Shared Conversation';
   return {
-    title: `${title} - AGI Workforce`,
-    description: 'A shared conversation from AGI Workforce',
+    title: `${title} - AGI`,
+    description: 'A shared conversation from AGI',
   };
 }
 
@@ -96,7 +96,7 @@ export default async function SharedConversationPage({ params }: PageProps) {
         {/* Page header */}
         <div className="mb-8 text-center">
           <p className="text-xs font-medium uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-2">
-            AGI Workforce - Shared Conversation
+            AGI - Shared Conversation
           </p>
           <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100 break-words">
             {conversationTitle}
@@ -160,7 +160,7 @@ export default async function SharedConversationPage({ params }: PageProps) {
               href="https://agiworkforce.com"
               className="underline hover:text-zinc-600 dark:hover:text-zinc-400 transition-colors"
             >
-              AGI Workforce
+              AGI
             </a>
             . This link expires 30 days after creation.
           </p>

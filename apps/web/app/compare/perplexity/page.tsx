@@ -4,9 +4,9 @@ import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'AGI Workforce vs Perplexity | AGI Workforce',
+  title: 'AGI vs Perplexity | AGI',
   description:
-    'Honest review of Perplexity. Where Perplexity wins, where AGI Workforce wins, and how the two products differ.',
+    'Honest review of Perplexity. Where Perplexity wins, where AGI wins, and how the two products differ.',
   alternates: { canonical: 'https://agiworkforce.com/compare/perplexity' },
 };
 
@@ -52,7 +52,7 @@ export default function ComparePerplexityPage() {
           </ul>
         </section>
         <section className="agi-section">
-          <p className="agi-section-eyebrow">Where AGI Workforce wins</p>
+          <p className="agi-section-eyebrow">Where AGI wins</p>
           <table className="agi-ledger">
             <tbody>
               <tr>
@@ -88,7 +88,7 @@ export default function ComparePerplexityPage() {
           </p>
           <div className="agi-cta-row">
             <Link href="/download" className="agi-cta-primary">
-              Try AGI Workforce
+              Try AGI
             </Link>
             <Link href="/compare" className="agi-cta-ghost">
               Read the other reviews →

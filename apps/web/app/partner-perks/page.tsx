@@ -5,15 +5,13 @@ import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { PERKS } from '../../lib/perks';
 
 export const metadata: Metadata = {
-  title: 'Partner Perks | AGI Workforce',
-  description:
-    'Exclusive perks and credits from AGI Workforce partners. AWS, Linear, Vercel, and more.',
+  title: 'Partner Perks | AGI',
+  description: 'Exclusive perks and credits from AGI partners. AWS, Linear, Vercel, and more.',
   openGraph: {
-    title: 'Partner Perks | AGI Workforce',
-    description:
-      'Exclusive perks and credits from AGI Workforce partners. AWS, Linear, Vercel, and more.',
+    title: 'Partner Perks | AGI',
+    description: 'Exclusive perks and credits from AGI partners. AWS, Linear, Vercel, and more.',
     url: 'https://agiworkforce.com/partner-perks',
-    siteName: 'AGI Workforce',
+    siteName: 'AGI',
     type: 'website',
   },
   alternates: { canonical: 'https://agiworkforce.com/partner-perks' },
@@ -29,7 +27,7 @@ export default function PartnerPerksPage() {
           <h1 className="agi-page-h1">Partner perks.</h1>
           <p className="agi-page-lede">
             Exclusive credits and offers from our technology partners.{' '}
-            <strong>AGI Workforce subscribers get access to all active perks below.</strong> Email
+            <strong>AGI subscribers get access to all active perks below.</strong> Email
             partnerships@agiworkforce.com with questions.
           </p>
         </section>

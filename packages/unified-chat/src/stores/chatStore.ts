@@ -14,7 +14,18 @@ const noopStorage: Storage = {
   key: () => null,
 };
 
-export type ActiveMode = 'code' | 'write' | 'learn' | 'life' | 'research' | 'web' | 'skills' | null;
+export type ActiveMode =
+  | 'code'
+  | 'write'
+  | 'learn'
+  | 'life'
+  | 'research'
+  | 'image'
+  | 'video'
+  | 'computer'
+  | 'web'
+  | 'skills'
+  | null;
 
 const MODE_SYSTEM_PROMPTS: Record<NonNullable<ActiveMode>, string> = {
   code: 'You are an expert coding assistant. Help the user write, debug, and explain code.',
@@ -25,6 +36,12 @@ const MODE_SYSTEM_PROMPTS: Record<NonNullable<ActiveMode>, string> = {
   life: 'You are a helpful life assistant. Help with personal tasks, planning, advice, and everyday decisions.',
   research:
     'You are a research assistant. Provide thorough, well-sourced analysis. Use web search when available.',
+  image:
+    'You are an image generation assistant. Help the user craft prompts and produce compelling visuals.',
+  video:
+    'You are a video generation assistant. Help the user craft prompts and storyboards for short videos.',
+  computer:
+    'You are a computer-use assistant. Plan and execute UI actions on the user behalf with care and confirmation.',
   web: 'You are a research assistant. Provide thorough, well-sourced analysis. Use web search when available.',
   skills: 'You are a skilled professional assistant with 140+ specialized skills.',
 };

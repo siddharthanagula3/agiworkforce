@@ -3,17 +3,17 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Careers',
   description:
-    'Join the AGI Workforce team. We are hiring engineers, designers, and product thinkers who want to build the future of AI-powered work.',
+    'Join the AGI team. We are hiring engineers, designers, and product thinkers who want to build the future of AI-powered work.',
   keywords: [
-    'AGI Workforce jobs',
+    'AGI jobs',
     'AI engineering jobs',
     'startup careers',
     'AI company hiring',
     'remote AI jobs',
-    'work at AGI Workforce',
+    'work at AGI',
   ],
   openGraph: {
-    title: 'Careers | AGI Workforce',
+    title: 'Careers | AGI',
     description:
       'Build the future of AI-powered work. Open roles in AI engineering, product, and operations.',
     type: 'website',
@@ -23,13 +23,13 @@ export const metadata: Metadata = {
         url: '/app-preview.png',
         width: 1200,
         height: 630,
-        alt: 'Careers at AGI Workforce',
+        alt: 'Careers at AGI',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Careers | AGI Workforce',
+    title: 'Careers | AGI',
     description:
       'Build the future of AI-powered work. Open roles in AI engineering, product, and operations.',
     images: ['/app-preview.png'],
@@ -49,9 +49,9 @@ export default function CareersLayout({ children }: { children: React.ReactNode 
           __html: JSON.stringify({
             '@context': 'https://schema.org',
             '@type': 'WebPage',
-            name: 'Careers at AGI Workforce',
+            name: 'Careers at AGI',
             description:
-              'Join the AGI Workforce team. Open roles in AI engineering, product, design, and operations.',
+              'Join the AGI team. Open roles in AI engineering, product, design, and operations.',
             url: 'https://agiworkforce.com/careers',
           }),
         }}

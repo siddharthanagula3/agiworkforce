@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Payment Failed | AGI Workforce',
+  title: 'Payment Failed | AGI',
   description:
     'Your payment was not processed successfully. Please try again or contact support for assistance.',
   robots: {

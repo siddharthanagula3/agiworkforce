@@ -18,7 +18,7 @@ export default function NotFoundScreen() {
         <Text style={styles.description}>The page you are looking for does not exist.</Text>
 
         <Pressable
-          onPress={() => router.replace('/(app)')}
+          onPress={() => router.replace({ pathname: '/(app)' as const })}
           style={styles.homeButton}
           accessibilityLabel="Go to home screen"
           accessibilityRole="button"

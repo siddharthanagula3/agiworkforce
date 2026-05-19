@@ -193,6 +193,12 @@ pub enum PluginInstallOutcome {
 const AGIWORKFORCE_DIR: &str = ".agiworkforce";
 const PLUGINS_DIR: &str = "plugins";
 
+impl Default for PluginsManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PluginsManager {
     pub fn new() -> Self {
         let global_dir = match dirs::home_dir() {
@@ -485,7 +491,7 @@ impl PluginsManager {
                     Some(a) => a,
                     None => continue,
                 };
-                result.push((event_name.clone(), arr.iter().cloned().collect(), p.from_project_dir));
+                result.push((event_name.clone(), arr.to_vec(), p.from_project_dir));
             }
         }
         result

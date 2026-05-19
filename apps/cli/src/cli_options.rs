@@ -16,7 +16,7 @@ pub(crate) enum InputFormat {
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) enum PermissionMode {
+pub enum PermissionMode {
     #[default]
     Default,
     Plan,

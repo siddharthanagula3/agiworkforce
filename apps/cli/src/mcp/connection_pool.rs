@@ -77,6 +77,10 @@ impl McpConnectionManager {
         self.pool.read().await.len()
     }
 
+    pub async fn is_empty(&self) -> bool {
+        self.pool.read().await.is_empty()
+    }
+
     pub async fn close_all(&self) {
         self.pool.write().await.clear();
     }

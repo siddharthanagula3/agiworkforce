@@ -1,8 +1,16 @@
-# AGI Workforce — Single Source of Truth
+# AGI — Single Source of Truth
 
-> Last updated: 2026-05-13. This file is the entry point for any agent (human or AI) working on this repo. Read this first; everything else links from here.
+> Last updated: 2026-05-16. This file is the entry point for any agent (human or AI) working on this repo. Read this first; everything else links from here.
 >
-> **Foundation Sprint shipped** at tag [`v0.7.0-foundation`](https://github.com/siddharthanagula3/agiworkforce/releases/tag/v0.7.0-foundation) (2026-05-13). Phase 1 close-out: central state (`createStore` + `onChangeAppState`), `messageQueueManager` priority lane (now>next>later FIFO), `packages/llm-runtime` (`withRetry` + stream watchdog + error classifier), outbound-worker direction inversion, HKDF dispatch-key rotation, Stripe webhook idempotency. **Wave 5 Supabase migrations applied to prod 2026-05-13:** `worker_registrations`, `work_units`, `dispatch_keys`, `rotate_dispatch_keys(uuid)` RPC, canonical-dir history marker. **Stripe live:** Hobby / Pro / **Pro+** (`prod_UTTTGQ9T01Ukge`) / Max all wired.
+> **Public brand: AGI** (simplified from "AGI Workforce" 2026-05-15). Repo path + internal packages remain `agiworkforce`. Strapline: _All the AIs you already pay for, in one place._
+>
+> **BYOK-first launch posture LOCKED 2026-05-16**: v1 ships as **BYOK + Local only**. All 6 paid tiers (Hobby / Pro / Pro+ / **Pro Max $99 NEW** / Max / Enterprise) on email-only waitlist until **August 1, 2026 graduation**. Stripe wired but dormant; flips live Aug 1 once 60-90 days of BYOK telemetry inform per-tier caps. See [`memory/byok-first-pivot-2026-05-16.md`](memory/byok-first-pivot-2026-05-16.md) + [`memory/launch-playbook-2026-05-16.md`](memory/launch-playbook-2026-05-16.md).
+>
+> **Wave 4+5 shipped** on PR #366 (38 commits / +19,659 LOC, 2026-05-16): v3 frontend live across all 6 surfaces behind `DESKTOP_CHAT_V3=true` (default-on). **Wave 6 in flight**: $99 Pro Max wiring, waitlist mechanic, BYOK polish suite (per-provider quotas + auto-fallback + spend tracking + key rotation), Routing-WHY badge, 5-chip trust row, memory import/export protocol, multi-model side-by-side (Pro+ gated), Chrome + VS Code ext finalization. See [`memory/v6-roadmap-decisions-2026-05-16.md`](memory/v6-roadmap-decisions-2026-05-16.md).
+>
+> **Apple notarization unblocked 2026-05-16**: PLA renewed; macOS signed + notarized builds re-enabled. Signing identity `D2PR62RLT4`.
+>
+> **Foundation Sprint shipped** at tag [`v0.7.0-foundation`](https://github.com/siddharthanagula3/agiworkforce/releases/tag/v0.7.0-foundation) (2026-05-13). Phase 1 close-out: central state, `messageQueueManager` priority lane, `packages/llm-runtime`, outbound-worker direction inversion, HKDF dispatch-key rotation, Stripe webhook idempotency. **Wave 5 Supabase migrations applied to prod 2026-05-13.** Stripe products created (Hobby / Pro / Pro+ `prod_UTTTGQ9T01Ukge` / Max) — **dormant during waitlist period**.
 
 ## What this is
 
@@ -31,19 +39,22 @@ These are the only three. Everything else (mobile dispatch, CLI with TUI, comput
 **Shared TS packages:** `packages/chat` (canonical chat component), `packages/api`, `packages/types`, `packages/runtime`, `packages/utils`.
 **Active Rust crates:** 14 active workspace crates per `cargo metadata --no-deps` (down from 84+ — 70 codex-rs port crates removed per `Cargo.toml:4-9` comment, NOT 102 nor 110 as multiple sources had previously claimed). Specifically: `agiworkforce-protocol`, `agiworkforce-sandbox-policy`, plus 10 transitive path-deps needed by protocol (`async-utils`, `execpolicy`, `network-proxy`, `utils-{absolute-path,cache,home-dir,image,rustls-provider,string,template}`), plus apps/cli + apps/desktop/src-tauri as workspace members.
 
-## Pricing model (locked 2026-05-13 — all paid tiers live in Stripe)
+## Pricing model (6 tiers, reopened 2026-05-16 — paid all on waitlist until Aug 1, 2026)
 
-| Tier       | Price         | Stripe product        | What                                                                                                                                    |
-| ---------- | ------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Local-only | Free forever  | n/a                   | Run Ollama/LMStudio on your laptop. No Supabase. Desktop only.                                                                          |
-| BYOK       | Free forever  | n/a                   | Bring your own keys to Anthropic/OpenAI/Google/etc. Optional Supabase if Cloud mode.                                                    |
-| Hobby      | $10/mo        | `prod_TeFMHLjQt0sgMy` | Managed cloud, limited credits, basic models.                                                                                           |
-| Pro        | $29.99/mo     | `prod_TeFMDyIcU6xYJ3` | Full models, higher caps, Pro pool routing.                                                                                             |
-| **Pro+**   | $49.99/mo     | `prod_UTTTGQ9T01Ukge` | Pro pool + Opus 4.7 (15K tokens/day) + GPT-5.5 (15K tokens/day) + 60 sec/mo Runway Gen-4 video + advanced computer use. US-only toggle. |
-| Max        | $299.99/mo    | `prod_TeFMn7oAjLQTvG` | Highest caps, computer use, dedicated multi-provider gating.                                                                            |
-| Enterprise | Contact sales | n/a                   | SSO, SCIM, custom retention, audit log export, dedicated support.                                                                       |
+| Tier        | Monthly       | Stripe product        | Waitlist or live?             | What                                                                                                                                    |
+| ----------- | ------------- | --------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Local-only  | Free forever  | n/a                   | ✅ LIVE                       | Run Ollama/LMStudio on your laptop. No Supabase. Desktop only.                                                                          |
+| BYOK        | Free forever  | n/a                   | ✅ LIVE                       | Bring your own keys to Anthropic/OpenAI/Google/xAI/DeepSeek/Perplexity/Moonshot/Zhipu/Mistral/etc. Optional Supabase if Cloud mode.     |
+| Hobby       | $10           | `prod_TeFMHLjQt0sgMy` | 📝 Waitlist → live 2026-08-01 | Managed cloud, limited credits, basic models.                                                                                           |
+| Pro         | $29.99        | `prod_TeFMDyIcU6xYJ3` | 📝 Waitlist → live 2026-08-01 | Full models, higher caps, Pro pool routing.                                                                                             |
+| **Pro+**    | $49.99        | `prod_UTTTGQ9T01Ukge` | 📝 Waitlist → live 2026-08-01 | Pro pool + Opus 4.7 (15K/day) + GPT-5.5 (15K/day) + 60s/mo Runway Gen-4 + voice 1500 min/mo + multi-model side-by-side (2-col).         |
+| **Pro Max** | **$99 NEW**   | TBD (Wave 6)          | 📝 Waitlist → live 2026-08-01 | Uninterrupted deep-work tier: highest premium caps, 4-model side-by-side, priority routing, no clock-watching. Anchor vs Claude Max 5×. |
+| Max         | $299.99       | `prod_TeFMn7oAjLQTvG` | 📝 Waitlist → live 2026-08-01 | Highest caps, computer use (1K soft / 2.5K hard actions/mo), Deep Research, voice unlimited.                                            |
+| Enterprise  | Contact sales | n/a                   | Contact sales                 | SSO, SCIM, custom retention, audit log export, dedicated support.                                                                       |
 
-**Stripe webhook idempotency:** `public.process_stripe_event_idempotent(p_event_id text) RETURNS boolean` (SECURITY DEFINER, `search_path=public`) live in prod 2026-05-13. Called from `apps/web/app/api/stripe-webhook/route.ts:1251`.
+**SSOT**: `packages/types/src/billing-catalog.ts` + `packages/types/src/model-catalog.ts` TIER_POLICIES. **Why waitlist**: per `memory/byok-first-pivot-2026-05-16.md`, 60-90 days of BYOK telemetry sets caps from data instead of guesses. Eliminates fraud risk + Hobby unit-economics worry + Stripe-launch dependency from Days-1-30. Trust signal: "we don't sell what we don't yet know the cost of."
+
+**Stripe webhook idempotency** (dormant until Aug 1): `public.process_stripe_event_idempotent(p_event_id text) RETURNS boolean` live in prod 2026-05-13. Called from `apps/web/app/api/stripe-webhook/route.ts:1251`. Flips active Aug 1 graduation.
 
 ## Local vs Cloud mode (architecture)
 
@@ -54,16 +65,18 @@ These are the only three. Everything else (mobile dispatch, CLI with TUI, comput
 
 ## MVP plan (waves, parallel where possible)
 
-| Wave       | Timeline   | What ships                                                                                                                                                                                                                                        | Status                               |
-| ---------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| **Wave 0** | 2026-05-03 | Cleanup: -1.04M LOC, SSOT created, audit P0/P1 mostly closed                                                                                                                                                                                      | ✅ SHIPPED                           |
-| **Wave 1** | 2026-05-03 | CLI v1.0 — Homebrew + install.sh + cargo + GitHub Release (5 platforms) live; npm pending NPM_TOKEN                                                                                                                                               | ✅ SHIPPED                           |
-| **Wave 2** | Weeks 2-5  | Desktop v1.0 — pixel-close Claude Desktop UI, Windows EV cert, web UnifiedAgenticChat done, IPC pruning                                                                                                                                           | In progress                          |
-| **Wave 3** | Weeks 6-9  | Mobile (App Store + Play) + Chrome ext (Web Store) + VS Code ext (Marketplace) + Hobby tier launch                                                                                                                                                | In progress (kickoff 2026-05-04)     |
-| **Wave 4** | 2026-05-08 | Phase A slices 1-4: Budget, agentic-loop, checkpoints/branches, artifacts/sidecar; Pro+ tier wired end-to-end across Desktop+Web+Mobile+VS Code+Chrome ext; 6 P0 security fixes; `packages/data-layer`; Stripe+Supabase production verified       | ✅ SHIPPED                           |
-| **Wave 5** | 2026-05-13 | Foundation Sprint (v0.7.0-foundation): central state + queue + llm-runtime + worker direction-inversion + HKDF dispatch keys; Supabase migrations applied to prod (`worker_registrations`, `work_units`, `dispatch_keys`, `rotate_dispatch_keys`) | ✅ SHIPPED (tag `v0.7.0-foundation`) |
+| Wave                | Timeline    | What ships                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Status                               |
+| ------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
+| **Wave 0**          | 2026-05-03  | Cleanup: -1.04M LOC, SSOT created, audit P0/P1 mostly closed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | ✅ SHIPPED                           |
+| **Wave 1**          | 2026-05-03  | CLI v1.0 — Homebrew + install.sh + cargo + GitHub Release (5 platforms) live; npm pending NPM_TOKEN                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | ✅ SHIPPED                           |
+| **Wave 2**          | Weeks 2-5   | Desktop v1.0 — pixel-close Claude Desktop UI, Windows EV cert, web UnifiedAgenticChat done, IPC pruning                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | In progress                          |
+| **Wave 3**          | Weeks 6-9   | Mobile (App Store + Play) + Chrome ext (Web Store) + VS Code ext (Marketplace) + Hobby tier launch                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | In progress (kickoff 2026-05-04)     |
+| **Wave 4**          | 2026-05-08  | Phase A slices 1-4: Budget, agentic-loop, checkpoints/branches, artifacts/sidecar; Pro+ tier wired end-to-end across Desktop+Web+Mobile+VS Code+Chrome ext; 6 P0 security fixes; `packages/data-layer`; Stripe+Supabase production verified                                                                                                                                                                                                                                                                                                                                    | ✅ SHIPPED                           |
+| **Wave 5**          | 2026-05-13  | Foundation Sprint (v0.7.0-foundation): central state + queue + llm-runtime + worker direction-inversion + HKDF dispatch keys; Supabase migrations applied to prod (`worker_registrations`, `work_units`, `dispatch_keys`, `rotate_dispatch_keys`)                                                                                                                                                                                                                                                                                                                              | ✅ SHIPPED (tag `v0.7.0-foundation`) |
+| **Wave 4+5 v3 UI**  | 2026-05-16  | v3 frontend across all 6 surfaces on PR #366 (38 commits / +19,659 LOC). `DESKTOP_CHAT_V3=true` default-on. Real-store wiring (chat / agentTask / execution / project / scheduler / artifact / mcp / billing / auth / voiceInput). Web `WebShellV3`, Mobile `MobileShellV3`, Chrome ext + VS Code ext v3 UIs. 9 anti-pattern ESLint locks.                                                                                                                                                                                                                                     | ✅ SHIPPED (PR #366)                 |
+| **Wave 6 finalize** | 2026-05-16+ | 22 deliverables baking in iteration 3 research: $99 Pro Max tier wired (SSOT + UI), WaitlistSignup component + Supabase `waitlist_signups` table, Pricing CTA flip to "Join Waitlist", 5-chip trust row, Routing-WHY badge, pre-request quota line, BYOK polish suite, memory import/export (AGI Memory v1 schema), conversation export multi-format, multi-model side-by-side (Pro+ gated 2-col / Pro Max 4-col later), Aug 1 countdown banner, voice privacy lock, legal page scaffolding, Chrome + VS Code BYOK control-plane positioning, 4 new ESLint anti-pattern locks. | 🚧 IN FLIGHT (post-PR-366 merge)     |
 
-Active sprint plan: [docs/plans/sprint1-vault-rewire.md](docs/plans/sprint1-vault-rewire.md). Master remediation: [docs/plans/master-remediation.md](docs/plans/master-remediation.md). License: PROPRIETARY (see [LICENSE](LICENSE)).
+Active plan: [`/Users/siddhartha/.claude/plans/v6-finalize-frontend-2026-05-16.md`](/Users/siddhartha/.claude/plans/v6-finalize-frontend-2026-05-16.md). Pre-launch checklist: [`tasks/launch-checklist-2026-07-18.md`](tasks/launch-checklist-2026-07-18.md). License: PROPRIETARY (see [LICENSE](LICENSE)).
 
 ## OpenClaw reference & porting plan
 
@@ -873,6 +886,109 @@ The Hobby tier launch needs **zero new code** — only Stripe dashboard config +
 4. **Mobile (Play first, App Store last)** — Apple is the long pole.
 
 Total wall-clock to all four live: 2–4 weeks, gated almost entirely on Apple's queue.
+
+## What shipped on 2026-05-16 (Wave 5 — v1 complete across 6 surfaces)
+
+**16 commits** on `claude/refine-local-plan-yhjFU`, base `b96197ecd`, HEAD `d914b26f8`. Plan SSOT: `~/.claude/plans/v1-complete-wave5.md`. Audit fire: `AUDIT_LOG.md` 2026-05-16T18:18Z.
+
+**Wave 5 closes v1.** `DESKTOP_CHAT_V3` flag flipped from `rolloutPercentage: 0` → `100` (`b90d26003`) — the v3 shell is the default mount on `apps/desktop/src/App.tsx`. Every v3 component sheds its seed data and consumes real stores. The v3 UI ships in full (not just CSS-var theming) on web, mobile, Chrome extension, and VS Code extension. Stripe checkout + Pause / Downgrade / Cancel wires end-to-end against `packages/types/billing-catalog.ts`. MCP install / uninstall lands behind the v3 plugin marketplace. `useGlobalSearch` powers a unified Cmd-K. i18n extraction (en + es), a11y audit (ARIA + keyboard nav + contrast, axe-core CI gate), and Playwright `@smoke` + `@reachability` suites land alongside.
+
+### Commit table
+
+| Commit      | What                                                                              | Surface     |
+| ----------- | --------------------------------------------------------------------------------- | ----------- |
+| `8a138f888` | Wire v3 Sidebar Recents + EmptyChat greeting to real stores                       | Desktop     |
+| `bc3388ebd` | Wire v3 Composer + ModelPopover + MicSettings to voice/chat/model stores          | Desktop     |
+| `6691d9674` | `useGlobalSearch` hook + wire v3 SearchModalCmdK to real search index             | Desktop     |
+| `b6738d0c1` | Wire v3 AccountMenu + PluginDetail to real stores                                 | Desktop     |
+| `1463f5b4b` | Full v3 chat surface — Sidebar + EmptyChat + SearchModalCmdK + Settings           | Web         |
+| `e6350804e` | Full v3 chat + Settings + Pricing + Cowork RN screens                             | Mobile      |
+| `c88e556b2` | Wire v3 Cowork 5 views to existing stores                                         | Desktop     |
+| `017062931` | v3 webview chat — ModelPopover, ProvenanceFooter, diff-inline, EmptyChat          | VS Code ext |
+| `19629c05d` | Fix `connectorsStore` migrate cast + typecheck pass                               | Desktop     |
+| `07895bc9a` | Full v3 sidebar UI (Composer + ModelPopover + EmptyChat + ActiveChat)             | Chrome ext  |
+| `e13ae4537` | v3 sidebar — EmptyChat icon, copy buttons, stop-stream, bridge probe              | Chrome ext  |
+| `476fc7f95` | Extract v3 hardcoded strings to `v3.*` namespace + en/es translations             | i18n        |
+| `e81ff5dca` | ARIA + keyboard nav + contrast pass on v3 components                              | a11y        |
+| `ccfd1a350` | Add `@smoke` + `@reachability` Playwright suites for v3                           | e2e         |
+| `b90d26003` | **Flip `DESKTOP_CHAT_V3` default-on** — v3 is the production desktop chat surface | Desktop     |
+| `d914b26f8` | Silence 3 `react-hooks/exhaustive-deps` warnings on mount-only effects            | Desktop     |
+
+### Locked highlights
+
+- **Flag default-on (`b90d26003`, task #10).** `apps/desktop/src/services/featureFlags.ts` `DESKTOP_CHAT_V3.rolloutPercentage = 100`. Legacy shell preserved behind `setLocalOverride(FeatureFlagName.DESKTOP_CHAT_V3, false)` for rollback. v1 is live.
+- **26 v3 components wired to real stores (tasks #1–#6).** `Sidebar`, `EmptyChat`, `CoworkHome/Projects/Scheduled/Artifacts/Dispatch`, `CustomizeHub/SkillsView/ConnectorsView/PluginsHub`, `AccountMenu`, `SearchModalCmdK`, `PluginMarketplace`, `PluginDetail`, `MicSettings`, `Composer`, `ModelPopover`, `ActiveChat`, `ArtifactWorkspace`, `ThinkingPill`, `InlineArtifactChip`, `ResponseActionRow`, `PlusMenu`. Zero seed arrays remain in `apps/desktop/src/components/v3/`.
+- **Stripe wiring + Pause / Downgrade / Cancel + SpendStackImporter (task #7).** `Pricing.tsx` and `AccountMenu` billing pane render from `billing-catalog.ts` SSOT; price IDs read from env (`STRIPE_PRICE_*`). SpendStackImporter (CSV/JSON, client-side parse) provides a migration path from competing subscription trackers.
+- **MCP install / uninstall via Tauri (task #9).** `PluginMarketplace` + `PluginDetail` invoke `#[tauri::command]` MCP registry add/remove paths; live state hydrates from the MCP store. stdio + http transports supported.
+- **`useGlobalSearch` hook (`6691d9674`, task #8).** `apps/desktop/src/hooks/useGlobalSearch.ts` spans conversations, projects, skills, plugins, MCP servers, and slash commands. Debounced + score-ranked.
+- **All-surface v3 UI parity (tasks #11–#14).** Web (`apps/web/features/chat/` full v3), mobile (`e6350804e` adds Settings + Pricing + Cowork RN screens), Chrome ext (full v3 side-panel UI — Composer + ModelPopover + EmptyChat + ActiveChat), VS Code ext (full v3 webview — ModelPopover + ProvenanceFooter + diff-inline + EmptyChat). Not just theming — full v3 chat surface on every surface.
+- **i18n + a11y + Playwright (tasks #15–#17).** Strings extracted to `v3.*` namespace with en + es translations; ARIA roles + keyboard nav + contrast pass with axe-core CI gate; `v3-smoke.spec.ts` (golden chat path) + `v3-reachability.spec.ts` (every nav edge) catch dead links after the flag flip.
+
+### Cut list — deferred to Wave 6 / ops track
+
+Documented in `~/.claude/plans/v1-complete-wave5.md:103-112`:
+
+1. Cowork agent runtime backend (UI shipped; needs hosted infra)
+2. Spend-stack OCR (importer ships for CSV/JSON; OCR API account needed)
+3. Live Stripe production checkout (Stripe test mode green; gated on live key provisioning)
+4. Apple notarization (signing works at `D2PR62RLT4`; blocked on Apple Developer Program 403 PLA acceptance — Linux + Windows unaffected)
+5. GrowthBook integration (account provisioning)
+6. Multi-language voice beyond en-US (Wispr-Flow-style transcription locale expansion)
+7. Memory graph visualization (memory store wired; graph UI deferred)
+8. Real-time computer-use full feature (UI shipped on `CoworkDispatch`; end-to-end execution backend deferred)
+
+### Verification matrix (per `AUDIT_LOG.md` 2026-05-16T18:18Z)
+
+- `pnpm typecheck:all` GREEN across all 19 TS projects
+- `pnpm lint` GREEN at `--max-warnings=0` (post-`d914b26f8` exhaustive-deps cleanup)
+- `pnpm lint:extension` GREEN at `--max-warnings=0`
+- `cargo check --workspace` GREEN
+- Desktop test run: in flight at fire time (partial set green; full matrix pending task #18)
+- Playwright `@smoke` + `@reachability` suites added (`ccfd1a350`); first CI run pending
+- Stripe checkout + Pause / Downgrade / Cancel: green against Stripe test mode
+- a11y: axe-core CI gate active across v3 components
+
+## What shipped on 2026-05-16 (Wave 4 — frontend rebuild, PR #366)
+
+**20 commits** on `claude/refine-local-plan-yhjFU`, base `ea104d1b3`, HEAD `6af5e3004`. Plan SSOT: `~/.claude/plans/robust-whistling-crane.md`. Net effect: a feature-flagged v3 desktop chat shell, cross-surface design-token parity, the v3 Pricing UI hydrated from billing-catalog SSOT, and the pre-v3 plan tree archived under `docs/archive/2026-05-16-pre-v3/`.
+
+| Commit        | What                                                                                                                                     | Impact                          |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `cbbed3ca3`   | Feature-flagged v3 chat shell behind `DESKTOP_CHAT_V3`                                                                                   | flag wired, rollout 0%          |
+| `3e00f9c9b`   | Record `claude/refine-local-plan` session permissions                                                                                    | tooling                         |
+| `6e0dd8621`   | QuickChips → 6 chips (Code/Write/Research/Image/Video/Computer)                                                                          | +41 / -8 LOC                    |
+| `9cc27e02f`   | Archive 9 pre-v3 plans → `docs/archive/2026-05-16-pre-v3/`                                                                               | renames + +35 README LOC        |
+| `fc3bc68ed`   | ProvenanceFooter auto-routing trace + Pin-to-model button                                                                                | +193 / -17 LOC, +113 RTL        |
+| `52fc08af6`   | v3 `Sidebar.tsx` + `DesktopShellV3.tsx` mode routing                                                                                     | shell scaffold                  |
+| `0a995cf09` † | v3 `ArtifactWorkspace.tsx` (split-pane, file tree, MCP-live banner) — bundled with `#16` vscode-ext + `#2` mobile typed-`Href` migration | +819 / -156 LOC across 19 files |
+| `4333eccf8`   | v3 Cowork mode (5 views) + Code mode home                                                                                                | 6 new components                |
+| `675ae9db4`   | `MessageRouting` schema: `traceId` + `alternatives[]` (OTel hook)                                                                        | +11 LOC                         |
+| `205159185`   | Web pricing page → `billing-catalog` SSOT                                                                                                | drift-proofed                   |
+| `1dbd2ceeb`   | Chrome ext: strip hardcoded hex, consume `@agiworkforce/design-tokens` CSS vars                                                          | brand-locked                    |
+| `3428e29d1`   | v3 ActiveChat + ThinkingPill + InlineArtifactChip + ResponseActionRow                                                                    | +443 LOC                        |
+| `0a9158c87`   | v3 Composer + PlusMenu + ModelPopover                                                                                                    | +973 LOC                        |
+| `fc86460a5`   | Mobile v3 parity — TaskChips (6 chips), Composer wrapper, Sidebar, brand copy fix                                                        | +196 / -62 LOC                  |
+| `dc38ad52e`   | v3 Pricing page (5 tiers + capability matrix + trust signals)                                                                            | +696 LOC                        |
+| `8259d6014`   | v3 Customize hub (Skills + Connectors + Plugins)                                                                                         | +1,036 LOC                      |
+| `93c87001b`   | v3 overlays — AccountMenu / SearchCmdK / PluginMarketplace / PluginDetail / MicSettings                                                  | +1,954 LOC                      |
+| `2cf38a32d`   | CLI v3 palette + slash menu order + model picker (Adaptive thinking)                                                                     | +328 LOC                        |
+| `7163765d0`   | Align `ModelPopover` to provider-scoped helpers + always-visible Composer Adaptive HUD                                                   | +175 / -100 LOC                 |
+| `6af5e3004`   | Mobile test fixtures repaired for typed `Href` migration (4 suites / 49 tests)                                                           | mobile suite green at 815 tests |
+
+† **Bundled-commit attribution.** `0a995cf09` carries work from THREE tasks because 13 teammates ran on the shared branch `claude/refine-local-plan-yhjFU` without git-worktree isolation. The commit's primary subject line is the desktop ArtifactWorkspace work (task #8); also included: VS Code webview theming + diff-decoration provider updates (task #16, +48 LOC modified across `extension-vscode/src/providers/`) plus `packages/design-tokens/src/index.ts` `agiVsCodeCssVars` extensions (+10 LOC); and the apps/mobile typed-`Href` router migration (task #2, 14 files / +332 net LOC including `.expo/types/router.d.ts` regen). Mobile work is therefore split across two commits — `0a995cf09` (router migration) and `fc86460a5` (v3 parity per task #17). Diffs are correct; only attribution is muddled.
+
+**Process notes (Wave 4 retrospective).** Future waves that run multiple teammates in parallel should provision a git-worktree per teammate (`git worktree add ../<wave>-<task>-<owner>`) so each commit cleanly maps 1:1 to a task. Wave 4's plan called for this but Ultraplan's first-cut implementation simplified to shared-branch coordination; the bundled `0a995cf09` is the visible artifact. Cost: extra reconciliation in the changelog (this entry); no correctness impact on the shipped code.
+
+**v3 anti-pattern guardrails (ESLint, `eslint.config.mjs:436-468`)** — locked to `apps/desktop/src/components/v3/**` + `apps/desktop/e2e/v3-*.spec.ts`:
+
+1. User-facing brand string must be "AGI" (not "AGI Workforce") — `Literal` + `JSXText` selectors block toast titles, alt text, and JSX children. Pointer to `docs/design/design-spec-2026-05-15.md`.
+2. `ModeSelectionDialog` re-imports blocked — mode picker lives in `OnboardingWizard.tsx` per CLAUDE.md.
+
+**Feature flag status:** `DESKTOP_CHAT_V3` default `rolloutPercentage: 0`. v3 ships dark; flip per-user via local override or ramp the rollout in a follow-up commit once internal dogfooding completes.
+
+**Verification matrix (per `AUDIT_LOG.md` 2026-05-16T08:49Z):** CLI 1,337 · Mobile 815 (46 suites, post-`6af5e3004`) · Chrome ext 614 (22 suites) · unified-chat 361. Desktop / Web / VS Code ext: typecheck + build green, no failures reported. Lint clean at `--max-warnings=0`. `cargo check` + `cargo clippy --workspace --lib -- -D warnings` + `cargo test --workspace --lib` all green (4 visibility warnings in `cli_options.rs`, non-error). Playwright `@locks` shell-mount test has an env-only caveat (no Tauri runtime + auth in CI; shell does mount in real Tauri dev per `App.tsx:1284-1306`).
+
+**Doc archive note:** 9 pre-v3 plan docs (`UNIFIED_LAUNCH_PLAN.md`, `SHIP_RUNBOOK.md`, `DESIGN.md`, `SURFACE_VERIFICATION.md`, `VERIFICATION_2026-05-08.md`, plus the previously-archived wave2/wave3/master-remediation/sprint1-vault-rewire files) are now under `docs/archive/2026-05-16-pre-v3/` with a README that maps each → its successor doc. New SSOT plan: `~/.claude/plans/robust-whistling-crane.md`.
 
 ## How to use this file
 

@@ -25,6 +25,12 @@ pub struct MarkdownRenderer {
     terminal_width: usize,
 }
 
+impl Default for MarkdownRenderer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MarkdownRenderer {
     pub fn new() -> Self {
         let width = terminal_width();

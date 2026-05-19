@@ -140,7 +140,7 @@ pub(super) async fn execute_task_create(args: &HashMap<String, String>) -> Resul
     Ok(ToolResult {
         tool_name: "task_create".into(),
         success: true,
-        output: serde_json::to_string_pretty(&task).unwrap_or_else(|_| id),
+        output: serde_json::to_string_pretty(&task).unwrap_or(id),
     })
 }
 
@@ -367,7 +367,7 @@ pub(super) async fn execute_cron_create(args: &HashMap<String, String>) -> Resul
     Ok(ToolResult {
         tool_name: "cron_create".into(),
         success: true,
-        output: serde_json::to_string_pretty(&cron).unwrap_or_else(|_| id),
+        output: serde_json::to_string_pretty(&cron).unwrap_or(id),
     })
 }
 

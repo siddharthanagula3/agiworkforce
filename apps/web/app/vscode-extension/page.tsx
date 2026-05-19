@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'VS Code Extension — Multi-provider coding assistant | AGI Workforce',
+  title: 'VS Code Extension — Multi-provider coding assistant | AGI',
   description:
     '10+ providers in one VS Code extension. Inline completions, code lens, hover provider, and an @agi chat participant inside Copilot Chat. Bring your own keys.',
   alternates: { canonical: 'https://agiworkforce.com/vscode-extension' },

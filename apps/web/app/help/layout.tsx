@@ -3,18 +3,18 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Help Center',
   description:
-    'Get help with AGI Workforce. Step-by-step guides, troubleshooting articles, and community support for AI automation.',
+    'Get help with AGI. Step-by-step guides, troubleshooting articles, and community support for AI automation.',
   keywords: [
-    'AGI Workforce help',
+    'AGI help',
     'AI agent support',
     'troubleshooting',
-    'how to use AGI Workforce',
+    'how to use AGI',
     'AI automation guide',
   ],
   openGraph: {
-    title: 'Help Center | AGI Workforce',
+    title: 'Help Center | AGI',
     description:
-      'Find answers fast. Guides, troubleshooting articles, and community support for AGI Workforce.',
+      'Find answers fast. Guides, troubleshooting articles, and community support for AGI.',
     type: 'website',
     url: 'https://agiworkforce.com/help',
     images: [
@@ -22,15 +22,15 @@ export const metadata: Metadata = {
         url: '/app-preview.png',
         width: 1200,
         height: 630,
-        alt: 'AGI Workforce Help Center',
+        alt: 'AGI Help Center',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Help Center | AGI Workforce',
+    title: 'Help Center | AGI',
     description:
-      'Find answers fast. Guides, troubleshooting articles, and community support for AGI Workforce.',
+      'Find answers fast. Guides, troubleshooting articles, and community support for AGI.',
     images: ['/app-preview.png'],
     creator: '@agiworkforce',
   },

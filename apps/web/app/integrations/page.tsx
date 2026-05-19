@@ -4,9 +4,9 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Integrations | AGI Workforce',
+  title: 'Integrations | AGI',
   description:
-    'How AGI Workforce connects to other tools — MCP plugins, native messaging bridge, BYOK against any cloud provider.',
+    'How AGI connects to other tools — MCP plugins, native messaging bridge, BYOK against any cloud provider.',
   alternates: { canonical: 'https://agiworkforce.com/integrations' },
 };
 
@@ -18,8 +18,8 @@ export default function IntegrationsPage() {
         <section className="agi-page-hero">
           <h1 className="agi-page-h1">Integrations.</h1>
           <p className="agi-page-lede">
-            Three patterns connect AGI Workforce to the rest of your stack: MCP plugins, the native
-            messaging bridge, and BYOK across cloud providers.{' '}
+            Three patterns connect AGI to the rest of your stack: MCP plugins, the native messaging
+            bridge, and BYOK across cloud providers.{' '}
             <strong>
               The model picker is one of the integrations — every wired provider counts.
             </strong>

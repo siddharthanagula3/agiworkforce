@@ -35,9 +35,9 @@ class SEOService {
   constructor() {
     this.baseUrl = process.env['NEXT_PUBLIC_APP_URL'] || 'https://agiworkforce.com';
     this.defaultSEO = {
-      title: 'AGI Workforce - Your AI Workforce, On Demand',
+      title: 'AGI - Beyond one model. Beyond one surface.',
       description:
-        'Build and manage your AI workforce. Chat with specialized AI agents, automate tasks, and scale your business.',
+        'All the AIs you already pay for, in one place. Beyond one model. Beyond one surface. AGI in your hands.',
       keywords: [
         'AI agents',
         'agentic AI',
@@ -94,7 +94,7 @@ class SEOService {
     this.updateMetaTag('og:type', fullSEO.ogType || '', 'property');
     this.updateMetaTag('og:url', this.getCanonicalUrl(currentPath), 'property');
     this.updateMetaTag('og:image', fullSEO.ogImage || '', 'property');
-    this.updateMetaTag('og:site_name', 'AGI Workforce', 'property');
+    this.updateMetaTag('og:site_name', 'AGI', 'property');
 
     // Update Twitter Card tags
     this.updateMetaTag('twitter:card', fullSEO.twitterCard || '');
@@ -166,11 +166,11 @@ class SEOService {
           headline: data['headline'],
           author: {
             '@type': 'Person',
-            name: data['author'] || 'AGI Workforce Team',
+            name: data['author'] || 'AGI Team',
           },
           publisher: {
             '@type': 'Organization',
-            name: 'AGI Workforce',
+            name: 'AGI',
             logo: {
               '@type': 'ImageObject',
               url: `${this.baseUrl}/logo.png`,
@@ -186,7 +186,7 @@ class SEOService {
           ...baseStructuredData,
           brand: {
             '@type': 'Brand',
-            name: 'AGI Workforce',
+            name: 'AGI',
           },
           offers: {
             '@type': 'Offer',
@@ -222,16 +222,16 @@ class SEOService {
     const pages: PageSEOData[] = [
       {
         path: '/',
-        title: 'AGI Workforce - AI Workforce Platform',
+        title: 'AGI - Beyond one model. Beyond one surface.',
         description:
-          'Transform your business with AI employees. Hire, manage, and scale your AI workforce.',
+          'All the AIs you already pay for, in one place. Beyond one model. Beyond one surface.',
         keywords: ['AI', 'automation', 'workforce', 'artificial intelligence'],
         priority: 1.0,
         changeFrequency: 'daily',
       },
       {
         path: '/pricing',
-        title: 'Pricing - AGI Workforce',
+        title: 'Pricing - AGI',
         description:
           'Choose the perfect plan for your AI workforce needs. Flexible pricing for businesses of all sizes.',
         keywords: ['pricing', 'AI workforce', 'subscription', 'plans'],
@@ -240,7 +240,7 @@ class SEOService {
       },
       {
         path: '/marketplace',
-        title: 'AI Employee Marketplace - AGI Workforce',
+        title: 'AI Employee Marketplace - AGI',
         description:
           'Browse and hire AI employees for your business. Find the perfect AI assistant for your needs.',
         keywords: ['AI employees', 'marketplace', 'hire AI', 'AI assistants'],
@@ -249,7 +249,7 @@ class SEOService {
       },
       {
         path: '/about',
-        title: 'About Us - AGI Workforce',
+        title: 'About Us - AGI',
         description:
           'Learn about our mission to democratize AI workforce automation and empower businesses.',
         keywords: ['about', 'company', 'mission', 'AI workforce'],
@@ -258,7 +258,7 @@ class SEOService {
       },
       {
         path: '/blog',
-        title: 'Blog - AGI Workforce',
+        title: 'Blog - AGI',
         description:
           'Latest insights, tutorials, and news about AI workforce automation and business transformation.',
         keywords: ['blog', 'AI insights', 'tutorials', 'automation'],
@@ -267,7 +267,7 @@ class SEOService {
       },
       {
         path: '/contact-sales',
-        title: 'Contact Sales - AGI Workforce',
+        title: 'Contact Sales - AGI',
         description:
           'Get in touch with our sales team to discuss your AI workforce automation needs.',
         keywords: ['contact', 'sales', 'AI consultation', 'support'],
@@ -367,7 +367,7 @@ class SEOService {
   private setupStructuredData(): void {
     // Add organization structured data
     const organizationData = this.generateStructuredData('Organization', {
-      name: 'AGI Workforce',
+      name: 'AGI',
       description: 'AI workforce automation platform',
     });
     this.updateStructuredData(organizationData);

@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Payment issue | AGI Workforce',
+  title: 'Payment issue | AGI',
   description: 'Something went wrong with your payment. Here is how to resolve it.',
 };
 
