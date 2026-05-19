@@ -1563,10 +1563,17 @@
   font-family: var(--agi-font);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  min-height: 100vh;
   font-feature-settings:
     'cv11' on,
     'ss01' on;
+}
+
+/* AUDIT-FIX: only the page root fills the viewport. Header/footer chrome
+   bands also carry data-design="agi" so the rule above must not cascade
+   min-height: 100vh to them, or every page gets a full-viewport blank band
+   above the hero. Scope the fill-viewport rule to non-chrome instances. */
+[data-design='agi']:not(.agi-chrome-band) {
+  min-height: 100vh;
 }
 
 [data-design='agi'] *,
