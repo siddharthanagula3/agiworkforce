@@ -1,6 +1,7 @@
 /**
- * Minimal DOM helpers to eliminate innerHTML for static/numeric content.
- * All functions produce elements via the safe DOM API — no parser involved.
+ * @deprecated import from 'features/content/dom-helpers' instead.
+ * Re-export shim — canonical source: src/features/content/dom-helpers.ts
+ * Kept so __tests__/dom-helpers.test.ts resolves unchanged.
  */
 
 /** Set textContent on an element (safe alternative to innerHTML = string). */

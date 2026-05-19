@@ -1,11 +1,20 @@
 /**
- * @deprecated import from 'features/native-bridge' instead.
+ * Desktop pairing state machine for the Chrome extension.
  *
- * Re-export shim — canonical source has moved to
- * `src/features/native-bridge/pairing.ts`. This file is kept so that:
- *   - Existing test imports (`../src/pairing`) resolve unchanged.
- *   - `popup.ts` keeps its current import path unchanged.
- * Do not add new imports to this path.
+ * States: IDLE → REQUESTING → PAIRED | ERROR
+ *         PAIRED → IDLE (unpair)
+ *
+ * The token returned by the desktop is stored in chrome.storage.session
+ * ('agi_bridge_token') so background.ts can attach it to bridge requests
+ * as X-Bridge-Token without further reads.
+ *
+ * The desktop endpoint is POST http://127.0.0.1:8787/pair (or overridden
+ * bridge URL + /pair). If the desktop is not yet running an actual /pair
+ * endpoint, the flow degrades gracefully: request fails → ERROR state with
+ * a clear message.
+ *
+ * Desktop bridge must implement POST /pair and return
+ * { token: string; fingerprint: string }.
  */
 
 export type PairingPhase = 'idle' | 'requesting' | 'paired' | 'error';
@@ -17,29 +26,10 @@ export interface PairingState {
   error: string | null;
 }
 
-import { ALLOWED_BRIDGE_HOSTS, DEFAULT_AGI_BRIDGE_URL } from './background/policy';
-
 const STORAGE_KEY_TOKEN = 'agi_bridge_token';
 const STORAGE_KEY_FINGERPRINT = 'agi_pairing_fingerprint';
 
-// SECURITY (H-07 audit 2026-05-19): pairing token / fingerprint shape.
-// Tokens must be 32-128 chars of URL-safe base64 / hex. Fingerprints are
-// shorter (4-32 chars, same charset). Reject anything else — including
-// empty values, multi-MB JSON blobs, or values containing whitespace.
-const PAIRING_TOKEN_RE = /^[A-Za-z0-9_-]{32,128}$/;
-const PAIRING_FINGERPRINT_RE = /^[A-Za-z0-9_-]{4,32}$/;
-
-export function isValidPairingToken(value: string): boolean {
-  return typeof value === 'string' && PAIRING_TOKEN_RE.test(value);
-}
-
-export function isValidPairingFingerprint(value: string): boolean {
-  return typeof value === 'string' && PAIRING_FINGERPRINT_RE.test(value);
-}
-
-// Use the canonical default exported by the policy module so this surface
-// can't drift from background / side panel (L-06 + H-08).
-const DEFAULT_BRIDGE_URL = DEFAULT_AGI_BRIDGE_URL;
+const DEFAULT_BRIDGE_URL = 'http://127.0.0.1:8787';
 
 let _state: PairingState = { phase: 'idle', fingerprint: null, error: null };
 
@@ -114,13 +104,10 @@ export async function requestPairing(): Promise<PairingState> {
   try {
     const baseUrl = await getBridgeBaseUrl();
 
-    // Only allow local bridge URLs.
-    // SECURITY (H-03 audit 2026-05-19): use the shared ALLOWED_BRIDGE_HOSTS
-    // set so this check stays in sync with `validateBridgeUrl`. The previous
-    // literal `'::1'` mismatched `new URL('http://[::1]/').hostname` which
-    // returns `'[::1]'` with brackets — IPv6 pairing always rejected.
+    // Only allow local bridge URLs (security constraint: same as bridge URL validation)
     const parsed = new URL(baseUrl);
-    if (!ALLOWED_BRIDGE_HOSTS.has(parsed.hostname)) {
+    const host = parsed.hostname;
+    if (host !== 'localhost' && host !== '127.0.0.1' && host !== '::1') {
       throw new Error('Pairing is only supported with local desktop bridge');
     }
 
@@ -141,18 +128,8 @@ export async function requestPairing(): Promise<PairingState> {
     if (!data.token) {
       throw new Error('Desktop response missing token');
     }
-    // SECURITY (H-07 audit 2026-05-19): validate token shape. Accept only
-    // URL-safe base64 / hex tokens between 32 and 128 chars. Reject
-    // arbitrary-length strings (a 10 MB JSON value would happily round-trip
-    // through chrome.storage.session today). Same constraint on fingerprint.
-    if (!isValidPairingToken(data.token)) {
-      throw new Error('Desktop returned a malformed token');
-    }
-    const rawFingerprint = data.fingerprint ?? data.token.slice(0, 4);
-    if (!isValidPairingFingerprint(rawFingerprint)) {
-      throw new Error('Desktop returned a malformed fingerprint');
-    }
-    const fingerprint = rawFingerprint;
+
+    const fingerprint = data.fingerprint ?? data.token.slice(0, 4);
 
     // Persist token in session storage so background.ts can read it
     await new Promise<void>((resolve, reject) => {
@@ -202,23 +179,12 @@ export async function unpair(): Promise<PairingState> {
  * desktop and typed it in). Stores the token and transitions to PAIRED.
  */
 export async function confirmPairing(token: string, fingerprint?: string): Promise<PairingState> {
-  const trimmed = (token ?? '').trim();
-  if (!trimmed) {
+  if (!token.trim()) {
     _state = { phase: 'error', fingerprint: null, error: 'Token must not be empty' };
     return getPairingState();
   }
-  // H-07: same shape check for user-supplied tokens (e.g. when the user
-  // pastes a code from the desktop UI).
-  if (!isValidPairingToken(trimmed)) {
-    _state = { phase: 'error', fingerprint: null, error: 'Token has invalid shape' };
-    return getPairingState();
-  }
 
-  const fp = fingerprint ?? trimmed.slice(0, 4);
-  if (!isValidPairingFingerprint(fp)) {
-    _state = { phase: 'error', fingerprint: null, error: 'Fingerprint has invalid shape' };
-    return getPairingState();
-  }
+  const fp = fingerprint ?? token.trim().slice(0, 4);
 
   try {
     await new Promise<void>((resolve, reject) => {

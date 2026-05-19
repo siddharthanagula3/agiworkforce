@@ -6,8 +6,8 @@ import type {
   PaywallHitMessage,
 } from './types';
 import { logger, storageUtils } from './utils';
-import { loadPairingState, requestPairing, unpair } from './pairing';
-import type { PairingState } from './pairing';
+import { loadPairingState, requestPairing, unpair } from './features/native-bridge/pairing';
+import type { PairingState } from './features/native-bridge/pairing';
 
 // UI feedback durations
 const UI_FEEDBACK_DURATION_MS = 2000;
