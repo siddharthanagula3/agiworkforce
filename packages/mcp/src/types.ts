@@ -25,6 +25,13 @@ export interface McpServerConfig {
   headers?: Record<string, string | number | boolean>;
   /** Connection timeout in milliseconds. Default 30s. */
   connectionTimeoutMs?: number;
+  /**
+   * AUDIT-FIX: H-5 — stdio transports must carry either a signed manifest flag
+   * (verified upstream) or an explicit user-consent record that names the
+   * command being launched. Without one of these the resolver throws.
+   */
+  signedManifest?: boolean;
+  userConsent?: { granted_at: string; for_command: string };
 }
 
 /** A single tool in the connected MCP server's catalog. */

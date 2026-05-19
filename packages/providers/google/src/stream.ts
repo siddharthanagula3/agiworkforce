@@ -12,6 +12,27 @@ import type { StreamChunk } from '@agiworkforce/types';
 
 import type { GeminiStreamChunk } from './types';
 
+// AUDIT-FIX: M-1 — structural validation guard for Gemini chunks; emit sentinel on failure.
+function isGeminiStreamChunk(value: unknown): value is GeminiStreamChunk {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidates = (value as { candidates?: unknown }).candidates;
+  const promptFeedback = (value as { promptFeedback?: unknown }).promptFeedback;
+  const usageMetadata = (value as { usageMetadata?: unknown }).usageMetadata;
+  if (candidates !== undefined && !Array.isArray(candidates)) return false;
+  if (
+    promptFeedback !== undefined &&
+    (typeof promptFeedback !== 'object' || promptFeedback === null)
+  )
+    return false;
+  if (usageMetadata !== undefined && (typeof usageMetadata !== 'object' || usageMetadata === null))
+    return false;
+  return true;
+}
+
+const PARSE_ERROR_SENTINEL = {
+  candidates: [{ finishReason: 'STOP', content: { role: 'model', parts: [] } }],
+} as unknown as GeminiStreamChunk;
+
 function mapFinishReason(
   reason: string | undefined,
 ): 'end_turn' | 'max_tokens' | 'tool_use' | 'stop_sequence' | 'error' | 'cancel' {
@@ -56,21 +77,36 @@ export async function* parseGeminiStream(
           .map((l) => l.slice(5).trimStart());
         const data = dataLines.join('\n').trim();
         if (!data) continue;
+        // AUDIT-FIX: M-1 — parse + validate; emit sentinel chunk on either failure.
+        let parsed: unknown;
         try {
-          yield JSON.parse(data) as GeminiStreamChunk;
+          parsed = JSON.parse(data);
         } catch {
-          // Skip malformed frames; production Gemini is well-behaved here.
+          yield PARSE_ERROR_SENTINEL;
+          continue;
         }
+        if (!isGeminiStreamChunk(parsed)) {
+          yield PARSE_ERROR_SENTINEL;
+          continue;
+        }
+        yield parsed;
       }
     }
     // Trailing buffer, if any.
     const trailing = buffer.trim();
     if (trailing) {
       const trimmed = trailing.startsWith('data:') ? trailing.slice(5).trimStart() : trailing;
+      let parsed: unknown;
       try {
-        yield JSON.parse(trimmed) as GeminiStreamChunk;
+        parsed = JSON.parse(trimmed);
       } catch {
-        // ignore
+        yield PARSE_ERROR_SENTINEL;
+        return;
+      }
+      if (isGeminiStreamChunk(parsed)) {
+        yield parsed;
+      } else {
+        yield PARSE_ERROR_SENTINEL;
       }
     }
   } finally {

@@ -62,28 +62,27 @@ describe('parseFrontmatter — basic shape', () => {
 });
 
 describe('parseFrontmatter — security: prototype pollution avoidance', () => {
-  it('does NOT pollute Object.prototype via __proto__ key', () => {
+  // AUDIT-FIX: H-1 — parser now rejects reserved keys instead of silently
+  // dropping them; the outcome (no Object.prototype pollution) is preserved.
+  it('throws FrontmatterError on __proto__ key (no Object.prototype pollution)', () => {
     const before = ({} as Record<string, unknown>)['polluted'];
-    const { data } = parseFrontmatter(['---', '__proto__: {polluted: true}', '---'].join('\n'));
-    // Whatever the parser stored under `__proto__` MUST NOT have leaked into
-    // Object.prototype. The most important assertion is that
-    // `({}).polluted` is still undefined after parse.
-    const after = ({} as Record<string, unknown>)['polluted'];
-    expect(after).toBeUndefined();
-    expect(after).toBe(before);
-    // We also check the parser didn't return a "polluted" entry on the
-    // OWN data object's proto chain (`hasOwnProperty` to avoid the polluted
-    // case false-passing).
-    expect(Object.prototype.hasOwnProperty.call(data, '__proto__')).toBe(false);
+    expect(() =>
+      parseFrontmatter(['---', '__proto__: {polluted: true}', '---'].join('\n')),
+    ).toThrow(/Reserved key: __proto__/);
+    expect(({} as Record<string, unknown>)['polluted']).toBe(before);
   });
 
-  it('does NOT pollute via constructor.prototype', () => {
-    parseFrontmatter(['---', 'constructor: {prototype: {polluted: true}}', '---'].join('\n'));
+  it('throws FrontmatterError on constructor key', () => {
+    expect(() =>
+      parseFrontmatter(['---', 'constructor: {prototype: {polluted: true}}', '---'].join('\n')),
+    ).toThrow(/Reserved key: constructor/);
     expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
   });
 
-  it('does NOT honor a __proto__ list-form payload', () => {
-    parseFrontmatter(['---', '__proto__:', '  - polluted', '---'].join('\n'));
+  it('throws FrontmatterError on __proto__ list-form payload', () => {
+    expect(() => parseFrontmatter(['---', '__proto__:', '  - polluted', '---'].join('\n'))).toThrow(
+      /Reserved key: __proto__/,
+    );
     expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
   });
 });

@@ -18,7 +18,7 @@ Phase 6 structural reorg. Zero behavior change. Pure moves + barrels.
 | platform/                    | VS Code API abstractions (workspace, window, env)                   | utils/workspaceFolders.ts, utils/config.ts, utils/version.ts                                                                                                                                                              |
 | integrations/                | Provider routing, stream client, patch engine                       | services/providerStreamClient.ts, services/patchEngine.ts, services/providerSwitchGuard.ts, services/tierResolver.ts                                                                                                      |
 | data/                        | Storage + settings adapters                                         | storage/conversationStore.ts, services/checkpointManager.ts, services/contextBudget.ts, services/contextBuilder.ts, services/sendQueue.ts, services/usageMeter.ts, services/tokenCounter.ts, services/workspaceIndexer.ts |
-| ui/                          | Shared webview components                                           | providers/chatEditorPanel.ts, providers/agentMode/\*, providers/sidebar/webviewContent.ts                                                                                                                                 |
+| ui/                          | Shared webview components                                           | providers/chatEditorPanel.ts, providers/agentMode/\*, features/sidebar-webview/webviewContent.ts                                                                                                                          |
 
 ## Migration status
 
