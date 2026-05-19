@@ -357,7 +357,7 @@ describe('Gradual Rollout System', () => {
       const callback = vi.fn().mockResolvedValue('success');
 
       await expect(withFeatureFlag('rate_limiting', 'user-123', callback)).rejects.toThrow(
-        'Feature rate_limiting not enabled for user',
+        new Error('Feature rate_limiting not enabled for user'), // AUDIT-FIX: vitest 4.x
       );
     });
 
@@ -407,7 +407,7 @@ describe('Gradual Rollout System', () => {
       const callback = vi.fn().mockRejectedValue(new Error('Critical error'));
 
       await expect(withFeatureFlag('html_sanitization', 'user-123', callback)).rejects.toThrow(
-        'Critical error',
+        new Error('Critical error'), // AUDIT-FIX: vitest 4.x
       );
     });
   });

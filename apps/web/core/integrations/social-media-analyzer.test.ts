@@ -198,7 +198,7 @@ describe('Social Media Analyzer', () => {
       mockGrokProvider.sendMessage.mockRejectedValueOnce(new Error('Grok API error'));
 
       await expect(analyzer.analyze({ topic: 'test' })).rejects.toThrow(
-        'Social media analysis failed: Grok API error',
+        new Error('Social media analysis failed: Grok API error'), // AUDIT-FIX: vitest 4.x
       );
     });
 

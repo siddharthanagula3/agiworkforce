@@ -116,7 +116,9 @@ describe('Web Search Handler', () => {
         error: null,
       });
 
-      await expect(searchWithPerplexity('test query')).rejects.toThrow('User not authenticated');
+      await expect(searchWithPerplexity('test query')).rejects.toMatchObject({
+        message: expect.stringContaining('User not authenticated'), // AUDIT-FIX: vitest 4.x; actual msg is longer
+      });
     });
 
     it('should throw error on API failure', async () => {
@@ -126,7 +128,7 @@ describe('Web Search Handler', () => {
         json: () => Promise.resolve({ error: 'API Error' }),
       });
 
-      await expect(searchWithPerplexity('test')).rejects.toThrow('API Error');
+      await expect(searchWithPerplexity('test')).rejects.toThrow(new Error('API Error')); // AUDIT-FIX: vitest 4.x
     });
 
     it('should handle response with content field directly', async () => {
@@ -232,7 +234,9 @@ describe('Web Search Handler', () => {
         error: null,
       });
 
-      await expect(searchWithGoogle('test')).rejects.toThrow('User not authenticated');
+      await expect(searchWithGoogle('test')).rejects.toMatchObject({
+        message: expect.stringContaining('User not authenticated'), // AUDIT-FIX: vitest 4.x; actual msg is longer
+      });
     });
 
     it('should handle results field instead of items', async () => {
@@ -338,7 +342,9 @@ describe('Web Search Handler', () => {
         statusText: 'Service Unavailable',
       });
 
-      await expect(searchWithDuckDuckGo('test')).rejects.toThrow('DuckDuckGo API error');
+      await expect(searchWithDuckDuckGo('test')).rejects.toMatchObject({
+        message: expect.stringContaining('DuckDuckGo API error'), // AUDIT-FIX: vitest 4.x; actual msg is longer
+      });
     });
 
     it('should respect maxResults limit', async () => {
@@ -437,7 +443,7 @@ describe('Web Search Handler', () => {
     it('should throw error when all providers fail', async () => {
       mockFetchWithTimeout.mockRejectedValue(new Error('All providers down'));
 
-      await expect(webSearch('test')).rejects.toThrow('All search providers failed');
+      await expect(webSearch('test')).rejects.toThrow(new Error('All search providers failed')); // AUDIT-FIX: vitest 4.x
     });
 
     it('should use preferred provider when specified', async () => {

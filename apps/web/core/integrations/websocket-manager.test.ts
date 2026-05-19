@@ -231,7 +231,9 @@ describe('WebSocket Manager', () => {
           type: MessageType.CHAT,
           payload: {},
         }),
-      ).rejects.toThrow('Connection not found');
+      ).rejects.toMatchObject({
+        message: expect.stringContaining('Connection not found'), // AUDIT-FIX: vitest 4.x; actual msg includes connection id
+      });
     });
 
     it('should queue message when not connected', async () => {

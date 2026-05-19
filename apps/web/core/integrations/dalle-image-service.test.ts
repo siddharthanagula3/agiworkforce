@@ -105,11 +105,11 @@ describe('DALL-E Image Service', () => {
 
     it('should throw error for empty prompt', async () => {
       await expect(dallEImageService.generateImage({ prompt: '' })).rejects.toThrow(
-        'Image generation prompt is required',
+        new Error('Image generation prompt is required'), // AUDIT-FIX: vitest 4.x string arg broken
       );
 
       await expect(dallEImageService.generateImage({ prompt: '   ' })).rejects.toThrow(
-        'Image generation prompt is required',
+        new Error('Image generation prompt is required'), // AUDIT-FIX: vitest 4.x
       );
     });
 
@@ -120,7 +120,7 @@ describe('DALL-E Image Service', () => {
           model: 'dall-e-3',
           n: 2,
         }),
-      ).rejects.toThrow('DALL-E 3 only supports generating 1 image at a time');
+      ).rejects.toThrow(new Error('DALL-E 3 only supports generating 1 image at a time')); // AUDIT-FIX: vitest 4.x
     });
 
     it('should throw error when not authenticated', async () => {
@@ -129,9 +129,9 @@ describe('DALL-E Image Service', () => {
         error: null,
       });
 
-      await expect(dallEImageService.generateImage({ prompt: 'Test' })).rejects.toThrow(
-        'User not authenticated',
-      );
+      await expect(dallEImageService.generateImage({ prompt: 'Test' })).rejects.toMatchObject({
+        message: expect.stringContaining('User not authenticated'), // AUDIT-FIX: vitest 4.x; actual msg is longer
+      });
     });
 
     it('should throw error on API failure', async () => {
@@ -146,7 +146,7 @@ describe('DALL-E Image Service', () => {
       });
 
       await expect(dallEImageService.generateImage({ prompt: 'Test' })).rejects.toThrow(
-        'Content policy violation',
+        new Error('Content policy violation'), // AUDIT-FIX: vitest 4.x
       );
     });
 
@@ -159,7 +159,7 @@ describe('DALL-E Image Service', () => {
       });
 
       await expect(dallEImageService.generateImage({ prompt: 'Test' })).rejects.toThrow(
-        'API error: 500 Internal Server Error',
+        new Error('API error: 500 Internal Server Error'), // AUDIT-FIX: vitest 4.x
       );
     });
 
