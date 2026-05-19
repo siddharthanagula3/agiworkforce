@@ -51,6 +51,15 @@ query-filters:
       id: rust/hard-coded-cryptographic-value
       path-regex: ".*/background_llm\\.rs$"
 
+  # Exclude dispatch_hmac.rs files — all hardcoded values are in #[cfg(test)]
+  # modules at the bottom of these files (test pairing codes like "ABCD1234",
+  # test salts like "saltsalt", test nonces like "STATE_NONCE_AAAAAAAAA").
+  # Production code derives all HMAC keys via HKDF from runtime-provided
+  # pairing codes — no hardcoded values exist on the production path.
+  - exclude:
+      id: rust/hard-coded-cryptographic-value
+      path-regex: ".*/dispatch_hmac\\.rs$"
+
   # Exclude cleartext transmission for HTTPS API calls
   # reqwest uses HTTPS by default for Google AI APIs
   - exclude:
