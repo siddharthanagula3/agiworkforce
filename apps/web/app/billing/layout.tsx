@@ -5,12 +5,15 @@ import type { ReactNode } from 'react';
 export const dynamic = 'force-dynamic';
 
 export default async function BillingLayout({ children }: { children: ReactNode }) {
+  // WEB-18 (audit 2026-05-19): getUser() re-validates the JWT against the
+  // auth server. getSession() only reads cookie state without revalidation
+  // and must not be the auth gate.
   const supabase = await createSupabaseServerClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (!user) {
     redirect('/login?redirectTo=/billing');
   }
 

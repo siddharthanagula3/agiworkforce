@@ -7,6 +7,7 @@ import { logger } from '@shared/lib/logger';
  */
 
 import { supabase } from '@shared/lib/supabase-client';
+import { secureFilenameSegment } from '@/lib/secure-random';
 import type { Attachment } from '../types';
 
 export interface UploadProgress {
@@ -125,8 +126,11 @@ export class AttachmentHandler {
     }
 
     // Generate unique filename
+    // WEB-16: secureFilenameSegment uses crypto.getRandomValues (rejection-
+    // sampled, unbiased) instead of Math.random — prevents URL-enumeration
+    // attacks against neighboring uploads when sessionId is known to attacker.
     const timestamp = Date.now();
-    const randomString = Math.random().toString(36).substring(2, 15);
+    const randomString = secureFilenameSegment(13);
     const extension = file.name.split('.').pop();
     const safeFilename = `${userId}/${sessionId}/${timestamp}_${randomString}.${extension}`;
 

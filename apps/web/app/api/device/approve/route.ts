@@ -128,6 +128,8 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
     // Approve: store the current session tokens (encrypted) for the device to retrieve exactly once.
     // Identity was already verified via getUser() above; getSession() is used only to retrieve
     // the raw token strings that the device needs to authenticate.
+    // WEB-18 (audit 2026-05-19): explicitly re-check expires_at so an expired
+    // session cannot be encrypted into a fresh device-auth payload.
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -136,6 +138,9 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
 
     if (!accessToken || !refreshToken) {
       throw createError.internal('Missing session tokens');
+    }
+    if (session?.expires_at && session.expires_at * 1000 <= Date.now()) {
+      throw createError.unauthorized('Session expired');
     }
 
     // Encrypt tokens at rest - the poll endpoint will decrypt on retrieval

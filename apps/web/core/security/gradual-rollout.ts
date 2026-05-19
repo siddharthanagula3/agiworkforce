@@ -140,8 +140,13 @@ export function isFeatureEnabled(feature: FeatureFlag, userId?: string): boolean
   // Percentage-based rollout
   if (config.percentage < 100) {
     if (!userId) {
-      // No user ID, use random chance
-      return Math.random() * 100 < config.percentage;
+      // WEB-22: anonymous fallback fails closed. The previous code used
+      // `Math.random() * 100 < percentage` here, which (a) made the security
+      // gate flicker per request for the same anon session and (b) gave any
+      // anonymous attacker a guaranteed escape path by retrying until the
+      // percentage roll missed. Anonymous traffic always sees "off" until a
+      // userId is available; deterministic bucketing then takes over.
+      return false;
     }
 
     // Deterministic based on user ID (consistent for same user)
