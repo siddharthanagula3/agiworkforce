@@ -60,7 +60,12 @@ router.post('/login', authRateLimiter, (_req: Request, res: Response) => {
 // presented token. POST /auth/logout requires a valid JWT. The token's `jti`
 // and `exp` are written to public.revoked_jwts and the kill-switch middleware
 // rejects further requests carrying that jti.
-router.post('/logout', authenticateToken, async (req: Request, res: Response) => {
+// AUDIT-FIX: alert-408, alert-409 — apply authRateLimiter to /logout so the
+// route is bucketed alongside /register, /login, and /verify (5 attempts /
+// 15-minute window). Logout is a state-changing call (it writes to
+// public.revoked_jwts) and was previously the only auth endpoint without a
+// limiter.
+router.post('/logout', authRateLimiter, authenticateToken, async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   const parts = authHeader?.split(' ');
   const token = parts?.length === 2 && parts[0].toLowerCase() === 'bearer' ? parts[1] : undefined;
