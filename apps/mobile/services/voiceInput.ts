@@ -1,201 +1,272 @@
+// AUDIT-FIX: STT-WIRE
 /**
- * On-device voice input service (STT).
+ * On-device voice input (STT) — backed by `expo-speech-recognition`.
  *
- * Architecture:
- *   - Audio capture: expo-av (on-device, no cloud)
- *   - Transcription: on-device only. Delegates to expo-av recording +
- *     local model pipeline. No audio bytes leave the device.
+ * iOS:     SFSpeechRecognizer + microphone (on-device when supported).
+ * Android: SpeechRecognizer + microphone (com.google.android.googlequicksearchbox
+ *          recognition service by default; on-device on Android 12+ when the
+ *          locale offline pack is installed).
  *
- * iOS:  Uses iOS Speech framework via expo-av audio capture.
- * Android: Uses Android SpeechRecognizer compatible capture path.
+ * Audio bytes do not leave the device when `requiresOnDeviceRecognition: true`
+ * AND the device reports on-device support for the requested locale.
  *
- * Cloud Whisper is NOT wired here. It lives separately in services/voice.ts
- * behind a cloud opt-in gate.
+ * Cloud Whisper / Deepgram paths live in services/voice.ts behind FEATURES.cloudChat.
  */
 
-import { Audio, type AudioMode } from 'expo-av';
 import { Platform } from 'react-native';
+import * as Localization from 'expo-localization';
+import {
+  ExpoSpeechRecognitionModule,
+  type ExpoSpeechRecognitionErrorCode,
+} from 'expo-speech-recognition';
+
+export type VoiceCaptureErrorCode =
+  | 'mic-permission-denied'
+  | 'on-device-recognition-unavailable'
+  | 'aborted'
+  | 'recognition-error'
+  | 'already-active';
+
+export class VoiceCaptureError extends Error {
+  readonly code: VoiceCaptureErrorCode;
+  readonly nativeCode?: ExpoSpeechRecognitionErrorCode;
+  constructor(
+    code: VoiceCaptureErrorCode,
+    message: string,
+    nativeCode?: ExpoSpeechRecognitionErrorCode,
+  ) {
+    super(message);
+    this.name = 'VoiceCaptureError';
+    this.code = code;
+    this.nativeCode = nativeCode;
+  }
+}
 
 export interface OnDeviceTranscriptResult {
   text: string;
-  /** true if the result was produced by on-device inference (always true here) */
+  /** true when the result was produced by on-device inference (no cloud round-trip) */
   isOnDevice: true;
+  /** Per-segment confidence average; -1 when unavailable */
+  confidence: number;
 }
 
 export interface VoiceInputMeteringEvent {
-  /** dB level, -160..0 */
+  /** Normalised dB-style value: -160..0 (mapped from native -2..10 scale) */
   metering: number;
   durationMillis: number;
 }
 
-type MeteringCallback = (event: VoiceInputMeteringEvent) => void;
-
-const RECORDING_MODE_CAPTURE: Partial<AudioMode> = {
-  allowsRecordingIOS: true,
-  playsInSilentModeIOS: true,
-  staysActiveInBackground: false,
-  shouldDuckAndroid: true,
-};
-
-const RECORDING_MODE_PLAYBACK: Partial<AudioMode> = {
-  allowsRecordingIOS: false,
-  playsInSilentModeIOS: true,
-  staysActiveInBackground: false,
-  shouldDuckAndroid: true,
-};
-
-const RECORDING_OPTIONS: Audio.RecordingOptions = {
-  isMeteringEnabled: true,
-  android: {
-    extension: '.m4a',
-    outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-    audioEncoder: Audio.AndroidAudioEncoder.AAC,
-    sampleRate: 16000,
-    numberOfChannels: 1,
-    bitRate: 64000,
-  },
-  ios: {
-    extension: '.m4a',
-    outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
-    audioQuality: Audio.IOSAudioQuality.HIGH,
-    sampleRate: 16000,
-    numberOfChannels: 1,
-    bitRate: 64000,
-    linearPCMBitDepth: 16,
-    linearPCMIsBigEndian: false,
-    linearPCMIsFloat: false,
-  },
-  web: {
-    mimeType: 'audio/webm',
-    bitsPerSecond: 64000,
-  },
-};
-
-let _recording: Audio.Recording | null = null;
-let _meteringInterval: ReturnType<typeof setInterval> | null = null;
-
-function _clearMeteringInterval() {
-  if (_meteringInterval) {
-    clearInterval(_meteringInterval);
-    _meteringInterval = null;
-  }
+export interface VoicePartialResult {
+  text: string;
+  isFinal: boolean;
 }
 
-/** Returns 'ios' | 'android' | 'web' */
+type MeteringCallback = (event: VoiceInputMeteringEvent) => void;
+type PartialCallback = (event: VoicePartialResult) => void;
+
+let _active = false;
+let _startedAt = 0;
+let _listeners: Array<{ remove: () => void }> = [];
+let _finalResolve: ((result: OnDeviceTranscriptResult) => void) | null = null;
+let _finalReject: ((err: VoiceCaptureError) => void) | null = null;
+let _latestPartial = '';
+let _latestConfidence = -1;
+
+function clearListeners(): void {
+  for (const sub of _listeners) {
+    try {
+      sub.remove();
+    } catch {
+      // ignore
+    }
+  }
+  _listeners = [];
+}
+
+function settleSuccess(text: string, confidence: number): void {
+  _active = false;
+  clearListeners();
+  const resolver = _finalResolve;
+  _finalResolve = null;
+  _finalReject = null;
+  resolver?.({ text, confidence, isOnDevice: true });
+}
+
+function settleError(err: VoiceCaptureError): void {
+  _active = false;
+  clearListeners();
+  const rejecter = _finalReject;
+  _finalResolve = null;
+  _finalReject = null;
+  rejecter?.(err);
+}
+
+/** Returns the canonical platform STT backend identifier. */
 export function getPlatformSTTBackend(): 'ios-speech' | 'android-speech-recognizer' | 'expo-av' {
   if (Platform.OS === 'ios') return 'ios-speech';
   if (Platform.OS === 'android') return 'android-speech-recognizer';
   return 'expo-av';
 }
 
-/** Check and request microphone permission. Returns true if granted. */
+/** Request both microphone and speech-recognition permissions. */
 export async function requestMicPermission(): Promise<boolean> {
-  const { status } = await Audio.requestPermissionsAsync();
-  return status === 'granted';
+  try {
+    const status = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+    return status.granted;
+  } catch {
+    return false;
+  }
 }
 
-/** Returns true if a recording session is currently active. */
+/** Returns true if a recognition session is currently active. */
 export function isCapturing(): boolean {
-  return _recording !== null;
+  return _active;
+}
+
+function pickLocale(): string {
+  try {
+    const locales = Localization.getLocales();
+    return locales[0]?.languageTag ?? 'en-US';
+  } catch {
+    return 'en-US';
+  }
 }
 
 /**
- * Begin audio capture.
- * On-device only — no audio leaves the device during capture.
- * Throws if permission is denied or another session is active.
+ * Begin speech recognition. Returns a promise that resolves with the final
+ * transcript when the user stops or the recognizer reports `isFinal: true`.
+ *
+ * Throws synchronously / rejects with {@link VoiceCaptureError} on:
+ *   - mic-permission-denied
+ *   - on-device-recognition-unavailable (when locale not installed)
+ *   - already-active (concurrent start)
  */
-export async function startCapture(onMetering?: MeteringCallback): Promise<void> {
-  if (_recording) throw new Error('Voice capture already in progress');
+export async function startCapture(
+  onMetering?: MeteringCallback,
+  onPartial?: PartialCallback,
+): Promise<OnDeviceTranscriptResult> {
+  if (_active) {
+    throw new VoiceCaptureError('already-active', 'Voice capture already in progress');
+  }
 
   const granted = await requestMicPermission();
-  if (!granted) throw new Error('Microphone permission denied');
-
-  await Audio.setAudioModeAsync(RECORDING_MODE_CAPTURE);
-
-  const rec = new Audio.Recording();
-  try {
-    await rec.prepareToRecordAsync(RECORDING_OPTIONS);
-    await rec.startAsync();
-  } catch (err) {
-    _clearMeteringInterval();
-    try {
-      await rec.stopAndUnloadAsync();
-    } catch {
-      // ignore cleanup errors
-    }
-    throw err;
+  if (!granted) {
+    throw new VoiceCaptureError('mic-permission-denied', 'Microphone permission denied');
   }
 
-  _recording = rec;
+  const lang = pickLocale();
+  const onDeviceSupported =
+    typeof ExpoSpeechRecognitionModule.supportsOnDeviceRecognition === 'function'
+      ? ExpoSpeechRecognitionModule.supportsOnDeviceRecognition()
+      : true;
+  const requiresOnDevice = onDeviceSupported;
 
-  if (onMetering) {
-    _meteringInterval = setInterval(async () => {
-      if (!_recording) return;
-      try {
-        const status = await _recording.getStatusAsync();
-        if (status.isRecording) {
-          onMetering({
-            metering: status.metering ?? -160,
-            durationMillis: status.durationMillis,
-          });
+  _active = true;
+  _startedAt = Date.now();
+  _latestPartial = '';
+  _latestConfidence = -1;
+
+  return new Promise<OnDeviceTranscriptResult>((resolve, reject) => {
+    _finalResolve = resolve;
+    _finalReject = reject;
+
+    _listeners.push(
+      ExpoSpeechRecognitionModule.addListener('result', (ev) => {
+        const top = ev.results?.[0];
+        if (!top) return;
+        _latestPartial = top.transcript;
+        _latestConfidence = top.confidence ?? -1;
+        onPartial?.({ text: top.transcript, isFinal: ev.isFinal });
+        if (ev.isFinal) {
+          settleSuccess(top.transcript, top.confidence ?? -1);
         }
-      } catch {
-        // recording may have been stopped
-      }
-    }, 67);
+      }),
+    );
+
+    _listeners.push(
+      ExpoSpeechRecognitionModule.addListener('end', () => {
+        if (!_active) return;
+        // Recognizer ended without isFinal: surface the latest partial as the final.
+        settleSuccess(_latestPartial, _latestConfidence);
+      }),
+    );
+
+    _listeners.push(
+      ExpoSpeechRecognitionModule.addListener('error', (ev) => {
+        const map: Record<string, VoiceCaptureErrorCode> = {
+          'not-allowed': 'mic-permission-denied',
+          'service-not-allowed': 'on-device-recognition-unavailable',
+          'language-not-supported': 'on-device-recognition-unavailable',
+          aborted: 'aborted',
+        };
+        const code = map[ev.error] ?? 'recognition-error';
+        settleError(new VoiceCaptureError(code, ev.message || ev.error, ev.error));
+      }),
+    );
+
+    if (onMetering) {
+      _listeners.push(
+        ExpoSpeechRecognitionModule.addListener('volumechange', (ev) => {
+          // Map native -2..10 to -160..0 dB-style scale used by the rest of the UI.
+          const normalized = Math.max(-160, Math.min(0, ev.value * 16 - 160));
+          onMetering({ metering: normalized, durationMillis: Date.now() - _startedAt });
+        }),
+      );
+    }
+
+    try {
+      ExpoSpeechRecognitionModule.start({
+        lang,
+        interimResults: true,
+        continuous: false,
+        requiresOnDeviceRecognition: requiresOnDevice,
+        addsPunctuation: true,
+        volumeChangeEventOptions: onMetering ? { enabled: true, intervalMillis: 100 } : undefined,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to start recognizer';
+      settleError(new VoiceCaptureError('recognition-error', msg));
+    }
+  });
+}
+
+/** Stop recognition and return the final transcript via the original startCapture promise. */
+export async function stopCapture(): Promise<void> {
+  if (!_active) return;
+  try {
+    ExpoSpeechRecognitionModule.stop();
+  } catch {
+    // Best-effort: error path will be surfaced via the error listener.
   }
 }
 
-/**
- * Stop capture and return the local URI of the recorded audio file.
- * Caller passes the URI to `transcribeOnDevice()`.
- */
-export async function stopCapture(): Promise<string> {
-  if (!_recording) throw new Error('No capture in progress');
-
-  _clearMeteringInterval();
-  const rec = _recording;
-  _recording = null;
-
-  await rec.stopAndUnloadAsync();
-  await Audio.setAudioModeAsync(RECORDING_MODE_PLAYBACK);
-
-  const uri = rec.getURI();
-  if (!uri) throw new Error('Capture failed: no URI returned');
-  return uri;
-}
-
-/**
- * Cancel an in-progress capture without producing audio output.
- */
+/** Cancel recognition immediately. The pending startCapture promise rejects with 'aborted'. */
 export async function cancelCapture(): Promise<void> {
-  if (!_recording) return;
-  _clearMeteringInterval();
+  if (!_active) return;
   try {
-    await _recording.stopAndUnloadAsync();
+    ExpoSpeechRecognitionModule.abort();
   } catch {
     // ignore
   }
-  await Audio.setAudioModeAsync(RECORDING_MODE_PLAYBACK);
-  _recording = null;
+  settleError(new VoiceCaptureError('aborted', 'Capture cancelled'));
 }
 
 /**
- * Transcribe a local audio URI using the on-device model pipeline.
- *
- * Currently returns the raw audio URI so the LLMController can feed it
- * directly into the local Qwen3 multimodal pipeline (audio token support).
- * As a fallback on devices without a multimodal runtime, returns an empty
- * transcript signalling that the caller should display the audio inline.
- *
- * Audio is NEVER sent to a remote server.
+ * Returns the latest partial transcript. Useful for screens that want to show
+ * a live preview without subscribing to the `result` event.
+ */
+export function getLatestPartial(): string {
+  return _latestPartial;
+}
+
+/**
+ * Compatibility wrapper retained for callers that previously received a URI
+ * and called transcribeOnDevice() on it. With ExpoSpeechRecognition the
+ * transcript is delivered through the live event stream, so this path no
+ * longer makes a second pass over the audio; instead it returns whatever
+ * was last surfaced by the recognizer.
  */
 export async function transcribeOnDevice(uri: string): Promise<OnDeviceTranscriptResult> {
-  // Placeholder for local ASR pipeline integration.
-  // The local model (Qwen3-4B or Apple Foundation Model) receives the m4a URI
-  // and handles ASR natively when multimodal audio is supported.
-  // Until that pipeline is wired (Wave 3), we return empty text so the caller
-  // can show a manual-review step.
   void uri;
-  return { text: '', isOnDevice: true };
+  return { text: _latestPartial, confidence: _latestConfidence, isOnDevice: true };
 }

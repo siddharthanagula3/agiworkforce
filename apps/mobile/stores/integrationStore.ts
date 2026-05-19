@@ -13,7 +13,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage } from '@/lib/mmkv';
+import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
 import { connectMessagingPlatform, disconnectMessagingPlatform } from '@/services/messaging';
 import {
   getCalendarPermissionStatus,
@@ -340,6 +340,8 @@ export const useIntegrationStore = create<IntegrationState>()(
     {
       name: 'integration-store',
       storage: createJSONStorage(() => mmkvStorage),
+      // AUDIT-FIX: MMKV-RACE
+      skipHydration: true,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[integrationStore] Hydration failed:', error);
       },
@@ -363,3 +365,7 @@ export const useIntegrationStore = create<IntegrationState>()(
     },
   ),
 );
+
+whenMmkvReady(() => {
+  useIntegrationStore.persist.rehydrate();
+});

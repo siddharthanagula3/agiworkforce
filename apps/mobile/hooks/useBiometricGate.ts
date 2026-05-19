@@ -5,6 +5,10 @@ import { AppState, type AppStateStatus } from 'react-native';
 
 interface BiometricGateResult {
   isUnlocked: boolean;
+  /** True once the biometric-flag SecureStore read has completed. */
+  isReady: boolean;
+  /** Convenience inverse for callers: `true` while the splash should remain up. */
+  isLocked: boolean;
   authenticate: () => Promise<boolean>;
 }
 
@@ -12,8 +16,13 @@ export function useBiometricGate(): BiometricGateResult {
   // LOW-MOB-1 fix (red-team 2026-05): the flag lives in SecureStore, not
   // MMKV — extracting the MMKV encryption key no longer disables the gate.
   // See lib/biometricFlagStore.ts for the rationale.
+  //
+  // AUDIT-FIX: H-10 — `isUnlocked` is not derived from `enabled` until
+  // `hydrated === true`. Reading `enabled` before hydration would race the
+  // SecureStore read and could surface the wrong state for one frame.
   const biometricLockEnabled = useBiometricFlag((s) => s.enabled);
-  const [isUnlocked, setIsUnlocked] = useState(!biometricLockEnabled);
+  const hydrated = useBiometricFlag((s) => s.hydrated);
+  const [isUnlocked, setIsUnlocked] = useState(false);
   const previousStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   const authenticate = useCallback(async (): Promise<boolean> => {
@@ -98,12 +107,29 @@ export function useBiometricGate(): BiometricGateResult {
     return () => subscription.remove();
   }, [biometricLockEnabled, authenticate]);
 
-  // If lock is disabled, always unlocked
+  // If lock is disabled, always unlocked (only after hydration completes —
+  // pre-hydration we treat the gate as engaged for fail-closed safety).
   useEffect(() => {
-    if (!biometricLockEnabled) {
+    if (hydrated && !biometricLockEnabled) {
       setIsUnlocked(true);
     }
-  }, [biometricLockEnabled]);
+  }, [hydrated, biometricLockEnabled]);
 
-  return { isUnlocked, authenticate };
+  // AUDIT-FIX: H-10 — surface explicit readiness so _layout can gate its
+  // navigator tree on `isReady` rather than racing the SecureStore read.
+  if (!hydrated) {
+    return {
+      isUnlocked: false,
+      isReady: false,
+      isLocked: true,
+      authenticate,
+    };
+  }
+
+  return {
+    isUnlocked,
+    isReady: true,
+    isLocked: !isUnlocked,
+    authenticate,
+  };
 }

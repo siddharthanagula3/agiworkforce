@@ -36,6 +36,7 @@
 const mockStorage = new Map<string, string>();
 
 jest.mock('../lib/mmkv', () => ({
+  whenMmkvReady: jest.fn((cb) => cb()),
   storage: {
     getString: (key: string) => mockStorage.get(key) ?? undefined,
     set: (key: string, value: string) => mockStorage.set(key, value),

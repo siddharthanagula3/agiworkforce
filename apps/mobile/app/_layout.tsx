@@ -50,7 +50,9 @@ export default function RootLayout() {
   const url = useURL();
   const backPressCount = useRef(0);
   const { colors: themeColors, statusBarStyle } = useTheme();
-  const { isUnlocked, authenticate } = useBiometricGate();
+  // AUDIT-FIX: H-10 — block the navigator tree on `isReady` so the
+  // biometric-flag SecureStore read completes before any gated UI renders.
+  const { isUnlocked, isReady: isBiometricReady, authenticate } = useBiometricGate();
 
   // CRIT-MOB-01 fix (2026-05-04): initialise MMKV encryption on mount, but do
   // NOT call initialize() here. The Supabase session must not be loaded until
@@ -320,7 +322,11 @@ export default function RootLayout() {
       (isCustomSchemePair ? segments[0] : segments[1]);
 
     if (code) {
-      const PAIRING_CODE_RE = /^[A-Za-z0-9]{8}$/;
+      // AUDIT-FIX: H-12 — accept the new 12-char pairing codes while still
+      // recognising legacy 8-char codes during the rollout window so users
+      // mid-pairing aren't bricked. Drop the 8-char branch once desktop ships
+      // the 12-char generator everywhere.
+      const PAIRING_CODE_RE = /^[A-Za-z0-9]{12}$|^[A-Za-z0-9]{8}$/;
       if (!PAIRING_CODE_RE.test(code)) {
         return;
       }
@@ -466,7 +472,10 @@ export default function RootLayout() {
     return () => subscription.remove();
   }, [router]);
 
-  if (!isMmkvReady || !isInitialized || isLoading) {
+  // AUDIT-FIX: H-10 — keep the splash up until the biometric-flag has
+  // hydrated. Without this we'd briefly render the navigator while the
+  // gate was indeterminate.
+  if (!isMmkvReady || !isInitialized || isLoading || !isBiometricReady) {
     return (
       <View
         style={{

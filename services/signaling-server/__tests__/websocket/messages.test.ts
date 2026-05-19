@@ -11,8 +11,9 @@ import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 
 // Recreate the validation schemas from the server for testing
-const PAIRING_CODE_LENGTH = 8;
-const PAIRING_CODE_PATTERN = /^[A-Z0-9]{8}$/;
+// AUDIT-FIX: H-12 — bumped from 8 to 12 chars (62^12 ≈ 71 bits entropy).
+const PAIRING_CODE_LENGTH = 12;
+const PAIRING_CODE_PATTERN = /^[A-Z0-9]{12}$/;
 const MAX_SDP_SIZE = 65536;
 const MAX_ICE_CANDIDATE_SIZE = 2048;
 const MAX_SDP_MID_SIZE = 64;

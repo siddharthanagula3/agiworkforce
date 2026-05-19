@@ -52,8 +52,12 @@ export const MAX_ACTION_NAME_SIZE = 50;
 // Pairing Configuration
 // =============================================================================
 
-/** Pairing code length (8 characters) */
-export const PAIRING_CODE_LENGTH = 8;
+// AUDIT-FIX: H-12 — bump from 8 to 12 chars (62^12 ≈ 71 bits of entropy).
+// Mitigates offline brute-force of the HKDF IKM if the pairing transcript
+// leaks. Follow-up: replace with a PAKE (e.g. OPAQUE / SRP) to remove the
+// shared-password class entirely.
+/** Pairing code length (12 characters, displayed as 3 groups of 4). */
+export const PAIRING_CODE_LENGTH = 12;
 
 /** Maximum attempts for code generation */
 export const CODE_GENERATION_MAX_ATTEMPTS = 10;

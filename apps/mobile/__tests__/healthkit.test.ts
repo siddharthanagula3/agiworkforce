@@ -23,6 +23,7 @@ jest.mock('react-native', () => ({
 const mmkvStore: Record<string, string> = {};
 
 jest.mock('@/lib/mmkv', () => ({
+  whenMmkvReady: jest.fn((cb) => cb()),
   storage: {
     getString: (key: string) => mmkvStore[key] ?? undefined,
     set: (key: string, value: string) => {
@@ -56,15 +57,14 @@ jest.mock('@kingstinct/react-native-healthkit', () => {
 // Imports (after mocks)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+/* eslint-disable @typescript-eslint/no-require-imports */
 const permission =
   require('../services/healthKitPermission') as typeof import('../services/healthKitPermission');
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const query = require('../services/healthKitQuery') as typeof import('../services/healthKitQuery');
 // HEALTHKIT_TOOL lives in the query service — not in the local-llm catalog.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const catalog =
   require('../services/healthKitQuery') as typeof import('../services/healthKitQuery');
+/* eslint-enable @typescript-eslint/no-require-imports */
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -157,9 +157,10 @@ describe('healthKitPermission — iOS', () => {
     // reset module registry so the lazy require is re-evaluated.
     mockHealthkitThrow = true;
     jest.resetModules();
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    /* eslint-disable @typescript-eslint/no-require-imports */
     const p =
       require('../services/healthKitPermission') as typeof import('../services/healthKitPermission');
+    /* eslint-enable @typescript-eslint/no-require-imports */
     const result = await p.requestHealthKitAccess(['steps']);
     expect(result.granted).toHaveLength(0);
     expect(result.denied).toContain('steps');

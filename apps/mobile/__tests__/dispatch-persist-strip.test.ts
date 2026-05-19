@@ -35,6 +35,7 @@ jest.mock('react-native-mmkv', () => ({
   })),
 }));
 jest.mock('@/lib/mmkv', () => ({
+  whenMmkvReady: jest.fn((cb) => cb()),
   mmkvStorage: { getItem: jest.fn(), setItem: jest.fn(), removeItem: jest.fn() },
   storage: { getString: jest.fn(), set: jest.fn(), delete: jest.fn() },
   initMmkvEncryption: jest.fn().mockResolvedValue(undefined),

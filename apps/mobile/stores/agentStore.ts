@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage } from '@/lib/mmkv';
+import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
 import { useConnectionStore } from '@/stores/connectionStore';
 import type { StatusStep, ToolCall, ApprovalRequest } from '@/types/chat';
 
@@ -125,9 +125,15 @@ export const useAgentStore = create<AgentState>()(
     {
       name: 'agent-store',
       storage: createJSONStorage(() => mmkvStorage),
+      // AUDIT-FIX: MMKV-RACE
+      skipHydration: true,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[agentStore] Hydration failed:', error);
       },
     },
   ),
 );
+
+whenMmkvReady(() => {
+  useAgentStore.persist.rehydrate();
+});
