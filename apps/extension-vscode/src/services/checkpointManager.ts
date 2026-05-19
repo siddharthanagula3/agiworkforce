@@ -174,11 +174,28 @@ export class CheckpointManager {
     try {
       if (checkpoint.stashRef === '') {
         // Marker checkpoint (clean tree) — just clean all changes.
+        // PR-2B (F-27): defensive stash of current state before destructive ops
+        // so the user has a recovery path. `git stash push --include-untracked`
+        // is no-op if there's nothing to save.
+        try {
+          await this._git(
+            [
+              'stash',
+              'push',
+              '--include-untracked',
+              '-m',
+              `agi-restore-backup: ${checkpoint.label}`,
+            ],
+            workspaceRoot,
+          );
+        } catch {
+          // best-effort — proceed even if stash fails
+        }
         await this._git(['checkout', '--', '.'], workspaceRoot);
         await this._git(['clean', '-fd'], workspaceRoot);
         log(`Restored to marker checkpoint: ${id} — "${checkpoint.label}"`);
         vscode.window.showInformationMessage(
-          `AGI Workforce: Restored to checkpoint "${checkpoint.label}" (clean state).`,
+          `AGI Workforce: Restored to checkpoint "${checkpoint.label}" (clean state). A safety stash was created — run "git stash list" to recover discarded work.`,
         );
         return true;
       }

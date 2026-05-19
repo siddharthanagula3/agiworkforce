@@ -29,6 +29,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Conflict-marker gate
+        run: python3 scripts/check-no-conflict-markers.py
+
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -81,6 +84,24 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Test (webview HTML rendering — jsdom)
+        # F-01 regression gate: parses the rendered webview <script> bodies
+        # in jsdom and fails if any contain syntax errors. Catches the class
+        # of bug where TypeScript syntax leaks into a JS template literal.
+        run: pnpm --filter agi-workforce test:webview
+
+      - name: Semgrep (security audit)
+        # Run Semgrep with security-audit + typescript + owasp rule packs.
+        # Continues on findings during initial rollout; tighten to block
+        # once baseline is established. Audit recommendation (PR-1A).
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/typescript
+            p/owasp-top-ten
+        continue-on-error: true
 
       - name: Build packages
         run: |

@@ -60,6 +60,13 @@ export function getWebviewContent(
     vscode.Uri.joinPath(extensionUri, 'out', 'codicons', 'codicon.css'),
   );
 
+  // Markdown rendering bundle (markdown-it + DOMPurify) — built by esbuild.js
+  // into out/webview/render.js. Loaded via CSP-allowed <script src> tag and
+  // exposes window.agiRender(text). Audit PR-2A (F-02, F-10).
+  const renderJsUri = webview.asWebviewUri(
+    vscode.Uri.joinPath(extensionUri, 'out', 'webview', 'render.js'),
+  );
+
   return /* html */ `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -68,8 +75,8 @@ export function getWebviewContent(
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'none';
              style-src 'nonce-${nonce}' ${cspSource};
-             script-src 'nonce-${nonce}';
-             img-src ${cspSource} https: data:;
+             script-src 'nonce-${nonce}' ${cspSource};
+             img-src ${cspSource} https:;
              font-src ${cspSource};" />
   <title>AGI Workforce</title>
   <link rel="stylesheet" href="${codiconCssUri}" />
@@ -886,6 +893,10 @@ export function getWebviewContent(
     </div>
   </div>
 
+  <!-- Markdown rendering bundle (markdown-it + DOMPurify). Loaded before the
+       inline script so window.agiRender is available when needed. -->
+  <script nonce="${nonce}" src="${renderJsUri}"></script>
+
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
 
@@ -1062,122 +1073,48 @@ export function getWebviewContent(
       userInput.style.height = Math.min(userInput.scrollHeight, 140) + 'px';
     }
 
-    // ── Markdown rendering ────────────────────────────────────────────────
-    function renderMarkdown(text) {
-      var bt = String.fromCharCode(96); // backtick char
-      var bt3 = bt + bt + bt;
-      var star = String.fromCharCode(42); // asterisk char
-      // Escape HTML entities first (DOMPurify-lite approach)
-      var html = text
+    // ── Markdown rendering — delegated to window.agiRender ────────────────
+    // The bundled out/webview/render.js defines window.agiRender(text) via
+    // markdown-it + DOMPurify. If for any reason it failed to load, fall
+    // back to plain text (no markdown) — never raw innerHTML of LLM output.
+    // Audit PR-2A (F-02, F-10).
+    function renderAssistant(text) {
+      if (typeof window.agiRender === 'function') {
+        return window.agiRender(text);
+      }
+      // Fallback: escape + preserve newlines. No markdown formatting.
+      return String(text)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-
-      // Fenced code blocks with language label + copy button
-      var codeBlockRe = new RegExp(bt3 + '(\\\\w*)?\\\\n([\\\\s\\\\S]*?)' + bt3, 'g');
-      html = html.replace(codeBlockRe, function(m, lang, code) {
-        var langLabel = lang ? '<span class="code-lang">' + lang + '</span>' : '';
-        var copyBtn = '<button class="copy-btn" onclick="copyCode(this)" title="Copy">Copy</button>';
-        return '<div class="code-block-wrapper">' + langLabel + copyBtn + '<pre><code>' + code.replace(/\\n$/, '') + '</code></pre></div>';
-      });
-
-      // Inline code
-      var inlineCodeRe = new RegExp(bt + '([^' + bt + ']+?)' + bt, 'g');
-      html = html.replace(inlineCodeRe, '<code>$1</code>');
-
-      // Bold
-      var boldRe = new RegExp(star + star + '(.+?)' + star + star, 'g');
-      html = html.replace(boldRe, '<strong>$1</strong>');
-
-      // Italic
-      var italicRe = new RegExp(star + '(.+?)' + star, 'g');
-      html = html.replace(italicRe, '<em>$1</em>');
-
-      // Strikethrough
-      html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
-
-      // Headers
-      html = html.replace(/^### (.+)$/gm, '<h4>$1</h4>');
-      html = html.replace(/^## (.+)$/gm, '<h3>$1</h3>');
-      html = html.replace(/^# (.+)$/gm, '<h2>$1</h2>');
-
-      // Horizontal rules
-      html = html.replace(/^---$/gm, '<hr>');
-
-      // Unordered lists
-      html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
-
-      // Block quotes
-      html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
-
-      // Newlines to <br> (but not inside code blocks)
-      var splitRe = new RegExp('(<(?:pre|div class="code-block-wrapper")[\\\\s\\\\S]*?<\\\\/(?:pre|div)>)', 'g');
-      var parts = html.split(splitRe);
-      for (var i = 0; i < parts.length; i++) {
-        if (!parts[i].startsWith('<pre') && !parts[i].startsWith('<div class="code-block')) {
-          parts[i] = parts[i].replace(/\\n/g, '<br>');
-        }
-      }
-      html = parts.join('');
-
-      return html;
+        .replace(/"/g, '&quot;')
+        .replace(/\\n/g, '<br>');
     }
 
-    // Copy code to clipboard
-    function copyCode(btn) {
-      var pre = btn.parentElement.querySelector('pre code');
-      if (pre) {
-        var text = pre.textContent || '';
-        navigator.clipboard.writeText(text).then(function() {
-          btn.textContent = 'Copied!';
-          setTimeout(function() { btn.textContent = 'Copy'; }, 1500);
-        }).catch(function() {
-          btn.textContent = 'Failed';
-          setTimeout(function() { btn.textContent = 'Copy'; }, 1500);
+    // Attach copy-button click handlers after sanitized HTML is in the DOM.
+    // The previous inline onclick="copyCode(this)" is stripped by DOMPurify
+    // (and would not fire under the nonce-only script-src CSP anyway).
+    function bindCopyButtons(rootEl) {
+      if (!rootEl) return;
+      var btns = rootEl.querySelectorAll('.copy-btn');
+      for (var i = 0; i < btns.length; i++) {
+        var btn = btns[i];
+        if (btn.dataset.bound === '1') continue;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', function(ev) {
+          var b = ev.currentTarget;
+          var pre = b.parentElement && b.parentElement.querySelector('pre code');
+          if (!pre) return;
+          var text = pre.textContent || '';
+          navigator.clipboard.writeText(text).then(function() {
+            b.textContent = 'Copied!';
+            setTimeout(function() { b.textContent = 'Copy'; }, 1500);
+          }).catch(function() {
+            b.textContent = 'Failed';
+            setTimeout(function() { b.textContent = 'Copy'; }, 1500);
+          });
         });
       }
-    }
-
-    // ── HTML sanitizer (defense-in-depth for innerHTML) ──────────────────
-    // VSCODE-05: extended to strip dangerous URI schemes from href/src/action.
-    // Blocked schemes: command:, javascript:, vscode-resource:, data:
-    // Allowed schemes: https:, http:, mailto:
-    var SAFE_HREF_RE = /^(https?:|mailto:)/i;
-    function sanitizeHtml(html) {
-      var div = document.createElement('div');
-      div.innerHTML = html;
-      // Remove dangerous elements
-      var dangerous = div.querySelectorAll('script,style,iframe,object,embed,form,link,meta,base');
-      for (var i = 0; i < dangerous.length; i++) { dangerous[i].remove(); }
-      // Process all remaining elements
-      var all = div.querySelectorAll('*');
-      for (var j = 0; j < all.length; j++) {
-        var el = all[j];
-        var attrs = Array.from(el.attributes);
-        for (var k = 0; k < attrs.length; k++) {
-          var attrName = attrs[k].name.toLowerCase();
-          var attrVal = attrs[k].value;
-          // Remove event handler attributes (on*)
-          if (/^on/i.test(attrName)) {
-            el.removeAttribute(attrs[k].name);
-            continue;
-          }
-          // VSCODE-05: sanitize URI-bearing attributes — href, src, action, formaction
-          if (attrName === 'href' || attrName === 'src' || attrName === 'action' || attrName === 'formaction') {
-            var trimmed = attrVal.trim();
-            // Allow only safe schemes; strip everything else
-            if (trimmed.length > 0 && !SAFE_HREF_RE.test(trimmed)) {
-              el.removeAttribute(attrs[k].name);
-            }
-          }
-        }
-        // VSCODE-05: strip srcdoc from any element (mutation-XSS vector)
-        if (el.hasAttribute('srcdoc')) {
-          el.removeAttribute('srcdoc');
-        }
-      }
-      return div.innerHTML;
     }
 
     // ── Send ──────────────────────────────────────────────────────────────────
@@ -1330,7 +1267,8 @@ export function getWebviewContent(
       else if (msg.type === 'done') {
         removeTyping();
         if (currentAssistantEl && accumulatedContent) {
-          currentAssistantEl.innerHTML = sanitizeHtml(renderMarkdown(accumulatedContent));
+          currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
+          bindCopyButtons(currentAssistantEl);
         }
         finalizeToolCallStack();
         setStreaming(false);
@@ -1381,7 +1319,7 @@ export function getWebviewContent(
         const opt = modelSelect.querySelector('option[value="' + msg.payload.model + '"]');
         if (opt) {
           modelSelect.value = msg.payload.model;
-          if (modelPill) modelPill.textContent = (opt as HTMLOptionElement).text;
+          if (modelPill) modelPill.textContent = opt.text;
         }
       }
 

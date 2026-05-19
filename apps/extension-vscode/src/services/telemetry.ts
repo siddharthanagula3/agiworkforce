@@ -66,14 +66,21 @@ function redactProperties(props: Record<string, string>): Record<string, string>
 
 // ─── Telemetry endpoint allowlist ────────────────────────────────────────────
 
-const ALLOWED_TELEMETRY_DOMAINS = ['agiworkforce.com', 'localhost', '127.0.0.1'];
+// PR-5C (F-22): exact-host allowlist. Previously `endsWith('.' + domain)`
+// permitted any *.agiworkforce.com subdomain — a subdomain takeover (a
+// real class per Veracode 2025 supply-chain reports) would route
+// telemetry to an attacker. Pin to exact hosts only.
+const ALLOWED_TELEMETRY_HOSTS = new Set<string>([
+  'telemetry.agiworkforce.com',
+  'agiworkforce.com',
+  'localhost',
+  '127.0.0.1',
+]);
 
 function isAllowedTelemetryEndpoint(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return ALLOWED_TELEMETRY_DOMAINS.some(
-      (domain) => parsed.hostname === domain || parsed.hostname.endsWith('.' + domain),
-    );
+    return ALLOWED_TELEMETRY_HOSTS.has(parsed.hostname);
   } catch {
     return false;
   }

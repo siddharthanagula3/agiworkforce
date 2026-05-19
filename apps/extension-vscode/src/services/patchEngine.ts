@@ -15,7 +15,9 @@
  */
 
 import * as vscode from 'vscode';
+import { resolveContained } from '@agiworkforce/utils';
 import { getActiveWorkspaceFolderSync } from '../utils/workspaceFolders';
+import { isSensitiveFile } from '../utils/pathSafety';
 
 // ─── Output channel for patch logs ────────────────────────────────────────────
 
@@ -179,13 +181,16 @@ export function applyPatch(document: vscode.TextDocument, patch: PatchBlock): Pa
   );
 
   // ── Insert at beginning (empty search) ──────────────────────────────────
+  // PR-2B (F-16): prepend operations cannot have "high" confidence —
+  // there is nothing to match against. Downgrade so the UI requires
+  // explicit confirmation for files that already exist.
   if (patch.search === '') {
-    logPatch(`  -> Insert at beginning (empty search)`);
+    logPatch(`  -> Insert at beginning (empty search) — confidence: medium`);
     return {
       success: true,
       range: new vscode.Range(0, 0, 0, 0),
       fuzzy: false,
-      confidence: 'high',
+      confidence: 'medium',
       whitespaceDiffPercent: 0,
       expectedText: '',
       matchedText: '',
@@ -247,7 +252,13 @@ export function applyPatch(document: vscode.TextDocument, patch: PatchBlock): Pa
 /**
  * Try aggressive fuzzy matching: ignore all whitespace, case-insensitive.
  * Used as a last resort when standard fuzzy matching fails.
+ *
+ * PR-3A (F-25): refuse offers when the matched text is too small to be
+ * a meaningful unique anchor. Short searches (under 24 stripped chars)
+ * are ambiguous and can apply patches at unintended locations.
  */
+const AGGRESSIVE_FUZZY_MIN_LEN = 24;
+
 export function aggressiveFuzzyMatch(
   docText: string,
   searchText: string,
@@ -258,9 +269,25 @@ export function aggressiveFuzzyMatch(
   const searchStripped = stripAll(searchText);
 
   if (searchStripped.length === 0) return undefined;
+  // PR-3A (F-25): refuse fuzzy matching of very short anchors.
+  if (searchStripped.length < AGGRESSIVE_FUZZY_MIN_LEN) {
+    logPatch(
+      `  -> Aggressive fuzzy refused: stripped search length ${searchStripped.length} < ${AGGRESSIVE_FUZZY_MIN_LEN} chars`,
+    );
+    return undefined;
+  }
 
   const index = docStripped.indexOf(searchStripped);
   if (index === -1) return undefined;
+  // PR-3A (F-25): require uniqueness — if the stripped search appears
+  // more than once, refuse rather than guess.
+  const secondIndex = docStripped.indexOf(searchStripped, index + 1);
+  if (secondIndex !== -1) {
+    logPatch(
+      `  -> Aggressive fuzzy refused: ${searchStripped.length}-char search appears more than once`,
+    );
+    return undefined;
+  }
 
   // Map back to original positions
   let origStart = -1;
@@ -385,47 +412,29 @@ export async function applyPatchBatch(patches: PatchBlock[]): Promise<BatchResul
 
   // Process each file.
   for (const [filePath, filePatches] of byFile) {
-    // SECURITY: Reject path traversal attempts — file must stay within workspace root.
-    // Normalize the path and ensure it does not escape the workspace via ".." segments.
-    const normalizedPath = filePath.replace(/\\/g, '/');
-    if (
-      normalizedPath.includes('..') ||
-      normalizedPath.startsWith('/') ||
-      normalizedPath.startsWith('~')
-    ) {
+    // PR-3A (F-05, F-06): single source of truth for path containment.
+    // resolveContained uses path.relative + separator-aware checks, so
+    // it correctly rejects adjacent-directory bypass (root "/a/b" does
+    // NOT contain "/a/b-evil/foo") and absolute / traversal inputs.
+    const contained = resolveContained(rootUri.fsPath, filePath);
+    if (!contained.ok) {
+      const reason =
+        contained.reason === 'traversal'
+          ? `Path traversal blocked: ${filePath}`
+          : contained.reason === 'absolute-input'
+            ? `Absolute path not allowed: ${filePath}`
+            : contained.reason === 'not-in-root'
+              ? `Path is not inside the workspace: ${filePath}`
+              : `Path rejected: ${filePath}`;
       for (const p of filePatches) {
-        failed.push({
-          ...p,
-          error: `Path traversal blocked: ${filePath}`,
-        });
-        patchResults.push({
-          success: false,
-          error: `Path traversal blocked: ${filePath}`,
-          expectedText: p.search,
-        });
+        failed.push({ ...p, error: reason });
+        patchResults.push({ success: false, error: reason, expectedText: p.search });
       }
-      logPatch(`  SECURITY: Path traversal blocked for ${filePath}`);
+      logPatch(`  SECURITY: ${reason}`);
       continue;
     }
 
-    const fileUri = vscode.Uri.joinPath(rootUri, filePath);
-
-    // SECURITY: Double-check that the resolved URI is under the workspace root
-    if (!fileUri.fsPath.startsWith(rootUri.fsPath)) {
-      for (const p of filePatches) {
-        failed.push({
-          ...p,
-          error: `Resolved path escapes workspace: ${filePath}`,
-        });
-        patchResults.push({
-          success: false,
-          error: `Resolved path escapes workspace: ${filePath}`,
-          expectedText: p.search,
-        });
-      }
-      logPatch(`  SECURITY: Resolved path escapes workspace for ${filePath}`);
-      continue;
-    }
+    const fileUri = vscode.Uri.file(contained.resolved);
 
     let document: vscode.TextDocument;
 
@@ -435,8 +444,39 @@ export async function applyPatchBatch(patches: PatchBlock[]): Promise<BatchResul
       // Check if this is a new file creation (empty search block).
       const isCreation = filePatches.every((p) => p.search === '');
       if (isCreation) {
-        // Create the file first, then open it.
+        // PR-2B (F-04): refuse to create files matching the sensitive-file
+        // denylist (.env, .pem, .ssh/, credentials, etc.) — these must
+        // never appear as an unattended side effect of an LLM patch.
+        if (isSensitiveFile(filePath)) {
+          for (const p of filePatches) {
+            const error = `Refused: target path matches sensitive-file denylist (${filePath}).`;
+            failed.push({ ...p, error });
+            patchResults.push({ success: false, error, expectedText: p.search });
+          }
+          logPatch(`  SECURITY: refused new-file creation for sensitive path ${filePath}`);
+          continue;
+        }
+        // PR-2B (F-04): surface a modal showing full file content before
+        // committing to disk. The user can see exactly what is being
+        // written — closes the silent-create vector. We skip the modal
+        // only when content is trivial (single-character `=` etc.) to
+        // avoid prompt fatigue on noise.
         const content = filePatches.map((p) => p.replace).join('');
+        const preview = content.length > 800 ? content.slice(0, 800) + '\n…[truncated]' : content;
+        const confirm = await vscode.window.showWarningMessage(
+          `AGI Workforce wants to create a new file:\n\n  ${filePath}\n\n--- file content (${content.length} chars) ---\n${preview}\n--- end ---\n\nCreate this file?`,
+          { modal: true },
+          'Create File',
+        );
+        if (confirm !== 'Create File') {
+          for (const p of filePatches) {
+            const error = `User declined new-file creation for ${filePath}.`;
+            failed.push({ ...p, error });
+            patchResults.push({ success: false, error, expectedText: p.search });
+          }
+          logPatch(`  User declined new-file creation for ${filePath}`);
+          continue;
+        }
         await vscode.workspace.fs.writeFile(fileUri, Buffer.from(content, 'utf-8'));
         await vscode.workspace.openTextDocument(fileUri);
         snapshots.set(filePath, '');
@@ -544,9 +584,21 @@ export function storeBatchForUndo(result: BatchResult): void {
     const oldestKey = batchSnapshotStore.keys().next().value;
     if (oldestKey !== undefined) {
       batchSnapshotStore.delete(oldestKey);
+      // PR-5D (F-26): log evictions so users can correlate a failed undo
+      // with the eviction. The UI should also remove stale Undo buttons
+      // for evicted batches.
+      logPatch(`  Evicted oldest batch from undo store: ${oldestKey} (cap: ${MAX_UNDO_BATCHES})`);
     }
   }
   batchSnapshotStore.set(result.batchId, result);
+}
+
+/**
+ * Returns true if the given batchId is currently tracked for undo.
+ * Used by the UI (agentUI) to suppress Undo buttons for evicted batches.
+ */
+export function isBatchUndoable(batchId: string): boolean {
+  return batchSnapshotStore.has(batchId);
 }
 
 /**
@@ -678,10 +730,11 @@ function trimTrailingNewline(text: string): string {
 }
 
 function randomHex(bytes: number): string {
-  const chars = '0123456789abcdef';
-  let result = '';
-  for (let i = 0; i < bytes * 2; i++) {
-    result += chars.charAt(Math.floor(Math.random() * 16));
-  }
-  return result;
+  // PR-5A (F-20): crypto-strong randomness. Batch IDs cross the webview ↔
+  // extension boundary as the key for undoBatch — if the webview is ever
+  // compromised (cf. F-02), guessable IDs could let an attacker silently
+  // undo a legitimate batch the user just approved.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { randomBytes } = require('crypto') as typeof import('crypto');
+  return randomBytes(bytes).toString('hex');
 }
