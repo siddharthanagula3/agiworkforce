@@ -215,7 +215,7 @@ describe('Media Generation Handler', () => {
       mockDallE.generateImage.mockRejectedValueOnce(new Error('Content policy violation'));
 
       await expect(mediaGenerationService.generateImage({ prompt: 'Test' })).rejects.toThrow(
-        'Image generation failed: Content policy violation',
+        new Error('Image generation failed: Content policy violation'), // AUDIT-FIX: vitest 4.x
       );
     });
 
@@ -317,9 +317,9 @@ describe('Media Generation Handler', () => {
     it('should throw error when Veo is not available', async () => {
       mockVeo.isAvailable.mockReturnValueOnce(false);
 
-      await expect(mediaGenerationService.generateVideo({ prompt: 'Test' })).rejects.toThrow(
-        'Google Veo service not configured',
-      );
+      await expect(mediaGenerationService.generateVideo({ prompt: 'Test' })).rejects.toMatchObject({
+        message: expect.stringContaining('Google Veo service not configured'), // AUDIT-FIX: vitest 4.x; actual msg is longer
+      });
     });
 
     it('should call progress callback', async () => {
@@ -400,7 +400,7 @@ describe('Media Generation Handler', () => {
       mockVeo.generateVideo.mockRejectedValueOnce(new Error('Content policy violation'));
 
       await expect(mediaGenerationService.generateVideo({ prompt: 'Test' })).rejects.toThrow(
-        'Video generation failed: Content policy violation',
+        new Error('Video generation failed: Content policy violation'), // AUDIT-FIX: vitest 4.x
       );
     });
 

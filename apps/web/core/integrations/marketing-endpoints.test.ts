@@ -96,13 +96,15 @@ describe('Marketing Endpoints', () => {
         json: () => Promise.resolve({ error: 'Invalid email format' }),
       });
 
-      await expect(submitContactForm(mockFormData)).rejects.toThrow('Invalid email format');
+      await expect(submitContactForm(mockFormData)).rejects.toThrow(
+        new Error('Invalid email format'),
+      ); // AUDIT-FIX: vitest 4.x string arg to .toThrow() broken; use Error object
     });
 
     it('should handle network errors', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
-      await expect(submitContactForm(mockFormData)).rejects.toThrow('Network error');
+      await expect(submitContactForm(mockFormData)).rejects.toThrow(new Error('Network error')); // AUDIT-FIX: vitest 4.x
     });
 
     it('should use default error message when none provided', async () => {
@@ -112,7 +114,7 @@ describe('Marketing Endpoints', () => {
       });
 
       await expect(submitContactForm(mockFormData)).rejects.toThrow(
-        'Failed to submit contact form',
+        new Error('Failed to submit contact form'), // AUDIT-FIX: vitest 4.x
       );
     });
   });
@@ -150,7 +152,7 @@ describe('Marketing Endpoints', () => {
       });
 
       await expect(subscribeToNewsletter(mockNewsletterData)).rejects.toThrow(
-        'Email already subscribed',
+        new Error('Email already subscribed'), // AUDIT-FIX: vitest 4.x
       );
     });
 
@@ -238,7 +240,7 @@ describe('Marketing Endpoints', () => {
         json: () => Promise.resolve({ error: 'Server error' }),
       });
 
-      await expect(getBlogPosts()).rejects.toThrow('Server error');
+      await expect(getBlogPosts()).rejects.toThrow(new Error('Server error')); // AUDIT-FIX: vitest 4.x
     });
   });
 
@@ -274,7 +276,7 @@ describe('Marketing Endpoints', () => {
         }),
       });
 
-      await expect(getBlogCategories()).rejects.toThrow('Database error');
+      await expect(getBlogCategories()).rejects.toThrow(new Error('Database error')); // AUDIT-FIX: vitest 4.x
     });
   });
 
@@ -621,7 +623,9 @@ describe('Marketing Endpoints', () => {
         }),
       });
 
-      await expect(createSupportTicket(mockTicket)).rejects.toThrow('Failed to create ticket');
+      await expect(createSupportTicket(mockTicket)).rejects.toThrow(
+        new Error('Failed to create ticket'),
+      ); // AUDIT-FIX: vitest 4.x
     });
   });
 
@@ -674,7 +678,7 @@ describe('Marketing Endpoints', () => {
         }),
       });
 
-      await expect(getUserTickets()).rejects.toThrow('Access denied');
+      await expect(getUserTickets()).rejects.toThrow(new Error('Access denied')); // AUDIT-FIX: vitest 4.x
     });
   });
 });

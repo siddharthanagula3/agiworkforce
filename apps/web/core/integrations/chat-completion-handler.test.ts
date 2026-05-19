@@ -175,7 +175,7 @@ describe('Chat Completion Handler', () => {
       mockUnifiedLLMService.sendMessage.mockRejectedValueOnce(new Error('API rate limit exceeded'));
 
       await expect(sendAIMessage('openai', mockMessages)).rejects.toThrow(
-        'API rate limit exceeded',
+        new Error('API rate limit exceeded'), // AUDIT-FIX: vitest 4.x string arg to .toThrow() broken
       );
     });
 
@@ -183,7 +183,7 @@ describe('Chat Completion Handler', () => {
       mockUnifiedLLMService.sendMessage.mockRejectedValueOnce('Unknown error');
 
       await expect(sendAIMessage('anthropic', mockMessages)).rejects.toThrow(
-        'Failed to send message to anthropic',
+        new Error('Failed to send message to anthropic'), // AUDIT-FIX: vitest 4.x
       );
     });
 
