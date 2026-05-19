@@ -141,6 +141,7 @@ These are contracts every PR must keep — failing any of them is a release-bloc
 - `tabs.onUpdated` sync gated on allowlist (`tab-updated-allowlist.test.ts`).
 - No `<<<<<<<` or `>>>>>>>` markers in `src/` or `__tests__/` (`scripts/check-conflict-markers.sh`, wired as `pretest`).
 - `patchConsole` removed entirely (`security-fixes.test.ts` M-13 block).
+- Commit messages follow Conventional Commits with the `Co-Authored-By:` footer — enforced by `.husky/commit-msg` running `pnpm exec commitlint --edit "$1"` monorepo-wide. The extension's `package.json` does not duplicate this hook because the root hook already gates every commit in the workspace (L-15 audit 2026-05-19).
 
 ---
 
@@ -149,7 +150,7 @@ These are contracts every PR must keep — failing any of them is a release-bloc
 | Risk | Why deferred | Tracking |
 |---|---|---|
 | `chrome.storage.sync` history retention | The migrator (H-04) clears the *current* sync value but Google retains history. Notifying existing users is a product decision. | PR description for the audit batch. |
-| `style-src 'unsafe-inline'` in CSP | Inline-style usage is pervasive. Refactor is bigger than the audit batch. | M-08 deferred. |
+| ~~`style-src 'unsafe-inline'` in CSP~~ | ~~Inline-style usage is pervasive. Refactor is bigger than the audit batch.~~ | **M-08 RESOLVED 2026-05-19**: popup.html / side_panel.html load styles via `<link>`; side_panel.ts uses Constructable Stylesheets (`document.adoptedStyleSheets`). |
 | Pre-stamp legacy records | Records without `createdByOrigin` are permitted at fire-time (legacy grace). | Acceptable: field set on creation post-fix. |
 | Cross-extension messaging | `externally_connectable` not declared, so other extensions cannot send. If that changes, message-router gates must extend their sender-id check. | Declared rule, not a tested invariant today. |
 

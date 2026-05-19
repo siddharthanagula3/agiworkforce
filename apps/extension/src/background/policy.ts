@@ -26,73 +26,131 @@
 import type { RunPageAction, ScheduledTask } from '../types';
 import { redactSecrets } from '@agiworkforce/utils';
 
-// ─── Message-type policy Sets ───────────────────────────────────────────────
+// ─── Declarative message policy (Arch #1, audit 2026-05-19) ────────────────
+//
+// Single per-message-type policy record. Replaces three independent Sets
+// (DISCOVERY, DOM_MUTATION, EXTENSION_PAGE_ONLY). The Sets are derived from
+// this matrix below for backwards-compatible exports.
+//
+// Adding a new message type? Add an entry here with the appropriate fields.
+// Forgetting to add the entry results in the *default* policy below, which
+// is fail-safe: the message goes through the allowlist gate but has no
+// cross-tab or extension-page restriction. If the new type mutates DOM or
+// persists state, you MUST add an explicit entry.
+//
+// senderClass
+//   - 'extension-page-only': only popup / side panel / options can send
+//     (used for state-mutating types whose execution outlives the
+//     originating tab — see EXTENSION_PAGE_ONLY history)
+//   - 'allowlisted-tab': any content-script on an `agi_site_allowlist`
+//     origin can send (the default — gated by isAllowlistedSender)
+//   - 'discovery': bypasses the allowlist (no current types — H-1)
+//
+// allowsCrossTab
+//   - false: the message must target the sender's own tab; `tabId` field
+//     either matches sender.tab.id or is undefined. Enforced via
+//     senderTabAllowedToMutate.
+//   - true (default for non-DOM-mutating types): cross-tab forwarding OK.
+
+export type SenderClass = 'extension-page-only' | 'allowlisted-tab' | 'discovery';
+
+export interface MessageTypePolicy {
+  senderClass: SenderClass;
+  /** When false, the gate rejects the message if msg.tabId !== sender.tab.id. */
+  allowsCrossTab: boolean;
+}
+
+const DEFAULT_POLICY: MessageTypePolicy = {
+  senderClass: 'allowlisted-tab',
+  allowsCrossTab: true,
+};
 
 /**
- * Discovery messages bypass the origin allowlist because they expose no
- * privileged capability. Currently empty after H-1 (audit 2026-05-03).
- * Do NOT add PING / GET_AGI_BRIDGE_URL here — see the H-1 comment in
- * background.ts.
+ * Declarative policy matrix. Every message type with a non-default policy
+ * is listed here. Look-up via `getMessagePolicy(type)`.
  */
-export const DISCOVERY_MESSAGE_TYPES = new Set<string>();
+export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
+  // ── DOM-mutation types (allowlisted-tab + same-tab restriction). ─────────
+  TYPE: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+  CLICK: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+  SET_LOCAL_STORAGE: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+  CLEAR_LOCAL_STORAGE: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+  SUBMIT_FORM: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+  SELECT_OPTION: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+  CHECK: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+  UNCHECK: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+  FOCUS: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+  BLUR: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+  HOVER: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+  SCROLL: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+  DRAG_DROP: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+  CLICK_AT_COORDINATES: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+  EXECUTE_SCRIPT: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+  RUN_PAGE_ACTIONS: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+  AUTO_FILL_JOB_APPLICATION: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+  DOUBLE_CLICK: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+  RIGHT_CLICK: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+  FILL_FORM: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+
+  // ── Extension-page-only types (state-mutating, persistence-outliving). ──
+  CREATE_SCHEDULED_TASK: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  UPDATE_SCHEDULED_TASK: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  DELETE_SCHEDULED_TASK: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  SAVE_SHORTCUT: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  DELETE_SHORTCUT: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  SET_RECORDING_VALUE_CAPTURE: { senderClass: 'extension-page-only', allowsCrossTab: true },
+};
+
+/**
+ * Returns the policy entry for a message type, or DEFAULT_POLICY if no
+ * entry exists. New message types fall back to "allowlisted-tab,
+ * cross-tab OK" — which is fail-safe for read-only handlers but
+ * UNSAFE for DOM-mutation or state-persistence. Always add an explicit
+ * entry when you introduce a new type with either capability.
+ */
+export function getMessagePolicy(type: string): MessageTypePolicy {
+  return MESSAGE_POLICY[type] ?? DEFAULT_POLICY;
+}
+
+// ─── Backwards-compatible Set exports (derived from MESSAGE_POLICY) ─────────
+// These are read by `background.ts handleMessage`. Keep them as Sets so the
+// hot path stays O(1). The Sets are derived once at module load — adding a
+// new type to MESSAGE_POLICY automatically populates them.
+
+/**
+ * Discovery messages bypass the origin allowlist. Currently empty (H-1).
+ */
+export const DISCOVERY_MESSAGE_TYPES: ReadonlySet<string> = new Set(
+  Object.entries(MESSAGE_POLICY)
+    .filter(([, p]) => p.senderClass === 'discovery')
+    .map(([t]) => t),
+);
 
 /**
  * Message types that mutate the target tab's DOM. Gated by both the origin
- * allowlist AND the same-tab restriction in `senderTabAllowedToMutate`.
- *
- * Adding a new content-script handler that writes to the DOM? Add the
- * wire-message type here too — otherwise an allowlisted origin can drive
- * a different tab via that type.
+ * allowlist AND the same-tab restriction. Derived from MESSAGE_POLICY where
+ * `allowsCrossTab === false`.
  */
-export const DOM_MUTATION_MESSAGE_TYPES = new Set<string>([
-  'TYPE',
-  'CLICK',
-  'SET_LOCAL_STORAGE',
-  'CLEAR_LOCAL_STORAGE',
-  'SUBMIT_FORM',
-  'SELECT_OPTION',
-  'CHECK',
-  'UNCHECK',
-  'FOCUS',
-  'BLUR',
-  'HOVER',
-  'SCROLL',
-  'DRAG_DROP',
-  'CLICK_AT_COORDINATES',
-  'EXECUTE_SCRIPT',
-  'RUN_PAGE_ACTIONS',
-  'AUTO_FILL_JOB_APPLICATION',
-  'DOUBLE_CLICK',
-  'RIGHT_CLICK',
-  'FILL_FORM',
-]);
+export const DOM_MUTATION_MESSAGE_TYPES: ReadonlySet<string> = new Set(
+  Object.entries(MESSAGE_POLICY)
+    .filter(([, p]) => p.allowsCrossTab === false)
+    .map(([t]) => t),
+);
 
 /**
- * Message types that may ONLY originate from an extension page (popup,
- * side panel, options). Content scripts — even on allowlisted origins —
- * are rejected.
+ * Message types that may ONLY originate from an extension page. Derived
+ * from MESSAGE_POLICY where `senderClass === 'extension-page-only'`.
  *
  * SECURITY (C-02 / C-03 audit 2026-05-19): scheduled-task and shortcut
  * creation flows mutate persistent state that survives the origin's
- * removal from the allowlist. The previous architecture allowed any
- * allowlisted content script to plant tasks that fire on later tabs;
- * fixing this surgically (origin-stamp + fire-time re-check) is not
- * enough — the capability itself must be gated to UI-trusted contexts.
- *
- * Add a type here only if (a) it persists state, (b) its execution can
- * outlive the originating tab, and (c) the legitimate flow is always
- * from the side-panel UI. If you need a web-page-callable variant in
- * the future, design a new message type (e.g. `SAVE_PUBLIC_SHORTCUT`)
- * with explicit per-origin rate limits.
+ * removal from the allowlist. The capability itself must be gated to
+ * UI-trusted contexts.
  */
-export const EXTENSION_PAGE_ONLY_MESSAGE_TYPES = new Set<string>([
-  'CREATE_SCHEDULED_TASK',
-  'UPDATE_SCHEDULED_TASK',
-  'DELETE_SCHEDULED_TASK',
-  'SAVE_SHORTCUT',
-  'DELETE_SHORTCUT',
-  'SET_RECORDING_VALUE_CAPTURE',
-]);
+export const EXTENSION_PAGE_ONLY_MESSAGE_TYPES: ReadonlySet<string> = new Set(
+  Object.entries(MESSAGE_POLICY)
+    .filter(([, p]) => p.senderClass === 'extension-page-only')
+    .map(([t]) => t),
+);
 
 // ─── Shared content / parsing caps ──────────────────────────────────────────
 

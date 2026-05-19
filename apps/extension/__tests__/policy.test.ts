@@ -16,8 +16,10 @@ import {
   DISCOVERY_MESSAGE_TYPES,
   DOM_MUTATION_MESSAGE_TYPES,
   EXTENSION_PAGE_ONLY_MESSAGE_TYPES,
+  MESSAGE_POLICY,
   ORIGIN_EXTENSION_PAGE,
   generateRecordId,
+  getMessagePolicy,
   validateBridgeUrl,
   validateShortcutActions,
 } from '../src/background/policy';
@@ -219,5 +221,49 @@ describe('policy — ORIGIN_EXTENSION_PAGE sentinel', () => {
   it('is a non-URL string so it cannot collide with real origins', () => {
     expect(ORIGIN_EXTENSION_PAGE).toBe('__extension_page__');
     expect(() => new URL(ORIGIN_EXTENSION_PAGE)).toThrow();
+  });
+});
+
+describe('policy — MESSAGE_POLICY matrix (Arch #1 audit 2026-05-19)', () => {
+  it('every extension-page-only type has a policy entry with the right senderClass', () => {
+    for (const t of EXTENSION_PAGE_ONLY_MESSAGE_TYPES) {
+      expect(MESSAGE_POLICY[t]?.senderClass).toBe('extension-page-only');
+    }
+  });
+
+  it('every DOM-mutation type has a policy entry with allowsCrossTab=false', () => {
+    for (const t of DOM_MUTATION_MESSAGE_TYPES) {
+      expect(MESSAGE_POLICY[t]?.allowsCrossTab).toBe(false);
+    }
+  });
+
+  it('extension-page-only types are also cross-tab-allowed (state mutation, not DOM)', () => {
+    for (const t of EXTENSION_PAGE_ONLY_MESSAGE_TYPES) {
+      expect(MESSAGE_POLICY[t]?.allowsCrossTab).toBe(true);
+    }
+  });
+
+  it('getMessagePolicy returns explicit entry for known types', () => {
+    expect(getMessagePolicy('CLICK').allowsCrossTab).toBe(false);
+    expect(getMessagePolicy('CREATE_SCHEDULED_TASK').senderClass).toBe('extension-page-only');
+  });
+
+  it('getMessagePolicy returns the fail-safe default for unknown types', () => {
+    // Unknown types fall back to allowlisted-tab + cross-tab — safe for
+    // read-only handlers; you MUST add an explicit entry for DOM-writing
+    // or state-persisting types.
+    const policy = getMessagePolicy('NEWLY_ADDED_FOO');
+    expect(policy.senderClass).toBe('allowlisted-tab');
+    expect(policy.allowsCrossTab).toBe(true);
+  });
+
+  it('no type is BOTH extension-page-only AND DOM-mutating', () => {
+    for (const t of EXTENSION_PAGE_ONLY_MESSAGE_TYPES) {
+      expect(DOM_MUTATION_MESSAGE_TYPES.has(t)).toBe(false);
+    }
+  });
+
+  it('DISCOVERY_MESSAGE_TYPES is empty (H-1)', () => {
+    expect(DISCOVERY_MESSAGE_TYPES.size).toBe(0);
   });
 });
