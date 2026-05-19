@@ -2,8 +2,26 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { createClient as createSupabaseAdminClient } from '@supabase/supabase-js';
 import { createClient as createSupabaseServerClient } from '@/utils/supabase/server';
 
-// Lazily get CSRF_SECRET to avoid errors during build/static generation
+// Lazily get CSRF_SECRET to avoid errors during build/static generation.
+//
+// SEV-WEB-07 / WEB-33 (audit 2026-05-19): both the current and the
+// previous secret are read so a rotation can happen without orphaning
+// any in-flight CSRF tokens. The previous secret is OPTIONAL and only
+// honored during the rotation window the operator picks; remove the
+// env var to close the window. Minimum 32-byte entropy is enforced on
+// each non-empty secret to prevent operationally weak rotations like
+// `CSRF_SECRET=abc`.
+const MIN_CSRF_SECRET_BYTES = 32;
 let cachedSecret: string | null = null;
+let cachedPrevSecret: string | null | undefined = undefined; // undefined = not yet read; null = read, none
+
+function assertSufficientEntropy(name: string, value: string): void {
+  if (Buffer.byteLength(value, 'utf8') < MIN_CSRF_SECRET_BYTES) {
+    throw new Error(
+      `${name} must be at least ${MIN_CSRF_SECRET_BYTES} bytes (UTF-8) — got ${Buffer.byteLength(value, 'utf8')}`,
+    );
+  }
+}
 
 function getCsrfSecret(): string {
   if (cachedSecret) {
@@ -13,8 +31,21 @@ function getCsrfSecret(): string {
   if (!secret) {
     throw new Error('CSRF_SECRET environment variable is required');
   }
+  assertSufficientEntropy('CSRF_SECRET', secret);
   cachedSecret = secret;
   return cachedSecret;
+}
+
+function getCsrfSecretPrev(): string | null {
+  if (cachedPrevSecret !== undefined) return cachedPrevSecret;
+  const prev = process.env['CSRF_SECRET_PREV'];
+  if (!prev) {
+    cachedPrevSecret = null;
+    return null;
+  }
+  assertSufficientEntropy('CSRF_SECRET_PREV', prev);
+  cachedPrevSecret = prev;
+  return cachedPrevSecret;
 }
 
 /**
@@ -23,6 +54,7 @@ function getCsrfSecret(): string {
  */
 export function resetCsrfCache(): void {
   cachedSecret = null;
+  cachedPrevSecret = undefined;
 }
 
 const CSRF_HEADER = 'x-csrf-token';
@@ -102,15 +134,29 @@ export function verifyCsrfToken(
 
   // Verify signature using constant-time comparison to prevent timing attacks.
   const data = `${tokenSessionId}:${timestamp}`;
-  const expectedSignature = createHmac('sha256', getCsrfSecret()).update(data).digest('hex');
 
+  // SEV-WEB-07 / WEB-33: accept tokens signed with EITHER the current or
+  // the previous secret. The previous secret is honored only when
+  // CSRF_SECRET_PREV is explicitly set — remove the env var to close the
+  // rotation window. Both branches use the same constant-time
+  // comparison; the order does not leak which secret matched.
+  const currentMatch = constantTimeSignatureMatch(data, signature, getCsrfSecret());
+  if (currentMatch) return true;
+  const prev = getCsrfSecretPrev();
+  if (prev) {
+    return constantTimeSignatureMatch(data, signature, prev);
+  }
+  return false;
+}
+
+function constantTimeSignatureMatch(data: string, providedSignature: string, secret: string): boolean {
+  const expectedSignature = createHmac('sha256', secret).update(data).digest('hex');
   // Hash both values to a fixed-length digest before comparing.
   // This ensures timingSafeEqual always receives equal-length buffers,
   // eliminating the timing side channel from the try/catch that previously
   // caught length-mismatch exceptions (distinguishable from normal comparison).
-  const hmacKey = getCsrfSecret();
-  const providedHash = createHmac('sha256', hmacKey).update(signature).digest();
-  const expectedHash = createHmac('sha256', hmacKey).update(expectedSignature).digest();
+  const providedHash = createHmac('sha256', secret).update(providedSignature).digest();
+  const expectedHash = createHmac('sha256', secret).update(expectedSignature).digest();
   return timingSafeEqual(providedHash, expectedHash);
 }
 
@@ -236,6 +282,25 @@ export async function getOrCreateAnonSession(
  * user. If verification fails, fall through to the CSRF token check as normal.
  *
  * Returns true if the token is valid (CSRF bypass is safe), false if invalid/missing.
+ *
+ * ┌──────────────────────────────────────────────────────────────────────────┐
+ * │ SEV-WEB-06 / WEB-34 (audit 2026-05-19) — Bearer-bypass invariant         │
+ * │                                                                          │
+ * │ The Bearer-bypass branch is only sound because cross-origin browsers     │
+ * │ cannot forge a valid Supabase JWT (same-origin policy blocks reading     │
+ * │ another origin's localStorage / injecting Authorization on third-party   │
+ * │ requests). It is NOT a generic "skip CSRF if any Bearer header is        │
+ * │ present" — that pattern was the RT-04 vulnerability.                     │
+ * │                                                                          │
+ * │ DO NOT add new routes that check CSRF BEFORE auth and rely on this       │
+ * │ helper to skip CSRF. If such a route ever passes `Authorization: Bearer  │
+ * │ <forged-but-shaped-correctly>`, the bypass attempts a verify call but    │
+ * │ that call's network failure mode (Supabase auth-server reachable?)       │
+ * │ becomes part of the CSRF surface. The required order on any new route is:│
+ * │     1. validate the Bearer JWT (or cookie session)                       │
+ * │     2. THEN call requireCsrfToken / validateCsrfFromRequest              │
+ * │ Inverting that order is a vulnerability, not a style preference.         │
+ * └──────────────────────────────────────────────────────────────────────────┘
  */
 async function isBearerTokenValid(authHeader: string | null): Promise<boolean> {
   if (!authHeader?.startsWith('Bearer ')) {
