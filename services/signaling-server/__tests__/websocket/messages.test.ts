@@ -61,7 +61,7 @@ describe('WebSocket Message Validation', () => {
     it('should validate valid register message', () => {
       const validMessage = {
         type: 'register',
-        code: 'ABCD1234',
+        code: 'ABCD1234EFGH',
         role: 'desktop',
       };
 
@@ -72,7 +72,7 @@ describe('WebSocket Message Validation', () => {
     it('should validate register message with metadata', () => {
       const validMessage = {
         type: 'register',
-        code: 'ABCD1234',
+        code: 'ABCD1234EFGH',
         role: 'mobile',
         metadata: { deviceName: 'iPhone 15' },
       };
@@ -95,7 +95,7 @@ describe('WebSocket Message Validation', () => {
     it('should reject invalid role', () => {
       const invalidMessage = {
         type: 'register',
-        code: 'ABCD1234',
+        code: 'ABCD1234EFGH',
         role: 'server', // Invalid role
       };
 
@@ -256,8 +256,8 @@ describe('WebSocket Message Validation', () => {
 });
 
 describe('Pairing Code Validation', () => {
-  it('should accept valid 8-character uppercase alphanumeric code', () => {
-    const validCodes = ['ABCD1234', 'A1B2C3D4', '12345678', 'XXXXXXXX'];
+  it('should accept valid 12-character uppercase alphanumeric code', () => {
+    const validCodes = ['ABCD1234EFGH', 'A1B2C3D4E5F6', '123456789012', 'XXXXXXXXXXXX'];
 
     validCodes.forEach((code) => {
       const result = pairingCodeSchema.safeParse(code);
