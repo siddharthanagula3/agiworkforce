@@ -19,7 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { MessageList } from '@/components/chat/MessageList';
-import { Composer } from '@/components/composer/Composer';
+import { Composer } from '@/components/Composer/Composer';
 import { QuotedReplyBar } from '@/components/chat/QuotedReplyBar';
 import { ModeSwitchModal, type AppMode } from '@/components/chat/ModeSwitchModal';
 import { AddToChatSheet } from '@/components/chat/AddToChatSheet';

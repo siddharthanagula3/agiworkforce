@@ -264,9 +264,9 @@ export default function RootLayout() {
       if (!onboardingDone && !inOnboarding) {
         // Age-gate must come before onboarding on first run.
         if (!isAgeGateConfirmed()) {
-          router.replace({ pathname: '/(public)/age-gate' as const });
+          router.replace({ pathname: '/(public)/age-gate' as never });
         } else {
-          router.replace({ pathname: '/(public)/onboarding' as const });
+          router.replace({ pathname: '/(public)/onboarding' as never });
         }
       } else {
         router.replace({ pathname: '/(app)' as const });
@@ -283,9 +283,9 @@ export default function RootLayout() {
       const onboardingDone = storage.getString('onboarding-done');
       if (!onboardingDone) {
         if (!isAgeGateConfirmed()) {
-          router.replace({ pathname: '/(public)/age-gate' as const });
+          router.replace({ pathname: '/(public)/age-gate' as never });
         } else {
-          router.replace({ pathname: '/(public)/onboarding' as const });
+          router.replace({ pathname: '/(public)/onboarding' as never });
         }
       }
     }

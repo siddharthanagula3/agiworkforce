@@ -340,7 +340,7 @@ class IndexedDBBackend implements CacheStorage {
 export class Cache {
   private storage: CacheStorage;
   private config: CacheConfig;
-  private cleanupTimer: NodeJS.Timeout | null = null;
+  private cleanupTimer: ReturnType<typeof setTimeout> | null = null;
   private stats = {
     hits: 0,
     misses: 0,

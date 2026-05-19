@@ -931,7 +931,7 @@ class MultiAgentOrchestrator {
       typeof this.cleanupIntervalId === 'object' &&
       'unref' in this.cleanupIntervalId
     ) {
-      (this.cleanupIntervalId as NodeJS.Timeout).unref();
+      (this.cleanupIntervalId as { unref(): void }).unref();
     }
   }
 

@@ -78,7 +78,7 @@ function FormField({
 }: FormFieldProps) {
   const [internalError, setInternalError] = React.useState<string | undefined>();
   const [touched, setTouched] = React.useState(false);
-  const validateTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const validateTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Use external error if provided, otherwise use internal validation error
   const displayError = error ?? (touched ? internalError : undefined);

@@ -1,12 +1,13 @@
+// AUDIT-FIX: vscode-reorg
 import * as vscode from 'vscode';
 import {
   AgiWorkforceApiError,
   AgiWorkforcePaywallError,
   chatCompletion,
   type LlmChatMessage,
-} from '../utils/api';
-import { Config } from '../utils/config';
-import { isSensitiveFile } from '../utils/pathSafety';
+} from '../../utils/api';
+import { Config } from '../../platform/config';
+import { isSensitiveFile } from '../../utils/pathSafety';
 
 // PR-2D (F-09): in addition to the canonical sensitive-file denylist,
 // refuse inline completion in any file whose name suggests it holds
@@ -229,9 +230,10 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
 
       this.cache.set(cacheKey, completion);
       return [new vscode.InlineCompletionItem(completion, new vscode.Range(position, position))];
-    } catch (error) {
+    } catch (error: unknown) {
       // Keep inline completions silent; chat/commands surface explicit errors.
       if (error instanceof AgiWorkforcePaywallError) {
+        const paywallError: AgiWorkforcePaywallError = error;
         // Suppress all future inline completion requests for this session to
         // avoid a toast+request loop on every keystroke.
         if (!this.paywallSuppressed) {
@@ -239,7 +241,7 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
           // Show a single one-time notification — never repeated.
           vscode.window
             .showInformationMessage(
-              `AGI Workforce: Inline completions paused — upgrade to ${error.requiredTier} to continue.`,
+              `AGI Workforce: Inline completions paused — upgrade to ${paywallError.requiredTier} to continue.`,
               'Upgrade',
             )
             .then((choice) => {
@@ -247,8 +249,8 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
                 vscode.env.openExternal(
                   vscode.Uri.parse(
                     `https://agiworkforce.com/pricing?from=paywall` +
-                      `&tier=${encodeURIComponent(error.requiredTier)}` +
-                      `&feature=${encodeURIComponent(error.feature)}`,
+                      `&tier=${encodeURIComponent(paywallError.requiredTier)}` +
+                      `&feature=${encodeURIComponent(paywallError.feature)}`,
                   ),
                 );
               }
