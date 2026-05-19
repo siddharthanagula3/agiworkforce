@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { validateUserImageUrl, EgressPolicyError } from '@/lib/egress-policy';
+
 import {
   BaseLLMProvider,
   LLMProviderRequest,
@@ -417,6 +419,25 @@ function buildAnthropicContentBlocks(
             data: dataUrlMatch[2] as string,
           },
         };
+      }
+      // SEV-WEB-01 / WEB-28 (audit 2026-05-19): defense-in-depth. The v1
+      // chat-completions route validates user-supplied image_url at the
+      // request layer (request-processor.ts:312-321), but the provider
+      // adapter must defend independently — other call sites (v2, internal
+      // helpers, tests) might invoke this builder with attacker-influenced
+      // URLs. `validateUserImageUrl` is synchronous (no DNS resolution),
+      // so it does not change this function's signature.
+      try {
+        validateUserImageUrl(url);
+      } catch (err) {
+        if (err instanceof EgressPolicyError) {
+          logger.warn(
+            { url: url.slice(0, 64) },
+            'buildAnthropicContentBlocks: rejected image_url (egress policy)',
+          );
+          throw err;
+        }
+        throw err;
       }
       // Fall back to URL type for remote images
       return { type: 'image', source: { type: 'url', url } };

@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { getSupabaseClient } from '../../services/supabase';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { getSafeRedirectUrl } from '../../lib/safe-redirect';
 
 const getAppUrl = () =>
   process.env['NEXT_PUBLIC_APP_URL'] ||
@@ -32,7 +33,12 @@ const labelStyle: React.CSSProperties = {
 function SignupForm() {
   const searchParams = useSearchParams();
   const appUrl = useMemo(() => getAppUrl(), []);
-  const redirectTo = searchParams.get('redirectTo') || '/chat';
+  // WEB-23: validate against allowlist to prevent open redirects via the
+  // emailRedirectTo callback. Mirrors the /login pattern.
+  const redirectTo = useMemo(
+    () => getSafeRedirectUrl(searchParams.get('redirectTo'), appUrl, '/chat'),
+    [searchParams, appUrl],
+  );
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
