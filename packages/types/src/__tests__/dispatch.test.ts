@@ -39,7 +39,7 @@ describe('dispatch — canonical wire-format constants', () => {
   });
 
   it('locks the unsigned-transitional cutoff date', () => {
-    expect(DISPATCH_HMAC_REQUIRED_AFTER).toBe('2026-06-05T00:00:00.000Z');
+    expect(DISPATCH_HMAC_REQUIRED_AFTER).toBe('2026-05-26T00:00:00.000Z');
   });
 
   it('locks the timestamp window at 30 seconds', () => {
