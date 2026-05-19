@@ -71,8 +71,9 @@ const RE_REASONING_MATH = /\b\d+\s*[+\-*/=]\s*\d/;
 const RE_RESEARCH = /\b(latest|today|2026|current|recent news|search the web|cite sources)\b/i;
 
 /** Creative-writing imperatives — long-form prose generation. */
+// AUDIT-FIX: alert-448 — bound whitespace runs so the regex stays linear-time.
 const RE_CREATIVE_WRITING =
-  /\b(write|draft|compose)\s+(a|an|the)?\s*(story|poem|email|essay|tweet|blog)/i;
+  /\b(write|draft|compose)[ \t]{1,32}(a|an|the)?[ \t]{0,32}(story|poem|email|essay|tweet|blog)/i;
 
 /** Whitespace splitter for word counting in the simple-chat heuristic. */
 const RE_WHITESPACE = /\s+/;

@@ -92,8 +92,9 @@ export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderA
       // query string. Keys in URLs leak via server access logs, browser
       // history, and proxy logs even over HTTPS. The Generative Language
       // API documents the header path as the recommended secure transport.
+      // AUDIT-FIX: alert-404 — bound trailing-slash strip to avoid polynomial-redos.
       const url = `${baseUrl.replace(
-        /\/+$/,
+        /\/{1,32}$/,
         '',
       )}/v1beta/models/${encodeURIComponent(req.model)}:streamGenerateContent?alt=sse`;
 

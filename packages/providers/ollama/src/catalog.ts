@@ -49,7 +49,8 @@ export async function fetchOllamaCatalog(params: {
   fetch?: typeof fetch;
   signal?: AbortSignal;
 }): Promise<ModelInfo[]> {
-  const baseUrl = params.baseUrl?.replace(/\/+$/, '') ?? DEFAULT_BASE_URL;
+  // AUDIT-FIX: alert-398 — bound trailing-slash stripping to avoid polynomial-redos.
+  const baseUrl = params.baseUrl?.replace(/\/{1,32}$/, '') ?? DEFAULT_BASE_URL;
   const fetchFn = params.fetch ?? fetch;
   let res: Response;
   try {

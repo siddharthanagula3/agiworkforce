@@ -31,10 +31,13 @@ const DEFAULT_CONNECTION_TIMEOUT_MS = 30_000;
 const CATALOG_VERSION = 1;
 
 function toSafeServerName(name: string): string {
+  // AUDIT-FIX: alert-397 — cap repetition counts to defeat polynomial-redos.
+  // The trim regex `/^_+|_+$/g` is anchored so it can't grow unboundedly, but
+  // CodeQL flags any unbounded `+` over a bounded character class. Bound it.
   return name
     .toLowerCase()
-    .replaceAll(/[^a-z0-9_]+/g, '_')
-    .replace(/^_+|_+$/g, '')
+    .replaceAll(/[^a-z0-9_]{1,128}/g, '_')
+    .replace(/^_{1,128}|_{1,128}$/g, '')
     .slice(0, 48);
 }
 

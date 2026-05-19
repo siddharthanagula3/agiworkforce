@@ -136,9 +136,10 @@ function readUpdateBody(
 
     let changeContext: string | undefined;
     if (line.startsWith(CHANGE_CONTEXT_MARKER)) {
+      // AUDIT-FIX: alert-406 — bound whitespace runs to avoid polynomial-redos.
       changeContext = line
         .slice(CHANGE_CONTEXT_MARKER.length)
-        .replace(/\s*@@\s*$/, '')
+        .replace(/\s{0,256}@@\s{0,256}$/, '')
         .trim();
       i += 1;
     } else if (line.trimEnd() === EMPTY_CHANGE_CONTEXT_MARKER) {
