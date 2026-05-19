@@ -59,8 +59,9 @@ export async function fetchGoogleCatalog(params: {
   fetch?: typeof fetch;
   signal?: AbortSignal;
 }): Promise<ModelInfo[]> {
+  // AUDIT-FIX: alert-405 — bound trailing-slash strip to avoid polynomial-redos.
   const baseUrl = (params.baseUrl ?? 'https://generativelanguage.googleapis.com').replace(
-    /\/+$/,
+    /\/{1,32}$/,
     '',
   );
   const fetchFn = params.fetch ?? fetch;

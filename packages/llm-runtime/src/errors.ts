@@ -238,7 +238,13 @@ function extractAnthropicOverageHint(e: SDKErrorLike): string | undefined {
  * Citation: `m8 §4.3` (Anthropic) — also surfaces from OpenAI as
  * `context_length_exceeded` with the same numeric triple.
  */
-const CONTEXT_OVERFLOW_REGEX = /context (?:limit|window|length).*?(\d+)[^\d]+(\d+)[^\d]+(\d+)/i;
+// AUDIT-FIX: alert-457, alert-458 — bound the wildcard and digit runs to
+// prevent polynomial-redos on adversarial error strings starting with
+// `context limit` followed by long digit sequences. Realistic context-overflow
+// messages carry three small integers; 64 digits per number is far above any
+// real value.
+const CONTEXT_OVERFLOW_REGEX =
+  /context (?:limit|window|length).{0,256}?(\d{1,64})[^\d]{1,64}(\d{1,64})[^\d]{1,64}(\d{1,64})/i;
 
 function matchesContextOverflow(message: string): boolean {
   if (CONTEXT_OVERFLOW_REGEX.test(message)) return true;
