@@ -1,0 +1,11 @@
+{
+  "name": "@agiworkforce/sandbox",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cross-origin artifact renderer at sandbox.agiworkforce.com. Single static HTML — no build step.",
+  "scripts": {
+    "dev": "npx serve . -p 3001",
+    "build": "echo 'no build — static HTML'",
+    "start": "npx serve . -p 3001"
+  }
+}

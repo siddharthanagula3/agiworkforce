@@ -14,6 +14,13 @@ import { updateSession } from '@/utils/supabase/proxy';
  * but non-trivial — leave as-is until a framework-level solution exists.
  */
 function buildCspWithNonce(nonce: string): string {
+  // WEB-13 / WEB-20 (audit 2026-05-19): allow framing the artifact sandbox
+  // origin so the cross-origin renderer at sandbox.agiworkforce.com can be
+  // embedded by the chat UI. When NEXT_PUBLIC_SANDBOX_ORIGIN is unset the
+  // parent falls back to a same-origin srcDoc iframe — no frame-src change
+  // needed in that case ('self' already covers it).
+  const sandboxOrigin = process.env['NEXT_PUBLIC_SANDBOX_ORIGIN']?.trim().replace(/\/+$/, '');
+  const sandboxFrameSrc = sandboxOrigin ? ` ${sandboxOrigin}` : '';
   return `
     default-src 'self';
     script-src 'self' 'nonce-${nonce}' https://js.stripe.com https://challenges.cloudflare.com https://www.googletagmanager.com;
@@ -21,7 +28,7 @@ function buildCspWithNonce(nonce: string): string {
     img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://stripe.com https://www.google-analytics.com;
     font-src 'self' https://fonts.gstatic.com https://js.stripe.com data:;
     connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://vitals.vercel-insights.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com;
-    frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com;
+    frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com${sandboxFrameSrc};
     frame-ancestors 'none';
     form-action 'self';
     base-uri 'self';
