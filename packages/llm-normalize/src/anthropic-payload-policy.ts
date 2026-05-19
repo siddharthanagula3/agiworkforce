@@ -49,6 +49,15 @@ function resolveBaseUrlHostname(baseUrl: string): string | undefined {
   }
 }
 
+// AUDIT-FIX: alert-396 — validate the leftmost label against a region pattern
+// rather than relying on a free-form `endsWith` substring match. Even with
+// URL-parsed `hostname`, the original check would accept any host of shape
+// `<anything>-aiplatform.googleapis.com`. Vertex AI's documented endpoints use
+// a region identifier (lowercase letters, digits, and `-`) as the prefix —
+// for example `us-central1-aiplatform.googleapis.com`. Enforce that shape.
+const VERTEX_REGION_HOST_REGEX =
+  /^[a-z0-9]{1,32}(?:-[a-z0-9]{1,32}){0,4}-aiplatform\.googleapis\.com$/;
+
 function isLongTtlEligibleEndpoint(baseUrl: string | undefined): boolean {
   if (typeof baseUrl !== 'string') {
     return false;
@@ -57,11 +66,10 @@ function isLongTtlEligibleEndpoint(baseUrl: string | undefined): boolean {
   if (!hostname) {
     return false;
   }
-  return (
-    hostname === 'api.anthropic.com' ||
-    hostname === 'aiplatform.googleapis.com' ||
-    hostname.endsWith('-aiplatform.googleapis.com')
-  );
+  if (hostname === 'api.anthropic.com' || hostname === 'aiplatform.googleapis.com') {
+    return true;
+  }
+  return VERTEX_REGION_HOST_REGEX.test(hostname);
 }
 
 function resolveAnthropicEphemeralCacheControl(
