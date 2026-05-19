@@ -35,7 +35,7 @@ jobs:
           echo "command=$COMMAND" >> $GITHUB_OUTPUT
 
       - name: React to comment
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             await github.rest.reactions.createForIssueComment({
@@ -47,7 +47,7 @@ jobs:
 
       - name: Handle help command
         if: steps.parse.outputs.command == 'help'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const helpText = '## AGI Workforce Bot\n\nAvailable commands:\n- `/agi help` - Show this help message\n- `/agi review` - Review the PR for code quality and common issues\n- `/agi explain` - Explain the changes in this PR\n- `/agi check` - Run build checks and report status\n- `/agi stats` - Show PR statistics (files changed, lines, complexity)';
@@ -61,7 +61,7 @@ jobs:
 
       - name: Handle explain command
         if: steps.parse.outputs.command == 'explain'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const { data: files } = await github.rest.pulls.listFiles({
@@ -107,7 +107,7 @@ jobs:
 
       - name: Handle stats command
         if: steps.parse.outputs.command == 'stats'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const { data: pr } = await github.rest.pulls.get({
@@ -158,7 +158,7 @@ jobs:
 
       - name: Handle check command
         if: steps.parse.outputs.command == 'check'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const { data: checks } = await github.rest.checks.listForRef({
@@ -189,7 +189,7 @@ jobs:
 
       - name: Handle review command
         if: steps.parse.outputs.command == 'review'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const { data: files } = await github.rest.pulls.listFiles({
@@ -251,7 +251,7 @@ jobs:
           steps.parse.outputs.command != 'explain' &&
           steps.parse.outputs.command != 'check' &&
           steps.parse.outputs.command != 'stats'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           PARSED_COMMAND: ${{ steps.parse.outputs.command }}
         with:
