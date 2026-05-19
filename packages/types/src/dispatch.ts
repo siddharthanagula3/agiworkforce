@@ -44,7 +44,7 @@ export const DISPATCH_HKDF_INFO = 'dispatch-hmac-v2';
  * ISO 8601 UTC date after which unsigned (transitional) Dispatch messages
  * MUST be rejected by both peers. Mobile and desktop must update lockstep.
  */
-export const DISPATCH_HMAC_REQUIRED_AFTER = '2026-06-05T00:00:00.000Z';
+export const DISPATCH_HMAC_REQUIRED_AFTER = '2026-05-26T00:00:00.000Z';
 
 /** Maximum age (ms) we accept for incoming Dispatch envelopes. */
 export const DISPATCH_MAX_MESSAGE_AGE_MS = 30_000;
