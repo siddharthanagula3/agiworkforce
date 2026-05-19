@@ -15,21 +15,18 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { ORIGIN_EXTENSION_PAGE } from '../src/background/policy';
+// Self-review #1 audit 2026-05-19: import the production helper instead of
+// mirroring. `shouldExecuteScheduledTask` is the same function the live
+// `executeScheduledTask` path calls — drift is impossible.
+import {
+  ORIGIN_EXTENSION_PAGE,
+  shouldExecuteScheduledTask,
+} from '../src/background/policy';
 import type { ScheduledTask } from '../src/types';
 
-/**
- * Mirror of the fire-time re-check guard from
- * `background.ts:executeScheduledTask`. The mirror is justified here because
- * the production function depends on chrome.alarms + chrome.storage which
- * are heavy to stub for a property test. If the production logic ever drifts,
- * the integration-style tests in `__tests__/background.*` will catch it.
- */
-function shouldExecute(task: ScheduledTask, allowlist: Set<string>): boolean {
-  if (!task.createdByOrigin) return true; // legacy task pre-stamp; permit
-  if (task.createdByOrigin === ORIGIN_EXTENSION_PAGE) return true;
-  return allowlist.has(task.createdByOrigin);
-}
+// Thin alias so the rest of the suite reads naturally.
+const shouldExecute = (task: ScheduledTask, allowlist: Set<string>): boolean =>
+  shouldExecuteScheduledTask(task, allowlist);
 
 function makeTask(overrides: Partial<ScheduledTask>): ScheduledTask {
   return {

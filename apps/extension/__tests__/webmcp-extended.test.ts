@@ -287,6 +287,12 @@ describe('callTool — execution via modelContext.callTool', () => {
 });
 
 describe('callTool — declarative form fallback', () => {
+  // M-06 audit 2026-05-19: stub confirm() to true so the new
+  // user-consent step doesn't short-circuit the existing assertions.
+  beforeEach(() => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+  });
+
   it('fills form fields and calls requestSubmit()', async () => {
     const form = addDeclarativeForm({
       toolName: 'contact',
@@ -394,10 +400,15 @@ describe('error handling for malformed MCP responses', () => {
       executeTool: vi.fn().mockResolvedValue('{ this is not valid JSON }'),
     });
 
-    // callTool will attempt JSON.parse and throw; we expect a rejection response
+    // M-03 audit 2026-05-19: invalid JSON used to throw and surface
+    // success: false. The new safeJsonParse returns undefined on parse
+    // failure, which the caller coerces to `null`. Both semantics are
+    // "graceful"; the new one lets the tool finish without an error
+    // (treating bad JSON as "no result") rather than failing the entire
+    // invocation.
     const resp = await callTool({ name: 'bad-json' });
-    expect(resp.success).toBe(false);
-    expect(typeof resp.error).toBe('string');
+    expect(resp.success).toBe(true);
+    expect(resp.result).toBeNull();
   });
 
   it('handles modelContextTesting.listTools returning malformed schema JSON', () => {

@@ -20,8 +20,9 @@
   ],
   "_host_permissions_note": "Broad localhost/* is intentional: the bridge port is user-configurable via chrome.storage.local agi_bridge_url (default 8787, matches VS Code extension and desktop bridge). Restricting to a fixed port would break configurability. Runtime enforcement: validateBridgeUrl() in background.ts rejects any non-local URL.",
   "host_permissions": ["http://localhost/*", "http://127.0.0.1/*"],
+  "_content_security_policy_note": "M-08 partial (audit 2026-05-19). style-src 'unsafe-inline' is DEFERRED because popup.html / side_panel.html / side_panel.ts:injectStyles inject inline CSS; a full refactor is tracked as follow-up. The other directives below add meaningful hardening with zero behavioural risk: default-src 'self' caps everything to the extension origin; img-src adds data: URIs for attachment previews; connect-src explicitly enumerates the localhost bridge + agiworkforce.com gateway + supabase.co; base-uri 'self' blocks <base> hijack; form-action 'self' blocks form submission to attacker origins; frame-ancestors 'none' blocks clickjacking.",
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'"
+    "extension_pages": "default-src 'self'; script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://localhost:* http://127.0.0.1:* https://api.agiworkforce.com https://*.agiworkforce.com https://*.supabase.co; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
   },
   "background": {
     "service_worker": "src/background.js",
