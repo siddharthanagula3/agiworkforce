@@ -6,18 +6,18 @@ import { promisify } from 'util';
 import { SidebarProvider } from '../providers/sidebarProvider';
 import { AgiDiagnosticsProvider } from '../providers/diagnosticsProvider';
 import { DiffDecorationProvider } from '../providers/diffDecorationProvider';
-import { ConversationStore } from '../storage/conversationStore';
+import { ConversationStore } from '../data/conversationStore';
 import {
   ConversationTreeProvider,
   ConversationTreeItem,
-} from '../providers/conversationTreeProvider';
-import { ContextPanelProvider } from '../providers/contextPanelProvider';
+  ContextPanelProvider,
+} from '../features/trees';
 import { AgentModePanel } from '../providers/agentModeProvider';
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
-import { ModelMetricsPanel } from '../services/modelMetrics';
-import { getDesktopBridge } from '../services/desktopBridge';
-import { getCheckpointManager } from '../services/checkpointManager';
-import { showOriginalContext, getPatchOutputChannel } from '../services/patchEngine';
+import { ModelMetricsPanel } from '../features/model-picker/modelMetrics';
+import { getDesktopBridge } from '../features/desktop-bridge';
+import { getCheckpointManager } from '../data/checkpointManager';
+import { showOriginalContext, getPatchOutputChannel } from '../integrations/patchEngine';
 import { runInlineCommand } from './runInlineCommand';
 import { resolveTier } from '../services/tierResolver';
 import { guardProviderSwitch } from '../services/providerSwitchGuard';
@@ -30,8 +30,8 @@ import {
   clearSupabaseJwt,
   fetchTierInfo,
 } from '../utils/api';
-import { getExtensionVersion } from '../utils/version';
-import { Config } from '../utils/config';
+import { getExtensionVersion } from '../platform/version';
+import { Config } from '../platform/config';
 import {
   normalizeConfiguredModelId,
   buildGroupedQuickPickItems,

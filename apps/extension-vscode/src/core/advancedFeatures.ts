@@ -6,9 +6,9 @@
  */
 
 import * as vscode from 'vscode';
-import { Config } from '../utils/config';
+import { Config } from '../platform/config';
 import { getApiKey } from '../utils/api';
-import { getDesktopBridge } from '../services/desktopBridge';
+import { getDesktopBridge } from '../features/desktop-bridge';
 
 export async function validateAdvancedFeatureFlags(
   context: vscode.ExtensionContext,

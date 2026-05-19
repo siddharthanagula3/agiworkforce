@@ -7,10 +7,10 @@
 
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
-import { WorkspaceIndexer } from '../services/workspaceIndexer';
+import { WorkspaceIndexer } from '../data/workspaceIndexer';
 import { AgentLoop } from './agentMode/agentLoop';
 import { AgentUI } from './agentMode/agentUI';
-import * as telemetry from '../services/telemetry';
+import * as telemetry from '../core/telemetry';
 
 export { parseFileEdits, parseFileReads } from './agentMode/agentLoop';
 

@@ -18,9 +18,12 @@ import {
   AgiWorkforceApiError,
   type LlmChatMessage,
 } from '../utils/api';
-import { getVSCodeSendQueue } from '../services/sendQueue';
-import { getContextBuilder } from '../services/contextBuilder';
-import { normalizeConfiguredModelId, getModelProviderInfo } from '../services/modelConstants';
+import { getVSCodeSendQueue } from '../data/sendQueue';
+import { getContextBuilder } from '../data/contextBuilder';
+import {
+  normalizeConfiguredModelId,
+  getModelProviderInfo,
+} from '../features/model-picker/modelConstants';
 import { PROVIDER_DISPLAY, type AgentMode, type Effort } from '@agiworkforce/types';
 import { Config } from '../utils/config';
 import { isSensitiveFile } from '../utils/pathSafety';

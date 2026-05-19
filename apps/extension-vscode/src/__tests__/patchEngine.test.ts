@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { parsePatchBlocks, type PatchBlock } from '../services/patchEngine';
+import { parsePatchBlocks, type PatchBlock } from '../integrations/patchEngine';
 
 describe('parsePatchBlocks', () => {
   it('returns empty array for plain text with no envelope', () => {
