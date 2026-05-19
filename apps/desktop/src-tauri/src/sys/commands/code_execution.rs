@@ -47,6 +47,7 @@ pub struct CodeExecutionResponse {
 /// Supported languages: python, javascript, typescript, bash, powershell, ruby, perl, r
 #[tauri::command]
 pub async fn execute_code(
+    app: tauri::AppHandle,
     language: String,
     code: String,
     timeout_secs: Option<u64>,
@@ -55,6 +56,28 @@ pub async fn execute_code(
     allow_network: Option<bool>,
     files: Option<HashMap<String, String>>,
 ) -> Result<CodeExecutionResponse, String> {
+    // FIX-F5 (audit 2026-05-19): require HITL before running arbitrary LLM-
+    // supplied code in 8 supported languages. The OS sandbox
+    // (Seatbelt/Bubblewrap/Landlock via SandboxManager) is the security
+    // boundary; this gate ensures the user sees what the agent is about to
+    // run and can refuse. Goes through request_confirmation_simple →
+    // request_tool_confirmation so Safe/Plan agent modes can also block.
+    let code_preview: String = code.chars().take(400).collect();
+    if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
+        &app,
+        "execute_code",
+        &serde_json::json!({
+            "language": language,
+            "code_preview": code_preview,
+            "code_full_len": code.len(),
+            "allow_network": allow_network.unwrap_or(false),
+        }),
+    )
+    .await?
+    {
+        return Err("Operation denied by user".to_string());
+    }
+
     let manager =
         SandboxManager::new().map_err(|e| format!("Failed to initialize sandbox: {e}"))?;
 
