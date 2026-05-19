@@ -11,8 +11,36 @@
 // cfg(target_os = "macos") declared at policy/mod.rs module gate
 #![allow(dead_code)]
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+
+#[derive(Debug)]
+pub enum SandboxError {
+    InvalidPath(String),
+}
+
+impl std::fmt::Display for SandboxError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SandboxError::InvalidPath(p) => write!(f, "Refusing unsafe SBPL path: {}", p),
+        }
+    }
+}
+
+impl std::error::Error for SandboxError {}
+
+// AUDIT-FIX: C-8 — refuse paths whose characters would break out of the SBPL string literal.
+fn sbpl_quote(p: &Path) -> Result<String, SandboxError> {
+    let s = p
+        .to_str()
+        .ok_or_else(|| SandboxError::InvalidPath(p.display().to_string()))?;
+    for c in s.chars() {
+        if c == '"' || c == '\\' || (c as u32) < 0x20 {
+            return Err(SandboxError::InvalidPath(p.display().to_string()));
+        }
+    }
+    Ok(format!("\"{}\"", s))
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SandboxPreset {
@@ -34,15 +62,14 @@ pub struct SandboxOptions {
 
 /// Build the Seatbelt profile string. The format is the `tinyscheme`-style
 /// rules accepted by `sandbox-exec -p <profile>`.
-pub fn build_profile(opts: &SandboxOptions) -> String {
+pub fn build_profile(opts: &SandboxOptions) -> Result<String, SandboxError> {
     if matches!(opts.preset, SandboxPreset::Unrestricted) {
-        // Allow everything; sandbox-exec still needs *some* profile.
-        return "(version 1)(allow default)".into();
+        return Ok("(version 1)(allow default)".into());
     }
+    let ws_q = sbpl_quote(&opts.workspace)?; // AUDIT-FIX: C-8
     let mut p = String::new();
     p.push_str("(version 1)\n");
     p.push_str("(deny default)\n");
-    // Always allow basic process operations.
     p.push_str("(allow process-fork)\n");
     p.push_str("(allow process-exec)\n");
     p.push_str("(allow signal (target same-sandbox))\n");
@@ -50,38 +77,35 @@ pub fn build_profile(opts: &SandboxOptions) -> String {
     p.push_str("(allow mach-lookup)\n");
     p.push_str("(allow ipc-posix-shm)\n");
     p.push_str("(allow file-read-metadata)\n");
-    // Workspace + extras: read everywhere we said yes to.
-    p.push_str(&format!("(allow file-read* (subpath \"{}\"))\n", opts.workspace.display()));
+    p.push_str(&format!("(allow file-read* (subpath {}))\n", ws_q)); // AUDIT-FIX: C-8
     for extra in &opts.extra_allowed_paths {
-        p.push_str(&format!("(allow file-read* (subpath \"{}\"))\n", extra.display()));
+        let q = sbpl_quote(extra)?; // AUDIT-FIX: C-8
+        p.push_str(&format!("(allow file-read* (subpath {}))\n", q));
     }
-    // Common system paths the runtime needs to read (libraries, system frameworks).
     p.push_str("(allow file-read* (subpath \"/usr\"))\n");
     p.push_str("(allow file-read* (subpath \"/System\"))\n");
     p.push_str("(allow file-read* (subpath \"/Library\"))\n");
     p.push_str("(allow file-read* (subpath \"/private/etc\"))\n");
     p.push_str("(allow file-read* (literal \"/dev/null\"))\n");
     p.push_str("(allow file-read* (literal \"/dev/urandom\"))\n");
-    // Temp dir.
     p.push_str("(allow file-read* file-write* (subpath \"/private/tmp\"))\n");
     p.push_str("(allow file-read* file-write* (subpath \"/private/var/folders\"))\n");
 
     if matches!(opts.preset, SandboxPreset::Contained) {
-        // Writes inside workspace only.
-        p.push_str(&format!("(allow file-write* (subpath \"{}\"))\n", opts.workspace.display()));
+        p.push_str(&format!("(allow file-write* (subpath {}))\n", ws_q)); // AUDIT-FIX: C-8
     }
 
     if opts.allow_network {
         p.push_str("(allow network*)\n");
     }
-    p
+    Ok(p)
 }
 
 /// Wrap a Command to run under `sandbox-exec -p <profile>`. The wrapped
 /// command preserves args + env + cwd; the profile is passed inline via
 /// `-p`. (The longer-form `-f <file>` path can be added later.)
-pub fn wrap_command(opts: &SandboxOptions, inner: Command) -> Command {
-    let profile = build_profile(opts);
+pub fn wrap_command(opts: &SandboxOptions, inner: Command) -> Result<Command, SandboxError> {
+    let profile = build_profile(opts)?; // AUDIT-FIX: C-8
     let mut cmd = Command::new("sandbox-exec");
     cmd.arg("-p").arg(profile);
     cmd.arg(inner.get_program());
@@ -97,7 +121,7 @@ pub fn wrap_command(opts: &SandboxOptions, inner: Command) -> Command {
     if let Some(cwd) = inner.get_current_dir() {
         cmd.current_dir(cwd);
     }
-    cmd
+    Ok(cmd)
 }
 
 /// Verify sandbox-exec is on PATH. Useful for /doctor.
@@ -125,28 +149,27 @@ mod tests {
 
     #[test]
     fn unrestricted_profile_is_allow_default() {
-        let p = build_profile(&opts(SandboxPreset::Unrestricted));
+        let p = build_profile(&opts(SandboxPreset::Unrestricted)).unwrap();
         assert!(p.contains("(allow default)"));
     }
 
     #[test]
     fn readonly_denies_default_and_blocks_writes() {
-        let p = build_profile(&opts(SandboxPreset::ReadOnly));
+        let p = build_profile(&opts(SandboxPreset::ReadOnly)).unwrap();
         assert!(p.contains("(deny default)"));
         assert!(p.contains("file-read*"));
-        // No file-write* of the workspace in ReadOnly mode.
         assert!(!p.contains(&format!("(allow file-write* (subpath \"/Users/test/work\"))")));
     }
 
     #[test]
     fn contained_allows_workspace_writes() {
-        let p = build_profile(&opts(SandboxPreset::Contained));
+        let p = build_profile(&opts(SandboxPreset::Contained)).unwrap();
         assert!(p.contains(&format!("(allow file-write* (subpath \"/Users/test/work\"))")));
     }
 
     #[test]
     fn network_gate_off_by_default() {
-        let p = build_profile(&opts(SandboxPreset::Contained));
+        let p = build_profile(&opts(SandboxPreset::Contained)).unwrap();
         assert!(!p.contains("(allow network*)"));
     }
 
@@ -154,7 +177,7 @@ mod tests {
     fn network_gate_on_when_requested() {
         let mut o = opts(SandboxPreset::Contained);
         o.allow_network = true;
-        let p = build_profile(&o);
+        let p = build_profile(&o).unwrap();
         assert!(p.contains("(allow network*)"));
     }
 
@@ -162,7 +185,7 @@ mod tests {
     fn extra_allowed_paths_appear_in_profile() {
         let mut o = opts(SandboxPreset::ReadOnly);
         o.extra_allowed_paths.push(PathBuf::from("/Users/test/shared"));
-        let p = build_profile(&o);
+        let p = build_profile(&o).unwrap();
         assert!(p.contains("/Users/test/shared"));
     }
 
@@ -170,7 +193,14 @@ mod tests {
     fn wrap_command_invokes_sandbox_exec() {
         let mut inner = std::process::Command::new("/bin/echo");
         inner.arg("hello");
-        let wrapped = wrap_command(&opts(SandboxPreset::ReadOnly), inner);
+        let wrapped = wrap_command(&opts(SandboxPreset::ReadOnly), inner).unwrap();
         assert_eq!(wrapped.get_program(), "sandbox-exec");
+    }
+
+    #[test]
+    fn sbpl_injection_rejected() {
+        let mut o = opts(SandboxPreset::ReadOnly);
+        o.workspace = PathBuf::from("/tmp/\")(allow default)(deny");
+        assert!(build_profile(&o).is_err());
     }
 }

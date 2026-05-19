@@ -123,16 +123,32 @@ pub(super) fn describe_command(command: &str) -> String {
                 format!("Move files: {}", trimmed)
             }
         }
-        "chmod" => format!("Change permissions: {}", trimmed),
-        "chown" | "chgrp" => format!("Change ownership: {}", trimmed),
-        "sudo" => format!("Run as root: {}", &trimmed[5..].trim()),
-        "kill" | "killall" | "pkill" => format!("Send signal to processes: {}", trimmed),
-        "git" => format!("Git: {}", &trimmed[4..].trim()),
-        "npm" | "pnpm" | "yarn" | "cargo" | "pip" => format!("Package manager: {}", trimmed),
-        "curl" | "wget" => format!("Download/fetch: {}", trimmed),
-        "docker" => format!("Docker: {}", &trimmed[7..].trim()),
-        _ => trimmed.to_string(),
+        "chmod" => format!("Change permissions: {}", cap_chars(trimmed, 200)),
+        "chown" | "chgrp" => format!("Change ownership: {}", cap_chars(trimmed, 200)),
+        "sudo" => format!("Run as root: {}", cap_chars(skip_chars(trimmed, 5).trim(), 200)), // AUDIT-FIX: H-6
+        "kill" | "killall" | "pkill" => {
+            format!("Send signal to processes: {}", cap_chars(trimmed, 200))
+        }
+        "git" => format!("Git: {}", cap_chars(skip_chars(trimmed, 4).trim(), 200)), // AUDIT-FIX: H-6
+        "npm" | "pnpm" | "yarn" | "cargo" | "pip" => {
+            format!("Package manager: {}", cap_chars(trimmed, 200))
+        }
+        "curl" | "wget" => format!("Download/fetch: {}", cap_chars(trimmed, 200)),
+        "docker" => format!("Docker: {}", cap_chars(skip_chars(trimmed, 7).trim(), 200)), // AUDIT-FIX: H-6
+        _ => cap_chars(trimmed, 200),
     }
+}
+
+// AUDIT-FIX: H-6 — char-safe skip avoids panicking on multibyte UTF-8.
+fn skip_chars(s: &str, n: usize) -> &str {
+    match s.char_indices().nth(n) {
+        Some((i, _)) => &s[i..],
+        None => "",
+    }
+}
+
+fn cap_chars(s: &str, max: usize) -> String {
+    s.chars().take(max).collect()
 }
 
 #[allow(dead_code)]

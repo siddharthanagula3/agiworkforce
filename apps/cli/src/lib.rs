@@ -640,6 +640,12 @@ enum PluginSubcommand {
         source: String,
         #[arg(long)]
         name: Option<String>,
+        /// `sha256:<hex>` integrity claim or path to sigstore.json sidecar. AUDIT-FIX: H-16
+        #[arg(long)]
+        integrity: Option<String>,
+        /// Bypass integrity verification. AUDIT-FIX: H-16 — prints a warning to stderr every install.
+        #[arg(long)]
+        unsafe_no_integrity: bool,
     },
 }
 
@@ -1240,7 +1246,12 @@ pub async fn run_main() -> Result<()> {
                         }
                         Ok(())
                     }
-                    PluginSubcommand::Install { source, name } => {
+                    PluginSubcommand::Install {
+                        source,
+                        name,
+                        integrity,
+                        unsafe_no_integrity,
+                    } => {
                         let pname = name.clone().unwrap_or_else(|| {
                             source.rsplit('/').next().unwrap_or("plugin").to_string()
                         });
@@ -1252,9 +1263,26 @@ pub async fn run_main() -> Result<()> {
                         } else {
                             plugins::PluginSource::Local(std::path::PathBuf::from(source))
                         };
+                        // AUDIT-FIX: H-16 — supply-chain integrity is required.
+                        let pintegrity = match (integrity.as_deref(), *unsafe_no_integrity) {
+                            (Some(s), _) if s.starts_with("sha256:") => {
+                                plugins::PluginIntegrity::PinnedSha256(s.to_string())
+                            }
+                            (Some(s), _) => {
+                                plugins::PluginIntegrity::Sigstore(std::path::PathBuf::from(s))
+                            }
+                            (None, true) => plugins::PluginIntegrity::UnsafeSkip,
+                            (None, false) => {
+                                eprintln!(
+                                    "Refusing install: pass --integrity sha256:<hex> or --integrity <sigstore.json> (or --unsafe-no-integrity)"
+                                );
+                                return Ok(());
+                            }
+                        };
                         match mgr.install(plugins::PluginInstallRequest {
                             source: psrc,
                             name: pname,
+                            integrity: pintegrity,
                         }) {
                             plugins::PluginInstallOutcome::Installed { path, format } => {
                                 let fmt_tag = match format {

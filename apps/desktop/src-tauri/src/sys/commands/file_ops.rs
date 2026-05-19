@@ -413,9 +413,14 @@ pub async fn file_read(
 ) -> Result<String, String> {
     debug!("Reading file: {}", path);
 
-    let _ = validate_path_security(&path)?;
+    let canonical = validate_path_security(&path)?;
+    // AUDIT-FIX: CI-4 — centralized blocked-path denylist.
+    if crate::sys::security::blocked_paths::is_blocked(&canonical) {
+        return Err(format!("Access denied: path is on the blocked-paths denylist: {}", path));
+    }
 
-    match fs::metadata(&path) {
+    // AUDIT-FIX: H-15 — use canonical (symlink-resolved) path for all fs ops.
+    match fs::symlink_metadata(&canonical) {
         Ok(metadata) => {
             if metadata.len() > 100_000_000 {
                 return Err(format!(
@@ -425,6 +430,9 @@ pub async fn file_read(
             }
             if !metadata.is_file() {
                 return Err(format!("Path is not a file: {}", path));
+            }
+            if metadata.file_type().is_symlink() {
+                return Err("Refusing to read through symlink".to_string()); // AUDIT-FIX: H-15
             }
         }
         Err(e) => return Err(format!("Failed to access file metadata: {}", e)),
@@ -443,7 +451,7 @@ pub async fn file_read(
         return Err(error);
     }
 
-    match fs::read_to_string(&path) {
+    match fs::read_to_string(&canonical) { // AUDIT-FIX: H-15
         Ok(content) => {
             log_file_operation(&path, FileOperation::Read, true, None, &state).await?;
             info!("Successfully read file: {}", path);
@@ -473,7 +481,11 @@ pub async fn file_write(
 ) -> Result<(), String> {
     debug!("Writing file: {}", path);
 
-    let _ = validate_path_security(&path)?;
+    let canonical = validate_path_security(&path)?;
+    // AUDIT-FIX: CI-4 — centralized blocked-path denylist.
+    if crate::sys::security::blocked_paths::is_blocked(&canonical) {
+        return Err(format!("Access denied: path is on the blocked-paths denylist: {}", path));
+    }
 
     if content.len() > 100_000_000 {
         return Err(format!(
@@ -509,14 +521,47 @@ pub async fn file_write(
         return Err(error);
     }
 
-    if let Some(parent) = Path::new(&path).parent() {
+    // AUDIT-FIX: H-15 — canonicalize parent and rejoin filename so writes to nonexistent files still pin to a real dir.
+    let write_target: std::path::PathBuf = if canonical.exists() {
+        canonical.clone()
+    } else {
+        let parent = Path::new(&path)
+            .parent()
+            .ok_or_else(|| format!("Path has no parent: {}", path))?;
         if !parent.exists() {
             fs::create_dir_all(parent)
                 .map_err(|e| format!("Failed to create parent directory: {}", e))?;
         }
-    }
+        let canonical_parent = parent
+            .canonicalize()
+            .map_err(|e| format!("Failed to canonicalize parent: {}", e))?;
+        let file_name = Path::new(&path)
+            .file_name()
+            .ok_or_else(|| format!("Path missing filename: {}", path))?;
+        canonical_parent.join(file_name)
+    };
 
-    match fs::write(&path, content) {
+    let write_result: std::io::Result<()> = (|| {
+        #[cfg(unix)]
+        {
+            use std::io::Write as _;
+            use std::os::unix::fs::OpenOptionsExt;
+            let mut f = fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .custom_flags(libc::O_NOFOLLOW) // AUDIT-FIX: H-15
+                .open(&write_target)?;
+            f.write_all(content.as_bytes())
+        }
+        #[cfg(not(unix))]
+        {
+            // AUDIT-FIX: H-15 — Windows has no O_NOFOLLOW equivalent; accepted exception, callers must trust validate_path_security.
+            fs::write(&write_target, content.as_bytes())
+        }
+    })();
+
+    match write_result {
         Ok(_) => {
             log_file_operation(&path, FileOperation::Write, true, None, &state).await?;
             info!("Successfully wrote file: {}", path);
