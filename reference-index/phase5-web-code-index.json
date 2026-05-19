@@ -1,0 +1,6710 @@
+[
+  {
+    "path": "apps/web/__tests__/api/agents-execute.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/auth-callback.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/chat-conversation-single.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/chat-conversations.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/chat-messages.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/checkout.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/credit-topup.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/credits-balance.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/csrf.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/device-approve.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/device-link.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/device-poll.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/gdpr.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/health.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/image-generation.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/llm-completion.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/llm-v1-chat-completions-routing.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/me.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/media-image-generate.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/media-video-generate.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/media-video-status.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/memory-search.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/memory.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/model-tiers.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/routing-preferences.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/schedules.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/stripe-cancel.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/stripe-downgrade.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/stripe-refund.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/stripe-webhook.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/usage.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/api/voice-transcribe.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/privacy-claims.spec.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/security/b2-set-token.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/security/b4-audio-mime-bypass.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/security/rt-01-provider-stream-auth.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/security/rt-02-api-key-dos.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/security/rt-03-prompt-injection.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/security/rt-04-csrf-bearer-bypass.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/security/rt-05-github-anon-client.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/security/rt-09-audit-idor.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/security/web-high-1-cookie-parser.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/__tests__/security/web-high-3-github-spend-cap.test.ts",
+    "current_dir": "__tests__",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/api/client.ts",
+    "current_dir": "api",
+    "proposed_dir": "tbd",
+    "role": "misc"
+  },
+  {
+    "path": "apps/web/api/orchestrator.ts",
+    "current_dir": "api",
+    "proposed_dir": "tbd",
+    "role": "misc"
+  },
+  {
+    "path": "apps/web/api/workflow.ts",
+    "current_dir": "api",
+    "proposed_dir": "tbd",
+    "role": "misc"
+  },
+  {
+    "path": "apps/web/app/__tests__/animations.test.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/app/__tests__/dark-mode-colors.test.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/app/about/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/accessibility/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/ai-skills/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/api-docs/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/api-docs/layout.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/api-docs/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/api-docs/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/api/admin/directory-sync/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/admin/security/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/admin/sso/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/agents/collaboration/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/agents/communication/[id]/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/agents/communication/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/agents/execute/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/agents/session/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/auth/clear-token/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/auth/desktop-token/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/auth/set-token/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/auth/sso-check/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/autotag/batch/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/autotag/classify/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/autotag/conversations/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/chat/conversations/[id]/messages/[messageId]/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/chat/conversations/[id]/messages/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/chat/conversations/[id]/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/chat/conversations/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/checkout/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/claim-offer/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/completion/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/connectors/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/control-plane/status/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/credit-topup/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/cron/reset-credits/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/csrf/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/debug/llm-status/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/device/approve/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/device/link/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/device/poll/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/download-beta/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/download/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/github/install/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/github/installations/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/github/webhook/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/health/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/llm/completion/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/llm/v1/audio/transcriptions/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/llm/v1/chat/completions/__tests__/auth-contract.test.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-misc"
+  },
+  {
+    "path": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-misc"
+  },
+  {
+    "path": "apps/web/app/api/llm/v1/chat/completions/lib/response-builder.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-misc"
+  },
+  {
+    "path": "apps/web/app/api/llm/v1/chat/completions/lib/stream-transform.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-misc"
+  },
+  {
+    "path": "apps/web/app/api/llm/v1/chat/completions/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/llm/v1/credits/balance/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/llm/v1/models/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/llm/v2/chat/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/marketplace/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/mcp/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/me/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/me/routing-preferences/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/media/image/generate/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/media/video/generate/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/media/video/status/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/memory/[id]/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/memory/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/memory/search/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/memory/sync/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/messaging/config/[platform]/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/messaging/config/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/messaging/stats/[platform]/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/messaging/test/[platform]/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/mission/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/models/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/portal/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/projects/[id]/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/projects/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/releases/[target]/[version]/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/releases/check/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/releases/latest/[platform]/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/schedules/[id]/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/schedules/[id]/runs/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/schedules/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/settings/test-provider/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/share/[token]/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/share/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/shared/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/skills/[name]/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/skills/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/stripe-webhook/lib/db.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-misc"
+  },
+  {
+    "path": "apps/web/app/api/stripe-webhook/lib/handlers.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-misc"
+  },
+  {
+    "path": "apps/web/app/api/stripe-webhook/lib/idempotency.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-misc"
+  },
+  {
+    "path": "apps/web/app/api/stripe-webhook/lib/verify.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-misc"
+  },
+  {
+    "path": "apps/web/app/api/stripe-webhook/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/sync-subscription/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/teams/[id]/members/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/teams/[id]/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/teams/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/usage/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/user/data/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/user/delete-account/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/user/export/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/v1/providers/[providerId]/catalog/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/v1/providers/[providerId]/stream/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/v1/providers/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/validate-webhook/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/voice/health/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/voice/transcribe/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/waitlist/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/webhook-diagnostic/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/webhooks/directory-sync/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/api/workforce/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/auth/callback/route.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "api-route"
+  },
+  {
+    "path": "apps/web/app/auth/device/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/auth/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/auth/error/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/auth/update-password/layout.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/auth/update-password/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/billing/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/billing/layout.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/billing/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/blog/[slug]/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/blog/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/blog/layout.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/blog/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/blog/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/byok/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/careers/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/careers/layout.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/careers/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/careers/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/changelog/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/changelog/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/changelog/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/chat-multi/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/chat/[sessionId]/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/chat/layout.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/chat/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/chrome-extension/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/cli/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/community/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/compare/chatgpt/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/compare/claude/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/compare/gemini/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/compare/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/compare/perplexity/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/connectors/mcp-directory/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/connectors/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/contact-sales/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/contact-sales/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/contact-sales/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/contact/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/contact/layout.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/contact/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/contact/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/cookies/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/customers/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/desktop/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/device-auth/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/device-auth/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/device-auth/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/diagnose/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/diagnose/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/diagnose/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/docs/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/download/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/download/layout.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/download/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/download/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/dpa/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/enterprise/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/faq/layout.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/faq/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/features/agents/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/features/ai-chat/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/features/ai-skills/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/features/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/features/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/features/plugins/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/features/tools/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/forgot-password/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/forgot-password/layout.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/forgot-password/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/forgot-password/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/gallery/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/gallery/layout.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/gallery/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/gallery/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/get-started/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/get-started/layout.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/get-started/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/get-started/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/global-error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-misc"
+  },
+  {
+    "path": "apps/web/app/help/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/help/layout.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/help/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/help/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/i18n/index.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-misc"
+  },
+  {
+    "path": "apps/web/app/integrations/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/layout.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/legal/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/local/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/login/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/login/layout.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/login/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/login/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/mobile/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/not-found.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/partner-perks/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/partners/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/payment-failure/layout.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/payment-failure/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/press/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/pricing/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/pricing/layout.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/pricing/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/pricing/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/privacy/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/providers.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-misc"
+  },
+  {
+    "path": "apps/web/app/providers/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/refund-policy/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/resources/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/resources/layout.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/resources/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/resources/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/robots.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-misc"
+  },
+  {
+    "path": "apps/web/app/security/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/settings/billing/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/settings/capabilities/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/settings/general/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/settings/layout.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/settings/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/settings/voice/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/share/[token]/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/share/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/share/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/shared/[id]/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/shared/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/shared/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/signup/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/signup/layout.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/signup/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/signup/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/sitemap-page/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/sitemap.ts",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-misc"
+  },
+  {
+    "path": "apps/web/app/skills/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/sla/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/status/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/subprocessors/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/support/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/support/layout.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/support/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/support/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/terms/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/trust/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/use-cases/consulting/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/use-cases/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/use-cases/it-providers/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/use-cases/layout.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/use-cases/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/use-cases/sales-teams/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/use-cases/startups/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/verify/error.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/verify/loading.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/verify/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/app/verify/verify-client.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-misc"
+  },
+  {
+    "path": "apps/web/app/vscode-extension/page.tsx",
+    "current_dir": "app",
+    "proposed_dir": "app (unchanged)",
+    "role": "app-router-page"
+  },
+  {
+    "path": "apps/web/components/accessibility/SkipLinks.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/AGI.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/agi/AgiChatDemo.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/agi/AgiMark.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/CommandPalette/CommandPalette.test.tsx",
+    "current_dir": "components",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/components/CommandPalette/CommandPalette.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/CommandPalette/CommandPaletteProvider.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/dashboard/CreditMonitor.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/dashboard/Sidebar.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/DirectDownloadButtons.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/DownloadSection.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ErrorBoundary.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/GoogleAnalytics.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/layout/Header.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/marketing/MarketingFooter.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/modals/CreditAlertModal.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/OfflineIndicator.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/settings/AppearanceSettings.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/settings/ChatSettings.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/settings/CustomCommandsSettings.test.tsx",
+    "current_dir": "components",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/components/settings/CustomCommandsSettings.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/settings/CustomModelsSettings.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/share/ExpiredShareBanner.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/share/SharedSessionViewer.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/SurfaceShowcase.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ThemeProvider.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/AccessibleDialog.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Accordion.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Alert.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/AlertDialog.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Badge.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Button.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Card.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Checkbox.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Collapsible.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/ConfirmDialog.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/ContextMenu.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Dialog.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/DropdownMenu.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/FormField.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/HoverCard.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/index.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Input.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Label.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/LoadingButton.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Popover.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Progress.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/PromptDialog.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/ResizeHandle.test.tsx",
+    "current_dir": "components",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/components/ui/ResizeHandle.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/ResponsiveContainer.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/ScrollArea.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/SectionErrorBoundary.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Select.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Separator.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Skeleton.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Slider.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Spinner.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Switch.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Table.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Tabs.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Textarea.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Toast.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Toaster.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/components/ui/Tooltip.tsx",
+    "current_dir": "components",
+    "proposed_dir": "src/components",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/constants/llm.ts",
+    "current_dir": "constants",
+    "proposed_dir": "src/constants",
+    "role": "constant"
+  },
+  {
+    "path": "apps/web/core/ai/llm/providers/anthropic-claude.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/ai/llm/providers/anthropic-claude.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/ai/llm/providers/deepseek-ai.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/ai/llm/providers/deepseek-ai.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/ai/llm/providers/google-gemini.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/ai/llm/providers/google-gemini.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/ai/llm/providers/grok-ai.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/ai/llm/providers/grok-ai.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/ai/llm/providers/openai-gpt.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/ai/llm/providers/openai-gpt.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/ai/llm/providers/perplexity-ai.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/ai/llm/providers/perplexity-ai.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/ai/llm/providers/qwen-ai.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/ai/llm/providers/qwen-ai.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/ai/llm/unified-language-model.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/ai/llm/unified-language-model.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/ai/llm/user-ai-preferences.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/ai/orchestration/agent-collaboration-manager.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/ai/orchestration/agent-collaboration-protocol.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/ai/orchestration/agent-communication-protocol.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/ai/orchestration/agent-conversation-protocol.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/ai/orchestration/intelligent-agent-router.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/ai/orchestration/model-router.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/ai/orchestration/reasoning/natural-language-processor.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/ai/orchestration/reasoning/task-breakdown.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/ai/orchestration/workflow-orchestration.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/ai/tools/index.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/ai/tools/tool-invocation-handler.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/ai/tools/tool-registry-manager.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/ai/tools/types.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/ai/tools/unified-tool-registry.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/ai/tools/unified-tool-registry.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/auth/account-lockout-service.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/auth/account-lockout-service.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/auth/authentication-manager.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/auth/authentication-manager.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/auth/rate-limiter.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/billing/token-enforcement-service.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/billing/token-enforcement-service.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/integrations/chat-completion-handler.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/integrations/chat-completion-handler.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/integrations/dalle-image-service.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/integrations/dalle-image-service.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/integrations/google-imagen-service.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/integrations/google-imagen-service.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/integrations/google-veo-service.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/integrations/google-veo-service.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/integrations/index.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/integrations/marketing-endpoints.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/integrations/marketing-endpoints.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/integrations/media-generation-handler.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/integrations/media-generation-handler.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/integrations/social-media-analyzer.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/integrations/social-media-analyzer.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/integrations/token-usage-tracker.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/integrations/token-usage-tracker.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/integrations/web-search-handler.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/integrations/web-search-handler.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/integrations/websocket-manager.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/integrations/websocket-manager.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/monitoring/analytics-tracker.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/monitoring/performance-monitor.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/monitoring/seo-optimizer.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/monitoring/system-monitor.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/security/api-abuse-prevention.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/security/api-abuse-prevention.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/security/employee-input-sanitizer.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/security/employee-input-sanitizer.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/security/gradual-rollout.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/security/gradual-rollout.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/security/index.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/security/prompt-injection-detector.test.ts",
+    "current_dir": "core",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/core/security/prompt-injection-detector.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/storage/chat/chat-realtime-subscriptions.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/storage/chat/collaboration-database.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/storage/chat/index.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/storage/chat/multi-agent-chat-database.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/storage/search-history-service.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/core/types/ai-employee.ts",
+    "current_dir": "core",
+    "proposed_dir": "src/core",
+    "role": "core-logic"
+  },
+  {
+    "path": "apps/web/data/marketplace-employees.ts",
+    "current_dir": "data",
+    "proposed_dir": "src/datas",
+    "role": "data"
+  },
+  {
+    "path": "apps/web/features/analytics/components/ActivityTable.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/analytics/components/AnalyticsSummaryCard.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/analytics/components/SimpleBarChart.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/analytics/components/SimpleLineChart.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/analytics/pages/AnalyticsDashboard.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/billing/components/Billing/Subscription.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/billing/components/Billing/Topup.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/billing/components/Billing/types.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/billing/components/Billing/Usage.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/billing/hooks/index.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-hook"
+  },
+  {
+    "path": "apps/web/features/billing/hooks/use-billing-queries.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-hook"
+  },
+  {
+    "path": "apps/web/features/billing/pages/BillingDashboard.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/billing/services/stripe-payments.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-service"
+  },
+  {
+    "path": "apps/web/features/billing/services/token-pack-purchase.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-service"
+  },
+  {
+    "path": "apps/web/features/billing/services/usage-monitor.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-service"
+  },
+  {
+    "path": "apps/web/features/chat/components/__tests__/InlinePaywallCard.test.tsx",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/chat/components/ActionTrail.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/agents/AgentParticipantPanel.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/agents/EmployeeSelector.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/agents/EmployeeWorkStream.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/agents/index.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/AgentStatusBar.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/ArtifactBlock.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/artifacts/DocumentActions.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/artifacts/DocumentMessage.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/artifacts/ImageAttachmentPreview.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/artifacts/index.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/BranchNavigator.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Budget/BudgetTrackerDisplay.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/cards/CalculationCard.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/cards/index.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/cards/RecipeCard.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/cards/StepsCard.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Composer/__tests__/ComposerFooter.integration.test.tsx",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/chat/components/Composer/ActiveModeTags.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Composer/AgentModeSwitcher.test.tsx",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/chat/components/Composer/AgentModeSwitcher.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Composer/AttachmentPreview.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Composer/ChatComposer.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Composer/ChatComposerNew.test.tsx",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Composer/DragDropOverlay.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Composer/FocusModeButtons.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Composer/FolderContextSelector.test.tsx",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/chat/components/Composer/FolderContextSelector.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Composer/GhostTextOverlay.test.tsx",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/chat/components/Composer/GhostTextOverlay.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Composer/index.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Composer/InputFooter.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Composer/SendButton.test.tsx",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Composer/SlashCommandMenu.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Composer/StyleSelector.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Composer/VoiceInputButton.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Composer/VoiceRecordingOverlay.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/dialogs/BookmarksDialog.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/dialogs/CreateBranchDialog.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/dialogs/CustomShortcutDialog.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/dialogs/EnhancedExportDialog.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/dialogs/index.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/dialogs/KeyboardShortcutsDialog.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/dialogs/TokenAnalyticsDialog.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/dialogs/UsageWarningModal.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/FollowUpSuggestions.test.tsx",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/chat/components/FollowUpSuggestions.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/GreetingBanner/useGreeting.test.ts",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/chat/components/GreetingBanner/useGreeting.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/ImageLightbox.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/index.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/InlinePaywallCard.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/InlineToolResults/index.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/InlineToolResults/InlineCodeDiff.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/InlineToolResults/InlineFileRead.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/InlineToolResults/InlineSearchResults.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/InlineToolResults/InlineTerminalOutput.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/InlineToolResults/ToolResultCard.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Main/ChatHeader.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Main/ChatTopBar.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Main/index.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Main/MessageList.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Main/MultiAgentChatInterface.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/MediaDisplay.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/MermaidRenderer.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/AdvancedMessageList.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/AudioPlayer.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/AudioVisualizer.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/ChatInput.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/ChatLoadingState.test.tsx",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/ChatLoadingState.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/ChatMessageList.test.tsx",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/ChatMessageList.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/CollaborativeMessageDisplay.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/DropZoneOverlay.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/EditableMessage.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/EnhancedMarkdownRenderer.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/EnhancedMessageInput.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/index.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/InlineCitation.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/MarkdownContent.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/MessageActions.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/MessageBubble.test.tsx",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/MessageBubbleSkeleton.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/MessageListNew.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/MessageSearch.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/ReasoningAccordion.test.tsx",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/ReasoningAccordion.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/ToolTimeline.test.tsx",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/ToolTimeline.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/messages/TypingIndicator.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/search/index.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/search/SearchResultCard.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/search/SearchResults.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/shortcuts/index.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/shortcuts/PromptShortcuts.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Sidebar/ChatSidebar.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Sidebar/ConversationListItem.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Sidebar/FolderManagement.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Sidebar/index.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/SkillsMenu.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/ThinkingBlock.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/tokens/index.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/tokens/TokenAnalyticsDashboard.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/tokens/TokenBalanceDisplay.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/tokens/TokenUsageDisplay.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/tokens/UsageWarningBanner.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/ToolCallCard.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Tools/index.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/Tools/ModeSelector.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/VoiceInputButton.test.tsx",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/chat/components/VoiceInputButton.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/workflows/CollaborativeTaskView.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/workflows/index.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/workflows/ToolProgressIndicator.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/workflows/WorkflowDisplay.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/components/workflows/WorkingProcess.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/hooks/index.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-hook"
+  },
+  {
+    "path": "apps/web/features/chat/hooks/use-ai-preferences.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-hook"
+  },
+  {
+    "path": "apps/web/features/chat/hooks/use-attachments.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-hook"
+  },
+  {
+    "path": "apps/web/features/chat/hooks/use-chat-persistence.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-hook"
+  },
+  {
+    "path": "apps/web/features/chat/hooks/use-chat-queries.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-hook"
+  },
+  {
+    "path": "apps/web/features/chat/hooks/use-conversation-branches.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-hook"
+  },
+  {
+    "path": "apps/web/features/chat/hooks/use-conversation-history.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-hook"
+  },
+  {
+    "path": "apps/web/features/chat/hooks/use-export-conversation.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-hook"
+  },
+  {
+    "path": "apps/web/features/chat/hooks/use-keyboard-shortcuts.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-hook"
+  },
+  {
+    "path": "apps/web/features/chat/hooks/use-message-reactions.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-hook"
+  },
+  {
+    "path": "apps/web/features/chat/hooks/use-search-history.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-hook"
+  },
+  {
+    "path": "apps/web/features/chat/hooks/use-session-tokens.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-hook"
+  },
+  {
+    "path": "apps/web/features/chat/hooks/use-unified-adapter.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-hook"
+  },
+  {
+    "path": "apps/web/features/chat/hooks/use-voice-recording.test.ts",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/chat/hooks/use-voice-recording.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-hook"
+  },
+  {
+    "path": "apps/web/features/chat/hooks/useHelpTour.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-hook"
+  },
+  {
+    "path": "apps/web/features/chat/index.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-misc"
+  },
+  {
+    "path": "apps/web/features/chat/pages/__tests__/unified-chat-route.test.tsx",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/chat/pages/UnifiedChatPage.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/pages/WebChatPage.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/services/attachment-handler.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-service"
+  },
+  {
+    "path": "apps/web/features/chat/services/chat-ai-service.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-service"
+  },
+  {
+    "path": "apps/web/features/chat/services/conversation-branching.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-service"
+  },
+  {
+    "path": "apps/web/features/chat/services/conversation-export.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-service"
+  },
+  {
+    "path": "apps/web/features/chat/services/conversation-storage.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-service"
+  },
+  {
+    "path": "apps/web/features/chat/services/document-export-service.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-service"
+  },
+  {
+    "path": "apps/web/features/chat/services/document-export.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-service"
+  },
+  {
+    "path": "apps/web/features/chat/services/document-generation-service.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-service"
+  },
+  {
+    "path": "apps/web/features/chat/services/folder-management-service.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-service"
+  },
+  {
+    "path": "apps/web/features/chat/services/global-search-service.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-service"
+  },
+  {
+    "path": "apps/web/features/chat/services/index.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-service"
+  },
+  {
+    "path": "apps/web/features/chat/services/message-bookmarks-service.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-service"
+  },
+  {
+    "path": "apps/web/features/chat/services/message-reactions-service.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-service"
+  },
+  {
+    "path": "apps/web/features/chat/services/user-shortcuts.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-service"
+  },
+  {
+    "path": "apps/web/features/chat/stores/__tests__/chat-store.test.ts",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/chat/stores/artifacts-store.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-store"
+  },
+  {
+    "path": "apps/web/features/chat/stores/chat-preferences-store.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-store"
+  },
+  {
+    "path": "apps/web/features/chat/stores/chat-store.test.ts",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/chat/stores/chat-store.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-store"
+  },
+  {
+    "path": "apps/web/features/chat/stores/style-store.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-store"
+  },
+  {
+    "path": "apps/web/features/chat/stores/voice-input-store.test.ts",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/chat/stores/voice-input-store.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-store"
+  },
+  {
+    "path": "apps/web/features/chat/types/agentMode.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-misc"
+  },
+  {
+    "path": "apps/web/features/chat/types/index.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-misc"
+  },
+  {
+    "path": "apps/web/features/chat/utils/artifact-detector.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-misc"
+  },
+  {
+    "path": "apps/web/features/chat/utils/retry-handler.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-misc"
+  },
+  {
+    "path": "apps/web/features/chat/v3/WebEmptyChat.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/v3/WebSearchModalCmdK.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/v3/WebShellV3.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/chat/v3/WebSidebar.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/connectors/config/connector-logos.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-misc"
+  },
+  {
+    "path": "apps/web/features/connectors/pages/ConnectorsPage.test.tsx",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/connectors/pages/ConnectorsPage.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/media/services/media-api-service.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-service"
+  },
+  {
+    "path": "apps/web/features/pages/ApiReference.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/pages/ArtifactGallery.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/pages/BlogList.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/pages/BlogPost.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/pages/Careers.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/pages/ContactSales.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/pages/DeviceAuth.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/pages/HelpCenter.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/pages/legal/BusinessLegalPage.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/pages/legal/CookiePolicy.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/pages/Resources.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/pages/Security.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/pages/SupportCenter.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/pages/use-cases/ConsultingBusinesses.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/pages/use-cases/ITServiceProviders.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/pages/use-cases/SalesTeams.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/pages/use-cases/Startups.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/projects/components/ProjectSidebar.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/projects/stores/project-store.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-store"
+  },
+  {
+    "path": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/schedules/components/ScheduleNotificationSettings.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/schedules/components/ScheduleRunHistory.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/schedules/stores/schedule-store.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-store"
+  },
+  {
+    "path": "apps/web/features/schedules/types/index.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-misc"
+  },
+  {
+    "path": "apps/web/features/settings/components/AdvancedModeToggle.test.tsx",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/settings/components/AdvancedModeToggle.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/settings/components/Settings/ApiKeys.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/settings/components/Settings/ExportData.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/settings/components/Settings/Notifications.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/settings/components/Settings/Profile.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/settings/components/Settings/System.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/settings/components/Settings/TwoFactor.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/settings/hooks/index.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-hook"
+  },
+  {
+    "path": "apps/web/features/settings/hooks/use-settings-queries.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-hook"
+  },
+  {
+    "path": "apps/web/features/settings/pages/AIConfiguration.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/settings/pages/SettingsPage.test.tsx",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/settings/pages/SettingsPage.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/settings/pages/UserSettings.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/settings/schemas/settings-validation.test.ts",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/settings/schemas/settings-validation.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-schema"
+  },
+  {
+    "path": "apps/web/features/settings/services/totp-2fa.test.ts",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/settings/services/user-preferences-security.test.ts",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/settings/services/user-preferences.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-service"
+  },
+  {
+    "path": "apps/web/features/support/pages/SupportPage.test.tsx",
+    "current_dir": "features",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/features/support/services/support-service.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-service"
+  },
+  {
+    "path": "apps/web/features/teams/components/TeamSettingsPanel.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/teams/components/TeamSwitcher.tsx",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-component"
+  },
+  {
+    "path": "apps/web/features/teams/stores/team-store.ts",
+    "current_dir": "features",
+    "proposed_dir": "src/features",
+    "role": "feature-store"
+  },
+  {
+    "path": "apps/web/handlers/slashCommandHandlers.ts",
+    "current_dir": "handlers",
+    "proposed_dir": "tbd",
+    "role": "handler"
+  },
+  {
+    "path": "apps/web/hooks/__tests__/useErrorRecovery.test.ts",
+    "current_dir": "hooks",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/hooks/useAgenticEvents.ts",
+    "current_dir": "hooks",
+    "proposed_dir": "src/hooks",
+    "role": "hook"
+  },
+  {
+    "path": "apps/web/hooks/useApiPromptCompletion.ts",
+    "current_dir": "hooks",
+    "proposed_dir": "src/hooks",
+    "role": "hook"
+  },
+  {
+    "path": "apps/web/hooks/useApprovalActions.ts",
+    "current_dir": "hooks",
+    "proposed_dir": "src/hooks",
+    "role": "hook"
+  },
+  {
+    "path": "apps/web/hooks/useConversationRealtime.ts",
+    "current_dir": "hooks",
+    "proposed_dir": "src/hooks",
+    "role": "hook"
+  },
+  {
+    "path": "apps/web/hooks/useCreditRefresh.ts",
+    "current_dir": "hooks",
+    "proposed_dir": "src/hooks",
+    "role": "hook"
+  },
+  {
+    "path": "apps/web/hooks/useErrorRecovery.ts",
+    "current_dir": "hooks",
+    "proposed_dir": "src/hooks",
+    "role": "hook"
+  },
+  {
+    "path": "apps/web/hooks/useFileOperations.ts",
+    "current_dir": "hooks",
+    "proposed_dir": "src/hooks",
+    "role": "hook"
+  },
+  {
+    "path": "apps/web/hooks/useNotifications.ts",
+    "current_dir": "hooks",
+    "proposed_dir": "src/hooks",
+    "role": "hook"
+  },
+  {
+    "path": "apps/web/hooks/usePromptSuggestions.ts",
+    "current_dir": "hooks",
+    "proposed_dir": "src/hooks",
+    "role": "hook"
+  },
+  {
+    "path": "apps/web/hooks/useReducedMotion.ts",
+    "current_dir": "hooks",
+    "proposed_dir": "src/hooks",
+    "role": "hook"
+  },
+  {
+    "path": "apps/web/hooks/useScreenCapture.ts",
+    "current_dir": "hooks",
+    "proposed_dir": "src/hooks",
+    "role": "hook"
+  },
+  {
+    "path": "apps/web/hooks/useSlashCommandAutocomplete.ts",
+    "current_dir": "hooks",
+    "proposed_dir": "src/hooks",
+    "role": "hook"
+  },
+  {
+    "path": "apps/web/hooks/useSlashCommands.ts",
+    "current_dir": "hooks",
+    "proposed_dir": "src/hooks",
+    "role": "hook"
+  },
+  {
+    "path": "apps/web/hooks/useToast.ts",
+    "current_dir": "hooks",
+    "proposed_dir": "src/hooks",
+    "role": "hook"
+  },
+  {
+    "path": "apps/web/hooks/useVoiceTranscription.ts",
+    "current_dir": "hooks",
+    "proposed_dir": "src/hooks",
+    "role": "hook"
+  },
+  {
+    "path": "apps/web/instrumentation.ts",
+    "current_dir": "instrumentation.ts",
+    "proposed_dir": "tbd",
+    "role": "misc"
+  },
+  {
+    "path": "apps/web/lib/__tests__/assert-quota.test.ts",
+    "current_dir": "lib",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/lib/__tests__/perks.test.ts",
+    "current_dir": "lib",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/lib/__tests__/pricing.test.ts",
+    "current_dir": "lib",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/lib/ai-sdk/providers.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/ai-sdk/stream-handler.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/api-auth.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/assert-quota.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/browserAutomation.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/client/csrf.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/constants.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/conversationSync.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/cors.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/csrf.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/db-error.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/device-token-crypto.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/egress-policy.test.ts",
+    "current_dir": "lib",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/lib/egress-policy.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/error-handler.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/errors.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/friendlyErrors.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/github-app.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/hash.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/hooks/use-toast.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/hooks/useChatStream.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/hooks/useConversations.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/hooks/useKeyboardShortcuts.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/hooks/useMediaGeneration.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/hooks/useMobileVoiceInput.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/hooks/useRenderCount.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/hooks/useSessionPersistence.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/hooks/useTTS.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/hooks/useVoiceInput.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/hooks/useVoiceTranscription.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/immerSetup.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/leak-detector.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/llm-providers/anthropic.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/llm-providers/base.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/llm-providers/context-management.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/llm-providers/deepseek.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/llm-providers/factory.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/llm-providers/google.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/llm-providers/moonshot.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/llm-providers/openai.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/llm-providers/perplexity.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/llm-providers/qwen.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/llm-providers/xai.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/llm-providers/zhipu.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/logger.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/markdown-config.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/marketing-constants.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/mcp-client.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/model-tiers.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/modelRouter.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/monaco-config.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/newChatReset.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/offline/offlineQueue.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/offline/offlineSync.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/password-validator.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/perks.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/price-tier-mapping.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/pricing.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/prompt-cache-helper.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/providerStreamClient.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/rate-limit.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/retry.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/runtime/WebChatRuntime.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/safe-redirect.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/security-audit.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/security/secrets-audit.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/services/api-key-service.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/services/audit-service.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/services/credit-service.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/services/llm-cost-calculator.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/services/notification-service.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/services/organization-service.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/services/security-monitoring-service.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/services/subscription-service.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/session/sessionStorage.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/storageFallback.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/stripe-config.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/stripe-types.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/supabase-server.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/supabase.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/taskMetadata.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/tauri-mock.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/toolDisplayNames.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/utils.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/validate-env.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/validations/chat.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/validations/checkout.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/validations/claim-offer.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/validations/device.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/validations/llm.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/validations/path.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/lib/video-task-store.ts",
+    "current_dir": "lib",
+    "proposed_dir": "src/integrations or src/data or src/platform",
+    "role": "lib-util"
+  },
+  {
+    "path": "apps/web/next-env.d.ts",
+    "current_dir": "next-env.d.ts",
+    "proposed_dir": "tbd",
+    "role": "misc"
+  },
+  {
+    "path": "apps/web/next.config.ts",
+    "current_dir": "next.config.ts",
+    "proposed_dir": "tbd",
+    "role": "misc"
+  },
+  {
+    "path": "apps/web/playwright.config.ts",
+    "current_dir": "playwright.config.ts",
+    "proposed_dir": "tbd",
+    "role": "misc"
+  },
+  {
+    "path": "apps/web/providers/ThemeProvider.tsx",
+    "current_dir": "providers",
+    "proposed_dir": "src/providers",
+    "role": "provider"
+  },
+  {
+    "path": "apps/web/proxy.ts",
+    "current_dir": "proxy.ts",
+    "proposed_dir": "tbd",
+    "role": "misc"
+  },
+  {
+    "path": "apps/web/scripts/audit-legacy-keys.ts",
+    "current_dir": "scripts",
+    "proposed_dir": "tbd",
+    "role": "misc"
+  },
+  {
+    "path": "apps/web/scripts/test-llm-keys.ts",
+    "current_dir": "scripts",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/services/__tests__/api-error-handler.test.ts",
+    "current_dir": "services",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/services/__tests__/download.test.ts",
+    "current_dir": "services",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/services/__tests__/state-recovery-service.test.ts",
+    "current_dir": "services",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/services/__tests__/supabaseAuth.test.ts",
+    "current_dir": "services",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/services/api-error-handler.ts",
+    "current_dir": "services",
+    "proposed_dir": "tbd",
+    "role": "service"
+  },
+  {
+    "path": "apps/web/services/auth.ts",
+    "current_dir": "services",
+    "proposed_dir": "tbd",
+    "role": "service"
+  },
+  {
+    "path": "apps/web/services/download.ts",
+    "current_dir": "services",
+    "proposed_dir": "tbd",
+    "role": "service"
+  },
+  {
+    "path": "apps/web/services/inter-agent-service.ts",
+    "current_dir": "services",
+    "proposed_dir": "tbd",
+    "role": "service"
+  },
+  {
+    "path": "apps/web/services/state-recovery-service.ts",
+    "current_dir": "services",
+    "proposed_dir": "tbd",
+    "role": "service"
+  },
+  {
+    "path": "apps/web/services/supabase-server.ts",
+    "current_dir": "services",
+    "proposed_dir": "tbd",
+    "role": "service"
+  },
+  {
+    "path": "apps/web/services/supabase.ts",
+    "current_dir": "services",
+    "proposed_dir": "tbd",
+    "role": "service"
+  },
+  {
+    "path": "apps/web/services/supabaseAuth.ts",
+    "current_dir": "services",
+    "proposed_dir": "tbd",
+    "role": "service"
+  },
+  {
+    "path": "apps/web/shared/components/__tests__/theme-contrast.test.ts",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/components/__tests__/ThemeProvider.test.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/components/accessibility/AccessibilityAudit.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/accessibility/AccessibilitySettings.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/accessibility/AccessibleButton.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/accessibility/AccessibleForm.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/accessibility/AccessibleInput.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/accessibility/ScreenReaderOnly.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/accessibility/SkipLink.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/AnimatedAvatar.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/CookieConsent.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/dashboard/QuickActions.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/dashboard/RecentActivity.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/dashboard/StatCard.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/dashboard/WelcomeBanner.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/EmptyState.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/ErrorBoundary.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/ErrorCard.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/HireButton.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/layout/DashboardHeader.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/layout/DashboardSidebar.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/layout/Header.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/layout/PublicFooter.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/layout/PublicHeader.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/LazyLoadingFallback.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/LazyLoadWrapper.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/media/GeneratedImagePreview.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/media/GeneratedVideoPreview.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/ScrollToTop.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/seo/SEOHead.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/ThemeConstants.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/ThemeContext.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/ThemeProvider.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/ui/avatar.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/ui/badge.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/ui/button.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/ui/collapsible.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/ui/input.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/ui/progress.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/ui/scroll-area.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/ui/select.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/components/ui/separator.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-component"
+  },
+  {
+    "path": "apps/web/shared/config/index.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/config/supported-models.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/hooks/index.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-hook"
+  },
+  {
+    "path": "apps/web/shared/hooks/use-mobile.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-hook"
+  },
+  {
+    "path": "apps/web/shared/hooks/use-tier-bridge.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-hook"
+  },
+  {
+    "path": "apps/web/shared/hooks/use-toast.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-hook"
+  },
+  {
+    "path": "apps/web/shared/hooks/useAccessibility.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-hook"
+  },
+  {
+    "path": "apps/web/shared/hooks/useAnalytics.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-hook"
+  },
+  {
+    "path": "apps/web/shared/hooks/useAutoScroll.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-hook"
+  },
+  {
+    "path": "apps/web/shared/hooks/useChatState.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-hook"
+  },
+  {
+    "path": "apps/web/shared/hooks/usePerformanceOptimization.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-hook"
+  },
+  {
+    "path": "apps/web/shared/hooks/useRealtime.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-hook"
+  },
+  {
+    "path": "apps/web/shared/hooks/useSessionTimeout.test.ts",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/hooks/useSessionTimeout.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-hook"
+  },
+  {
+    "path": "apps/web/shared/hooks/useThemeContext.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-hook"
+  },
+  {
+    "path": "apps/web/shared/lib/accessibility.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/lib/agent-context-stub.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/lib/api-enhanced.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/lib/api.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/lib/async-hooks-stub.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-hook"
+  },
+  {
+    "path": "apps/web/shared/lib/cache.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/lib/date-utils.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-util"
+  },
+  {
+    "path": "apps/web/shared/lib/design-tokens.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/lib/empty-module.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/lib/error-utils.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-util"
+  },
+  {
+    "path": "apps/web/shared/lib/logger.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/lib/security.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/lib/sentry.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/lib/stripe.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/lib/supabase-client.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/lib/useCache.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/lib/utils.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-util"
+  },
+  {
+    "path": "apps/web/shared/lib/websocket.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/services/realtimeService.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/stores/__tests__/workforce-wave4.test.ts",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/stores/agent-metrics-store.test.ts",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/stores/agent-metrics-store.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-store"
+  },
+  {
+    "path": "apps/web/shared/stores/artifact-store.test.ts",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/stores/artifact-store.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-store"
+  },
+  {
+    "path": "apps/web/shared/stores/authentication-store.test.ts",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/stores/authentication-store.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-store"
+  },
+  {
+    "path": "apps/web/shared/stores/chat-store.test.ts",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/stores/chat-store.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-store"
+  },
+  {
+    "path": "apps/web/shared/stores/company-hub-store.test.ts",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/stores/company-hub-store.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-store"
+  },
+  {
+    "path": "apps/web/shared/stores/global-settings-store.test.ts",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/stores/global-settings-store.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-store"
+  },
+  {
+    "path": "apps/web/shared/stores/index.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-store"
+  },
+  {
+    "path": "apps/web/shared/stores/layout-store.test.ts",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/stores/layout-store.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-store"
+  },
+  {
+    "path": "apps/web/shared/stores/mission-control-store.test.ts",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/stores/mission-control-store.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-store"
+  },
+  {
+    "path": "apps/web/shared/stores/model-store.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-store"
+  },
+  {
+    "path": "apps/web/shared/stores/multi-agent-chat-store.test.ts",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/stores/multi-agent-chat-store.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-store"
+  },
+  {
+    "path": "apps/web/shared/stores/notification-store.test.ts",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/stores/notification-store.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-store"
+  },
+  {
+    "path": "apps/web/shared/stores/query-client.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-store"
+  },
+  {
+    "path": "apps/web/shared/stores/usage-warning-store.test.ts",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/stores/usage-warning-store.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-store"
+  },
+  {
+    "path": "apps/web/shared/stores/user-profile-store.test.ts",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/stores/user-profile-store.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-store"
+  },
+  {
+    "path": "apps/web/shared/stores/workforce-store.test.ts",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/stores/workforce-store.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-store"
+  },
+  {
+    "path": "apps/web/shared/types/ai-employee.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-type"
+  },
+  {
+    "path": "apps/web/shared/types/common.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-type"
+  },
+  {
+    "path": "apps/web/shared/types/complete-ai-employee.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-type"
+  },
+  {
+    "path": "apps/web/shared/types/employee.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-type"
+  },
+  {
+    "path": "apps/web/shared/types/index.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-type"
+  },
+  {
+    "path": "apps/web/shared/types/multi-agent-chat.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-type"
+  },
+  {
+    "path": "apps/web/shared/types/store-types.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-store"
+  },
+  {
+    "path": "apps/web/shared/types/supabase-extended.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-type"
+  },
+  {
+    "path": "apps/web/shared/types/supabase.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-type"
+  },
+  {
+    "path": "apps/web/shared/ui/__tests__/theme-toggle.test.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/ui/accordion.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/ai-prompt-box.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/alert-dialog.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/alert.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/animated-beam.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/animated-gradient-text.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/aspect-ratio.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/ui/avatar-with-fallback.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/avatar.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/badge-variants.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/badge.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/bento-grid.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/breadcrumb.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/button-variants.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/button.test.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/ui/button.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/calendar.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/card.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/carousel.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/chat-bubble.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/chat-input.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/chat-message-list.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/checkbox.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/collapsible.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/command.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/context-menu.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/countdown-timer.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/countdown-utils.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-util"
+  },
+  {
+    "path": "apps/web/shared/ui/data-table-helpers.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/data-table.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/dialog.test.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/ui/dialog.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/drawer.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/dropdown-menu.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/expandable-chat-demo.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/expandable-chat.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/floating-dock.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/form-hooks.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-hook"
+  },
+  {
+    "path": "apps/web/shared/ui/form.test.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/ui/form.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/hover-card.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/index.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/input-otp.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/input.test.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/ui/input.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/interactive-hover-card.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/label.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/loading-spinner.test.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/ui/loading-spinner.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/menubar.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/message-loading.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/missing-modules.d.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/navigation-menu-variants.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/navigation-menu.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/pagination.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/particles.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/popover.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/premium-loading.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/progress.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/radio-group.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/resizable-panels.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/resizable.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/scroll-area.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/select.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/separator.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/sheet.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/sidebar-constants.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/sidebar-hooks.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-hook"
+  },
+  {
+    "path": "apps/web/shared/ui/sidebar-variants.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/sidebar.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/skeleton-card.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/skeleton-loader.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/skeleton.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/slider.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/sonner-utils.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-util"
+  },
+  {
+    "path": "apps/web/shared/ui/sonner.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/spotlight.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/switch.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/table.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/tabs.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/textarea.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/theme-toggle.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/toast.test.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/ui/toast.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/toaster.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/toggle-group.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/toggle-variants.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/toggle.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/tooltip.tsx",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/ui/use-toast.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-misc"
+  },
+  {
+    "path": "apps/web/shared/utils/avatar-utils.test.ts",
+    "current_dir": "shared",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/shared/utils/avatar-utils.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-util"
+  },
+  {
+    "path": "apps/web/shared/utils/browser-utils.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-util"
+  },
+  {
+    "path": "apps/web/shared/utils/error-handling.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-util"
+  },
+  {
+    "path": "apps/web/shared/utils/html-sanitizer.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-util"
+  },
+  {
+    "path": "apps/web/shared/utils/sitemap-generator.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-util"
+  },
+  {
+    "path": "apps/web/shared/utils/validation-schemas.ts",
+    "current_dir": "shared",
+    "proposed_dir": "src/shared",
+    "role": "shared-util"
+  },
+  {
+    "path": "apps/web/stores/agentStatusStore.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/apiKeysStore.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/browserActivityStore.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/chatStore.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/mediaStore.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/settingsStore.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/uiStore.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/unified/accountStore.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/unified/artifactStore.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/unified/auth.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/unified/billingUsage.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/unified/chat/agentStore.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/unified/chat/chatStore.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/unified/chat/index.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/unified/chat/toolStore.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/unified/chat/types.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/unified/codeStore.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/unified/customInstructionsStore.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/unified/desktop-stubs.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/unified/executionStore.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/unified/mediaGenerationStore.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/unified/modelStore.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/unified/projectStore.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/unified/settingsStore.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/unified/ui.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/stores/unified/unifiedChatStore.ts",
+    "current_dir": "stores",
+    "proposed_dir": "src/stores",
+    "role": "store"
+  },
+  {
+    "path": "apps/web/test/__mocks__/webcontainer-api.ts",
+    "current_dir": "test",
+    "proposed_dir": "tbd",
+    "role": "misc"
+  },
+  {
+    "path": "apps/web/test/jest-dom.d.ts",
+    "current_dir": "test",
+    "proposed_dir": "tbd",
+    "role": "misc"
+  },
+  {
+    "path": "apps/web/test/setup.ts",
+    "current_dir": "test",
+    "proposed_dir": "tbd",
+    "role": "misc"
+  },
+  {
+    "path": "apps/web/tests/fixtures/test-data-factory.ts",
+    "current_dir": "tests",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  },
+  {
+    "path": "apps/web/types/api.ts",
+    "current_dir": "types",
+    "proposed_dir": "src/types",
+    "role": "type"
+  },
+  {
+    "path": "apps/web/types/capture.ts",
+    "current_dir": "types",
+    "proposed_dir": "src/types",
+    "role": "type"
+  },
+  {
+    "path": "apps/web/types/chat.ts",
+    "current_dir": "types",
+    "proposed_dir": "src/types",
+    "role": "type"
+  },
+  {
+    "path": "apps/web/types/code-execution-modules.d.ts",
+    "current_dir": "types",
+    "proposed_dir": "src/types",
+    "role": "type"
+  },
+  {
+    "path": "apps/web/types/index.ts",
+    "current_dir": "types",
+    "proposed_dir": "src/types",
+    "role": "type"
+  },
+  {
+    "path": "apps/web/types/mcp.ts",
+    "current_dir": "types",
+    "proposed_dir": "src/types",
+    "role": "type"
+  },
+  {
+    "path": "apps/web/types/media.ts",
+    "current_dir": "types",
+    "proposed_dir": "src/types",
+    "role": "type"
+  },
+  {
+    "path": "apps/web/types/saas.ts",
+    "current_dir": "types",
+    "proposed_dir": "src/types",
+    "role": "type"
+  },
+  {
+    "path": "apps/web/types/stripe-modules.d.ts",
+    "current_dir": "types",
+    "proposed_dir": "src/types",
+    "role": "type"
+  },
+  {
+    "path": "apps/web/types/supabase.ts",
+    "current_dir": "types",
+    "proposed_dir": "src/types",
+    "role": "type"
+  },
+  {
+    "path": "apps/web/types/teams.ts",
+    "current_dir": "types",
+    "proposed_dir": "src/types",
+    "role": "type"
+  },
+  {
+    "path": "apps/web/types/toolCalling.ts",
+    "current_dir": "types",
+    "proposed_dir": "src/types",
+    "role": "type"
+  },
+  {
+    "path": "apps/web/types/workflow.ts",
+    "current_dir": "types",
+    "proposed_dir": "src/types",
+    "role": "type"
+  },
+  {
+    "path": "apps/web/utils/autoCorrection.ts",
+    "current_dir": "utils",
+    "proposed_dir": "src/utils",
+    "role": "util"
+  },
+  {
+    "path": "apps/web/utils/captureTransforms.ts",
+    "current_dir": "utils",
+    "proposed_dir": "src/utils",
+    "role": "util"
+  },
+  {
+    "path": "apps/web/utils/clipboard.ts",
+    "current_dir": "utils",
+    "proposed_dir": "src/utils",
+    "role": "util"
+  },
+  {
+    "path": "apps/web/utils/cn.ts",
+    "current_dir": "utils",
+    "proposed_dir": "src/utils",
+    "role": "util"
+  },
+  {
+    "path": "apps/web/utils/commandHistory.ts",
+    "current_dir": "utils",
+    "proposed_dir": "src/utils",
+    "role": "util"
+  },
+  {
+    "path": "apps/web/utils/credits.ts",
+    "current_dir": "utils",
+    "proposed_dir": "src/utils",
+    "role": "util"
+  },
+  {
+    "path": "apps/web/utils/env.ts",
+    "current_dir": "utils",
+    "proposed_dir": "src/utils",
+    "role": "util"
+  },
+  {
+    "path": "apps/web/utils/format.ts",
+    "current_dir": "utils",
+    "proposed_dir": "src/utils",
+    "role": "util"
+  },
+  {
+    "path": "apps/web/utils/ipc.ts",
+    "current_dir": "utils",
+    "proposed_dir": "src/utils",
+    "role": "util"
+  },
+  {
+    "path": "apps/web/utils/localStorage.ts",
+    "current_dir": "utils",
+    "proposed_dir": "src/utils",
+    "role": "util"
+  },
+  {
+    "path": "apps/web/utils/navigation.ts",
+    "current_dir": "utils",
+    "proposed_dir": "src/utils",
+    "role": "util"
+  },
+  {
+    "path": "apps/web/utils/security.ts",
+    "current_dir": "utils",
+    "proposed_dir": "src/utils",
+    "role": "util"
+  },
+  {
+    "path": "apps/web/utils/stubs.ts",
+    "current_dir": "utils",
+    "proposed_dir": "src/utils",
+    "role": "util"
+  },
+  {
+    "path": "apps/web/utils/subscription-client.ts",
+    "current_dir": "utils",
+    "proposed_dir": "src/utils",
+    "role": "util"
+  },
+  {
+    "path": "apps/web/utils/subscription.ts",
+    "current_dir": "utils",
+    "proposed_dir": "src/utils",
+    "role": "util"
+  },
+  {
+    "path": "apps/web/utils/subscriptionGate.ts",
+    "current_dir": "utils",
+    "proposed_dir": "src/utils",
+    "role": "util"
+  },
+  {
+    "path": "apps/web/utils/supabase/client.ts",
+    "current_dir": "utils",
+    "proposed_dir": "src/utils",
+    "role": "util"
+  },
+  {
+    "path": "apps/web/utils/supabase/proxy.ts",
+    "current_dir": "utils",
+    "proposed_dir": "src/utils",
+    "role": "util"
+  },
+  {
+    "path": "apps/web/utils/supabase/server.ts",
+    "current_dir": "utils",
+    "proposed_dir": "src/utils",
+    "role": "util"
+  },
+  {
+    "path": "apps/web/utils/tokenCount.ts",
+    "current_dir": "utils",
+    "proposed_dir": "src/utils",
+    "role": "util"
+  },
+  {
+    "path": "apps/web/vitest.config.ts",
+    "current_dir": "vitest.config.ts",
+    "proposed_dir": "stay (test)",
+    "role": "test"
+  }
+]

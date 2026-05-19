@@ -765,9 +765,11 @@ export default [
       'apps/web/core/ai/tools/tool-invocation-handler.ts',
       'apps/web/core/security/api-abuse-prevention.ts',
       'apps/web/features/analytics/pages/AnalyticsDashboard.tsx',
+      'apps/web/src/features/analytics/pages/AnalyticsDashboard.tsx', // Phase 5 web reorg mirror
       'apps/web/features/chat/hooks/use-ai-preferences.ts',
       'apps/web/features/pages/legal/BusinessLegalPage.tsx',
       'apps/web/features/schedules/types/index.ts',
+      'apps/web/src/features/schedules/types/index.ts', // Phase 5 web reorg mirror
       'apps/web/features/settings/hooks/use-settings-queries.ts',
       'apps/web/features/settings/services/user-preferences.ts',
 
