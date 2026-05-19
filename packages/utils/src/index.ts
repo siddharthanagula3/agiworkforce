@@ -93,3 +93,13 @@ export {
 export { measureAsync, measureSync, PerformanceTracker } from './performance';
 
 export type { MeasureResult, PerformanceMetrics } from './performance';
+
+// Sensitive-file denylist — files that must never cross trust boundaries
+// (LLM context, telemetry, agent reads). Audit findings F-07, F-09.
+export { SENSITIVE_FILE_PATTERNS, isSensitiveFile, matchSensitivePattern } from './sensitiveFiles';
+
+// Path containment — single source of truth for "is candidate inside root".
+// Replaces 5 inline implementations across apps/extension-vscode. Audit
+// findings F-05, F-06, F-13.
+export { resolveContained, isContainedIn } from './pathContainment';
+export type { ContainmentResult } from './pathContainment';
