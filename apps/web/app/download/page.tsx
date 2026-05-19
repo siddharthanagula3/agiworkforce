@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Download — Install AGI Workforce | AGI Workforce',
+  title: 'Download — Install AGI | AGI',
   description:
     'Free. macOS, Linux, Windows. The CLI is a small Rust binary; the desktop app adds the chat shell on top. Code-signed, reversible, local by default.',
   alternates: { canonical: 'https://agiworkforce.com/download' },
@@ -27,7 +27,7 @@ export default function DownloadPage() {
       <main className="agi-shell">
         <Header />
         <section className="agi-page-hero">
-          <h1 className="agi-page-h1">Install AGI Workforce.</h1>
+          <h1 className="agi-page-h1">Install AGI.</h1>
           <p className="agi-page-lede">
             Free. macOS, Linux, Windows. The CLI is a small Rust binary; the desktop app adds the
             chat shell on top.{' '}

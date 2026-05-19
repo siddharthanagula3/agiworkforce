@@ -4,9 +4,9 @@ import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'IT service providers — AGI Workforce',
+  title: 'IT service providers — AGI',
   description:
-    'How MSPs and IT shops use AGI Workforce: triage, runbooks, ticket-grade automation, and operations across multi-provider AI.',
+    'How MSPs and IT shops use AGI: triage, runbooks, ticket-grade automation, and operations across multi-provider AI.',
   alternates: { canonical: 'https://agiworkforce.com/use-cases/it-providers' },
 };
 

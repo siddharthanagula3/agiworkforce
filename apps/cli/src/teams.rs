@@ -222,6 +222,12 @@ pub struct TeamManager {
     next_task_id: Arc<RwLock<u32>>,
 }
 
+impl Default for TeamManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TeamManager {
     /// Create a new empty team manager.
     pub fn new() -> Self {

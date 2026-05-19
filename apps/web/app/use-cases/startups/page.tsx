@@ -4,9 +4,9 @@ import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Startups — AGI Workforce',
+  title: 'Startups — AGI',
   description:
-    'How startups use AGI Workforce: ship product faster with multi-provider AI, BYOK, and a CLI that fits CI.',
+    'How startups use AGI: ship product faster with multi-provider AI, BYOK, and a CLI that fits CI.',
   alternates: { canonical: 'https://agiworkforce.com/use-cases/startups' },
 };
 

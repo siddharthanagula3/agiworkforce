@@ -83,6 +83,7 @@ const CHOICES: [ApprovalChoice; 4] = [
 // ---------------------------------------------------------------------------
 
 /// All mutable state owned by the host `TuiApp`.
+#[derive(Default)]
 pub struct ApprovalOverlayState {
     /// True while the overlay is intercepting key events.
     pub visible: bool,
@@ -96,17 +97,6 @@ pub struct ApprovalOverlayState {
     pub result: Option<ApprovalChoice>,
 }
 
-impl Default for ApprovalOverlayState {
-    fn default() -> Self {
-        Self {
-            visible: false,
-            prompt: String::new(),
-            detail: Vec::new(),
-            cursor: 0,
-            result: None,
-        }
-    }
-}
 
 impl ApprovalOverlayState {
     /// Open the overlay with a fresh prompt. Clears any previous result.

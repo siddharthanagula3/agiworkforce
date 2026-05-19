@@ -4,8 +4,8 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Gallery | AGI Workforce',
-  description: 'A gallery of artifacts users have built with AGI Workforce. Coming soon.',
+  title: 'Gallery | AGI',
+  description: 'A gallery of artifacts users have built with AGI. Coming soon.',
   alternates: { canonical: 'https://agiworkforce.com/gallery' },
 };
 
@@ -17,9 +17,8 @@ export default function GalleryPage() {
         <section className="agi-page-hero">
           <h1 className="agi-page-h1">Gallery.</h1>
           <p className="agi-page-lede">
-            A gallery of artifacts users have built with AGI Workforce.{' '}
-            <strong>Not live yet</strong> — we want a real collection before we ship a gallery, not
-            stock examples.
+            A gallery of artifacts users have built with AGI. <strong>Not live yet</strong> — we
+            want a real collection before we ship a gallery, not stock examples.
           </p>
         </section>
         <section className="agi-section">

@@ -42,7 +42,7 @@ export function ConversationItem({
   const [renameText, setRenameText] = useState('');
 
   const handlePress = useCallback(() => {
-    router.push(`/(app)/chat/${conversation.id}`);
+    router.push({ pathname: '/(app)/chat/[id]' as const, params: { id: conversation.id } });
   }, [router, conversation.id]);
 
   const handleDelete = useCallback(() => {

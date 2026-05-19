@@ -44,7 +44,7 @@ export function MarketingFooter() {
         style={{ maxWidth: 1180, margin: '0 auto', padding: '56px 28px 28px' }}
       >
         <div className="agi-footer-row">
-          <Link href="/" className="agi-footer-mark" aria-label="AGI Workforce home">
+          <Link href="/" className="agi-footer-mark" aria-label="AGI home">
             <AgiMark size={18} />
             <span style={{ marginLeft: 8 }}>
               agi<span className="agi-mark-dot">.</span>workforce

@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Chrome Extension — AI alongside every webpage | AGI Workforce',
+  title: 'Chrome Extension — AI alongside every webpage | AGI',
   description:
     'A side panel that lives on top of any tab. Read the page, ask a question, get a tool call back. The extension is the UI; your desktop is the brain. No model runs in the browser.',
   alternates: { canonical: 'https://agiworkforce.com/chrome-extension' },
@@ -48,8 +48,8 @@ export default function ChromeExtensionPage() {
               <span className="agi-step-n">02 / Native messaging bridge</span>
               <h3 className="agi-step-h">Bridge to your desktop on localhost:8787</h3>
               <p className="agi-step-body">
-                The intent flows through Chrome&rsquo;s native messaging API to the AGI Workforce
-                desktop process running on your machine.
+                The intent flows through Chrome&rsquo;s native messaging API to the AGI desktop
+                process running on your machine.
               </p>
             </li>
             <li className="agi-step">

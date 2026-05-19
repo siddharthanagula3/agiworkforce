@@ -2,7 +2,7 @@
 
 /**
  * Device Authorization Page
- * Handles OAuth device flow for AGI Workforce Desktop app.
+ * Handles OAuth device flow for AGI Desktop app.
  * Route: /device-auth?user_code=XXXX
  */
 
@@ -99,7 +99,7 @@ const DeviceAuthPage: React.FC = () => {
             <CardTitle>Invalid Request</CardTitle>
             <CardDescription>
               No authorization code provided. Please start the device authorization flow from the
-              AGI Workforce Desktop app.
+              AGI Desktop app.
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center">
@@ -126,9 +126,7 @@ const DeviceAuthPage: React.FC = () => {
               <Monitor className="h-8 w-8 text-primary" />
             </div>
             <CardTitle className="text-xl">Authorize Desktop App</CardTitle>
-            <CardDescription>
-              AGI Workforce Desktop is requesting access to your account
-            </CardDescription>
+            <CardDescription>AGI Desktop is requesting access to your account</CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-6">

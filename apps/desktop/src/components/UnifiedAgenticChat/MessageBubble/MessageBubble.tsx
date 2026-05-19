@@ -952,6 +952,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
       />
 
       <div
+        data-role={message.role}
         className={`message-bubble group flex gap-3 px-4 py-3 hover:bg-accent/50 transition-colors ${
           isUser ? 'flex-row-reverse' : ''
         }`}

@@ -36,6 +36,12 @@ interface VoiceInputState {
   provider: 'local_whisper' | 'deepgram' | 'openai_whisper';
   language: string;
 
+  // Device selection — 'default' means system default (on-device lock honored)
+  selectedDeviceId: string;
+  // UX toggles persisted across sessions
+  holdToRecord: boolean;
+  autoTrimSilence: boolean;
+
   // Post-processing settings
   /** 'ai' = LLM cleanup (default), 'basic' = regex only, 'none' = raw transcript */
   postProcessingMode: PostProcessingMode;
@@ -55,6 +61,9 @@ interface VoiceInputState {
   setProvider: (provider: VoiceInputState['provider']) => void;
   setLanguage: (language: string) => void;
   setPostProcessingMode: (mode: PostProcessingMode) => void;
+  setSelectedDeviceId: (deviceId: string) => void;
+  setHoldToRecord: (hold: boolean) => void;
+  setAutoTrimSilence: (trim: boolean) => void;
   clearTranscript: () => void;
 
   /**
@@ -79,6 +88,9 @@ export const useVoiceInputStore = create<VoiceInputState>()(
         hotkey: 'option',
         provider: 'local_whisper',
         language: 'en',
+        selectedDeviceId: 'default',
+        holdToRecord: true,
+        autoTrimSilence: true,
         postProcessingMode: 'ai',
         _mediaStream: null,
         _recorder: null,
@@ -94,7 +106,12 @@ export const useVoiceInputStore = create<VoiceInputState>()(
             _startAborted: false,
           });
           try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const { selectedDeviceId } = get();
+            const audioConstraints: boolean | MediaTrackConstraints =
+              selectedDeviceId && selectedDeviceId !== 'default'
+                ? { deviceId: { exact: selectedDeviceId } }
+                : true;
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
 
             // Check if stopListening was called while we were awaiting
             if (get()._startAborted) {
@@ -289,6 +306,9 @@ Output ONLY the cleaned text. No explanations, no quotes, no markdown. If the in
         setProvider: (provider) => set({ provider }),
         setLanguage: (language) => set({ language }),
         setPostProcessingMode: (mode) => set({ postProcessingMode: mode }),
+        setSelectedDeviceId: (deviceId) => set({ selectedDeviceId: deviceId }),
+        setHoldToRecord: (hold) => set({ holdToRecord: hold }),
+        setAutoTrimSilence: (trim) => set({ autoTrimSilence: trim }),
         clearTranscript: () =>
           set({ transcript: '', pendingTranscript: '', lastTranscriptIsCommand: false }),
       }),
@@ -303,6 +323,9 @@ Output ONLY the cleaned text. No explanations, no quotes, no markdown. If the in
           provider: state.provider,
           language: state.language,
           postProcessingMode: state.postProcessingMode,
+          selectedDeviceId: state.selectedDeviceId,
+          holdToRecord: state.holdToRecord,
+          autoTrimSilence: state.autoTrimSilence,
         }),
       },
     ),

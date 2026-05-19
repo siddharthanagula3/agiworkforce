@@ -54,12 +54,12 @@ export default function OnboardingScreen() {
 
   const finish = () => {
     storage.set('onboarding-done', 'true');
-    router.replace('/(auth)/login');
+    router.replace({ pathname: '/(auth)/login' as const });
   };
 
   const signIn = () => {
     storage.set('onboarding-done', 'true');
-    router.replace('/(auth)/login');
+    router.replace({ pathname: '/(auth)/login' as const });
   };
 
   const next = () => {

@@ -14,7 +14,7 @@ export const PERKS: Perk[] = [
     partner: 'AWS',
     title: '$5,000 in AWS credits',
     description:
-      'Activate $5,000 in AWS infrastructure credits for your team. Valid for new AWS customers via the AGI Workforce partner portal.',
+      'Activate $5,000 in AWS infrastructure credits for your team. Valid for new AWS customers via the AGI partner portal.',
     ctaUrl: 'mailto:partnerships@agiworkforce.com?subject=AWS%20Credits%20Perk',
     ctaText: 'Claim credits',
   },
@@ -23,7 +23,7 @@ export const PERKS: Perk[] = [
     partner: 'Linear',
     title: '3 months of Linear free',
     description:
-      'Ship faster with Linear project tracking. AGI Workforce teams get 3 months free on any plan, no credit card required.',
+      'Ship faster with Linear project tracking. AGI teams get 3 months free on any plan, no credit card required.',
     ctaUrl: 'mailto:partnerships@agiworkforce.com?subject=Linear%20Perk',
     ctaText: 'Get access',
   },
@@ -41,7 +41,7 @@ export const PERKS: Perk[] = [
     partner: 'Notion',
     title: 'Notion Team plan, 6 months',
     description:
-      'Pair your AI workflows with Notion. All AGI Workforce subscribers get 6 months of the Notion Team plan at no cost.',
+      'Pair your AI workflows with Notion. All AGI subscribers get 6 months of the Notion Team plan at no cost.',
     ctaUrl: 'mailto:partnerships@agiworkforce.com?subject=Notion%20Perk',
     ctaText: 'Unlock',
   },
@@ -50,7 +50,7 @@ export const PERKS: Perk[] = [
     partner: 'Retool',
     title: 'Retool Starter, first year free',
     description:
-      'Build internal tools faster. AGI Workforce users get the first year of Retool Starter free to power dashboards and ops tooling.',
+      'Build internal tools faster. AGI users get the first year of Retool Starter free to power dashboards and ops tooling.',
     ctaUrl: 'mailto:partnerships@agiworkforce.com?subject=Retool%20Perk',
     ctaText: 'Apply',
   },

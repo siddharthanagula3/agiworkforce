@@ -162,7 +162,7 @@ export default function NotificationCenterScreen() {
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
-    else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
+    else router.replace({ pathname: '/(app)' as const });
   }, [router]);
 
   const handleItemPress = useCallback(
@@ -176,31 +176,37 @@ export default function NotificationCenterScreen() {
         case 'agent_failed':
         case 'emergency_stop_triggered':
           if (agentId) {
-            router.push(`/(app)/companion/agent/${agentId}` as Parameters<typeof router.push>[0]);
+            router.push({
+              pathname: '/(app)/companion/agent/[agentId]' as const,
+              params: { agentId },
+            });
           } else {
-            router.push('/(app)/companion');
+            router.push({ pathname: '/(app)/companion' as const });
           }
           break;
         case 'agent_approval_needed':
         case 'approval_pending_escalation':
-          router.push('/(app)/companion');
+          router.push({ pathname: '/(app)/companion' as const });
           break;
         case 'agent_paused':
           if (agentId) {
-            router.push(`/(app)/companion/agent/${agentId}` as Parameters<typeof router.push>[0]);
+            router.push({
+              pathname: '/(app)/companion/agent/[agentId]' as const,
+              params: { agentId },
+            });
           } else {
-            router.push('/(app)/companion');
+            router.push({ pathname: '/(app)/companion' as const });
           }
           break;
         case 'task_completed':
           if (route && typeof route === 'string') {
             router.push(route as Parameters<typeof router.push>[0]);
           } else {
-            router.push('/(app)');
+            router.push({ pathname: '/(app)' as const });
           }
           break;
         case 'schedule_triggered':
-          router.push('/(app)/schedules');
+          router.push({ pathname: '/(app)/schedules' as const });
           break;
         default:
           if (route && typeof route === 'string') {

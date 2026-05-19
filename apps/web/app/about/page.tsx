@@ -3,7 +3,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'About — Multi-provider by design | AGI Workforce',
+  title: 'About — Multi-provider by design | AGI',
   description:
     'AGI Automation LLC. Austin, Texas. The CLI is the engine; the apps are surfaces over it. The bet: the user owns the keys, the data, and the choice of model.',
   alternates: { canonical: 'https://agiworkforce.com/about' },

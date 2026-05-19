@@ -3027,6 +3027,35 @@ impl ChatWidget {
             SlashCommand::Mention => {
                 self.insert_str("@");
             }
+            SlashCommand::Files => {
+                // Open file search popup — same affordance as typing @
+                self.insert_str("@");
+            }
+            SlashCommand::Screenshot => {
+                self.add_info_message(
+                    "Screenshot capture: press ⌘⇧4 to capture then attach the image with @".to_string(),
+                    Some("Tip: paste an image directly into the composer with ⌘V".to_string()),
+                );
+            }
+            SlashCommand::Github => {
+                self.add_info_message(
+                    "GitHub attach: type @<owner>/<repo>#<issue> or @<url> to attach an issue, PR, or file".to_string(),
+                    None,
+                );
+            }
+            SlashCommand::Research => {
+                // Pre-fill a research prompt prefix for the user to complete
+                self.insert_str("Research this topic in depth: ");
+            }
+            SlashCommand::Web => {
+                self.add_info_message(
+                    "Web search is available via the model's built-in tools when connected to a web-capable model.".to_string(),
+                    None,
+                );
+            }
+            SlashCommand::Style => {
+                self.open_personality_popup();
+            }
             SlashCommand::Skills => {
                 self.open_skills_menu();
             }
@@ -3247,6 +3276,28 @@ impl ChatWidget {
                     .send(AppEvent::BeginWindowsSandboxGrantReadRoot {
                         path: prepared_args,
                     });
+                self.bottom_pane.drain_pending_submission_state();
+            }
+            SlashCommand::Research if !trimmed.is_empty() => {
+                // /research <topic> — submit the topic as a research message
+                let prefix = "Research this topic in depth: ";
+                let topic = trimmed.to_string();
+                let full_text = format!("{prefix}{topic}");
+                let user_message = UserMessage {
+                    text: full_text,
+                    local_images: vec![],
+                    remote_image_urls: vec![],
+                    text_elements: vec![],
+                    mention_bindings: vec![],
+                };
+                if self.is_session_configured() {
+                    self.reasoning_buffer.clear();
+                    self.full_reasoning_buffer.clear();
+                    self.set_status_header(String::from("Working"));
+                    self.submit_user_message(user_message);
+                } else {
+                    self.queue_user_message(user_message);
+                }
                 self.bottom_pane.drain_pending_submission_state();
             }
             _ => self.dispatch_command(cmd),
@@ -4741,11 +4792,136 @@ impl ChatWidget {
         Some(trimmed.to_string())
     }
 
+    /// v3 model picker: 3 Anthropic primaries + Adaptive thinking toggle + "More models".
+    ///
+    /// Called by `open_model_popup_with_presets` when the catalog has Anthropic primaries.
+    /// Model IDs are resolved from `model_catalog::anthropic_primary_models()` — no literals.
+    pub(crate) fn open_v3_model_popup(&mut self, all_presets: Vec<ModelPreset>) {
+        use crate::model_catalog::anthropic_primary_models;
+        use crate::design_system::{capability_for_model, capability_label, CapabilityTier};
+
+        let primary_models = anthropic_primary_models();
+        let current_model = self.current_model().to_string();
+
+        // Adaptive thinking is currently ON when reasoning effort ≠ None/Minimal.
+        let adaptive_on = matches!(
+            self.effective_reasoning_effort(),
+            Some(ReasoningEffortConfig::High) | Some(ReasoningEffortConfig::XHigh)
+        );
+
+        let mut items: Vec<SelectionItem> = Vec::new();
+
+        // ── 3 Anthropic primaries ──────────────────────────────────────────
+        for (api_id, display_name, quality_tier) in &primary_models {
+            let tier = CapabilityTier::from(quality_tier.as_str());
+            let tier_label = capability_label(tier);
+            let description = Some(format!("{tier_label} · Anthropic"));
+            let is_current = api_id.as_str() == current_model;
+            let model_for_action = api_id.clone();
+            let should_prompt = self.should_prompt_plan_mode_reasoning_scope(
+                api_id.as_str(),
+                /*effort*/ None,
+            );
+            let actions = Self::model_selection_actions(
+                model_for_action,
+                /*effort*/ None,
+                should_prompt,
+            );
+            items.push(SelectionItem {
+                name: display_name.clone(),
+                description,
+                is_current,
+                is_default: false,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            });
+        }
+
+        // ── Adaptive thinking toggle ───────────────────────────────────────
+        {
+            let toggle_label = if adaptive_on {
+                "Adaptive thinking: ON  [toggle off]"
+            } else {
+                "Adaptive thinking: OFF [toggle on]"
+            };
+            let description = Some(if adaptive_on {
+                "Extended reasoning active — press enter to disable".to_string()
+            } else {
+                "Enable extended reasoning for harder tasks".to_string()
+            });
+            let new_effort = if adaptive_on {
+                // toggle off → no extended reasoning
+                Some(ReasoningEffortConfig::None)
+            } else {
+                // toggle on → high reasoning
+                Some(ReasoningEffortConfig::High)
+            };
+            let current_model_for_action = current_model.clone();
+            let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
+                tx.send(AppEvent::UpdateReasoningEffort(new_effort));
+                tx.send(AppEvent::PersistModelSelection {
+                    model: current_model_for_action.clone(),
+                    effort: new_effort,
+                });
+            })];
+            items.push(SelectionItem {
+                name: toggle_label.to_string(),
+                description,
+                is_current: false,
+                is_default: false,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            });
+        }
+
+        // ── More models ────────────────────────────────────────────────────
+        {
+            let all_models = all_presets;
+            let is_current = primary_models.iter().all(|(id, _, _)| id.as_str() != current_model);
+            let description = Some(format!(
+                "Switch to any provider or model (current: {current_model})"
+            ));
+            let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
+                tx.send(AppEvent::OpenAllModelsPopup {
+                    models: all_models.clone(),
+                });
+            })];
+            items.push(SelectionItem {
+                name: "More models".to_string(),
+                description,
+                is_current,
+                is_default: false,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            });
+        }
+
+        let header = self.model_menu_header(
+            "Select Model",
+            "3 Anthropic primaries · Adaptive thinking · More models",
+        );
+        self.bottom_pane.show_selection_view(SelectionViewParams {
+            footer_hint: Some(standard_popup_hint_line()),
+            items,
+            header,
+            ..Default::default()
+        });
+    }
+
     pub(crate) fn open_model_popup_with_presets(&mut self, presets: Vec<ModelPreset>) {
         let presets: Vec<ModelPreset> = presets
             .into_iter()
             .filter(|preset| preset.show_in_picker)
             .collect();
+
+        // v3 picker: if Anthropic primaries are available, use the v3 layout.
+        if !crate::model_catalog::anthropic_primary_models().is_empty() {
+            self.open_v3_model_popup(presets);
+            return;
+        }
 
         let current_model = self.current_model();
         let current_label = presets

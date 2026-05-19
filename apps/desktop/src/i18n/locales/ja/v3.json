@@ -1,0 +1,382 @@
+{
+  "common": {
+    "copy": "Copy",
+    "copied": "Copied",
+    "close": "Close",
+    "refresh": "Refresh",
+    "delete": "Delete",
+    "options": "Options",
+    "settings": "Settings",
+    "search": "Search",
+    "loading": "Loading…",
+    "enable": "Enable",
+    "disable": "Disable",
+    "enabled": "Enabled",
+    "off": "Off",
+    "default": "Default",
+    "beta": "Beta",
+    "connected": "Connected",
+    "manage": "Manage",
+    "untitled": "Untitled",
+    "showAll": "Show all",
+    "hide": "Hide",
+    "newFile": "New file",
+    "openExternally": "Open externally",
+    "openArtifact": "Open artifact",
+    "running": "Running",
+    "done": "Done",
+    "queued": "Queued",
+    "paused": "Paused",
+    "fresh": "Fresh",
+    "stale": "Stale",
+    "view": "View"
+  },
+  "sidebar": {
+    "expand": "Expand sidebar",
+    "collapse": "Collapse sidebar",
+    "newChat": "New chat",
+    "newSession": "New session",
+    "searchKbd": "Search (⌘K)",
+    "recents": "Recents",
+    "groups": {
+      "lastHour": "Last hour",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "pastWeek": "Past week",
+      "pastMonth": "Past month"
+    },
+    "modes": {
+      "chat": "Chat",
+      "cowork": "Cowork",
+      "code": "Code"
+    },
+    "nav": {
+      "projects": "Projects",
+      "artifacts": "Artifacts",
+      "customize": "Customize",
+      "scheduled": "Scheduled",
+      "liveArtifacts": "Live artifacts",
+      "dispatch": "Dispatch",
+      "routines": "Routines"
+    },
+    "account": "Account"
+  },
+  "emptyChat": {
+    "greetMorning": "Good morning, {{name}}",
+    "greetDay": "What can I help with, {{name}}?",
+    "greetNight": "It's late-night, {{name}}",
+    "fallbackName": "there",
+    "chipPrompts": {
+      "code": "Help me write code for ",
+      "write": "Help me write ",
+      "research": "Research this topic in depth: ",
+      "image": "Create an image of ",
+      "video": "Create a video of ",
+      "computer": "Use computer to ",
+      "learn": "Explain this to me: ",
+      "life": "Help me with ",
+      "web": "Search the web for "
+    }
+  },
+  "composer": {
+    "placeholder": "How can I help you today?",
+    "placeholderReply": "Reply, or ask a follow-up…",
+    "inputAriaLabel": "Chat message input",
+    "addAriaLabel": "Add files, skills, connectors…",
+    "modelAriaLabel": "Choose model",
+    "voiceAriaLabel": "Voice input settings",
+    "stopAriaLabel": "Stop generation",
+    "sendAriaLabel": "Send message",
+    "adaptive": "Adaptive",
+    "standard": "Standard",
+    "disclaimer": "AI can make mistakes. Please double-check responses."
+  },
+  "plusMenu": {
+    "addFiles": "Add files or photos",
+    "addProject": "Add to project",
+    "addGithub": "Add from GitHub",
+    "skills": "Skills",
+    "connectors": "Connectors",
+    "plugins": "Plugins",
+    "research": "Research",
+    "webSearch": "Web search",
+    "useStyle": "Use style",
+    "browseAll": "Browse all plugins",
+    "manageSkills": "Manage skills",
+    "addConnector": "Add connector"
+  },
+  "modelPopover": {
+    "primary": {
+      "premium": "Most capable for ambitious work",
+      "balanced": "Responsive everyday work",
+      "fast": "Fastest, most efficient"
+    },
+    "groups": {
+      "olderAnthropic": "Older Anthropic",
+      "otherProviders": "Other providers"
+    },
+    "tags": {
+      "local": "Local"
+    },
+    "thinking": "Adaptive thinking",
+    "thinkingDesc": "Thinks for more complex tasks",
+    "moreModels": "More models"
+  },
+  "micSettings": {
+    "title": "Voice input",
+    "source": "Source",
+    "loadingDevices": "Loading devices…",
+    "defaultMic": "Default microphone",
+    "microphone": "Microphone",
+    "holdToRecord": "Hold to record",
+    "holdToRecordDesc": "Tap to start, tap to stop when off",
+    "autoTrim": "Auto-trim silence",
+    "autoTrimDesc": "Cut leading/trailing pauses",
+    "footer": "On-device · Whisper-small",
+    "settings": "Settings"
+  },
+  "responseActions": {
+    "copy": "Copy",
+    "copied": "Copied",
+    "helpful": "Helpful",
+    "notHelpful": "Not helpful",
+    "regenerate": "Regenerate",
+    "branch": "Branch",
+    "branchConversation": "Branch this conversation"
+  },
+  "thinking": {
+    "reasoned": "Reasoned",
+    "reasonedFor": "Reasoned for {{seconds}}s"
+  },
+  "capModal": {
+    "title": "You've hit your message limit",
+    "subtitle": "Pick how you want to keep going — switch to a smaller model, top up, or wait until your usage resets.",
+    "dismiss": "Dismiss until next reset",
+    "switchModel": "Switch to a smaller model",
+    "buyTopUp": "Buy a top-up",
+    "waitReset": "Wait until reset"
+  },
+  "artifact": {
+    "title": "Artifact",
+    "interactive": "interactive",
+    "interactiveWithLang": "{{language}} · interactive",
+    "noFiles": "No files",
+    "loadingArtifact": "Loading artifact…",
+    "notFound": "Artifact not found",
+    "emptyHint": "Open an artifact to preview it here",
+    "noArtifactSelected": "No artifact selected",
+    "loading": "Loading…",
+    "tabs": {
+      "preview": "Preview",
+      "code": "Code",
+      "share": "Share"
+    },
+    "shareTitle": "Share this artifact",
+    "shareSubtitle": "Anyone with the link can view, but not run code. Conversation stays private.",
+    "provenance": "Provenance is preserved",
+    "provenanceDesc": "Recipients see which model generated this — no spoofing.",
+    "htmlPreview": "HTML preview",
+    "fileCount_one": "{{count}} file",
+    "fileCount_other": "{{count}} files",
+    "mcpManage": "Manage",
+    "mcpConnected": "Connected:"
+  },
+  "search": {
+    "placeholder": "Search chats, projects, skills, connectors, settings…",
+    "noMatches": "No matches for \"{{query}}\"",
+    "noResults": "No results",
+    "esc": "esc",
+    "navigate": "navigate",
+    "open": "open",
+    "closeKbd": "close",
+    "groups": {
+      "chats": "Chats",
+      "projects": "Projects",
+      "skills": "Skills",
+      "connectors": "Connectors",
+      "settings": "Settings"
+    }
+  },
+  "accountMenu": {
+    "settings": "Settings",
+    "language": "Language",
+    "privacySecurity": "Privacy & security",
+    "viewAllPlans": "View all plans",
+    "byokLocal": "BYOK & local models",
+    "appsExtensions": "Apps & extensions",
+    "giftAGI": "Gift AGI",
+    "helpSupport": "Help & support",
+    "logOut": "Log out",
+    "accountFallback": "Account"
+  },
+  "customize": {
+    "title": "Customize",
+    "subtitle": "Skills, connectors, and plugins extend what AGI can do.",
+    "tabs": {
+      "skills": "Skills",
+      "connectors": "Connectors",
+      "plugins": "Plugins"
+    }
+  },
+  "skills": {
+    "searchPlaceholder": "Search skills",
+    "loading": "Loading skills...",
+    "noneFound": "No skills found.",
+    "addSkill": "Add skill",
+    "noneInstalled": "No skills installed yet.",
+    "breadcrumb": "Customize / Skills / {{name}}",
+    "allowedTools": "Allowed tools",
+    "requirements": "Requirements",
+    "binaries": "Binaries:",
+    "envVars": "Env vars:",
+    "supportedOs": "Supported OS",
+    "allOs": "All",
+    "category": "Category",
+    "edit": "Edit",
+    "viewSource": "View source",
+    "disableSkill": "Disable skill",
+    "enableSkill": "Enable skill"
+  },
+  "connectors": {
+    "connected": "Connected",
+    "connectedDesc": "Per-tool permissions for each connector. AGI never uses ⚠ Ask actions without confirmation.",
+    "noneConnected": "No connectors connected yet.",
+    "notConnected": "Not connected",
+    "notConnectedDesc": "Add a connector to give AGI scoped access to your tools.",
+    "add": "Add",
+    "perm": {
+      "allow": "Allow",
+      "ask": "Ask",
+      "never": "Never"
+    },
+    "tools": {
+      "readEmails": "Read emails",
+      "readEmailsDesc": "View subject, sender, and body",
+      "sendEmails": "Send emails",
+      "sendEmailsDesc": "Compose and send on your behalf",
+      "deleteEmails": "Delete emails",
+      "deleteEmailsDesc": "Move to trash",
+      "readDeployments": "Read deployments",
+      "readDeploymentsDesc": "View build logs and status",
+      "triggerDeploy": "Trigger deploy",
+      "triggerDeployDesc": "Start a new deployment",
+      "readRepos": "Read repos",
+      "readReposDesc": "Browse code and issues",
+      "createPrs": "Create PRs",
+      "createPrsDesc": "Open pull requests",
+      "pushCommits": "Push commits",
+      "pushCommitsDesc": "Write to branches",
+      "readEvents": "Read events",
+      "readEventsDesc": "View your schedule",
+      "createEvents": "Create events",
+      "createEventsDesc": "Add events to your calendar",
+      "readPages": "Read pages",
+      "readPagesDesc": "View and search pages",
+      "editPages": "Edit pages",
+      "editPagesDesc": "Update content in your workspace",
+      "readChannels": "Read channels",
+      "readChannelsDesc": "View messages and channel info",
+      "sendMessages": "Send messages",
+      "sendMessagesDesc": "Post on your behalf",
+      "readIssues": "Read issues",
+      "readIssuesDesc": "View issues and projects",
+      "createIssues": "Create issues",
+      "createIssuesDesc": "Open new issues",
+      "updateIssues": "Update issues",
+      "updateIssuesDesc": "Edit status and fields",
+      "readDataGeneric": "Read data",
+      "readDataGenericDesc": "View data from {{name}}",
+      "writeDataGeneric": "Write data",
+      "writeDataGenericDesc": "Modify data in {{name}}"
+    }
+  },
+  "plugins": {
+    "installed": "Installed plugins",
+    "installedDesc": "Server-side tools AGI can call mid-response. Different from connectors — plugins do not need an account.",
+    "featured": "Featured in the directory",
+    "browseAll": "Browse all plugins",
+    "loading": "Loading...",
+    "emptyDirectory": "Browse the directory to discover more plugins.",
+    "toolsAvailable": "{{count}} tools available",
+    "mcpServer": "MCP server",
+    "mcp": "MCP",
+    "builtIn": "Built-in",
+    "view": "View",
+    "card": {
+      "calc": "Calculator",
+      "calcDesc": "Exact arithmetic without LLM math errors",
+      "py": "Python Sandbox",
+      "pyDesc": "Run Python in an isolated container",
+      "img": "Image Generation",
+      "imgDesc": "Multi-provider image creation (routed by tier)",
+      "ts": "TypeScript REPL",
+      "tsDesc": "Bun-powered TS execution in a sandbox"
+    }
+  },
+  "cowork": {
+    "home": {
+      "headline": "Let's knock something off your list",
+      "learnLink": "Learn how to use Cowork safely.",
+      "placeholder": "How can I help you today?",
+      "startTask": "Start task",
+      "kbdHint": "to start a task and keep going",
+      "active": "Active",
+      "clearActive": "Clear active",
+      "onboardingTitle": "Get to know Cowork",
+      "onboarding": {
+        "startTitle": "Start your first task",
+        "startDesc": "Describe a recurring work job above and let your AI team handle it.",
+        "connectTitle": "Connect a project",
+        "connectDesc": "Link a project to give tasks context — emails, docs, CRM, repo.",
+        "scheduleTitle": "Schedule a recurring task",
+        "scheduleDesc": "Run tasks automatically on a cron schedule, even while you sleep.",
+        "phoneTitle": "Send a task from your phone",
+        "phoneDesc": "Install the mobile app and dispatch work from anywhere via Dispatch."
+      }
+    },
+    "dispatch": {
+      "title": "Dispatch",
+      "subtitle": "Send tasks from your phone, run them on this Mac. Outputs land in Live artifacts.",
+      "sendFromAnywhere": "Send from anywhere",
+      "sendFromAnywhereDesc": "Dispatch a task from the mobile app, your wrist, or a shortcut. This Mac picks it up, runs it, returns the artifact.",
+      "getMobileApp": "Get mobile app",
+      "acceptTasks": "Accept dispatched tasks",
+      "acceptTasksDesc": "When off, your phone won't be able to dispatch work here.",
+      "requireConfirm": "Require confirmation for writes",
+      "requireConfirmDesc": "Anything that sends mail, runs SQL, or deploys waits for your tap.",
+      "outputs": "Outputs",
+      "noOutputs": "No task outputs yet. Dispatch a task from the mobile app to get started."
+    },
+    "artifacts": {
+      "title": "Live artifacts",
+      "subtitle": "Outputs from scheduled tasks. Refreshed on each run.",
+      "loading": "Loading artifacts…",
+      "empty": "No artifacts yet. Run a scheduled task to generate outputs."
+    },
+    "projects": {
+      "title": "Cowork projects",
+      "newProject": "New project",
+      "updated": "Updated {{when}}",
+      "sessions": "{{count}} sessions"
+    },
+    "scheduled": {
+      "title": "Scheduled tasks",
+      "scheduleNew": "Schedule new task",
+      "keepAwake": "Keep this Mac awake for scheduled tasks",
+      "keepAwakeDesc": "When on, uses caffeinate to prevent sleep during scheduled runs. Plug in for long tasks.",
+      "loading": "Loading scheduled tasks…",
+      "nextRun": "Next run",
+      "paused": "Paused",
+      "empty": "No scheduled tasks yet. Click \"Schedule new task\" to get started."
+    }
+  },
+  "time": {
+    "justNow": "just now",
+    "minAgo": "{{count}} min ago",
+    "hAgo": "{{count}}h ago",
+    "dAgo": "{{count}}d ago",
+    "mAgoShort": "{{count}}m ago",
+    "daysAgo": "{{count}} days ago",
+    "weeksAgo": "{{count}} weeks ago"
+  }
+}

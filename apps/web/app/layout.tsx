@@ -45,8 +45,8 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
   title: {
-    default: 'AGI Workforce | Your On-Demand AI Workforce',
-    template: '%s | AGI Workforce',
+    default: 'AGI | Beyond one model. Beyond one surface.',
+    template: '%s | AGI',
   },
   description:
     'Just tell the AI what you want done. No setup, no coding required. Desktop and web automation with full undo support. Powered by OpenAI, Anthropic, Google, and more.',
@@ -75,8 +75,8 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'en_US',
     url: APP_URL,
-    siteName: 'AGI Workforce',
-    title: 'AGI Workforce | Your On-Demand AI Workforce',
+    siteName: 'AGI',
+    title: 'AGI | Beyond one model. Beyond one surface.',
     description:
       'Just tell the AI what you want done. No setup, no coding required. Full undo support.',
     images: [
@@ -84,13 +84,13 @@ export const metadata: Metadata = {
         url: '/app-preview.png',
         width: 1200,
         height: 630,
-        alt: 'AGI Workforce - Just ask, it does',
+        alt: 'AGI - Just ask, it does',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AGI Workforce | Your On-Demand AI Workforce',
+    title: 'AGI | Beyond one model. Beyond one surface.',
     description:
       'Just tell the AI what you want done. No setup, no coding required. Desktop and web automation with full undo support. Powered by OpenAI, Anthropic, Google, and more.',
     creator: '@agiworkforce',
@@ -118,7 +118,7 @@ export default async function RootLayout({
   const organizationSchema = {
     '@context': 'https://schema.org',
     '@type': 'Organization',
-    name: 'AGI Workforce',
+    name: 'AGI',
     url: APP_URL,
     logo: `${APP_URL}/logo.png`,
     description:
@@ -135,7 +135,7 @@ export default async function RootLayout({
   const softwareAppSchema = {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
-    name: 'AGI Workforce',
+    name: 'AGI',
     description: 'Autonomous AI agents for desktop and web automation with multi-LLM support',
     applicationCategory: 'Business Application',
     operatingSystem: 'macOS, Windows, Linux, Web',
@@ -151,7 +151,7 @@ export default async function RootLayout({
   const webSiteSchema = {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
-    name: 'AGI Workforce',
+    name: 'AGI',
     url: APP_URL,
     potentialAction: {
       '@type': 'SearchAction',

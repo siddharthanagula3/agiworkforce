@@ -89,6 +89,11 @@ export default defineConfig({
       testMatch: '**/tests/self-healing.spec.ts',
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'v3-locks',
+      testMatch: '**/v3-*.spec.ts',
+      use: { ...devices['Desktop Chrome'] },
+    },
   ],
 
   // In CI, we start the dev server manually in the workflow

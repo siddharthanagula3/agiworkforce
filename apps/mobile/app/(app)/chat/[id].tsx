@@ -17,7 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { MessageList } from '@/components/chat/MessageList';
-import { ChatInput } from '@/components/chat/ChatInput';
+import { Composer } from '@/components/Composer/Composer';
 import { QuotedReplyBar } from '@/components/chat/QuotedReplyBar';
 import { AddToChatSheet } from '@/components/chat/AddToChatSheet';
 import { ConversationExportSheet } from '@/components/chat/ConversationExportSheet';
@@ -538,8 +538,8 @@ export default function ChatScreen() {
         {/* Quoted reply bar */}
         {quotedMessage && <QuotedReplyBar message={quotedMessage} onDismiss={handleDismissQuote} />}
 
-        {/* Input — always active; offline sends are queued automatically */}
-        <ChatInput
+        {/* Composer — shows TaskChips when conversation is empty */}
+        <Composer
           onSend={handleSend}
           isStreaming={isStreaming}
           onStop={handleStop}
@@ -550,6 +550,7 @@ export default function ChatScreen() {
           isOnline={isOnline}
           queueSize={queueSize}
           attachRef={chatInputAttachRef}
+          showChips={conversationMessages.length === 0}
         />
 
         {/* Add to Chat bottom sheet */}

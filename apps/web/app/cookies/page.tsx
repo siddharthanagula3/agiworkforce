@@ -4,9 +4,9 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Cookie policy | AGI Workforce',
+  title: 'Cookie policy | AGI',
   description:
-    'How AGI Workforce uses cookies and similar technologies. Strictly-necessary by default; analytics opt-in.',
+    'How AGI uses cookies and similar technologies. Strictly-necessary by default; analytics opt-in.',
   alternates: { canonical: 'https://agiworkforce.com/cookies' },
 };
 

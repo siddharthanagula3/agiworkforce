@@ -339,7 +339,7 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
     // No active session — defer to login screen. We do not pass arbitrary
     // notification data through to the login screen as a redirect target;
     // the user will land on the default post-login route.
-    safeNavigate('/(auth)/login' as Parameters<typeof router.push>[0]);
+    safeNavigate({ pathname: '/(auth)/login' as const });
     return;
   }
 
@@ -348,60 +348,66 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
     case 'emergency_stop_triggered':
       // Critical: deep link to agent detail or companion dashboard
       if (isValidAgentId(data.agentId)) {
-        safeNavigate(`/(app)/companion/agent/${data.agentId}` as Parameters<typeof router.push>[0]);
+        safeNavigate({
+          pathname: '/(app)/companion/agent/[agentId]' as const,
+          params: { agentId: data.agentId },
+        });
       } else {
         if (data.agentId) {
           console.warn('[notifications] Blocked navigation with invalid agentId:', data.agentId);
         }
-        safeNavigate('/(app)/companion');
+        safeNavigate({ pathname: '/(app)/companion' as const });
       }
       break;
 
     case 'agent_approval_needed':
     case 'approval_pending_escalation':
       // Navigate to companion/desktop view for approval
-      safeNavigate('/(app)/companion');
+      safeNavigate({ pathname: '/(app)/companion' as const });
       break;
 
     case 'agent_paused':
       // Navigate to agent detail if we have a valid agentId
       if (isValidAgentId(data.agentId)) {
-        safeNavigate(`/(app)/companion/agent/${data.agentId}` as Parameters<typeof router.push>[0]);
+        safeNavigate({
+          pathname: '/(app)/companion/agent/[agentId]' as const,
+          params: { agentId: data.agentId },
+        });
       } else {
         if (data.agentId) {
           console.warn('[notifications] Blocked navigation with invalid agentId:', data.agentId);
         }
-        safeNavigate('/(app)/companion');
+        safeNavigate({ pathname: '/(app)/companion' as const });
       }
       break;
 
     case 'task_completed':
       // Navigate to the relevant chat if a validated route is provided
       if (data.route && typeof data.route === 'string' && isAllowedRoute(data.route)) {
-        safeNavigate(data.route as '/(app)');
+        safeNavigate(data.route as Parameters<typeof router.push>[0]);
       } else {
         if (data.route && !isAllowedRoute(data.route as string)) {
           console.warn('[notifications] Blocked navigation to disallowed route:', data.route);
         }
-        safeNavigate('/(app)');
+        safeNavigate({ pathname: '/(app)' as const });
       }
       break;
 
     case 'schedule_triggered':
-      safeNavigate('/(app)/schedules');
+      safeNavigate({ pathname: '/(app)/schedules' as const });
       break;
 
     case 'companion_connected':
-      safeNavigate('/(app)/companion');
+      safeNavigate({ pathname: '/(app)/companion' as const });
       break;
 
     case 'chat_message':
       if (data.route && typeof data.route === 'string') {
         if (isAllowedRoute(data.route)) {
-          safeNavigate(data.route as '/(app)');
+          safeNavigate(data.route as Parameters<typeof router.push>[0]);
         } else {
           console.warn('[notifications] Blocked navigation to disallowed route:', data.route);
-          safeNavigate('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
+          safeNavigate({ pathname: '/(app)/(tabs)/chat' as const });
         }
       }
       break;
@@ -409,12 +415,12 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
     case 'status_update':
     case 'heartbeat_info':
       // Low priority — navigate to notification center
-      safeNavigate('/(app)/notifications' as Parameters<typeof router.push>[0]);
+      safeNavigate({ pathname: '/(app)/notifications' as const });
       break;
 
     default:
       // Unknown type — open app home
-      safeNavigate('/(app)');
+      safeNavigate({ pathname: '/(app)' as const });
       break;
   }
 }

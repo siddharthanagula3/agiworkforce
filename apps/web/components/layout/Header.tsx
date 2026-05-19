@@ -51,7 +51,7 @@ export function Header() {
         className="agi-top"
         style={{ position: 'relative', maxWidth: 1180, margin: '0 auto', padding: '22px 28px' }}
       >
-        <Link href="/" className="agi-mark" aria-label="AGI Workforce home">
+        <Link href="/" className="agi-mark" aria-label="AGI home">
           <AgiMark size={20} />
           <span style={{ marginLeft: 8 }}>
             agi<span className="agi-mark-dot">.</span>workforce

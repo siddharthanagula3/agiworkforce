@@ -216,7 +216,7 @@ export function WelcomeBanner({ displayName, suppress }: WelcomeBannerProps) {
           </div>
           <div>
             <h2 className="text-sm font-semibold">
-              {displayName ? `Welcome, ${displayName}!` : 'Welcome to AGI Workforce!'}
+              {displayName ? `Welcome, ${displayName}!` : 'Welcome to AGI!'}
             </h2>
             <p className="mt-0.5 text-xs text-muted-foreground/70">
               {completedCount}/{CHECKLIST.length} steps complete

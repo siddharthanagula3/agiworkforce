@@ -3,7 +3,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'BYOK — Your keys, your data, your cost | AGI Workforce',
+  title: 'BYOK — Your keys, your data, your cost | AGI',
   description:
     'Bring your own keys to any cloud provider. Pay providers directly. Zero markup. AES-256-GCM encrypted on device with a master password we do not hold.',
   alternates: { canonical: 'https://agiworkforce.com/byok' },

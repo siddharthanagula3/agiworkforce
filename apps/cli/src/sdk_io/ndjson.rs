@@ -29,7 +29,7 @@ fn escape_line_terminators(s: &str) -> String {
 /// Synchronous helper for tests and any caller that already has a `Write`.
 pub(crate) fn write_event_sync<W: Write, T: Serialize>(w: &mut W, event: &T) -> io::Result<()> {
     let raw = serde_json::to_string(event)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .map_err(io::Error::other)?;
     let escaped = escape_line_terminators(&raw);
     w.write_all(escaped.as_bytes())?;
     w.write_all(b"\n")?;
@@ -55,7 +55,7 @@ impl<W: AsyncWrite + Unpin> NdjsonWriter<W> {
     /// produce a torn line.
     pub(crate) async fn emit<T: Serialize>(&self, event: &T) -> io::Result<()> {
         let raw = serde_json::to_string(event)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+            .map_err(io::Error::other)?;
         let escaped = escape_line_terminators(&raw);
         let mut guard = self.inner.lock().await;
         guard.write_all(escaped.as_bytes()).await?;

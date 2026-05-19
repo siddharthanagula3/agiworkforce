@@ -4,8 +4,8 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Resources | AGI Workforce',
-  description: 'Pointers into the parts of AGI Workforce most often asked about.',
+  title: 'Resources | AGI',
+  description: 'Pointers into the parts of AGI most often asked about.',
   alternates: { canonical: 'https://agiworkforce.com/resources' },
 };
 
@@ -30,7 +30,7 @@ export default function ResourcesPage() {
         <section className="agi-page-hero">
           <h1 className="agi-page-h1">Resources.</h1>
           <p className="agi-page-lede">
-            Pointers into the parts of AGI Workforce most often asked about.{' '}
+            Pointers into the parts of AGI most often asked about.{' '}
             <strong>Everything below is a real page with real content</strong> — nothing here is a
             placeholder.
           </p>
