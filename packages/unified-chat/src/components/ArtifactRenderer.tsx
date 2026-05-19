@@ -180,12 +180,25 @@ function sanitizeSvg(raw: string): string {
         if (!SVG_ALLOWED_ATTRS.has(name)) {
           node.removeAttribute(attr.name);
         }
-        // Block javascript: URIs
-        if (
-          (name === 'href' || name === 'xlink:href') &&
-          attr.value.trim().startsWith('javascript:')
-        ) {
-          node.removeAttribute(attr.name);
+        // Block dangerous URI schemes (javascript:, data:, vbscript:, etc.)
+        // AUDIT-FIX: alert-450 — parse URL scheme instead of `startsWith` substring
+        // check, which is bypassable via case (`JavaScript:`) or whitespace prefix.
+        if (name === 'href' || name === 'xlink:href') {
+          const raw = attr.value.trim();
+          // Allow safe schemes + relative refs; reject everything else.
+          // `new URL` throws on relative URLs without a base — treat as safe.
+          let scheme: string | null = null;
+          try {
+            scheme = new URL(raw, 'https://placeholder.invalid/').protocol
+              .replace(/:$/, '')
+              .toLowerCase();
+          } catch {
+            scheme = null;
+          }
+          const SAFE_SCHEMES = new Set(['http', 'https', 'mailto', 'tel']);
+          if (scheme && !SAFE_SCHEMES.has(scheme)) {
+            node.removeAttribute(attr.name);
+          }
         }
       }
       // Recurse children (snapshot to avoid mutation during iteration)
