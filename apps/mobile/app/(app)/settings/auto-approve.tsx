@@ -15,6 +15,7 @@ import { Card } from '@/components/ui/card';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/lib/theme';
 import type { AutoApproveMode } from '@/types/chat';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 // ---------------------------------------------------------------------------
 // Option metadata
@@ -64,6 +65,8 @@ export default function AutoApproveScreen() {
     if (router.canGoBack()) router.back();
     else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
   }, [router]);
+
+  if (!FEATURES.agents) return null;
 
   return (
     <SafeAreaView className="flex-1 bg-surface-base">

@@ -1,40 +1,130 @@
 {
+  "$schema": "https://raw.githubusercontent.com/expo/eas-cli/main/packages/eas-json/schema/eas.schema.json",
   "cli": {
     "version": ">= 13.0.0",
-    "appVersionSource": "remote"
+    "appVersionSource": "remote",
+    "requireCommit": true,
+    "promptToConfigurePushNotifications": false
   },
   "build": {
+    "base": {
+      "node": "22.12.0",
+      "pnpm": "9.15.3",
+      "env": {
+        "EXPO_NO_DOTENV": "1",
+        "EXPO_NO_TELEMETRY": "1"
+      },
+      "ios": {
+        "image": "latest",
+        "resourceClass": "m-medium"
+      },
+      "android": {
+        "image": "latest",
+        "resourceClass": "medium",
+        "ndk": "27.1.12297006"
+      },
+      "cache": {
+        "key": "agi-mobile-v1",
+        "paths": ["node_modules", ".cache", "ios/Pods"]
+      }
+    },
     "development": {
+      "extends": "base",
       "developmentClient": true,
       "distribution": "internal",
+      "channel": "development",
+      "env": {
+        "APP_ENV": "development",
+        "EXPO_PUBLIC_APP_ENV": "development"
+      },
       "ios": {
-        "simulator": true
+        "simulator": true,
+        "buildConfiguration": "Debug"
+      },
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleDebug"
       }
     },
     "preview": {
+      "extends": "base",
       "distribution": "internal",
       "channel": "preview",
+      "autoIncrement": "buildNumber",
+      "env": {
+        "APP_ENV": "preview",
+        "EXPO_PUBLIC_APP_ENV": "preview"
+      },
       "ios": {
         "simulator": false,
+        "buildConfiguration": "Release",
+        "credentialsSource": "remote"
+      },
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease"
+      }
+    },
+    "preview-simulator": {
+      "extends": "preview",
+      "ios": {
+        "simulator": true,
         "buildConfiguration": "Release"
       }
     },
     "production": {
-      "autoIncrement": true,
+      "extends": "base",
       "channel": "production",
+      "autoIncrement": true,
+      "env": {
+        "APP_ENV": "production",
+        "EXPO_PUBLIC_APP_ENV": "production"
+      },
       "ios": {
-        "resourceClass": "m-medium",
-        "credentialsSource": "remote"
+        "buildConfiguration": "Release",
+        "credentialsSource": "remote",
+        "resourceClass": "m-medium"
       },
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "app-bundle",
+        "gradleCommand": ":app:bundleRelease"
       }
     }
   },
   "submit": {
     "production": {
+      "ios": {
+        "language": "en-US",
+        "appleTeamId": "D2PR62RLT4",
+        "bundleIdentifier": "com.agiworkforce.app",
+        "ascAppId": "$ASC_APP_ID",
+        "appleId": "$APPLE_ID",
+        "ascApiKeyPath": "./secrets/asc-api-key.p8",
+        "ascApiKeyId": "$ASC_API_KEY_ID",
+        "ascApiKeyIssuerId": "$ASC_API_KEY_ISSUER_ID"
+      },
       "android": {
-        "track": "internal"
+        "track": "internal",
+        "serviceAccountKeyPath": "./secrets/google-play-service-account.json",
+        "releaseStatus": "draft",
+        "changesNotSentForReview": false
+      }
+    },
+    "preview": {
+      "ios": {
+        "language": "en-US",
+        "appleTeamId": "D2PR62RLT4",
+        "bundleIdentifier": "com.agiworkforce.app",
+        "ascAppId": "$ASC_APP_ID",
+        "appleId": "$APPLE_ID",
+        "ascApiKeyPath": "./secrets/asc-api-key.p8",
+        "ascApiKeyId": "$ASC_API_KEY_ID",
+        "ascApiKeyIssuerId": "$ASC_API_KEY_ISSUER_ID"
+      },
+      "android": {
+        "track": "internal",
+        "serviceAccountKeyPath": "./secrets/google-play-service-account.json",
+        "releaseStatus": "draft"
       }
     }
   }

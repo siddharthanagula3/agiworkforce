@@ -6,6 +6,7 @@
  */
 
 import { api } from './api';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,6 +45,7 @@ export interface ImageGenProgress {
  * @throws {Error} On network or server errors
  */
 export async function generateImage(request: ImageGenRequest): Promise<ImageGenResponse> {
+  if (!FEATURES.imageGen) throw new Error('imagegen: image generation not available in v1');
   if (!request.prompt.trim()) {
     throw new Error('Image generation requires a non-empty prompt');
   }

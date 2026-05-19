@@ -103,6 +103,7 @@ jest.mock('../lib/mmkv', () => ({
 import { secureStorage } from '../lib/secureStorage';
 import { useAuthStore } from '../stores/authStore';
 import { act } from '@testing-library/react-native';
+import { FEATURES } from '../lib/v1FeatureFlags';
 
 let consoleErrorSpy: jest.SpyInstance;
 
@@ -335,7 +336,10 @@ describe('authStore — secure storage persistence', () => {
     mockDeleteItemAsync.mockResolvedValue(undefined);
   });
 
-  it('writes session to secure store after successful email sign-in', async () => {
+  // Cloud auth is gated by FEATURES.auth — signInWithEmail throws in v1
+  const itCloudAuth = FEATURES.auth ? it : it.skip;
+
+  itCloudAuth('writes session to secure store after successful email sign-in', async () => {
     const session = makeSession();
 
     mockSignInWithPassword.mockResolvedValue({

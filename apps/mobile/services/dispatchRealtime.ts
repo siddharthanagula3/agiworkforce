@@ -17,6 +17,7 @@ import { useDesktopStatusStore } from '@/stores/desktopStatusStore';
 import type { DispatchMessage, TaskStatus, TaskResult } from '@/stores/dispatchStore';
 import type { Agent } from '@/stores/agentStore';
 import type { ApprovalRequest } from '@/types/chat';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 let messagesChannel: RealtimeChannel | null = null;
 let agentStateChannel: RealtimeChannel | null = null;
@@ -44,6 +45,7 @@ function mapDispatchMessageRow(row: Record<string, unknown>): DispatchMessage {
  * @returns Cleanup function that removes all channels.
  */
 export async function subscribeToDispatch(): Promise<() => void> {
+  if (!FEATURES.dispatch) return () => {};
   // Clean up any existing channels to prevent duplicate subscriptions
   unsubscribeFromDispatch();
 

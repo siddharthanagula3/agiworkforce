@@ -410,6 +410,31 @@ export default [
             'Hardcoded model ID detected. Read from models.json via packages/types model-catalog helpers (getDefaultModelFor, resolveAutoModeModel, getRoutingSlotModel) — NEVER inline a literal. See CLAUDE.md "Critical rules". To opt out (tests, marketing copy), add `// eslint-disable-next-line no-restricted-syntax` with a `// FIXME: P1-XX` if migration is pending.',
         },
         {
+          // Deprecated-alias gate — PRD V5 lock #24, urgent action 2026-05-17.
+          //
+          // These IDs are EOL on a known cutoff date and must NEVER be inlined
+          // outside `models.json` (where they live ONLY as canonicalization
+          // alias keys for transitional legacy-ID resolution):
+          //   - `kimi-k2-*` family: dies 2026-05-25 (Moonshot deprecation).
+          //   - `deepseek-chat`: superseded by `deepseek-v4-flash`.
+          //   - `deepseek-reasoner`: superseded by `deepseek-v4-pro`.
+          //
+          // The regex anchors on `^` so legitimate substrings (e.g. inside a
+          // URL or comment) inside string literals are not flagged. The exact
+          // family-suffix `kimi-k2-` (with a trailing `-`) is required so the
+          // *current* model `kimi-k2.6` (note the `.`, not `-`) is NOT caught.
+          //
+          // Resolution: import `@agiworkforce/types` and use:
+          //   - `kimi-k2.6` for any Kimi K2 routing.
+          //   - `deepseek-v4-flash` for budget/fast lanes.
+          //   - `deepseek-v4-pro` for premium/reasoning lanes (with auto-
+          //     reroute to `deepseek-v4-flash` post `2026-05-31T15:59:00Z`
+          //     via `resolveThreeTierModel()` from `@agiworkforce/routing`).
+          selector: 'Literal[value=/^(kimi-k2-[^.]|deepseek-chat$|deepseek-reasoner$)/]',
+          message:
+            'Deprecated model alias literal detected (kimi-k2-*, deepseek-chat, or deepseek-reasoner). These IDs are EOL — kimi-k2-* family dies 2026-05-25; deepseek-chat/reasoner are superseded. Read from packages/types/src/models.json via @agiworkforce/types or use resolveThreeTierModel() from @agiworkforce/routing for promo-aware auto-reroute. See packages/routing/src/three-tier-router.ts.',
+        },
+        {
           // Service-role-key Supabase clients outside `lib/supabase*.ts`.
           // Matches any reference to the env var inside a `createClient(`
           // call subtree — covers `process.env.SUPABASE_SERVICE_ROLE_KEY`
@@ -500,6 +525,23 @@ export default [
         process: 'readonly',
         console: 'readonly',
         Buffer: 'readonly',
+      },
+    },
+  },
+
+  // Expo config plugins (CommonJS Node.js scripts loaded via require() by expo prebuild)
+  {
+    files: ['apps/mobile/native/**/*.cjs', 'apps/mobile/lib/polyfills/**/*.cjs'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: {
+        require: 'readonly',
+        module: 'readonly',
+        exports: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        process: 'readonly',
+        console: 'readonly',
       },
     },
   },
@@ -751,6 +793,13 @@ export default [
       'packages/providers/google/src/catalog.ts',
       'packages/routing/src/classify.ts',
       'packages/api/src/memoryImport.ts',
+
+      // The three-tier router INTENTIONALLY inlines catalog IDs in its
+      // POLICY tables — those literals ARE the routing decision and have
+      // to be readable at a glance. Reading them through the catalog
+      // helpers at the call site would defeat the deterministic-routing
+      // property the router promises. Locked: do not migrate.
+      'packages/routing/src/three-tier-router.ts',
 
       // Services — api-gateway routes.
       // FIXME: P1-MODEL-CATALOG-MIGRATION (Wave 1 P0-G/I)

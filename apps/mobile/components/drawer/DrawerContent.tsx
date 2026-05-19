@@ -10,6 +10,10 @@ import {
   Link,
   Settings,
   Plus,
+  Brain,
+  Key,
+  Info,
+  User,
   type LucideIcon,
 } from 'lucide-react-native';
 import { type DrawerContentComponentProps } from '@react-navigation/drawer';
@@ -18,31 +22,72 @@ import { DesktopCompanionWidget } from '@/components/shared/DesktopCompanionWidg
 import { useChatStore } from '@/stores/chatStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeColors } from '@/hooks/useTheme';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
-/**
- * 6 primary navigation items for the drawer.
- * Each maps to a top-level route inside (app).
- */
-const NAV_ITEMS: {
+// Chat-first primary nav items
+const CHAT_NAV_ITEMS: {
   key: string;
   label: string;
   icon: LucideIcon;
   route: string;
+  show: boolean;
 }[] = [
-  { key: 'chat', label: 'Chat', icon: MessageSquare, route: '/(app)/(tabs)/chat' },
-  { key: 'skills', label: 'Skills', icon: Zap, route: '/(app)/skills' },
-  { key: 'projects', label: 'Projects', icon: FolderOpen, route: '/(app)/(tabs)/projects' },
-  { key: 'dispatch', label: 'Dispatch', icon: Monitor, route: '/(app)/dispatch' },
-  { key: 'connectors', label: 'Connectors', icon: Link, route: '/(app)/connectors' },
-  { key: 'settings', label: 'Settings', icon: Settings, route: '/(app)/(tabs)/settings' },
-];
+  { key: 'chat', label: 'Chat', icon: MessageSquare, route: '/(app)/(tabs)/chat', show: true },
+  { key: 'skills', label: 'Skills', icon: Zap, route: '/(app)/skills', show: true },
+  {
+    key: 'projects',
+    label: 'Projects',
+    icon: FolderOpen,
+    route: '/(app)/(tabs)/projects',
+    // FOUNDER DECISION 2026-05-18: Projects ships in v1.
+    show: FEATURES.projects,
+  },
+  {
+    key: 'dispatch',
+    label: 'Dispatch',
+    icon: Monitor,
+    route: '/(app)/dispatch',
+    show: FEATURES.dispatch,
+  },
+  {
+    key: 'connectors',
+    label: 'Connectors',
+    icon: Link,
+    route: '/(app)/connectors',
+    show: FEATURES.connectorsCloudOnly,
+  },
+].filter((item) => item.show);
+
+// Utility strip: Models · Keys · Memory · Account · Settings · About
+const UTILITY_ITEMS: {
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  route: string;
+  show: boolean;
+}[] = [
+  { key: 'models', label: 'Models', icon: Brain, route: '/(app)/models', show: true },
+  { key: 'keys', label: 'Keys', icon: Key, route: '/(app)/keys', show: true },
+  { key: 'memory', label: 'Memory', icon: Brain, route: '/(app)/settings/memory', show: true },
+  { key: 'account', label: 'Account', icon: User, route: '/(app)/account', show: FEATURES.auth },
+  {
+    key: 'settings',
+    label: 'Settings',
+    icon: Settings,
+    route: '/(app)/(tabs)/settings',
+    show: true,
+  },
+  { key: 'about', label: 'About', icon: Info, route: '/(app)/about', show: true },
+].filter((item) => item.show);
 
 /**
  * Custom drawer content for the mobile app.
  *
  * Layout:
  *   Header: brand wordmark + [+] new chat button
- *   Nav items (6)
+ *   Primary nav (5 items: Chat / Skills / Projects / Dispatch / Connectors)
+ *   Desktop companion widget
+ *   Utility strip (6 items: Models / Keys / Memory / Account / Settings / About)
  *   Recents section (last 5 conversations)
  *   User profile card at bottom
  */
@@ -61,7 +106,6 @@ export function DrawerContent(_props: DrawerContentComponentProps) {
       const id = await createConversation('New Chat');
       router.push({ pathname: '/(app)/chat/[id]' as const, params: { id } });
     } catch {
-      // Navigate to chat list on failure
       router.push({ pathname: '/(app)/(tabs)/chat' as const });
     }
   }, [createConversation, router]);
@@ -80,9 +124,6 @@ export function DrawerContent(_props: DrawerContentComponentProps) {
     [router],
   );
 
-  /**
-   * Determine if a nav item is active based on the current pathname.
-   */
   const isActive = useCallback(
     (key: string) => {
       const p = pathname.startsWith('/') ? pathname : `/${pathname}`;
@@ -97,8 +138,18 @@ export function DrawerContent(_props: DrawerContentComponentProps) {
           return p === '/dispatch' || p.startsWith('/dispatch/');
         case 'connectors':
           return p === '/connectors' || p.startsWith('/connectors/');
+        case 'models':
+          return p === '/models' || p.startsWith('/models/');
+        case 'keys':
+          return p === '/keys' || p.startsWith('/keys/');
+        case 'memory':
+          return p === '/settings/memory';
+        case 'account':
+          return p === '/account' || p.startsWith('/account/');
         case 'settings':
           return p === '/settings' || p === '/(tabs)/settings' || p.startsWith('/settings/');
+        case 'about':
+          return p === '/about';
         default:
           return false;
       }
@@ -139,9 +190,9 @@ export function DrawerContent(_props: DrawerContentComponentProps) {
         </Pressable>
       </View>
 
-      {/* Navigation items */}
+      {/* Primary navigation items */}
       <View className="px-2 pt-3 gap-0.5">
-        {NAV_ITEMS.map((item) => {
+        {CHAT_NAV_ITEMS.map((item) => {
           const active = isActive(item.key);
           const Icon = item.icon;
           return (
@@ -183,9 +234,45 @@ export function DrawerContent(_props: DrawerContentComponentProps) {
         <DesktopCompanionWidget compact />
       </View>
 
+      {/* Utility strip: Models · Keys · Memory · Account · Settings · About */}
+      <View className="px-2 pt-1.5">
+        <View className="mx-1 mb-1.5" style={{ height: 1, backgroundColor: colors.border }} />
+        {UTILITY_ITEMS.map((item) => {
+          const active = isActive(item.key);
+          const Icon = item.icon;
+          return (
+            <Pressable
+              key={item.key}
+              onPress={() => handleNavPress(item.route)}
+              className="flex-row items-center gap-3 px-3 rounded-lg"
+              style={{
+                height: 36,
+                backgroundColor: active ? colors.surfaceHover : 'transparent',
+              }}
+              accessibilityLabel={item.label}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+            >
+              <Icon size={16} strokeWidth={1.75} color={active ? colors.teal : colors.textMuted} />
+              <Text
+                numberOfLines={1}
+                style={{
+                  fontSize: 13,
+                  fontWeight: active ? '500' : '400',
+                  color: active ? colors.textPrimary : colors.textSecondary,
+                  flex: 1,
+                }}
+              >
+                {item.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
       {/* Recents section */}
       {recentConversations.length > 0 && (
-        <View className="px-4 pt-5 flex-1">
+        <View className="px-4 pt-4 flex-1">
           <Text
             className="text-[11px] font-semibold uppercase tracking-wider mb-2"
             style={{ color: colors.textMuted }}

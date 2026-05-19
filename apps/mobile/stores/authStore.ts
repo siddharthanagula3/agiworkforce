@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { secureStorage } from '@/lib/secureStorage';
 import { supabase } from '@/services/supabase';
 import type { Session, User } from '@supabase/supabase-js';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 interface AuthState {
   session: Session | null;
@@ -60,6 +61,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       signInWithEmail: async (email, password) => {
+        if (!FEATURES.auth) throw new Error('auth: cloud auth not available in v1');
         set({ isLoading: true });
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
