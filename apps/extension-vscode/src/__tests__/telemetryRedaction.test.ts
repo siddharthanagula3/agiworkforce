@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { redactSecrets } from '../services/telemetry';
+import { redactSecrets } from '../core/telemetry';
 
 describe('redactSecrets', () => {
   it('returns input unchanged when no secret matches', () => {
@@ -49,7 +49,9 @@ describe('redactSecrets', () => {
   });
 
   it('redacts Stripe / live/test keys', () => {
-    expect(redactSecrets('STRIPE=sk_live_TELEMETRY_TEST_FIXTURE_REDACTED')).toBe('STRIPE=[REDACTED]');
+    expect(redactSecrets('STRIPE=sk_live_TELEMETRY_TEST_FIXTURE_REDACTED')).toBe(
+      'STRIPE=[REDACTED]',
+    );
     expect(redactSecrets('STRIPE=sk_test_abcdefghijklmnop')).toBe('STRIPE=[REDACTED]');
   });
 

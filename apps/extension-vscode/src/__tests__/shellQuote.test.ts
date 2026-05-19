@@ -7,7 +7,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { shellQuoteForCurrentPlatform } from '../utils/workspaceFolders';
+import { shellQuoteForCurrentPlatform } from '../platform/workspaceFolders';
 
 describe('shellQuoteForCurrentPlatform', () => {
   let originalPlatform: NodeJS.Platform;

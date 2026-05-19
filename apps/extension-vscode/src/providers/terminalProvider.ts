@@ -12,7 +12,10 @@
 
 import * as vscode from 'vscode';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
-import { getActiveWorkspaceFolderSync, getWorkspaceDisplayName } from '../utils/workspaceFolders';
+import {
+  getActiveWorkspaceFolderSync,
+  getWorkspaceDisplayName,
+} from '../platform/workspaceFolders';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 

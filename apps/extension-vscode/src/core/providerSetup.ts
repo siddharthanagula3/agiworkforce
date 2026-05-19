@@ -1,14 +1,14 @@
 import * as vscode from 'vscode';
 import { AgiCodeActionProvider, CODE_ACTION_KINDS } from '../providers/codeActionProvider';
-import { AgiHoverProvider } from '../providers/hoverProvider';
-import { AgiInlineCompletionProvider } from '../providers/inlineCompletionProvider';
-import { AgiCodeLensProvider } from '../providers/codeLensProvider';
+import { AgiHoverProvider } from '../features/hover';
+import { AgiInlineCompletionProvider } from '../features/inline-completions';
+import { AgiCodeLensProvider } from '../features/code-lens';
 import { AgiDiagnosticsProvider } from '../providers/diagnosticsProvider';
 import { DiffDecorationProvider } from '../providers/diffDecorationProvider';
-import { activateTokenCounter } from '../services/tokenCounter';
+import { activateTokenCounter } from '../data/tokenCounter';
 import { activateTerminal } from '../providers/terminalProvider';
 import { activateErrorExplainer } from '../providers/errorExplainerProvider';
-import { Config } from '../utils/config';
+import { Config } from '../platform/config';
 
 export interface ProviderState {
   diffDecorationProvider: DiffDecorationProvider;

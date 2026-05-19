@@ -17,12 +17,12 @@ import { getWebviewContent, getNonce } from './sidebar/webviewContent';
 import { parseWebviewMessage } from '../protocol/webviewMessages';
 
 // Re-export for chatEditorPanel.ts (imported from ./sidebarProvider)
-export { getWebviewContent, getNonce, escapeHtml } from './sidebar/webviewContent';
+export { getWebviewContent, getNonce, escapeHtml } from './webviewContent';
 export type {
   WebviewToExtMessage,
   ExtToWebviewMessage,
   UsageMeterWebviewPayload,
-} from './sidebar/ChatStateManager';
+} from './ChatStateManager';
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
