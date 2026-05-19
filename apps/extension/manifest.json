@@ -20,8 +20,9 @@
   ],
   "_host_permissions_note": "Broad localhost/* is intentional: the bridge port is user-configurable via chrome.storage.local agi_bridge_url (default 8787, matches VS Code extension and desktop bridge). Restricting to a fixed port would break configurability. Runtime enforcement: validateBridgeUrl() in background.ts rejects any non-local URL.",
   "host_permissions": ["http://localhost/*", "http://127.0.0.1/*"],
+  "_content_security_policy_note": "M-08 FULL (audit 2026-05-19). style-src 'unsafe-inline' DROPPED. popup.html and side_panel.html now load styles via <link rel='stylesheet'> (popup.css, side_panel.css). side_panel.ts:injectStyles uses Constructable Stylesheets (`new CSSStyleSheet().replaceSync()` + `document.adoptedStyleSheets`) which is a DOM API, not CSS-source delivery, so it bypasses style-src. Combined hardening: default-src 'self' caps to extension origin; img-src adds data: for attachment previews; connect-src enumerates bridge + agiworkforce.com + supabase.co; base-uri 'self' blocks <base> hijack; form-action 'self' blocks form submission to attacker origins; frame-ancestors 'none' blocks clickjacking. Content scripts on web pages are governed by the page's CSP, not this one, so the shadow-DOM <style> elements in content.ts are unaffected.",
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'"
+    "extension_pages": "default-src 'self'; script-src 'self'; object-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' http://localhost:* http://127.0.0.1:* https://api.agiworkforce.com https://*.agiworkforce.com https://*.supabase.co; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
   },
   "background": {
     "service_worker": "src/background.js",

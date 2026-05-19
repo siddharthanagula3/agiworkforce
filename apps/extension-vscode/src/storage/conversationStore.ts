@@ -6,6 +6,7 @@
  */
 
 import * as vscode from 'vscode';
+import { randomBytes } from 'crypto';
 
 export interface StoredMessage {
   role: 'user' | 'assistant' | 'system';
@@ -68,7 +69,10 @@ export class ConversationStore {
   create(title: string, model: string): StoredConversation {
     const now = Date.now();
     const conversation: StoredConversation = {
-      id: now.toString(36) + Math.random().toString(36).slice(2),
+      // PR-5A (F-20): crypto-strong conversation ID. Avoid Math.random
+      // collisions and make IDs unpredictable to webview / postMessage
+      // attackers.
+      id: now.toString(36) + '-' + randomBytes(8).toString('base64url'),
       title,
       messages: [],
       model,

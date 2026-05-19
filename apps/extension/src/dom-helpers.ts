@@ -45,3 +45,31 @@ export function createElementWith(opts: CreateElementOptions): HTMLElement {
 export function setChild(parent: Element, opts: CreateElementOptions): void {
   parent.replaceChildren(createElementWith(opts));
 }
+
+/**
+ * Parse a static SVG string with `DOMParser` and append the root element to
+ * `parent`. Use this in place of `parent.innerHTML = svgString` so the
+ * HTML parser is never invoked.
+ *
+ * L-11 audit 2026-05-19: the SVG strings in this codebase are all static
+ * literals (the AGI logo, the empty-state icon, Lucide icons in
+ * `assets/icons.ts`). Switching to DOMParser is defense-in-depth — any
+ * future refactor that accidentally passes attacker-controlled SVG
+ * through gets a parser path that can't produce <script> execution.
+ */
+const _svgParser: DOMParser | null = typeof DOMParser !== 'undefined' ? new DOMParser() : null;
+
+export function appendSvgString(parent: Element, svgString: string): void {
+  if (!_svgParser) {
+    return; // No DOMParser in this environment — skip rather than fall back to innerHTML.
+  }
+  try {
+    const doc = _svgParser.parseFromString(svgString, 'image/svg+xml');
+    const root = doc.documentElement;
+    if (root.nodeName.toLowerCase() === 'svg') {
+      parent.appendChild(document.importNode(root, true));
+    }
+  } catch {
+    // Malformed SVG — render nothing rather than fall back to innerHTML.
+  }
+}

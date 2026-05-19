@@ -9,40 +9,37 @@
 
 import { describe, expect, it } from 'vitest';
 
-// ─── C-1: validateGatewayUrl — mirrors background.ts ─────────────────────────
+// ─── C-1 + M-02: validateGatewayUrl — imported from production (no mirror) ──
+//
+// M-02 (audit 2026-05-19): the previous logic accepted any
+// `*.agiworkforce.com` subdomain. Replaced with an EXACT-match allowlist
+// so a delegated subdomain (e.g. a Vercel preview, an old marketing
+// hostname) cannot become a JWT-receiving endpoint. Tests now import
+// from the production policy module — no mirror.
 
-const GATEWAY_URL_ALLOWLIST_EXACT = new Set<string>(['https://api.agiworkforce.com']);
-const GATEWAY_URL_SUBDOMAIN_SUFFIX = '.agiworkforce.com';
+import { validateGatewayUrl } from '../src/background/policy';
 
-function validateGatewayUrl(raw: string): string | null {
-  if (!raw) return null;
-  try {
-    const parsed = new URL(raw);
-    if (parsed.protocol !== 'https:') return null;
-    const origin = `https://${parsed.host}`;
-    if (GATEWAY_URL_ALLOWLIST_EXACT.has(origin)) return origin;
-    if (parsed.hostname.endsWith(GATEWAY_URL_SUBDOMAIN_SUFFIX)) return origin;
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-describe('C-1 validateGatewayUrl — allowlist enforcement', () => {
+describe('C-1 + M-02 validateGatewayUrl — exact-match allowlist', () => {
   it('accepts the canonical production gateway', () => {
     expect(validateGatewayUrl('https://api.agiworkforce.com')).toBe('https://api.agiworkforce.com');
   });
 
-  it('accepts a valid agiworkforce.com subdomain', () => {
+  it('accepts the allowlisted gateway subdomain (exact match)', () => {
     expect(validateGatewayUrl('https://gateway.agiworkforce.com')).toBe(
       'https://gateway.agiworkforce.com',
     );
   });
 
-  it('accepts a staging subdomain', () => {
+  it('accepts the allowlisted staging subdomain (exact match)', () => {
     expect(validateGatewayUrl('https://staging-api.agiworkforce.com')).toBe(
       'https://staging-api.agiworkforce.com',
     );
+  });
+
+  it('REJECTS any other agiworkforce.com subdomain (M-02 tightening)', () => {
+    // Previously the open subdomain rule would accept this; now it's rejected.
+    expect(validateGatewayUrl('https://random-marketing.agiworkforce.com')).toBeNull();
+    expect(validateGatewayUrl('https://preview-pr-42.agiworkforce.com')).toBeNull();
   });
 
   it('rejects an attacker-controlled https URL', () => {
@@ -54,7 +51,6 @@ describe('C-1 validateGatewayUrl — allowlist enforcement', () => {
   });
 
   it('rejects a domain that has agiworkforce.com as a suffix but different TLD base', () => {
-    // e.g. evilagiworkforce.com should not match .agiworkforce.com suffix
     expect(validateGatewayUrl('https://evilagiworkforce.com')).toBeNull();
   });
 
@@ -75,7 +71,6 @@ describe('C-1 validateGatewayUrl — allowlist enforcement', () => {
   });
 
   it('strips path from returned origin', () => {
-    // The validator should return just the origin, not with path
     const result = validateGatewayUrl('https://api.agiworkforce.com/some/path');
     expect(result).toBe('https://api.agiworkforce.com');
   });
@@ -249,10 +244,21 @@ function encodeText(text: string): string {
     .replace(/'/g, '&#39;');
 }
 
+function encodeHref(url: string): string {
+  // Mirrors the percent-encode step added to renderMarkdown in side_panel/markdown.ts
+  // for C-04 (audit 2026-05-19).
+  return url
+    .replace(/"/g, '%22')
+    .replace(/'/g, '%27')
+    .replace(/</g, '%3C')
+    .replace(/>/g, '%3E');
+}
+
 function renderLinkMarkdown(text: string, url: string): string {
   const safeUrl = /^https?:\/\//i.test(url.trim()) ? url : '#';
+  const encodedHref = encodeHref(safeUrl);
   const encodedText = encodeText(text);
-  return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${encodedText}</a>`;
+  return `<a href="${encodedHref}" target="_blank" rel="noopener noreferrer">${encodedText}</a>`;
 }
 
 describe('M-1 renderMarkdown link text entity-encoding', () => {
@@ -305,6 +311,56 @@ describe('M-1 renderMarkdown link text entity-encoding', () => {
   it('preserves https URL in href', () => {
     const result = renderLinkMarkdown('link', 'https://api.agiworkforce.com');
     expect(result).toContain('href="https://api.agiworkforce.com"');
+  });
+});
+
+// ─── C-04: renderMarkdown URL href is percent-encoded ────────────────────────
+//
+// Defense-in-depth for the case where a future refactor weakens or removes
+// DOMPurify. The prior M-1 fix encoded link TEXT; this extends to the URL so
+// attribute-injection (e.g. `[click](https://e.com" onerror="alert(1))`) cannot
+// land even without sanitization downstream.
+
+describe('C-04 renderMarkdown href percent-encoding', () => {
+  it('percent-encodes a double quote in the URL', () => {
+    const result = renderLinkMarkdown('click', 'https://example.com/"');
+    expect(result).toContain('href="https://example.com/%22"');
+    // No raw quote inside the href attribute — would break out of the attr.
+    expect(result).not.toContain('href="https://example.com/"" ');
+  });
+
+  it('percent-encodes a single quote in the URL', () => {
+    const result = renderLinkMarkdown('click', "https://example.com/'");
+    expect(result).toContain('href="https://example.com/%27"');
+  });
+
+  it('percent-encodes < and > in the URL', () => {
+    const result = renderLinkMarkdown('click', 'https://example.com/<script>');
+    expect(result).toContain('href="https://example.com/%3Cscript%3E"');
+  });
+
+  it('blocks attribute-injection attempt via crafted URL', () => {
+    const hostile = 'https://e.com" onerror="alert(1)';
+    const result = renderLinkMarkdown('click', hostile);
+    // The closing quote is percent-encoded; the rest stays literal but
+    // can no longer escape the href attribute because no raw `"` remains
+    // until the parser-controlled closing quote.
+    expect(result).toContain('href="https://e.com%22 onerror=%22alert(1)"');
+    // No raw `"` appears in the URL value — the browser parser keeps the
+    // whole string as href content until the real closing quote.
+    const innerHref = result.match(/href="([^"]*)"/)?.[1] ?? '';
+    expect(innerHref).toBe('https://e.com%22 onerror=%22alert(1)');
+    expect(innerHref).not.toContain('"');
+  });
+
+  it('leaves a plain URL unchanged', () => {
+    const result = renderLinkMarkdown('click', 'https://example.com/path?q=1');
+    expect(result).toContain('href="https://example.com/path?q=1"');
+  });
+
+  it('still routes javascript: scheme to # via the existing http(s) gate', () => {
+    const result = renderLinkMarkdown('click', 'javascript:alert(1)');
+    expect(result).toContain('href="#"');
   });
 });
 
@@ -484,6 +540,126 @@ describe('CHROME-HIGH-3 handleChatMessage refuses apiKey from message body', () 
   });
 });
 
+// ─── H-10: side panel send-side check ───────────────────────────────────────
+//
+// Symmetric to CHROME-HIGH-3: the receive side stopped destructuring
+// `apiKey` in background.handleChatMessage. The send side (side_panel.ts)
+// was still attaching `apiKey: _ctx.currentApiKey` to every CHAT_MESSAGE
+// payload. Dead weight that a future maintainer might "fix" by re-enabling
+// the destructure on the receive side. Static-AST grep ensures both stay
+// in sync.
+
+describe('H-10 side panel does not send apiKey on CHAT_MESSAGE', () => {
+  const sidePanelSource = readFileSync(join(__dirname, '..', 'src', 'side_panel.ts'), 'utf8');
+
+  it('CHAT_MESSAGE send sites do not include an apiKey: field', () => {
+    // Find every CHAT_MESSAGE send block, then strip JS line + block
+    // comments so we're only asserting against real code (the SECURITY
+    // explanation comment mentions `apiKey:` legitimately).
+    const chatMessageBlocks = sidePanelSource.match(
+      /type:\s*'CHAT_MESSAGE'[\s\S]*?\}\s*,\s*\(\s*\)\s*=>/g,
+    );
+    expect(chatMessageBlocks?.length).toBeGreaterThan(0);
+    for (const block of chatMessageBlocks ?? []) {
+      const codeOnly = block
+        .replace(/\/\*[\s\S]*?\*\//g, '') // strip /* … */
+        .replace(/\/\/.*$/gm, ''); // strip // …
+      expect(codeOnly).not.toMatch(/\bapiKey\s*:/);
+    }
+  });
+});
+
+// ─── H-07: pairing token shape validation ───────────────────────────────────
+
+describe('H-07 pairing token shape', () => {
+  const PAIRING_TOKEN_RE = /^[A-Za-z0-9_-]{32,128}$/;
+  const PAIRING_FINGERPRINT_RE = /^[A-Za-z0-9_-]{4,32}$/;
+
+  it('accepts a 32-char base64url token', () => {
+    expect(PAIRING_TOKEN_RE.test('a'.repeat(32))).toBe(true);
+    expect(PAIRING_TOKEN_RE.test('Abc_-' + 'x'.repeat(27))).toBe(true);
+  });
+
+  it('accepts a 128-char token (upper boundary)', () => {
+    expect(PAIRING_TOKEN_RE.test('a'.repeat(128))).toBe(true);
+  });
+
+  it('rejects a 31-char token (just below lower bound)', () => {
+    expect(PAIRING_TOKEN_RE.test('a'.repeat(31))).toBe(false);
+  });
+
+  it('rejects a 129-char token (just above upper bound)', () => {
+    expect(PAIRING_TOKEN_RE.test('a'.repeat(129))).toBe(false);
+  });
+
+  it('rejects a multi-MB token', () => {
+    expect(PAIRING_TOKEN_RE.test('a'.repeat(10_000_000))).toBe(false);
+  });
+
+  it('rejects tokens containing whitespace', () => {
+    expect(PAIRING_TOKEN_RE.test('a'.repeat(40) + ' ')).toBe(false);
+    expect(PAIRING_TOKEN_RE.test('a'.repeat(40) + '\n')).toBe(false);
+  });
+
+  it('rejects tokens containing dangerous chars', () => {
+    expect(PAIRING_TOKEN_RE.test('a'.repeat(31) + '/')).toBe(false);
+    expect(PAIRING_TOKEN_RE.test('a'.repeat(31) + '<')).toBe(false);
+    expect(PAIRING_TOKEN_RE.test('a'.repeat(31) + ';')).toBe(false);
+  });
+
+  it('rejects an empty string', () => {
+    expect(PAIRING_TOKEN_RE.test('')).toBe(false);
+  });
+
+  it('fingerprint accepts 4-32 char URL-safe values', () => {
+    expect(PAIRING_FINGERPRINT_RE.test('ab12')).toBe(true);
+    expect(PAIRING_FINGERPRINT_RE.test('a'.repeat(32))).toBe(true);
+  });
+
+  it('fingerprint rejects values under 4 chars', () => {
+    expect(PAIRING_FINGERPRINT_RE.test('abc')).toBe(false);
+  });
+});
+
+// ─── H-01: NLWEB_PROBE same-origin enforcement (logic mirror) ───────────────
+//
+// The same-origin check lives inside the NLWEB_PROBE switch arm in
+// background.ts. Mirror the logic here for fast unit testing; the full
+// integration path is exercised by the existing nlweb-related tests.
+
+describe('H-01 NLWEB_PROBE same-origin enforcement', () => {
+  function isSameOrigin(senderUrl: string, probeUrl: string): boolean {
+    try {
+      return new URL(probeUrl).origin === new URL(senderUrl).origin;
+    } catch {
+      return false;
+    }
+  }
+
+  it('allows same-origin probes', () => {
+    expect(isSameOrigin('https://example.com/a', 'https://example.com/.well-known/nlweb')).toBe(
+      true,
+    );
+  });
+
+  it('rejects cross-origin probes', () => {
+    expect(isSameOrigin('https://example.com/a', 'https://internal.corp.example.com')).toBe(false);
+    expect(isSameOrigin('https://example.com/a', 'https://attacker.example.com')).toBe(false);
+  });
+
+  it('rejects probes on a different scheme', () => {
+    expect(isSameOrigin('https://example.com/a', 'http://example.com/x')).toBe(false);
+  });
+
+  it('rejects probes on a different port', () => {
+    expect(isSameOrigin('https://example.com/a', 'https://example.com:8443/x')).toBe(false);
+  });
+
+  it('rejects malformed probe URLs', () => {
+    expect(isSameOrigin('https://example.com/a', 'not-a-url')).toBe(false);
+  });
+});
+
 // ─── CHROME-NEW-007: scheduled task prompt truncation ────────────────────────
 
 const TASK_PROMPT_MAX_CHARS = 10_000;
@@ -586,37 +762,30 @@ describe('CHROME-MED-5 WebMCP tool-name validation', () => {
   });
 });
 
-// ─── CHROME-SUB-5: console buffering gated by allowlist ──────────────────────
+// ─── M-13: console-patch removed entirely (audit 2026-05-19) ────────────────
 //
-// Static-analysis test: the production source must invoke `patchConsole`
-// only via `patchConsoleIfAllowlisted`, never unconditionally. Mirrors the
-// pattern already used in the CHROME-HIGH-3 test.
+// CHROME-SUB-5 previously required the patch to be gated by allowlist; we now
+// reject the entire approach. Page-script console interception is a fingerprint
+// and an interference risk. If console-log capture is ever needed, the
+// chrome.debugger API gives a per-tab, user-opt-in path with no monkey-patch.
 
-describe('CHROME-SUB-5 console buffering gated by user allowlist', () => {
+describe('M-13 console-patch removed', () => {
   const contentSource = readFileSync(join(__dirname, '..', 'src', 'content.ts'), 'utf8');
 
-  it('initialize() does NOT call patchConsole() unconditionally', () => {
-    // The bad pattern: a bare `patchConsole();` call inside the try { ... }
-    // block in initialize(). The good pattern: `patchConsoleIfAllowlisted()`.
-    // We accept any whitespace and newlines around the bare call.
-    expect(contentSource).not.toMatch(/\n\s*try\s*\{\s*patchConsole\(\)\s*;/);
+  it('content.ts does NOT define a patchConsole function', () => {
+    expect(contentSource).not.toMatch(/function patchConsole\s*\(/);
   });
 
-  it('initialize() routes through the allowlist-gated wrapper', () => {
-    expect(contentSource).toMatch(/patchConsoleIfAllowlisted\(\)/);
+  it('content.ts does NOT define a patchConsoleIfAllowlisted function', () => {
+    expect(contentSource).not.toMatch(/function patchConsoleIfAllowlisted\s*\(/);
   });
 
-  it('patchConsoleIfAllowlisted reads agi_site_allowlist from chrome.storage.local', () => {
-    expect(contentSource).toMatch(
-      /async function patchConsoleIfAllowlisted[\s\S]*chrome\.storage\.local\.get\('agi_site_allowlist'/,
-    );
+  it('initialize() does not call any patchConsole variant', () => {
+    expect(contentSource).not.toMatch(/patchConsole\w*\(\)/);
   });
 
-  it('patchConsoleIfAllowlisted compares window.location.origin against the allowlist set', () => {
-    const fnIdx = contentSource.indexOf('async function patchConsoleIfAllowlisted');
-    const slice = contentSource.slice(fnIdx, fnIdx + 1500);
-    expect(slice).toContain('window.location.origin');
-    expect(slice).toMatch(/allowlist\.has\(/);
+  it('does not assign to console.* methods', () => {
+    expect(contentSource).not.toMatch(/console\[level\]\s*=/);
   });
 });
 

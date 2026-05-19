@@ -53,6 +53,28 @@ export async function setupInPagePanel(logger?: {
     return;
   }
 
+  // SECURITY (M-14 audit 2026-05-19): only inject the FAB launcher on
+  // allowlisted origins. The launcher was previously injected on every
+  // http(s) page regardless of allowlist; clicking it on a non-allowlisted
+  // page got the user a confusing "site not on your allowlist" error from
+  // background.handleMessage. The launcher also acts as a fingerprint
+  // (the `data-agi-launcher` attribute) on every page the user visits.
+  let allowlist: Set<string>;
+  try {
+    const res = await chrome.storage.local.get('agi_site_allowlist');
+    const list = (res as Record<string, unknown>)['agi_site_allowlist'];
+    allowlist = new Set(Array.isArray(list) ? (list as string[]) : []);
+  } catch (err) {
+    logger?.debug('Could not read agi_site_allowlist for in-page panel gating', err);
+    return;
+  }
+  if (!allowlist.has(window.location.origin)) {
+    logger?.debug('in-page panel skipped — origin not on user allowlist', {
+      origin: window.location.origin,
+    });
+    return;
+  }
+
   // Feature flag check
   const enabled = await isPanelEnabled();
   if (!enabled) {

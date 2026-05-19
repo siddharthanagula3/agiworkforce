@@ -116,17 +116,28 @@ describe('loadPairingState', () => {
 
 describe('confirmPairing', () => {
   it('stores token in session storage and transitions to paired', async () => {
-    const state = await confirmPairing('secret-token', 'ab12');
+    // H-07 audit 2026-05-19: token must be 32-128 chars of [A-Za-z0-9_-];
+    // fingerprint must be 4-32 chars of the same charset.
+    const token = 'secret-token-' + 'a'.repeat(28);
+    const state = await confirmPairing(token, 'ab12');
     expect(state.phase).toBe('paired');
     expect(state.fingerprint).toBe('ab12');
-    expect(sessionStore['agi_bridge_token']).toBe('secret-token');
+    expect(sessionStore['agi_bridge_token']).toBe(token);
     expect(sessionStore['agi_pairing_fingerprint']).toBe('ab12');
   });
 
   it('derives fingerprint from first 4 chars when not provided', async () => {
-    const state = await confirmPairing('xyzw_rest_of_token');
+    // H-07: token must be 32-128 chars; first 4 chars become the fingerprint.
+    const token = 'xyzw' + 'a'.repeat(36);
+    const state = await confirmPairing(token);
     expect(state.phase).toBe('paired');
     expect(state.fingerprint).toBe('xyzw');
+  });
+
+  it('rejects a malformed token shape (H-07)', async () => {
+    const state = await confirmPairing('short');
+    expect(state.phase).toBe('error');
+    expect(state.error).toMatch(/invalid shape/i);
   });
 
   it('returns error for empty token', async () => {
@@ -157,9 +168,11 @@ describe('unpair', () => {
 
 describe('requestPairing — success path', () => {
   it('stores token + fingerprint and transitions to paired', async () => {
+    // H-07: bridge must emit a 32-128 char token from [A-Za-z0-9_-].
+    const validToken = 'bridge-tok-' + 'a'.repeat(30);
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ token: 'bridge-tok', fingerprint: 'br12' }),
+      json: async () => ({ token: validToken, fingerprint: 'br12' }),
       text: async () => '',
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -171,7 +184,7 @@ describe('requestPairing — success path', () => {
 
     expect(state.phase).toBe('paired');
     expect(state.fingerprint).toBe('br12');
-    expect(sessionStore['agi_bridge_token']).toBe('bridge-tok');
+    expect(sessionStore['agi_bridge_token']).toBe(validToken);
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/pair'),
       expect.objectContaining({ method: 'POST' }),
