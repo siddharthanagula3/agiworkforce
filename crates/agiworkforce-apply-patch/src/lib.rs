@@ -2,7 +2,7 @@ mod parser;
 
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use thiserror::Error;
 
@@ -51,13 +51,13 @@ pub fn apply_patch(patch: &ParsedPatch, root: &Path) -> Result<PatchApplyOutcome
     for hunk in &patch.hunks {
         match hunk {
             Hunk::AddFile { path, contents } => {
-                let abs = resolve(root, path);
+                let abs = resolve(root, path)?; // AUDIT-FIX: C-4
                 write_with_parent_mkdir(&abs, contents.as_bytes())
                     .map_err(|e| ApplyPatchError::io(&abs, e))?;
                 added.push(path.clone());
             }
             Hunk::DeleteFile { path } => {
-                let abs = resolve(root, path);
+                let abs = resolve(root, path)?; // AUDIT-FIX: C-4
                 let meta = fs::metadata(&abs).map_err(|e| ApplyPatchError::io(&abs, e))?;
                 if meta.is_dir() {
                     return Err(ApplyPatchError::Apply(format!(
@@ -73,11 +73,11 @@ pub fn apply_patch(patch: &ParsedPatch, root: &Path) -> Result<PatchApplyOutcome
                 move_path,
                 chunks,
             } => {
-                let abs = resolve(root, path);
+                let abs = resolve(root, path)?; // AUDIT-FIX: C-4
                 let new_contents = apply_chunks_to_file(&abs, chunks)?;
 
                 if let Some(dest) = move_path {
-                    let dest_abs = resolve(root, dest);
+                    let dest_abs = resolve(root, dest)?; // AUDIT-FIX: C-4
                     write_with_parent_mkdir(&dest_abs, new_contents.as_bytes())
                         .map_err(|e| ApplyPatchError::io(&dest_abs, e))?;
                     let meta = fs::metadata(&abs).map_err(|e| ApplyPatchError::io(&abs, e))?;
@@ -111,12 +111,56 @@ pub fn parse_and_apply(patch_text: &str, root: &Path) -> Result<PatchApplyOutcom
     apply_patch(&parsed, root)
 }
 
-fn resolve(root: &Path, path: &Path) -> PathBuf {
+fn resolve(root: &Path, path: &Path) -> Result<PathBuf, ApplyPatchError> {
+    // AUDIT-FIX: C-4 — reject absolute / parent-dir / prefix / root components and pin under root.
     if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        root.join(path)
+        return Err(ApplyPatchError::Apply(format!(
+            "Refusing absolute patch path: {}",
+            path.display()
+        )));
     }
+    for c in path.components() {
+        match c {
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+                return Err(ApplyPatchError::Apply(format!(
+                    "Refusing traversal in patch path: {}",
+                    path.display()
+                )));
+            }
+            _ => {}
+        }
+    }
+
+    let joined = root.join(path);
+    let canonical_root = match root.canonicalize() {
+        Ok(p) => p,
+        Err(_) => lexical_normalize(root),
+    };
+    let canonical_joined = match joined.canonicalize() {
+        Ok(p) => p,
+        Err(_) => lexical_normalize(&joined),
+    };
+    if !canonical_joined.starts_with(&canonical_root) {
+        return Err(ApplyPatchError::Apply(format!(
+            "Patch path escapes workspace root: {}",
+            path.display()
+        )));
+    }
+    Ok(canonical_joined)
+}
+
+fn lexical_normalize(p: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for c in p.components() {
+        match c {
+            Component::ParentDir => {
+                out.pop();
+            }
+            Component::CurDir => {}
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
 }
 
 fn write_with_parent_mkdir(path: &Path, contents: &[u8]) -> io::Result<()> {

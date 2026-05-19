@@ -302,7 +302,13 @@ pub(super) async fn execute_web_fetch(args: &HashMap<String, String>) -> Result<
         Ok(resp) => {
             let body = resp.text().await.unwrap_or_default();
             let text = strip_html_tags(&body);
-            let output = truncate_output_with_save("web_fetch", text);
+            let truncated = truncate_output_with_save("web_fetch", text);
+            // AUDIT-FIX: H-8 — flag network-sourced content so the model does not treat it as trusted instructions.
+            let safe_url = url.replace('"', "%22").replace('<', "%3C").replace('>', "%3E");
+            let output = format!(
+                "<web_fetch_result untrusted=\"true\" url=\"{}\">{}</web_fetch_result>",
+                safe_url, truncated
+            );
             Ok(ToolResult {
                 tool_name: "web_fetch".to_string(),
                 success: true,

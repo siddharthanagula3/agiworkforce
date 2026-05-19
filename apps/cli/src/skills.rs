@@ -86,7 +86,8 @@ pub fn discover_skills() -> Vec<Skill> {
     // Project-level skills: .agiworkforce/skills/
     if let Ok(cwd) = std::env::current_dir() {
         let project_dir = cwd.join(".agiworkforce").join("skills");
-        if project_dir.exists() {
+        // AUDIT-FIX: H-9 — gate auto-load behind explicit per-workspace consent file.
+        if project_dir.exists() && project_skills_consented(&project_dir) {
             load_skills_from_dir(&project_dir, &mut skills);
         }
     }
@@ -120,6 +121,49 @@ pub fn discover_skills() -> Vec<Skill> {
     }
 
     skills
+}
+
+// AUDIT-FIX: H-9 — consent gate for project skills. Returns true only if .consent matches the canonical dir.
+fn project_skills_consented(skills_dir: &Path) -> bool {
+    let consent_path = skills_dir.join(".consent");
+    let canonical = match skills_dir.canonicalize() {
+        Ok(p) => p,
+        Err(_) => skills_dir.to_path_buf(),
+    };
+    let canonical_str = canonical.to_string_lossy().to_string();
+
+    if let Ok(raw) = std::fs::read_to_string(&consent_path) {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
+            if v.get("consented_for_dir").and_then(|s| s.as_str()) == Some(&canonical_str) {
+                return true;
+            }
+        }
+    }
+
+    use std::io::IsTerminal;
+    if !std::io::stdin().is_terminal() {
+        return false;
+    }
+
+    let confirmed = dialoguer::Confirm::new()
+        .with_prompt(format!(
+            "Project skills detected at {}. Auto-load on every CLI run?",
+            skills_dir.display()
+        ))
+        .default(false)
+        .interact()
+        .unwrap_or(false);
+
+    if !confirmed {
+        return false;
+    }
+
+    let record = serde_json::json!({
+        "consented_for_dir": canonical_str,
+        "consented_at": chrono::Utc::now().to_rfc3339(),
+    });
+    let _ = std::fs::write(&consent_path, record.to_string());
+    true
 }
 
 /// Load SKILL.md files from a directory.
