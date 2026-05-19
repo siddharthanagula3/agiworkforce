@@ -386,30 +386,22 @@ function getRateLimiter(key: RateLimitKey): Ratelimit {
  *
  * Priority:
  * 1. Explicit identifier (e.g., validated user ID from handler)
- * 2. User ID extracted from JWT Bearer token (prevents IP rotation bypass)
- * 3. x-real-ip header (set by reverse proxies, harder to spoof)
- * 4. Rightmost IP from x-forwarded-for (Vercel appends real client IP at end)
- * 5. 'unknown' fallback
+ * 2. x-real-ip header (set by reverse proxies, harder to spoof)
+ * 3. Rightmost IP from x-forwarded-for (Vercel appends real client IP at end)
+ * 4. 'unknown' fallback
+ *
+ * SEV-WEB-09 / WEB-32 (audit 2026-05-19): the previous code base64-decoded
+ * the Bearer JWT payload (no signature verification) and used `sub` as the
+ * rate-limit bucket. An attacker could forge a JWT with `sub` = victim UUID,
+ * call any rate-limited route, and the victim's bucket would be incremented
+ * — even though JWT verification at the route handler rejected the request.
+ * That branch is removed. Routes that need user-keyed rate-limiting must
+ * pass the verified user.id explicitly via the `identifier` parameter (after
+ * `getAuthenticatedUser`); anonymous traffic falls through to IP-keyed.
  */
 function getRateLimitIdentifier(request: NextRequest, identifier?: string): string {
   if (identifier) {
     return identifier;
-  }
-
-  // H4: Extract user ID from JWT Bearer token for authenticated rate limiting.
-  // This prevents bypass via IP rotation - authenticated users are tracked by sub claim.
-  // We only base64-decode the payload (no cryptographic verification needed here;
-  // the route handler is responsible for full auth validation).
-  const authHeader = request.headers.get('authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    try {
-      const payload = JSON.parse(atob(authHeader.slice(7).split('.')[1]!));
-      if (payload.sub) {
-        return `user:${payload.sub}`;
-      }
-    } catch {
-      // Malformed token - fall through to IP-based limiting
-    }
   }
 
   // H3: Prefer x-real-ip (set by Vercel/reverse proxy, not client-controlled).

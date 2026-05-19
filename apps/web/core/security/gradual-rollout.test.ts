@@ -127,8 +127,51 @@ describe('Gradual Rollout System', () => {
     it('should use random chance when no userId provided', () => {
       updateRollout('api_abuse_prevention', { percentage: 50 });
 
-      // Without userId, result is random - just verify it doesn't throw
+      // WEB-22: anonymous fallback now fails closed (was Math.random()). The
+      // test name predates the fix; behavior asserted below is the post-fix
+      // contract.
       expect(() => isFeatureEnabled('api_abuse_prevention')).not.toThrow();
+    });
+
+    it('WEB-22 — returns false for anonymous traffic during partial rollout', () => {
+      // Pre-fix this used Math.random() which (a) gave a coin-flip-per-request
+      // security gate and (b) let an attacker just retry to escape.
+      updateRollout('api_abuse_prevention', { percentage: 50 });
+      // Run many times — must be deterministically false without a userId.
+      for (let i = 0; i < 100; i++) {
+        expect(isFeatureEnabled('api_abuse_prevention')).toBe(false);
+      }
+    });
+
+    it('WEB-22 — returns true at 100% even without a userId', () => {
+      // Confirm the fail-closed branch only fires when percentage < 100.
+      updateRollout('api_abuse_prevention', { percentage: 100 });
+      expect(isFeatureEnabled('api_abuse_prevention')).toBe(true);
+    });
+
+    it('WEB-22 — anonymous never escapes via repeated requests during 99% rollout', () => {
+      updateRollout('rate_limiting', { percentage: 99 });
+      // Pre-fix: ~1 in 100 requests would be "off" — letting an attacker
+      // retry until they got the unprotected branch. Now: deterministically
+      // off until the user has an identity to bucket on.
+      let onCount = 0;
+      for (let i = 0; i < 500; i++) {
+        if (isFeatureEnabled('rate_limiting')) onCount++;
+      }
+      expect(onCount).toBe(0);
+    });
+
+    it('WEB-22 — authed bucketing is unchanged (deterministic by user)', () => {
+      // The fix only touches the !userId branch; user-id bucketing must
+      // still be deterministic across calls.
+      updateRollout('html_sanitization', { percentage: 50 });
+      const a = isFeatureEnabled('html_sanitization', 'user-a');
+      const b = isFeatureEnabled('html_sanitization', 'user-b');
+      // Same user → same answer across 100 calls
+      for (let i = 0; i < 100; i++) {
+        expect(isFeatureEnabled('html_sanitization', 'user-a')).toBe(a);
+        expect(isFeatureEnabled('html_sanitization', 'user-b')).toBe(b);
+      }
     });
   });
 
