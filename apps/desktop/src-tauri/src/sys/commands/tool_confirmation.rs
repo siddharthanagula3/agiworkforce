@@ -51,7 +51,7 @@ pub const NEVER_REMEMBERABLE: &[&str] = &[
 /// Returns `true` when `tool_name` is eligible to have a remembered choice
 /// persisted. Currently the inverse of [`NEVER_REMEMBERABLE`] membership.
 pub fn is_tool_remember_eligible(tool_name: &str) -> bool {
-    !NEVER_REMEMBERABLE.iter().any(|blocked| *blocked == tool_name)
+    !NEVER_REMEMBERABLE.contains(&tool_name)
 }
 
 /// Agent execution mode controlling which tools are permitted.
