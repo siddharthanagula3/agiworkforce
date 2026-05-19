@@ -1,4 +1,5 @@
 import { logger } from './utils';
+import { safeJsonParse, MAX_NLWEB_PROBE_BYTES, MAX_JSON_LD_BYTES } from './background/policy';
 
 export interface NLWebEndpoint {
   url: string;
@@ -118,11 +119,10 @@ async function checkWellKnown(origin: string): Promise<NLWebEndpoint | null> {
     return null;
   }
 
-  // Validate that the response looks like JSON
+  // Validate that the response looks like JSON.
+  // M-03 audit 2026-05-19: cap probe-body parse to MAX_NLWEB_PROBE_BYTES.
   if (resp.body) {
-    try {
-      JSON.parse(resp.body);
-    } catch {
+    if (safeJsonParse(resp.body, MAX_NLWEB_PROBE_BYTES) === undefined) {
       return null;
     }
   }
@@ -159,11 +159,9 @@ function parseJsonLdSchemaTypes(): string[] {
     const text = script.textContent;
     if (!text) continue;
 
-    try {
-      const data: unknown = JSON.parse(text);
+    const data = safeJsonParse<unknown>(text, MAX_JSON_LD_BYTES);
+    if (data !== undefined) {
       collectSchemaTypes(data, types);
-    } catch {
-      // Malformed JSON-LD — skip
     }
   }
 

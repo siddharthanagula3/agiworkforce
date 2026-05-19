@@ -2,29 +2,27 @@
  * Tests for invisible-Unicode stripping + secret redaction in page-context
  * extraction (H-06 audit 2026-05-19).
  *
- * Indirect prompt-injection attackers hide instructions in zero-width
- * joiners, tag characters, and bidi-override controls so the user sees
- * benign rendered text while the LLM ingests adversarial instructions.
- * EchoLeak (CVE-2025-32711) and the ASCII-smuggling research (Embrace The
- * Red, 2024) document the vector. We strip these classes BEFORE the
- * collapsed text is sent to the desktop bridge or LLM.
- *
- * The unit-test helper mirrors the production regex in content.ts. If they
- * diverge, the companion integration test in `__tests__/content.test.ts`
- * will catch the drift.
+ * Self-review #1 audit 2026-05-19: stop mirroring. Import the production
+ * `sanitizePageText` + `INVISIBLE_UNICODE_RE` from policy.ts so this test
+ * uses the exact same regex and redactor chain as content.ts. The previous
+ * mirror would silently pass against the wrong regex (the H-02 lesson).
  */
 
 import { describe, expect, it } from 'vitest';
-import { redactSecrets } from '@agiworkforce/utils';
+// Production functions — sanitizePageText runs the same Unicode strip +
+// secret redaction the live extractor uses. INVISIBLE_UNICODE_RE is exposed
+// for low-level assertions.
+import { sanitizePageText, INVISIBLE_UNICODE_RE } from '../src/background/policy';
 
-const INVISIBLE_UNICODE_RE =
-  // eslint-disable-next-line no-misleading-character-class
-  /[​-‍﻿‪-‮⁦-⁩︀-️]|[\u{E0000}-\u{E007F}]/gu;
+describe('INVISIBLE_UNICODE_RE — character class matches expected vectors', () => {
+  it('matches a zero-width space', () => {
+    expect('a​b'.match(INVISIBLE_UNICODE_RE)?.length).toBe(1);
+  });
 
-function sanitizePageText(raw: string): string {
-  const stripped = raw.replace(INVISIBLE_UNICODE_RE, '');
-  return redactSecrets(stripped);
-}
+  it('does not match plain ASCII', () => {
+    expect('hello'.match(INVISIBLE_UNICODE_RE)).toBeNull();
+  });
+});
 
 describe('H-06 invisible-Unicode stripping in page text', () => {
   it('strips zero-width space (U+200B)', () => {

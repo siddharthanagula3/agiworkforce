@@ -23,7 +23,8 @@
  *     Add it to EXTENSION_PAGE_ONLY_MESSAGE_TYPES below.
  */
 
-import type { RunPageAction } from '../types';
+import type { RunPageAction, ScheduledTask } from '../types';
+import { redactSecrets } from '@agiworkforce/utils';
 
 // ─── Message-type policy Sets ───────────────────────────────────────────────
 
@@ -92,6 +93,43 @@ export const EXTENSION_PAGE_ONLY_MESSAGE_TYPES = new Set<string>([
   'DELETE_SHORTCUT',
   'SET_RECORDING_VALUE_CAPTURE',
 ]);
+
+// ─── Shared content / parsing caps ──────────────────────────────────────────
+
+/**
+ * Maximum byte budget for page-text extraction (innerText slice) that the
+ * extension forwards to the desktop bridge as LLM context.
+ *
+ * L-14 (audit 2026-05-19): single source so content.ts + background.ts can
+ * never drift on this number.
+ */
+export const MAX_CONTEXT_HTML_CHARS = 100_000;
+
+/**
+ * Per-source-document size caps for JSON.parse paths that consume page-
+ * supplied data. M-03 (audit 2026-05-19): without a cap, a hostile or
+ * malformed page can submit multi-megabyte JSON-LD / WebMCP schemas and
+ * stall the parser. The values trade legitimate-edge-case breadth for
+ * bounded compute.
+ */
+export const MAX_JSON_LD_BYTES = 256 * 1024; // 256 KB per <script type="application/ld+json"> block
+export const MAX_WEBMCP_SCHEMA_BYTES = 64 * 1024; // 64 KB per tool inputSchema
+export const MAX_NLWEB_PROBE_BYTES = 256 * 1024; // 256 KB total NLWeb probe body
+
+/**
+ * Bounded JSON.parse helper. Returns the parsed value or `undefined` if the
+ * input is missing, oversized, or unparseable. Callers must accept the
+ * possibility of `undefined` and not throw on it.
+ */
+export function safeJsonParse<T = unknown>(text: string | null | undefined, maxBytes: number): T | undefined {
+  if (typeof text !== 'string') return undefined;
+  if (text.length > maxBytes) return undefined;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return undefined;
+  }
+}
 
 // ─── Bridge URL validation ──────────────────────────────────────────────────
 
@@ -240,4 +278,48 @@ export const ORIGIN_EXTENSION_PAGE = '__extension_page__';
 export function generateRecordId(prefix: string): string {
   const uuid = crypto.randomUUID().replace(/-/g, '');
   return `${prefix}_${Date.now()}_${uuid.slice(0, 12)}`;
+}
+
+// ─── Page-text sanitization (extracted from content.ts for testability) ─────
+
+/**
+ * Invisible Unicode characters used as vehicles for indirect prompt injection
+ * (Greshake 2023 / EchoLeak CVE-2025-32711 / ASCII-smuggling vectors —
+ * Embrace The Red 2024). The regex is the SINGLE source of truth — both
+ * production (`content.ts:extractPageHtmlSafely`) and tests import it.
+ *
+ * Self-review #1 audit 2026-05-19: previously content.ts had a local copy
+ * and `__tests__/extract-page-html-unicode.test.ts` mirrored it. That mirror
+ * pattern is the same antipattern that caused H-02.
+ */
+export const INVISIBLE_UNICODE_RE =
+  // eslint-disable-next-line no-misleading-character-class, no-irregular-whitespace
+  /[​-‍﻿‪-‮⁦-⁩︀-️]|[\u{E0000}-\u{E007F}]/gu;
+
+/**
+ * Pure-function page-text sanitizer: strip invisible Unicode then run the
+ * shared `redactSecrets` redactor. Production extractor (content.ts) and
+ * tests use this directly.
+ */
+export function sanitizePageText(raw: string): string {
+  const stripped = raw.replace(INVISIBLE_UNICODE_RE, '');
+  return redactSecrets(stripped);
+}
+
+/**
+ * Decide whether a scheduled task should fire given the current allowlist.
+ * Returns true for the `__extension_page__` sentinel and for any task whose
+ * origin remains on the allowlist. Returns false otherwise — caller should
+ * auto-delete the task.
+ *
+ * Self-review #1: extracted so `__tests__/scheduled-task-origin.test.ts`
+ * can import this directly instead of mirroring the check.
+ */
+export function shouldExecuteScheduledTask(
+  task: Pick<ScheduledTask, 'createdByOrigin'>,
+  allowlist: ReadonlySet<string>,
+): boolean {
+  if (!task.createdByOrigin) return true; // legacy task pre-stamp; permit
+  if (task.createdByOrigin === ORIGIN_EXTENSION_PAGE) return true;
+  return allowlist.has(task.createdByOrigin);
 }
