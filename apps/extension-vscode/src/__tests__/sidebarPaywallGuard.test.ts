@@ -17,8 +17,8 @@ import * as vscode from 'vscode';
 
 // ─── Mock tierResolver bridge fetch so integration tests are offline ──────────
 
-vi.mock('../services/tierResolver', async (importOriginal) => {
-  const original = await importOriginal<typeof import('../services/tierResolver')>();
+vi.mock('../integrations/tierResolver', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../integrations/tierResolver')>();
   return {
     ...original,
     resolveTier: vi.fn().mockResolvedValue('byok' as Tier),
@@ -162,8 +162,8 @@ describe('resolveTier — workspace tier spoofing regression (P0-F hardening)', 
 
     // Import the REAL resolveTier (not the mock) for this test.
     const { resolveTier: realResolveTier } = await vi.importActual<
-      typeof import('../services/tierResolver')
-    >('../services/tierResolver');
+      typeof import('../integrations/tierResolver')
+    >('../integrations/tierResolver');
 
     // preferBridge=false so we skip the network call
     const tier = await realResolveTier(ctx, false);
@@ -176,8 +176,8 @@ describe('resolveTier — workspace tier spoofing regression (P0-F hardening)', 
     const ctx = makeContext(undefined);
 
     const { resolveTier: realResolveTier } = await vi.importActual<
-      typeof import('../services/tierResolver')
-    >('../services/tierResolver');
+      typeof import('../integrations/tierResolver')
+    >('../integrations/tierResolver');
 
     const tier = await realResolveTier(ctx, false);
     expect(tier).toBe('pro_plus');
@@ -188,8 +188,8 @@ describe('resolveTier — workspace tier spoofing regression (P0-F hardening)', 
     const ctx = makeContext(undefined);
 
     const { resolveTier: realResolveTier } = await vi.importActual<
-      typeof import('../services/tierResolver')
-    >('../services/tierResolver');
+      typeof import('../integrations/tierResolver')
+    >('../integrations/tierResolver');
 
     const tier = await realResolveTier(ctx, false);
     expect(tier).toBe('byok');
@@ -200,8 +200,8 @@ describe('resolveTier — workspace tier spoofing regression (P0-F hardening)', 
     const ctx = makeContext('hobby');
 
     const { resolveTier: realResolveTier } = await vi.importActual<
-      typeof import('../services/tierResolver')
-    >('../services/tierResolver');
+      typeof import('../integrations/tierResolver')
+    >('../integrations/tierResolver');
 
     const tier = await realResolveTier(ctx, false);
     expect(tier).toBe('hobby');
@@ -212,8 +212,8 @@ describe('resolveTier — workspace tier spoofing regression (P0-F hardening)', 
     const ctx = makeContext(undefined);
 
     const { resolveTier: realResolveTier } = await vi.importActual<
-      typeof import('../services/tierResolver')
-    >('../services/tierResolver');
+      typeof import('../integrations/tierResolver')
+    >('../integrations/tierResolver');
 
     const tier = await realResolveTier(ctx, false);
     const guardResult = guardProviderSwitch('claude-opus-4-6', 'gpt-5.5', tier);
