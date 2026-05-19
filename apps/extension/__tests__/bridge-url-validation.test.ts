@@ -1,38 +1,19 @@
 /**
- * Tests for the bridge URL domain validation in background.ts.
+ * Tests for the bridge URL domain validation.
  *
- * The validateBridgeUrl() function is not exported, so we mirror it here.
- * If the source logic changes these tests will catch a regression.
+ * SECURITY (H-02 audit 2026-05-19): this file previously **mirrored** the
+ * validator from background.ts, which let the test allowlist `0.0.0.0`
+ * while the production code rejected it. The test passed against the
+ * wrong list. We now import `validateBridgeUrl` / `ALLOWED_BRIDGE_HOSTS`
+ * directly from `src/background/policy.ts` so any future divergence
+ * fails this test immediately.
+ *
+ * Do NOT replace these imports with a mirrored function. The mirror
+ * pattern is the bug.
  */
 
 import { describe, expect, it } from 'vitest';
-
-/** Allowed bridge URL hostnames — mirrors ALLOWED_BRIDGE_HOSTS in background.ts */
-const ALLOWED_BRIDGE_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '0.0.0.0']);
-
-/** Mirrors validateBridgeUrl() in background.ts */
-function validateBridgeUrl(raw: string): string | null {
-  try {
-    // Normalize protocol for URL parsing
-    const normalized = raw.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://');
-    const parsed = new URL(normalized);
-
-    // Only allow http/https schemes
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return null;
-    }
-
-    // Only allow local hostnames — never route bridge traffic to remote servers
-    if (!ALLOWED_BRIDGE_HOSTS.has(parsed.hostname)) {
-      return null;
-    }
-
-    // Strip trailing slash
-    return normalized.replace(/\/$/, '');
-  } catch {
-    return null;
-  }
-}
+import { ALLOWED_BRIDGE_HOSTS, validateBridgeUrl } from '../src/background/policy';
 
 // ── localhost URLs ──────────────────────────────────────────────────────────
 
@@ -64,7 +45,7 @@ describe('validateBridgeUrl — 127.0.0.1 URLs pass validation', () => {
 
 // ── [::1] IPv6 loopback ─────────────────────────────────────────────────────
 
-describe('validateBridgeUrl — [::1] URLs pass validation', () => {
+describe('validateBridgeUrl — [::1] URLs pass validation (H-03)', () => {
   it('accepts http://[::1]', () => {
     expect(validateBridgeUrl('http://[::1]')).toBe('http://[::1]');
   });
@@ -72,17 +53,28 @@ describe('validateBridgeUrl — [::1] URLs pass validation', () => {
   it('accepts http://[::1]:8787', () => {
     expect(validateBridgeUrl('http://[::1]:8787')).toBe('http://[::1]:8787');
   });
+
+  it('ALLOWED_BRIDGE_HOSTS uses bracketed form (matches new URL().hostname)', () => {
+    // This is what makes H-03 stay fixed — `new URL(...).hostname` returns
+    // `[::1]` with brackets, and the Set must compare against the same form.
+    expect(ALLOWED_BRIDGE_HOSTS.has('[::1]')).toBe(true);
+    expect(ALLOWED_BRIDGE_HOSTS.has('::1')).toBe(false);
+  });
 });
 
-// ── 0.0.0.0 URLs ───────────────────────────────────────────────────────────
+// ── 0.0.0.0 is rejected (SEV-CHEXT-09 / H-02) ───────────────────────────────
 
-describe('validateBridgeUrl — 0.0.0.0 URLs pass validation', () => {
-  it('accepts http://0.0.0.0', () => {
-    expect(validateBridgeUrl('http://0.0.0.0')).toBe('http://0.0.0.0');
+describe('validateBridgeUrl — 0.0.0.0 is REJECTED', () => {
+  it('rejects http://0.0.0.0 (Linux LAN-routes; defeats loopback contract)', () => {
+    expect(validateBridgeUrl('http://0.0.0.0')).toBeNull();
   });
 
-  it('accepts http://0.0.0.0:9000', () => {
-    expect(validateBridgeUrl('http://0.0.0.0:9000')).toBe('http://0.0.0.0:9000');
+  it('rejects http://0.0.0.0:9000', () => {
+    expect(validateBridgeUrl('http://0.0.0.0:9000')).toBeNull();
+  });
+
+  it('ALLOWED_BRIDGE_HOSTS does not contain 0.0.0.0', () => {
+    expect(ALLOWED_BRIDGE_HOSTS.has('0.0.0.0')).toBe(false);
   });
 });
 

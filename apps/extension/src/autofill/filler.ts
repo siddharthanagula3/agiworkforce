@@ -533,24 +533,86 @@ export async function autofillLever(
 
 // ─── Profile storage helpers ──────────────────────────────────────────────────
 
-/** The chrome.storage.sync key used to persist the autofill profile. */
+/**
+ * Storage key for the autofill profile.
+ *
+ * SECURITY (H-04 promoted Critical, audit 2026-05-19): the profile previously
+ * lived in `chrome.storage.sync`, which replicates to Google's servers via the
+ * user's signed-in Chrome account. Profile fields include resume text,
+ * cover-letter text, salary expectation, current employer/title — sensitive
+ * PII that should never leave the device. We migrated to `chrome.storage.local`
+ * (device-only). The one-shot `migrateAutofillProfile()` below copies any
+ * pre-existing sync value into local on first run after upgrade, then clears
+ * the sync key. Historical Google-server retention is outside the extension's
+ * control; the migration just prevents future replication.
+ */
 export const AUTOFILL_PROFILE_STORAGE_KEY = 'agi_autofill_profile';
 
-/** Loads the autofill profile from chrome.storage.sync. */
+/**
+ * Marker key set after a successful sync → local migration so the migrator
+ * runs at most once. Stored alongside the profile in local.
+ */
+const AUTOFILL_MIGRATION_DONE_KEY = 'agi_autofill_profile_migrated';
+
+/** Loads the autofill profile from chrome.storage.local. */
 export async function loadAutofillProfile(): Promise<JobApplicationProfile> {
   try {
-    const result = await chrome.storage.sync.get(AUTOFILL_PROFILE_STORAGE_KEY);
+    const result = await chrome.storage.local.get(AUTOFILL_PROFILE_STORAGE_KEY);
     const stored = result[AUTOFILL_PROFILE_STORAGE_KEY];
     if (stored && typeof stored === 'object') {
       return stored as JobApplicationProfile;
     }
   } catch {
-    // storage.sync may not be available in all contexts
+    // storage.local may not be available in all contexts
   }
   return {};
 }
 
-/** Persists the autofill profile to chrome.storage.sync. */
+/** Persists the autofill profile to chrome.storage.local. */
 export async function saveAutofillProfile(profile: JobApplicationProfile): Promise<void> {
-  await chrome.storage.sync.set({ [AUTOFILL_PROFILE_STORAGE_KEY]: profile });
+  await chrome.storage.local.set({ [AUTOFILL_PROFILE_STORAGE_KEY]: profile });
+}
+
+/**
+ * One-shot migrator: copy autofill profile from `chrome.storage.sync` into
+ * `chrome.storage.local`, then clear sync. Idempotent — guarded by the
+ * AUTOFILL_MIGRATION_DONE_KEY marker. Silent on any storage error so the
+ * extension boot path stays resilient.
+ *
+ * Returns true when a migration write actually occurred, false otherwise.
+ */
+export async function migrateAutofillProfile(): Promise<boolean> {
+  try {
+    const localResult = await chrome.storage.local.get([
+      AUTOFILL_MIGRATION_DONE_KEY,
+      AUTOFILL_PROFILE_STORAGE_KEY,
+    ]);
+    if (localResult[AUTOFILL_MIGRATION_DONE_KEY] === true) {
+      return false; // already migrated
+    }
+
+    const syncResult = await chrome.storage.sync.get(AUTOFILL_PROFILE_STORAGE_KEY);
+    const syncProfile = syncResult[AUTOFILL_PROFILE_STORAGE_KEY];
+    const localProfile = localResult[AUTOFILL_PROFILE_STORAGE_KEY];
+
+    // Only copy from sync into local when local is empty — never clobber a
+    // post-migration write the user has made.
+    let copied = false;
+    if (
+      (!localProfile || typeof localProfile !== 'object' || Object.keys(localProfile).length === 0) &&
+      syncProfile &&
+      typeof syncProfile === 'object'
+    ) {
+      await chrome.storage.local.set({ [AUTOFILL_PROFILE_STORAGE_KEY]: syncProfile });
+      copied = true;
+    }
+
+    // Always clear sync and stamp the marker so subsequent boots skip this path.
+    await chrome.storage.sync.remove(AUTOFILL_PROFILE_STORAGE_KEY).catch(() => {});
+    await chrome.storage.local.set({ [AUTOFILL_MIGRATION_DONE_KEY]: true });
+    return copied;
+  } catch {
+    // Storage unavailable (test / SSR / locked profile) — leave state as-is.
+    return false;
+  }
 }
