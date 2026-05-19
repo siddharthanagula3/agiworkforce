@@ -1,5 +1,6 @@
 import type { SavedShortcut, ExtensionResponse } from '../types';
 import type { SaveShortcutMessage, DeleteShortcutMessage } from '../types';
+import { ORIGIN_EXTENSION_PAGE, generateRecordId, validateShortcutActions } from './policy';
 
 const SHORTCUTS_STORAGE_KEY = 'agi_saved_shortcuts';
 const MAX_SHORTCUTS = 50;
@@ -28,11 +29,24 @@ export async function handleSaveShortcut(message: SaveShortcutMessage): Promise<
       error: `Maximum ${MAX_SHORTCUTS} shortcuts reached`,
     } as ExtensionResponse;
   }
+  // SECURITY (C-03 audit 2026-05-19): reject shortcuts containing action
+  // types that are not in the executor allowlist. Save-time rejection
+  // prevents attackers from planting payloads that target a future handler.
+  const actions = Array.isArray(message.actions) ? message.actions : [];
+  if (!validateShortcutActions(actions)) {
+    return {
+      success: false,
+      error: 'Shortcut contains an unsupported action type.',
+    } as ExtensionResponse;
+  }
+  // C-03: stamp the trusted-UI sentinel. Handler is gated to extension-page
+  // senders by EXTENSION_PAGE_ONLY_MESSAGE_TYPES in background.handleMessage.
   const shortcut: SavedShortcut = {
-    id: `sc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    id: generateRecordId('sc'),
     name: message.name.slice(0, 100),
-    actions: message.actions,
+    actions,
     createdAt: Date.now(),
+    createdByOrigin: ORIGIN_EXTENSION_PAGE,
     url: message.url,
     prompt: message.prompt,
     startUrl: message.startUrl,

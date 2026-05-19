@@ -21,6 +21,11 @@ import {
 import { sanitizeHtml, renderMarkdown } from './side_panel/markdown';
 import { setupVoiceInput } from './side_panel/voice';
 import {
+  ALLOWED_BRIDGE_HOSTS,
+  DEFAULT_AGI_BRIDGE_URL,
+  validateBridgeUrl,
+} from './background/policy';
+import {
   Terminal,
   FileText,
   FilePen,
@@ -2079,7 +2084,12 @@ function sendMessage(text: string): void {
             text: actualPrompt,
             pageContext: pageCtx ?? undefined,
             conversationHistory: history,
-            apiKey: _ctx.currentApiKey ?? undefined,
+            // SECURITY (H-10 audit 2026-05-19): `apiKey:` removed from the
+            // CHAT_MESSAGE wire payload. The background handler ignores any
+            // apiKey field per chrome-HIGH-3 and resolves the key from
+            // chrome.storage.session instead. Sending it here was dead
+            // weight that could mislead future maintainers into restoring
+            // the destructure on the receive side.
             // Phase 3 bridge: bridge must consume extendedThinking and
             // forward to providers that support it (Anthropic thinking blocks,
             // OpenAI reasoning effort, Gemini thinkingBudget).
@@ -2142,7 +2152,8 @@ function sendMessage(text: string): void {
       text: userMsg.content,
       pageContext: pageCtx ?? undefined,
       conversationHistory: history,
-      apiKey: _ctx.currentApiKey ?? undefined,
+      // SECURITY (H-10 audit 2026-05-19): `apiKey:` removed from the
+      // CHAT_MESSAGE wire payload. See chrome-HIGH-3.
       // Phase 3 bridge: bridge must consume extendedThinking and
       // forward to providers that support it (Anthropic thinking blocks,
       // OpenAI reasoning effort, Gemini thinkingBudget).
@@ -2300,7 +2311,14 @@ function updateToolsButton(): void {
     const item = el('div', { class: 'sp-tool-item' });
     item.appendChild(el('div', { class: 'sp-tool-item-name' }, tool.name));
     if (tool.description) {
-      item.appendChild(el('div', { class: 'sp-tool-item-desc' }, tool.description));
+      // SECURITY (M-09 audit 2026-05-19): prefix tool descriptions with the
+      // source hostname so users can distinguish extension-supplied copy
+      // from page-supplied copy. Defends against page tool-poisoning
+      // attempts that imitate extension UI prompts (Invariant Labs TPA).
+      const prefixed = currentPageHostname
+        ? `(from ${currentPageHostname}) ${tool.description}`
+        : tool.description;
+      item.appendChild(el('div', { class: 'sp-tool-item-desc' }, prefixed));
     }
     item.addEventListener('click', () => {
       const inputEl = document.getElementById('sp-input') as HTMLTextAreaElement | null;
@@ -2845,34 +2863,31 @@ function buildUI(): void {
     }
   });
 
-  // Save bridge URL and reconnect — only local URLs allowed
+  // Save bridge URL and reconnect — only local URLs allowed.
+  // SECURITY (H-02 audit 2026-05-19): validateBridgeUrl is now sourced from
+  // `src/background/policy.ts` so the UI and the background service worker
+  // share the EXACT same allowlist semantics (rejecting `0.0.0.0`, accepting
+  // `[::1]` with brackets). Previous inline Set diverged on `0.0.0.0`.
   const saveBridgeUrl = (): void => {
     const raw = (bridgeUrlInput as HTMLInputElement).value.trim();
     if (!raw) {
       chrome.storage.local.remove('agi_bridge_url');
     } else {
-      // Validate: only allow localhost/127.0.0.1 URLs to prevent data exfiltration
-      try {
-        const normalized = raw.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://');
-        const parsed = new URL(normalized);
-        const allowedHosts = new Set(['localhost', '127.0.0.1', '[::1]', '0.0.0.0']);
-        if (!allowedHosts.has(parsed.hostname)) {
-          // Show inline error instead of saving
-          const bar = document.getElementById('sp-settings-bar');
-          if (bar) {
-            const existing = bar.querySelector('.sp-bridge-error');
-            if (existing) existing.remove();
-            const errEl = document.createElement('div');
-            errEl.className = 'sp-bridge-error';
-            errEl.style.cssText = 'color: var(--agi-ext-danger); font-size: 10px; padding: 2px 0;';
-            errEl.textContent = 'Only local URLs (localhost, 127.0.0.1) are allowed';
-            bar.appendChild(errEl);
-            setTimeout(() => errEl.remove(), 4000);
-          }
-          return;
+      const validated = validateBridgeUrl(raw);
+      if (!validated) {
+        const bar = document.getElementById('sp-settings-bar');
+        if (bar) {
+          const existing = bar.querySelector('.sp-bridge-error');
+          if (existing) existing.remove();
+          const errEl = document.createElement('div');
+          errEl.className = 'sp-bridge-error';
+          errEl.style.cssText = 'color: var(--agi-ext-danger); font-size: 10px; padding: 2px 0;';
+          const allowed = Array.from(ALLOWED_BRIDGE_HOSTS).join(', ');
+          errEl.textContent = `Only local URLs (${allowed}) are allowed`;
+          bar.appendChild(errEl);
+          setTimeout(() => errEl.remove(), 4000);
         }
-      } catch {
-        return; // Invalid URL, silently reject
+        return;
       }
       chrome.storage.local
         .set({ agi_bridge_url: raw })
@@ -4129,7 +4144,13 @@ async function probeBridgeStatus(): Promise<void> {
         resolve((items['agi_bridge_url'] as string | undefined) || undefined);
       });
     });
-    const baseUrl = stored?.trim().replace(/\/$/, '') || 'http://localhost:8787';
+    // SECURITY (H-08 audit 2026-05-19): never fetch a stored bridge URL
+    // without first running it through `validateBridgeUrl`. Storage is
+    // writable by the side panel UI and (in principle) by future code
+    // paths; a poisoned value here used to be fetched verbatim. Fall
+    // back to the canonical default when the stored value is invalid.
+    const validated = stored ? validateBridgeUrl(stored.trim()) : null;
+    const baseUrl = validated ?? DEFAULT_AGI_BRIDGE_URL;
     const resp = await fetch(`${baseUrl}/v1/status`, {
       method: 'GET',
       signal: AbortSignal.timeout(3000),
