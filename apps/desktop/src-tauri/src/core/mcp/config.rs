@@ -1300,8 +1300,30 @@ pub fn load_bundle(path: &std::path::Path) -> McpResult<McpBundle> {
 pub fn install_bundle(bundle: &McpBundle, config: &mut McpServersConfig) -> McpResult<()> {
     bundle.validate()?;
 
+    // AUDIT-FIX: CI-5 — slopsquatting defense. If mcp-allowlist.json is present
+    // next to the binary's config dir, reject server entries whose args reference
+    // an npm package not on the list. Absence of the file = open mode (dev).
+    let allowlist_path = std::path::PathBuf::from("mcp-allowlist.json");
+    let allowlist = if allowlist_path.exists() {
+        crate::core::mcp::manifest::load(&allowlist_path).ok()
+    } else {
+        None
+    };
+
     let mut installed = 0usize;
     for (server_name, server_config) in &bundle.servers {
+        if let Some(ref m) = allowlist {
+            for arg in &server_config.args {
+                if arg.starts_with('@') || arg.starts_with("@modelcontextprotocol/") {
+                    if !crate::core::mcp::manifest::is_allowed(m, arg) {
+                        return Err(crate::core::mcp::McpError::InvalidConfig(format!(
+                            "MCP package '{}' (server '{}') is not on the allow-list",
+                            arg, server_name
+                        )));
+                    }
+                }
+            }
+        }
         let prev = config
             .mcp_servers
             .insert(server_name.clone(), server_config.clone());

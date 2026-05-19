@@ -13,6 +13,8 @@ pub mod extensions;
 pub mod health;
 pub mod logs;
 pub mod manager;
+// AUDIT-FIX: CI-5 — MCP allow-list module.
+pub mod manifest;
 pub mod oauth;
 pub mod protocol;
 pub mod registry;
