@@ -10,7 +10,7 @@ import {
   type CapabilityTier,
 } from '@agiworkforce/types';
 import { getExtensionSendQueue } from './sendQueue';
-import { clearChildren, setText, createElementWith, setChild } from './dom-helpers';
+import { clearChildren, setText, createElementWith, setChild, appendSvgString } from './dom-helpers';
 import {
   saveConversation,
   listConversations,
@@ -306,8 +306,13 @@ function clearStoredApiKey(): void {
 }
 
 function injectStyles(): void {
-  const style = document.createElement('style');
-  style.textContent = `
+  // M-08 audit 2026-05-19: switched from `document.createElement('style')` +
+  // textContent + appendChild (which CSP `style-src 'self'` blocks) to
+  // Constructable Stylesheets (`new CSSStyleSheet().replaceSync(...)` +
+  // `document.adoptedStyleSheets`). Constructable sheets are a DOM API, not
+  // CSS-source delivery, so they bypass style-src entirely. Chrome 73+
+  // supports them; manifest minimum_chrome_version is 132 so we're safe.
+  const cssText = `
     /* ── AGI design tokens (dark) ── */
     ${getExtensionTokensCss('dark')}
 
@@ -1617,7 +1622,23 @@ function injectStyles(): void {
     }
     .sp-history-item-del:hover { color: var(--agi-ext-danger); background: var(--agi-ext-danger-bg); }
   `;
-  document.head.appendChild(style);
+  // M-08 audit 2026-05-19: Constructable Stylesheet — CSP-compliant
+  // because it's a DOM API call, not a <style> tag.
+  if (
+    typeof CSSStyleSheet === 'function' &&
+    typeof (CSSStyleSheet.prototype as { replaceSync?: unknown }).replaceSync === 'function'
+  ) {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(cssText);
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+  } else {
+    // Fallback path for environments without Constructable Stylesheets
+    // (some JSDOM versions used in tests). Tests don't render the panel,
+    // so missing styles here is acceptable.
+    const fallback = document.createElement('style');
+    fallback.textContent = cssText;
+    document.head.appendChild(fallback);
+  }
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -2415,8 +2436,11 @@ function buildUI(): void {
   const header = el('div', { id: 'sp-header' });
   const headerLeft = el('div', { id: 'sp-header-left' });
 
+  // L-11 audit 2026-05-19: replaced innerHTML SVG injection with
+  // DOMParser-based import. Same end result — static SVG literal rendered
+  // into the wrapper — but no HTML parser involved.
   const logoEl = el('div', { id: 'sp-logo' });
-  logoEl.innerHTML = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  const logoSvg = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <rect width="24" height="24" rx="6" fill="url(#logoGrad)"/>
     <circle cx="12" cy="9" r="3" stroke="white" stroke-width="1.5"/>
     <path d="M6 19c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
@@ -2424,6 +2448,7 @@ function buildUI(): void {
       <stop stop-color="#21808d"/><stop offset="1" stop-color="#da7756"/>
     </linearGradient></defs>
   </svg>`;
+  appendSvgString(logoEl, logoSvg);
   headerLeft.appendChild(logoEl);
 
   const titleWrap = el('div', {});
@@ -2984,7 +3009,8 @@ function buildUI(): void {
   // #sp-empty: composer-first empty state (design-spec §8); hidden when messages present
   const emptyState = el('div', { id: 'sp-empty' });
   const emptyIcon = el('div', { id: 'sp-empty-icon' });
-  emptyIcon.innerHTML = `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" width="40" height="40" aria-hidden="true">
+  // L-11 audit 2026-05-19: see logo SVG above.
+  const emptyIconSvg = `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" width="40" height="40" aria-hidden="true">
     <rect width="40" height="40" rx="10" fill="url(#emGrad)" opacity="0.18"/>
     <circle cx="20" cy="15" r="5" stroke="url(#emGrad)" stroke-width="1.75"/>
     <path d="M10 32c0-5.523 4.477-8.5 10-8.5s10 2.977 10 8.5" stroke="url(#emGrad)" stroke-width="1.75" stroke-linecap="round"/>
@@ -2992,6 +3018,7 @@ function buildUI(): void {
       <stop stop-color="#21808d"/><stop offset="1" stop-color="#da7756"/>
     </linearGradient></defs>
   </svg>`;
+  appendSvgString(emptyIcon, emptyIconSvg);
   emptyState.appendChild(emptyIcon);
   emptyState.appendChild(el('div', { id: 'sp-empty-headline' }, 'What can I help with?'));
   emptyState.appendChild(
