@@ -131,10 +131,17 @@ export function renderMarkdown(text: string): string {
   // that break out of an HTML attribute (`"`, `'`, `<`, `>`) inside the
   // URL before interpolating into `href="..."`. The prior fix encoded the
   // link text but left the URL raw, so a model response like
-  // `[click](https://e.com" onerror="alert(1))` would inject an attribute
-  // (caught today only by DOMPurify; the M-1 comment's "future refactor"
-  // concern applies here too).
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match: string, text: string, url: string) => {
+  // `[click](https://e.com" onerror="alert(1))` would inject an attribute.
+  // Self-review #8 audit 2026-05-19: the URL pattern was `[^)]+` which
+  // terminated at the first `)` and broke legitimate Wikipedia-style URLs
+  // like `[wiki](https://en.wikipedia.org/wiki/Foo_(bar))`. Switched to a
+  // pattern that allows balanced single-level parens — covers the
+  // overwhelming common case while still terminating on the outer `)`.
+  // Multi-level nesting is rare in URL paths; users can fall back to
+  // angle-bracket links if needed.
+  html = html.replace(
+    /\[([^\]]+)\]\(((?:[^()]|\([^()]*\))+)\)/g,
+    (_match: string, text: string, url: string) => {
     const rawUrl = url.trim();
     const safeUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : '#';
     const encodedHref = safeUrl
