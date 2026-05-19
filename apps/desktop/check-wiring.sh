@@ -69,6 +69,37 @@ echo "INFO: $UNUSED command(s) registered in lib.rs are not invoked from any fro
 echo "      (Some are expected — tray actions, native menu items, internal calls.)"
 
 # --------------------------------------------------------------------------
+# 4. AUDIT-FIX: CI-3 — HITL allow-list enforcement.
+# --------------------------------------------------------------------------
+# .hitl-required-tools.yaml lists tools that MUST gate through
+# request_confirmation_simple. We grep each handler file for that callsite;
+# if any required tool has no callsite in its declared handler, fail.
+# yq is not assumed available in CI, so awk extracts the YAML pairs.
+HITL_YAML="apps/desktop/.hitl-required-tools.yaml"
+if [ -f "$HITL_YAML" ]; then
+  # Extract `tool: <name>` / `handler: <path>` pairs in order, then iterate.
+  HITL_PAIRS=$(awk '
+    /^[[:space:]]*-[[:space:]]*tool:[[:space:]]*/ { sub(/^[[:space:]]*-[[:space:]]*tool:[[:space:]]*/, ""); t=$0 }
+    /^[[:space:]]*handler:[[:space:]]*/ { sub(/^[[:space:]]*handler:[[:space:]]*/, ""); print t "|" $0 }
+  ' "$HITL_YAML")
+
+  while IFS='|' read -r tool handler; do
+    [ -z "$tool" ] && continue
+    if [ ! -f "$handler" ]; then
+      echo "MISSING (HITL handler file not found): $tool -> $handler"
+      MISSING=1
+      continue
+    fi
+    if ! grep -q "request_confirmation_simple" "$handler" 2>/dev/null; then
+      echo "MISSING (HITL tool $tool has no request_confirmation_simple in $handler)"
+      MISSING=1
+    fi
+  done <<EOF
+$HITL_PAIRS
+EOF
+fi
+
+# --------------------------------------------------------------------------
 
 if [ "$MISSING" -eq 0 ]; then
   echo "OK: invoke() <-> #[tauri::command] <-> generate_handler! wiring is consistent."

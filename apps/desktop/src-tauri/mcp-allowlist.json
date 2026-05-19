@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "comment": "AUDIT-FIX: CI-5 — MCP server allow-list. Only listed packages can be installed via MCP install commands. Update via PR with security review.",
+  "allowed_packages": [
+    "@modelcontextprotocol/server-filesystem",
+    "@modelcontextprotocol/server-github",
+    "@modelcontextprotocol/server-gitlab",
+    "@modelcontextprotocol/server-postgres",
+    "@modelcontextprotocol/server-sqlite",
+    "@modelcontextprotocol/server-fetch",
+    "@modelcontextprotocol/server-brave-search",
+    "@modelcontextprotocol/server-puppeteer"
+  ]
+}

@@ -92,16 +92,20 @@ jobs:
         run: pnpm --filter agi-workforce test:webview
 
       - name: Semgrep (security audit)
-        # Run Semgrep with security-audit + typescript + owasp rule packs.
-        # Continues on findings during initial rollout; tighten to block
-        # once baseline is established. Audit recommendation (PR-1A).
+        # AUDIT-FIX: CI-1 — Policy: ERROR-severity findings block merge;
+        # INFO/WARNING findings inform but do not gate. `baseline_ref: main`
+        # scopes failures to NEW findings introduced by the PR so pre-existing
+        # backlog does not block unrelated work. Tightened from advisory
+        # `continue-on-error: true` (rollout phase complete).
         uses: returntocorp/semgrep-action@v1
         with:
           config: >-
             p/security-audit
             p/typescript
             p/owasp-top-ten
-        continue-on-error: true
+          baseline_ref: main
+          severity: ERROR
+        continue-on-error: false
 
       - name: Build packages
         run: |
