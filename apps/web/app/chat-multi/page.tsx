@@ -82,6 +82,12 @@ export default function MultiProviderChatPage(): ReactElement {
   useEffect(() => {
     if (!supabase) return;
     void (async () => {
+      // WEB-18: client-side `getSession` is intentional here. This is not an
+      // auth gate — middleware enforces authentication on this route; the
+      // effect only reads the access token to attach as a Bearer header on
+      // outbound LLM-provider fan-out requests. Using getUser() instead
+      // would round-trip to the auth server on every page render.
+      // eslint-disable-next-line no-restricted-syntax
       const { data, error } = await supabase.auth.getSession();
       if (error) {
         setAuthError(error.message);

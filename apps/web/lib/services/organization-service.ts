@@ -112,11 +112,21 @@ export class OrganizationService {
     client: SupabaseClient,
     orgId: string,
   ): Promise<OrganizationMember[]> {
+    // SEV-WEB-08 / WEB-31 (audit 2026-05-19): explicit column list matching
+    // the OrganizationMember type. The previous `select('*, profile:profiles(...)')`
+    // returned every column on organization_members (including internal flags /
+    // metadata columns) to any caller — even role='viewer' members. RLS doesn't
+    // help because the service-role client bypasses it. Listing only the
+    // columns the UI needs limits the blast radius of any future column added
+    // with sensitive semantics (e.g. invitation tokens, mfa state, etc.).
     const { data, error } = await client
       .from('organization_members')
       .select(
         `
-        *,
+        organization_id,
+        user_id,
+        role,
+        joined_at,
         profile:profiles (
           email,
           display_name,
@@ -131,7 +141,11 @@ export class OrganizationService {
       throw error;
     }
 
-    return data as OrganizationMember[];
+    // Supabase's generated PostgrestResponse types model FK joins as arrays
+    // even when the relationship is single-row. Cast through unknown to bridge
+    // the structural mismatch — runtime shape is consistent with
+    // OrganizationMember thanks to the column-by-column select above.
+    return data as unknown as OrganizationMember[];
   }
 
   /**

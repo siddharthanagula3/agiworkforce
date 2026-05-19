@@ -84,6 +84,28 @@ const eslintConfig = defineConfig([
       'react/no-unescaped-entities': 'off',
     },
   },
+  // WEB-18 (audit 2026-05-19): forbid `auth.getSession()` in server-component
+  // auth gates. getSession() returns unverified cached cookie data; auth gates
+  // must use auth.getUser() which re-validates the JWT signature with the
+  // auth server. Scope is narrow on purpose — client-side files that
+  // legitimately read the access token (for outbound API Authorization
+  // headers) are not flagged. After PR-2's getSession sweep, this rule is
+  // expected to fire zero times; the rule's job is regression-prevention.
+  {
+    files: ['app/**/layout.tsx', 'app/**/page.tsx'],
+    ignores: ['**/*.{test,spec}.{ts,tsx}', '**/__tests__/**'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "CallExpression[callee.property.name='getSession'][callee.object.property.name='auth']",
+          message:
+            'Page/layout auth gates must use auth.getUser() (re-validates the JWT) not auth.getSession() (only reads cookies) — WEB-18.',
+        },
+      ],
+    },
+  },
   // WEB-13 (audit 2026-05-19): forbid Math.random in security-sensitive paths.
   // CSPRNG quality is required for tokens, filenames, IDs, and rollout
   // bucketing in these directories. Use @/lib/secure-random helpers instead.
