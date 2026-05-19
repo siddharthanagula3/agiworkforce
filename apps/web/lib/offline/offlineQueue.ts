@@ -74,7 +74,7 @@ function saveQueue(queue: OfflineQueueState): void {
 export function queueMessage(sessionId: string, content: string): string {
   try {
     // WEB-13: Math.random is intentional — local-only client queue ID; never used as an auth token.
-    // eslint-disable-next-line no-restricted-syntax
+
     const id = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const queue = loadQueue();
 
@@ -107,7 +107,7 @@ export function queueToolExecution(
 ): string {
   try {
     // WEB-13: Math.random is intentional — local-only client queue ID; never used as an auth token.
-    // eslint-disable-next-line no-restricted-syntax
+
     const id = `tool_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const queue = loadQueue();
 

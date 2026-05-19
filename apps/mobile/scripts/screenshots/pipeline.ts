@@ -1,4 +1,5 @@
 #!/usr/bin/env tsx
+/* eslint-disable no-console -- CLI tool; stdout/log is the intended output channel */
 /**
  * AGI screenshot pipeline.
  *

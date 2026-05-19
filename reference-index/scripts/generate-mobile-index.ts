@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- CLI indexer tool; stdout progress is the intended output */
 /**
  * reference-index/scripts/generate-mobile-index.ts
  *
@@ -34,11 +35,20 @@ const EXCLUDE_DIRS = new Set([
 
 const FILE_EXT = /\.(tsx?|jsx?)$/;
 
-type LayerGuess = 'entry' | 'core' | 'features' | 'platform' | 'integrations' | 'storage' | 'ui' | 'app' | 'unclassified';
+type LayerGuess =
+  | 'entry'
+  | 'core'
+  | 'features'
+  | 'platform'
+  | 'integrations'
+  | 'storage'
+  | 'ui'
+  | 'app'
+  | 'unclassified';
 
 interface FileRecord {
-  path: string;          // relative to repo root
-  current_dir: string;   // first segment under apps/mobile/
+  path: string; // relative to repo root
+  current_dir: string; // first segment under apps/mobile/
   proposed_dir: LayerGuess;
   role_guess: string;
   imports_in_count: number;
@@ -229,7 +239,11 @@ const LAYER_GUESS_RULES: Array<{ match: RegExp; layer: LayerGuess; role: string 
   { match: /^components\/image\//, layer: 'features', role: 'feature-component' },
   { match: /^components\/[Cc]omposer\//, layer: 'features', role: 'feature-component' },
   { match: /^components\//, layer: 'features', role: 'feature-component' },
-  { match: /^services\/(api|secureFetch|supabase)\.ts$/, layer: 'integrations', role: 'http-or-sdk' },
+  {
+    match: /^services\/(api|secureFetch|supabase)\.ts$/,
+    layer: 'integrations',
+    role: 'http-or-sdk',
+  },
   { match: /^services\/streaming\.ts$/, layer: 'integrations', role: 'native-bridge' },
   { match: /^services\/realtime\.ts$/, layer: 'integrations', role: 'realtime' },
   { match: /^services\/notifications\.ts$/, layer: 'platform', role: 'push-adapter' },
@@ -259,10 +273,20 @@ const LAYER_GUESS_RULES: Array<{ match: RegExp; layer: LayerGuess; role: string 
 function walk(dir: string, acc: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     if (EXCLUDE_DIRS.has(entry)) continue;
-    if (entry.startsWith('.') && entry !== '.eslintrc' && entry !== '.eslintrc.js' && entry !== '.eslintrc.cjs') continue;
+    if (
+      entry.startsWith('.') &&
+      entry !== '.eslintrc' &&
+      entry !== '.eslintrc.js' &&
+      entry !== '.eslintrc.cjs'
+    )
+      continue;
     const full = join(dir, entry);
     let st;
-    try { st = statSync(full); } catch { continue; }
+    try {
+      st = statSync(full);
+    } catch {
+      continue;
+    }
     if (st.isDirectory()) walk(full, acc);
     else if (FILE_EXT.test(entry)) acc.push(full);
   }
@@ -293,7 +317,9 @@ function countImports(filePath: string): { incoming: number; outgoing: number } 
       if (/^\s*import\s+.+from\s+['"][^'"]+['"]/.test(ln)) outgoing++;
       else if (/^\s*import\s+['"][^'"]+['"]/.test(ln)) outgoing++;
     }
-  } catch { /* skip unreadable */ }
+  } catch {
+    /* skip unreadable */
+  }
   // Incoming is computed in a second pass at index level (see main)
   return { incoming: 0, outgoing };
 }
@@ -358,7 +384,9 @@ function main(): void {
           }
         }
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   // Second pass: stamp incoming counts onto records
@@ -391,7 +419,9 @@ function main(): void {
   writeFileSync(OUTPUT_OWN, JSON.stringify(ownership, null, 2) + '\n');
   console.log(`[indexer] wrote ${OUTPUT_INDEX}`);
   console.log(`[indexer] wrote ${OUTPUT_OWN}`);
-  console.log(`[indexer] ${records.length} files indexed across ${Object.keys(ownership.by_owner).length} owners`);
+  console.log(
+    `[indexer] ${records.length} files indexed across ${Object.keys(ownership.by_owner).length} owners`,
+  );
 }
 
 main();

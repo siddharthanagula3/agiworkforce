@@ -81,7 +81,7 @@ export function calculateDelay(
   if (options.jitter) {
     const jitterRange = cappedDelay * options.jitterFactor;
     // WEB-13: Math.random is intentional — retry-backoff jitter, not security-sensitive.
-    // eslint-disable-next-line no-restricted-syntax
+
     const jitter = (Math.random() - 0.5) * 2 * jitterRange;
     return Math.max(0, Math.round(cappedDelay + jitter));
   }
