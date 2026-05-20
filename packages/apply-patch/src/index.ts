@@ -73,10 +73,39 @@ export class WorkspaceEscapeError extends Error {
  * outside (e.g. `workspace/foo -> /etc`); without it, a patch targeting
  * `foo/passwd` would lexically resolve cleanly but actually write to /etc.
  */
+/**
+ * FIX (audit 2026-05-20, §13): the lexical `startsWith` check used to be a
+ * raw byte comparison. On case-insensitive filesystems (macOS HFS+, Windows
+ * NTFS) `/CWD/foo` and `/cwd/foo` resolve to the same inode but the byte
+ * comparison would treat them as different paths — so a patch with
+ * `--- /CWD/../escape` could potentially slip past the lexical gate before
+ * the realpath check caught it.
+ *
+ * Use case-aware comparison on case-insensitive platforms. The realpath
+ * resolution below remains the primary defense; this is belt-and-braces.
+ */
+function isCaseInsensitiveFs(): boolean {
+  return process.platform === 'darwin' || process.platform === 'win32';
+}
+
+function pathStartsWith(haystack: string, prefix: string): boolean {
+  if (isCaseInsensitiveFs()) {
+    return haystack.toLowerCase().startsWith(prefix.toLowerCase());
+  }
+  return haystack.startsWith(prefix);
+}
+
+function pathEquals(a: string, b: string): boolean {
+  if (isCaseInsensitiveFs()) {
+    return a.toLowerCase() === b.toLowerCase();
+  }
+  return a === b;
+}
+
 async function assertInsideWorkspace(p: string, cwd: string): Promise<void> {
   // Reject path-level escape first (lexical check, no fs call).
   const resolved = isAbsolute(p) ? resolve(p) : resolve(cwd, p);
-  if (resolved !== cwd && !resolved.startsWith(cwd + sep)) {
+  if (!pathEquals(resolved, cwd) && !pathStartsWith(resolved, cwd + sep)) {
     throw new WorkspaceEscapeError(p, cwd);
   }
   // Then canonicalize via realpath to reject symlink escapes. We canonicalize
@@ -90,7 +119,7 @@ async function assertInsideWorkspace(p: string, cwd: string): Promise<void> {
     canonCwd = cwd;
   }
   const canonTarget = await realpathOfExistingAncestor(resolved);
-  if (canonTarget !== canonCwd && !canonTarget.startsWith(canonCwd + sep)) {
+  if (!pathEquals(canonTarget, canonCwd) && !pathStartsWith(canonTarget, canonCwd + sep)) {
     throw new WorkspaceEscapeError(p, canonCwd);
   }
 }

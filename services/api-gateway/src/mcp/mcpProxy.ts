@@ -280,7 +280,18 @@ export class McpProxy {
       'Connecting to stdio MCP server',
     );
 
-    // SECURITY: Build a sanitized env — strip sensitive vars from parent process
+    // SECURITY: Build a sanitized env — strip sensitive vars from parent process.
+    //
+    // AUDIT (2026-05-20, §16): the api-gateway service does not import or
+    // consume Stripe secrets — they appear here only because mcpProxy
+    // strips them from the env handed to spawned MCP servers. The
+    // production Stripe-consuming surface (apps/web) already has env-var
+    // validation in `apps/web/lib/validate-env.ts:validateEnvironment()`,
+    // which is the canonical "fail loudly if missing in prod" gate. We
+    // leave Stripe keys on this strip list so a future api-gateway
+    // refactor that does start consuming them doesn't accidentally leak
+    // them to subprocesses; the audit-listed missing-startup-validation
+    // finding cross-references that web-side check.
     const SENSITIVE_ENV_KEYS = new Set([
       'SUPABASE_SERVICE_ROLE_KEY',
       'SUPABASE_ANON_KEY',

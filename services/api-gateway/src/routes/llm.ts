@@ -762,6 +762,13 @@ router.post(
         })
         .then(({ error }) => {
           if (error) logger.debug({ error }, 'Failed to log usage event (table may not exist)');
+        })
+        // FIX (audit 2026-05-20, §14): unhandled rejection on dropped SSE
+        // client connection — the .then chain previously had no .catch, so
+        // a rejected supabase insert promise propagated as a process-level
+        // unhandledRejection event. Now we swallow it with a debug log.
+        .catch((err: unknown) => {
+          logger.debug({ err }, 'Usage event insert rejected (SSE path)');
         });
       return;
     }
@@ -794,6 +801,11 @@ router.post(
       })
       .then(({ error }) => {
         if (error) logger.debug({ error }, 'Failed to log usage event (table may not exist)');
+      })
+      // FIX (audit 2026-05-20, §14): paired .catch so a rejected insert
+      // can't surface as unhandledRejection on the non-streaming path.
+      .catch((err: unknown) => {
+        logger.debug({ err }, 'Usage event insert rejected (completion path)');
       });
 
     res.json(openaiResponse);

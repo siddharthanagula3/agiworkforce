@@ -339,6 +339,10 @@ jest.mock('react-native-webrtc', () => ({
 
 jest.mock('@/lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
+  rehydrateWhenMmkvReady: jest.fn((store, _name) => {
+    if (store && store.persist && typeof store.persist.rehydrate === 'function')
+      store.persist.rehydrate();
+  }),
   mmkvStorage: {
     getItem: jest.fn(),
     setItem: jest.fn(),

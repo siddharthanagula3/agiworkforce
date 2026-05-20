@@ -29,9 +29,31 @@ export interface McpServerConfig {
    * AUDIT-FIX: H-5 — stdio transports must carry either a signed manifest flag
    * (verified upstream) or an explicit user-consent record that names the
    * command being launched. Without one of these the resolver throws.
+   *
+   * FIX (audit 2026-05-20, §2): the consent path is now a fallback only
+   * when `developerMode` is `true`. In production builds the
+   * `signedManifest` path is the only acceptable form. This closes the
+   * string-equality bypass where consenting to `python3 server.py` would
+   * implicitly cover *any* future config sharing that command prefix.
+   *
+   * When `developerMode` is true, the consent record must additionally
+   * match `for_command` AND `for_args` exactly — argv-level pinning, not
+   * just executable-name match.
    */
   signedManifest?: boolean;
-  userConsent?: { granted_at: string; for_command: string };
+  userConsent?: {
+    granted_at: string;
+    for_command: string;
+    /** FIX (audit 2026-05-20, §2): argv-level pin alongside for_command. */
+    for_args?: string[];
+  };
+  /**
+   * When true (default: false), permits `userConsent` as a fallback for
+   * stdio spawn. Production builds should leave this false so only
+   * `signedManifest: true` configs spawn. CLI / desktop expose a setting
+   * to flip it for local development.
+   */
+  developerMode?: boolean;
 }
 
 /** A single tool in the connected MCP server's catalog. */
