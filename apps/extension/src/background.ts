@@ -175,6 +175,77 @@ function createSharedBackgroundContext(): SharedBackgroundContext {
 
 const _bgCtx: SharedBackgroundContext = createSharedBackgroundContext();
 
+/**
+ * Per-session HMAC secret negotiated with the native host on connect.
+ *
+ * FIX (audit 2026-05-20, §2): the legacy native-messaging envelope paired
+ * requests with their responses purely by UUID, with no integrity envelope.
+ * A compromised native host (or any in-process MITM that can intercept
+ * postMessage in this extension service worker) could swap responses
+ * across in-flight requests — answer a benign ping with the data from a
+ * concurrent `chat_message` call.
+ *
+ * Mitigation: at connect time, ask the native host for a 32-byte session
+ * secret in its connect ack. Every outgoing request gets a per-request
+ * `mac = HMAC-SHA256(secret, id || timestamp || body)` and every incoming
+ * response is verified the same way against the request's id. If the host
+ * doesn't return a session_secret (older builds), we log a one-time
+ * warning and continue without MACing — fully backwards-compatible.
+ */
+let nativeSessionSecret: ArrayBuffer | null = null;
+let nativeSessionSecretWarned = false;
+
+async function importHmacKey(rawSecret: ArrayBuffer): Promise<CryptoKey> {
+  return crypto.subtle.importKey('raw', rawSecret, { name: 'HMAC', hash: 'SHA-256' }, false, [
+    'sign',
+    'verify',
+  ]);
+}
+
+async function computeEnvelopeMac(
+  id: string,
+  timestamp: number,
+  body: unknown,
+): Promise<string | null> {
+  if (!nativeSessionSecret) return null;
+  const payload = `${id}|${timestamp}|${JSON.stringify(body)}`;
+  const key = await importHmacKey(nativeSessionSecret);
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload));
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function setNativeSessionSecret(hex: string | undefined): void {
+  // FIX (Codex P2, 2026-05-20): strict format check. The previous accept-any
+  // ≥32-char string would silently coerce non-hex (or odd-length) input into
+  // zeroed/truncated bytes via `parseInt(NaN, 16) = NaN → 0`, producing an
+  // HMAC key that differs from the host's and breaking every signed
+  // response once strict-mode (P1, below) is in effect. Require exactly
+  // 64 hex chars = 32 bytes.
+  const isWellFormed =
+    typeof hex === 'string' && hex.length === 64 && /^[0-9a-fA-F]{64}$/.test(hex);
+  if (!isWellFormed) {
+    if (!nativeSessionSecretWarned) {
+      nativeSessionSecretWarned = true;
+      logger.warn(
+        '[native-mac] Native host did not return a well-formed session_secret in connect ack; ' +
+          'continuing without HMAC envelope verification (back-compat). Update the desktop ' +
+          'app to mint a 32-byte (64 hex char) per-session secret to enable ' +
+          'response-shuffle protection.',
+      );
+    }
+    nativeSessionSecret = null;
+    return;
+  }
+  // Parse 64-char hex into 32-byte ArrayBuffer.
+  const bytes = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) {
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  nativeSessionSecret = bytes.buffer;
+}
+
 function clearNativeReconnectTimer(): void {
   if (_bgCtx.nativeReconnectTimer) {
     clearTimeout(_bgCtx.nativeReconnectTimer);
@@ -414,9 +485,17 @@ function sendNativeRequest(
 
       pendingRequests.set(id, { resolve, reject, timeout });
 
+      // FIX (audit 2026-05-20, §2): attach an HMAC envelope when a session
+      // secret is available. The native host echoes the same id and signs
+      // its response with the same secret; verifyResponseMac() rejects on
+      // mismatch.
+      const timestamp = Date.now();
       try {
+        const mac = await computeEnvelopeMac(id, timestamp, message);
         state.nativePort?.postMessage({
           id,
+          timestamp,
+          mac,
           message,
         });
       } catch (error) {
@@ -431,12 +510,68 @@ function sendNativeRequest(
 function handleNativeMessage(message: NativeMessageEnvelope): void {
   logger.debug('Received native message', message);
 
+  // FIX (audit 2026-05-20, §2): if the native host sends a session_secret
+  // (in the connect-handshake response), latch it for subsequent MAC
+  // computation. Best-effort: a missing secret falls back to the legacy
+  // no-MAC behavior with a one-time warn.
+  const maybeSecret = (message as Record<string, unknown>)['session_secret'];
+  if (typeof maybeSecret === 'string' && !nativeSessionSecret) {
+    setNativeSessionSecret(maybeSecret);
+  }
+
   if (message && message.id && pendingRequests.has(message.id)) {
     const request = pendingRequests.get(message.id);
     if (request) {
       const { resolve, reject, timeout } = request;
       clearTimeout(timeout);
       pendingRequests.delete(message.id);
+
+      // FIX (audit 2026-05-20, §2 + Codex P1 2026-05-20): once a session
+      // secret has been negotiated, we are in STRICT mode — every response
+      // must carry a valid mac+timestamp envelope. An attacker that can
+      // tamper with response framing must not be able to defeat the
+      // integrity check by simply stripping the `mac`/`timestamp` fields
+      // (downgrade attack). Only when no secret has ever been negotiated
+      // do we accept the legacy success/error envelope.
+      const respMac = (message as Record<string, unknown>)['mac'];
+      const respTs = (message as Record<string, unknown>)['timestamp'];
+      if (nativeSessionSecret) {
+        if (typeof respMac !== 'string' || typeof respTs !== 'number') {
+          logger.warn(
+            '[native-mac] Strict mode — rejecting response with missing mac/timestamp ' +
+              '(downgrade attack guard)',
+            { id: message.id },
+          );
+          reject(new Error('Native response missing required MAC envelope'));
+          return;
+        }
+        // The host signs with the same payload shape: id|ts|body. Body is
+        // the message *without* id/mac/timestamp/session_secret so the
+        // signature is over a stable canonical form.
+        const body: Record<string, unknown> = { ...(message as Record<string, unknown>) };
+        delete body['id'];
+        delete body['mac'];
+        delete body['timestamp'];
+        delete body['session_secret'];
+        void computeEnvelopeMac(message.id, respTs, body).then((expected) => {
+          if (expected !== respMac) {
+            logger.warn(
+              '[native-mac] Response MAC mismatch — rejecting (potential shuffle attack)',
+              { id: message.id },
+            );
+            reject(new Error('Native response MAC mismatch'));
+            return;
+          }
+          if (message.success === false) {
+            reject(new Error(message.error ?? 'Native request failed'));
+          } else {
+            resolve(message as unknown as ExtensionResponse);
+          }
+        });
+        return;
+      }
+
+      // No session secret negotiated — legacy back-compat path.
       if (message.success === false) {
         reject(new Error(message.error ?? 'Native request failed'));
       } else {
@@ -447,6 +582,10 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
 }
 
 function handleNativeDisconnect(): void {
+  // FIX (audit 2026-05-20, §2): drop the session secret on disconnect
+  // so a reconnect must re-negotiate.
+  nativeSessionSecret = null;
+  nativeSessionSecretWarned = false;
   const error = chrome.runtime.lastError?.message || 'Native host disconnected';
   logger.warn('Native host disconnected', { error });
 
@@ -873,8 +1012,34 @@ async function handleMessageAsync(
         return { success: false, error: 'No tab ID for page context sync' } as ExtensionResponse;
       }
 
-      const messageContext = (message as ExtensionMessage & { context?: Record<string, unknown> })
-        .context;
+      // FIX (audit 2026-05-20, §9): the content script is on attacker-
+      // authored pages (Slack/Gmail/Docs/etc.). Page-script can postMessage
+      // arbitrary shapes into our SYNC_PAGE_CONTEXT path. Whitelist the
+      // fields by type at this boundary so a hostile context cannot smuggle
+      // extra keys past the downstream sender.
+      const rawContext =
+        (message as ExtensionMessage & { context?: Record<string, unknown> }).context ?? null;
+      let messageContext: Record<string, unknown> | undefined;
+      if (rawContext && typeof rawContext === 'object') {
+        const whitelisted: Record<string, unknown> = {
+          success: true,
+        };
+        const str = (k: string) => {
+          const v = rawContext[k];
+          if (typeof v === 'string') whitelisted[k] = v;
+        };
+        const num = (k: string) => {
+          const v = rawContext[k];
+          if (typeof v === 'number' && Number.isFinite(v)) whitelisted[k] = v;
+        };
+        str('url');
+        str('title');
+        str('html');
+        str('selectedText');
+        str('error');
+        num('timestamp');
+        messageContext = whitelisted;
+      }
       return syncTabContextWithDesktop(resolvedTabId, 'content_sync', messageContext);
     }
 

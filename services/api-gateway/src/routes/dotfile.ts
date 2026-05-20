@@ -14,6 +14,7 @@ import { Router, type Request, type Response } from 'express';
 import { authenticateToken } from '../middleware/auth';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
+import { type ZodTypeAny } from 'zod';
 
 const router: Router = Router();
 
@@ -108,8 +109,18 @@ const AVAILABLE_ENDPOINTS = [
  * Attempt to fetch from the desktop app's localhost API.
  * Returns the parsed JSON on success, or null if the desktop is unreachable.
  */
+/**
+ * FIX (audit 2026-05-20, §16): the desktop API response was previously
+ * accepted after only a "non-null object" runtime check. A misconfigured
+ * desktop (or a malicious local app binding port 8787 before the
+ * legitimate desktop binds it) could feed shape-divergent JSON into the
+ * gateway where downstream consumers trusted the field layout. The
+ * second argument is now an optional Zod schema; when provided, the
+ * gateway rejects responses that don't match and returns null.
+ */
 async function proxyFromDesktop<T extends Record<string, unknown>>(
   path: string,
+  schema?: ZodTypeAny,
 ): Promise<T | null> {
   try {
     const controller = new AbortController();
@@ -156,6 +167,21 @@ async function proxyFromDesktop<T extends Record<string, unknown>>(
     if (data === null || typeof data !== 'object' || Array.isArray(data)) {
       logger.debug({ path }, 'Desktop API returned non-object JSON');
       return null;
+    }
+
+    // FIX (audit 2026-05-20, §16): apply a Zod schema if the caller
+    // provided one. Callers that don't provide a schema get the legacy
+    // shape-only check above — back-compat.
+    if (schema) {
+      const parsed = schema.safeParse(data);
+      if (!parsed.success) {
+        logger.debug(
+          { path, issues: parsed.error.issues.slice(0, 5) },
+          'Desktop API response failed schema validation',
+        );
+        return null;
+      }
+      return parsed.data as T;
     }
 
     return data as T;

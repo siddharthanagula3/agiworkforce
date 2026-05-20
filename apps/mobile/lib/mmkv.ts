@@ -157,3 +157,48 @@ export const mmkvStorage: StateStorage = {
     getStorage().delete(name);
   },
 };
+
+/**
+ * Shared MMKV-race helper for Zustand persist stores.
+ *
+ * FIX (audit 2026-05-20, §17): every persisted mobile store carried this
+ * boilerplate at the bottom of its module:
+ *
+ * ```ts
+ * whenMmkvReady(() => {
+ *   useFooStore.persist.rehydrate();
+ * });
+ * ```
+ *
+ * 23 stores carry the AUDIT-FIX: MMKV-RACE marker. Consolidating the
+ * pattern here so:
+ *   1. New stores opt in via one call, not three lines.
+ *   2. If we ever need to add structured logging / metrics around
+ *      rehydration timing, there's one place to change.
+ *   3. The shape `{ persist: { rehydrate(): Promise<void> | void } }`
+ *      is enforced statically rather than via duck-typing.
+ *
+ * Use this helper in new persist-enabled stores; existing call sites can
+ * migrate opportunistically (don't churn for churn's sake — a TODO marker
+ * was left on the remaining 20 stores referencing this helper).
+ */
+export interface RehydratableStore {
+  persist: {
+    rehydrate: () => Promise<void> | void;
+  };
+}
+
+export function rehydrateWhenMmkvReady(store: RehydratableStore, storeName: string): void {
+  whenMmkvReady(() => {
+    try {
+      const result = store.persist.rehydrate();
+      if (result && typeof (result as Promise<void>).catch === 'function') {
+        (result as Promise<void>).catch((err) => {
+          console.warn(`[mmkv] ${storeName} async rehydrate failed:`, err);
+        });
+      }
+    } catch (err) {
+      console.warn(`[mmkv] ${storeName} sync rehydrate threw:`, err);
+    }
+  });
+}

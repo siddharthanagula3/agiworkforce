@@ -42,14 +42,35 @@ function coerceHeaders(
   return out;
 }
 
+function arraysEqual(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
 export function resolveMcpTransport(config: McpServerConfig): Transport {
   if (config.command) {
-    // AUDIT-FIX: H-5 — never spawn an arbitrary local command without consent or a signed manifest.
-    const consentMatches =
-      !!config.userConsent && config.userConsent.for_command === config.command;
-    if (!config.signedManifest && !consentMatches) {
+    // AUDIT-FIX: H-5 + FIX (audit 2026-05-20, §2): never spawn an arbitrary
+    // local command without a signed manifest. The userConsent fallback is
+    // ONLY honored when developerMode is on AND the consent matches BOTH
+    // the command and the args exactly (argv-level pin, not just executable
+    // name). The string-equality consent bypass is closed.
+    const consent = config.userConsent;
+    const expectedArgs = config.args ?? [];
+    const consentMatchesCommand = !!consent && consent.for_command === config.command;
+    const consentMatchesArgs =
+      !!consent &&
+      (consent.for_args !== undefined
+        ? arraysEqual(consent.for_args, expectedArgs)
+        : // No for_args on the consent record means "command only" — that's
+          // the legacy string-equality consent shape; refuse it.
+          false);
+    const consentValid = !!config.developerMode && consentMatchesCommand && consentMatchesArgs;
+    if (!config.signedManifest && !consentValid) {
       throw new MCPTransportError(
-        'Stdio transport requires signed manifest or explicit user consent',
+        'Stdio transport requires a signed manifest. ' +
+          'Legacy userConsent is honored only when developerMode is enabled AND ' +
+          'the consent record pins both `for_command` and `for_args` exactly.',
       );
     }
     const env = coerceEnv(config.env);

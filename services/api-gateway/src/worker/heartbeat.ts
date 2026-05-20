@@ -272,7 +272,7 @@ export function startHeartbeatSweep(): void {
       logger.error({ err }, 'Heartbeat sweep error');
     });
   }, 60_000);
-  sweepInterval.unref?.();
+  (sweepInterval as unknown as { unref?(): void }).unref?.();
 }
 
 export function stopHeartbeatSweep(): void {

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
+import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 
 /** How recently a heartbeat must be to consider the desktop "online" (ms). */
 const ONLINE_THRESHOLD_MS = 90_000;
@@ -68,6 +68,5 @@ export const useDesktopStatusStore = create<DesktopStatusState>()(
   ),
 );
 
-whenMmkvReady(() => {
-  useDesktopStatusStore.persist.rehydrate();
-});
+// FIX (audit 2026-05-20, §17): use the shared rehydrate helper.
+rehydrateWhenMmkvReady(useDesktopStatusStore, 'desktopStatusStore');

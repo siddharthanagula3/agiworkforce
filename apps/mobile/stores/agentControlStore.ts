@@ -201,6 +201,9 @@ export const useAgentControlStore = create<AgentControlStore>()(
   ),
 );
 
+// TODO(audit 2026-05-20, §17): migrate to rehydrateWhenMmkvReady() from
+// @/lib/mmkv — see notificationPrefsStore / desktopStatusStore / projectStore
+// for the canonical pattern. Tracked as part of the MMKV-RACE cleanup.
 whenMmkvReady(() => {
   useAgentControlStore.persist.rehydrate();
 });

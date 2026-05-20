@@ -14,6 +14,15 @@ pub struct PatchResult {
 /// CLI-NEW-007 fix (2026-05-04 audit): scan a unified diff for the file
 /// targets it touches and verify each one is contained within `cwd`.
 ///
+/// FIX (audit 2026-05-20, §3): the equivalent TS validator in
+/// `packages/apply-patch` takes a `workspaceOnly: boolean` flag. The Rust
+/// CLI never had a way to opt out — workspace-only is the only mode.
+/// To make that invariant explicit (and protect against a future refactor
+/// re-introducing an `--unsafe-paths` knob): this function fails closed.
+/// There is no `workspace_only: false` code path; any change here that
+/// adds one MUST default to `true` and require an explicit caller opt-in
+/// at the CLI command surface, never at this validator.
+///
 /// Without this check, a patch with `--- /etc/cron.d/backdoor` flowed straight
 /// into `git apply`. Modern git refuses absolute paths by default, but:
 ///   - older gits (< 2.20) accept them,

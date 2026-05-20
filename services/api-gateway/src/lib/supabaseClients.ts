@@ -137,14 +137,18 @@ const supabaseJwtCache = new Map<string, { token: string; cachedAt: number }>();
 // Periodic cleanup so a long-running process with millions of distinct
 // userIds doesn't grow the cache unboundedly. Mirrors the pattern in
 // middleware/auth.ts:46.
-setInterval(() => {
+const _supabaseCacheSweepTimer = setInterval(() => {
   const now = Date.now();
   for (const [userId, entry] of supabaseJwtCache) {
     if (now - entry.cachedAt > SUPABASE_TOKEN_CACHE_TTL_MS) {
       supabaseJwtCache.delete(userId);
     }
   }
-}, 300_000).unref?.();
+}, 300_000);
+// `unref` is Node-only; this tsconfig has `lib: ["ES2022"]` and resolves
+// setInterval to the DOM signature returning `number`. Cast through unknown
+// to reach the runtime method without a tsconfig change.
+(_supabaseCacheSweepTimer as unknown as { unref?(): void }).unref?.();
 
 /**
  * Mint a short-lived Supabase-shaped JWT for the given user.

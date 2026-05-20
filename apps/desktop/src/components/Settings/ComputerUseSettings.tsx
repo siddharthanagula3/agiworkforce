@@ -29,6 +29,7 @@ import {
 } from '@/stores/computerUseStore';
 import { ComputerUseConsentDialog } from './ComputerUseConsentDialog';
 import { getAllModels } from '@/constants/llm';
+import { STORAGE_KEYS } from '../../constants/storageKeys';
 
 // Backend types — mirror Rust definitions.
 type PermissionStatus = 'allowed' | 'denied' | 'ask_every_time';
@@ -105,11 +106,11 @@ export function ComputerUseSettings() {
   // to executeOpaTask on next run)
   const [computerUseModel, setComputerUseModel] = useState<string>(() => {
     if (typeof window === 'undefined') return '';
-    return window.localStorage.getItem('computerUse.model') ?? '';
+    return window.localStorage.getItem(STORAGE_KEYS.COMPUTER_USE_MODEL) ?? '';
   });
   const [computerUseProvider, setComputerUseProvider] = useState<string>(() => {
     if (typeof window === 'undefined') return '';
-    return window.localStorage.getItem('computerUse.provider') ?? '';
+    return window.localStorage.getItem(STORAGE_KEYS.COMPUTER_USE_PROVIDER) ?? '';
   });
 
   const refreshPermissions = useCallback(async () => {
@@ -191,8 +192,8 @@ export function ComputerUseSettings() {
     const providerId = opt?.provider ?? '';
     setComputerUseProvider(providerId);
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem('computerUse.model', modelId);
-      window.localStorage.setItem('computerUse.provider', providerId);
+      window.localStorage.setItem(STORAGE_KEYS.COMPUTER_USE_MODEL, modelId);
+      window.localStorage.setItem(STORAGE_KEYS.COMPUTER_USE_PROVIDER, providerId);
     }
     toast.success(
       modelId

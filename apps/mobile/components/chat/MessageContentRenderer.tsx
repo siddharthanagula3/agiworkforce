@@ -181,10 +181,24 @@ function renderTextSegment(text: string, keyBase: string): React.ReactNode[] {
     }
 
     // --- Blockquote: > text ---
+    //
+    // FIX (audit 2026-05-20, §14): the legacy code matched any line
+    // starting with `> ` and pushed `.slice(2)`. For a line that was
+    // exactly `> ` (the quote marker with no body), this yielded an
+    // empty string that downstream rendered as a blank line inside the
+    // quote box. Worse, it could collapse a `>` followed by trailing
+    // whitespace into a silent empty quote — a renderer-side glitch the
+    // author cannot see.
+    //
+    // Now: skip empty / whitespace-only quote-body lines explicitly so
+    // the rendered blockquote only contains lines that have real content.
     if (line.startsWith('> ')) {
       const quoteLines: string[] = [];
       while (idx < lines.length && lines[idx]!.startsWith('> ')) {
-        quoteLines.push(lines[idx]!.slice(2));
+        const body = lines[idx]!.slice(2);
+        if (body.trim().length > 0) {
+          quoteLines.push(body);
+        }
         idx++;
       }
       nodes.push(

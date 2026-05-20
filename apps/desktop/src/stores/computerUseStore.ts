@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 
 export interface ScreenCapture {
   image_data: string;
@@ -495,14 +496,19 @@ export const useComputerUseStore = create<ComputerUseState>()(
           undefined,
           'computerUse/executeOpa/start',
         );
-        // Pull the persisted model/provider settings as defaults (set by the
-        // computer-use model picker in ComputerUseSettings.tsx). Caller can
-        // still override per-call via `options.model`.
+        // Pull the persisted model/provider settings as defaults. The keys
+        // are written by ComputerUseSettings.tsx:194-195 when the user picks
+        // a model in the settings UI; this is NOT a hallucinated storage
+        // contract (audit 2026-05-20 §8 flagged it as dead but mis-traced
+        // the write-side). See constants/storageKeys.ts for the canonical
+        // names — do not hardcode them in new call sites.
         const persistedModel =
-          typeof window !== 'undefined' ? window.localStorage.getItem('computerUse.model') : null;
+          typeof window !== 'undefined'
+            ? window.localStorage.getItem(STORAGE_KEYS.COMPUTER_USE_MODEL)
+            : null;
         const persistedProvider =
           typeof window !== 'undefined'
-            ? window.localStorage.getItem('computerUse.provider')
+            ? window.localStorage.getItem(STORAGE_KEYS.COMPUTER_USE_PROVIDER)
             : null;
         try {
           const result = await invoke<OpaTaskResult>('computer_use_execute_opa_task', {

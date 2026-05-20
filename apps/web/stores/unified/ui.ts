@@ -880,7 +880,17 @@ export const useUIStore = create<UIState>()(
               Promise.all([import('./modelStore'), import('./accountStore')]).then(
                 ([{ useModelStore: _useModelStore }, { useAccountStore: _useAccountStore }]) => {
                   const modelStore = _useModelStore.getState();
-                  const accountStore = _useAccountStore.getState();
+                  // FIX (audit 2026-05-20, §8): desktop-stubs now returns a
+                  // typed `Record<string, never>` from getState() rather than
+                  // `any`, so we cannot pretend an `account.plan` field
+                  // exists at compile time. The web bundle never reaches this
+                  // branch because UnifiedAgenticChat is desktop-only — but
+                  // we keep the defensive lookup via a narrow type assertion
+                  // so the contract is explicit at the boundary rather than
+                  // hidden behind `as any`.
+                  const accountStore = _useAccountStore.getState() as {
+                    account?: { plan?: string };
+                  };
                   const tier = accountStore.account?.plan ?? 'free';
 
                   // Map tier to the best available auto mode

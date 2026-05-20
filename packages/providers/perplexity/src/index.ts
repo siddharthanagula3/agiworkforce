@@ -90,7 +90,14 @@ async function* withCitationFooter(
       if (formatted) citationFooter = formatted;
     }
     const finishReason = chunk.choices?.[0]?.finish_reason;
-    if (finishReason && citationFooter) {
+    // FIX (audit 2026-05-20, §8): the legacy code asserted `chunk.choices[0]!`
+    // after only checking `finishReason` via optional chaining. If the
+    // upstream Perplexity stream ever returns a chunk with finish_reason
+    // on `choices[0]` but `choices[0]` itself being null/undefined (which
+    // the type system permits because of the chained `?.`), the `!`
+    // would crash. Bounds-check explicitly.
+    const firstChoice = chunk.choices?.[0];
+    if (finishReason && citationFooter && firstChoice) {
       // Emit a synthetic text-delta chunk before the finish-bearing chunk so
       // translateOpenAIStream renders the footer as part of the assistant
       // message, then forward the original.
@@ -98,7 +105,7 @@ async function* withCitationFooter(
         ...chunk,
         choices: [
           {
-            ...chunk.choices[0]!,
+            ...firstChoice,
             finish_reason: null,
             delta: { content: citationFooter },
           },
