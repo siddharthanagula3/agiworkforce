@@ -355,8 +355,8 @@ mod tests {
         assert!(ids.contains(&"grok-4.3"));
         assert!(ids.contains(&"mistral-large-2512"));
         assert!(ids.contains(&"mistral-medium-2508"));
-        assert!(ids.contains(&"deepseek-chat"));
-        assert!(ids.contains(&"deepseek-reasoner"));
+        assert!(ids.contains(&"deepseek-v4-flash"));
+        assert!(ids.contains(&"deepseek-v4-pro"));
         assert!(ids.contains(&"llama3.1"));
         assert!(ids.contains(&"qwen2.5"));
     }
@@ -460,7 +460,7 @@ mod tests {
         // grok-4-0709 was deprecated in the Phase 3 catalog refresh; the live
         // xAI flagship is grok-4.3 which has reasoning enabled.
         assert!(reasoning_ids.contains(&"grok-4.3"));
-        assert!(reasoning_ids.contains(&"deepseek-reasoner"));
+        assert!(reasoning_ids.contains(&"deepseek-v4-pro"));
     }
 
     #[test]
@@ -631,7 +631,7 @@ mod tests {
         assert!(supports_tool_use("gemini-3.1-pro-preview"));
         // grok-4-0709 deprecated; use grok-4.3 (live xAI flagship).
         assert!(supports_tool_use("grok-4.3"));
-        assert!(supports_tool_use("deepseek-reasoner"));
+        assert!(supports_tool_use("deepseek-v4-pro"));
     }
 
     #[test]
@@ -693,7 +693,7 @@ mod tests {
         assert!(supports_reasoning("gpt-5.4-mini"));
         assert!(supports_reasoning("gpt-5.4-pro"));
         assert!(supports_reasoning("gemini-3.1-pro-preview"));
-        assert!(supports_reasoning("deepseek-reasoner"));
+        assert!(supports_reasoning("deepseek-v4-pro"));
     }
 
     #[test]
@@ -756,14 +756,19 @@ mod tests {
     }
 
     #[test]
-    fn test_format_model_detail_no_tools_with_vision() {
-        let model = find_model("deepseek-reasoner").unwrap();
+    fn test_format_model_detail_deepseek_v4_pro() {
+        // Generic detail-formatter smoke test on a reasoning model. Was
+        // originally named test_format_model_detail_no_tools_with_vision and
+        // pinned to legacy "deepseek-reasoner" (tools=yes, vision=no);
+        // canonical "deepseek-v4-pro" in models.json has tools+vision+reasoning
+        // all yes and pricing 0.14/0.28.
+        let model = find_model("deepseek-v4-pro").unwrap();
         let detail = format_model_detail(&model);
         assert!(detail.contains("Tool use:        yes"));
-        assert!(detail.contains("Vision:          no"));
+        assert!(detail.contains("Vision:          yes"));
         assert!(detail.contains("Reasoning:       yes"));
         assert!(!detail.contains("free (local)"));
-        assert!(detail.contains("$0.28 / $0.42"));
+        assert!(detail.contains("$0.14 / $0.28"));
     }
 
     // ── format_model_list ──────────────────────────────────────
