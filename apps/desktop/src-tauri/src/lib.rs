@@ -1357,6 +1357,7 @@ pub fn run() {
 
             crate::sys::commands::browser_init,
             crate::sys::commands::browser_check_status,
+            crate::sys::commands::open_url,
             crate::sys::commands::browser_launch,
             crate::sys::commands::browser_open_tab,
             crate::sys::commands::browser_close,

@@ -1691,6 +1691,44 @@ pub async fn find_by_role(
         .ok_or_else(|| format!("No element found for role '{}'", role))
 }
 
+/// AUDIT-FIX: CI-3 — system-default-browser navigation gated by HITL.
+///
+/// Opens an http(s) URL in the user's default browser after explicit
+/// confirmation via `request_confirmation_simple`. Rejects non-http(s)
+/// schemes to block `file://`, `javascript:`, and other vectors that
+/// prompt-injected agents could use to read local files or execute JS.
+#[tauri::command]
+pub async fn open_url(
+    url: String,
+    reason: String,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let lower = url.to_ascii_lowercase();
+    if !lower.starts_with("https://") && !lower.starts_with("http://") {
+        return Err(format!("Refusing to open non-http(s) URL: {url}"));
+    }
+    if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
+        &app,
+        "open_url",
+        &serde_json::json!({ "url": url, "reason": reason }),
+    )
+    .await?
+    {
+        return Err("User denied open_url".to_string());
+    }
+    #[cfg(target_os = "macos")]
+    let spawned = std::process::Command::new("open").arg(&url).spawn();
+    #[cfg(target_os = "windows")]
+    let spawned = std::process::Command::new("cmd")
+        .args(["/C", "start", "", &url])
+        .spawn();
+    #[cfg(target_os = "linux")]
+    let spawned = std::process::Command::new("xdg-open").arg(&url).spawn();
+    spawned
+        .map(|_| ())
+        .map_err(|e| format!("Failed to open URL: {e}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
