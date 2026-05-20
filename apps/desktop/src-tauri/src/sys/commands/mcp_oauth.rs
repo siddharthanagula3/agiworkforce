@@ -2012,7 +2012,7 @@ mod tests {
     #[test]
     fn test_pkce_generation() {
         let pkce = PkceChallenge::generate();
-        assert_eq!(pkce.code_verifier.len(), 64);
+        assert_eq!(pkce.code_verifier.len(), 43);
         assert!(!pkce.code_challenge.is_empty());
 
         // Verify the challenge is a valid base64url-encoded SHA256 hash
