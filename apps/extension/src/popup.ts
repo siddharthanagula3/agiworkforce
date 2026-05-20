@@ -68,9 +68,9 @@ function setupEventListeners(): void {
         (response: { success?: boolean } | undefined) => {
           if (chrome.runtime.lastError) return;
           if (groupBtn && response?.success) {
-            groupBtn.textContent = 'Grouped';
+            setActionButtonLabel(groupBtn, 'Grouped');
             setTimeout(() => {
-              groupBtn.textContent = 'Group Tab';
+              setActionButtonLabel(groupBtn, 'Group Tab');
             }, 1500);
           }
         },
@@ -131,6 +131,19 @@ function setupEventListeners(): void {
       void handleRefresh();
     }
   });
+}
+
+function setActionButtonLabel(button: HTMLButtonElement, label: string): void {
+  const labelEl = button.querySelector('.btn-label');
+  if (labelEl) {
+    labelEl.textContent = label;
+  } else {
+    button.textContent = label;
+  }
+}
+
+function getActionButtonLabel(button: HTMLButtonElement): string {
+  return button.querySelector('.btn-label')?.textContent ?? button.textContent ?? '';
 }
 
 /**
@@ -308,10 +321,10 @@ async function handleCapturePage(): Promise<void> {
   const button = document.getElementById('captureBtn') as HTMLButtonElement | null;
   if (!button) return;
 
-  const originalText = button.textContent;
+  const originalText = getActionButtonLabel(button);
 
   try {
-    button.textContent = 'Capturing...';
+    setActionButtonLabel(button, 'Capturing...');
     button.disabled = true;
 
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -330,11 +343,11 @@ async function handleCapturePage(): Promise<void> {
     const result = response as CaptureScreenshotResponse;
 
     if (result.success) {
-      button.textContent = 'Captured!';
+      setActionButtonLabel(button, 'Captured!');
       incrementActionCount();
 
       setTimeout(() => {
-        button.textContent = originalText;
+        setActionButtonLabel(button, originalText ?? 'Capture');
         button.disabled = false;
       }, UI_FEEDBACK_DURATION_MS);
     } else {
@@ -342,10 +355,10 @@ async function handleCapturePage(): Promise<void> {
     }
   } catch (error) {
     logger.error('Capture failed', error);
-    button.textContent = 'Failed';
+    setActionButtonLabel(button, 'Failed');
 
     setTimeout(() => {
-      button.textContent = originalText;
+      setActionButtonLabel(button, originalText ?? 'Capture');
       button.disabled = false;
     }, UI_FEEDBACK_DURATION_MS);
   }
@@ -355,26 +368,26 @@ async function handleRefresh(): Promise<void> {
   const button = document.getElementById('refreshBtn') as HTMLButtonElement | null;
   if (!button) return;
 
-  const originalText = button.textContent;
+  const originalText = getActionButtonLabel(button);
 
   try {
-    button.textContent = 'Refreshing...';
+    setActionButtonLabel(button, 'Refreshing...');
     button.disabled = true;
 
     await Promise.all([updateStatus(), updateTabInfo(), updateStats()]);
 
-    button.textContent = 'Refreshed';
+    setActionButtonLabel(button, 'Refreshed');
 
     setTimeout(() => {
-      button.textContent = originalText;
+      setActionButtonLabel(button, originalText ?? 'Refresh');
       button.disabled = false;
     }, REFRESH_FEEDBACK_DURATION_MS);
   } catch (error) {
     logger.error('Refresh failed', error);
-    button.textContent = 'Failed';
+    setActionButtonLabel(button, 'Failed');
 
     setTimeout(() => {
-      button.textContent = originalText;
+      setActionButtonLabel(button, originalText ?? 'Refresh');
       button.disabled = false;
     }, UI_FEEDBACK_DURATION_MS);
   }

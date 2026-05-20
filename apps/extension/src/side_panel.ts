@@ -10,7 +10,13 @@ import {
   type CapabilityTier,
 } from '@agiworkforce/types';
 import { getExtensionSendQueue } from './sendQueue';
-import { clearChildren, setText, createElementWith, setChild, appendSvgString } from './dom-helpers';
+import {
+  clearChildren,
+  setText,
+  createElementWith,
+  setChild,
+  appendSvgString,
+} from './dom-helpers';
 import {
   saveConversation,
   listConversations,
@@ -2314,7 +2320,7 @@ function updateToolsButton(): void {
   if (!btn || !dropdown) return;
 
   const count = discoveredTools.length;
-  setText(btn, `\uD83D\uDD27 AI Tools (${count})`);
+  btn.replaceChildren(renderIcon(Plug, 14), document.createTextNode(` Tools (${count})`));
 
   if (count === 0) {
     btn.classList.remove('has-context');
@@ -2452,7 +2458,7 @@ function buildUI(): void {
   headerLeft.appendChild(logoEl);
 
   const titleWrap = el('div', {});
-  titleWrap.appendChild(el('div', { id: 'sp-title' }, 'Workforce'));
+  titleWrap.appendChild(el('div', { id: 'sp-title' }, 'AGI'));
   headerLeft.appendChild(titleWrap);
 
   const modelSelectorWrap = el('div', { class: 'sp-model-selector-wrap' });
@@ -3604,7 +3610,8 @@ function buildUI(): void {
     id: 'sp-tools-btn',
     title: 'WebMCP tools discovered on this page',
   });
-  setText(toolsBtn, '\uD83D\uDD27 AI Tools (0)');
+  toolsBtn.appendChild(renderIcon(Plug, 14));
+  toolsBtn.appendChild(document.createTextNode(' Tools (0)'));
 
   const toolsDropdown = el('div', { id: 'sp-tools-dropdown' });
   setChild(toolsDropdown, {

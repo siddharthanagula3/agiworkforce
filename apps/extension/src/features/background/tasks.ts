@@ -6,6 +6,7 @@ import type {
   DeleteScheduledTaskMessage,
 } from '../../types';
 import { logger } from '../../utils';
+import { ORIGIN_EXTENSION_PAGE, generateRecordId } from '../../background/policy';
 
 const TASKS_STORAGE_KEY = 'agi_scheduled_tasks';
 const MAX_TASKS = 50;
@@ -69,8 +70,9 @@ export async function handleCreateScheduledTask(
   }
   const task: ScheduledTask = {
     ...message.task,
-    id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    id: generateRecordId('task'),
     createdAt: Date.now(),
+    createdByOrigin: ORIGIN_EXTENSION_PAGE,
   };
   tasks.push(task);
   await saveScheduledTasks(tasks);

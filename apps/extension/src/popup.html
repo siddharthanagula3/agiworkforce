@@ -15,7 +15,7 @@
   <body>
     <div class="header">
       <h1>AGI</h1>
-      <p>Browser Automation Extension</p>
+      <p>Browser control plane</p>
     </div>
 
     <div class="content">
@@ -33,10 +33,22 @@
 
       <!-- Quick Actions -->
       <div class="actions">
-        <button class="action-btn primary" id="sidePanelBtn">💬 Open Chat</button>
-        <button class="action-btn primary" id="captureBtn">📸 Capture</button>
-        <button class="action-btn" id="refreshBtn">🔄 Refresh</button>
-        <button class="action-btn" id="groupBtn">📂 Group Tab</button>
+        <button class="action-btn primary" id="sidePanelBtn">
+          <span class="btn-icon btn-icon-chat" aria-hidden="true"></span>
+          <span class="btn-label">Open Chat</span>
+        </button>
+        <button class="action-btn primary" id="captureBtn">
+          <span class="btn-icon btn-icon-camera" aria-hidden="true"></span>
+          <span class="btn-label">Capture</span>
+        </button>
+        <button class="action-btn" id="refreshBtn">
+          <span class="btn-icon btn-icon-refresh" aria-hidden="true"></span>
+          <span class="btn-label">Refresh</span>
+        </button>
+        <button class="action-btn" id="groupBtn">
+          <span class="btn-icon btn-icon-folder" aria-hidden="true"></span>
+          <span class="btn-label">Group Tab</span>
+        </button>
       </div>
 
       <!-- Statistics -->
