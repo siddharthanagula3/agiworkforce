@@ -77,16 +77,17 @@ export function isOriginAllowed(origin: string | null, requireOrigin = false): b
   // Check for Tauri desktop app.
   //
   // FIX (audit 2026-05-20, §13): the legacy `tauri://[a-zA-Z0-9_-]+$` pattern
-  // was a Tauri v1 carryover. With the platform on Tauri v2 (per CLAUDE.md),
-  // the only origin we should accept from the desktop window is the canonical
-  // `https://tauri.localhost` form. Dropping the v1 scheme also removes the
-  // permissive underscore-in-host-id surface flagged by the audit.
+  // was over-permissive (any host-id charset, including underscores).
   //
-  // If you ever bring back v1 support, restrict the host-id charset to
-  // alphanumerics only (no underscore) and pin the length range — never
-  // accept an unbounded charset.
-  const tauriLocalhostPattern = /^https:\/\/tauri\.localhost(?::\d+)?$/;
-  if (tauriLocalhostPattern.test(origin)) {
+  // FIX (Codex P1, 2026-05-20): Tauri v2 on Windows/Linux still uses the
+  // `tauri://localhost` origin scheme for desktop window requests, and the
+  // desktop codebase asserts that origin in production. Accept BOTH the
+  // pinned `https://tauri.localhost` (macOS / Tauri v2 https mode) and the
+  // pinned `tauri://localhost` (Tauri v2 legacy scheme on other platforms).
+  // The host-id is now hard-pinned to the literal `localhost` — no charset
+  // wildcard, no length surface.
+  const tauriOriginPattern = /^(?:https:\/\/tauri\.localhost|tauri:\/\/localhost)(?::\d+)?$/;
+  if (tauriOriginPattern.test(origin)) {
     return true;
   }
 

@@ -217,21 +217,30 @@ async function computeEnvelopeMac(
 }
 
 function setNativeSessionSecret(hex: string | undefined): void {
-  if (!hex || typeof hex !== 'string' || hex.length < 32) {
+  // FIX (Codex P2, 2026-05-20): strict format check. The previous accept-any
+  // ≥32-char string would silently coerce non-hex (or odd-length) input into
+  // zeroed/truncated bytes via `parseInt(NaN, 16) = NaN → 0`, producing an
+  // HMAC key that differs from the host's and breaking every signed
+  // response once strict-mode (P1, below) is in effect. Require exactly
+  // 64 hex chars = 32 bytes.
+  const isWellFormed =
+    typeof hex === 'string' && hex.length === 64 && /^[0-9a-fA-F]{64}$/.test(hex);
+  if (!isWellFormed) {
     if (!nativeSessionSecretWarned) {
       nativeSessionSecretWarned = true;
       logger.warn(
-        '[native-mac] Native host did not return a session_secret in connect ack; ' +
+        '[native-mac] Native host did not return a well-formed session_secret in connect ack; ' +
           'continuing without HMAC envelope verification (back-compat). Update the desktop ' +
-          'app to mint a per-session secret to enable response-shuffle protection.',
+          'app to mint a 32-byte (64 hex char) per-session secret to enable ' +
+          'response-shuffle protection.',
       );
     }
     nativeSessionSecret = null;
     return;
   }
-  // Parse hex into ArrayBuffer.
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
+  // Parse 64-char hex into 32-byte ArrayBuffer.
+  const bytes = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) {
     bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
   }
   nativeSessionSecret = bytes.buffer;
@@ -517,12 +526,25 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
       clearTimeout(timeout);
       pendingRequests.delete(message.id);
 
-      // FIX (audit 2026-05-20, §2): if we have a session secret AND the
-      // response carries a mac, verify it. Mismatch = potential MITM /
-      // response-shuffle attack — reject the response.
+      // FIX (audit 2026-05-20, §2 + Codex P1 2026-05-20): once a session
+      // secret has been negotiated, we are in STRICT mode — every response
+      // must carry a valid mac+timestamp envelope. An attacker that can
+      // tamper with response framing must not be able to defeat the
+      // integrity check by simply stripping the `mac`/`timestamp` fields
+      // (downgrade attack). Only when no secret has ever been negotiated
+      // do we accept the legacy success/error envelope.
       const respMac = (message as Record<string, unknown>)['mac'];
       const respTs = (message as Record<string, unknown>)['timestamp'];
-      if (nativeSessionSecret && typeof respMac === 'string' && typeof respTs === 'number') {
+      if (nativeSessionSecret) {
+        if (typeof respMac !== 'string' || typeof respTs !== 'number') {
+          logger.warn(
+            '[native-mac] Strict mode — rejecting response with missing mac/timestamp ' +
+              '(downgrade attack guard)',
+            { id: message.id },
+          );
+          reject(new Error('Native response missing required MAC envelope'));
+          return;
+        }
         // The host signs with the same payload shape: id|ts|body. Body is
         // the message *without* id/mac/timestamp/session_secret so the
         // signature is over a stable canonical form.
@@ -549,6 +571,7 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
         return;
       }
 
+      // No session secret negotiated — legacy back-compat path.
       if (message.success === false) {
         reject(new Error(message.error ?? 'Native request failed'));
       } else {

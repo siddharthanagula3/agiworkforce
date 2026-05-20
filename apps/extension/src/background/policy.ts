@@ -331,12 +331,22 @@ export function validateShortcutActions(actions: ReadonlyArray<RunPageAction>): 
       if (selector.length === 0 || selector.length > MAX_SELECTOR_LENGTH) return false;
     }
     const value = rec['value'];
+    const typeLower = t.toLowerCase();
     if (value !== undefined && value !== null) {
       if (typeof value !== 'string') return false;
-      if (value.length > MAX_VALUE_LENGTH) return false;
+      // FIX (Codex P2, 2026-05-20): `navigate` / `open` actions carry the
+      // destination URL in the `value` field (the canonical RunPageAction
+      // shape), not `url`. The previous fix only scheme-checked `url`, so
+      // an LLM-supplied `javascript:` payload in `value` would slip through
+      // the 16384-char cap. Apply the URL safety check (2048-char cap,
+      // forbidden schemes, http(s)-only) when the action is navigation.
+      if (typeLower === 'navigate' || typeLower === 'open') {
+        if (!isSafeActionUrl(value)) return false;
+      } else if (value.length > MAX_VALUE_LENGTH) {
+        return false;
+      }
     }
-    // `url` is not on the canonical RunPageAction shape but action handlers
-    // accept it for `navigate` / `open` types. Validate when present.
+    // Legacy `url` field — kept for older action shapes that still set it.
     const url = rec['url'];
     if (url !== undefined && url !== null) {
       if (!isSafeActionUrl(url)) return false;
