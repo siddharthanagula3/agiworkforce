@@ -188,10 +188,8 @@ fn default_global_hotkey_combo() -> String {
 fn default_allowed_directories() -> Vec<String> {
     let mut dirs = Vec::new();
 
-    if let Some(home) = dirs::home_dir() {
-        dirs.push(home.to_string_lossy().to_string());
-    }
-
+    // The selected project/workspace is added explicitly when the user chooses
+    // it. Do not seed broad home-directory access for approval-free file reads.
     if let Ok(cwd) = std::env::current_dir() {
         dirs.push(cwd.to_string_lossy().to_string());
     }
@@ -199,6 +197,36 @@ fn default_allowed_directories() -> Vec<String> {
     dirs.push(std::env::temp_dir().to_string_lossy().to_string());
 
     dirs
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_allowed_directories_excludes_home_directory() {
+        let dirs = default_allowed_directories();
+
+        if let Some(home) = dirs::home_dir() {
+            assert!(
+                !dirs.contains(&home.to_string_lossy().to_string()),
+                "home directory must not be allowed by default"
+            );
+        }
+    }
+
+    #[test]
+    fn default_allowed_directories_includes_workspace_and_temp() {
+        let dirs = default_allowed_directories();
+        let cwd = std::env::current_dir()
+            .expect("current directory should resolve")
+            .to_string_lossy()
+            .to_string();
+        let temp = std::env::temp_dir().to_string_lossy().to_string();
+
+        assert!(dirs.contains(&cwd), "workspace cwd should be allowed by default");
+        assert!(dirs.contains(&temp), "temp directory should be allowed by default");
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

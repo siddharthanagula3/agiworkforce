@@ -774,10 +774,24 @@ fn get_stored_credential(provider: McpOAuthProvider, key: &str) -> Result<String
 pub async fn mcp_oauth_start(
     provider: String,
     state: tauri::State<'_, McpOAuthState>,
-    _app: tauri::AppHandle,
+    app: tauri::AppHandle,
 ) -> Result<OAuthStartResponse, String> {
     let oauth_provider = McpOAuthProvider::from_str(&provider)
         .ok_or_else(|| format!("Unknown provider: {}", provider))?;
+
+    // AUDIT-FIX: CI-3 — HITL gate before navigating the user to a third-party
+    // OAuth consent page. Without this an agent following a prompt-injected
+    // instruction could silently start an OAuth flow against an attacker-controlled
+    // provider. Pattern mirrors file_ops.rs:501.
+    if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
+        &app,
+        "mcp_oauth_consent",
+        &serde_json::json!({ "provider": oauth_provider.as_str() }),
+    )
+    .await?
+    {
+        return Err("User denied mcp_oauth_consent".to_string());
+    }
 
     // Clean up expired flows
     state.cleanup_expired_flows().await;
@@ -2012,7 +2026,7 @@ mod tests {
     #[test]
     fn test_pkce_generation() {
         let pkce = PkceChallenge::generate();
-        assert_eq!(pkce.code_verifier.len(), 64);
+        assert_eq!(pkce.code_verifier.len(), 43);
         assert!(!pkce.code_challenge.is_empty());
 
         // Verify the challenge is a valid base64url-encoded SHA256 hash

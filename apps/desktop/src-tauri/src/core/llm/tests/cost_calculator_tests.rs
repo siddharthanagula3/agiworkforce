@@ -170,14 +170,14 @@ mod tests {
     }
 
     #[test]
-    fn test_deepseek_chat_cost() {
+    fn test_deepseek_v4_flash_cost() {
         let calc = CostCalculator::new();
-        // deepseek-chat: $0.28/M input, $0.42/M output
-        // 1_000_000 input + 1_000_000 output = $0.28 + $0.42 = $0.70
-        let cost = calc.calculate(Provider::DeepSeek, "deepseek-chat", 1_000_000, 1_000_000);
+        // deepseek-v4-flash: $0.14/M input, $0.28/M output (canonical id; "deepseek-chat" is alias)
+        // 1_000_000 input + 1_000_000 output = $0.14 + $0.28 = $0.42
+        let cost = calc.calculate(Provider::DeepSeek, "deepseek-v4-flash", 1_000_000, 1_000_000);
         assert!(
-            (cost - 0.70).abs() < 1e-9,
-            "Expected $0.70 for deepseek-chat 1M+1M tokens, got ${}",
+            (cost - 0.42).abs() < 1e-9,
+            "Expected $0.42 for deepseek-v4-flash 1M+1M tokens, got ${}",
             cost
         );
     }
@@ -285,11 +285,11 @@ mod tests {
     #[test]
     fn test_cost_only_input_tokens() {
         let calc = CostCalculator::new();
-        // deepseek-chat: $0.28/M input; 500k input tokens → $0.14
-        let cost = calc.calculate(Provider::DeepSeek, "deepseek-chat", 500_000, 0);
+        // deepseek-v4-flash: $0.14/M input; 500k input tokens → $0.07
+        let cost = calc.calculate(Provider::DeepSeek, "deepseek-v4-flash", 500_000, 0);
         assert!(
-            (cost - 0.14).abs() < 1e-9,
-            "Expected $0.14 for 500k input-only deepseek-chat, got ${}",
+            (cost - 0.07).abs() < 1e-9,
+            "Expected $0.07 for 500k input-only deepseek-v4-flash, got ${}",
             cost
         );
     }
@@ -297,11 +297,11 @@ mod tests {
     #[test]
     fn test_cost_only_output_tokens() {
         let calc = CostCalculator::new();
-        // deepseek-chat: $0.42/M output; 1M output → $0.42
-        let cost = calc.calculate(Provider::DeepSeek, "deepseek-chat", 0, 1_000_000);
+        // deepseek-v4-flash: $0.28/M output; 1M output → $0.28
+        let cost = calc.calculate(Provider::DeepSeek, "deepseek-v4-flash", 0, 1_000_000);
         assert!(
-            (cost - 0.42).abs() < 1e-9,
-            "Expected $0.42 for 1M output-only deepseek-chat, got ${}",
+            (cost - 0.28).abs() < 1e-9,
+            "Expected $0.28 for 1M output-only deepseek-v4-flash, got ${}",
             cost
         );
     }
@@ -322,17 +322,17 @@ mod tests {
     #[test]
     fn test_managed_cloud_falls_through_to_origin_provider() {
         let calc = CostCalculator::new();
-        // ManagedCloud with deepseek-chat should match DeepSeek pricing
+        // ManagedCloud with deepseek-v4-flash should match DeepSeek pricing (origin-provider lookup)
         let managed = calc.calculate(
             Provider::ManagedCloud,
-            "deepseek-chat",
+            "deepseek-v4-flash",
             1_000_000,
             1_000_000,
         );
-        let origin = calc.calculate(Provider::DeepSeek, "deepseek-chat", 1_000_000, 1_000_000);
+        let origin = calc.calculate(Provider::DeepSeek, "deepseek-v4-flash", 1_000_000, 1_000_000);
         assert!(
             (managed - origin).abs() < 1e-9,
-            "ManagedCloud must proxy deepseek-chat pricing: managed=${managed}, origin=${origin}"
+            "ManagedCloud must proxy deepseek-v4-flash pricing: managed=${managed}, origin=${origin}"
         );
     }
 
@@ -389,13 +389,13 @@ mod tests {
     }
 
     #[test]
-    fn test_moonshot_kimi_cost() {
+    fn test_moonshot_kimi_k2_6_cost() {
         let calc = CostCalculator::new();
-        // kimi-k2.5: $0.60/M input, $3.00/M output
-        let cost = calc.calculate(Provider::Moonshot, "kimi-k2.5", 1_000_000, 1_000_000);
+        // kimi-k2.6: $0.60/M input, $2.50/M output (kimi-k2.5 EOL 2026-05-25; alias maps to k2.6)
+        let cost = calc.calculate(Provider::Moonshot, "kimi-k2.6", 1_000_000, 1_000_000);
         assert!(
-            (cost - 3.60).abs() < 1e-9,
-            "Expected $3.60 for kimi-k2.5 1M+1M tokens, got ${}",
+            (cost - 3.10).abs() < 1e-9,
+            "Expected $3.10 for kimi-k2.6 1M+1M tokens, got ${}",
             cost
         );
     }
