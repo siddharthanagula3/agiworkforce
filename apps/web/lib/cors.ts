@@ -74,14 +74,18 @@ export function isOriginAllowed(origin: string | null, requireOrigin = false): b
     return true;
   }
 
-  // Check for Tauri desktop app (tauri:// or tauri.localhost)
-  // SECURITY: Strict regex to prevent bypass via tauri://evil.example.com
-  // Dots are intentionally excluded from the character class to prevent subdomain bypass.
-  const tauriSchemePattern = /^tauri:\/\/[a-zA-Z0-9_-]+$/;
-  if (tauriSchemePattern.test(origin)) {
-    return true;
-  }
-  const tauriLocalhostPattern = /^https:\/\/tauri\.localhost(:\d+)?$/;
+  // Check for Tauri desktop app.
+  //
+  // FIX (audit 2026-05-20, §13): the legacy `tauri://[a-zA-Z0-9_-]+$` pattern
+  // was a Tauri v1 carryover. With the platform on Tauri v2 (per CLAUDE.md),
+  // the only origin we should accept from the desktop window is the canonical
+  // `https://tauri.localhost` form. Dropping the v1 scheme also removes the
+  // permissive underscore-in-host-id surface flagged by the audit.
+  //
+  // If you ever bring back v1 support, restrict the host-id charset to
+  // alphanumerics only (no underscore) and pin the length range — never
+  // accept an unbounded charset.
+  const tauriLocalhostPattern = /^https:\/\/tauri\.localhost(?::\d+)?$/;
   if (tauriLocalhostPattern.test(origin)) {
     return true;
   }
