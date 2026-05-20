@@ -91,6 +91,7 @@ jest.mock('react-native-reanimated', () => ({
   },
   FadeIn: { duration: jest.fn().mockReturnValue({}) },
   FadeOut: { duration: jest.fn().mockReturnValue({}) },
+  useReducedMotion: jest.fn().mockReturnValue(false),
 }));
 
 // Mock tierStore — default to 'free' tier with no conversation provider set.
@@ -116,7 +117,7 @@ jest.mock('../services/tierGuard', () => ({
 
 // Mock ProPlusPaywall so it does not try to render BottomSheet inside a test.
 // Use jest.fn() rather than require('react').forwardRef to avoid the no-require-imports rule.
-jest.mock('../components/Paywall/ProPlusPaywall', () => ({
+jest.mock('../components/paywall/ProPlusPaywall', () => ({
   ProPlusPaywall: jest.fn().mockReturnValue(null),
 }));
 

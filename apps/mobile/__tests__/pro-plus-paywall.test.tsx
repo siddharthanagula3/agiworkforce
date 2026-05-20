@@ -95,7 +95,7 @@ jest.mock('../components/ui/text', () => {
 // Imports
 // ---------------------------------------------------------------------------
 
-import { ProPlusPaywall } from '../components/Paywall/ProPlusPaywall';
+import { ProPlusPaywall } from '../components/paywall/ProPlusPaywall';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 
 const mockOpenExternalUrl = openExternalUrl as jest.Mock;
