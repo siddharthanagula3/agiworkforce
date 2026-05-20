@@ -11,13 +11,23 @@ import { logRateLimitExceeded } from './security-audit';
 // vars in a production-ish environment. Local dev and Vercel preview are
 // still allowed to run without Redis (failClosed configs already absorb that
 // safely for security-sensitive routes).
+//
+// FIX (CI 2026-05-20): scope the throw to actual Vercel production runtime,
+// not any NODE_ENV=production context. `next build` always sets
+// NODE_ENV=production during page-data collection — including in CI and in
+// local prod builds — which made this guard fire at build time on every
+// machine that wasn't a Vercel preview, blocking the `check` job. The
+// runtime intent is preserved: Vercel production functions WITHOUT Redis
+// still abort at cold-start, the moment the module is first loaded by the
+// runtime. `VERCEL_ENV` is set only inside Vercel environments, so CI
+// builds and local builds now pass cleanly.
 const hasRedisEnv =
   !!process.env['UPSTASH_REDIS_REST_URL'] && !!process.env['UPSTASH_REDIS_REST_TOKEN'];
 const vercelEnv = process.env['VERCEL_ENV']; // 'production' | 'preview' | 'development' | undefined
-const isProductionDeploy = vercelEnv === 'production' || process.env['NODE_ENV'] === 'production';
+const isVercelProductionDeploy = vercelEnv === 'production';
 
-if (isProductionDeploy && vercelEnv !== 'preview' && !hasRedisEnv) {
-  // Loud, fail-fast error so the deploy aborts at build-or-init time rather
+if (isVercelProductionDeploy && !hasRedisEnv) {
+  // Loud, fail-fast error so the deploy aborts at module init time rather
   // than silently allowing N× rate limits in serverless.
   throw new Error(
     'SEV-WEB-13: UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required ' +
