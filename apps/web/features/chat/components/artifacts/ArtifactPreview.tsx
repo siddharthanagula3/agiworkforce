@@ -211,8 +211,7 @@ export function ArtifactPreview({
         ? artifact!.versions[artifact.currentVersion]!.content
         : artifact.content;
     const sanitized = sanitizeArtifact(content, artifact.type);
-    const kind: ArtifactKind =
-      artifact.type === 'code' ? 'code' : (artifact.type as ArtifactKind);
+    const kind: ArtifactKind = artifact.type === 'code' ? 'code' : (artifact.type as ArtifactKind);
     switch (artifact.type) {
       case 'html':
         return { type: 'render', kind: 'html', html: sanitized, runScripts: true };

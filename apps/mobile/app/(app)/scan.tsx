@@ -14,15 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { CameraView, useCameraPermissions, type FlashMode } from 'expo-camera';
 import { useRouter } from 'expo-router';
-import {
-  X,
-  Zap,
-  ZapOff,
-  Send,
-  RotateCcw,
-  ScanText,
-  Copy,
-} from 'lucide-react-native';
+import { X, Zap, ZapOff, Send, RotateCcw, ScanText, Copy } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
@@ -461,15 +453,7 @@ function OcrOverlay({ regions, imgNaturalW, imgNaturalH }: OcrOverlayProps) {
           return null;
         }
 
-        return (
-          <View
-            key={i}
-            style={[
-              styles.ocrRect,
-              { left, top, width, height },
-            ]}
-          />
-        );
+        return <View key={i} style={[styles.ocrRect, { left, top, width, height }]} />;
       })}
     </View>
   );

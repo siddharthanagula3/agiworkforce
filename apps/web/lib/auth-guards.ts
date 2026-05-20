@@ -51,7 +51,8 @@ export async function requireAdmin(request: NextRequest): Promise<User> {
 export async function requireRole(request: NextRequest, role: string): Promise<User> {
   const user = await getAuthenticatedUser(request);
   const userRole = getRole(user);
-  const accepted = role === 'admin' ? userRole === 'admin' || userRole === 'owner' : userRole === role;
+  const accepted =
+    role === 'admin' ? userRole === 'admin' || userRole === 'owner' : userRole === role;
   if (!accepted) {
     throw createError.forbidden(`Requires role: ${role}`);
   }

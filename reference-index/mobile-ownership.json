@@ -228,25 +228,19 @@
       "apps/mobile/stores/chat/chatMessageStore.ts",
       "apps/mobile/stores/chat/chatViewStore.ts"
     ],
-    "marketing-engineer": [
-      "apps/mobile/app/(app)/about.tsx"
-    ],
+    "marketing-engineer": ["apps/mobile/app/(app)/about.tsx"],
     "vision-engineer": [
       "apps/mobile/app/(app)/camera.tsx",
       "apps/mobile/app/(app)/scan.tsx",
       "apps/mobile/components/image/ImageWithQuestion.tsx"
     ],
-    "compare-engineer": [
-      "apps/mobile/app/(app)/compare.tsx"
-    ],
+    "compare-engineer": ["apps/mobile/app/(app)/compare.tsx"],
     "memory-engineer": [
       "apps/mobile/app/(app)/settings/memory.tsx",
       "apps/mobile/services/memory.ts",
       "apps/mobile/stores/memoryStore.ts"
     ],
-    "translate-engineer": [
-      "apps/mobile/app/(app)/translate.tsx"
-    ],
+    "translate-engineer": ["apps/mobile/app/(app)/translate.tsx"],
     "onboarding-engineer": [
       "apps/mobile/app/(public)/_layout.tsx",
       "apps/mobile/app/(public)/age-gate.tsx",
@@ -294,15 +288,11 @@
       "apps/mobile/storage/memory.ts",
       "apps/mobile/storage/migrations.ts"
     ],
-    "cloud-mode-gate-engineer": [
-      "apps/mobile/lib/v1FeatureFlags.ts"
-    ],
+    "cloud-mode-gate-engineer": ["apps/mobile/lib/v1FeatureFlags.ts"],
     "test-engineer": [
       "apps/mobile/scripts/screenshots/pipeline.ts",
       "apps/mobile/scripts/screenshots/specs/01-multi-provider.spec.ts"
     ],
-    "native-runtime-engineer": [
-      "apps/mobile/services/streaming.ts"
-    ]
+    "native-runtime-engineer": ["apps/mobile/services/streaming.ts"]
   }
 }

@@ -132,9 +132,7 @@ export function ComputerUseOverlay({
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
       {lastAction.type === 'click' && <ClickIndicator x={scaledX} y={scaledY} />}
       {lastAction.type === 'type' && <TypeIndicator x={scaledX} y={scaledY} />}
-      {lastAction.type === 'scroll' && (
-        <ScrollIndicator x={scaledX} y={scaledY} direction="down" />
-      )}
+      {lastAction.type === 'scroll' && <ScrollIndicator x={scaledX} y={scaledY} direction="down" />}
       {lastAction.type === 'scroll_up' && (
         <ScrollIndicator x={scaledX} y={scaledY} direction="up" />
       )}

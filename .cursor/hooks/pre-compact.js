@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 const { readStdin } = require('./adapter');
-readStdin().then(raw => {
-  try {
-    const input = JSON.parse(raw || '{}');
-    console.error('[AGI] Context compaction triggered — session state preserved');
-  } catch {}
-  process.stdout.write(raw);
-}).catch(() => process.exit(0));
+readStdin()
+  .then((raw) => {
+    try {
+      const input = JSON.parse(raw || '{}');
+      console.error('[AGI] Context compaction triggered — session state preserved');
+    } catch {}
+    process.stdout.write(raw);
+  })
+  .catch(() => process.exit(0));

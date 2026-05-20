@@ -17,13 +17,6 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true
   },
-  "include": [
-    "plugins/**/*.ts",
-    "tools/**/*.ts",
-    "index.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist"
-  ]
+  "include": ["plugins/**/*.ts", "tools/**/*.ts", "index.ts"],
+  "exclude": ["node_modules", "dist"]
 }

@@ -27,13 +27,13 @@ The catalog's `consumers_still_using_old_path` field is computed by grepping `*.
 
 But Expo route files have a second class of consumer that grep cannot see: **routing-based consumers**. Examples in the current tree:
 
-- `apps/mobile/app/_layout.tsx:85`  `<Drawer.Screen name="settings/personalization" />`
-- `apps/mobile/app/(app)/(tabs)/settings.tsx:486`  `onPress: push('/(app)/settings/personalization')`
-- `apps/mobile/app/_layout.tsx:435`  `router.push('/(app)/share-preview?text=...')`
+- `apps/mobile/app/_layout.tsx:85` `<Drawer.Screen name="settings/personalization" />`
+- `apps/mobile/app/(app)/(tabs)/settings.tsx:486` `onPress: push('/(app)/settings/personalization')`
+- `apps/mobile/app/_layout.tsx:435` `router.push('/(app)/share-preview?text=...')`
 
 These references invoke the route by **string path**, which Expo router resolves by **filename**, not by JS import. Grep emits zero matches for the import patterns the script checks, so the entry's `consumers_still_using_old_path: []` looks empty even though the route file is load-bearing.
 
-**Expo route wrappers are permanent contract**, not transitional barrels. They must remain at `apps/mobile/app/<route>.tsx` (or sub-paths) for the router to bind the route. They re-export the implementation that lives in `apps/mobile/src/features/<feature>/index.tsx`, and that re-export *is* the renderable component for the route.
+**Expo route wrappers are permanent contract**, not transitional barrels. They must remain at `apps/mobile/app/<route>.tsx` (or sub-paths) for the router to bind the route. They re-export the implementation that lives in `apps/mobile/src/features/<feature>/index.tsx`, and that re-export _is_ the renderable component for the route.
 
 ### Proposed fix
 
@@ -64,16 +64,16 @@ fi
 
 **Migration of existing catalog entries** — re-tag the 8 Expo route wrappers currently in the catalog:
 
-| Entry | Current type | Should be |
-|---|---|---|
-| `apps/mobile/app/(app)/feedback.tsx` | `re-export` | `expo-route-wrapper` |
-| `apps/mobile/app/(app)/compare.tsx` | `re-export` | `expo-route-wrapper` |
-| `apps/mobile/app/(app)/share-preview.tsx` | `re-export` | `expo-route-wrapper` |
-| `apps/mobile/app/(app)/settings/personalization.tsx` | `re-export` | `expo-route-wrapper` |
-| `apps/mobile/app/(app)/settings/notifications.tsx` | `re-export` | `expo-route-wrapper` |
-| `apps/mobile/app/(app)/widget-setup.tsx` | `re-export` | `expo-route-wrapper` |
-| `apps/mobile/app/(app)/settings/capabilities.tsx` | `re-export` | `expo-route-wrapper` |
-| `apps/mobile/app/(app)/(tabs)/settings.tsx` | `re-export` | `expo-route-wrapper` |
+| Entry                                                | Current type | Should be            |
+| ---------------------------------------------------- | ------------ | -------------------- |
+| `apps/mobile/app/(app)/feedback.tsx`                 | `re-export`  | `expo-route-wrapper` |
+| `apps/mobile/app/(app)/compare.tsx`                  | `re-export`  | `expo-route-wrapper` |
+| `apps/mobile/app/(app)/share-preview.tsx`            | `re-export`  | `expo-route-wrapper` |
+| `apps/mobile/app/(app)/settings/personalization.tsx` | `re-export`  | `expo-route-wrapper` |
+| `apps/mobile/app/(app)/settings/notifications.tsx`   | `re-export`  | `expo-route-wrapper` |
+| `apps/mobile/app/(app)/widget-setup.tsx`             | `re-export`  | `expo-route-wrapper` |
+| `apps/mobile/app/(app)/settings/capabilities.tsx`    | `re-export`  | `expo-route-wrapper` |
+| `apps/mobile/app/(app)/(tabs)/settings.tsx`          | `re-export`  | `expo-route-wrapper` |
 
 The 3 waitlist entries (the original Phase 7 seed) remain as `re-export` because they are not Expo route files — they live under `services/`, `stores/`, `components/` and have transitional TS-import consumers.
 
@@ -82,8 +82,9 @@ The 3 waitlist entries (the original Phase 7 seed) remain as `re-export` because
 Expand the consumer-counting logic to also detect route-string references — grep for `router.push('/(app)/...'`, `<Stack.Screen name="..."`, `<Drawer.Screen name="..."`, `<Tabs.Screen name="..."`, `<Slot />` parents, and the deep-link share-target intent strings.
 
 Rejected because:
+
 1. Coverage is unreliable. String matches can hide behind interpolation, helper functions, or array iteration over route lists.
-2. Even with perfect detection, the field's *meaning* still misleads: an Expo route wrapper with route-string consumers is still **permanent**, not "almost ready for removal." The right answer is a separate type, not a richer count.
+2. Even with perfect detection, the field's _meaning_ still misleads: an Expo route wrapper with route-string consumers is still **permanent**, not "almost ready for removal." The right answer is a separate type, not a richer count.
 
 ### Who should act
 
@@ -152,10 +153,10 @@ If desired, the script could grow a `--phase <N>` flag that fails only on regres
 
 ## Summary
 
-| Issue | Severity | Blocks Phase 3 review? | Action owner |
-|---|---|---|---|
+| Issue                                             | Severity                                                  | Blocks Phase 3 review?  | Action owner                                               |
+| ------------------------------------------------- | --------------------------------------------------------- | ----------------------- | ---------------------------------------------------------- |
 | 1. Expo route wrappers misclassified as removable | medium — script will produce false enforcement once wired | no — informational only | Phase 8 supervisor (schema + script) + me (re-tag entries) |
-| 2. Ownership map drift | low — already in flight upstream | no | Upstream regen sweep |
-| 3. `check-structure.sh` 215-count alarm | none — by design | no | Documentation note in Phase 8 README |
+| 2. Ownership map drift                            | low — already in flight upstream                          | no                      | Upstream regen sweep                                       |
+| 3. `check-structure.sh` 215-count alarm           | none — by design                                          | no                      | Documentation note in Phase 8 README                       |
 
 None of the three issues block the founder review of `claude/reorg-mobile-pilot-2026-05-18` at commit `a1cedef5f`. All three are tracked for the next Phase 8 iteration.

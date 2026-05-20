@@ -27,6 +27,7 @@ Initial P0-2 (48 ghost commands) was wrong. Before marking something P0, always 
 ### Lesson 6: Three large root-level docs predate the reference-index reorg
 
 At the time the mobile-pilot reorg branch was created, three large untracked-or-tracked files sit at repo root:
+
 - `REFERENCE_INDEX.md` (~230 KB)
 - `REFERENCE_STRUCTURE.md` (~16 KB)
 - `MASTER_PLAN.md` (~205 KB)
@@ -34,6 +35,7 @@ At the time the mobile-pilot reorg branch was created, three large untracked-or-
 These were left untouched by the One-Source Reorg Phase 3 (mobile pilot, per founder directive on 2026-05-18). They are likely superseded by the new `reference-index/` tree + `docs/PRD.md` V5 but a careful diff is needed before deletion or relocation.
 
 **Action item for post-launch (post-2026-08-16):** read the three files end-to-end, diff them against:
+
 - `reference-index/README.md` (new)
 - `reference-index/mobile-code-index.json` (new)
 - `docs/PRD.md` V5

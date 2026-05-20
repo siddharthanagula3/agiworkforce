@@ -75,9 +75,7 @@
     "phase_added": 3,
     "phase_added_branch": "claude/reorg-mobile-pilot-2026-05-18",
     "phase_added_commit": "8435bbe87d53154194202bf72915b686dd4496e7",
-    "consumers_still_using_old_path": [
-      "apps/mobile/__tests__/personalization.test.tsx:72"
-    ],
+    "consumers_still_using_old_path": ["apps/mobile/__tests__/personalization.test.tsx:72"],
     "ready_for_removal_when": "all consumers migrated OR phase 7"
   },
   {
@@ -117,9 +115,7 @@
     "phase_added": 3,
     "phase_added_branch": "claude/reorg-mobile-pilot-2026-05-18",
     "phase_added_commit": "5a83aa8038bb6283b7d03bf1b12af58fc9911e71",
-    "consumers_still_using_old_path": [
-      "apps/mobile/__tests__/settings-page.test.tsx:174"
-    ],
+    "consumers_still_using_old_path": ["apps/mobile/__tests__/settings-page.test.tsx:174"],
     "ready_for_removal_when": "all consumers migrated OR phase 7"
   }
 ]

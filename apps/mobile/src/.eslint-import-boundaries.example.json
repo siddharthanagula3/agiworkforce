@@ -7,16 +7,11 @@
       {
         "patterns": [
           {
-            "group": [
-              "@/src/features/*/internal/*",
-              "@/src/features/*/internal"
-            ],
+            "group": ["@/src/features/*/internal/*", "@/src/features/*/internal"],
             "message": "Feature internals are private. Import from the feature barrel (e.g. '@/src/features/waitlist') instead."
           },
           {
-            "group": [
-              "@/src/ui/*/internal/*"
-            ],
+            "group": ["@/src/ui/*/internal/*"],
             "message": "UI primitive internals are private. Import from the primitive's barrel."
           }
         ],

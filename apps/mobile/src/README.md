@@ -7,15 +7,15 @@ in-flight teammate work keeps building.
 
 ## Layer map
 
-| Layer            | Owns                                                                          |
-| ---------------- | ----------------------------------------------------------------------------- |
-| `entry/`         | Bootstrap, route wrappers, app-level providers. Wires features into Expo routes. |
-| `core/`          | State orchestration and flows shared across screens.                           |
-| `features/`      | Self-contained feature folders (chat, onboarding, billing, settings, messaging, models, companions, waitlist, ...). |
-| `platform/`      | Native adapters: health, permissions, intent bridges, push, voice, TTS, background. |
-| `integrations/`  | API / auth / sync / supabase / mcp / cloud + local backends. The only place network and SDK calls happen. |
-| `storage/`       | Data boundary. Reads and writes go through here.                              |
-| `ui/`            | Reusable presentation primitives. No business logic, no integrations, no platform. |
+| Layer           | Owns                                                                                                                |
+| --------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `entry/`        | Bootstrap, route wrappers, app-level providers. Wires features into Expo routes.                                    |
+| `core/`         | State orchestration and flows shared across screens.                                                                |
+| `features/`     | Self-contained feature folders (chat, onboarding, billing, settings, messaging, models, companions, waitlist, ...). |
+| `platform/`     | Native adapters: health, permissions, intent bridges, push, voice, TTS, background.                                 |
+| `integrations/` | API / auth / sync / supabase / mcp / cloud + local backends. The only place network and SDK calls happen.           |
+| `storage/`      | Data boundary. Reads and writes go through here.                                                                    |
+| `ui/`           | Reusable presentation primitives. No business logic, no integrations, no platform.                                  |
 
 ## Rules (enforced softly in this phase, hard later)
 

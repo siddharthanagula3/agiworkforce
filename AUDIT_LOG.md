@@ -10,13 +10,14 @@ Rotation order: `apps/cli → apps/desktop → apps/web → apps/mobile → apps
 
 ## 2026-05-19T05:00Z — apps/web security audit batch — WEB-13 through WEB-32
 
-**Audited:** apps/web — 15 fresh findings from a new audit pass + verification of 14 pre-existing SEV-WEB-* pentest findings (2026-05-04 cycle).
+**Audited:** apps/web — 15 fresh findings from a new audit pass + verification of 14 pre-existing SEV-WEB-\* pentest findings (2026-05-04 cycle).
 
-**Total findings remediated:** 22 (15 fresh + 2 SEV-WEB-* still-present + 5 SEV-WEB-* already-closed verified)
+**Total findings remediated:** 22 (15 fresh + 2 SEV-WEB-_ still-present + 5 SEV-WEB-_ already-closed verified)
 **Severity:** 1 critical · 6 high · 11 medium · 3 low · 1 informational
 **Verification:** GREEN — pnpm lint clean (10 pre-existing warnings in files I didn't touch), pnpm typecheck at pre-existing baseline (13 errors in 13 untouched files), 220+ tests passing on changed paths.
 
 **PRs:**
+
 - #367 — primitives: `lib/secure-random.ts`, `lib/auth-guards.ts`, `lib/validations/tool-calls.ts`, 48 new tests
 - #368 — call-site adoption + pentest SEV-WEB-01/03 + ESLint Rule A (Math.random in security paths) at error
 - #369 — sandbox.agiworkforce.com cross-origin artifact isolation (closes WEB-13 + WEB-20)
@@ -24,41 +25,41 @@ Rotation order: `apps/cli → apps/desktop → apps/web → apps/mobile → apps
 
 ### Fresh findings (WEB-14 through WEB-27)
 
-| # | Severity | What |
-| --- | --- | --- |
-| WEB-14 | HIGH | `/diagnose` page deleted — was exposing env-var presence + Stripe customer data to any authed user |
-| WEB-15 | HIGH | Chat share token now `secureToken(16)` (22-char base64url) instead of `Math.random` |
-| WEB-16 | HIGH | Attachment storage filename uses `secureFilenameSegment(13)` (rejection-sampled, no modulo bias) |
-| WEB-17 | MEDIUM | GitHub webhook blocks LLM review on 2+ injection markers OR `system:` + `ignore previous` pair |
-| WEB-18 | MEDIUM | `getSession` → `getUser` sweep on 4 page/layout auth gates + 3 API routes; ESLint rule prevents regression on `app/**/{layout,page}.tsx` |
-| WEB-19 | MEDIUM | `/api/completion` fences untrusted `context` in a user-role message; newlines stripped; cap 5000→4096 |
-| WEB-20 | MEDIUM | React artifact `unsafe-eval` scoped to the cross-origin sandbox origin (no cookies / no `connect-src`) |
-| WEB-21 | MEDIUM | `tool_calls` schema-enforced via `ToolCallResponseSchema` at 3 sites; was `z.array(z.unknown())` |
-| WEB-22 | MEDIUM | `gradualRollout` anonymous fallback fails closed; was `Math.random()*100 < pct` (per-request coin flip) |
-| WEB-23 | MEDIUM | `/signup` `redirectTo` validated via `getSafeRedirectUrl` (mirrors `/login`) |
-| WEB-24 | LOW | `/api/validate-webhook` fails closed in dev too (was open when `CRON_SECRET` unset + `NODE_ENV !== 'production'`) — superseded by WEB-26 deletion |
-| WEB-25 | LOW | Blob `window.open` at 3 artifact sites uses `noopener,noreferrer`; revokes URL after 60s |
-| WEB-26 | LOW | `/api/validate-webhook` deleted; `/api/webhook-diagnostic` admin-gated via `requireAdmin` |
-| WEB-27 | INFO | `/compare` page no longer uses `dangerouslySetInnerHTML` — plain JSX with inline characters |
+| #      | Severity | What                                                                                                                                              |
+| ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| WEB-14 | HIGH     | `/diagnose` page deleted — was exposing env-var presence + Stripe customer data to any authed user                                                |
+| WEB-15 | HIGH     | Chat share token now `secureToken(16)` (22-char base64url) instead of `Math.random`                                                               |
+| WEB-16 | HIGH     | Attachment storage filename uses `secureFilenameSegment(13)` (rejection-sampled, no modulo bias)                                                  |
+| WEB-17 | MEDIUM   | GitHub webhook blocks LLM review on 2+ injection markers OR `system:` + `ignore previous` pair                                                    |
+| WEB-18 | MEDIUM   | `getSession` → `getUser` sweep on 4 page/layout auth gates + 3 API routes; ESLint rule prevents regression on `app/**/{layout,page}.tsx`          |
+| WEB-19 | MEDIUM   | `/api/completion` fences untrusted `context` in a user-role message; newlines stripped; cap 5000→4096                                             |
+| WEB-20 | MEDIUM   | React artifact `unsafe-eval` scoped to the cross-origin sandbox origin (no cookies / no `connect-src`)                                            |
+| WEB-21 | MEDIUM   | `tool_calls` schema-enforced via `ToolCallResponseSchema` at 3 sites; was `z.array(z.unknown())`                                                  |
+| WEB-22 | MEDIUM   | `gradualRollout` anonymous fallback fails closed; was `Math.random()*100 < pct` (per-request coin flip)                                           |
+| WEB-23 | MEDIUM   | `/signup` `redirectTo` validated via `getSafeRedirectUrl` (mirrors `/login`)                                                                      |
+| WEB-24 | LOW      | `/api/validate-webhook` fails closed in dev too (was open when `CRON_SECRET` unset + `NODE_ENV !== 'production'`) — superseded by WEB-26 deletion |
+| WEB-25 | LOW      | Blob `window.open` at 3 artifact sites uses `noopener,noreferrer`; revokes URL after 60s                                                          |
+| WEB-26 | LOW      | `/api/validate-webhook` deleted; `/api/webhook-diagnostic` admin-gated via `requireAdmin`                                                         |
+| WEB-27 | INFO     | `/compare` page no longer uses `dangerouslySetInnerHTML` — plain JSX with inline characters                                                       |
 
 ### Pentest carry-overs (verification of 2026-05-04 findings)
 
-| # | Verified | Action |
-| --- | --- | --- |
-| SEV-WEB-01 → WEB-28 | **STILL PRESENT** | Defense-in-depth: `buildAnthropicContentBlocks` calls `validateUserImageUrl` before emitting `{type:'image', source:{type:'url', url}}`. Request layer already validated; provider adapter now defends independently. |
-| SEV-WEB-02 | **already closed** | RLS-bound `SupabaseClient` parameter on `OrganizationService` methods — no change. |
-| SEV-WEB-03 → WEB-30 | **STILL PRESENT** | Provider base-URL allowlist extended 4→9: `ANTHROPIC_BASE_URL`, `XAI_BASE_URL`, `PERPLEXITY_BASE_URL`, `ZHIPU_BASE_URL`, `GOOGLE_BASE_URL` now flow through `validateEgressUrl`. |
-| SEV-WEB-04 | **already closed** | Audio transcription has MIME allowlist + 25 MB cap + magic-byte sniffing at `app/api/llm/v1/audio/transcriptions/route.ts:157+`. |
-| SEV-WEB-05 | **already closed** | GitHub webhook background task uses service-role client (`createClient(URL, SERVICE_ROLE_KEY)` at line 117) — `cookies()` no longer called outside request scope. RT-05 fix. |
-| SEV-WEB-06 | **deferred** | CSRF Bearer-bypass is documentation-grade — no exploitable path on current routes (JWT validation handles it). Documented as future work. |
-| SEV-WEB-07 | **deferred** | `CSRF_SECRET` rotation requires `CSRF_SECRET_PREV` infrastructure — operational change tracked separately. |
-| SEV-WEB-08 → WEB-31 | **STILL PRESENT** | `getOrganizationMembers` `select('*, profile:profiles(...)')` replaced with explicit column list. |
-| SEV-WEB-09 → WEB-32 | **STILL PRESENT** | Rate-limiter no longer base64-decodes Bearer JWT to bucket by `sub` — attacker could forge JWT with victim's UUID for targeted DoS. Routes must now pass verified user.id via the `identifier` parameter. |
-| SEV-WEB-10 | **already closed** | `/api/validate-webhook` deleted by WEB-26. |
-| SEV-WEB-11 | **already closed** | `AuditService.getOrganizationLogs` requires `callerUserId` and verifies org membership before returning rows. RT-09 fix. |
-| SEV-WEB-12 | **deferred** | Desktop-token SHA-256 → scrypt is an operational KDF upgrade with backward-compat implications. Tracked separately. |
-| SEV-WEB-13 | **deferred** | Rate-limiter in-memory fallback when Upstash Redis absent — ops-side fix (require Redis on all deployed environments + Vercel build-check). |
-| SEV-WEB-14 | **already closed** | `__Host-anon-session-id` cookie with `Path=/ + Secure + HttpOnly + SameSite=Strict` shipped per SEV-WEB-M-1 fix (2026-05-05). |
+| #                   | Verified           | Action                                                                                                                                                                                                                |
+| ------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SEV-WEB-01 → WEB-28 | **STILL PRESENT**  | Defense-in-depth: `buildAnthropicContentBlocks` calls `validateUserImageUrl` before emitting `{type:'image', source:{type:'url', url}}`. Request layer already validated; provider adapter now defends independently. |
+| SEV-WEB-02          | **already closed** | RLS-bound `SupabaseClient` parameter on `OrganizationService` methods — no change.                                                                                                                                    |
+| SEV-WEB-03 → WEB-30 | **STILL PRESENT**  | Provider base-URL allowlist extended 4→9: `ANTHROPIC_BASE_URL`, `XAI_BASE_URL`, `PERPLEXITY_BASE_URL`, `ZHIPU_BASE_URL`, `GOOGLE_BASE_URL` now flow through `validateEgressUrl`.                                      |
+| SEV-WEB-04          | **already closed** | Audio transcription has MIME allowlist + 25 MB cap + magic-byte sniffing at `app/api/llm/v1/audio/transcriptions/route.ts:157+`.                                                                                      |
+| SEV-WEB-05          | **already closed** | GitHub webhook background task uses service-role client (`createClient(URL, SERVICE_ROLE_KEY)` at line 117) — `cookies()` no longer called outside request scope. RT-05 fix.                                          |
+| SEV-WEB-06          | **deferred**       | CSRF Bearer-bypass is documentation-grade — no exploitable path on current routes (JWT validation handles it). Documented as future work.                                                                             |
+| SEV-WEB-07          | **deferred**       | `CSRF_SECRET` rotation requires `CSRF_SECRET_PREV` infrastructure — operational change tracked separately.                                                                                                            |
+| SEV-WEB-08 → WEB-31 | **STILL PRESENT**  | `getOrganizationMembers` `select('*, profile:profiles(...)')` replaced with explicit column list.                                                                                                                     |
+| SEV-WEB-09 → WEB-32 | **STILL PRESENT**  | Rate-limiter no longer base64-decodes Bearer JWT to bucket by `sub` — attacker could forge JWT with victim's UUID for targeted DoS. Routes must now pass verified user.id via the `identifier` parameter.             |
+| SEV-WEB-10          | **already closed** | `/api/validate-webhook` deleted by WEB-26.                                                                                                                                                                            |
+| SEV-WEB-11          | **already closed** | `AuditService.getOrganizationLogs` requires `callerUserId` and verifies org membership before returning rows. RT-09 fix.                                                                                              |
+| SEV-WEB-12          | **deferred**       | Desktop-token SHA-256 → scrypt is an operational KDF upgrade with backward-compat implications. Tracked separately.                                                                                                   |
+| SEV-WEB-13          | **deferred**       | Rate-limiter in-memory fallback when Upstash Redis absent — ops-side fix (require Redis on all deployed environments + Vercel build-check).                                                                           |
+| SEV-WEB-14          | **already closed** | `__Host-anon-session-id` cookie with `Path=/ + Secure + HttpOnly + SameSite=Strict` shipped per SEV-WEB-M-1 fix (2026-05-05).                                                                                         |
 
 ### Architectural changes
 

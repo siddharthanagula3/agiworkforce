@@ -3,13 +3,8 @@
   "model": "anthropic/claude-sonnet-4-5",
   "small_model": "anthropic/claude-haiku-4-5",
   "default_agent": "build",
-  "instructions": [
-    "CLAUDE.md",
-    ".opencode/instructions/INSTRUCTIONS.md"
-  ],
-  "plugin": [
-    "./.opencode/plugins"
-  ],
+  "instructions": ["CLAUDE.md", ".opencode/instructions/INSTRUCTIONS.md"],
+  "plugin": ["./.opencode/plugins"],
   "agent": {
     "build": {
       "description": "Primary coding agent for AGI Workforce development (Tauri v2 Rust backend + React/TS frontend + Next.js web app)",

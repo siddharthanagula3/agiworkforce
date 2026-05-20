@@ -4,7 +4,7 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
 
 ## [Unreleased — apps/web security audit batch] — 2026-05-19
 
-Four-PR batch closing WEB-13 through WEB-32 on `apps/web`: 15 fresh audit findings + verification of 14 pre-existing SEV-WEB-* pentest items (5 confirmed already-closed, 2 still-present and now closed, 4 deferred operational). Audit fire at `AUDIT_LOG.md` 2026-05-19T05:00Z. PRs #367 → #368 → #369 → #370.
+Four-PR batch closing WEB-13 through WEB-32 on `apps/web`: 15 fresh audit findings + verification of 14 pre-existing SEV-WEB-\* pentest items (5 confirmed already-closed, 2 still-present and now closed, 4 deferred operational). Audit fire at `AUDIT_LOG.md` 2026-05-19T05:00Z. PRs #367 → #368 → #369 → #370.
 
 ### Security
 
