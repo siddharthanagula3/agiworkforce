@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
+import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 
 export interface Project {
   id: string;
@@ -86,6 +86,5 @@ export const useProjectStore = create<ProjectState>()(
   ),
 );
 
-whenMmkvReady(() => {
-  useProjectStore.persist.rehydrate();
-});
+// FIX (audit 2026-05-20, §17): use the shared rehydrate helper.
+rehydrateWhenMmkvReady(useProjectStore, 'projectStore');
