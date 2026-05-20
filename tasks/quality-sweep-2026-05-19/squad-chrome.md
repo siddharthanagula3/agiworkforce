@@ -113,7 +113,7 @@ The Rust enum uses `#[serde(tag = "type", rename_all = "snake_case")]`. Relevant
 
 ### Schema drift findings
 
-**Finding #4 (reproduced): `selected_text_query` — `tabId` field name ambiguity**
+**Finding #4 (RETRACTED — false positive on PR re-check): `selected_text_query` — `tabId` field name ambiguity**
 
 Extension sends (background.ts:1994–1999):
 

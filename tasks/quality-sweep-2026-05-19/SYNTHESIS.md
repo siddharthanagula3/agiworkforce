@@ -24,7 +24,7 @@ Everything else (Stripe / paid Hobby / two-supabase-migrations / Dispatch / push
 
 Cross-cut's 6 severity-bucketed findings cover the 41 semgrep findings categorically (the 8 categorical groups in `squad-cross-cut.md` minus 2 that are not severity-classified); the 41 semgrep items contribute mostly P2/P3 distributed across squads #2/#3/#4 (already included in their effort). Chrome P2 count drops 3→2 after retraction of Finding #4 (`tabId` schema drift — confirmed false positive on spot-check; see § 4); chrome effort drops 4.25→3.25.
 
-**Effort reconciliation:** the **~92.75 hrs** above is the sum of each squad's per-finding effort (raw bottom-up). The **3-wave totals below add to 68.75 hrs** because (a) some squad findings overlap across surfaces and are de-duplicated when assigned to a single wave fix, (b) several items are explicitly deferred out of waves as "not v1 LOCAL ONLY scope" (Section 5), and (c) cross-cut's ~22 hrs of distributed work is already accounted for within other squads' rows. Use 68.75 hrs as the **executable fix budget**; 92.75 is the **diagnostic surface area**.
+**Effort reconciliation:** the **~91.75 hrs** above is the sum of each squad's per-finding effort (raw bottom-up, post-chrome-F#4 retraction). The **3-wave totals below add to 68.75 hrs** because (a) some squad findings overlap across surfaces and are de-duplicated when assigned to a single wave fix, (b) several items are explicitly deferred out of waves as "not v1 LOCAL ONLY scope" (Section 5), and (c) cross-cut's ~22 hrs of distributed work is already accounted for within other squads' rows. Use 68.75 hrs as the **executable fix budget**; 91.75 is the **diagnostic surface area**.
 
 **True P0 count: 1** (rust-core #1 — hardcoded model ID in CLI agent fallback).
 
@@ -246,7 +246,7 @@ I opened these cited findings in the actual files and confirmed reproduction:
 Per CLAUDE.md the v1 locks are CI green + models.json SSOT. The following are explicitly post-v1 and the user can defer with confidence:
 
 1. **Stripe / paid Hobby launch items**: `app/api/stripe-webhook/`, `portal/route.ts:160` email fallback (`todo.md` P3-1 with `TODO(2026-Q3)` removal), `checkout`, `credit-topup`, `sync-subscription`. Webhook is hardened (signature verify, 60s replay window, idempotency, rate limit). Paid-tier launch is NO-GO per CLAUDE.md until Stripe RPC migrations ship.
-2. **Two-supabase-migrations reconciliation** (`P2-6`): canonical `supabase/migrations/` (50 files) vs `apps/web/supabase/migrations/` (45 files). Both contain Stripe idempotency RPCs with table-extend statements. Blocks paid-tier launch only. **NOT v1 LOCAL ONLY scope** per CLAUDE.md "Common pitfalls".
+2. **Two-supabase-migrations reconciliation** (`P2-6`): canonical `supabase/migrations/` (**45 files**) vs legacy `apps/web/supabase/migrations/` (**50 files**). Both contain Stripe idempotency RPCs with table-extend statements. Blocks paid-tier launch only. **NOT v1 LOCAL ONLY scope** per CLAUDE.md "Common pitfalls".
 3. **`SUPABASE_SERVICE_ROLE_KEY` audit completion** (P1-1, stale at "56"; reality 15). Remaining 15 routes (admin/device/webhook/cron) legitimately need service-role.
 4. **Mobile App Store submission** (compliance ledger MMKV persistence, F-3). Apple 5.1.2(i) + EU AI Act Article 50(1). NOT v1 LOCAL ONLY blocker.
 5. **Mobile on-device model download** (F-4). v1 LOCAL ONLY on desktop ships without forcing mobile inference users through this path.
