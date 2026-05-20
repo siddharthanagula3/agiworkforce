@@ -1697,6 +1697,13 @@ pub async fn find_by_role(
 /// confirmation via `request_confirmation_simple`. Rejects non-http(s)
 /// schemes to block `file://`, `javascript:`, and other vectors that
 /// prompt-injected agents could use to read local files or execute JS.
+///
+/// AUDIT-FIX: BUG_002 — delegate to the `open` crate so Windows uses
+/// `ShellExecuteW` instead of `cmd /C start`. The previous implementation
+/// shell-injected on URLs whose query string contained `&` (and other cmd
+/// metacharacters), because cmd.exe re-parses its command line after Rust's
+/// argv quoting. ShellExecuteW takes the URL as a single wide-string and
+/// performs no shell interpretation.
 #[tauri::command]
 pub async fn open_url(
     url: String,
@@ -1716,17 +1723,7 @@ pub async fn open_url(
     {
         return Err("User denied open_url".to_string());
     }
-    #[cfg(target_os = "macos")]
-    let spawned = std::process::Command::new("open").arg(&url).spawn();
-    #[cfg(target_os = "windows")]
-    let spawned = std::process::Command::new("cmd")
-        .args(["/C", "start", "", &url])
-        .spawn();
-    #[cfg(target_os = "linux")]
-    let spawned = std::process::Command::new("xdg-open").arg(&url).spawn();
-    spawned
-        .map(|_| ())
-        .map_err(|e| format!("Failed to open URL: {e}"))
+    open::that(&url).map_err(|e| format!("Failed to open URL: {e}"))
 }
 
 #[cfg(test)]

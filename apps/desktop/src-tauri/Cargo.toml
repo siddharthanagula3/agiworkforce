@@ -59,6 +59,9 @@ bincode = "1.3.3"
 
 once_cell = "1.19"
 shlex = "1.3"
+# Safe URL/file opener: uses ShellExecuteW on Windows (no cmd.exe re-parsing),
+# `open` on macOS, xdg-open on Linux — each handed a single argv element.
+open = "5"
 
 
 
