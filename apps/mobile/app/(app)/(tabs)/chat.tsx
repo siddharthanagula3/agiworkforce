@@ -158,7 +158,7 @@ export default function ChatTabScreen() {
 
   const handleSheetFile = useCallback(async () => {
     try {
-      await DocumentPicker.getDocumentAsync({
+      const result = await DocumentPicker.getDocumentAsync({
         type: [
           'application/pdf',
           'application/msword',
@@ -168,6 +168,17 @@ export default function ChatTabScreen() {
         ],
         copyToCacheDirectory: true,
       });
+      if (!result.canceled && result.assets.length > 0) {
+        const attachments: import('@/components/chat/AttachmentPreview').Attachment[] =
+          result.assets.map((asset) => ({
+            id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            uri: asset.uri,
+            mimeType: asset.mimeType ?? 'application/octet-stream',
+            fileName: asset.name ?? 'document',
+            fileSize: asset.size,
+          }));
+        chatInputAttachRef.current?.addAttachments(attachments);
+      }
     } catch {
       Alert.alert('Error', 'Failed to pick document. Please try again.');
     }
