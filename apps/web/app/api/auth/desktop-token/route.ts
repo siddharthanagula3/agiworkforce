@@ -32,17 +32,34 @@ const TOKEN_TTL_MS = 60 * 1000;
 // Encryption key derived from TOTP_ENCRYPTION_KEY env var.
 // Must be 32 bytes for AES-256-GCM.
 //
-// SEV-WEB-12 / WEB-35 (audit 2026-05-19): SHA-256 is not a password-stretching
-// KDF, so if the env var is a passphrase the derived key is brute-forceable
-// against any captured ciphertext. We don't change to scrypt here because the
-// decrypting side lives in the desktop app (Tauri/Rust) and a coordinated
-// rollout is out of scope for this PR — but we can close the practical
-// exposure by REJECTING low-entropy key material at the env-var boundary.
-// Accepted inputs:
-//   - 64-char hex (32 bytes random) — preferred
-//   - any value ≥ 64 UTF-8 bytes that isn't an obvious passphrase pattern
+// FIX (audit 2026-05-20, §13): SEV-WEB-12 / WEB-35 originally accepted SHA-256
+// of a passphrase as the KDF; the only mitigation was an entropy gate
+// rejecting < 64-byte inputs. SHA-256 is not a password-stretching KDF, so
+// once the ciphertext leaked the attacker could grind candidate passphrases
+// at hardware speed. This release migrates the KDF to scrypt(N=2^15,r=8,p=1)
+// with a fixed app-domain salt — chosen over Argon2id because scrypt ships in
+// node:crypto (no native dep), gives raw bytes for direct AES-256-GCM key
+// use, and matches the desktop-side derivation we plan to wire up next.
+//
+// The entropy gate is preserved as defense in depth: even a stretched KDF
+// only delays a low-entropy passphrase by ~2^16 iterations, which is fine for
+// an offline-attacker scenario where they have all the time in the world.
+// Force at least 64 UTF-8 bytes so the unstretched material is itself out of
+// brute-force range.
+//
+// SCRYPT_SALT is a fixed application-domain constant so encryptPayload() and
+// the (forthcoming) desktop decryptPayload() derive the same key from the
+// same env-var without a per-token salt round-trip. Per-token salts would
+// require shipping the salt in the wire envelope; that's a follow-up.
 const MIN_KEYSOURCE_BYTES = 64;
 const HEX_32_BYTE = /^[0-9a-fA-F]{64}$/;
+const SCRYPT_KEY_LENGTH = 32;
+const SCRYPT_N = 1 << 15; // 32768 — matches OWASP minimum, ~64ms on modern CPUs
+const SCRYPT_R = 8;
+const SCRYPT_P = 1;
+// Stable app-domain salt. Changing this value invalidates every previously
+// encrypted desktop-token, so coordinate with a desktop release if you do.
+const SCRYPT_SALT = Buffer.from('agiworkforce.desktop-token.v1', 'utf8');
 
 function assertHighEntropyKeysource(name: string, value: string): void {
   const byteLen = Buffer.byteLength(value, 'utf8');
@@ -71,12 +88,22 @@ function getEncryptionKey(): Buffer {
     ? 'TOTP_ENCRYPTION_KEY'
     : 'DESKTOP_TOKEN_SECRET';
   assertHighEntropyKeysource(sourceName, keySource);
-  // If the secret is a hex 32-byte string, use it directly. Otherwise SHA-256
-  // derive (acceptable now that we've gated the input on entropy).
+  // If the secret is a hex 32-byte string, treat it as raw key material — no
+  // stretching needed for a uniformly random 256-bit secret.
   if (HEX_32_BYTE.test(keySource)) {
     return Buffer.from(keySource, 'hex');
   }
-  return crypto.createHash('sha256').update(keySource).digest();
+  // Otherwise: scrypt-derive a 32-byte AES-GCM key. Synchronous variant is
+  // intentional — this runs on the server during desktop-token mint, which is
+  // already rate-limited to 5/min and not on the hot path.
+  return crypto.scryptSync(keySource, SCRYPT_SALT, SCRYPT_KEY_LENGTH, {
+    N: SCRYPT_N,
+    r: SCRYPT_R,
+    p: SCRYPT_P,
+    // node:crypto's scrypt enforces a default 32MB memory cap; lift it so
+    // the N=2^15 parameter set actually runs instead of throwing ERR_OS_OUT_OF_MEMORY.
+    maxmem: 128 * 1024 * 1024,
+  });
 }
 
 function encryptPayload(payload: string): string {

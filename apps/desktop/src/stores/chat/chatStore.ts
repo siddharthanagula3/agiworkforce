@@ -124,7 +124,7 @@ const MAX_ID_MAPPINGS = 1000;
 let idMappings: IdMapping = { dbIdToUuid: {}, uuidToDbId: {} };
 
 if (typeof window !== 'undefined') {
-  idMappings = safeGetJSON<IdMapping>('id-mappings', { dbIdToUuid: {}, uuidToDbId: {} });
+  idMappings = safeGetJSON<IdMapping>(STORAGE_KEYS.ID_MAPPINGS, { dbIdToUuid: {}, uuidToDbId: {} });
 }
 
 let _persistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -134,7 +134,7 @@ function persistIdMappings() {
   if (_persistTimer !== null) clearTimeout(_persistTimer);
   _persistTimer = setTimeout(() => {
     _persistTimer = null;
-    const success = safeSetJSON('id-mappings', idMappings);
+    const success = safeSetJSON(STORAGE_KEYS.ID_MAPPINGS, idMappings);
     if (!success) {
       console.warn('[ChatStore] Failed to persist ID mappings - using in-memory only');
     }
@@ -172,7 +172,7 @@ export function clearIdMappings() {
   idMappings = { dbIdToUuid: {}, uuidToDbId: {} };
   if (typeof window !== 'undefined') {
     try {
-      localStorage.removeItem('id-mappings');
+      localStorage.removeItem(STORAGE_KEYS.ID_MAPPINGS);
     } catch {
       /* ignore */
     }
@@ -198,6 +198,7 @@ function generateTitleFromMessage(content: string): string {
 const STORAGE_VERSION = 1;
 
 import type { ToolLabelEntry } from '@agiworkforce/types';
+import { STORAGE_KEYS } from '../../constants/storageKeys';
 export type { ToolLabelEntry };
 
 // === Message domain state (core store) ===

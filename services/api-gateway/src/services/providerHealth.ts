@@ -99,24 +99,80 @@ const DEFAULT_PROVIDERS: ProviderEntry[] = [
  * ProviderEntry objects), it overrides the hardcoded defaults, enabling
  * operational URL changes without code deploys.
  */
+/**
+ * FIX (audit 2026-05-20, §8): the PROVIDER_HEALTH_URLS env override was
+ * parsed silently — ops had no signal when an operator typo'd a URL or
+ * tried to ping a non-allowlisted host. Now: validate every override URL
+ * against a known-good host allowlist and emit a structured warning on
+ * each rejection. Operator can spot the misconfig in logs immediately.
+ */
+const PROVIDER_HEALTH_ALLOWED_HOSTS = new Set<string>([
+  'api.anthropic.com',
+  'api.openai.com',
+  'generativelanguage.googleapis.com',
+  'api.x.ai',
+  'api.mistral.ai',
+  'api.groq.com',
+  'api.deepseek.com',
+  'api.together.xyz',
+  'api.perplexity.ai',
+  'api.cohere.com',
+  'api.fireworks.ai',
+  // Operator-controlled internal endpoints.
+  'api.agiworkforce.com',
+  'staging-api.agiworkforce.com',
+]);
+
+function isAcceptableHealthUrl(rawUrl: string, providerId: string): boolean {
+  try {
+    const u = new URL(rawUrl);
+    if (u.protocol !== 'https:') {
+      logger.warn(
+        { providerId, rawUrl, reason: 'protocol_not_https' },
+        'PROVIDER_HEALTH_URLS entry rejected',
+      );
+      return false;
+    }
+    if (!PROVIDER_HEALTH_ALLOWED_HOSTS.has(u.hostname)) {
+      logger.warn(
+        { providerId, rawUrl, host: u.hostname, reason: 'host_not_on_allowlist' },
+        'PROVIDER_HEALTH_URLS entry rejected',
+      );
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logger.warn(
+      { providerId, rawUrl, err: err instanceof Error ? err.message : String(err) },
+      'PROVIDER_HEALTH_URLS entry failed to parse as URL',
+    );
+    return false;
+  }
+}
+
 function resolveProviders(): ProviderEntry[] {
   const envOverride = process.env['PROVIDER_HEALTH_URLS'];
   if (!envOverride) return DEFAULT_PROVIDERS;
   try {
     const parsed = JSON.parse(envOverride) as unknown;
     if (Array.isArray(parsed) && parsed.length > 0) {
-      // Validate each entry has the required fields
+      // Validate each entry has the required fields + URL allowlist match.
       const valid = (parsed as ProviderEntry[]).filter(
         (p) =>
           typeof p.id === 'string' &&
           typeof p.label === 'string' &&
           typeof p.pingUrl === 'string' &&
-          typeof p.family === 'string',
+          typeof p.family === 'string' &&
+          isAcceptableHealthUrl(p.pingUrl, p.id),
       );
       if (valid.length > 0) {
         logger.info({ count: valid.length }, 'Using PROVIDER_HEALTH_URLS override');
         return valid;
       }
+      logger.warn(
+        { entries: parsed.length },
+        'PROVIDER_HEALTH_URLS had entries but none survived validation; falling back to defaults',
+      );
     }
   } catch (err) {
     logger.warn({ err }, 'Failed to parse PROVIDER_HEALTH_URLS; using defaults');

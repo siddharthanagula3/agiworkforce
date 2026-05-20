@@ -1,13 +1,84 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- test mocks: partial state objects cast to store type */
+/**
+ * FIX (audit 2026-05-20, §15 — test-overfit):
+ *
+ * The old version of this file carried a top-of-file
+ * `eslint-disable @typescript-eslint/no-explicit-any` and 13 inline
+ * `as any` casts on the mocked `supabaseAuth.getState()` return value.
+ * Result: any billing-schema drift (new fields on AuthState /
+ * Subscription, removed status values) would silently still typecheck
+ * even though the production code path could break.
+ *
+ * Replaced by a typed `makeAuthState(overrides)` helper that builds a
+ * real `AuthState` via Partial-merge against a known-good baseline.
+ * Adding a required field to `AuthState` now fails the build here, which
+ * is exactly the regression signal we want.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { checkSubscriptionGate, canUseAPIKeys, getUpgradeMessage } from '../subscriptionGate';
-import { supabaseAuth } from '../../services/supabaseAuth';
-
+import {
+  supabaseAuth,
+  type AuthState,
+  type SubscriptionFetchStatus,
+} from '../../services/supabaseAuth';
+import type { Session, User } from '@supabase/supabase-js';
 vi.mock('../../services/supabaseAuth', () => ({
   supabaseAuth: {
     getState: vi.fn(),
   },
 }));
+
+/**
+ * Build a canonical Supabase User row, overrideable per test.
+ *
+ * The Supabase typings carry several non-load-bearing fields that the
+ * tests don't care about (app_metadata, user_metadata, aud, created_at).
+ * We give each a safe default so test bodies stay focused on the auth
+ * decision they're exercising.
+ */
+function makeUser(overrides: Partial<User> = {}): User {
+  const base: User = {
+    id: 'user-1',
+    aud: 'authenticated',
+    email: 'test@example.com',
+    created_at: new Date().toISOString(),
+    app_metadata: {},
+    user_metadata: {},
+  } as User;
+  return { ...base, ...overrides };
+}
+
+/**
+ * Build a canonical Supabase Session, overrideable per test.
+ */
+function makeSession(overrides: Partial<Session> = {}): Session {
+  const base: Session = {
+    access_token: 'token',
+    refresh_token: 'refresh',
+    expires_in: 3600,
+    token_type: 'bearer',
+    user: makeUser(),
+  } as Session;
+  return { ...base, ...overrides };
+}
+
+/**
+ * Build a canonical AuthState, overrideable per test. The baseline is the
+ * "no user signed in" shape so test bodies only set what's load-bearing.
+ */
+function makeAuthState(overrides: Partial<AuthState> = {}): AuthState {
+  const subscriptionFetchStatus: SubscriptionFetchStatus = 'succeeded';
+  const base: AuthState = {
+    user: null,
+    session: null,
+    profile: null,
+    subscription: null,
+    featureFlags: {},
+    isLoading: false,
+    error: null,
+    subscriptionFetchStatus,
+  };
+  return { ...base, ...overrides };
+}
 
 describe('subscriptionGate', () => {
   beforeEach(() => {
@@ -16,15 +87,17 @@ describe('subscriptionGate', () => {
 
   describe('checkSubscriptionGate', () => {
     it('should deny access when user is not authenticated', () => {
-      vi.mocked(supabaseAuth.getState).mockReturnValue({
-        user: null,
-        session: null,
-        profile: null,
-        subscription: null,
-        featureFlags: {},
-        isLoading: false,
-        error: null,
-      } as any);
+      vi.mocked(supabaseAuth.getState).mockReturnValue(
+        makeAuthState({
+          user: null,
+          session: null,
+          profile: null,
+          subscription: null,
+          featureFlags: {},
+          isLoading: false,
+          error: null,
+        }),
+      );
 
       const result = checkSubscriptionGate();
 
@@ -34,15 +107,17 @@ describe('subscriptionGate', () => {
     });
 
     it('should deny access when user has no subscription', () => {
-      vi.mocked(supabaseAuth.getState).mockReturnValue({
-        user: { id: 'user-1', email: 'test@example.com' },
-        session: { access_token: 'token', refresh_token: 'refresh' },
-        profile: null,
-        subscription: null,
-        featureFlags: {},
-        isLoading: false,
-        error: null,
-      } as any);
+      vi.mocked(supabaseAuth.getState).mockReturnValue(
+        makeAuthState({
+          user: makeUser({ id: 'user-1', email: 'test@example.com' }),
+          session: makeSession({ access_token: 'token', refresh_token: 'refresh' }),
+          profile: null,
+          subscription: null,
+          featureFlags: {},
+          isLoading: false,
+          error: null,
+        }),
+      );
 
       const result = checkSubscriptionGate();
 
@@ -54,29 +129,31 @@ describe('subscriptionGate', () => {
     });
 
     it('should deny access when subscription is canceled', () => {
-      vi.mocked(supabaseAuth.getState).mockReturnValue({
-        user: { id: 'user-1', email: 'test@example.com' },
-        session: { access_token: 'token', refresh_token: 'refresh' },
-        profile: null,
-        subscription: {
-          id: 'sub-1',
-          user_id: 'user-1',
-          plan_tier: 'hobby',
-          status: 'canceled',
-          stripe_customer_id: 'cus-1',
-          stripe_subscription_id: 'sub-1',
-          stripe_price_id: 'price-1',
-          current_period_start: new Date().toISOString(),
-          current_period_end: new Date().toISOString(),
-          cancel_at_period_end: false,
-          canceled_at: new Date().toISOString(),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        featureFlags: {},
-        isLoading: false,
-        error: null,
-      } as any);
+      vi.mocked(supabaseAuth.getState).mockReturnValue(
+        makeAuthState({
+          user: makeUser({ id: 'user-1', email: 'test@example.com' }),
+          session: makeSession({ access_token: 'token', refresh_token: 'refresh' }),
+          profile: null,
+          subscription: {
+            id: 'sub-1',
+            user_id: 'user-1',
+            plan_tier: 'hobby',
+            status: 'canceled',
+            stripe_customer_id: 'cus-1',
+            stripe_subscription_id: 'sub-1',
+            stripe_price_id: 'price-1',
+            current_period_start: new Date().toISOString(),
+            current_period_end: new Date().toISOString(),
+            cancel_at_period_end: false,
+            canceled_at: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+          featureFlags: {},
+          isLoading: false,
+          error: null,
+        }),
+      );
 
       const result = checkSubscriptionGate();
 
@@ -91,29 +168,31 @@ describe('subscriptionGate', () => {
       const pastDate = new Date();
       pastDate.setDate(pastDate.getDate() - 8);
 
-      vi.mocked(supabaseAuth.getState).mockReturnValue({
-        user: { id: 'user-1', email: 'test@example.com' },
-        session: { access_token: 'token', refresh_token: 'refresh' },
-        profile: null,
-        subscription: {
-          id: 'sub-1',
-          user_id: 'user-1',
-          plan_tier: 'hobby',
-          status: 'past_due',
-          stripe_customer_id: 'cus-1',
-          stripe_subscription_id: 'sub-1',
-          stripe_price_id: 'price-1',
-          current_period_start: new Date().toISOString(),
-          current_period_end: pastDate.toISOString(),
-          cancel_at_period_end: false,
-          canceled_at: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        featureFlags: {},
-        isLoading: false,
-        error: null,
-      } as any);
+      vi.mocked(supabaseAuth.getState).mockReturnValue(
+        makeAuthState({
+          user: makeUser({ id: 'user-1', email: 'test@example.com' }),
+          session: makeSession({ access_token: 'token', refresh_token: 'refresh' }),
+          profile: null,
+          subscription: {
+            id: 'sub-1',
+            user_id: 'user-1',
+            plan_tier: 'hobby',
+            status: 'past_due',
+            stripe_customer_id: 'cus-1',
+            stripe_subscription_id: 'sub-1',
+            stripe_price_id: 'price-1',
+            current_period_start: new Date().toISOString(),
+            current_period_end: pastDate.toISOString(),
+            cancel_at_period_end: false,
+            canceled_at: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+          featureFlags: {},
+          isLoading: false,
+          error: null,
+        }),
+      );
 
       const result = checkSubscriptionGate();
 
@@ -128,29 +207,31 @@ describe('subscriptionGate', () => {
       const pastDate = new Date();
       pastDate.setDate(pastDate.getDate() - 6);
 
-      vi.mocked(supabaseAuth.getState).mockReturnValue({
-        user: { id: 'user-1', email: 'test@example.com' },
-        session: { access_token: 'token', refresh_token: 'refresh' },
-        profile: null,
-        subscription: {
-          id: 'sub-1',
-          user_id: 'user-1',
-          plan_tier: 'hobby',
-          status: 'past_due',
-          stripe_customer_id: 'cus-1',
-          stripe_subscription_id: 'sub-1',
-          stripe_price_id: 'price-1',
-          current_period_start: new Date().toISOString(),
-          current_period_end: pastDate.toISOString(),
-          cancel_at_period_end: false,
-          canceled_at: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        featureFlags: {},
-        isLoading: false,
-        error: null,
-      } as any);
+      vi.mocked(supabaseAuth.getState).mockReturnValue(
+        makeAuthState({
+          user: makeUser({ id: 'user-1', email: 'test@example.com' }),
+          session: makeSession({ access_token: 'token', refresh_token: 'refresh' }),
+          profile: null,
+          subscription: {
+            id: 'sub-1',
+            user_id: 'user-1',
+            plan_tier: 'hobby',
+            status: 'past_due',
+            stripe_customer_id: 'cus-1',
+            stripe_subscription_id: 'sub-1',
+            stripe_price_id: 'price-1',
+            current_period_start: new Date().toISOString(),
+            current_period_end: pastDate.toISOString(),
+            cancel_at_period_end: false,
+            canceled_at: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+          featureFlags: {},
+          isLoading: false,
+          error: null,
+        }),
+      );
 
       const result = checkSubscriptionGate();
 
@@ -160,29 +241,31 @@ describe('subscriptionGate', () => {
     });
 
     it('should allow access when user has free tier', () => {
-      vi.mocked(supabaseAuth.getState).mockReturnValue({
-        user: { id: 'user-1', email: 'test@example.com' },
-        session: { access_token: 'token', refresh_token: 'refresh' },
-        profile: null,
-        subscription: {
-          id: 'sub-1',
-          user_id: 'user-1',
-          plan_tier: 'free',
-          status: 'active',
-          stripe_customer_id: 'cus-1',
-          stripe_subscription_id: 'sub-1',
-          stripe_price_id: 'price-1',
-          current_period_start: new Date().toISOString(),
-          current_period_end: new Date().toISOString(),
-          cancel_at_period_end: false,
-          canceled_at: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        featureFlags: {},
-        isLoading: false,
-        error: null,
-      } as any);
+      vi.mocked(supabaseAuth.getState).mockReturnValue(
+        makeAuthState({
+          user: makeUser({ id: 'user-1', email: 'test@example.com' }),
+          session: makeSession({ access_token: 'token', refresh_token: 'refresh' }),
+          profile: null,
+          subscription: {
+            id: 'sub-1',
+            user_id: 'user-1',
+            plan_tier: 'free',
+            status: 'active',
+            stripe_customer_id: 'cus-1',
+            stripe_subscription_id: 'sub-1',
+            stripe_price_id: 'price-1',
+            current_period_start: new Date().toISOString(),
+            current_period_end: new Date().toISOString(),
+            cancel_at_period_end: false,
+            canceled_at: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+          featureFlags: {},
+          isLoading: false,
+          error: null,
+        }),
+      );
 
       const result = checkSubscriptionGate();
 
@@ -193,29 +276,31 @@ describe('subscriptionGate', () => {
     });
 
     it('should allow access when user has hobby tier with active status', () => {
-      vi.mocked(supabaseAuth.getState).mockReturnValue({
-        user: { id: 'user-1', email: 'test@example.com' },
-        session: { access_token: 'token', refresh_token: 'refresh' },
-        profile: null,
-        subscription: {
-          id: 'sub-1',
-          user_id: 'user-1',
-          plan_tier: 'hobby',
-          status: 'active',
-          stripe_customer_id: 'cus-1',
-          stripe_subscription_id: 'sub-1',
-          stripe_price_id: 'price-1',
-          current_period_start: new Date().toISOString(),
-          current_period_end: new Date().toISOString(),
-          cancel_at_period_end: false,
-          canceled_at: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        featureFlags: {},
-        isLoading: false,
-        error: null,
-      } as any);
+      vi.mocked(supabaseAuth.getState).mockReturnValue(
+        makeAuthState({
+          user: makeUser({ id: 'user-1', email: 'test@example.com' }),
+          session: makeSession({ access_token: 'token', refresh_token: 'refresh' }),
+          profile: null,
+          subscription: {
+            id: 'sub-1',
+            user_id: 'user-1',
+            plan_tier: 'hobby',
+            status: 'active',
+            stripe_customer_id: 'cus-1',
+            stripe_subscription_id: 'sub-1',
+            stripe_price_id: 'price-1',
+            current_period_start: new Date().toISOString(),
+            current_period_end: new Date().toISOString(),
+            cancel_at_period_end: false,
+            canceled_at: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+          featureFlags: {},
+          isLoading: false,
+          error: null,
+        }),
+      );
 
       const result = checkSubscriptionGate();
 
@@ -225,29 +310,31 @@ describe('subscriptionGate', () => {
     });
 
     it('should allow access when user has hobby tier with trialing status', () => {
-      vi.mocked(supabaseAuth.getState).mockReturnValue({
-        user: { id: 'user-1', email: 'test@example.com' },
-        session: { access_token: 'token', refresh_token: 'refresh' },
-        profile: null,
-        subscription: {
-          id: 'sub-1',
-          user_id: 'user-1',
-          plan_tier: 'hobby',
-          status: 'trialing',
-          stripe_customer_id: 'cus-1',
-          stripe_subscription_id: 'sub-1',
-          stripe_price_id: 'price-1',
-          current_period_start: new Date().toISOString(),
-          current_period_end: new Date().toISOString(),
-          cancel_at_period_end: false,
-          canceled_at: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        featureFlags: {},
-        isLoading: false,
-        error: null,
-      } as any);
+      vi.mocked(supabaseAuth.getState).mockReturnValue(
+        makeAuthState({
+          user: makeUser({ id: 'user-1', email: 'test@example.com' }),
+          session: makeSession({ access_token: 'token', refresh_token: 'refresh' }),
+          profile: null,
+          subscription: {
+            id: 'sub-1',
+            user_id: 'user-1',
+            plan_tier: 'hobby',
+            status: 'trialing',
+            stripe_customer_id: 'cus-1',
+            stripe_subscription_id: 'sub-1',
+            stripe_price_id: 'price-1',
+            current_period_start: new Date().toISOString(),
+            current_period_end: new Date().toISOString(),
+            cancel_at_period_end: false,
+            canceled_at: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+          featureFlags: {},
+          isLoading: false,
+          error: null,
+        }),
+      );
 
       const result = checkSubscriptionGate();
 
@@ -257,29 +344,31 @@ describe('subscriptionGate', () => {
     });
 
     it('should allow access when user has pro tier', () => {
-      vi.mocked(supabaseAuth.getState).mockReturnValue({
-        user: { id: 'user-1', email: 'test@example.com' },
-        session: { access_token: 'token', refresh_token: 'refresh' },
-        profile: null,
-        subscription: {
-          id: 'sub-1',
-          user_id: 'user-1',
-          plan_tier: 'pro',
-          status: 'active',
-          stripe_customer_id: 'cus-1',
-          stripe_subscription_id: 'sub-1',
-          stripe_price_id: 'price-1',
-          current_period_start: new Date().toISOString(),
-          current_period_end: new Date().toISOString(),
-          cancel_at_period_end: false,
-          canceled_at: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        featureFlags: {},
-        isLoading: false,
-        error: null,
-      } as any);
+      vi.mocked(supabaseAuth.getState).mockReturnValue(
+        makeAuthState({
+          user: makeUser({ id: 'user-1', email: 'test@example.com' }),
+          session: makeSession({ access_token: 'token', refresh_token: 'refresh' }),
+          profile: null,
+          subscription: {
+            id: 'sub-1',
+            user_id: 'user-1',
+            plan_tier: 'pro',
+            status: 'active',
+            stripe_customer_id: 'cus-1',
+            stripe_subscription_id: 'sub-1',
+            stripe_price_id: 'price-1',
+            current_period_start: new Date().toISOString(),
+            current_period_end: new Date().toISOString(),
+            cancel_at_period_end: false,
+            canceled_at: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+          featureFlags: {},
+          isLoading: false,
+          error: null,
+        }),
+      );
 
       const result = checkSubscriptionGate();
 
@@ -288,29 +377,31 @@ describe('subscriptionGate', () => {
     });
 
     it('should allow access when user has max tier', () => {
-      vi.mocked(supabaseAuth.getState).mockReturnValue({
-        user: { id: 'user-1', email: 'test@example.com' },
-        session: { access_token: 'token', refresh_token: 'refresh' },
-        profile: null,
-        subscription: {
-          id: 'sub-1',
-          user_id: 'user-1',
-          plan_tier: 'max',
-          status: 'active',
-          stripe_customer_id: 'cus-1',
-          stripe_subscription_id: 'sub-1',
-          stripe_price_id: 'price-1',
-          current_period_start: new Date().toISOString(),
-          current_period_end: new Date().toISOString(),
-          cancel_at_period_end: false,
-          canceled_at: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        featureFlags: {},
-        isLoading: false,
-        error: null,
-      } as any);
+      vi.mocked(supabaseAuth.getState).mockReturnValue(
+        makeAuthState({
+          user: makeUser({ id: 'user-1', email: 'test@example.com' }),
+          session: makeSession({ access_token: 'token', refresh_token: 'refresh' }),
+          profile: null,
+          subscription: {
+            id: 'sub-1',
+            user_id: 'user-1',
+            plan_tier: 'max',
+            status: 'active',
+            stripe_customer_id: 'cus-1',
+            stripe_subscription_id: 'sub-1',
+            stripe_price_id: 'price-1',
+            current_period_start: new Date().toISOString(),
+            current_period_end: new Date().toISOString(),
+            cancel_at_period_end: false,
+            canceled_at: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+          featureFlags: {},
+          isLoading: false,
+          error: null,
+        }),
+      );
 
       const result = checkSubscriptionGate();
 
@@ -319,29 +410,31 @@ describe('subscriptionGate', () => {
     });
 
     it('should allow access when user has enterprise tier', () => {
-      vi.mocked(supabaseAuth.getState).mockReturnValue({
-        user: { id: 'user-1', email: 'test@example.com' },
-        session: { access_token: 'token', refresh_token: 'refresh' },
-        profile: null,
-        subscription: {
-          id: 'sub-1',
-          user_id: 'user-1',
-          plan_tier: 'enterprise',
-          status: 'active',
-          stripe_customer_id: 'cus-1',
-          stripe_subscription_id: 'sub-1',
-          stripe_price_id: 'price-1',
-          current_period_start: new Date().toISOString(),
-          current_period_end: new Date().toISOString(),
-          cancel_at_period_end: false,
-          canceled_at: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        featureFlags: {},
-        isLoading: false,
-        error: null,
-      } as any);
+      vi.mocked(supabaseAuth.getState).mockReturnValue(
+        makeAuthState({
+          user: makeUser({ id: 'user-1', email: 'test@example.com' }),
+          session: makeSession({ access_token: 'token', refresh_token: 'refresh' }),
+          profile: null,
+          subscription: {
+            id: 'sub-1',
+            user_id: 'user-1',
+            plan_tier: 'enterprise',
+            status: 'active',
+            stripe_customer_id: 'cus-1',
+            stripe_subscription_id: 'sub-1',
+            stripe_price_id: 'price-1',
+            current_period_start: new Date().toISOString(),
+            current_period_end: new Date().toISOString(),
+            cancel_at_period_end: false,
+            canceled_at: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+          featureFlags: {},
+          isLoading: false,
+          error: null,
+        }),
+      );
 
       const result = checkSubscriptionGate();
 
@@ -352,43 +445,47 @@ describe('subscriptionGate', () => {
 
   describe('canUseAPIKeys', () => {
     it('should return false when subscription gate denies access', () => {
-      vi.mocked(supabaseAuth.getState).mockReturnValue({
-        user: null,
-        session: null,
-        profile: null,
-        subscription: null,
-        featureFlags: {},
-        isLoading: false,
-        error: null,
-      } as any);
+      vi.mocked(supabaseAuth.getState).mockReturnValue(
+        makeAuthState({
+          user: null,
+          session: null,
+          profile: null,
+          subscription: null,
+          featureFlags: {},
+          isLoading: false,
+          error: null,
+        }),
+      );
 
       expect(canUseAPIKeys()).toBe(false);
     });
 
     it('should return true when subscription gate allows access', () => {
-      vi.mocked(supabaseAuth.getState).mockReturnValue({
-        user: { id: 'user-1', email: 'test@example.com' },
-        session: { access_token: 'token', refresh_token: 'refresh' },
-        profile: null,
-        subscription: {
-          id: 'sub-1',
-          user_id: 'user-1',
-          plan_tier: 'hobby',
-          status: 'active',
-          stripe_customer_id: 'cus-1',
-          stripe_subscription_id: 'sub-1',
-          stripe_price_id: 'price-1',
-          current_period_start: new Date().toISOString(),
-          current_period_end: new Date().toISOString(),
-          cancel_at_period_end: false,
-          canceled_at: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        featureFlags: {},
-        isLoading: false,
-        error: null,
-      } as any);
+      vi.mocked(supabaseAuth.getState).mockReturnValue(
+        makeAuthState({
+          user: makeUser({ id: 'user-1', email: 'test@example.com' }),
+          session: makeSession({ access_token: 'token', refresh_token: 'refresh' }),
+          profile: null,
+          subscription: {
+            id: 'sub-1',
+            user_id: 'user-1',
+            plan_tier: 'hobby',
+            status: 'active',
+            stripe_customer_id: 'cus-1',
+            stripe_subscription_id: 'sub-1',
+            stripe_price_id: 'price-1',
+            current_period_start: new Date().toISOString(),
+            current_period_end: new Date().toISOString(),
+            cancel_at_period_end: false,
+            canceled_at: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+          featureFlags: {},
+          isLoading: false,
+          error: null,
+        }),
+      );
 
       expect(canUseAPIKeys()).toBe(true);
     });

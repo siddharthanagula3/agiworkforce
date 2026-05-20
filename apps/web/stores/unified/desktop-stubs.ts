@@ -1,109 +1,102 @@
 /**
  * Shared desktop-port compilation stubs.
  *
- * All store hooks return empty state. Individual stub files re-export from here
- * and add file-specific extras as needed (e.g., projectStore adds mutable state
- * for FolderSelector tests, accountStore adds selectIsTierLoading).
+ * FIX (audit 2026-05-20, §8): the previous default export was
+ * `export default {} as any;` — a stub that silently swallowed any call.
+ * It is now a typed empty record so consumers either:
+ *
+ *   1. Use a named export (preferred — every store hook is named below), or
+ *   2. Type-check against `DesktopStubsDefault` and see the empty shape.
+ *
+ * Each store hook still no-ops because the web bundle imports them through
+ * `apps/web/stores/unified/index.ts` and the *callers* are runtime-gated
+ * behind `isTauri()` / `isCloudWeb()` (see `packages/runtime/src/detect.ts`).
+ * If a future call reaches a stub on the web, the dev-only warn surfaces
+ * the mistake without crashing the render.
+ *
+ * Individual stub files (mediaGenerationStore.ts, etc.) re-export from here
+ * and add file-specific extras as needed.
  */
 
+/** Shape of the default export. Intentionally empty; not a passthrough. */
+export type DesktopStubsDefault = Record<string, never>;
+const defaultExport: DesktopStubsDefault = Object.freeze({});
+
 export const _stub = true;
-export default {} as any;
-export const useAuth = () => ({ user: null });
+export default defaultExport;
 
-const _useAccountStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useAccountStoreFn.getState = () => ({});
-export const useAccountStore = _useAccountStoreFn;
+/** Dev-only call notice so a misrouted call surfaces in the console. */
+function warnStubCalled(name: string): void {
+  if (typeof process !== 'undefined' && process.env?.['NODE_ENV'] !== 'production') {
+    console.warn(
+      `[desktop-stubs] ${name} was called on the web bundle. ` +
+        'This hook is desktop-only and should be guarded by isTauri()/isCloudWeb().',
+    );
+  }
+}
 
-const _useModelStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useModelStoreFn.getState = () => ({});
-export const useModelStore = _useModelStoreFn;
+type StoreSelector<S> = (state: S) => unknown;
+type StubHook<S> = ((selector?: StoreSelector<S>) => unknown) & {
+  getState: () => S;
+};
 
-const _useProjectStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useProjectStoreFn.getState = () => ({});
-export const useProjectStore = _useProjectStoreFn;
+/** Factory: produce a no-op hook whose default state is `{}`. */
+function makeStubHook(name: string): StubHook<Record<string, never>> {
+  const empty = Object.freeze({}) as Record<string, never>;
+  const fn = ((selector?: StoreSelector<Record<string, never>>) => {
+    warnStubCalled(name);
+    return selector ? selector(empty) : empty;
+  }) as StubHook<Record<string, never>>;
+  fn.getState = () => empty;
+  return fn;
+}
 
-const _useMemoryStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useMemoryStoreFn.getState = () => ({});
-export const useMemoryStore = _useMemoryStoreFn;
+export const useAuth = (): { user: null } => {
+  warnStubCalled('useAuth');
+  return { user: null };
+};
 
-const _useArtifactStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useArtifactStoreFn.getState = () => ({});
-export const useArtifactStore = _useArtifactStoreFn;
-
-const _useExecutionStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useExecutionStoreFn.getState = () => ({});
-export const useExecutionStore = _useExecutionStoreFn;
-
-const _useTerminalStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useTerminalStoreFn.getState = () => ({});
-export const useTerminalStore = _useTerminalStoreFn;
-
-const _useBrowserStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useBrowserStoreFn.getState = () => ({});
-export const useBrowserStore = _useBrowserStoreFn;
-
-const _useMcpStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useMcpStoreFn.getState = () => ({});
-export const useMcpStore = _useMcpStoreFn;
-
-const _useUpdaterStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useUpdaterStoreFn.getState = () => ({});
-export const useUpdaterStore = _useUpdaterStoreFn;
-
-const _useUsageStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useUsageStoreFn.getState = () => ({});
-export const useUsageStore = _useUsageStoreFn;
-
-const _useCloudStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useCloudStoreFn.getState = () => ({});
-export const useCloudStore = _useCloudStoreFn;
-
-const _useAutomationStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useAutomationStoreFn.getState = () => ({});
-export const useAutomationStore = _useAutomationStoreFn;
-
-const _useErrorStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useErrorStoreFn.getState = () => ({});
-export const useErrorStore = _useErrorStoreFn;
-
-const _useSchedulerStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useSchedulerStoreFn.getState = () => ({});
-export const useSchedulerStore = _useSchedulerStoreFn;
-
-const _useMediaGenerationStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useMediaGenerationStoreFn.getState = () => ({});
-export const useMediaGenerationStore = _useMediaGenerationStoreFn;
-
-const _useCustomInstructionsStoreFn: any = (selector?: any) =>
-  selector ? selector({} as any) : {};
-_useCustomInstructionsStoreFn.getState = () => ({});
-export const useCustomInstructionsStore = _useCustomInstructionsStoreFn;
-
-const _useCodeStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useCodeStoreFn.getState = () => ({});
-export const useCodeStore = _useCodeStoreFn;
-
-const _useSettingsStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useSettingsStoreFn.getState = () => ({});
-export const useSettingsStore = _useSettingsStoreFn;
-
-const _useBillingUsageStoreFn: any = (selector?: any) => (selector ? selector({} as any) : {});
-_useBillingUsageStoreFn.getState = () => ({});
-export const useBillingUsageStore = _useBillingUsageStoreFn;
+export const useAccountStore = makeStubHook('useAccountStore');
+export const useModelStore = makeStubHook('useModelStore');
+export const useProjectStore = makeStubHook('useProjectStore');
+export const useMemoryStore = makeStubHook('useMemoryStore');
+export const useArtifactStore = makeStubHook('useArtifactStore');
+export const useExecutionStore = makeStubHook('useExecutionStore');
+export const useTerminalStore = makeStubHook('useTerminalStore');
+export const useBrowserStore = makeStubHook('useBrowserStore');
+export const useMcpStore = makeStubHook('useMcpStore');
+export const useUpdaterStore = makeStubHook('useUpdaterStore');
+export const useUsageStore = makeStubHook('useUsageStore');
+export const useCloudStore = makeStubHook('useCloudStore');
+export const useAutomationStore = makeStubHook('useAutomationStore');
+export const useErrorStore = makeStubHook('useErrorStore');
+export const useSchedulerStore = makeStubHook('useSchedulerStore');
+export const useMediaGenerationStore = makeStubHook('useMediaGenerationStore');
+export const useCustomInstructionsStore = makeStubHook('useCustomInstructionsStore');
+export const useCodeStore = makeStubHook('useCodeStore');
+export const useSettingsStore = makeStubHook('useSettingsStore');
+export const useBillingUsageStore = makeStubHook('useBillingUsageStore');
 
 // General dummy exports (covers many cases)
-export const invoke = async () => ({});
+export const invoke = async (): Promise<Record<string, never>> => {
+  warnStubCalled('invoke');
+  return {};
+};
 export const isTauri = false;
-export const countTokens = () => 0;
-export const getTokenPercentage = () => 0;
+export const countTokens = (): number => 0;
+export const getTokenPercentage = (): number => 0;
 
-export const BrowserVisualization = (_props?: any) => null;
-export const MonacoEditor = (_props?: any) => null;
-export const TerminalPanel = (_props?: any) => null;
-export const MemoryPanel = (_props?: any) => null;
-export const ScreenCaptureButton = (_props?: any) => null;
-export const ErrorBoundary = ({ children }: any) => children;
-export const TimeoutWarningDialog = (_props?: any) => null;
-export const DiffViewer = (_props?: any) => null;
+// React-component stubs. Typed as null-returning components so consumers
+// importing them as JSX still type-check.
+import type { ReactNode } from 'react';
+type StubComponentProps = Record<string, unknown>;
+export const BrowserVisualization = (_props?: StubComponentProps): null => null;
+export const MonacoEditor = (_props?: StubComponentProps): null => null;
+export const TerminalPanel = (_props?: StubComponentProps): null => null;
+export const MemoryPanel = (_props?: StubComponentProps): null => null;
+export const ScreenCaptureButton = (_props?: StubComponentProps): null => null;
+export const ErrorBoundary = ({ children }: { children: ReactNode }): ReactNode => children;
+export const TimeoutWarningDialog = (_props?: StubComponentProps): null => null;
+export const DiffViewer = (_props?: StubComponentProps): null => null;
 
-export const handleSlashCommand = () => {};
+export const handleSlashCommand = (): void => {};

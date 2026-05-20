@@ -7,7 +7,7 @@
  */
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
+import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import type { NotificationEventType } from '@/services/notifications';
 
 // ---------------------------------------------------------------------------
@@ -179,6 +179,5 @@ export const useNotificationPrefsStore = create<NotificationPrefsState>()(
   ),
 );
 
-whenMmkvReady(() => {
-  useNotificationPrefsStore.persist.rehydrate();
-});
+// FIX (audit 2026-05-20, §17): use the shared rehydrate helper.
+rehydrateWhenMmkvReady(useNotificationPrefsStore, 'notificationPrefsStore');

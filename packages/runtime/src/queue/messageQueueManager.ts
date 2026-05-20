@@ -283,8 +283,14 @@ export function createMessageQueue(options: CreateMessageQueueOptions = {}): Mes
     dequeue: (filter) => {
       const snapshot = store.getState();
       const idx = findBestIdx(snapshot, filter);
-      if (idx === -1) return undefined;
-      const cmd = snapshot[idx]!;
+      // FIX (audit 2026-05-20, §14): bounds-check idx against the snapshot
+      // before the non-null assertion. findBestIdx returning a valid index
+      // is the contract today, but concurrent splice/replace via mutate()
+      // could shorten the array between the find and the indexed read.
+      if (idx === -1 || idx < 0 || idx >= snapshot.length) return undefined;
+      const cmdAt = snapshot[idx];
+      if (cmdAt === undefined) return undefined;
+      const cmd = cmdAt;
       mutate((prev) => {
         // Re-find under the latest snapshot — defends against concurrent
         // mutations by ID match. If the command moved or was removed, no-op.
@@ -302,10 +308,17 @@ export function createMessageQueue(options: CreateMessageQueueOptions = {}): Mes
     dequeueIf: (expectedId: string) => {
       const snapshot = store.getState();
       const idx = findBestIdx(snapshot);
-      if (idx === -1 || snapshot[idx]!.id !== expectedId) {
+      // FIX (audit 2026-05-20, §14): explicit bounds check before the
+      // non-null assertion below (snapshot can shrink under concurrent
+      // mutate(); the dequeueIf race path was the most likely site).
+      if (idx === -1 || idx < 0 || idx >= snapshot.length) {
         throw new QueueDequeueRaceError(expectedId);
       }
-      const cmd = snapshot[idx]!;
+      const cmdAt = snapshot[idx];
+      if (cmdAt === undefined || cmdAt.id !== expectedId) {
+        throw new QueueDequeueRaceError(expectedId);
+      }
+      const cmd = cmdAt;
       let racedRef = false;
       mutate((prev) => {
         const realIdx = prev.findIndex((c) => c.id === expectedId);

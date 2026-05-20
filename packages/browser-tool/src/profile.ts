@@ -52,9 +52,44 @@ interface OpenProfile {
 
 const open = new Map<string, OpenProfile>();
 
+/**
+ * Pattern that AGIWORKFORCE_BROWSER_PROFILE_ROOT must match.
+ *
+ * FIX (audit 2026-05-20, §8): the env-var override was previously read
+ * with zero validation — an attacker who could write to the user's shell
+ * profile could set this to `/etc` or `~/Library/Mail` and have the
+ * profile machinery write into a directory the agent shouldn't own. The
+ * audit also flagged the silent default ("no docs, no validation").
+ *
+ * Allowed values are *absolute* paths whose every component is safe
+ * (alphanumerics + `_`, `-`, `.`, `/`) and that contain no parent
+ * traversal segments. Relative paths and `..` are rejected with a
+ * clear error so the operator can fix their shell config.
+ */
+const PROFILE_ROOT_ENV_VAR = 'AGIWORKFORCE_BROWSER_PROFILE_ROOT';
+
+function isAcceptableProfileRoot(p: string): boolean {
+  if (!p || typeof p !== 'string') return false;
+  if (!p.startsWith('/') && !/^[A-Za-z]:[\\/]/.test(p)) return false; // absolute on POSIX or Windows
+  if (p.includes('\0')) return false;
+  // Reject any `..` segment.
+  const parts = p.split(/[\\/]/);
+  if (parts.some((seg) => seg === '..')) return false;
+  // Conservative charset: everything we expect from a config knob.
+  return /^[A-Za-z0-9_.:\\/ -]+$/.test(p);
+}
+
 function profileRoot(): string {
-  const env = process.env['AGIWORKFORCE_BROWSER_PROFILE_ROOT'];
-  if (env) return env;
+  const env = process.env[PROFILE_ROOT_ENV_VAR];
+  if (env) {
+    if (!isAcceptableProfileRoot(env)) {
+      throw new Error(
+        `${PROFILE_ROOT_ENV_VAR} is not a safe absolute path: "${env}". ` +
+          'Must be absolute, contain no `..`, and use only [A-Za-z0-9_.:/-].',
+      );
+    }
+    return env;
+  }
   return join(homedir(), '.agiworkforce', 'browser', 'profiles');
 }
 

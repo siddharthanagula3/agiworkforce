@@ -749,7 +749,12 @@ router.post(
       } else {
         await streamResponse(provider, upstream, res, body.model);
       }
-      // Best-effort usage tracking (fire and forget for streaming)
+      // Best-effort usage tracking (fire and forget for streaming).
+      // PostgrestBuilder.then() returns PromiseLike, not Promise — `.catch`
+      // isn't on the prototype. Pair the rejection handler via the 2-arg
+      // `.then(onfulfilled, onrejected)` form to swallow rejected inserts
+      // (audit 2026-05-20, §14: was leaking unhandledRejection on dropped
+      // SSE connections).
       usageDb
         .from('usage_events')
         .insert({
@@ -760,9 +765,14 @@ router.post(
           event_type: 'llm_stream',
           created_at: new Date().toISOString(),
         })
-        .then(({ error }) => {
-          if (error) logger.debug({ error }, 'Failed to log usage event (table may not exist)');
-        });
+        .then(
+          ({ error }) => {
+            if (error) logger.debug({ error }, 'Failed to log usage event (table may not exist)');
+          },
+          (err: unknown) => {
+            logger.debug({ err }, 'Usage event insert rejected (SSE path)');
+          },
+        );
       return;
     }
 
@@ -780,6 +790,7 @@ router.post(
 
     // Best-effort usage tracking
     const usage = openaiResponse['usage'] as Record<string, number> | undefined;
+    // PromiseLike 2-arg form (see SSE path above for rationale).
     usageDb
       .from('usage_events')
       .insert({
@@ -792,9 +803,14 @@ router.post(
         completion_tokens: usage?.['completion_tokens'] ?? null,
         created_at: new Date().toISOString(),
       })
-      .then(({ error }) => {
-        if (error) logger.debug({ error }, 'Failed to log usage event (table may not exist)');
-      });
+      .then(
+        ({ error }) => {
+          if (error) logger.debug({ error }, 'Failed to log usage event (table may not exist)');
+        },
+        (err: unknown) => {
+          logger.debug({ err }, 'Usage event insert rejected (completion path)');
+        },
+      );
 
     res.json(openaiResponse);
   },

@@ -9,6 +9,21 @@ pub(crate) fn escape_command(command: &[String]) -> String {
     try_join(command.iter().map(String::as_str)).unwrap_or_else(|_| command.join(" "))
 }
 
+/// AUDIT (2026-05-20, §4): cross-checked that what this returns matches
+/// what gets executed. Two cases:
+///   1. `[bash, -lc, "<script>"]` → display only `<script>`. The actual
+///      `argv` passed to `Command::new` IS still `[bash, -lc, script]`,
+///      so what the user reads IS what the shell parses (semi-colons,
+///      pipes, backticks, $-substitutions, etc. all appear verbatim).
+///   2. Other forms → `escape_command` shell-escapes each argv slot via
+///      `shlex::try_join`, so the rendered string round-trips back to
+///      the same argv (modulo quoting).
+///
+/// No truncation, no terminal-escape stripping. If you change this, you
+/// MUST keep the byte-identity invariant: anything `strip_bash_lc_and_escape`
+/// drops MUST also be inert (e.g. the literal `bash -lc` interpreter prefix).
+/// Adding "smart" rewrites here re-opens the LITL approval-dialog spoof
+/// vector described in CLAUDE.md / dev-methodology.md.
 pub(crate) fn strip_bash_lc_and_escape(command: &[String]) -> String {
     if let Some((_, script)) = extract_shell_command(command) {
         return script.to_string();

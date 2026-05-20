@@ -515,6 +515,23 @@ export function createChatHandler(
 
 /**
  * Register the @agi chat participant and return a disposable.
+ *
+ * AUDIT (2026-05-20, §10): the chat participant must preserve the following
+ * properties; any future change here MUST be reviewed against this list:
+ *
+ *   1. NO auto-execute of generated code. The handler only `stream.markdown`s
+ *      the LLM response. Code blocks are rendered, not run.
+ *   2. `stream.button({ command: <id> })` calls use ONLY hardcoded command
+ *      IDs from this file (e.g. `agi-workforce.explain`). Never pass a
+ *      command ID that originated from LLM output, message metadata, or
+ *      workspace state.
+ *   3. NO direct shell or filesystem operations from inside the handler.
+ *      Agent-mode edits flow through `agentUI.ts` which has the
+ *      Workspace-Trust gate (VSCODE-02) plus the LITL per-file diff review
+ *      for sensitive paths (PR-2B / F-03). That gate is the trust boundary;
+ *      anything that bypasses it is a regression.
+ *
+ * Reviewed and confirmed in the 2026-05-20 audit sweep — no gaps found.
  */
 export function registerChatParticipant(
   context: vscode.ExtensionContext,

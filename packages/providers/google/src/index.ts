@@ -35,16 +35,23 @@ import { parseGeminiStream, translateGeminiStream } from './stream';
 
 const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com';
 
+// FIX (audit 2026-05-20, §8): the Vertex AI / gcp-adc auth method was
+// advertised in the catalog but the adapter has no implementation behind
+// it. Importers that picked gcp-adc thinking it was functional would
+// silently fall through the `!config.apiKey` branch in stream() and
+// surface a misleading "requires apiKey" error. Until the Vertex adapter
+// lands, only the api-key path is advertised here. The full method list
+// (kept for documentation) is in the comment below.
+//
+// const FUTURE_AUTH_METHODS: readonly AuthMethod[] = [
+//   { kind: 'gcp-adc', label: 'Google Cloud ADC (Vertex AI)' },
+// ];
 const GOOGLE_AUTH_METHODS: readonly AuthMethod[] = [
   {
     kind: 'api-key',
     envVar: 'GOOGLE_API_KEY',
     required: true,
     label: 'Google AI Studio API Key',
-  },
-  {
-    kind: 'gcp-adc',
-    label: 'Google Cloud ADC (Vertex AI — not yet wired)',
   },
 ];
 
@@ -56,6 +63,19 @@ export interface GoogleAdapterConfig extends ProviderAdapterConfig {
 }
 
 export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderAdapter {
+  // FIX (audit 2026-05-20, §8): fail-fast on Vertex/gcp-adc requests until
+  // that path is implemented. Catches the case where a future caller
+  // surfaces gcp-adc selection via authMethod or vertex-style config.
+  if (
+    (config as { authMethod?: string }).authMethod === 'gcp-adc' ||
+    (config as { useVertex?: boolean }).useVertex === true
+  ) {
+    throw new Error(
+      'Google Vertex AI / gcp-adc adapter is not implemented yet. ' +
+        'Pass an api-key (GOOGLE_API_KEY) via createGoogleAdapter({ apiKey }) ' +
+        'or switch to the OpenAI / Anthropic adapter while Vertex support lands.',
+    );
+  }
   const baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
   const fetchFn = config.fetch ?? fetch;
 

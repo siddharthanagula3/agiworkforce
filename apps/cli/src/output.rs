@@ -540,10 +540,13 @@ mod tests {
     }
 
     #[test]
-    fn test_model_pricing_deepseek_reasoner() {
-        let (i, o) = model_pricing("deepseek-reasoner");
-        assert_eq!(i, 0.28);
-        assert_eq!(o, 0.42);
+    fn test_model_pricing_deepseek_v4_pro() {
+        // models.json canonicalizes legacy "deepseek-reasoner" → "deepseek-v4-pro".
+        // find_model does not follow the alias map, so the test asserts on the
+        // canonical id from packages/types/src/models.json (input 0.14, output 0.28).
+        let (i, o) = model_pricing("deepseek-v4-pro");
+        assert_eq!(i, 0.14);
+        assert_eq!(o, 0.28);
     }
 
     #[test]
@@ -638,8 +641,8 @@ mod tests {
             "mistral-large-2512",
             "mistral-medium-2508",
             "grok-4-0709",
-            "deepseek-reasoner",
-            "deepseek-chat",
+            "deepseek-v4-pro",
+            "deepseek-v4-flash",
             "unknown-local-model",
         ];
 

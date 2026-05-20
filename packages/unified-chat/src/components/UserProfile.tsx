@@ -21,10 +21,16 @@ interface UserProfileProps {
 }
 
 function getInitials(fullName: string): string {
+  // FIX (audit 2026-05-20, §14): replace the misleading non-null assertion
+  // pattern `parts[0]![0] ?? 'U'`. After `.filter(Boolean)` every entry is
+  // a non-empty string, but the `!` told a reader otherwise; safe optional
+  // access is both correct and self-documenting.
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return 'U';
-  if (parts.length === 1) return (parts[0]![0] ?? 'U').toUpperCase();
-  return ((parts[0]![0] ?? '') + (parts[parts.length - 1]![0] ?? '')).toUpperCase();
+  const first = parts[0] ?? '';
+  if (parts.length === 1) return (first[0] ?? 'U').toUpperCase();
+  const last = parts[parts.length - 1] ?? '';
+  return ((first[0] ?? '') + (last[0] ?? '')).toUpperCase();
 }
 
 function getAvatarColor(name: string): string {
