@@ -514,7 +514,7 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
   // (in the connect-handshake response), latch it for subsequent MAC
   // computation. Best-effort: a missing secret falls back to the legacy
   // no-MAC behavior with a one-time warn.
-  const maybeSecret = (message as Record<string, unknown>)['session_secret'];
+  const maybeSecret = (message as unknown as Record<string, unknown>)['session_secret'];
   if (typeof maybeSecret === 'string' && !nativeSessionSecret) {
     setNativeSessionSecret(maybeSecret);
   }
@@ -533,8 +533,8 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
       // integrity check by simply stripping the `mac`/`timestamp` fields
       // (downgrade attack). Only when no secret has ever been negotiated
       // do we accept the legacy success/error envelope.
-      const respMac = (message as Record<string, unknown>)['mac'];
-      const respTs = (message as Record<string, unknown>)['timestamp'];
+      const respMac = (message as unknown as Record<string, unknown>)['mac'];
+      const respTs = (message as unknown as Record<string, unknown>)['timestamp'];
       if (nativeSessionSecret) {
         if (typeof respMac !== 'string' || typeof respTs !== 'number') {
           logger.warn(
@@ -548,7 +548,9 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
         // The host signs with the same payload shape: id|ts|body. Body is
         // the message *without* id/mac/timestamp/session_secret so the
         // signature is over a stable canonical form.
-        const body: Record<string, unknown> = { ...(message as Record<string, unknown>) };
+        const body: Record<string, unknown> = {
+          ...(message as unknown as Record<string, unknown>),
+        };
         delete body['id'];
         delete body['mac'];
         delete body['timestamp'];

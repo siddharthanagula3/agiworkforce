@@ -23,6 +23,7 @@
   "scripts": {
     "dev": "vite build --watch",
     "build": "vite build",
+    "typecheck": "tsc --noEmit",
     "pretest": "bash scripts/check-conflict-markers.sh",
     "test": "vitest run",
     "clean": "rm -rf dist",
