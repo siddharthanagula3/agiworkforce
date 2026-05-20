@@ -1,0 +1,43 @@
+- generic [ref=e7] [box=0,0,1633,928]:
+  - generic [ref=e8] [box=0,0,1633,40]:
+    - generic [ref=e11] [box=6,0,393,40]:
+      - link "Back to projects" [ref=e12] [box=6,6,28,28]:
+        - /url: /design/
+        - img [ref=e13] [box=11,11,17,17]
+      - generic "AGI Mobile" [ref=e16] [box=40,7,78,25]
+      - button "" [ref=e18] [box=367,7,26,26]:
+        - generic [ref=e19] [box=372,12,16,16]: 
+    - generic [ref=e20] [box=400,0,1233,40]:
+      - generic [ref=e22] [box=410,7,107,34]:
+        - generic [ref=e23] [box=424,14,12,12]: 
+        - generic [ref=e24] [box=439,14,64,13]: Design Files
+      - generic [ref=e26] [box=503,7,1034,33]:
+        - generic [ref=e28] [box=531,14,124,13]: index.html
+        - generic [ref=e30] [box=681,14,124,13]: screens-r5-canonical.jsx
+        - generic [ref=e32] [box=831,14,124,13]: screens-r6-canonical.jsx
+        - generic [ref=e34] [box=981,14,111,13]: app.jsx
+      - generic [ref=e39] [box=1537,6,88,28]:
+        - button "Share" [ref=e41] [box=1543,9,48,22]
+        - button "Profile and connectors" [ref=e43] [cursor=pointer] [box=1597,6,28,28]
+  - generic [ref=e46] [box=0,40,1633,888]:
+    - generic [ref=e53] [box=0,40,399,888]:
+      - generic [ref=e56] [box=14,-54504,364,55257]:
+        - generic [ref=e59] [box=260,-5904,118,38]: dont use codex
+        - generic [ref=e62] [box=14,-5844,364,75]
+        - generic [ref=e74] [box=81,-5755,297,38]: can you like brainstrom or ask me questions?
+        - generic [ref=e79] [box=14,-5697,364,1410]
+        - generic [ref=e135] [box=69,-4273,309,2540]
+        - generic [ref=e141] [box=69,-1719,309,2323]: "Create a new R6 canonical set that keeps the visual polish of R5 but corrects the AGI Mobile product direction. Do not edit by making small copy tweaks only. Make a new light-first AGI Mobile v1 direction using these rules: 1. Product truth AGI Mobile v1 is on-device first. The hero is private AI that runs on the phone, works offline, and only leaves the device when the user explicitly chooses BYOK. Managed AGI Cloud is waitlist/private beta only. BYOK is available when the user adds their own provider key. 2. Visual direction Make canonical screens light-first with warm cream #faf9f7 as the base, white raised surfaces, teal #21808d for primary actions, terracotta #da7756 only as secondary accent. Include dark variants only as secondary examples. Use iOS/Android system sans. Do not use serif body text. Do not use negative letter spacing. Keep density professional and mobile-native. 3. Empty chat Replace \"How can I help you, Siddhartha?\" with \"Ask anything\". Add a compact trust badge near the header or above the composer: \"On-device · Private · Works offline\". Keep the composer-first layout. The screen should feel like a real tool, not a landing page. 4. Navigation Remove Agents, Dispatch, and Multi-model from primary mobile nav. Mobile v1 primary drawer should be: Chat, Projects, Skills, Memory, Models, Keys, Settings. Agents only appear later if desktop companion has active runs. Dispatch is not a v1 destination. Multi-model compare is not a primary nav item. 5. Onboarding No sign-in in first-run. Replace the current Android onboarding copy with: \"AGI runs on your device.\" Supporting copy: \"No account. No cloud. Free forever.\" Primary CTA: \"Start chatting\" or \"Continue\". Then show device-tier detection and model download/manage. BYOK is optional later in Keys. 6. Model picker Rebuild the model picker into three explicit sections: - On-device: installed and downloadable local/system models. - BYOK: Anthropic, OpenAI, Google, xAI, Perplexity, Mistral, Ollama/LM Studio, Custom. Rows say \"Add key\" until configured, then become selectable. These are not waitlist. - AGI Cloud: managed models and credits. These are waitlist/private beta only. Do not label every cloud provider model as waitlist. BYOK unlocks provider models now. 7. BYOK flow Add a Keys / BYOK screen and a Local to BYOK fork flow. The fork flow must show: choose provider/model, choose context to send, include attachments toggle, local secret scan, payload preview, confirm. Original local chat remains local. Labels should say \"Claude via your Anthropic key\" or equivalent. 8. Waitlist Remove fake or global waitlist rank from Settings and nav. Before join, show only \"Join waitlist\" at natural cloud gates. After join, rank may appear only in the waitlist confirmation and mode/cloud row, and only as server-provided data. 9. Settings and storage Remove account/email assumptions from local v1 settings. Storage export must be on-device export/share sheet, not \"emailed within 24h\". Settings sections: Mode, Keys, Memory, Voice, Storage, Performance, Privacy, Appearance, About. 10. Preserve what works Keep the high-fidelity phone frames, compact composer, inline tool-call bar, performance chip, plus menu structure, and model sheet interaction quality. Just make the IA, copy, trust boundaries, and palette correct for AGI. Output one new section titled \"R6 · AGI Mobile v1 canonical\" with these screens: onboarding hero, device tier/model download, empty chat, active chat, drawer, plus menu, model picker, Keys/BYOK setup, Local to BYOK fork preview, Settings/Storage/Privacy. Add Android light variants for drawer and onboarding."
+        - generic [ref=e144] [box=14,626,364,113]
+      - generic [ref=e163] [box=12,790,375,125]:
+        - textbox "Describe what you want to create..." [ref=e165] [box=25,803,350,63]
+        - generic [ref=e166] [box=25,875,350,28]
+    - generic [ref=e182] [box=400,40,1233,888]:
+      - generic [ref=e184] [box=1383,46,240,22]:
+        - generic [ref=e185] [box=1383,51,32,13]: Saved
+        - button " Reload" [ref=e186] [box=1425,46,69,22]
+        - button " Save" [ref=e189] [box=1500,46,58,22]
+        - button " Copy" [ref=e192] [box=1564,46,60,22]
+      - generic [ref=e199] [box=400,74,1233,853]:
+        - generic [box=400,74,43,853]
+        - textbox [active] [ref=e200] [box=443,74,1190,853]: "// app.jsx - AGI Mobile canonical canvas function App() { return ( <DesignCanvas title=\"AGI Mobile\" subtitle=\"R6 v1 canonical · local-first mobile design\"> {renderRoundSixCanonical()} </DesignCanvas> ); } const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<App />);"

@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "lastUpdated": "2026-05-20",
+  "canonicalAgentDoc": "AGENTS.md",
+  "surfaces": [
+    {
+      "name": "CLI",
+      "path": "apps/cli",
+      "owner": "CLI lead",
+      "stack": "Rust, Ratatui TUI",
+      "purpose": "Developer engine, Claude Code-compatible terminal workflow, local/BYOK session foundation",
+      "primaryChecks": ["cargo check -p agiworkforce-cli", "cargo test -p agiworkforce-cli --lib"],
+      "allowedImports": ["crates/*", "packages only through generated/protocol boundaries when explicit"]
+    },
+    {
+      "name": "Desktop",
+      "path": "apps/desktop",
+      "owner": "Desktop lead",
+      "stack": "Tauri v2, React, Vite, Rust backend",
+      "purpose": "Local-first private compute host, artifacts, MCP/connectors, computer use, local files",
+      "primaryChecks": ["pnpm --filter @agiworkforce/desktop typecheck", "pnpm --filter @agiworkforce/desktop test"],
+      "allowedImports": ["packages/*", "apps/desktop/src-tauri through Tauri IPC only"]
+    },
+    {
+      "name": "Web",
+      "path": "apps/web",
+      "owner": "Web lead",
+      "stack": "Next.js app router",
+      "purpose": "Account, projects, synced app chats, artifacts, billing/waitlist, admin",
+      "primaryChecks": ["pnpm --filter @agiworkforce/web typecheck", "pnpm --filter @agiworkforce/web test"],
+      "allowedImports": ["packages/*"]
+    },
+    {
+      "name": "Mobile",
+      "path": "apps/mobile",
+      "owner": "Mobile lead",
+      "stack": "Expo, React Native",
+      "purpose": "Local/BYOK onboarding, continuity, capture, approvals, preview/download/share",
+      "primaryChecks": ["pnpm --filter @agiworkforce/mobile typecheck", "pnpm --filter @agiworkforce/mobile test"],
+      "allowedImports": ["packages/*"]
+    },
+    {
+      "name": "Chrome Extension",
+      "path": "apps/extension",
+      "owner": "Extension lead",
+      "stack": "Chrome MV3",
+      "purpose": "Browser context, capture, research/action, native messaging bridge",
+      "primaryChecks": ["pnpm lint:extension", "pnpm --filter @agiworkforce/extension test"],
+      "allowedImports": ["packages/*"]
+    },
+    {
+      "name": "VS Code Extension",
+      "path": "apps/extension-vscode",
+      "owner": "Extension lead",
+      "stack": "VS Code extension",
+      "purpose": "IDE-native developer surface and agent session UI",
+      "primaryChecks": ["pnpm --filter agi-workforce typecheck", "pnpm --filter agi-workforce test"],
+      "allowedImports": ["packages/*"]
+    }
+  ],
+  "platform": [
+    {
+      "name": "TypeScript packages",
+      "path": "packages",
+      "owner": "Platform lead",
+      "purpose": "Shared contracts, provider adapters, runtime helpers, UI packages, local tools",
+      "primaryChecks": ["pnpm -r --filter './packages/*' --if-present typecheck"],
+      "rule": "Packages must not import from apps."
+    },
+    {
+      "name": "Rust crates",
+      "path": "crates",
+      "owner": "Rust platform",
+      "purpose": "Reusable Rust protocol, command registry, sandbox, task, plugin, and utility crates",
+      "primaryChecks": ["cargo check --workspace", "cargo test --workspace --lib"],
+      "rule": "Reusable runtime belongs in crates only when there is a second consumer."
+    },
+    {
+      "name": "Services",
+      "path": "services",
+      "owner": "Backend/data lead",
+      "purpose": "API gateway, signaling server, future managed compute services",
+      "primaryChecks": ["pnpm --filter @agiworkforce/api-gateway test", "pnpm --filter @agiworkforce/signaling-server test"],
+      "rule": "Services must not import UI packages."
+    },
+    {
+      "name": "Database",
+      "path": "supabase",
+      "owner": "Backend/data lead",
+      "purpose": "Canonical Supabase migrations and database docs",
+      "primaryChecks": ["review migrations manually before billing/security changes"],
+      "rule": "Root supabase/migrations is canonical."
+    }
+  ]
+}

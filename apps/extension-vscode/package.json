@@ -852,7 +852,7 @@
     "@agiworkforce/utils": "workspace:*",
     "dompurify": "^3.4.0",
     "markdown-it": "^14.1.0",
-    "ws": "^8.20.0",
+    "ws": "^8.20.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {

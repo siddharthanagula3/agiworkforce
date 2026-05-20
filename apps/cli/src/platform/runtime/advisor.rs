@@ -30,10 +30,7 @@ fn pick_default_advisor_model() -> (String, Provider) {
     }
     // Fall back to gpt-5.5 if OpenAI key is present.
     if std::env::var("OPENAI_API_KEY").is_ok_and(|k| !k.is_empty()) {
-        return (
-            "gpt-5.5".to_string(),
-            models::openai_provider(),
-        );
+        return ("gpt-5.5".to_string(), models::openai_provider());
     }
     // Last resort: return Anthropic anyway (will fail with a clear error at
     // call time if the key is missing).
@@ -56,9 +53,7 @@ pub async fn consult(req: AdvisorRequest) -> Result<AdvisorResponse> {
 
     // Validate the chosen provider has credentials before attempting a call.
     let has_key = match &provider {
-        Provider::Anthropic => {
-            std::env::var("ANTHROPIC_API_KEY").is_ok_and(|k| !k.is_empty())
-        }
+        Provider::Anthropic => std::env::var("ANTHROPIC_API_KEY").is_ok_and(|k| !k.is_empty()),
         Provider::Google => {
             std::env::var("GOOGLE_API_KEY").is_ok_and(|k| !k.is_empty())
                 || std::env::var("GEMINI_API_KEY").is_ok_and(|k| !k.is_empty())
@@ -145,7 +140,10 @@ mod tests {
         let result = consult(req).await;
         assert!(result.is_err(), "expected error when no API key configured");
         assert!(
-            result.unwrap_err().to_string().contains("no API key configured"),
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("no API key configured"),
             "error message should mention missing key"
         );
 

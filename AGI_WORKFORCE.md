@@ -2,11 +2,13 @@
 
 > Last updated: 2026-05-16. This file is the entry point for any agent (human or AI) working on this repo. Read this first; everything else links from here.
 >
+> **Docs audit note, 2026-05-20:** the newer Claude memory locks about local-first/cloud-waitlist scope apply to the mobile-v1 focus. Before editing mobile launch, pricing, or onboarding docs, read [`docs/decisions/CURRENT_DECISIONS.md`](docs/decisions/CURRENT_DECISIONS.md).
+>
 > **Public brand: AGI** (simplified from "AGI Workforce" 2026-05-15). Repo path + internal packages remain `agiworkforce`. Strapline: _All the AIs you already pay for, in one place._
 >
-> **BYOK-first launch posture LOCKED 2026-05-16**: v1 ships as **BYOK + Local only**. All 6 paid tiers (Hobby / Pro / Pro+ / **Pro Max $99 NEW** / Max / Enterprise) on email-only waitlist until **August 1, 2026 graduation**. Stripe wired but dormant; flips live Aug 1 once 60-90 days of BYOK telemetry inform per-tier caps. See [`memory/byok-first-pivot-2026-05-16.md`](memory/byok-first-pivot-2026-05-16.md) + [`memory/launch-playbook-2026-05-16.md`](memory/launch-playbook-2026-05-16.md).
+> **BYOK-first launch posture LOCKED 2026-05-16**: v1 ships as **BYOK + Local only**. All 6 paid tiers (Hobby / Pro / Pro+ / **Pro Max $99 NEW** / Max / Enterprise) on email-only waitlist until **August 1, 2026 graduation**. Stripe wired but dormant; flips live Aug 1 once 60-90 days of BYOK telemetry inform per-tier caps. Original evidence lives in Claude memory outside the repo; see [`docs/decisions/CURRENT_DECISIONS.md`](docs/decisions/CURRENT_DECISIONS.md) for the mobile-v1-specific 2026-05-20 Local/BYOK trust-boundary clarification.
 >
-> **Wave 4+5 shipped** on PR #366 (38 commits / +19,659 LOC, 2026-05-16): v3 frontend live across all 6 surfaces behind `DESKTOP_CHAT_V3=true` (default-on). **Wave 6 in flight**: $99 Pro Max wiring, waitlist mechanic, BYOK polish suite (per-provider quotas + auto-fallback + spend tracking + key rotation), Routing-WHY badge, 5-chip trust row, memory import/export protocol, multi-model side-by-side (Pro+ gated), Chrome + VS Code ext finalization. See [`memory/v6-roadmap-decisions-2026-05-16.md`](memory/v6-roadmap-decisions-2026-05-16.md).
+> **Wave 4+5 shipped** on PR #366 (38 commits / +19,659 LOC, 2026-05-16): v3 frontend live across all 6 surfaces behind `DESKTOP_CHAT_V3=true` (default-on). **Wave 6 in flight**: $99 Pro Max wiring, waitlist mechanic, BYOK polish suite (per-provider quotas + auto-fallback + spend tracking + key rotation), Routing-WHY badge, 5-chip trust row, memory import/export protocol, multi-model side-by-side (Pro+ gated), Chrome + VS Code ext finalization. Original Wave 6 decisions live in Claude memory outside the repo; see [`docs/decisions/CURRENT_DECISIONS.md`](docs/decisions/CURRENT_DECISIONS.md).
 >
 > **Apple notarization unblocked 2026-05-16**: PLA renewed; macOS signed + notarized builds re-enabled. Signing identity `D2PR62RLT4`.
 >
@@ -52,7 +54,7 @@ These are the only three. Everything else (mobile dispatch, CLI with TUI, comput
 | Max         | $299.99       | `prod_TeFMn7oAjLQTvG` | 📝 Waitlist → live 2026-08-01 | Highest caps, computer use (1K soft / 2.5K hard actions/mo), Deep Research, voice unlimited.                                            |
 | Enterprise  | Contact sales | n/a                   | Contact sales                 | SSO, SCIM, custom retention, audit log export, dedicated support.                                                                       |
 
-**SSOT**: `packages/types/src/billing-catalog.ts` + `packages/types/src/model-catalog.ts` TIER_POLICIES. **Why waitlist**: per `memory/byok-first-pivot-2026-05-16.md`, 60-90 days of BYOK telemetry sets caps from data instead of guesses. Eliminates fraud risk + Hobby unit-economics worry + Stripe-launch dependency from Days-1-30. Trust signal: "we don't sell what we don't yet know the cost of."
+**SSOT**: `packages/types/src/billing-catalog.ts` + `packages/types/src/model-catalog.ts` TIER_POLICIES. **Why waitlist**: per the 2026-05-16 Claude memory lock, 60-90 days of BYOK telemetry sets caps from data instead of guesses. Eliminates fraud risk + Hobby unit-economics worry + Stripe-launch dependency from Days-1-30. Trust signal: "we don't sell what we don't yet know the cost of." See [`docs/decisions/CURRENT_DECISIONS.md`](docs/decisions/CURRENT_DECISIONS.md) before applying this pricing posture to mobile-v1 launch copy.
 
 **Stripe webhook idempotency** (dormant until Aug 1): `public.process_stripe_event_idempotent(p_event_id text) RETURNS boolean` live in prod 2026-05-13. Called from `apps/web/app/api/stripe-webhook/route.ts:1251`. Flips active Aug 1 graduation.
 
@@ -172,10 +174,13 @@ That is the entire compliance burden.
 | [README.md](README.md)                                                           | User-facing quick start (download, install)                                        |
 | [BUILD.md](BUILD.md)                                                             | Prerequisites, build commands per surface                                          |
 | [CONTRIBUTING.md](CONTRIBUTING.md)                                               | PR conventions, branch protection, commit format                                   |
+| [docs/README.md](docs/README.md)                                                 | Organized documentation map                                                        |
+| [docs/PRD.md](docs/PRD.md)                                                       | Product requirements document                                                      |
+| [docs/decisions/CURRENT_DECISIONS.md](docs/decisions/CURRENT_DECISIONS.md)       | Current decision index and mobile-v1 launch clarifications                         |
 | [docs/VISION.md](docs/VISION.md)                                                 | Product vision (ONE chat layout, multi-provider)                                   |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)                                     | Cross-surface architecture                                                         |
 | [docs/ROADMAP.md](docs/ROADMAP.md)                                               | Live wave/sprint status (this is what changes weekly)                              |
-| [docs/DESIGN.md](docs/DESIGN.md)                                                 | UI principles. Reference: `~/Desktop/reference/ui/`                                |
+| [docs/design/design-spec-2026-05-15.md](docs/design/design-spec-2026-05-15.md)   | UI principles. Reference: `~/Desktop/reference/ui/`                                |
 | [docs/PRICING.md](docs/PRICING.md)                                               | Tier model details                                                                 |
 | [apps/cli/ARCHITECTURE.md](apps/cli/ARCHITECTURE.md)                             | CLI deep-dive (will be folded into docs/ARCHITECTURE.md in v2)                     |
 | [docs/audit/](docs/audit/)                                                       | Historical audits (AUDIT_REPORT.md, FIX_QUEUE.md, AUDIT_2026-05-03.md)             |
@@ -994,7 +999,7 @@ Documented in `~/.claude/plans/v1-complete-wave5.md:103-112`:
 
 - **New contributor?** Read this top to bottom, then [BUILD.md](BUILD.md) + [docs/VISION.md](docs/VISION.md).
 - **Picking up where someone left off?** Check [docs/ROADMAP.md](docs/ROADMAP.md) for current sprint.
-- **Designing UI?** [docs/DESIGN.md](docs/DESIGN.md) → `~/Desktop/reference/ui/claude ui/` for the design north star.
+- **Designing UI?** [docs/design/design-spec-2026-05-15.md](docs/design/design-spec-2026-05-15.md) → `~/Desktop/reference/ui/claude ui/` for the design north star.
 - **AI agent (Claude Code, etc.)?** This file + your `~/.claude/projects/.../memory/MEMORY.md` are your context.
 
 ## Update cadence

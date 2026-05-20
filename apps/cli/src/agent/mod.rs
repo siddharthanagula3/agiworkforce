@@ -1,6 +1,6 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 
 use crate::compaction;
 use crate::config::CliConfig;
@@ -96,6 +96,9 @@ pub struct AgentSession {
     #[allow(dead_code)]
     pub fallback_model: Option<String>,
     pub allowed_tools: Option<Vec<String>>,
+    pub privacy_mode: PrivacyMode,
+    pub additional_context_dirs: Vec<PathBuf>,
+    pub attached_context_files: Vec<PathBuf>,
     pub(crate) subagent_manager: Option<subagent::SubagentManager>,
     pub(crate) team_manager: Option<teams::TeamManager>,
     pub(crate) managed_session: Option<ManagedSession>,
@@ -110,6 +113,59 @@ pub struct TurnResult {
     pub cache_read_tokens: u32,
     pub cache_creation_tokens: u32,
     pub via_subscription: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrivacyMode {
+    Local,
+    Byok,
+    Managed,
+}
+
+impl PrivacyMode {
+    pub fn label(self) -> &'static str {
+        match self {
+            PrivacyMode::Local => "local",
+            PrivacyMode::Byok => "byok",
+            PrivacyMode::Managed => "managed",
+        }
+    }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            PrivacyMode::Local => "no prompt, chat, or file context should leave this device",
+            PrivacyMode::Byok => {
+                "selected context may be sent directly to the user's configured provider key"
+            }
+            PrivacyMode::Managed => {
+                "selected context may be sent through AGI Workforce managed cloud"
+            }
+        }
+    }
+
+    pub fn from_arg(arg: &str) -> Option<Self> {
+        match arg.trim().to_ascii_lowercase().as_str() {
+            "local" | "offline" | "device" => Some(PrivacyMode::Local),
+            "byok" | "cloud-byok" | "provider" => Some(PrivacyMode::Byok),
+            "managed" | "agi" | "agi-cloud" | "cloud" => Some(PrivacyMode::Managed),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AddContextDirReport {
+    pub path: PathBuf,
+    pub already_present: bool,
+    pub instructions_loaded: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AttachFilesReport {
+    pub added: Vec<PathBuf>,
+    pub skipped_existing: Vec<PathBuf>,
+    pub failed: Vec<(String, String)>,
+    pub truncated: Vec<PathBuf>,
 }
 
 impl AgentSession {
@@ -183,6 +239,8 @@ impl AgentSession {
             ),
         );
 
+        let privacy_mode = provider_privacy_mode(&provider);
+
         Self {
             messages: vec![system_message],
             model: model.to_string(),
@@ -219,6 +277,9 @@ impl AgentSession {
             session_name: None,
             fallback_model: None,
             allowed_tools: None,
+            privacy_mode,
+            additional_context_dirs: Vec::new(),
+            attached_context_files: Vec::new(),
             subagent_manager: None,
             team_manager: None,
             managed_session: None,
@@ -286,14 +347,171 @@ impl AgentSession {
 
     /// Switch the model mid-session (keeps conversation history).
     pub fn switch_model(&mut self, model: &str) {
+        let next_provider = models::detect_provider(model);
         self.model = model.to_string();
-        self.provider = models::detect_provider(model);
+        self.provider = next_provider;
+        self.adopt_provider_privacy_mode();
+    }
+
+    /// Add an additional directory root at runtime, mirroring Claude Code's
+    /// `/add-dir` semantics for tool access and directory-scoped instructions.
+    pub fn add_context_dir(&mut self, raw_path: &str) -> Result<AddContextDirReport> {
+        let canonical = crate::path_security::register_additional_workspace_root(raw_path)
+            .map_err(|e| {
+                anyhow::anyhow!("failed to register additional directory `{raw_path}`: {e}")
+            })?;
+        let already_present = self
+            .additional_context_dirs
+            .iter()
+            .any(|path| path == &canonical);
+        if !already_present {
+            self.additional_context_dirs.push(canonical.clone());
+        }
+
+        let instructions = compaction::load_instructions(&canonical);
+        if !already_present {
+            let message = match instructions.as_deref() {
+                Some(contents) if !contents.trim().is_empty() => format!(
+                    "<additional_directory_context path=\"{}\">\n{}\n</additional_directory_context>",
+                    escape_attr(&canonical),
+                    contents.trim()
+                ),
+                _ => format!(
+                    "<additional_directory_context path=\"{}\">\nNo instruction files were found in this directory lineage.\n</additional_directory_context>",
+                    escape_attr(&canonical)
+                ),
+            };
+            self.messages.push(Message::text("system", &message));
+        }
+
+        Ok(AddContextDirReport {
+            path: canonical,
+            already_present,
+            instructions_loaded: instructions.is_some(),
+        })
+    }
+
+    /// Attach file contents into session context without sending a user turn.
+    pub fn attach_context_files<I, S>(&mut self, raw_paths: I) -> AttachFilesReport
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        const MAX_TOTAL_CHARS: usize = 120_000;
+        const MAX_PER_FILE_CHARS: usize = 40_000;
+
+        let mut report = AttachFilesReport {
+            added: Vec::new(),
+            skipped_existing: Vec::new(),
+            failed: Vec::new(),
+            truncated: Vec::new(),
+        };
+        let mut segments = Vec::new();
+        let mut remaining = MAX_TOTAL_CHARS;
+
+        for raw_path in raw_paths {
+            let raw = raw_path.as_ref().trim();
+            if raw.is_empty() {
+                continue;
+            }
+            let resolved = match resolve_context_file(raw) {
+                Ok(path) => path,
+                Err(e) => {
+                    report.failed.push((raw.to_string(), e.to_string()));
+                    continue;
+                }
+            };
+            if self
+                .attached_context_files
+                .iter()
+                .any(|path| path == &resolved)
+            {
+                report.skipped_existing.push(resolved);
+                continue;
+            }
+            if remaining == 0 {
+                report.failed.push((
+                    resolved.display().to_string(),
+                    "attachment budget exhausted".to_string(),
+                ));
+                continue;
+            }
+
+            let content = match std::fs::read_to_string(&resolved)
+                .with_context(|| format!("read {}", resolved.display()))
+            {
+                Ok(content) => content,
+                Err(e) => {
+                    report
+                        .failed
+                        .push((resolved.display().to_string(), e.to_string()));
+                    continue;
+                }
+            };
+
+            let max_for_file = remaining.min(MAX_PER_FILE_CHARS);
+            let mut chars = content.chars();
+            let selected: String = chars.by_ref().take(max_for_file).collect();
+            let truncated = chars.next().is_some();
+            if truncated {
+                report.truncated.push(resolved.clone());
+            }
+            remaining = remaining.saturating_sub(selected.len());
+            segments.push(format!(
+                "<attached_file path=\"{}\"{}>\n{}\n</attached_file>",
+                escape_attr(&resolved),
+                if truncated { " truncated=\"true\"" } else { "" },
+                selected
+            ));
+            self.attached_context_files.push(resolved.clone());
+            report.added.push(resolved);
+        }
+
+        if !segments.is_empty() {
+            let message = format!(
+                "<attached_files>\n{}\n</attached_files>",
+                segments.join("\n\n")
+            );
+            self.messages.push(Message::text("system", &message));
+        }
+
+        report
     }
 
     /// Override the provider from config.
     pub fn set_provider_override(&mut self, provider_name: &str) {
         if let Some(p) = models::provider_from_name(provider_name) {
             self.provider = p;
+            self.adopt_provider_privacy_mode();
+        }
+    }
+
+    pub fn set_privacy_mode(&mut self, mode: PrivacyMode) {
+        self.privacy_mode = mode;
+    }
+
+    pub fn provider_privacy_mode(&self) -> PrivacyMode {
+        provider_privacy_mode(&self.provider)
+    }
+
+    pub fn validate_privacy_boundary(&self) -> Result<()> {
+        let provider_mode = self.provider_privacy_mode();
+        if self.privacy_mode == PrivacyMode::Local && provider_mode != PrivacyMode::Local {
+            anyhow::bail!(
+                "Privacy boundary blocked: this session is Local, but model `{}` routes to {:?} ({}) through {} mode. Use `/continue-with-byok` to create a reviewable BYOK handoff draft, or run `/privacy-mode byok` only after you intentionally leave Local mode.",
+                self.model,
+                self.provider,
+                provider_mode.description(),
+                provider_mode.label(),
+            );
+        }
+        Ok(())
+    }
+
+    fn adopt_provider_privacy_mode(&mut self) {
+        let provider_mode = self.provider_privacy_mode();
+        if self.privacy_mode != PrivacyMode::Local || provider_mode == PrivacyMode::Local {
+            self.privacy_mode = provider_mode;
         }
     }
 
@@ -324,6 +542,7 @@ impl AgentSession {
         self.recent_tool_calls.clear();
         self.loop_strike_count = 0;
         self.reset_plan_state();
+        self.attached_context_files.clear();
     }
 
     /// Clear all four plan-mode state fields.
@@ -374,8 +593,10 @@ impl AgentSession {
             .map(|p| p.display().to_string())
             .unwrap_or_else(|| "<unwritten>".to_string());
 
-        let message = if matches!(self.permission_mode, crate::cli_options::PermissionMode::Plan)
-            && !self.plan_approved
+        let message = if matches!(
+            self.permission_mode,
+            crate::cli_options::PermissionMode::Plan
+        ) && !self.plan_approved
         {
             "plan written; awaiting user approval. Do not call mutating tools yet."
         } else if was_approved {
@@ -426,9 +647,7 @@ impl AgentSession {
     }
 
     pub fn managed_session_id(&self) -> Option<&str> {
-        self.managed_session
-            .as_ref()
-            .map(|s| s.session_id.as_str())
+        self.managed_session.as_ref().map(|s| s.session_id.as_str())
     }
 
     fn sync_managed_session_metadata(&self) -> Result<()> {
@@ -495,6 +714,63 @@ impl AgentSession {
     }
 }
 
+fn resolve_context_file(raw_path: &str) -> Result<PathBuf> {
+    let expanded = expand_home(raw_path);
+    let validated =
+        crate::path_security::validate_workspace_path(&expanded).map_err(|e| anyhow::anyhow!(e))?;
+    if !validated.is_file() {
+        anyhow::bail!("not a file: {}", validated.display());
+    }
+    Ok(validated)
+}
+
+fn expand_home(path: &str) -> String {
+    if path == "~" {
+        return dirs::home_dir()
+            .map(|home| home.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.to_string());
+    }
+    if let Some(rest) = path.strip_prefix("~/") {
+        if let Some(home) = dirs::home_dir() {
+            return home.join(rest).to_string_lossy().into_owned();
+        }
+    }
+    path.to_string()
+}
+
+fn escape_attr(path: &Path) -> String {
+    path.to_string_lossy()
+        .replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+fn provider_privacy_mode(provider: &Provider) -> PrivacyMode {
+    match provider {
+        Provider::Ollama(models::OllamaMode::Local) => PrivacyMode::Local,
+        Provider::OpenAICompatible {
+            base_url,
+            api_key_env,
+            ..
+        } if api_key_env.is_none() && is_local_provider_url(base_url) => PrivacyMode::Local,
+        Provider::Custom {
+            base_url,
+            api_key_env,
+            ..
+        } if api_key_env.is_none() && is_local_provider_url(base_url) => PrivacyMode::Local,
+        _ => PrivacyMode::Byok,
+    }
+}
+
+fn is_local_provider_url(url: &str) -> bool {
+    let lower = url.to_ascii_lowercase();
+    lower.starts_with("http://localhost")
+        || lower.starts_with("http://127.")
+        || lower.starts_with("http://[::1]")
+        || lower.starts_with("http://0.0.0.0")
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -504,13 +780,13 @@ mod tests {
     use super::*;
     use crate::models::MessageContent;
 
+    use crate::models::ContentBlock;
     use executor::{
         detect_content_loop, hash_tool_call, tool_call_to_legacy, CONTENT_CHUNK_SIZE,
         CONTENT_LOOP_CHUNK_THRESHOLD, LOOP_DETECTION_THRESHOLD,
     };
     use history::build_assistant_message;
     use tools::is_team_tool;
-    use crate::models::ContentBlock;
 
     #[test]
     fn test_build_tool_definitions_count() {
@@ -785,6 +1061,131 @@ mod tests {
         assert_eq!(session.checkpoint_count(), 0);
 
         assert!(!session.restore_checkpoint());
+    }
+
+    #[test]
+    fn add_context_dir_registers_root_and_loads_instructions() {
+        crate::path_security::clear_additional_workspace_roots_for_tests();
+        let ctx = SystemContext {
+            cwd: "/tmp".to_string(),
+            git_branch: None,
+            git_status_summary: None,
+            git_remote_url: None,
+            project_type: None,
+            project_language: None,
+            ci_providers: vec![],
+            monorepo_type: None,
+            package_manager: None,
+            containerization: vec![],
+            editor_configs: vec![],
+            os: "test".to_string(),
+            shell: "test".to_string(),
+        };
+        let mut session = AgentSession::new("test-model", &ctx, None);
+        let dir = tempfile::tempdir().expect("extra dir");
+        std::fs::write(dir.path().join("CLAUDE.md"), "Use careful tests.").unwrap();
+
+        let report = session
+            .add_context_dir(&dir.path().to_string_lossy())
+            .expect("add context dir");
+
+        assert_eq!(report.path, dir.path().canonicalize().unwrap());
+        assert!(!report.already_present);
+        assert!(report.instructions_loaded);
+        assert_eq!(session.additional_context_dirs.len(), 1);
+        assert!(session
+            .messages
+            .last()
+            .unwrap()
+            .text_content()
+            .contains("Use careful tests."));
+        crate::path_security::clear_additional_workspace_roots_for_tests();
+    }
+
+    #[test]
+    fn attach_context_files_adds_file_contents_to_session_context() {
+        let ctx = SystemContext {
+            cwd: "/tmp".to_string(),
+            git_branch: None,
+            git_status_summary: None,
+            git_remote_url: None,
+            project_type: None,
+            project_language: None,
+            ci_providers: vec![],
+            monorepo_type: None,
+            package_manager: None,
+            containerization: vec![],
+            editor_configs: vec![],
+            os: "test".to_string(),
+            shell: "test".to_string(),
+        };
+        let mut session = AgentSession::new("test-model", &ctx, None);
+        let file = tempfile::NamedTempFile::new_in(".").expect("file under workspace");
+        std::fs::write(file.path(), "attached body").unwrap();
+
+        let report = session.attach_context_files([file.path().to_string_lossy().to_string()]);
+
+        assert_eq!(report.added.len(), 1);
+        assert!(report.failed.is_empty());
+        assert_eq!(session.attached_context_files.len(), 1);
+        assert!(session
+            .messages
+            .last()
+            .unwrap()
+            .text_content()
+            .contains("attached body"));
+    }
+
+    #[test]
+    fn local_privacy_blocks_cloud_provider_until_explicit_byok() {
+        let ctx = SystemContext {
+            cwd: "/tmp".to_string(),
+            git_branch: None,
+            git_status_summary: None,
+            git_remote_url: None,
+            project_type: None,
+            project_language: None,
+            ci_providers: vec![],
+            monorepo_type: None,
+            package_manager: None,
+            containerization: vec![],
+            editor_configs: vec![],
+            os: "test".to_string(),
+            shell: "test".to_string(),
+        };
+        let mut session = AgentSession::new("llama3", &ctx, None);
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
+
+        session.switch_model("gpt-5.5");
+
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
+        assert!(session.validate_privacy_boundary().is_err());
+
+        session.set_privacy_mode(PrivacyMode::Byok);
+        assert!(session.validate_privacy_boundary().is_ok());
+    }
+
+    #[test]
+    fn cloud_model_starts_in_byok_privacy_mode() {
+        let ctx = SystemContext {
+            cwd: "/tmp".to_string(),
+            git_branch: None,
+            git_status_summary: None,
+            git_remote_url: None,
+            project_type: None,
+            project_language: None,
+            ci_providers: vec![],
+            monorepo_type: None,
+            package_manager: None,
+            containerization: vec![],
+            editor_configs: vec![],
+            os: "test".to_string(),
+            shell: "test".to_string(),
+        };
+        let session = AgentSession::new("claude-sonnet-4-5", &ctx, None);
+
+        assert_eq!(session.privacy_mode, PrivacyMode::Byok);
+        assert!(session.validate_privacy_boundary().is_ok());
     }
 
     #[test]

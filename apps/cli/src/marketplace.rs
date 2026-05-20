@@ -165,7 +165,10 @@ impl Marketplace {
             }
         };
         if !resp.status().is_success() {
-            eprintln!("Marketplace list returned HTTP {}: results may be incomplete.", resp.status());
+            eprintln!(
+                "Marketplace list returned HTTP {}: results may be incomplete.",
+                resp.status()
+            );
             return Ok(Vec::new());
         }
         let index: MarketplaceIndex = resp.json().await.context("parse registry.json")?;
@@ -183,10 +186,7 @@ impl Marketplace {
     pub async fn search(&self, query: &str) -> Result<Vec<MarketplacePlugin>> {
         let url = format!("{}/search?q={}", self.registry_url, urlencoded(query));
 
-        let result = self.client
-            .get(&url)
-            .send()
-            .await;
+        let result = self.client.get(&url).send().await;
 
         match result {
             Ok(resp) if resp.status().is_success() => {
@@ -709,11 +709,14 @@ mod tests {
             },
         ];
         let q = "rust";
-        let filtered: Vec<_> = plugins.iter().filter(|p| {
-            p.name.to_lowercase().contains(q)
-                || p.description.to_lowercase().contains(q)
-                || p.keywords.iter().any(|t| t.to_lowercase().contains(q))
-        }).collect();
+        let filtered: Vec<_> = plugins
+            .iter()
+            .filter(|p| {
+                p.name.to_lowercase().contains(q)
+                    || p.description.to_lowercase().contains(q)
+                    || p.keywords.iter().any(|t| t.to_lowercase().contains(q))
+            })
+            .collect();
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].name, "rust-helper");
     }

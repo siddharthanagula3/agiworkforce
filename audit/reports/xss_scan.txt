@@ -1,0 +1,159 @@
+apps/extension/src/assets/icons.ts:4: * No React deps — raw SVG strings rendered via DOM/innerHTML (sanitized).
+apps/extension/src/assets/icons.ts:123:  wrapper.innerHTML = svgString;
+apps/extension/src/background.ts:639:// its presence in this set made a future accidental eval()-based handler look
+apps/extension/src/background.ts:641:// expose an eval() surface. Use EXECUTE_SCRIPT + ALLOWED_SCRIPT_OPERATIONS instead.
+apps/extension/src/side_panel.ts:1611:    bubble.innerHTML = sanitizeHtml(renderMarkdown(msg.content));
+apps/extension/src/side_panel.ts:1749:    bubble.innerHTML = sanitizeHtml(renderMarkdown(textParts.join('')));
+apps/extension/src/side_panel.ts:1829:  bubble.innerHTML = sanitizeHtml(renderMarkdown(fullText));
+apps/extension/src/popup.ts:468: * The card uses plain DOM construction so no innerHTML with user-controlled
+apps/extension/src/popup.ts:498:  // All text set via textContent — no innerHTML — so no XSS risk
+apps/extension/src/inPagePanel/panel.ts:167:    // Render plain text — no innerHTML — to prevent XSS from model output
+apps/desktop/src/data/skills/skill-creator/assets/eval_review.html:69:      tbody.innerHTML = '';
+apps/desktop/src/data/skills/skill-creator/assets/eval_review.html:82:          headerRow.innerHTML = `<td colspan="3">${item.should_trigger ? 'Should Trigger' : 'Should NOT Trigger'}</td>`;
+apps/desktop/src/data/skills/skill-creator/assets/eval_review.html:89:        tr.innerHTML = `
+apps/desktop/src/data/skills/skill-creator/assets/eval_review.html:108:      return div.innerHTML;
+apps/extension/src/content.ts:1062: * SECURITY: new Function() / eval() is not used. Only pre-defined operations are allowed.
+apps/extension/src/utils.ts:336:    return div.innerHTML;
+apps/desktop/src/data/skills/skill-creator/scripts/run_loop.py:92:        all_results = run_eval(
+apps/extension/src/dom-helpers.ts:2: * Minimal DOM helpers to eliminate innerHTML for static/numeric content.
+apps/extension/src/dom-helpers.ts:6:/** Set textContent on an element (safe alternative to innerHTML = string). */
+apps/extension/src/dom-helpers.ts:11:/** Remove all children from an element (safe alternative to innerHTML = ''). */
+apps/extension/src/dom-helpers.ts:26: * Safe replacement for innerHTML templates that produce a single element.
+apps/extension/src/dom-helpers.ts:43: * Equivalent to: el.innerHTML = '<tag class="...">text</tag>'
+apps/desktop/src/data/skills/skill-creator/scripts/run_eval.py:184:def run_eval(
+apps/desktop/src/data/skills/skill-creator/scripts/run_eval.py:286:    output = run_eval(
+apps/desktop/src/data/skills/skill-creator/eval-viewer/viewer.html:766:      container.innerHTML = "";
+apps/desktop/src/data/skills/skill-creator/eval-viewer/viewer.html:770:        container.innerHTML = '<div class="empty-state">No output files</div>';
+apps/desktop/src/data/skills/skill-creator/eval-viewer/viewer.html:849:          wrapper.innerHTML = htmlStr;
+apps/desktop/src/data/skills/skill-creator/eval-viewer/viewer.html:904:      content.innerHTML = html;
+apps/desktop/src/data/skills/skill-creator/eval-viewer/viewer.html:931:      content.innerHTML = "";
+apps/desktop/src/data/skills/skill-creator/eval-viewer/viewer.html:1102:      return div.innerHTML;
+apps/desktop/src/data/skills/skill-creator/eval-viewer/viewer.html:1317:      container.innerHTML = html;
+apps/extension-vscode/src/providers/agentModeProvider.ts:341:      return div.innerHTML;
+apps/extension-vscode/src/providers/agentModeProvider.ts:395:      messagesEl.innerHTML = '';
+apps/extension-vscode/src/providers/agentModeProvider.ts:427:          messagesEl.innerHTML = '';
+apps/extension-vscode/src/providers/sidebar/webviewContent.ts:1142:    // ── HTML sanitizer (defense-in-depth for innerHTML) ──────────────────
+apps/extension-vscode/src/providers/sidebar/webviewContent.ts:1149:      div.innerHTML = html;
+apps/extension-vscode/src/providers/sidebar/webviewContent.ts:1180:      return div.innerHTML;
+apps/extension-vscode/src/providers/sidebar/webviewContent.ts:1333:          currentAssistantEl.innerHTML = sanitizeHtml(renderMarkdown(accumulatedContent));
+apps/extension-vscode/src/providers/sidebar/webviewContent.ts:1397:        messagesEl.innerHTML = '';
+apps/extension-vscode/src/providers/sidebar/webviewContent.ts:1401:        freshEmpty.innerHTML = '<div class="empty-state-headline">Ask about your code</div>' +
+apps/extension-vscode/src/providers/sidebar/webviewContent.ts:1461:      mentionDropdown.innerHTML = '';
+apps/extension-vscode/src/providers/sidebar/webviewContent.ts:1468:      mentionDropdown.innerHTML = '';
+apps/extension-vscode/src/providers/sidebar/webviewContent.ts:1586:      doneEl.innerHTML = '<span class="codicon codicon-check" aria-hidden="true"></span> Done';
+apps/extension/__tests__/page-metadata.test.ts:36:  document.head.innerHTML = '';
+apps/extension/__tests__/page-metadata.test.ts:37:  document.body.innerHTML = '';
+apps/extension/__tests__/page-metadata.test.ts:100:      document.body.innerHTML = '<h1>Welcome to the Site</h1>';
+apps/extension/__tests__/page-metadata.test.ts:108:      document.body.innerHTML = '<h1>  Spaced Title  </h1>';
+apps/extension/__tests__/page-metadata.test.ts:476:      document.body.innerHTML =
+apps/extension/__tests__/page-metadata.test.ts:487:      document.body.innerHTML = '<div itemscope itemtype="https://schema.org/Product"></div>';
+apps/extension/__tests__/webmcp-extended.test.ts:47:  document.body.innerHTML = '';
+apps/extension/__tests__/webmcp-extended.test.ts:186:    plain.innerHTML = '<input name="q" />';
+apps/extension/__tests__/utils.test.ts:48:  document.body.innerHTML = '';
+apps/extension/__tests__/utils.test.ts:277:      document.body.innerHTML = '<div id="target">Hello</div>';
+apps/extension/__tests__/utils.test.ts:295:      document.body.innerHTML = '<span class="item">A</span><span class="item">B</span>';
+apps/extension/__tests__/utils.test.ts:312:      document.body.innerHTML = '<div id="ready"></div>';
+apps/extension/__tests__/utils.test.ts:325:      document.body.innerHTML = '<div id="vis" style="width:100px;height:100px"></div>';
+apps/extension/__tests__/utils.test.ts:338:      document.body.innerHTML = '<button id="btn">Click</button>';
+apps/extension/__tests__/utils.test.ts:351:      document.body.innerHTML = '<div id="box"></div>';
+apps/extension/__tests__/utils.test.ts:363:      document.body.innerHTML = '<p id="p">Hello World</p>';
+apps/extension/__tests__/utils.test.ts:379:      document.body.innerHTML = '<div id="r"></div>';
+apps/extension/__tests__/utils.test.ts:391:      document.body.innerHTML = '<div id="s">Scroll target</div>';
+apps/extension/__tests__/utils.test.ts:405:      document.body.innerHTML = '<div id="hidden"></div>';
+apps/extension/__tests__/utils.test.ts:423:      document.body.innerHTML = '<form id="f1"></form><form id="f2"></form>';
+apps/extension/__tests__/utils.test.ts:434:      document.body.innerHTML = `
+apps/extension/__tests__/utils.test.ts:446:      document.body.innerHTML = '<input name="x" /><input name="y" />';
+apps/extension/__tests__/utils.test.ts:453:      document.body.innerHTML = '<input id="inp" name="q" />';
+apps/extension/__tests__/utils.test.ts:469:      document.body.innerHTML = `
+apps/extension/__tests__/utils.test.ts:486:      document.body.innerHTML = '<textarea id="ta"></textarea>';
+apps/extension/__tests__/utils.test.ts:496:      document.body.innerHTML = '<form id="f"></form>';
+apps/extension/__tests__/utils.test.ts:504:      document.body.innerHTML = '<form id="first"></form><form id="second"></form>';
+apps/extension/__tests__/content.test.ts:138:  document.body.innerHTML = '';
+apps/extension/__tests__/content.test.ts:241:    document.body.innerHTML = '<form id="f1" method="post"><input name="q" /></form>';
+apps/extension/__tests__/content.test.ts:274:    document.body.innerHTML = '<button id="btn">Go</button>';
+apps/extension/__tests__/content.test.ts:308:    document.body.innerHTML = '<input id="inp" />';
+apps/extension/__tests__/content.test.ts:338:    document.body.innerHTML = '<p id="p">Hello</p>';
+apps/extension/__tests__/content.test.ts:356:    document.body.innerHTML = '<div id="d"></div>';
+apps/extension/__tests__/content.test.ts:373:    document.body.innerHTML = '<div id="d"></div>';
+apps/extension/__tests__/content.test.ts:389:    document.body.innerHTML = '<script id="s"></script>';
+apps/extension/__tests__/content.test.ts:797:    document.body.innerHTML = '<a id="link" href="https://example.com">Link</a>';
+apps/extension/__tests__/popup.paywall.test.ts:80:  document.body.innerHTML = `
+apps/extension/__tests__/popup.paywall.test.ts:160:  document.body.innerHTML = '';
+apps/extension/__tests__/webmcp.test.ts:39:  document.body.innerHTML = '';
+apps/extension/__tests__/webmcp.test.ts:204:    form.innerHTML = '<input name="q" />';
+apps/extension/__tests__/dom-helpers.test.ts:13:    expect(div.innerHTML).toBe('&lt;b&gt;bold&lt;/b&gt;');
+apps/extension/__tests__/jobAutofill.runtime.test.ts:42:  document.body.innerHTML = '';
+apps/extension/__tests__/jobAutofill.runtime.test.ts:47:  document.body.innerHTML = html;
+apps/extension/__tests__/jobAutofill.runtime.test.ts:200:    document.body.innerHTML = `
+apps/extension/__tests__/jobAutofill.runtime.test.ts:216:      document.body.innerHTML = `
+apps/extension/__tests__/jobAutofill.runtime.test.ts:230:        document.body.innerHTML = '<main>Thank you for applying</main>';
+apps/extension/__tests__/jobAutofill.runtime.test.ts:248:    document.body.innerHTML = `
+apps/extension/__tests__/jobAutofill.runtime.test.ts:257:      document.body.innerHTML = `
+apps/extension/__tests__/jobAutofill.runtime.test.ts:265:        document.body.innerHTML = `
+apps/extension/__tests__/jobAutofill.runtime.test.ts:279:          document.body.innerHTML = '<main>Application submitted</main>';
+apps/extension/__tests__/popup.test.ts:97:  document.body.innerHTML = `
+apps/extension/__tests__/popup.test.ts:167:  document.body.innerHTML = '';
+packages/unified-chat/src/components/ArtifactRenderer.tsx:288:        dangerouslySetInnerHTML={{ __html: sanitized }}
+packages/unified-chat/src/components/ArtifactRenderer.tsx:353:          dangerouslySetInnerHTML={{ __html: sanitized }}
+apps/web/app/layout.tsx:173:          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
+apps/web/app/layout.tsx:179:          dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareAppSchema) }}
+apps/web/app/layout.tsx:185:          dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteSchema) }}
+apps/web/app/pricing/layout.tsx:90:        dangerouslySetInnerHTML={{ __html: JSON.stringify(pricingSchema) }}
+apps/web/app/page.tsx:71:        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+apps/web/shared/lib/security.ts:471:    return div.innerHTML;
+apps/web/shared/lib/security.ts:479:    textarea.innerHTML = html;
+apps/web/app/contact/layout.tsx:77:        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+apps/web/app/download/layout.tsx:66:        dangerouslySetInnerHTML={{ __html: JSON.stringify(downloadJsonLd) }}
+apps/web/components/SurfaceShowcase.tsx:660:                    <span dangerouslySetInnerHTML={{ __html: f }} />
+apps/web/components/SurfaceShowcase.tsx:798:                        <span dangerouslySetInnerHTML={{ __html: f }} />
+apps/web/app/gallery/layout.tsx:47:        dangerouslySetInnerHTML={{
+apps/web/shared/components/seo/SEOHead.tsx:52:        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+apps/web/features/chat/services/conversation-export.ts:299:    return div.innerHTML;
+apps/web/app/faq/layout.tsx:179:        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+apps/web/app/careers/layout.tsx:48:        dangerouslySetInnerHTML={{
+apps/web/app/blog/layout.tsx:46:        dangerouslySetInnerHTML={{
+apps/web/features/chat/components/MermaidRenderer.tsx:332:          dangerouslySetInnerHTML={{ __html: svgHtml }}
+apps/web/features/chat/components/cards/CalculationCard.tsx:163:        dangerouslySetInnerHTML={{
+apps/web/features/chat/components/ArtifactBlock.tsx:278:          dangerouslySetInnerHTML={{
+apps/web/app/compare/page.tsx:64:                <p className="agi-tier-body" dangerouslySetInnerHTML={{ __html: r.take }} />
+apps/web/app/compare/page.tsx:67:                    dangerouslySetInnerHTML={{
+apps/web/app/compare/page.tsx:72:                    dangerouslySetInnerHTML={{
+apps/desktop/src-tauri/src/automation/uia/tests.rs:425:    fn test_element_registration_and_retrieval() {
+apps/desktop/src-tauri/src/core/agi/tests/security_tests.rs:329:            "eval('malicious code')",
+apps/desktop/src-tauri/src/core/agi/tests/memory_tests.rs:74:    fn test_memory_retrieval() {
+apps/desktop/src-tauri/src/core/agi/executors/code_executor.rs:96:            pattern: "eval(",
+apps/desktop/src-tauri/src/sys/commands/email.rs:1219:    fn test_secure_password_storage_and_retrieval() {
+apps/desktop/src/components/Artifacts/ArtifactRendererView.tsx:295:          dangerouslySetInnerHTML={{ __html: sanitizeSvg(svg) }}
+apps/desktop/src/components/Artifacts/ArtifactRendererView.tsx:322:    //   not inject any eval-dependent console-capture logic. Blocking eval()
+apps/desktop/src/components/Artifacts/ArtifactRendererView.tsx:324:    //   If a user artifact explicitly calls eval() it will be blocked by the CSP
+apps/desktop/src/utils/security.ts:90:    tempDiv.innerHTML = sanitized;
+apps/desktop/src/utils/security.ts:98:    return tempDiv.innerHTML;
+apps/desktop/src/utils/security.ts:154:  tempDiv.innerHTML = sanitized;
+apps/desktop/src/utils/security.ts:177:  return tempDiv.innerHTML;
+apps/desktop/src/utils/security.ts:222:  tempDiv.innerHTML = sanitized;
+apps/desktop/src/utils/security.ts:236:  return tempDiv.innerHTML;
+apps/desktop/src/components/ToolCalling/ToolResultCard.tsx:161:            <div dangerouslySetInnerHTML={{ __html: sanitizedMarkdown }} />
+apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs:1207:                            inner_html: el.innerHTML || '',
+apps/desktop/src-tauri/src/sys/security/tool_guard.rs:1809:            "eval(",
+apps/desktop/src-tauri/src/sys/security/auth.rs:741:    fn test_jwt_secret_retrieval() {
+apps/desktop/src/components/__tests__/AGIProgressIndicator.test.tsx:27:    expect(container.innerHTML).toBe('');
+apps/desktop/src/components/Canvas/ArtifactPreview.tsx:146:              dangerouslySetInnerHTML={{ __html: sanitizeMarkdownHtml(markdownHtml) }}
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/HtmlArtifact.tsx:67:    //   artifacts that call eval(), new Function(), or pass strings to setTimeout().
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:9: * - Never eval() user-provided content
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/SvgArtifact.tsx:112:        dangerouslySetInnerHTML={{ __html: sanitized }}
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:14: *     binding, never via innerHTML of untrusted strings.
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:141:    '      container.innerHTML = "<svg viewBox=\\"0 0 "+W+" "+H+"\\" width=\\"100%\\">"+slices+"</svg>";',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:182:    '    container.innerHTML="<svg viewBox=\\"0 0 "+W+" "+H+"\\" width=\\"100%\\">"+axisLine+bars+lines+xlabels+"</svg>";',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:208:    '    container.innerHTML = (config.title ? "<p class=\\"tbl-title\\">"+esc(config.title)+"</p>" : "") +',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:237:    '    container.innerHTML = html;',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:278:    '    container.innerHTML = "<div class=\\"md\\"><p>"+html+"</p></div>";',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:288:    '    container.innerHTML =',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:303:    '          el.innerHTML = "<p class=\\"err\\">Unknown component type: "+esc(type)+"</p>";',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:306:    '      el.innerHTML = "<p class=\\"err\\">Render error: "+esc(String(err))+"</p>";',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:319:    '    root.innerHTML = "";',
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:22: *     into the srcdoc via innerHTML on the host side
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:23: *   - No eval(), no dynamic code execution on the host
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/MermaidArtifact.tsx:112:          dangerouslySetInnerHTML={{ __html: sanitizedSvg }}
+apps/desktop/src/components/Browser/BrowserDebugTabs.tsx:276:      dangerouslySetInnerHTML={{ __html: sanitized }}
+apps/desktop/src/components/editing/LivePreview.tsx:422:        <div className="max-w-full max-h-full" dangerouslySetInnerHTML={{ __html: sanitizedSvg }} />
+apps/desktop/src-tauri/src/features/tests/agi_tests.rs:494:    fn test_memory_retrieval() {

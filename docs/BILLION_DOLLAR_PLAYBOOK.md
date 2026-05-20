@@ -1,5 +1,7 @@
 # Billion-Dollar Playbook — what we built and what's next
 
+> Historical note, 2026-05-20 docs audit: this is a 2026-05-08 strategy snapshot. It remains useful context, but it predates PRD V5 and the 2026-05-18 mobile local-only/cloud-waitlist memory locks.
+
 This doc connects the user's strategic ask ("scale easily; swap Supabase → Neon; multi-cloud; multi-domain; heavy traffic; billion-dollar business") to the concrete code shipped on 2026-05-08 and the gaps that remain.
 
 > **For deep technical detail**, read the linked docs. This playbook is the executive index.

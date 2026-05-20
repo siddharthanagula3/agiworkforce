@@ -8,12 +8,12 @@
 #![allow(clippy::result_large_err)]
 
 // Active modules — core CLI functionality
-pub mod design_system;
 pub mod agent;
 pub mod agent_events;
 pub mod agents;
 pub mod auth;
 pub mod auth_oauth;
+pub mod claude_parity;
 pub mod cli_options;
 pub mod command_registry;
 pub mod compaction;
@@ -21,21 +21,24 @@ pub mod config;
 pub mod context;
 pub mod conversations;
 pub mod daemon;
+pub mod design_system;
 pub mod errors;
 // hooks lives at features::hooks::hooks; re-exported here so all 20 call-sites
 // using `crate::hooks::*` continue to resolve unchanged.
-pub use features::hooks::hooks as hooks;
+pub use features::hooks::hooks;
 pub mod markdown;
 // lsp lives at platform::lsp; re-exported here so all 4 call-sites
 // in features/exec/tools/task_registry.rs resolve unchanged.
 pub use platform::lsp;
 pub mod mcp;
 pub mod memory;
-#[allow(dead_code)] // FOUNDATION: cross-surface send-pipeline contract; CLI integrations wire through Sprint B (REPL drain + SDK headless)
+#[allow(dead_code)]
+// FOUNDATION: cross-surface send-pipeline contract; CLI integrations wire through Sprint B (REPL drain + SDK headless)
 pub mod message_queue;
 pub mod models;
 pub mod output;
 pub mod output_styles;
+pub mod path_security;
 pub mod permissions;
 // plan_mode lives at features::plan::plan_mode; re-exported here so all
 // internal callers using `crate::plan_mode::*` continue to resolve unchanged.
@@ -50,7 +53,7 @@ pub mod subagent_v2;
 pub mod teams;
 // tools lives at features::exec::tools; re-exported here so all 42 call-sites
 // using `crate::tools::*` continue to resolve unchanged.
-pub use features::exec::tools as tools;
+pub use features::exec::tools;
 pub mod tui;
 pub mod voice;
 
@@ -67,7 +70,7 @@ pub mod oauth;
 pub mod onboarding;
 // plugins lives at features::plugins::plugins; re-exported here so all
 // internal callers using `crate::plugins::*` continue to resolve unchanged.
-pub use features::plugins::plugins as plugins;
+pub use features::plugins::plugins;
 pub mod project_registry;
 pub mod project_scope;
 pub mod review;
@@ -75,26 +78,29 @@ pub mod routing;
 // runtime lives at platform::runtime; re-exported here so all 27 call-sites
 // using `crate::runtime::<submod>::*` continue to resolve unchanged.
 pub use platform::runtime;
+pub mod cost_ledger;
+pub mod notebook_edit;
+pub mod powershell_tool;
 pub mod sandbox;
 pub mod shell_snapshot;
 pub mod sync;
 pub mod tier_cache;
-pub mod cost_ledger;
-pub mod notebook_edit;
-pub mod powershell_tool;
 pub mod tool_search;
 
 // Phase-2 candidates — implementations exist but the user-facing surface is
 // not yet wired. Each carries an inline PHASE2 marker explaining the unblock.
-#[allow(dead_code)] // PHASE2: registry.agiworkforce.com not deployed; rewires to plugin-manifest discovery (Sprint B6)
+#[allow(dead_code)]
+// PHASE2: registry.agiworkforce.com not deployed; rewires to plugin-manifest discovery (Sprint B6)
 pub mod marketplace;
 #[allow(dead_code)] // PHASE2: SDK stdin-reader surface ships in Sprint B (headless mode hardening)
 pub mod sdk_io; // used by OneShotOutputMode::JsonEvents in lib.rs
-// policy lives at platform::policy; re-exported here so existing PHASE2 references
-// (and any future callers) using `crate::policy::*` continue to resolve unchanged.
-#[allow(dead_code)] // PHASE2: Gemini-style declarative TOML tool-rule eval not yet wired into agent
+                // policy lives at platform::policy; re-exported here so existing PHASE2 references
+                // (and any future callers) using `crate::policy::*` continue to resolve unchanged.
+#[allow(dead_code)]
+// PHASE2: Gemini-style declarative TOML tool-rule eval not yet wired into agent
 pub use platform::policy;
-#[allow(dead_code)] // PHASE2: WS transport for a2a — wraps jsonrpc::handle_request over persistent WS connections
+#[allow(dead_code)]
+// PHASE2: WS transport for a2a — wraps jsonrpc::handle_request over persistent WS connections
 pub mod a2a_ws;
 pub mod memory_pipeline; // used by agent/mod.rs + agent/chat.rs + agent/prompt.rs
 pub mod skill_learner; // used by agent/chat.rs session-end hook
@@ -107,11 +113,12 @@ pub use features::a2a;
 // Phase 6 reorg — feature/platform/data layers.
 // features/ has a real mod.rs; submodules migrate here incrementally.
 // platform/ and data/ are placeholders (mod.rs exists, empty for now).
-pub mod features;
-#[allow(dead_code)]
-pub mod platform;
 #[allow(dead_code)]
 pub mod data;
+pub mod features;
+pub mod file_state;
+#[allow(dead_code)]
+pub mod platform;
 
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
@@ -560,6 +567,15 @@ enum Command {
         #[command(subcommand)]
         action: EcosystemSubcommand,
     },
+    /// Migrate settings from another coding CLI. Defaults to Claude Code.
+    Migrate {
+        /// Source to migrate from: claude or claude-code.
+        #[arg(default_value = "claude")]
+        source: String,
+        /// Show what would be imported without writing files.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Browse session history.
     History {
         /// Maximum number of sessions to display.
@@ -616,9 +632,7 @@ enum SessionAction {
         limit: usize,
     },
     /// Show the turn-by-turn transcript of a session.
-    Show {
-        session_id: String,
-    },
+    Show { session_id: String },
     /// Fork a session at a specific turn into a new named session.
     Fork {
         session_id: String,
@@ -779,8 +793,8 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
     use colored::Colorize;
     match action {
         SessionAction::List { limit } => {
-            let mut summaries = runtime::session_control::list_managed_sessions()
-                .unwrap_or_default();
+            let mut summaries =
+                runtime::session_control::list_managed_sessions().unwrap_or_default();
             summaries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
             summaries.truncate(limit);
             if summaries.is_empty() {
@@ -800,11 +814,7 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
         }
         SessionAction::Show { session_id } => {
             let (messages, _) = resolve_resume_payload(&session_id, false)?;
-            println!(
-                "{}: {} messages",
-                session_id.cyan().bold(),
-                messages.len()
-            );
+            println!("{}: {} messages", session_id.cyan().bold(), messages.len());
             for (i, msg) in messages.iter().enumerate() {
                 let preview: String = msg.text_content().chars().take(120).collect();
                 println!("  [{:>3}] {:<10}  {}", i, msg.role, preview);
@@ -859,6 +869,11 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
 pub async fn run_main() -> Result<()> {
     let cli = Cli::parse();
     let normalized_cli_options = cli_options::CliOptions::from_cli(&cli);
+
+    for dir in &normalized_cli_options.additional_dirs {
+        crate::path_security::register_additional_workspace_root(dir)
+            .map_err(|e| anyhow::anyhow!("--add-dir {}: {}", dir, e))?;
+    }
 
     // Load configuration (global + project + env overrides merged)
     let mut app_config = config::CliConfig::load_merged()?;
@@ -1336,10 +1351,21 @@ pub async fn run_main() -> Result<()> {
                     if servers.is_empty() {
                         println!("No MCP server configs found to import.");
                     } else {
-                        println!("Imported {} MCP server config(s):", servers.len());
+                        let report = ecosystem::import_mcp_servers_to_global(&servers, false)?;
+                        println!(
+                            "Imported {} MCP server config(s) into {}:",
+                            report.added.len(),
+                            report.path.display()
+                        );
                         for s in &servers {
                             let transport = if s.url.is_some() { "HTTP/SSE" } else { "stdio" };
                             println!("  {} ({}) [{}]", s.name, s.source, transport);
+                        }
+                        if !report.skipped_existing.is_empty() {
+                            println!(
+                                "Skipped {} existing server config(s).",
+                                report.skipped_existing.len()
+                            );
                         }
                     }
                     let skills = ecosystem::discover_external_skills(&detected);
@@ -1378,6 +1404,22 @@ pub async fn run_main() -> Result<()> {
                     Ok(())
                 }
             },
+
+            Command::Migrate { source, dry_run } => {
+                let normalized = source.to_ascii_lowercase();
+                if !matches!(
+                    normalized.as_str(),
+                    "claude" | "claude-code" | "claude_code"
+                ) {
+                    anyhow::bail!(
+                        "Unsupported migration source '{}'. Supported sources: claude, claude-code",
+                        source
+                    );
+                }
+                let report = ecosystem::migrate_claude_code(*dry_run)?;
+                print!("{}", ecosystem::format_claude_migration_report(&report));
+                Ok(())
+            }
 
             // --- History ---
             Command::History { limit } => {
@@ -1825,13 +1867,12 @@ pub async fn run_main() -> Result<()> {
     } else {
         // No explicit model — attempt tier-aware selection.
         let jwt = tier_cache::load_jwt();
-        let cached_tier =
-            tokio::time::timeout(
-                std::time::Duration::from_secs(3),
-                tier_cache::resolve_user_tier(jwt.as_deref()),
-            )
-            .await
-            .unwrap_or(None);
+        let cached_tier = tokio::time::timeout(
+            std::time::Duration::from_secs(3),
+            tier_cache::resolve_user_tier(jwt.as_deref()),
+        )
+        .await
+        .unwrap_or(None);
 
         if let Some(ct) = cached_tier {
             // Use the tier's economy default if no model is pinned in config.
@@ -2179,9 +2220,7 @@ pub async fn run_oneshot(
             .ok();
 
         let start = std::time::Instant::now();
-        let result = session
-            .send(config, prompt, Box::new(|_chunk| {}))
-            .await;
+        let result = session.send(config, prompt, Box::new(|_chunk| {})).await;
         let duration_ms = start.elapsed().as_millis() as u64;
 
         match result {
@@ -2231,9 +2270,7 @@ pub async fn run_oneshot(
         // Pretty-printed single JSON object — non-streaming, for shell users
         // running `agiworkforce -p '...' --output-format json`.
         let start = std::time::Instant::now();
-        let result = session
-            .send(config, prompt, Box::new(|_chunk| {}))
-            .await;
+        let result = session.send(config, prompt, Box::new(|_chunk| {})).await;
         let duration_ms = start.elapsed().as_millis() as u64;
 
         match result {

@@ -1,0 +1,8 @@
+.next
+node_modules
+coverage
+.env*
+!.env.example
+infra/.terraform
+infra/**/*.tfstate*
+README.md

@@ -493,9 +493,11 @@ impl RealtimeServer {
         // none of our valid messages are anywhere near 4 MiB. A peer that
         // sends a frame above this gets disconnected at the protocol layer
         // before any deserialisation runs.
-        let mut ws_config = WebSocketConfig::default();
-        ws_config.max_message_size = Some(MAX_WS_MESSAGE_SIZE);
-        ws_config.max_frame_size = Some(MAX_WS_MESSAGE_SIZE);
+        let ws_config = WebSocketConfig {
+            max_message_size: Some(MAX_WS_MESSAGE_SIZE),
+            max_frame_size: Some(MAX_WS_MESSAGE_SIZE),
+            ..Default::default()
+        };
 
         let ws_stream = match accept_hdr_async_with_config(stream, callback, Some(ws_config)).await
         {

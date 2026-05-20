@@ -121,6 +121,7 @@ pub fn search_tool_schemas(
             .split(',')
             .map(str::trim)
             .filter(|s| !s.is_empty())
+            .map(canonical_schema_tool_name)
             .collect();
         catalog
             .iter()
@@ -151,6 +152,14 @@ pub fn search_tool_schemas(
                     } else if nl.contains(term) {
                         s += 5.0;
                     }
+                    for alias in schema_tool_aliases(&t.name) {
+                        let alias = alias.to_lowercase();
+                        if alias == *term {
+                            s += 9.0;
+                        } else if alias.contains(term) {
+                            s += 4.0;
+                        }
+                    }
                     if dl.contains(term) {
                         s += 2.0;
                     }
@@ -173,6 +182,86 @@ pub fn search_tool_schemas(
                 was_deferred: t.should_defer,
             })
             .collect()
+    }
+}
+
+fn canonical_schema_tool_name(tool_name: &str) -> &str {
+    match tool_name {
+        "Read" | "read" | "ReadFile" => "read_file",
+        "Write" | "write" | "WriteFile" => "write_file",
+        "Edit" | "edit" | "EditFile" => "edit_file",
+        "MultiEdit" | "multi_edit" | "Multi_Edit" => "multiedit",
+        "Bash" | "bash" | "Shell" | "shell" | "RunCommand" => "run_command",
+        "PowerShell" => "powershell",
+        "Glob" | "glob_search" | "GlobSearch" => "glob",
+        "Grep" | "grep" | "GrepFiles" | "grep_search" | "GrepSearch" => "grep_files",
+        "LS" | "Ls" | "ls" | "List" | "ListDirectory" => "list_directory",
+        "WebFetch" => "web_fetch",
+        "WebSearch" => "web_search",
+        "ToolSearch" => "tool_search",
+        "ApplyPatch" => "apply_patch",
+        "Batch" => "batch",
+        "NotebookEdit" => "notebook_edit",
+        "TodoRead" => "todo_read",
+        "TodoWrite" => "todo_write",
+        "AskUser" | "AskUserQuestion" => "ask_user",
+        "ReadManyFiles" => "read_many_files",
+        "TaskCreate" => "task_create",
+        "TaskGet" => "task_get",
+        "TaskList" => "task_list",
+        "TaskUpdate" => "task_update",
+        "TaskStop" => "task_stop",
+        "TaskOutput" => "task_output",
+        "TeamCreate" => "team_create",
+        "TeamDelete" => "team_delete",
+        "CronCreate" => "cron_create",
+        "CronDelete" => "cron_delete",
+        "CronList" => "cron_list",
+        "Advisor" => "advisor",
+        "EnterWorktree" => "enter_worktree",
+        "ExitWorktree" => "exit_worktree",
+        "ListWorktrees" => "list_worktrees",
+        _ => tool_name,
+    }
+}
+
+fn schema_tool_aliases(tool_name: &str) -> &'static [&'static str] {
+    match tool_name {
+        "read_file" => &["Read", "read", "ReadFile"],
+        "write_file" => &["Write", "write", "WriteFile"],
+        "edit_file" => &["Edit", "edit", "EditFile"],
+        "multiedit" => &["MultiEdit", "multi_edit"],
+        "run_command" => &["Bash", "bash", "Shell", "shell", "RunCommand"],
+        "powershell" => &["PowerShell"],
+        "glob" => &["Glob", "glob_search", "GlobSearch"],
+        "grep_files" => &["Grep", "grep", "GrepFiles", "grep_search", "GrepSearch"],
+        "list_directory" => &["LS", "Ls", "ls", "List", "ListDirectory"],
+        "web_fetch" => &["WebFetch"],
+        "web_search" => &["WebSearch"],
+        "tool_search" => &["ToolSearch"],
+        "apply_patch" => &["ApplyPatch"],
+        "batch" => &["Batch"],
+        "notebook_edit" => &["NotebookEdit"],
+        "todo_read" => &["TodoRead"],
+        "todo_write" => &["TodoWrite"],
+        "ask_user" => &["AskUser", "AskUserQuestion"],
+        "read_many_files" => &["ReadManyFiles"],
+        "task_create" => &["TaskCreate"],
+        "task_get" => &["TaskGet"],
+        "task_list" => &["TaskList"],
+        "task_update" => &["TaskUpdate"],
+        "task_stop" => &["TaskStop"],
+        "task_output" => &["TaskOutput"],
+        "team_create" => &["TeamCreate"],
+        "team_delete" => &["TeamDelete"],
+        "cron_create" => &["CronCreate"],
+        "cron_delete" => &["CronDelete"],
+        "cron_list" => &["CronList"],
+        "advisor" => &["Advisor"],
+        "enter_worktree" => &["EnterWorktree"],
+        "exit_worktree" => &["ExitWorktree"],
+        "list_worktrees" => &["ListWorktrees"],
+        _ => &[],
     }
 }
 
@@ -271,6 +360,23 @@ mod tests {
     }
 
     #[test]
+    fn select_directive_accepts_claude_style_tool_aliases() {
+        let catalog = vec![
+            make_tool("run_command", "Execute shell command", false),
+            make_tool("grep_files", "Search files", false),
+            make_tool("todo_write", "Write todos", true),
+        ];
+
+        let results = search_tool_schemas("select:Bash,Grep,TodoWrite", &catalog, 10);
+        let names: Vec<&str> = results.iter().map(|r| r.name.as_str()).collect();
+
+        assert_eq!(results.len(), 3);
+        assert!(names.contains(&"run_command"));
+        assert!(names.contains(&"grep_files"));
+        assert!(names.contains(&"todo_write"));
+    }
+
+    #[test]
     fn select_directive_returns_was_deferred_flag() {
         let catalog = vec![
             make_tool("apply_patch", "Apply a patch", true),
@@ -340,6 +446,19 @@ mod tests {
     }
 
     #[test]
+    fn keyword_search_matches_claude_style_tool_alias() {
+        let catalog = vec![
+            make_tool("run_command", "Execute a command", false),
+            make_tool("read_file", "Read file contents", false),
+        ];
+
+        let results = search_tool_schemas("Bash", &catalog, 10);
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].name, "run_command");
+    }
+
+    #[test]
     fn keyword_search_respects_max_results() {
         let catalog: Vec<ToolDefinition> = (0..10)
             .map(|i| make_tool(&format!("file_tool_{}", i), "file operation", false))
@@ -397,7 +516,19 @@ mod tests {
     #[test]
     fn builtin_catalog_always_loaded_tools_not_deferred() {
         let catalog = tool_catalog::all_builtin_tool_definitions();
-        let always = ["read_file", "write_file", "edit_file", "run_command", "grep_files", "task", "web_search", "web_fetch", "tool_search", "search_files", "list_directory"];
+        let always = [
+            "read_file",
+            "write_file",
+            "edit_file",
+            "run_command",
+            "grep_files",
+            "task",
+            "web_search",
+            "web_fetch",
+            "tool_search",
+            "search_files",
+            "list_directory",
+        ];
         for name in &always {
             let results = search_tool_schemas(&format!("select:{}", name), &catalog, 10);
             assert_eq!(results.len(), 1, "tool {} not found in catalog", name);
@@ -412,15 +543,26 @@ mod tests {
     #[test]
     fn builtin_catalog_niche_tools_are_deferred() {
         let catalog = tool_catalog::all_builtin_tool_definitions();
-        let deferred = ["apply_patch", "update_plan", "glob", "batch", "multiedit", "todo_read", "todo_write", "ask_user", "read_many_files"];
+        let deferred = [
+            "apply_patch",
+            "update_plan",
+            "glob",
+            "batch",
+            "multiedit",
+            "todo_read",
+            "todo_write",
+            "ask_user",
+            "read_many_files",
+        ];
         for name in &deferred {
             let results = search_tool_schemas(&format!("select:{}", name), &catalog, 10);
-            assert_eq!(results.len(), 1, "deferred tool {} not found in catalog", name);
-            assert!(
-                results[0].was_deferred,
-                "tool {} SHOULD be deferred",
+            assert_eq!(
+                results.len(),
+                1,
+                "deferred tool {} not found in catalog",
                 name
             );
+            assert!(results[0].was_deferred, "tool {} SHOULD be deferred", name);
         }
     }
 

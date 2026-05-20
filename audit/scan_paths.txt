@@ -1,0 +1,55 @@
+packages/apply-patch/src/index.ts:202:      const original = await fs.readFile(hunk.path);
+packages/apply-patch/src/node-fs-bridge.ts:26:    async readFile(path: string): Promise<string> {
+packages/apply-patch/src/node-fs-bridge.ts:27:      return readFile(abs(path), 'utf-8');
+packages/apply-patch/src/__tests__/edge-cases.test.ts:52:    const written = await readFile(join(workspace, 'note.txt'), 'utf-8');
+packages/apply-patch/src/__tests__/edge-cases.test.ts:74:    const written = await readFile(join(workspace, 'note.txt'), 'utf-8');
+packages/apply-patch/src/__tests__/edge-cases.test.ts:99:    const written = await readFile(join(workspace, 'config.json'), 'utf-8');
+packages/apply-patch/src/__tests__/edge-cases.test.ts:116:    const written = await readFile(join(workspace, 'bom.txt'), 'utf-8');
+packages/apply-patch/src/__tests__/edge-cases.test.ts:145:    const after = await readFile(join(workspace, 'short.txt'), 'utf-8');
+packages/apply-patch/src/__tests__/edge-cases.test.ts:177:    const after = await readFile(join(workspace, 'tail.txt'), 'utf-8');
+packages/apply-patch/src/__tests__/edge-cases.test.ts:194:    const written = await readFile(resolve(workspace, 'a/b/c/leaf.md'), 'utf-8');
+packages/apply-patch/src/__tests__/path-traversal.test.ts:121:    const written = await readFile(resolve(workspace, 'legitimate.txt'), 'utf-8');
+packages/apply-patch/src/__tests__/path-traversal.test.ts:135:    const written = await readFile(resolve(workspace, 'nested/dir/file.txt'), 'utf-8');
+packages/apply-patch/src/__tests__/path-traversal.test.ts:212:      async readFile() {
+packages/apply-patch/src/types.ts:54:  readFile(path: string): Promise<string>;
+packages/skills/src/loader.ts:69:    raw = await readFile(filePath, 'utf-8');
+packages/skills/src/loader.ts:69:    raw = await readFile(filePath, 'utf-8');
+apps/cli/src/memory.rs:733:        let file = path.join("CLAUDE.md");
+apps/cli/src/memory.rs:741:        let file = path.join("CLAUDE.md");
+apps/cli/src/memory.rs:792:        fs::create_dir_all(path.join(".git")).unwrap();
+apps/cli/src/memory.rs:821:        fs::create_dir_all(path.join(".git")).unwrap();
+apps/cli/src/memory.rs:822:        fs::write(path.join("CLAUDE.md"), "# My Project\nBuild with cargo.").unwrap();
+apps/cli/src/memory.rs:836:            global_path: path.join("subdir").join("deep").join("CLAUDE.md"),
+apps/cli/src/memory.rs:852:        fs::create_dir_all(path.join(".git")).unwrap();
+apps/cli/src/memory.rs:862:        fs::create_dir_all(path.join(".git")).unwrap();
+apps/cli/src/memory.rs:863:        let subdir = path.join("src").join("lib");
+apps/cli/src/marketplace.rs:403:            let is_git = install_path.join(".git").exists()
+apps/cli/src/sync.rs:523:        fs::write(home_path.join("INSTRUCTIONS.md"), "# Original").unwrap();
+apps/cli/src/sync.rs:528:        fs::write(home_path.join("INSTRUCTIONS.md"), "# Modified locally").unwrap();
+apps/cli/src/sync.rs:551:        let local = fs::read_to_string(home_path.join("INSTRUCTIONS.md")).unwrap();
+apps/cli/src/sync.rs:562:        fs::write(home_path.join("INSTRUCTIONS.md"), "# Original").unwrap();
+apps/cli/src/sync.rs:589:        let local = fs::read_to_string(home_path.join("INSTRUCTIONS.md")).unwrap();
+apps/cli/src/sync.rs:599:        fs::write(home_path.join("config.toml"), "test").unwrap();
+apps/cli/src/sync.rs:613:        fs::write(home_path.join("config.toml"), "test").unwrap();
+apps/cli/src/sync.rs:628:        fs::write(home_path.join("config.toml"), "original").unwrap();
+apps/cli/src/sync.rs:632:        fs::write(home_path.join("config.toml"), "changed").unwrap();
+apps/cli/src/sync.rs:645:        fs::write(home_path.join("config.toml"), "test").unwrap();
+apps/cli/src/sync.rs:649:        fs::remove_file(home_path.join("config.toml")).unwrap();
+packages/apply-patch/src/index.ts:202:      const original = await fs.readFile(hunk.path);
+apps/cli/src/ecosystem.rs:275:        let p = tool_path.join(rel);
+apps/cli/src/ecosystem.rs:285:        let in_tool = tool_path.join(rel);
+apps/cli/src/ecosystem.rs:300:            let full_pattern = tool_path.join(pattern);
+apps/cli/src/ecosystem.rs:313:            let full = tool_path.join(pattern);
+packages/apply-patch/src/node-fs-bridge.ts:26:    async readFile(path: string): Promise<string> {
+packages/apply-patch/src/node-fs-bridge.ts:27:      return readFile(abs(path), 'utf-8');
+packages/apply-patch/src/__tests__/edge-cases.test.ts:52:    const written = await readFile(join(workspace, 'note.txt'), 'utf-8');
+packages/apply-patch/src/__tests__/edge-cases.test.ts:74:    const written = await readFile(join(workspace, 'note.txt'), 'utf-8');
+packages/apply-patch/src/__tests__/edge-cases.test.ts:99:    const written = await readFile(join(workspace, 'config.json'), 'utf-8');
+packages/apply-patch/src/__tests__/edge-cases.test.ts:116:    const written = await readFile(join(workspace, 'bom.txt'), 'utf-8');
+packages/apply-patch/src/__tests__/edge-cases.test.ts:145:    const after = await readFile(join(workspace, 'short.txt'), 'utf-8');
+packages/apply-patch/src/__tests__/edge-cases.test.ts:177:    const after = await readFile(join(workspace, 'tail.txt'), 'utf-8');
+packages/apply-patch/src/__tests__/edge-cases.test.ts:194:    const written = await readFile(resolve(workspace, 'a/b/c/leaf.md'), 'utf-8');
+packages/apply-patch/src/__tests__/path-traversal.test.ts:121:    const written = await readFile(resolve(workspace, 'legitimate.txt'), 'utf-8');
+packages/apply-patch/src/__tests__/path-traversal.test.ts:135:    const written = await readFile(resolve(workspace, 'nested/dir/file.txt'), 'utf-8');
+packages/apply-patch/src/__tests__/path-traversal.test.ts:212:      async readFile() {
+packages/apply-patch/src/types.ts:54:  readFile(path: string): Promise<string>;

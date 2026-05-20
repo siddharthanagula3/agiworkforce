@@ -82,10 +82,7 @@ fn print_welcome_banner() {
         format!("v{}", env!("CARGO_PKG_VERSION")).dimmed(),
     );
     eprintln!("  {}\n", "Multi-model AI agent in your terminal.".dimmed());
-    eprintln!(
-        "  {}",
-        "What makes us different:".dimmed()
-    );
+    eprintln!("  {}", "What makes us different:".dimmed());
     eprintln!(
         "  {}  {}",
         "✦".cyan(),

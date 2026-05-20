@@ -20,7 +20,7 @@ Multi-provider, local-first AI agent platform. One Tauri desktop app, one Next.j
 >
 > **Foundation Sprint shipped** at tag [`v0.7.0-foundation`](https://github.com/siddharthanagula3/agiworkforce/releases/tag/v0.7.0-foundation) (2026-05-13): central state pattern, message-queue priority lane, `packages/llm-runtime`, outbound-worker direction inversion, HKDF dispatch-key rotation, Stripe webhook idempotency RPC live in prod. Stripe wired but **dormant during waitlist period** — flips live Aug 1.
 >
-> **For contributors and AI agents:** [AGI_WORKFORCE.md](AGI_WORKFORCE.md) is the single source of truth.
+> **For contributors and AI agents:** [AGI_WORKFORCE.md](AGI_WORKFORCE.md) is the entry point; [docs/README.md](docs/README.md) gives the organized docs map.
 > **For builds and deployment:** [BUILD.md](BUILD.md).
 > **For PR conventions:** [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -114,10 +114,11 @@ cargo run -p agiworkforce-cli -- exec "hello"
 
 ## Documentation
 
+- [docs/decisions/CURRENT_DECISIONS.md](docs/decisions/CURRENT_DECISIONS.md) records the mobile-v1 launch clarification: focus mobile first, ship Local + explicit BYOK, and keep AGI-managed cloud credits waitlisted.
 - [AGI_WORKFORCE.md](AGI_WORKFORCE.md) — single source of truth (start here)
+- [docs/README.md](docs/README.md) — organized documentation map
 - [docs/VISION.md](docs/VISION.md) — product vision (ONE chat layout, multi-provider)
 - [docs/ROADMAP.md](docs/ROADMAP.md) — live wave/sprint status
-- [docs/DESIGN.md](docs/DESIGN.md) — UI principles (Claude Desktop as north star)
 - [docs/design/design-spec-2026-05-15.md](docs/design/design-spec-2026-05-15.md) — canonical 2026-05-15 design spec (composer, sidebar, inline tool-call, icons) shipped across all 6 surfaces
 - [docs/PRICING.md](docs/PRICING.md) — tier model
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — cross-surface architecture

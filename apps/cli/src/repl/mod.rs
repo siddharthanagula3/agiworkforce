@@ -18,8 +18,8 @@ use slash_commands::{handle_slash_command, SlashResult};
 
 // Re-export the public handler functions used by tui_app.rs and lib.rs.
 pub use registry::{
-    handle_branch, handle_compact, handle_export, handle_history, handle_init_project,
-    handle_load, handle_memory, handle_permissions, handle_rename, handle_rewind, handle_save,
+    handle_branch, handle_compact, handle_export, handle_history, handle_init_project, handle_load,
+    handle_memory, handle_permissions, handle_rename, handle_rewind, handle_save,
 };
 
 type ManagedSessionResume = (crate::runtime::session::ManagedSession, std::path::PathBuf);
@@ -249,61 +249,51 @@ pub async fn run_repl(
                                 }
                             }
                         }
-                        SlashResult::Sync(subcmd) => {
-                            match crate::config::CliConfig::config_dir() {
-                                Ok(home) => match subcmd.as_str() {
-                                    "status" => match crate::sync::ConfigSync::status(&home) {
-                                        Ok(changes) => {
-                                            if changes.is_empty() {
-                                                eprintln!("No synced files found.");
-                                            } else {
-                                                for (path, change) in &changes {
-                                                    eprintln!("  {:<35} {}", path, change);
-                                                }
+                        SlashResult::Sync(subcmd) => match crate::config::CliConfig::config_dir() {
+                            Ok(home) => match subcmd.as_str() {
+                                "status" => match crate::sync::ConfigSync::status(&home) {
+                                    Ok(changes) => {
+                                        if changes.is_empty() {
+                                            eprintln!("No synced files found.");
+                                        } else {
+                                            for (path, change) in &changes {
+                                                eprintln!("  {:<35} {}", path, change);
                                             }
                                         }
-                                        Err(e) => output::print_error(&format!(
-                                            "Sync status failed: {}",
-                                            e
-                                        )),
-                                    },
-                                    "export" => match crate::sync::ConfigSync::export(&home) {
-                                        Ok(bundle) => {
-                                            if let Ok(json) = serde_json::to_string_pretty(&bundle)
-                                            {
-                                                println!("{}", json);
-                                            }
-                                        }
-                                        Err(e) => output::print_error(&format!(
-                                            "Sync export failed: {}",
-                                            e
-                                        )),
-                                    },
-                                    _ => {
-                                        output::print_info("Usage: /sync status | /sync export");
+                                    }
+                                    Err(e) => {
+                                        output::print_error(&format!("Sync status failed: {}", e))
                                     }
                                 },
-                                Err(e) => {
-                                    output::print_error(&format!("Config dir error: {}", e))
+                                "export" => match crate::sync::ConfigSync::export(&home) {
+                                    Ok(bundle) => {
+                                        if let Ok(json) = serde_json::to_string_pretty(&bundle) {
+                                            println!("{}", json);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        output::print_error(&format!("Sync export failed: {}", e))
+                                    }
+                                },
+                                _ => {
+                                    output::print_info("Usage: /sync status | /sync export");
                                 }
-                            }
-                        }
+                            },
+                            Err(e) => output::print_error(&format!("Config dir error: {}", e)),
+                        },
                         SlashResult::Onboarding => {
                             match crate::onboarding::run_onboarding().await {
                                 Ok(true) => output::print_info(
                                     "Onboarding complete. Restart to apply changes.",
                                 ),
                                 Ok(false) => output::print_info("Onboarding skipped."),
-                                Err(e) => {
-                                    output::print_error(&format!("Onboarding error: {}", e))
-                                }
+                                Err(e) => output::print_error(&format!("Onboarding error: {}", e)),
                             }
                         }
                         SlashResult::Btw(question) => {
                             let spinner = output::create_spinner("Side query...");
-                            let md_btw = std::sync::Arc::new(std::sync::Mutex::new(
-                                MarkdownRenderer::new(),
-                            ));
+                            let md_btw =
+                                std::sync::Arc::new(std::sync::Mutex::new(MarkdownRenderer::new()));
                             let md_btw_cb = std::sync::Arc::clone(&md_btw);
 
                             let btw_result = session
@@ -366,6 +356,9 @@ pub async fn run_repl(
                             )
                             .await;
                         }
+                        SlashResult::Prompt(prompt) => {
+                            run_prompt_turn(&mut session, config, prompt).await;
+                        }
                         SlashResult::Handled => {}
                     }
                     continue;
@@ -377,45 +370,7 @@ pub async fn run_repl(
                     input.to_string()
                 };
 
-                let spinner = output::create_spinner("Thinking...");
-                let md = std::sync::Arc::new(std::sync::Mutex::new(MarkdownRenderer::new()));
-                let md_cb = std::sync::Arc::clone(&md);
-
-                let result = session
-                    .send(
-                        config,
-                        &full_input,
-                        Box::new(move |chunk| {
-                            if let Ok(mut renderer) = md_cb.lock() {
-                                output::print_assistant_chunk_formatted(&mut renderer, chunk);
-                            }
-                        }),
-                    )
-                    .await;
-
-                spinner.finish_and_clear();
-
-                if let Ok(mut renderer) = md.lock() {
-                    output::flush_markdown(&mut renderer);
-                }
-
-                match result {
-                    Ok(turn) => {
-                        output::print_assistant_end();
-                        if turn.via_subscription {
-                            output::print_subscription_cost(turn.input_tokens, turn.output_tokens);
-                        } else {
-                            output::print_cost(
-                                &session.model,
-                                turn.input_tokens,
-                                turn.output_tokens,
-                            );
-                        }
-                    }
-                    Err(e) => {
-                        output::print_error(&format!("{:#}", e));
-                    }
-                }
+                run_prompt_turn(&mut session, config, full_input).await;
             }
             Err(ReadlineError::Interrupted) => {
                 eprintln!("{}", "(Ctrl-C to cancel, /exit to quit)".dimmed());
@@ -463,6 +418,44 @@ pub async fn run_repl(
     );
 
     Ok(())
+}
+
+async fn run_prompt_turn(session: &mut AgentSession, config: &CliConfig, full_input: String) {
+    let spinner = output::create_spinner("Thinking...");
+    let md = std::sync::Arc::new(std::sync::Mutex::new(MarkdownRenderer::new()));
+    let md_cb = std::sync::Arc::clone(&md);
+
+    let result = session
+        .send(
+            config,
+            &full_input,
+            Box::new(move |chunk| {
+                if let Ok(mut renderer) = md_cb.lock() {
+                    output::print_assistant_chunk_formatted(&mut renderer, chunk);
+                }
+            }),
+        )
+        .await;
+
+    spinner.finish_and_clear();
+
+    if let Ok(mut renderer) = md.lock() {
+        output::flush_markdown(&mut renderer);
+    }
+
+    match result {
+        Ok(turn) => {
+            output::print_assistant_end();
+            if turn.via_subscription {
+                output::print_subscription_cost(turn.input_tokens, turn.output_tokens);
+            } else {
+                output::print_cost(&session.model, turn.input_tokens, turn.output_tokens);
+            }
+        }
+        Err(e) => {
+            output::print_error(&format!("{:#}", e));
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

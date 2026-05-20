@@ -24,6 +24,8 @@ impl AgentSession {
         user_input: &str,
         on_chunk: StreamCallback,
     ) -> Result<TurnResult> {
+        self.validate_privacy_boundary()?;
+
         // Context compaction: if above 90%, shrink to 70%
         let usage = compaction::context_usage(&self.messages, &self.model);
         if usage.fraction > 0.90 {
@@ -95,15 +97,17 @@ impl AgentSession {
                 "USER REJECTED THE PREVIOUS PLAN. FEEDBACK: {feedback}\n\n"
             ));
         }
-        if matches!(self.permission_mode, crate::cli_options::PermissionMode::Plan)
-            && !self.plan_approved
+        if matches!(
+            self.permission_mode,
+            crate::cli_options::PermissionMode::Plan
+        ) && !self.plan_approved
         {
             prefix.push_str(
                 "[plan-mode] You must call the `update_plan` tool with a complete, ordered plan \
 of steps before any mutating action (run_command, edit_file, write_file, apply_patch, MCP tools, \
 task subagents). The user reviews and approves the plan; only then can you execute mutating \
 tools. If your plan is rejected, the rejection feedback will be prefixed to the next user \
-message -- revise and call `update_plan` again.\n\n"
+message -- revise and call `update_plan` again.\n\n",
             );
         }
         let effective_input = if prefix.is_empty() {
@@ -378,7 +382,11 @@ message -- revise and call `update_plan` again.\n\n"
                 format!(
                     "  Executing {} tool{}... (iteration {}/{})",
                     current_tool_calls.len(),
-                    if current_tool_calls.len() == 1 { "" } else { "s" },
+                    if current_tool_calls.len() == 1 {
+                        ""
+                    } else {
+                        "s"
+                    },
                     iteration + 1,
                     effective_max
                 )
@@ -426,8 +434,10 @@ message -- revise and call `update_plan` again.\n\n"
                     continue;
                 }
 
-                if matches!(self.permission_mode, crate::cli_options::PermissionMode::Plan)
-                    && !self.plan_approved
+                if matches!(
+                    self.permission_mode,
+                    crate::cli_options::PermissionMode::Plan
+                ) && !self.plan_approved
                 {
                     let payload = serde_json::json!({
                         "ok": false,
@@ -646,8 +656,11 @@ message -- revise and call `update_plan` again.\n\n"
                 if !self.quiet {
                     eprintln!(
                         "  {} ({})",
-                        format!("running {} read-only tools in parallel", concurrent_calls.len())
-                            .dimmed(),
+                        format!(
+                            "running {} read-only tools in parallel",
+                            concurrent_calls.len()
+                        )
+                        .dimmed(),
                         concurrent_calls
                             .iter()
                             .map(|tc| tc.name.as_str())
@@ -724,12 +737,7 @@ message -- revise and call `update_plan` again.\n\n"
                         } else {
                             "failed".red().to_string()
                         };
-                        eprintln!(
-                            "  {} {} [{}]",
-                            "->".dimmed(),
-                            tool_name.bold(),
-                            status
-                        );
+                        eprintln!("  {} {} [{}]", "->".dimmed(), tool_name.bold(), status);
                     }
 
                     hooks::run_hooks(
@@ -785,8 +793,10 @@ message -- revise and call `update_plan` again.\n\n"
                     continue;
                 }
 
-                if matches!(self.permission_mode, crate::cli_options::PermissionMode::Plan)
-                    && !self.plan_approved
+                if matches!(
+                    self.permission_mode,
+                    crate::cli_options::PermissionMode::Plan
+                ) && !self.plan_approved
                     && is_mutating_tool(&tc.name)
                 {
                     let payload = serde_json::json!({
@@ -818,8 +828,10 @@ message -- revise and call `update_plan` again.\n\n"
                 )
                 .await;
                 let pre_t = hooks::aggregate_transformers(&pre_results);
-                let effective_args =
-                    pre_t.updated_input.clone().unwrap_or_else(|| tc.arguments.clone());
+                let effective_args = pre_t
+                    .updated_input
+                    .clone()
+                    .unwrap_or_else(|| tc.arguments.clone());
 
                 match hooks::aggregate_results(&pre_results) {
                     hooks::HookAggregateOutcome::Blocked { reasons } => {
@@ -841,11 +853,7 @@ message -- revise and call `update_plan` again.\n\n"
                     }
                     hooks::HookAggregateOutcome::Stop => {
                         if !self.quiet {
-                            eprintln!(
-                                "  {} {} stopped by hook",
-                                "->".dimmed(),
-                                tc.name.bold()
-                            );
+                            eprintln!("  {} {} stopped by hook", "->".dimmed(), tc.name.bold());
                         }
                         result_blocks.push(ContentBlock::ToolResult {
                             tool_use_id: tc.id.clone(),

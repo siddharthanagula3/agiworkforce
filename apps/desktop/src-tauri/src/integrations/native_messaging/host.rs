@@ -6,9 +6,10 @@
 //! Handles the native messaging host process that communicates with Chrome extension
 
 use super::*;
+use rand::RngCore;
 use std::collections::HashMap;
 use std::io::{stdin, stdout, BufReader, BufWriter};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::{mpsc, Mutex};
 
 const NATIVE_RESPONSE_TIMEOUT_MS: u64 = 15_000;
@@ -18,6 +19,8 @@ pub struct NativeMessagingHost {
     state: Arc<RwLock<NativeMessagingState>>,
     message_tx: mpsc::Sender<NativeRequest>,
     response_rx: Arc<Mutex<mpsc::Receiver<NativeResponse>>>,
+    session_secret: [u8; 32],
+    session_secret_hex: String,
 }
 
 impl NativeMessagingHost {
@@ -28,11 +31,15 @@ impl NativeMessagingHost {
     ) {
         let (msg_tx, msg_rx) = mpsc::channel(100);
         let (resp_tx, resp_rx) = mpsc::channel(100);
+        let mut session_secret = [0_u8; 32];
+        rand::rngs::OsRng.fill_bytes(&mut session_secret);
 
         let host = Self {
             state: Arc::new(RwLock::new(NativeMessagingState::new())),
             message_tx: msg_tx,
             response_rx: Arc::new(Mutex::new(resp_rx)),
+            session_secret,
+            session_secret_hex: hex::encode(session_secret),
         };
 
         (host, msg_rx, resp_tx)
@@ -67,9 +74,20 @@ impl NativeMessagingHost {
                         continue;
                     }
 
-                    let response = self
+                    let mut response = self
                         .wait_for_response_for_request(&request.id, &mut buffered_responses)
                         .await;
+                    if matches!(request.message, NativeMessage::Connect { .. }) {
+                        response = response.with_session_secret(self.session_secret_hex.clone());
+                    }
+                    if let Err(e) = self.sign_response(&mut response) {
+                        tracing::error!("Failed to sign native response: {}", e);
+                        response = NativeResponse::error(
+                            request.id,
+                            format!("Native host response signing failed: {}", e),
+                        );
+                        let _ = self.sign_response(&mut response);
+                    }
 
                     // Send response back to extension
                     if let Err(e) = write_message(&mut stdout, &response) {
@@ -92,6 +110,10 @@ impl NativeMessagingHost {
         }
 
         Ok(())
+    }
+
+    fn sign_response(&self, response: &mut NativeResponse) -> Result<()> {
+        response.sign_with_secret(&self.session_secret, current_epoch_millis())
     }
 
     async fn wait_for_response_for_request(
@@ -168,6 +190,15 @@ impl NativeMessagingHost {
         state.connection_state = ConnectionState::Disconnected;
         state.extension_id = None;
     }
+}
+
+fn current_epoch_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .try_into()
+        .unwrap_or(u64::MAX)
 }
 
 impl Default for NativeMessagingHost {

@@ -7,7 +7,9 @@ use tokio::process::Command;
 
 use crate::safety::{classify_command, CommandSafety};
 
-use super::common::{describe_command, print_tool_status, truncate_output_with_save, COMMAND_TIMEOUT};
+use super::common::{
+    describe_command, print_tool_status, truncate_output_with_save, COMMAND_TIMEOUT,
+};
 use super::ToolResult;
 
 pub(super) async fn execute_run_command(
@@ -93,8 +95,7 @@ pub(super) async fn execute_run_command(
     }
 
     let sandbox_supported = cfg!(any(target_os = "macos", target_os = "linux"));
-    let use_sandbox =
-        sandbox_supported && std::env::var("AGIWORKFORCE_NO_SANDBOX").is_err();
+    let use_sandbox = sandbox_supported && std::env::var("AGIWORKFORCE_NO_SANDBOX").is_err();
 
     let result: std::result::Result<
         std::result::Result<std::process::Output, std::io::Error>,

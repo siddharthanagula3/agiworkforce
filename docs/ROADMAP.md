@@ -1,12 +1,14 @@
 # Roadmap — AGI
 
+> Docs audit note, 2026-05-20: this roadmap still reflects the platform Local + BYOK / paid-waitlist posture. The mobile-v1 clarification is Local + explicit BYOK, with AGI-managed cloud credits waitlisted. See [`docs/decisions/CURRENT_DECISIONS.md`](decisions/CURRENT_DECISIONS.md) before editing mobile launch posture.
+>
 > Live document. Update when waves/sprints change. Last updated: 2026-05-16.
 
 ## Current state (2026-05-16)
 
 **Brand**: public surface is **AGI** (simplified from "AGI Workforce" 2026-05-15). Repo path + internal packages remain `agiworkforce`.
 
-**Launch posture**: BYOK + Local v1 shipping; all 6 paid tiers (Hobby / Pro / Pro+ / **Pro Max $99 NEW** / Max / Enterprise) on **email-only waitlist** until **August 1, 2026 graduation**. Why: 60-90 days of BYOK telemetry will set per-tier caps from data instead of guesses, eliminating fraud risk + Stripe-launch dependency from Days-1-30. See [`memory/byok-first-pivot-2026-05-16.md`](../memory/byok-first-pivot-2026-05-16.md).
+**Launch posture**: BYOK + Local v1 shipping; all 6 paid tiers (Hobby / Pro / Pro+ / **Pro Max $99 NEW** / Max / Enterprise) on **email-only waitlist** until **August 1, 2026 graduation**. Why: 60-90 days of BYOK telemetry will set per-tier caps from data instead of guesses, eliminating fraud risk + Stripe-launch dependency from Days-1-30. See [`docs/decisions/CURRENT_DECISIONS.md`](decisions/CURRENT_DECISIONS.md) for the mobile-v1 Local/BYOK trust-boundary clarification.
 
 **Active waves**:
 
@@ -41,7 +43,7 @@
 - 12-month stretch: $20-50K MRR with niche locked + multi-surface trust differentiator working
 - Escalation trigger: <$2K MRR by Oct 31, 2026 → honest pivot/wind-down assessment
 
-**GTM channel priority**: HN > r/cursor + r/ClaudeAI + r/LocalLLaMA > Discord micro-communities (OpenRouter / Open WebUI / LibreChat / Cherry Studio) > 3-8 YouTube creators ($150-500 each + free Pro+) > long-tail SEO. Product Hunt = badge only. r/SaaS dead for direct conversion. See [`memory/launch-playbook-2026-05-16.md`](../memory/launch-playbook-2026-05-16.md).
+**GTM channel priority**: HN > r/cursor + r/ClaudeAI + r/LocalLLaMA > Discord micro-communities (OpenRouter / Open WebUI / LibreChat / Cherry Studio) > 3-8 YouTube creators ($150-500 each + free Pro+) > long-tail SEO. Product Hunt = badge only. r/SaaS dead for direct conversion. Original launch playbook lives in Claude memory outside the repo; see [`docs/decisions/CURRENT_DECISIONS.md`](decisions/CURRENT_DECISIONS.md).
 
 **Audit status**: P0 13/14 closed, P1 21/25 closed. Pre-existing main CI red on Rust Security clippy (49 errors) fully resolved on PR #366 in flight.
 

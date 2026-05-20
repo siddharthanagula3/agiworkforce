@@ -209,11 +209,15 @@ impl CliError {
     /// exactly what to try next.
     pub fn hint(&self) -> String {
         match self {
-            CliError::Api { provider, status, .. } if (500..600).contains(status) => format!(
+            CliError::Api {
+                provider, status, ..
+            } if (500..600).contains(status) => format!(
                 "{provider} returned HTTP {status}. Retry the request, or run `agiworkforce \
                  features` to fall back to a different provider."
             ),
-            CliError::Api { provider, status, .. } => format!(
+            CliError::Api {
+                provider, status, ..
+            } => format!(
                 "{provider} rejected the request with HTTP {status}. Check `agiworkforce \
                  auth-status` and the request payload for invalid fields."
             ),
@@ -237,7 +241,10 @@ impl CliError {
                 "Context exceeded for `{model}`. Try `/compact` to summarize history, or switch \
                  to a model with a larger context window."
             ),
-            CliError::RateLimited { provider, retry_after } => match retry_after {
+            CliError::RateLimited {
+                provider,
+                retry_after,
+            } => match retry_after {
                 Some(secs) => format!(
                     "{provider} is rate-limiting. Wait {secs}s, or use a fallback model: \
                      `--model claude-sonnet-4-6,gpt-5.5`."

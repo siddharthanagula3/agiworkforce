@@ -1,0 +1,66 @@
+[
+  {
+    "action": "Cancel current turn / interrupt",
+    "key": "Ctrl+C"
+  },
+  {
+    "action": "Exit AGI Workforce",
+    "key": "Ctrl+D"
+  },
+  {
+    "action": "Clear screen (preserve session)",
+    "key": "Ctrl+L"
+  },
+  {
+    "action": "Toggle plan mode",
+    "key": "Tab"
+  },
+  {
+    "action": "Cycle plan / accept / reject",
+    "key": "Shift+Tab"
+  },
+  {
+    "action": "Open palette",
+    "key": "/"
+  },
+  {
+    "action": "Navigate commands",
+    "key": "\u2191/\u2193"
+  },
+  {
+    "action": "Run selected command",
+    "key": "Enter"
+  },
+  {
+    "action": "Close palette",
+    "key": "Esc"
+  },
+  {
+    "action": "Filter commands",
+    "key": "type"
+  },
+  {
+    "action": "Switch tabs",
+    "key": "\u2190/\u2192"
+  },
+  {
+    "action": "Navigate items",
+    "key": "\u2191/\u2193"
+  },
+  {
+    "action": "Confirm / open detail",
+    "key": "Enter"
+  },
+  {
+    "action": "Close overlay",
+    "key": "Esc"
+  },
+  {
+    "action": "Open external editor for current input",
+    "key": "Ctrl+E"
+  },
+  {
+    "action": "Insert newline without submitting",
+    "key": "Alt+Enter"
+  }
+]

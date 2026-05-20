@@ -257,9 +257,7 @@ pub async fn stream_completion(
             .await
         }
         Provider::OpenAICompatible {
-            name: _,
-            base_url,
-            ..
+            name: _, base_url, ..
         } => {
             stream_openai_compatible(
                 &client,
@@ -1530,10 +1528,7 @@ mod tests {
         let result = parse_paywall_body(body);
         assert!(result.is_some(), "Should parse paywall body");
         let err = result.unwrap();
-        assert!(
-            err.is_paywall(),
-            "Should return a Paywall error variant"
-        );
+        assert!(err.is_paywall(), "Should return a Paywall error variant");
         // Verify the formatted message contains required tier and upgrade URL
         let msg = err.to_string();
         assert!(
@@ -1555,7 +1550,10 @@ mod tests {
         // Generic rate-limit body from Anthropic
         let body = r#"{"error":{"type":"rate_limit_error","message":"Rate limit exceeded"}}"#;
         let result = parse_paywall_body(body);
-        assert!(result.is_none(), "Non-paywall 429 should not parse as paywall");
+        assert!(
+            result.is_none(),
+            "Non-paywall 429 should not parse as paywall"
+        );
     }
 
     #[test]
@@ -1596,11 +1594,13 @@ mod tests {
         // Plain 429 without kind:paywall should still be RateLimited
         assert!(
             !err.is_paywall(),
-            "Plain 429 should NOT be Paywall, got: {:?}", err
+            "Plain 429 should NOT be Paywall, got: {:?}",
+            err
         );
         assert!(
             err.to_string().contains("Rate limited"),
-            "Plain 429 should be rate-limited: {}", err
+            "Plain 429 should be rate-limited: {}",
+            err
         );
     }
 

@@ -21,6 +21,8 @@ pub(super) enum SlashResult {
     A2a(String, String),
     /// Batch operation — carries (glob_pattern, prompt) for parallel file processing.
     Batch(String, String),
+    /// Turn the slash command into a first-class prompt.
+    Prompt(String),
     /// Run ecosystem scan.
     Ecosystem(String),
     /// Run marketplace search.
@@ -39,6 +41,24 @@ pub(super) fn handle_slash_command(
     let parts: Vec<&str> = input.splitn(2, ' ').collect();
     let cmd = parts[0].to_lowercase();
     let arg = parts.get(1).map(|s| s.trim()).unwrap_or_default();
+
+    match crate::claude_parity::handle_shared_command(cmd.as_str(), arg, session) {
+        crate::claude_parity::ParityCommandResult::SystemMessage(message) => {
+            eprintln!("{message}");
+            return SlashResult::Handled;
+        }
+        crate::claude_parity::ParityCommandResult::Prompt(prompt) => {
+            return SlashResult::Prompt(prompt);
+        }
+        crate::claude_parity::ParityCommandResult::DraftPrompt(prompt) => {
+            eprintln!("{prompt}");
+            output::print_info(
+                "Review this BYOK continuation draft. It was not sent automatically.",
+            );
+            return SlashResult::Handled;
+        }
+        crate::claude_parity::ParityCommandResult::NotHandled => {}
+    }
 
     match cmd.as_str() {
         "/exit" | "/quit" | "/q" => {
@@ -98,7 +118,7 @@ pub(super) fn handle_slash_command(
         "/setup" => {
             dialogs::handle_setup(config);
         }
-        "/permissions" | "/perms" => {
+        "/permissions" | "/perms" | "/approvals" => {
             registry::handle_permissions(arg);
         }
         "/models" => {
@@ -135,6 +155,9 @@ pub(super) fn handle_slash_command(
             );
             eprintln!("  Checkpoints: {}", session.checkpoint_count());
             eprintln!("  Skip perms: {}", session.skip_permissions);
+        }
+        "/usage" => {
+            eprintln!("{}", crate::claude_parity::render_stats(session));
         }
         "/sessions" => {
             registry::handle_sessions(arg);
@@ -174,9 +197,7 @@ pub(super) fn handle_slash_command(
                 session.permission_mode,
                 crate::cli_options::PermissionMode::Plan
             ) {
-                output::print_warn(
-                    "/plan accept: not in plan mode. Use `/plan` to enter first.",
-                );
+                output::print_warn("/plan accept: not in plan mode. Use `/plan` to enter first.");
             } else if session.current_plan.is_none() {
                 output::print_warn(
                     "/plan accept: no plan to approve yet. Ask the model to call `update_plan` first.",
@@ -189,9 +210,7 @@ pub(super) fn handle_slash_command(
         "/plan" if arg.starts_with("reject") => {
             let feedback = arg.strip_prefix("reject").unwrap_or("").trim().to_string();
             if feedback.is_empty() {
-                output::print_warn(
-                    "/plan reject: needs a reason. Usage: /plan reject <feedback>",
-                );
+                output::print_warn("/plan reject: needs a reason. Usage: /plan reject <feedback>");
             } else {
                 session.plan_rejection_feedback = Some(feedback);
                 session.current_plan = None;
@@ -205,7 +224,11 @@ pub(super) fn handle_slash_command(
         "/plan" if arg == "show" || arg == "view" => {
             match (&session.current_plan, &session.current_plan_path) {
                 (Some(plan), Some(path)) => {
-                    eprintln!("\n# Plan ({})\n\n{}", path.display(), plan.render_markdown());
+                    eprintln!(
+                        "\n# Plan ({})\n\n{}",
+                        path.display(),
+                        plan.render_markdown()
+                    );
                 }
                 (Some(plan), None) => {
                     eprintln!("\n{}", plan.render_markdown());
@@ -321,7 +344,7 @@ pub(super) fn handle_slash_command(
             let subcmd = if arg.is_empty() { "scan" } else { arg };
             return SlashResult::Ecosystem(subcmd.to_string());
         }
-        "/marketplace" | "/market" => {
+        "/marketplace" | "/market" | "/plugin" | "/plugins" => {
             let subcmd = if arg.is_empty() { "list" } else { arg };
             return SlashResult::Marketplace(subcmd.to_string());
         }
@@ -515,6 +538,32 @@ pub(super) fn print_help() {
     eprintln!(
         "  {}       Re-run first-run setup wizard",
         "/onboarding".bold()
+    );
+    eprintln!();
+    eprintln!("{}", "Claude Compatibility:".cyan().bold());
+    eprintln!(
+        "  {}       Add a directory root and load its instructions",
+        "/add-dir <dir>".bold()
+    );
+    eprintln!(
+        "  {}         Attach files into the next-turn context",
+        "/files [paths...]".bold()
+    );
+    eprintln!(
+        "  {}  Run a security-focused review",
+        "/security-review".bold()
+    );
+    eprintln!(
+        "  {}       Inspect PR review comments",
+        "/pr-comments".bold()
+    );
+    eprintln!(
+        "  {}      Deep bug-hunt review prompt",
+        "/ultrareview".bold()
+    );
+    eprintln!(
+        "  {}       Show local privacy settings",
+        "/privacy-settings".bold()
     );
     eprintln!();
     eprintln!("{}", "Agent-to-Agent (A2A):".cyan().bold());

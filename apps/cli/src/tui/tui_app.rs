@@ -324,8 +324,8 @@ impl TuiApp {
 fn crossterm_to_keyaction(
     key: crossterm::event::KeyEvent,
 ) -> crate::tui::widgets::interactive::KeyAction {
-    use crossterm::event::KeyCode;
     use crate::tui::widgets::interactive::KeyAction;
+    use crossterm::event::KeyCode;
     match key.code {
         KeyCode::Up => KeyAction::Up,
         KeyCode::Down => KeyAction::Down,
@@ -396,8 +396,7 @@ fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &TuiApp) -> Re
             out_tokens: app.total_output_tokens,
             cache_read: app.session.total_cache_read_tokens,
             cache_creation: app.session.total_cache_creation_tokens,
-            context_used: app.total_input_tokens as u64
-                + app.total_output_tokens as u64,
+            context_used: app.total_input_tokens as u64 + app.total_output_tokens as u64,
             context_window: crate::model_catalog::context_window(&app.model_name) as u64,
         };
         super::cost_hud::render(frame, area, &hud, &app.model_name);
@@ -772,9 +771,7 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
         Some(crate::sandbox::SandboxType::MacosSeatbelt) => ("sandbox: seatbelt", Color::Green),
         Some(crate::sandbox::SandboxType::LinuxBubblewrap) => ("sandbox: bwrap", Color::Green),
         Some(crate::sandbox::SandboxType::LinuxLandlock) => ("sandbox: landlock", Color::Green),
-        Some(crate::sandbox::SandboxType::WindowsRestrictedToken) => {
-            ("sandbox: win", Color::Green)
-        }
+        Some(crate::sandbox::SandboxType::WindowsRestrictedToken) => ("sandbox: win", Color::Green),
         Some(crate::sandbox::SandboxType::None) | None => ("no sandbox", Color::Red),
     };
 
@@ -806,10 +803,7 @@ fn render_mode_banner(frame: &mut ratatui::Frame, chat_area: Rect, app: &TuiApp)
     if shown_at.elapsed() > MODE_BANNER_TTL {
         return;
     }
-    let text = format!(
-        "  Mode: {} (shift+tab to cycle)  ",
-        app.mode.label()
-    );
+    let text = format!("  Mode: {} (shift+tab to cycle)  ", app.mode.label());
     let width = (text.chars().count() as u16).min(chat_area.width.saturating_sub(2));
     if width == 0 {
         return;
@@ -822,7 +816,11 @@ fn render_mode_banner(frame: &mut ratatui::Frame, chat_area: Rect, app: &TuiApp)
     };
     // Use the same color as the mode badge, white text for legibility on grey
     let bg = app.mode.color();
-    let fg = if app.mode == InteractionMode::Chat { Color::White } else { Color::Black };
+    let fg = if app.mode == InteractionMode::Chat {
+        Color::White
+    } else {
+        Color::Black
+    };
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
             text,
@@ -997,7 +995,12 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
                     .command_registry
                     .commands()
                     .iter()
-                    .map(|rc| PopupCmd::new(rc.slash_name().trim_start_matches('/'), rc.description.clone()))
+                    .map(|rc| {
+                        PopupCmd::new(
+                            rc.slash_name().trim_start_matches('/'),
+                            rc.description.clone(),
+                        )
+                    })
                     .collect();
                 app.open_overlay(Box::new(CommandPopup::new(cmds)));
             }
@@ -1281,8 +1284,7 @@ fn apply_mode(app: &mut TuiApp, mode: InteractionMode) {
     app.session.plan_mode = mode == InteractionMode::Plan;
     app.session.skip_permissions =
         mode == InteractionMode::BypassPermissions || mode == InteractionMode::FullAuto;
-    app.session.auto_approve_safe =
-        mode == InteractionMode::AcceptEdits
+    app.session.auto_approve_safe = mode == InteractionMode::AcceptEdits
         || mode == InteractionMode::BypassPermissions
         || mode == InteractionMode::FullAuto;
     // FullAuto: verbose output so the user can see what is happening
@@ -1970,7 +1972,25 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             SlashResult::SystemMessage(lines.join("\n"))
         }
 
-        _ => SlashResult::SendAsPrompt,
+        _ => match crate::claude_parity::handle_shared_command(cmd.as_str(), arg, &mut app.session)
+        {
+            crate::claude_parity::ParityCommandResult::SystemMessage(message) => {
+                SlashResult::SystemMessage(message)
+            }
+            crate::claude_parity::ParityCommandResult::Prompt(prompt) => {
+                app.input = prompt;
+                app.cursor = app.input.len();
+                SlashResult::SendAsPrompt
+            }
+            crate::claude_parity::ParityCommandResult::DraftPrompt(prompt) => {
+                app.input = prompt;
+                app.cursor = app.input.len();
+                SlashResult::SystemMessage(
+                    "Drafted BYOK continuation prompt. Review it before pressing Enter.".into(),
+                )
+            }
+            crate::claude_parity::ParityCommandResult::NotHandled => SlashResult::SendAsPrompt,
+        },
     }
 }
 
@@ -2160,8 +2180,12 @@ async fn run_event_loop(
                             msg.push_str("\n  Press Shift+Tab again to advance to FullAuto, or cycle back to Default.");
                         }
                         if new_mode == InteractionMode::FullAuto {
-                            msg.push_str("\n\n  WARNING: Full-auto mode — no prompts, no confirmations.");
-                            msg.push_str("\n  Use with extreme caution in trusted environments only.");
+                            msg.push_str(
+                                "\n\n  WARNING: Full-auto mode — no prompts, no confirmations.",
+                            );
+                            msg.push_str(
+                                "\n  Use with extreme caution in trusted environments only.",
+                            );
                         }
                         app.chat_messages.push(ChatMessage {
                             role: ChatRole::System,
@@ -2357,7 +2381,11 @@ mod tests {
 
     impl StubView {
         fn new(close_on_enter: bool) -> Self {
-            Self { call_count: 0, close_on_enter, last_key: None }
+            Self {
+                call_count: 0,
+                close_on_enter,
+                last_key: None,
+            }
         }
     }
 

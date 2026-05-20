@@ -300,9 +300,7 @@ pub async fn dynamic_register(reg_endpoint: &str, redirect_uri: &str) -> Result<
 ///     pre-registers a fixed port.
 ///   * Otherwise we bind 127.0.0.1:0 and synthesize the URI from the
 ///     OS-assigned port.
-async fn prepare_loopback_callback(
-    oauth_cfg: &McpOAuthConfig,
-) -> Result<(TcpListener, String)> {
+async fn prepare_loopback_callback(oauth_cfg: &McpOAuthConfig) -> Result<(TcpListener, String)> {
     if let Some(uri) = oauth_cfg.redirect_uri.as_deref() {
         let parsed = reqwest::Url::parse(uri)
             .with_context(|| format!("invalid redirect_uri in config: {}", uri))?;
@@ -310,14 +308,15 @@ async fn prepare_loopback_callback(
         let is_loopback = host == "127.0.0.1" || host == "[::1]" || host == "localhost";
         if is_loopback {
             if let Some(port) = parsed.port() {
-                let bind_host = if host == "[::1]" { "[::1]" } else { "127.0.0.1" };
+                let bind_host = if host == "[::1]" {
+                    "[::1]"
+                } else {
+                    "127.0.0.1"
+                };
                 let listener = TcpListener::bind(format!("{}:{}", bind_host, port))
                     .await
                     .with_context(|| {
-                        format!(
-                            "bind loopback listener at configured redirect_uri {}",
-                            uri
-                        )
+                        format!("bind loopback listener at configured redirect_uri {}", uri)
                     })?;
                 return Ok((listener, uri.to_string()));
             }
@@ -405,7 +404,10 @@ pub async fn start_pkce_flow(
     // "opening browser" line.
     match webbrowser::open(&authorize_url) {
         Ok(_) => {
-            eprintln!("\n  [mcp oauth] opened browser for {} (waiting for callback)\n", server_url);
+            eprintln!(
+                "\n  [mcp oauth] opened browser for {} (waiting for callback)\n",
+                server_url
+            );
         }
         Err(_) => {
             eprintln!(
@@ -416,18 +418,16 @@ pub async fn start_pkce_flow(
     }
 
     // 4. Wait for the redirect (with timeout so headless CI fails fast).
-    let (code, returned_state) = tokio::time::timeout(
-        OAUTH_INTERACTIVE_TIMEOUT,
-        wait_for_callback(listener),
-    )
-    .await
-    .map_err(|_| {
-        anyhow!(
-            "OAuth flow timed out after {}s — re-run interactively or pre-auth via \
+    let (code, returned_state) =
+        tokio::time::timeout(OAUTH_INTERACTIVE_TIMEOUT, wait_for_callback(listener))
+            .await
+            .map_err(|_| {
+                anyhow!(
+                    "OAuth flow timed out after {}s — re-run interactively or pre-auth via \
              `agiworkforce mcp oauth login <server>`",
-            OAUTH_INTERACTIVE_TIMEOUT.as_secs()
-        )
-    })??;
+                    OAUTH_INTERACTIVE_TIMEOUT.as_secs()
+                )
+            })??;
 
     if returned_state != state {
         bail!("oauth state mismatch — possible CSRF, refusing to continue");
@@ -508,7 +508,12 @@ pub async fn refresh_token(
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
-        bail!("token refresh at {} returned {} — {}", token_url, status, body);
+        bail!(
+            "token refresh at {} returned {} — {}",
+            token_url,
+            status,
+            body
+        );
     }
 
     let parsed: TokenResponseRaw = resp
@@ -599,7 +604,12 @@ async fn exchange_code_form(
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
-        bail!("code exchange at {} returned {} — {}", token_url, status, body);
+        bail!(
+            "code exchange at {} returned {} — {}",
+            token_url,
+            status,
+            body
+        );
     }
 
     resp.json::<TokenResponseRaw>()
@@ -748,7 +758,11 @@ fn build_authorize_url(
     code_challenge: &str,
     state: &str,
 ) -> String {
-    let sep = if authorize_endpoint.contains('?') { '&' } else { '?' };
+    let sep = if authorize_endpoint.contains('?') {
+        '&'
+    } else {
+        '?'
+    };
     let mut out = format!(
         "{base}{sep}response_type=code&client_id={cid}&redirect_uri={ru}&\
          code_challenge={chal}&code_challenge_method=S256&state={st}",
@@ -797,8 +811,7 @@ pub async fn perform_full_oauth(
     scope_override: Option<&str>,
 ) -> Result<McpOAuthToken> {
     // 1. Resource metadata.
-    let (metadata_url, prm) =
-        discover_protected_resource(server_url, www_authenticate).await?;
+    let (metadata_url, prm) = discover_protected_resource(server_url, www_authenticate).await?;
 
     // 2. AS metadata. Use the first AS the server points us at.
     let as_url = prm
@@ -984,7 +997,10 @@ mod tests {
     #[test]
     fn well_known_root_strip() {
         assert_eq!(
-            well_known("https://mcp.example.com/some/path/", "oauth-protected-resource"),
+            well_known(
+                "https://mcp.example.com/some/path/",
+                "oauth-protected-resource"
+            ),
             "https://mcp.example.com/.well-known/oauth-protected-resource"
         );
         assert_eq!(
@@ -1009,7 +1025,8 @@ mod tests {
 
     #[test]
     fn callback_surfaces_authorization_errors() {
-        let line = "GET /callback?error=access_denied&error_description=user%20declined HTTP/1.1\r\n";
+        let line =
+            "GET /callback?error=access_denied&error_description=user%20declined HTTP/1.1\r\n";
         let err = parse_query_from_request_line(line).unwrap_err();
         let msg = format!("{}", err);
         assert!(msg.contains("access_denied"));

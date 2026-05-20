@@ -79,7 +79,13 @@ impl Plan {
         std::fs::create_dir_all(&plans_dir)?;
         let safe_id: String = session_id
             .chars()
-            .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect();
         let path = plans_dir.join(format!("{}.md", safe_id));
         std::fs::write(&path, self.render_markdown())?;

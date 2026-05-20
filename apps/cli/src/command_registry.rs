@@ -265,6 +265,7 @@ pub(crate) fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
         RegistryCommand::builtin_slash("rewind", "Undo last code changes", false, false, vec![]),
         RegistryCommand::builtin_slash("mcp", "List MCP servers and tools", true, false, vec![]),
         RegistryCommand::builtin_slash("skills", "Browse available skills", true, false, vec![]),
+        RegistryCommand::builtin_slash("agents", "Browse and manage agents", true, false, vec![]),
         RegistryCommand::builtin_slash(
             "permissions",
             "Manage tool permissions",
@@ -273,7 +274,28 @@ pub(crate) fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             vec!["perms", "approvals"],
         ),
         RegistryCommand::builtin_slash("hooks", "Manage hooks configuration", true, false, vec![]),
-        RegistryCommand::builtin_slash("plugins", "Manage plugins", true, false, vec![]),
+        RegistryCommand::builtin_slash(
+            "chrome",
+            "Manage Chrome extension integration",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "ide",
+            "Connect to an IDE for integrated features",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "plugin",
+            "Manage plugins",
+            true,
+            false,
+            vec!["plugins", "marketplace", "market"],
+        ),
+        RegistryCommand::builtin_slash("tasks", "View background tasks", true, false, vec![]),
         RegistryCommand::builtin_slash(
             "status",
             "Show session info (model, tokens, mode)",
@@ -282,6 +304,48 @@ pub(crate) fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             vec![],
         ),
         RegistryCommand::builtin_slash("cost", "Show session cost summary", true, false, vec![]),
+        RegistryCommand::builtin_slash(
+            "usage",
+            "Tokens, cost, and plan usage for this session",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "sandbox",
+            "Show or toggle sandbox mode (read-only / contained / unrestricted)",
+            true,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "doctor",
+            "Run diagnostics: providers, MCP, plugins, version",
+            true,
+            false,
+            vec!["diagnose", "health"],
+        ),
+        RegistryCommand::builtin_slash(
+            "recap",
+            "Summarize the recent turns of this session",
+            true,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "release-notes",
+            "Show release notes for the current AGI Workforce version",
+            true,
+            false,
+            vec!["changelog"],
+        ),
+        RegistryCommand::builtin_slash(
+            "keybindings",
+            "Show all keybindings for the TUI",
+            true,
+            false,
+            vec!["keys"],
+        ),
         RegistryCommand::builtin_slash(
             "output-style",
             "Switch output style (default | explanatory | learning)",
@@ -376,6 +440,207 @@ pub(crate) fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             false,
             vec!["quit", "q"],
         ),
+        RegistryCommand::builtin_slash(
+            "focus",
+            "Toggle focus view (hide chrome, full-width composer)",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "background",
+            "Continue current task in background",
+            false,
+            false,
+            vec!["bg"],
+        ),
+        RegistryCommand::builtin_slash(
+            "advisor",
+            "Consult a higher-tier model on a side question",
+            false,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "team-onboarding",
+            "Generate codebase onboarding guide for a new teammate",
+            false,
+            true,
+            vec!["onboarding"],
+        ),
+        RegistryCommand::builtin_slash(
+            "terminal-setup",
+            "Print shell-integration snippet (bash/zsh/fish)",
+            true,
+            true,
+            vec!["shell-setup"],
+        ),
+        RegistryCommand::builtin_slash(
+            "reload-plugins",
+            "Reload plugin manifests without restarting",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "extra-usage",
+            "Show pricing + how to extend usage limits",
+            true,
+            false,
+            vec!["pricing"],
+        ),
+        RegistryCommand::builtin_slash(
+            "remote-env",
+            "Show or set remote-environment defaults",
+            true,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "add-dir",
+            "Add a directory to the current workspace context",
+            true,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash("color", "Set the prompt/session color", true, true, vec![]),
+        RegistryCommand::builtin_slash(
+            "desktop",
+            "Open or manage the desktop companion",
+            true,
+            false,
+            vec!["app"],
+        ),
+        RegistryCommand::builtin_slash("effort", "Set reasoning effort", false, true, vec![]),
+        RegistryCommand::builtin_slash(
+            "files",
+            "Attach or list files for context",
+            true,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "heapdump",
+            "Write a heap diagnostic dump",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "install-github-app",
+            "Install or connect the GitHub app",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "install-slack-app",
+            "Install or connect the Slack app",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "mobile",
+            "Open or manage mobile companion setup",
+            true,
+            false,
+            vec!["ios", "android"],
+        ),
+        RegistryCommand::builtin_slash(
+            "passes",
+            "Show active passes and session gates",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "pr-comments",
+            "Inspect pull request review comments",
+            true,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "privacy-settings",
+            "Show or update privacy settings",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "privacy-mode",
+            "Set the session privacy boundary",
+            true,
+            true,
+            vec!["trust-boundary"],
+        ),
+        RegistryCommand::builtin_slash(
+            "continue-with-byok",
+            "Draft an explicit Local to BYOK continuation",
+            true,
+            true,
+            vec!["fork-byok", "byok"],
+        ),
+        RegistryCommand::builtin_slash(
+            "rate-limit-options",
+            "Show rate-limit and usage-limit options",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "security-review",
+            "Run a security-focused code review",
+            false,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash("stats", "Show session statistics", true, false, vec![]),
+        RegistryCommand::builtin_slash(
+            "statusline",
+            "Configure the terminal status line",
+            true,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "stickers",
+            "Manage Claude-style stickers",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash("tag", "Tag the current session", true, true, vec![]),
+        RegistryCommand::builtin_slash(
+            "think-back",
+            "Generate or edit a Think Back recap",
+            true,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "thinkback-play",
+            "Play the last Think Back recap",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "ultrareview",
+            "Run a deep remote-style review workflow",
+            false,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "upgrade",
+            "Open upgrade and plan options",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash("vim", "Toggle Vim keybindings", true, true, vec![]),
     ]
 }
 
@@ -449,9 +714,7 @@ fn plugin_command_registry_entries(
             if let Ok(entries) = std::fs::read_dir(&command_path) {
                 for entry in entries.flatten() {
                     let p = entry.path();
-                    if p.is_file()
-                        && p.extension().and_then(|e| e.to_str()) == Some("md")
-                    {
+                    if p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("md") {
                         push_plugin_command(&p, reserved_names, &mut out);
                     }
                 }
@@ -675,6 +938,72 @@ mod tests {
                 .map(|command| command.name.as_str())
                 .collect::<Vec<_>>(),
             vec!["prompts:draft-pr", "release-notes"]
+        );
+    }
+
+    #[test]
+    fn cli_registry_resolves_plugin_aliases_and_late_parity_commands() {
+        let mut registry = CommandRegistry::default();
+        registry.extend(builtin_slash_registry_commands());
+
+        for alias in ["plugin", "plugins", "marketplace", "market"] {
+            assert_eq!(
+                registry.find(alias).map(|command| command.name.as_str()),
+                Some("plugin"),
+                "/{alias} must resolve to canonical /plugin"
+            );
+        }
+
+        for name in [
+            "agents",
+            "chrome",
+            "ide",
+            "tasks",
+            "usage",
+            "sandbox",
+            "doctor",
+            "recap",
+            "release-notes",
+            "keybindings",
+            "focus",
+            "background",
+            "remote-env",
+            "add-dir",
+            "color",
+            "desktop",
+            "effort",
+            "files",
+            "heapdump",
+            "install-github-app",
+            "install-slack-app",
+            "mobile",
+            "passes",
+            "pr-comments",
+            "privacy-settings",
+            "privacy-mode",
+            "continue-with-byok",
+            "rate-limit-options",
+            "security-review",
+            "stats",
+            "statusline",
+            "stickers",
+            "tag",
+            "think-back",
+            "thinkback-play",
+            "ultrareview",
+            "upgrade",
+            "vim",
+        ] {
+            assert!(registry.find(name).is_some(), "/{name} must be registered");
+        }
+
+        assert_eq!(
+            registry.find("ios").map(|command| command.name.as_str()),
+            Some("mobile")
+        );
+        assert_eq!(
+            registry.find("app").map(|command| command.name.as_str()),
+            Some("desktop")
         );
     }
 }

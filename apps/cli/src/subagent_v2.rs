@@ -162,10 +162,16 @@ impl SubagentTaskRunner for AgentSessionRunner {
     ) {
         let mut history: Vec<ConversationTurn> = Vec::new();
         if let Some(sys) = &self.system_prompt {
-            history.push(ConversationTurn { role: TurnRole::System, content: sys.clone() });
+            history.push(ConversationTurn {
+                role: TurnRole::System,
+                content: sys.clone(),
+            });
         }
         while let Some(prompt) = inbox_rx.recv().await {
-            history.push(ConversationTurn { role: TurnRole::User, content: prompt });
+            history.push(ConversationTurn {
+                role: TurnRole::User,
+                content: prompt,
+            });
             match self.caller.call(&model, history.clone()).await {
                 Ok(response) => {
                     history.push(ConversationTurn {
@@ -251,7 +257,10 @@ pub struct SubagentHandle {
 
 impl SubagentHandle {
     pub async fn send_message(&self, body: String) -> Result<()> {
-        self.inbox_tx.send(body).await.context("subagent inbox closed")
+        self.inbox_tx
+            .send(body)
+            .await
+            .context("subagent inbox closed")
     }
 
     pub async fn recv_message(&self) -> Option<SubagentMessage> {
@@ -376,7 +385,11 @@ pub struct ProviderLlmCaller {
 
 impl ProviderLlmCaller {
     pub fn new(config: crate::config::CliConfig, provider: crate::models::Provider) -> Self {
-        Self { config, provider, max_tokens: 4096 }
+        Self {
+            config,
+            provider,
+            max_tokens: 4096,
+        }
     }
 }
 
@@ -488,7 +501,10 @@ mod tests {
         let arc = r.get(id).await.unwrap();
         let h = arc.read().await;
         let s = h.status().await;
-        assert!(matches!(s, SubagentStatus::Running | SubagentStatus::Completed));
+        assert!(matches!(
+            s,
+            SubagentStatus::Running | SubagentStatus::Completed
+        ));
     }
 
     #[tokio::test]
@@ -513,7 +529,9 @@ mod tests {
     async fn mock_runner_exhausted_emits_placeholder() {
         let r = SubagentRegistry::new();
         let mut spec = SubagentSpec::new("test-model");
-        spec.runner = Arc::new(MockRunner { scripted_responses: vec![] });
+        spec.runner = Arc::new(MockRunner {
+            scripted_responses: vec![],
+        });
         let id = r.spawn(spec).await.unwrap();
         let arc = r.get(id).await.unwrap();
         let handle = arc.read().await;
@@ -538,7 +556,9 @@ mod tests {
     async fn runner_completion_transitions_to_completed_not_killed() {
         let r = SubagentRegistry::new();
         let mut spec = SubagentSpec::new("model-y");
-        spec.runner = Arc::new(MockRunner { scripted_responses: vec!["done".into()] });
+        spec.runner = Arc::new(MockRunner {
+            scripted_responses: vec!["done".into()],
+        });
         let id = r.spawn(spec).await.unwrap();
         let arc = r.get(id).await.unwrap();
         {
@@ -548,7 +568,10 @@ mod tests {
         }
         // Verify the status is Completed or Running (not Killed).
         let s = arc.read().await.status().await;
-        assert!(matches!(s, SubagentStatus::Running | SubagentStatus::Completed));
+        assert!(matches!(
+            s,
+            SubagentStatus::Running | SubagentStatus::Completed
+        ));
     }
 
     #[tokio::test]
@@ -556,7 +579,10 @@ mod tests {
         let caller = Arc::new(MockLlmCaller {
             responses: std::sync::Mutex::new(vec![Ok("[mock-llm] hello back".into())]),
         });
-        let runner = Arc::new(AgentSessionRunner { caller, system_prompt: None });
+        let runner = Arc::new(AgentSessionRunner {
+            caller,
+            system_prompt: None,
+        });
         let r = SubagentRegistry::new();
         let mut spec = SubagentSpec::new("claude-opus-4-7");
         spec.runner = runner;
@@ -574,7 +600,10 @@ mod tests {
         let caller = Arc::new(MockLlmCaller {
             responses: std::sync::Mutex::new(vec![Err(anyhow::anyhow!("rate limit"))]),
         });
-        let runner = Arc::new(AgentSessionRunner { caller, system_prompt: None });
+        let runner = Arc::new(AgentSessionRunner {
+            caller,
+            system_prompt: None,
+        });
         let r = SubagentRegistry::new();
         let mut spec = SubagentSpec::new("claude-opus-4-7");
         spec.runner = runner;
@@ -589,21 +618,30 @@ mod tests {
 
     #[test]
     fn turn_to_message_user_maps_to_user_role() {
-        let t = ConversationTurn { role: TurnRole::User, content: "hi".into() };
+        let t = ConversationTurn {
+            role: TurnRole::User,
+            content: "hi".into(),
+        };
         let m = turn_to_message(&t);
         assert_eq!(m.role, "user");
     }
 
     #[test]
     fn turn_to_message_system_maps_to_system_role() {
-        let t = ConversationTurn { role: TurnRole::System, content: "rules".into() };
+        let t = ConversationTurn {
+            role: TurnRole::System,
+            content: "rules".into(),
+        };
         let m = turn_to_message(&t);
         assert_eq!(m.role, "system");
     }
 
     #[test]
     fn turn_to_message_assistant_maps_to_assistant_role() {
-        let t = ConversationTurn { role: TurnRole::Assistant, content: "ok".into() };
+        let t = ConversationTurn {
+            role: TurnRole::Assistant,
+            content: "ok".into(),
+        };
         let m = turn_to_message(&t);
         assert_eq!(m.role, "assistant");
     }
@@ -611,10 +649,22 @@ mod tests {
     #[test]
     fn turns_to_messages_preserves_order_and_count() {
         let turns = vec![
-            ConversationTurn { role: TurnRole::System, content: "s".into() },
-            ConversationTurn { role: TurnRole::User, content: "u1".into() },
-            ConversationTurn { role: TurnRole::Assistant, content: "a1".into() },
-            ConversationTurn { role: TurnRole::User, content: "u2".into() },
+            ConversationTurn {
+                role: TurnRole::System,
+                content: "s".into(),
+            },
+            ConversationTurn {
+                role: TurnRole::User,
+                content: "u1".into(),
+            },
+            ConversationTurn {
+                role: TurnRole::Assistant,
+                content: "a1".into(),
+            },
+            ConversationTurn {
+                role: TurnRole::User,
+                content: "u2".into(),
+            },
         ];
         let msgs = turns_to_messages(&turns);
         assert_eq!(msgs.len(), 4);
@@ -638,7 +688,9 @@ mod tests {
         }
 
         let recorded = StdArc::new(StdMutex::new(Vec::new()));
-        let caller = Arc::new(HistorySpy { recorded: recorded.clone() });
+        let caller = Arc::new(HistorySpy {
+            recorded: recorded.clone(),
+        });
         let runner = Arc::new(AgentSessionRunner {
             caller,
             system_prompt: Some("you are a helpful agent".into()),

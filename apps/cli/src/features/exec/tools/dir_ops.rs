@@ -4,8 +4,8 @@ use anyhow::Result;
 use tokio::process::Command;
 
 use super::common::{
-    format_size, print_tool_status, truncate_output_with_save, validate_file_path,
-    COMMAND_TIMEOUT, MAX_OUTPUT_BYTES,
+    format_size, print_tool_status, truncate_output_with_save, validate_file_path, COMMAND_TIMEOUT,
+    MAX_OUTPUT_BYTES,
 };
 use super::ToolResult;
 

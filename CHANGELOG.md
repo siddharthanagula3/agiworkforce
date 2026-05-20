@@ -2,6 +2,77 @@
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased — Anthropic Applications parity transition] — 2026-05-20
+
+This entry starts the explicit transition from ad hoc Claude-like improvements to a repo-owned Anthropic Applications parity program across CLI, Desktop, Mobile, Web, VS Code, Chrome, shared packages, and future cloud services.
+
+### Added
+
+- Root `PLAN.md` as the active transition control plane for Anthropic Applications parity. It defines the mission, non-negotiables, source corpus, parity matrix, transition workstreams, phases, and definition of done.
+- Root `TODO.md` as the active transition checklist. It separates exploration, CLI engine work, cross-surface product tasks, cloud-later tasks, and documentation rules.
+- `docs/decisions/2026-05-20-openai-anthropic-application-suite-thesis.md` locking AGI Workforce as an OpenAI/Anthropic-style application suite, not just a chat app or CLI.
+- `docs/plans/pre-release-repo-organization-2026-05-20.md` defining the pre-release repo organization plan for root cleanup, naming, ownership, docs, package boundaries, CI guardrails, and team onboarding.
+- `docs/agent-context/` as the canonical LLM-operability layer for coding agents:
+  - `README.md` - agent read order and rules.
+  - `repo-map.json` - surfaces, owner roles, purposes, and checks.
+  - `risk-map.json` - high-risk owner paths and verification focus.
+  - `commands.json` - canonical commands by surface.
+  - `doc-status.json` - current, historical, working-note, and classification-debt docs.
+  - `known-flaws.md` - repeated bug/stale-claim ledger.
+  - `bug-finding-guide.md` - high-signal bug search workflow.
+- Repo organization guardrail scripts:
+  - `scripts/check-agent-context.mjs`
+  - `scripts/check-repo-organization.mjs`
+  - `scripts/check-boundaries.mjs`
+- `audit/anthropic-apps-parity/` evidence ledger with:
+  - `README.md` - evidence folder contract.
+  - `application-suite-thesis-2026-05-20.md` - official OpenAI/Anthropic suite research and AGI's locked local-first/BYOK/multi-provider/privacy-controlled managed-compute thesis.
+  - `feature-ledger.md` - initial official Anthropic feature baseline and current AGI status.
+  - `file-inventory.md` - initial scoped repo inventory and surface map.
+  - `reference-notes.md` - local reference architecture and license snapshot.
+  - `surface-gap-ledger.md` - cross-surface parity gaps, owner paths, and next closure targets.
+  - `competitive-baseline-2026-05-20.md` - current Anthropic/OpenAI application baseline and AGI chat-sync boundary.
+  - `sdk-strategy-2026-05-20.md` - OpenAI/Anthropic/Vercel SDK strategy, provider-boundary rules, and AGI-owned runtime decision.
+  - `compute-artifacts-2026-05-20.md` - Claude/ChatGPT compute, computer-use, generated-file, preview, and download architecture research with AGI implementation tasks.
+- CLI privacy-boundary foundation:
+  - `PrivacyMode` on `AgentSession`: `Local`, `Byok`, `Managed`.
+  - Send-time block when a Local session would route to a non-local provider.
+  - `/privacy-mode` and `/continue-with-byok` slash commands.
+  - BYOK continuation draft that redacts obvious sensitive lines and does not send automatically.
+- Slash palette expanded to 83 built-in commands with `privacy-mode` and `continue-with-byok`.
+
+### Changed
+
+- `PLAN.md`, `TODO.md`, and `docs/decisions/CURRENT_DECISIONS.md` now treat OpenAI/Anthropic-style application-suite parity as the product baseline, with local-first, explicit BYOK, multi-provider routing, and privacy-controlled managed compute as the locked differentiation.
+- `PLAN.md` and `TODO.md` now include pre-release repo organization as a first-class workstream before broad hiring or release operations.
+- `AGENTS.md` is now the canonical tool-neutral coding-agent entry point; `CLAUDE.md` is a Claude-specific mirror.
+- Root `package.json` now exposes `check:agent-context`, `check:repo-organization`, `check:boundaries`, and `check:llm-operability`.
+- `docs/README.md` now points maintainers to root `PLAN.md` and `TODO.md` immediately after `AGI_WORKFORCE.md`.
+- CLI parity commands continue moving into shared `apps/cli/src/claude_parity.rs` so TUI and REPL behavior does not drift.
+- `PLAN.md`, `TODO.md`, and the evidence ledgers now include the first parallel-explorer findings for AGI surfaces and local reference architecture.
+- `audit/anthropic-apps-parity/reference-notes.md` now records a full 1902-file read pass over `/Users/siddhartha/Desktop/reference/src`, including scope counts, architecture lessons, AGI implementation targets, study-first files, and copying cautions.
+- `PLAN.md` now locks normal chat sync to Web, Mobile, and Desktop only. CLI, VS Code, and Chrome stay local/workspace/task scoped unless an explicit preview/redaction handoff is implemented.
+- `PLAN.md` and `TODO.md` now record that OpenAI, Anthropic, and Vercel SDKs are adapter/UI-edge dependencies only. AGI owns runtime schemas, event streams, privacy modes, provider routing, and usage accounting.
+- `PLAN.md`, `TODO.md`, and `feature-ledger.md` now include compute sessions, computer use, generated-file manifests, and artifact-preview/download flows as first-class parity workstreams.
+- Mobile generated-file strategy now matches the Claude/ChatGPT evidence: mobile must support request, status, preview, download, and share, while local on-device heavy compute remains deferred behind Desktop/local-host or future Managed compute.
+
+### Documented Gaps
+
+- Cross-surface data ownership is not yet unified for projects, artifacts, memory, teams, and billing.
+- API gateway `agents` and `mcp` route files exist but need a mount/initialization decision.
+- Desktop hook stats, some memory analytics, VS Code managed usage, Chrome native-host install coverage, and docs drift remain open.
+- Current exploration is targeted and file-backed; full line-by-line completion for all 6118 scoped files is not yet claimed.
+- Full coverage is claimed only for `/Users/siddhartha/Desktop/reference/src`: 1902 of 1902 scoped files read through the parallel explorer pass.
+
+### Verified
+
+- `cargo fmt -p agiworkforce-cli -p agiworkforce-command-registry`
+- `cargo test -p agiworkforce-cli claude_parity --lib`
+- `cargo test -p agiworkforce-cli privacy --lib`
+- `cargo test -p agiworkforce-command-registry --test slash_palette_golden`
+- `cargo check -p agiworkforce-cli`
+- `python3 scripts/audit_cli_command_parity.py --check`
+
 ## [Unreleased — apps/web security audit batch] — 2026-05-19
 
 Four-PR batch closing WEB-13 through WEB-32 on `apps/web`: 15 fresh audit findings + verification of 14 pre-existing SEV-WEB-\* pentest items (5 confirmed already-closed, 2 still-present and now closed, 4 deferred operational). Audit fire at `AUDIT_LOG.md` 2026-05-19T05:00Z. PRs #367 → #368 → #369 → #370.

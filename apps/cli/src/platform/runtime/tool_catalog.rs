@@ -690,22 +690,14 @@ pub fn effective_tool_definitions(
 }
 
 fn filter_read_only_builtin_tool_definitions() -> Vec<ToolDefinition> {
-    let read_only_tool_names = [
-        "read_file",
-        "search_files",
-        "list_directory",
-        "web_search",
-        "web_fetch",
-        // Sprint B4: `update_plan` is the plan tool. Even though it is
-        // normally deferred (plan-mode-only), it MUST appear in the initial
-        // schema list when plan mode is active — that's the whole point.
-        "update_plan",
-    ];
-    // Use all_builtin_tool_definitions (includes deferred) so update_plan
-    // is visible here despite its should_defer=true flag.
+    // Use all_builtin_tool_definitions (includes deferred) so read-only
+    // exploration tools remain visible in plan mode. `update_plan` is a
+    // special non-read-only control tool that must also be visible there.
     all_builtin_tool_definitions()
         .into_iter()
-        .filter(|tool_definition| read_only_tool_names.contains(&tool_definition.name.as_str()))
+        .filter(|tool_definition| {
+            tool_definition.is_read_only || tool_definition.name == "update_plan"
+        })
         .collect()
 }
 
@@ -747,7 +739,24 @@ mod tests {
                 "list_directory",
                 "web_search",
                 "web_fetch",
+                "grep_files",
+                "tool_search",
                 "update_plan",
+                "glob",
+                "todo_read",
+                "read_many_files",
+                "task_get",
+                "task_list",
+                "task_output",
+                "cron_list",
+                "advisor",
+                "list_worktrees",
+                "lsp_definition",
+                "lsp_hover",
+                "lsp_diagnostics",
+                "lsp_completion",
+                "lsp_document_symbols",
+                "lsp_format",
                 "send_message",
                 "team_task",
                 "read_messages",

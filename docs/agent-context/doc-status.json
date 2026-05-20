@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "lastUpdated": "2026-05-20",
+  "currentSourcesOfTruth": [
+    "AGENTS.md",
+    "AGI_WORKFORCE.md",
+    "PLAN.md",
+    "TODO.md",
+    "CHANGELOG.md",
+    "BUILD.md",
+    "docs/README.md",
+    "docs/decisions/CURRENT_DECISIONS.md",
+    "docs/decisions/2026-05-20-openai-anthropic-application-suite-thesis.md",
+    "docs/plans/pre-release-repo-organization-2026-05-20.md",
+    "docs/agent-context/README.md"
+  ],
+  "currentEvidence": [
+    "audit/anthropic-apps-parity/application-suite-thesis-2026-05-20.md",
+    "audit/anthropic-apps-parity/competitive-baseline-2026-05-20.md",
+    "audit/anthropic-apps-parity/compute-artifacts-2026-05-20.md",
+    "audit/anthropic-apps-parity/sdk-strategy-2026-05-20.md",
+    "audit/anthropic-apps-parity/reference-notes.md"
+  ],
+  "historicalOrCaution": [
+    {
+      "path": "docs/archive",
+      "status": "historical",
+      "rule": "Do not cite as current unless a current doc explicitly references it."
+    },
+    {
+      "path": "docs/planning",
+      "status": "historical",
+      "rule": "Older planning specs; current plans belong in docs/plans."
+    },
+    {
+      "path": "tasks/research",
+      "status": "working-notes",
+      "rule": "Promote durable conclusions to docs or audit before using as source of truth."
+    },
+    {
+      "path": "reference-index",
+      "status": "classification-debt",
+      "rule": "Needs relocation decision before release."
+    },
+    {
+      "path": "root scratch markdown/images",
+      "status": "classification-debt",
+      "rule": "Use docs/agent-context/known-flaws.md ORG-ROOT-01 until moved."
+    }
+  ]
+}

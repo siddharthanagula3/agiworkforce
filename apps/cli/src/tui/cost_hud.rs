@@ -48,7 +48,8 @@ impl CostHud {
         let (price_in, price_out) = model_catalog::pricing(model_id);
         let billable_in = self.in_tokens as f64 + self.cache_creation as f64;
         let billable_cache_read = self.cache_read as f64;
-        (billable_in * price_in + self.out_tokens as f64 * price_out
+        (billable_in * price_in
+            + self.out_tokens as f64 * price_out
             + billable_cache_read * price_in * 0.1)
             / 1_000_000.0
     }
@@ -172,9 +173,7 @@ mod tests {
             ..Default::default()
         };
         assert!(
-            (no_cache.dollars("claude-sonnet-4-6")
-                - with_cache.dollars("claude-sonnet-4-6"))
-            .abs()
+            (no_cache.dollars("claude-sonnet-4-6") - with_cache.dollars("claude-sonnet-4-6")).abs()
                 < 1e-6
         );
     }

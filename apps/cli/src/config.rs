@@ -1319,7 +1319,8 @@ max_tokens = 2048
     #[test]
     fn test_fallback_chain_serialization() {
         let mut config = CliConfig::default();
-        config.default.fallback_chain = vec!["gpt-5.5".to_string(), "gemini-3.1-flash-lite".to_string()];
+        config.default.fallback_chain =
+            vec!["gpt-5.5".to_string(), "gemini-3.1-flash-lite".to_string()];
         let serialized = toml::to_string_pretty(&config).unwrap();
         assert!(serialized.contains("fallback_chain"));
         let deserialized: CliConfig = toml::from_str(&serialized).unwrap();

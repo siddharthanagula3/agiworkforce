@@ -1,5 +1,7 @@
 # Wave 1 Handoff — Status as of 2026-05-03
 
+> Historical note, 2026-05-20 docs audit: this is a Wave 1 CLI handoff, not the current operational handoff for the repo. Do not use it as current launch state without reconciling against `docs/PRD.md`, `docs/decisions/CURRENT_DECISIONS.md`, and the Claude memory locks.
+
 > **Status: CLI v1.0 SHIPPED.** Run `./scripts/launch-readiness-check.sh` to verify. Below tracks what's still on you.
 
 ---
@@ -241,7 +243,7 @@ git push origin main
 | PR conventions                       | [`CONTRIBUTING.md`](../CONTRIBUTING.md)                                      |
 | Vision (ONE chat layout)             | [`docs/VISION.md`](VISION.md)                                                |
 | Roadmap (3 waves)                    | [`docs/ROADMAP.md`](ROADMAP.md)                                              |
-| UI design (Claude Desktop reference) | [`docs/DESIGN.md`](DESIGN.md)                                                |
+| UI design (Claude Desktop reference) | [`docs/design/design-spec-2026-05-15.md`](design/design-spec-2026-05-15.md)  |
 | Pricing (Local/BYOK/Hobby/Pro/Max)   | [`docs/PRICING.md`](PRICING.md)                                              |
 | Audit status (P0/P1)                 | [`docs/audit/AUDIT_2026-05-03.md`](audit/AUDIT_2026-05-03.md)                |
 | All 47 fix prompts                   | [`docs/audit/FIX_QUEUE.md`](audit/FIX_QUEUE.md)                              |

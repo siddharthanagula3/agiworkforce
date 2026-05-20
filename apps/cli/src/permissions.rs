@@ -323,7 +323,10 @@ mod tests {
         let aaa_pos = display.find("aaa").unwrap();
         let mmm_pos = display.find("mmm").unwrap();
         let zzz_pos = display.find("zzz").unwrap();
-        assert!(aaa_pos < mmm_pos && mmm_pos < zzz_pos, "rules should be sorted");
+        assert!(
+            aaa_pos < mmm_pos && mmm_pos < zzz_pos,
+            "rules should be sorted"
+        );
     }
 
     #[test]

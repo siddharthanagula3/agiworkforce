@@ -1,0 +1,1488 @@
+services/signaling-server/src/metrics.ts:69:  recordPairingRequest(success: boolean): void {
+apps/cli/src/model_catalog.rs:887:    let client = reqwest::Client::builder()
+services/signaling-server/src/index.ts:679:    metrics.recordPairingRequest(false);
+services/signaling-server/src/index.ts:686:  metrics.recordPairingRequest(true);
+apps/extension-vscode/src/services/tierResolver.ts:74:    const res = await fetch(`${bridge.baseUrl}/billing/tier`, {
+apps/cli/src/voice.rs:709:    let file_part = reqwest::multipart::Part::bytes(file_bytes)
+apps/cli/src/voice.rs:714:    let form = reqwest::multipart::Form::new()
+apps/cli/src/voice.rs:720:    let client = reqwest::Client::new();
+apps/extension-vscode/src/services/desktopBridge.ts:307:      const res = await fetch(url, {
+apps/extension-vscode/src/services/desktopBridge.ts:338:      const res = await fetch(`${this.baseUrl}/api/health`, {
+apps/extension-vscode/src/services/providerStreamClient.ts:63:  const res = await fetch(url, {
+apps/web/services/api-error-handler.ts:76:      const response = await fetch(url, {
+apps/extension-vscode/src/services/telemetry.ts:198:      void fetch(telemetryEndpoint, {
+apps/extension-vscode/src/services/modelMetrics.ts:45:  recordRequest(model: string, latencyMs: number, tokens?: number): void {
+services/api-gateway/src/services/providerHealth.ts:175:    const response = await fetch(entry.pingUrl, {
+packages/utils/src/errors.ts:802: *   async (url: string) => fetch(url).then(r => r.json()),
+packages/utils/src/async.ts:220: *   async () => fetch('/api/data').then(r => r.json()),
+packages/utils/src/async.ts:342: *   () => fetch('/api/data').then(r => r.json()),
+packages/utils/src/async.ts:364: *   (id: string) => fetch(`/api/users/${id}`).then(r => r.json()),
+packages/utils/src/async.ts:391: *   () => fetch('/api/slow-endpoint').then(r => r.json()),
+packages/utils/src/async.ts:418: *   () => fetch('/api/users/1'),
+packages/utils/src/async.ts:419: *   () => fetch('/api/users/2'),
+packages/utils/src/async.ts:420: *   () => fetch('/api/users/3'),
+packages/utils/src/performance.ts:47: *   return fetch('/api/models').then(r => r.json());
+services/api-gateway/src/routes/mobile.ts:263:      fetchResponse = await fetch(`${SIGNALING_HTTP_URL.replace(/\/+$/, '')}/pairings`, {
+apps/extension/src/background.ts:293:        const connectResult = (await sendNativeRequest({
+apps/extension/src/background.ts:301:        const pingResult = (await sendNativeRequest({
+apps/extension/src/background.ts:363:function sendNativeRequest(message: Record<string, unknown>): Promise<ExtensionResponse> {
+apps/extension/src/background.ts:783:        void sendNativeRequest({ type: 'ping' }).catch((error) => {
+apps/extension/src/background.ts:838:        await sendNativeRequest({
+apps/extension/src/background.ts:1160:          const resp = await fetch(probeUrl, {
+apps/extension/src/background.ts:1578:  const pageContextResponse = (await sendNativeRequest({
+apps/extension/src/background.ts:1630:  const taskResultResponse = (await sendNativeRequest(
+apps/extension/src/background.ts:1681:      const ping = (await sendNativeRequest({
+apps/extension/src/background.ts:1892:  return sendNativeRequest(message)
+apps/extension/src/background.ts:2237:    const response = await fetch(meUrl, {
+apps/extension/src/background.ts:2553:      const resp = await fetch(`${AGI_API_BASE}/v1/chat/stream`, {
+apps/extension/src/background.ts:2631:            sendNativeRequest({
+apps/extension/src/background.ts:2718:    const resp = await fetch(`${AGI_API_BASE}/v1/chat/stream`, {
+apps/extension/src/background.ts:2742:        sendNativeRequest({
+apps/desktop/src/services/supabaseAuth.ts:128:    const response = await fetch(`${WEB_APP_URL}/api/me`, {
+apps/extension/src/providerStreamClient.ts:104:  const res = await fetch(url, {
+services/api-gateway/src/routes/llm.ts:185:function toAnthropicRequest(body: z.infer<typeof chatCompletionSchema>): {
+services/api-gateway/src/routes/llm.ts:304:function toGoogleRequest(body: z.infer<typeof chatCompletionSchema>): {
+services/api-gateway/src/routes/llm.ts:362:// GW-2 (audit 2026-05-03): SECURITY GUARDRAIL — every fetch() call in
+services/api-gateway/src/routes/llm.ts:378:      const anthropicBody = toAnthropicRequest(body);
+services/api-gateway/src/routes/llm.ts:379:      return fetch(ANTHROPIC_API_URL, {
+services/api-gateway/src/routes/llm.ts:390:      return fetch(OPENAI_API_URL, {
+services/api-gateway/src/routes/llm.ts:411:      const googleBody = toGoogleRequest(body);
+services/api-gateway/src/routes/llm.ts:412:      return fetch(url, {
+apps/mobile/services/secureFetch.ts:47:  return fetch(input, init);
+apps/web/api/orchestrator.ts:65:    const response = await fetch('/api/agents/execute', {
+apps/web/api/orchestrator.ts:95: * New code should call fetch() directly rather than invoke().
+apps/web/api/orchestrator.ts:98:  console.warn(`[orchestrator] invoke('${cmd}') called in web environment — use fetch() instead.`);
+apps/web/lib/offline/offlineQueue.ts:228:      const response = await fetch('/api/health', {
+apps/web/lib/egress-policy.ts:3: * Call validateEgressUrl() before any fetch() to an external service.
+services/api-gateway/src/routes/pair.ts:99:    fetchResponse = await fetch(`${SIGNALING_HTTP_URL.replace(/\/+$/, '')}/pairings`, {
+services/api-gateway/src/routes/pair.ts:198:    lookupResponse = await fetch(
+services/api-gateway/src/routes/pair.ts:261:    lookupResponse = await fetch(
+services/api-gateway/src/routes/pair.ts:319:      await fetch(
+apps/extension/src/nlweb.ts:58:    const resp = await fetch(url, {
+apps/web/lib/client/csrf.ts:20:  const response = await fetch('/api/csrf', {
+apps/web/lib/client/csrf.ts:58: * fetch('/api/checkout', { method: 'POST', headers, body: ... });
+services/api-gateway/src/routes/cloudChat.ts:110:export function buildGoogleStreamRequest(
+services/api-gateway/src/routes/cloudChat.ts:152:      return fetch('https://api.anthropic.com/v1/messages', {
+services/api-gateway/src/routes/cloudChat.ts:167:      return fetch('https://api.openai.com/v1/chat/completions', {
+services/api-gateway/src/routes/cloudChat.ts:200:      const request = buildGoogleStreamRequest(model, body, apiKey);
+services/api-gateway/src/routes/cloudChat.ts:201:      return fetch(request.url, request.init);
+apps/web/lib/cors.ts:144:export function handleCorsPreflightRequest(
+services/api-gateway/src/routes/dotfile.ts:120:      response = await fetch(`${DESKTOP_BASE_URL}${path}`, {
+services/api-gateway/src/routes/dotfile.ts:180:    const response = await fetch(`${DESKTOP_BASE_URL}/config`, {
+apps/web/lib/csrf.ts:133:export async function getSessionIdFromRequest(_request: Request): Promise<string> {
+apps/web/lib/csrf.ts:267:export async function validateCsrfFromRequest(
+apps/web/lib/csrf.ts:293:  const sid = sessionId || (await getSessionIdFromRequest(request));
+apps/web/lib/csrf.ts:330:  const sid = sessionId || (await getSessionIdFromRequest(request));
+apps/web/lib/modelRouter.ts:314:export function getModelForRequest(
+apps/web/lib/hooks/useConversations.ts:81:      const response = await fetch('/api/chat/conversations', { headers });
+apps/web/lib/hooks/useConversations.ts:114:        const response = await fetch('/api/chat/conversations', {
+apps/web/lib/hooks/useConversations.ts:156:        const response = await fetch(`/api/chat/conversations/${id}`, { headers });
+apps/web/lib/hooks/useConversations.ts:191:        const response = await fetch(`/api/chat/conversations/${id}`, {
+apps/web/lib/hooks/useConversations.ts:221:        const response = await fetch(`/api/chat/conversations/${id}`, {
+apps/web/lib/hooks/useVoiceTranscription.ts:173: * Web-only version: no Tauri IPC. Uses fetch('/api/voice/transcribe') for the
+apps/web/lib/hooks/useVoiceTranscription.ts:570:            fetch('/api/voice/transcribe', {
+apps/web/lib/hooks/useChatStream.ts:33:    const response = await fetch(`/api/chat/conversations/${conversationId}/messages`, {
+apps/web/lib/hooks/useChatStream.ts:181:        const response = await fetch('/api/llm/v1/chat/completions', {
+apps/web/lib/hooks/useMobileVoiceInput.ts:73:        const response = await fetch('/api/llm/v1/audio/transcriptions', {
+apps/web/lib/hooks/useMediaGeneration.ts:39:        const response = await fetch('/api/media/image/generate', {
+packages/api/src/governance.ts:91:export async function createApprovalRequest(
+packages/api/src/governance.ts:111:export async function getApprovalRequest(requestId: string): Promise<ApprovalRequest> {
+packages/api/src/governance.ts:114:export async function approveRequest(
+packages/api/src/governance.ts:121:export async function rejectRequest(
+apps/web/lib/providerStreamClient.ts:36:  const res = await fetch(url, {
+apps/extension-vscode/src/__tests__/codeLensProvider.test.ts:149:    expect(isFunctionOrClassLine('  public async handleRequest(', lang)).toBe(true);
+apps/web/lib/llm-providers/moonshot.ts:30:  async sendRequest(request: LLMProviderRequest): Promise<LLMProviderResponse> {
+apps/web/lib/llm-providers/moonshot.ts:50:      const response = await fetch(url, {
+apps/web/lib/llm-providers/moonshot.ts:123:  async streamRequest(request: LLMProviderRequest): Promise<ReadableStream> {
+apps/web/lib/llm-providers/moonshot.ts:143:    const response = await fetch(url, {
+apps/web/lib/llm-providers/zhipu.ts:24:  async sendRequest(request: LLMProviderRequest): Promise<LLMProviderResponse> {
+apps/web/lib/llm-providers/zhipu.ts:53:      const response = await fetch(url, {
+apps/web/lib/llm-providers/zhipu.ts:114:  async streamRequest(request: LLMProviderRequest): Promise<ReadableStream> {
+apps/web/lib/llm-providers/zhipu.ts:134:    const response = await fetch(url, {
+apps/web/lib/llm-providers/perplexity.ts:42:  async sendRequest(request: LLMProviderRequest): Promise<LLMProviderResponse> {
+apps/web/lib/llm-providers/perplexity.ts:69:      const response = await fetch(url, {
+apps/web/lib/llm-providers/perplexity.ts:133:  async streamRequest(request: LLMProviderRequest): Promise<ReadableStream> {
+apps/web/lib/llm-providers/perplexity.ts:153:    const response = await fetch(url, {
+apps/web/lib/llm-providers/google.ts:307:  async sendRequest(request: LLMProviderRequest): Promise<LLMProviderResponse> {
+apps/web/lib/llm-providers/google.ts:340:      const response = await fetch(url, {
+apps/web/lib/llm-providers/google.ts:489:  async streamRequest(request: LLMProviderRequest): Promise<ReadableStream> {
+apps/web/lib/llm-providers/google.ts:522:    const response = await fetch(url, {
+apps/web/lib/llm-providers/factory.ts:284:  static async sendRequest(
+apps/web/lib/llm-providers/factory.ts:317:      const response = await providerInstance.sendRequest(requestWithCache);
+apps/web/lib/llm-providers/factory.ts:358:  static async streamRequest(
+apps/web/lib/llm-providers/factory.ts:386:      const stream = await providerInstance.streamRequest(mappedRequest);
+apps/web/lib/llm-providers/openai.ts:36:  async sendRequest(request: LLMProviderRequest): Promise<LLMProviderResponse> {
+apps/web/lib/llm-providers/openai.ts:109:      const response = await fetch(url, {
+apps/web/lib/llm-providers/openai.ts:203:  async streamRequest(request: LLMProviderRequest): Promise<ReadableStream> {
+apps/web/lib/llm-providers/openai.ts:257:    const response = await fetch(url, {
+packages/browser-tool/src/index.ts:25: * exfiltrate session credentials with a single `fetch()`. To prevent that,
+apps/web/lib/llm-providers/deepseek.ts:38:  async sendRequest(request: LLMProviderRequest): Promise<LLMProviderResponse> {
+apps/web/lib/llm-providers/deepseek.ts:60:      const response = await fetch(url, {
+apps/web/lib/llm-providers/deepseek.ts:119:  async streamRequest(request: LLMProviderRequest): Promise<ReadableStream> {
+apps/web/lib/llm-providers/deepseek.ts:141:    const response = await fetch(url, {
+apps/web/lib/llm-providers/qwen.ts:20:  async sendRequest(request: LLMProviderRequest): Promise<LLMProviderResponse> {
+apps/web/lib/llm-providers/qwen.ts:26:      return this.sendOpenAICompatibleRequest(request);
+apps/web/lib/llm-providers/qwen.ts:29:      return this.sendDashScopeRequest(request);
+apps/web/lib/llm-providers/qwen.ts:33:  private async sendOpenAICompatibleRequest(
+apps/web/lib/llm-providers/qwen.ts:65:      const response = await fetch(url, {
+apps/web/lib/llm-providers/qwen.ts:120:  private async sendDashScopeRequest(request: LLMProviderRequest): Promise<LLMProviderResponse> {
+apps/web/lib/llm-providers/qwen.ts:140:      const response = await fetch(url, {
+apps/web/lib/llm-providers/qwen.ts:195:  async streamRequest(request: LLMProviderRequest): Promise<ReadableStream> {
+apps/web/lib/llm-providers/qwen.ts:211:    const response = await fetch(url, {
+packages/browser-tool/src/__tests__/evaluate-gate.test.ts:8: * a single fetch(). The gate refuses `evaluate` by default and never
+apps/web/lib/llm-providers/xai.ts:30:  async sendRequest(request: LLMProviderRequest): Promise<LLMProviderResponse> {
+apps/web/lib/llm-providers/xai.ts:50:      const response = await fetch(url, {
+apps/web/lib/llm-providers/xai.ts:129:  async streamRequest(request: LLMProviderRequest): Promise<ReadableStream> {
+apps/web/lib/llm-providers/xai.ts:149:    const response = await fetch(url, {
+apps/web/lib/llm-providers/anthropic.ts:139:  async sendRequest(request: LLMProviderRequest): Promise<LLMProviderResponse> {
+apps/web/lib/llm-providers/anthropic.ts:186:      const response = await fetch(url, {
+apps/web/lib/llm-providers/anthropic.ts:311:  async streamRequest(request: LLMProviderRequest): Promise<ReadableStream> {
+apps/web/lib/llm-providers/anthropic.ts:354:    const response = await fetch(url, {
+apps/web/lib/llm-providers/base.ts:53:  abstract sendRequest(request: LLMProviderRequest): Promise<LLMProviderResponse>;
+apps/web/lib/llm-providers/base.ts:54:  abstract streamRequest(request: LLMProviderRequest): Promise<ReadableStream>;
+apps/cli/src/marketplace.rs:124:    client: reqwest::Client,
+apps/cli/src/marketplace.rs:138:            client: reqwest::Client::builder()
+services/api-gateway/src/mcp/mcpProxy.ts:176:    const response = await this.sendRequest(serverId, conn, {
+services/api-gateway/src/mcp/mcpProxy.ts:208:    const response = await this.sendRequest(serverId, conn, {
+services/api-gateway/src/mcp/mcpProxy.ts:426:          await fetch(conn.url, {
+services/api-gateway/src/mcp/mcpProxy.ts:468:  private async sendRequest(
+services/api-gateway/src/mcp/mcpProxy.ts:483:      return this.sendStdioRequest(serverId, conn, request, timeoutMs);
+services/api-gateway/src/mcp/mcpProxy.ts:485:    return this.sendHttpRequest(conn, request, timeoutMs);
+services/api-gateway/src/mcp/mcpProxy.ts:488:  private sendStdioRequest(
+services/api-gateway/src/mcp/mcpProxy.ts:534:  private async sendHttpRequest(
+services/api-gateway/src/mcp/mcpProxy.ts:543:      const response = await fetch(conn.url, {
+apps/desktop/src/api/automation.ts:101:function buildClickRequest(request: AutomationClickRequest): RawAutomationQuery {
+apps/desktop/src/api/automation.ts:110:function buildScreenshotRequest(options: AutomationScreenshotOptions): RawAutomationQuery {
+apps/desktop/src/api/automation.ts:287:    await invokeWithTimeout('automation_click', { request: buildClickRequest(request) });
+apps/desktop/src/api/automation.ts:306:      { request: buildScreenshotRequest(options) },
+apps/web/lib/tauri-mock.ts:14:      const response = await fetch('/api/chat/conversations', {
+apps/web/lib/retry.ts:118: *   () => fetch('/api/data'),
+apps/web/lib/mcp-client.ts:165:    const response = await fetch(url, {
+apps/web/lib/runtime/WebChatRuntime.ts:117:    const response = await fetch('/api/llm/v1/chat/completions', {
+apps/web/lib/runtime/WebChatRuntime.ts:207:    const res = await fetch(`/api/chat/conversations/${conversationId}/messages`, {
+apps/web/lib/runtime/WebChatRuntime.ts:217:    const res = await fetch('/api/chat/conversations', {
+apps/web/lib/runtime/WebChatRuntime.ts:230:    await fetch(`/api/chat/conversations/${conversationId}`, {
+apps/web/lib/runtime/WebChatRuntime.ts:238:    await fetch(`/api/chat/conversations/${conversationId}`, {
+apps/web/lib/runtime/WebChatRuntime.ts:247:    const res = await fetch('/api/chat/conversations', {
+apps/cli/src/sdk_io/protocol.rs:32:    ControlRequest(ControlRequest),
+apps/extension-vscode/src/providers/chatParticipant.ts:219:    const response = await model.sendRequest(lmMessages, {}, token);
+apps/extension-vscode/src/utils/api.ts:569:      getModelMetrics().recordRequest(model, Date.now() - requestStartTime);
+apps/extension-vscode/src/utils/api.ts:614:    getModelMetrics().recordRequest(
+apps/extension/src/pairing.ts:114:    const resp = await fetch(`${baseUrl}/pair`, {
+apps/mobile/hooks/useNetworkStatus.ts:66:    NetInfo.fetch()
+apps/extension/__tests__/security-fixes.test.ts:90:function isBridgeRequest(baseUrl: string): boolean {
+apps/extension/__tests__/security-fixes.test.ts:103:  if (isBridgeRequest(baseUrl)) {
+apps/mobile/__tests__/dispatch-defense.test.ts:844:    useAgentStore.getState().approveRequest('apr-1');
+apps/mobile/__tests__/dispatch-defense.test.ts:849:    useAgentStore.getState().rejectRequest('apr-2', 'Too dangerous');
+apps/cli/src/oauth.rs:158:    let client = reqwest::Client::new();
+apps/cli/src/oauth.rs:202:    let client = reqwest::Client::new();
+apps/cli/src/oauth.rs:330:    let client = reqwest::Client::new();
+apps/cli/src/oauth.rs:403:        if status == reqwest::StatusCode::FORBIDDEN {
+apps/cli/src/oauth.rs:415:        if status == reqwest::StatusCode::BAD_REQUEST {
+apps/cli/src/tier_cache.rs:336:    let client = reqwest::Client::builder()
+apps/mobile/__tests__/pinning.test.ts:234:    const req = new Request('https://agiworkforce.com/api/test');
+packages/runtime/src/http.ts:52:  const response = await fetch(`${baseUrl}/command`, {
+apps/cli/src/models/streaming.rs:3:use reqwest::Client;
+apps/cli/src/models/streaming.rs:59:    status: reqwest::StatusCode,
+apps/cli/src/models/streaming.rs:60:    retry_after: Option<&reqwest::header::HeaderValue>,
+apps/cli/src/models/streaming.rs:411:        let retry_after = resp.headers().get(reqwest::header::RETRY_AFTER).cloned();
+apps/cli/src/models/streaming.rs:654:        let retry_after = resp.headers().get(reqwest::header::RETRY_AFTER).cloned();
+apps/cli/src/models/streaming.rs:753:        let retry_after = resp.headers().get(reqwest::header::RETRY_AFTER).cloned();
+apps/cli/src/models/streaming.rs:925:        let retry_after = resp.headers().get(reqwest::header::RETRY_AFTER).cloned();
+apps/cli/src/models/streaming.rs:1104:        let retry_after = resp.headers().get(reqwest::header::RETRY_AFTER).cloned();
+apps/cli/src/models/streaming.rs:1184:        let retry_after = resp.headers().get(reqwest::header::RETRY_AFTER).cloned();
+apps/cli/src/models/streaming.rs:1203:    resp: reqwest::Response,
+apps/cli/src/models/streaming.rs:1383:            reqwest::StatusCode::from_u16(529).unwrap(),
+apps/cli/src/models/streaming.rs:1399:            reqwest::StatusCode::NOT_FOUND,
+apps/cli/src/models/streaming.rs:1415:            reqwest::StatusCode::BAD_REQUEST,
+apps/cli/src/models/streaming.rs:1431:            reqwest::StatusCode::BAD_REQUEST,
+apps/cli/src/models/streaming.rs:1450:        let stream = futures_util::stream::pending::<Result<bytes::Bytes, reqwest::Error>>();
+apps/cli/src/models/streaming.rs:1462:        let stream = futures_util::stream::once(async move { Ok::<_, reqwest::Error>(data) });
+apps/cli/src/models/streaming.rs:1473:        let stream = futures_util::stream::empty::<Result<bytes::Bytes, reqwest::Error>>();
+apps/cli/src/models/streaming.rs:1487:            reqwest::StatusCode::UNAUTHORIZED,
+apps/cli/src/models/streaming.rs:1501:            reqwest::StatusCode::TOO_MANY_REQUESTS,
+apps/cli/src/models/streaming.rs:1515:            reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+apps/cli/src/models/streaming.rs:1572:            reqwest::StatusCode::TOO_MANY_REQUESTS,
+apps/cli/src/models/streaming.rs:1592:            reqwest::StatusCode::TOO_MANY_REQUESTS,
+apps/cli/src/mcp/oauth_flow.rs:143:    let client = reqwest::Client::builder()
+apps/cli/src/mcp/oauth_flow.rs:185:    let client = reqwest::Client::builder()
+apps/cli/src/mcp/oauth_flow.rs:241:    let client = reqwest::Client::builder()
+apps/cli/src/mcp/oauth_flow.rs:307:        let parsed = reqwest::Url::parse(uri)
+apps/cli/src/mcp/oauth_flow.rs:486:    let client = reqwest::Client::builder()
+apps/cli/src/mcp/oauth_flow.rs:575:    let client = reqwest::Client::builder()
+apps/cli/src/mcp/oauth_flow.rs:913:        let parsed = reqwest::Url::parse(&uri).expect("returned uri must parse");
+apps/cli/src/mcp/http.rs:65:    let client = reqwest::Client::builder()
+apps/cli/src/mcp/http.rs:210:    client: &reqwest::Client,
+apps/cli/src/mcp/http.rs:351:    client: &reqwest::Client,
+apps/cli/src/mcp/http.rs:394:    if status == reqwest::StatusCode::ACCEPTED {
+apps/cli/src/mcp/http.rs:399:    if status == reqwest::StatusCode::UNAUTHORIZED {
+apps/cli/src/mcp/mod.rs:379:        client: reqwest::Client,
+apps/cli/src/mcp/mod.rs:393:        client: reqwest::Client,
+apps/cli/src/mcp/mod.rs:734:        client: &reqwest::Client,
+apps/cli/src/mcp/sse.rs:40:    let client = reqwest::Client::builder()
+apps/cli/src/mcp/sse.rs:166:    if let Ok(base) = reqwest::Url::parse(base_url) {
+apps/mobile/components/shared/ApprovalModal.tsx:253:      approveRequest(id);
+apps/mobile/components/shared/ApprovalModal.tsx:261:      rejectRequest(id, reason);
+apps/cli/src/auth_oauth.rs:165:    let client = reqwest::Client::new();
+apps/cli/src/auth_oauth.rs:226:    let client = reqwest::Client::new();
+apps/cli/src/auth.rs:366:    let client = reqwest::Client::new();
+apps/cli/src/auth.rs:378:    if status == reqwest::StatusCode::NOT_FOUND || status == reqwest::StatusCode::UNAUTHORIZED {
+apps/cli/src/auth.rs:482:    let client = reqwest::Client::new();
+apps/cli/src/auth.rs:534:        if status == reqwest::StatusCode::FORBIDDEN {
+apps/cli/src/auth.rs:613:    let client = reqwest::Client::new();
+apps/cli/src/auth.rs:640:        if status == reqwest::StatusCode::UNAUTHORIZED || body.contains("invalid_grant") {
+apps/cli/src/auth.rs:694:    let client = reqwest::Client::new();
+apps/cli/src/auth.rs:706:        if status == reqwest::StatusCode::UNAUTHORIZED {
+apps/desktop/src/api/apiManagement.ts:110:export async function apiRequest(request: ApiRequest): Promise<ApiResponse> {
+apps/web/lib/github-app.ts:160:  const res = await fetch(
+apps/web/lib/github-app.ts:200:  const res = await fetch(
+apps/web/lib/github-app.ts:233:  const res = await fetch(
+apps/web/lib/github-app.ts:260:  const res = await fetch(
+apps/desktop/src/api/cloudApi.ts:118:      const csrfResp = await fetch(`${CLOUD_API_BASE_URL}/api/csrf`, {
+apps/desktop/src/api/cloudApi.ts:146:  const res = await fetch(`${CLOUD_API_BASE_URL}/api/cloud-chat`, {
+apps/desktop/src/api/cloudApi.ts:170:  const res = await fetch(`${CLOUD_API_BASE_URL}/api/cloud-chat`, {
+apps/desktop/src/api/cloudApi.ts:190:  const res = await fetch(`${CLOUD_API_BASE_URL}/api/cloud-chat/${id}`, {
+apps/desktop/src/api/cloudApi.ts:212:  const res = await fetch(`${CLOUD_API_BASE_URL}/api/cloud-chat/${id}`, {
+apps/desktop/src/api/cloudApi.ts:228:  const res = await fetch(`${CLOUD_API_BASE_URL}/api/cloud-chat/${id}`, {
+apps/desktop/src/api/cloudApi.ts:252:  const res = await fetch(`${CLOUD_API_BASE_URL}/api/v1/usage`, {
+apps/desktop/src/api/cloudApi.ts:317:    const res = await fetch(url.toString(), {
+apps/desktop/src/api/cloudApi.ts:393:    res = await fetch(`${CLOUD_API_BASE_URL}/api/llm/v1/chat/completions`, {
+apps/web/scripts/test-llm-keys.ts:69:    const response = await fetch(url, {
+apps/web/hooks/useApiPromptCompletion.ts:112:    invalidatePendingRequest();
+apps/web/hooks/useApiPromptCompletion.ts:165:        const fetchResponse = await fetch('/api/completion', {
+apps/web/hooks/useApiPromptCompletion.ts:313:      invalidatePendingRequest();
+apps/desktop/src/App.tsx:607:            const res = await fetch(`${API_BASE_URL}/api/models`);
+apps/desktop/src/App.tsx:1013:              void handleVoiceInputRequest();
+apps/desktop/src/App.tsx:1016:              void handleCaptureRequest();
+apps/desktop/src/App.tsx:1353:                void handleVoiceInputRequest(draft);
+apps/desktop/src/App.tsx:1356:                void handleCaptureRequest(captureResult, draft);
+apps/desktop/e2e/fixtures/mock-data.ts:89:      const response = await fetch('/api/auth/login', {
+apps/desktop/src/lib/modelRouter.ts:1023:export function getModelForRequest(
+services/api-gateway/__tests__/routes/cloudChat.test.ts:6:    const request = buildGoogleStreamRequest(
+apps/cli/src/tui/voice.rs:958:    let client = build_reqwest_client_with_custom_ca(reqwest::Client::builder())
+apps/cli/src/tui/voice.rs:964:            let part = reqwest::multipart::Part::bytes(wav_bytes)
+apps/cli/src/tui/voice.rs:968:            let form = reqwest::multipart::Form::new().part("file", part);
+apps/cli/src/tui/voice.rs:980:            let part = reqwest::multipart::Part::bytes(wav_bytes)
+apps/cli/src/tui/voice.rs:984:            let mut form = reqwest::multipart::Form::new()
+apps/cli/src/tui/app.rs:720:            EventMsg::ExecApprovalRequest(ev) => {
+apps/cli/src/tui/app.rs:732:            EventMsg::ApplyPatchApprovalRequest(ev) => Some(ThreadInteractiveRequest::Approval(
+apps/cli/src/tui/app.rs:745:            EventMsg::ElicitationRequest(ev) => {
+apps/cli/src/tui/app.rs:2004:            AppEvent::FatalExitRequest(message) => {
+apps/cli/src/tui/app.rs:3069:            AppEvent::FullScreenApprovalRequest(request) => match request {
+apps/cli/src/tui/app.rs:3697:            msg: EventMsg::ExecApprovalRequest(
+apps/cli/src/tui/app.rs:3755:        assert!(matches!(second_event.msg, EventMsg::ExecApprovalRequest(_)));
+apps/cli/src/tui/app.rs:5343:                msg: EventMsg::ExecApprovalRequest(
+apps/cli/src/tui/app.rs:5432:                msg: EventMsg::ExecApprovalRequest(
+apps/mobile/app/(app)/agents/[id].tsx:263:      approveRequest(approvalId);
+apps/mobile/app/(app)/agents/[id].tsx:272:      rejectRequest(approvalId);
+apps/cli/src/tui/chatwidget.rs:3091:                    // msg: EventMsg::ExecApprovalRequest(ExecApprovalRequestEvent {
+apps/cli/src/tui/chatwidget.rs:3097:                    msg: EventMsg::ApplyPatchApprovalRequest(ApplyPatchApprovalRequestEvent {
+apps/cli/src/tui/chatwidget.rs:3807:            EventMsg::ExecApprovalRequest(ev) => {
+apps/cli/src/tui/chatwidget.rs:3811:            EventMsg::ApplyPatchApprovalRequest(ev) => {
+apps/cli/src/tui/chatwidget.rs:3814:            EventMsg::ElicitationRequest(ev) => {
+apps/cli/src/tui/chatwidget.rs:3919:            | EventMsg::DynamicToolCallRequest(_)
+apps/cli/src/tui/chatwidget/agent.rs:51:                app_event_tx_clone.send(AppEvent::FatalExitRequest(message));
+apps/cli/src/tui/chatwidget/tests.rs:3472:        msg: EventMsg::ExecApprovalRequest(ev),
+apps/cli/src/tui/chatwidget/tests.rs:3504:        msg: EventMsg::ExecApprovalRequest(ExecApprovalRequestEvent {
+apps/cli/src/tui/chatwidget/tests.rs:3568:        msg: EventMsg::ExecApprovalRequest(ev_multi),
+apps/cli/src/tui/chatwidget/tests.rs:3624:        msg: EventMsg::ExecApprovalRequest(ev_long),
+apps/cli/src/tui/chatwidget/tests.rs:8031:async fn apps_refresh_failure_with_cached_snapshot_triggers_pending_force_refetch() {
+apps/cli/src/tui/chatwidget/tests.rs:10034:        msg: EventMsg::ExecApprovalRequest(ev),
+apps/cli/src/tui/chatwidget/tests.rs:10096:        msg: EventMsg::ExecApprovalRequest(ev),
+apps/cli/src/tui/chatwidget/tests.rs:10145:        msg: EventMsg::ExecApprovalRequest(ev),
+apps/cli/src/tui/chatwidget/tests.rs:10192:        msg: EventMsg::ApplyPatchApprovalRequest(ev),
+apps/cli/src/tui/chatwidget/tests.rs:10513:        msg: EventMsg::ExecApprovalRequest(ev),
+apps/cli/src/tui/chatwidget/tests.rs:10848:        msg: EventMsg::ApplyPatchApprovalRequest(ev),
+apps/cli/src/tui/chatwidget/tests.rs:10939:        msg: EventMsg::ApplyPatchApprovalRequest(ApplyPatchApprovalRequestEvent {
+apps/cli/src/tui/chatwidget/tests.rs:10988:        msg: EventMsg::ApplyPatchApprovalRequest(ApplyPatchApprovalRequestEvent {
+apps/cli/src/tui/chatwidget/tests.rs:11048:        msg: EventMsg::ApplyPatchApprovalRequest(ev),
+apps/cli/src/tui/chatwidget/tests.rs:11086:        msg: EventMsg::ApplyPatchApprovalRequest(ApplyPatchApprovalRequestEvent {
+apps/cli/src/tui/chatwidget/tests.rs:11173:        msg: EventMsg::ApplyPatchApprovalRequest(ApplyPatchApprovalRequestEvent {
+apps/cli/src/tui/chatwidget/tests.rs:11227:        msg: EventMsg::ApplyPatchApprovalRequest(ApplyPatchApprovalRequestEvent {
+packages/providers/openai/src/translate.ts:204:export function translateChatRequest(
+packages/providers/openai/src/index.ts:178:      const params = translateChatRequest(req, {
+apps/cli/src/a2a/client.rs:19:    let client = reqwest::Client::builder()
+apps/cli/src/a2a/client.rs:58:    let client = reqwest::Client::builder()
+apps/cli/src/a2a/client.rs:141:    let client = reqwest::Client::builder()
+apps/web/__tests__/api/health.test.ts:67:      const request = new NextRequest('http://localhost/api/health', {
+apps/web/__tests__/api/health.test.ts:97:      const request = new NextRequest('http://localhost/api/health', {
+apps/web/__tests__/api/health.test.ts:114:      const request = new NextRequest('http://localhost/api/health', {
+apps/web/__tests__/api/health.test.ts:130:      const request = new NextRequest('http://localhost/api/health', {
+apps/web/__tests__/api/health.test.ts:155:      const request = new NextRequest('http://localhost/api/health', {
+apps/web/__tests__/api/health.test.ts:166:      const request = new NextRequest('http://localhost/api/health', {
+apps/web/__tests__/api/health.test.ts:182:      const request = new NextRequest('http://localhost/api/health', {
+apps/web/__tests__/api/health.test.ts:197:      const request = new NextRequest('http://localhost/api/health', {
+apps/cli/src/a2a/security.rs:17:        .parse::<reqwest::Url>()
+apps/cli/src/a2a/registry.rs:75:    let client = reqwest::Client::builder()
+apps/web/__tests__/api/device-link.test.ts:85:        const request = new NextRequest('http://localhost/api/device/link', {
+apps/web/__tests__/api/device-link.test.ts:96:        const request = new NextRequest('http://localhost/api/device/link', {
+apps/web/__tests__/api/device-link.test.ts:107:        const request = new NextRequest('http://localhost/api/device/link', {
+apps/web/__tests__/api/device-link.test.ts:121:        const request = new NextRequest('http://localhost/api/device/link', {
+apps/web/__tests__/api/device-link.test.ts:141:      const request = new NextRequest('http://localhost/api/device/link', {
+apps/web/__tests__/api/device-link.test.ts:154:        const request = new NextRequest('http://localhost/api/device/link', {
+apps/web/__tests__/api/device-link.test.ts:169:        const request = new NextRequest('http://localhost/api/device/link', {
+apps/web/__tests__/api/device-link.test.ts:185:            new NextRequest('http://localhost/api/device/link', {
+apps/web/__tests__/api/device-link.test.ts:195:        const [r1, r2, r3] = await Promise.all([makeRequest(), makeRequest(), makeRequest()]);
+apps/web/__tests__/api/device-link.test.ts:207:        const request = new NextRequest('http://localhost/api/device/link', {
+apps/web/__tests__/api/device-link.test.ts:220:        const request = new NextRequest('http://localhost/api/device/link', {
+apps/web/__tests__/api/device-link.test.ts:237:        const request = new NextRequest('http://localhost/api/device/link', {
+apps/web/__tests__/api/device-link.test.ts:252:        const request = new NextRequest('http://localhost/api/device/link', {
+apps/web/__tests__/api/device-link.test.ts:263:        const request = new NextRequest('http://localhost/api/device/link', {
+apps/web/__tests__/api/device-link.test.ts:284:            new NextRequest('http://localhost/api/device/link', {
+apps/web/__tests__/api/device-link.test.ts:294:            new NextRequest('http://localhost/api/device/link', {
+apps/web/__tests__/api/device-link.test.ts:312:        const request = new NextRequest('http://localhost/api/device/link', {
+apps/web/__tests__/api/checkout.test.ts:124:    const request = new NextRequest('http://localhost/api/checkout', {
+apps/web/__tests__/api/checkout.test.ts:138:    const request = new NextRequest('http://localhost/api/checkout', {
+apps/web/__tests__/api/checkout.test.ts:152:    const request = new NextRequest('http://localhost/api/checkout', {
+apps/web/__tests__/api/checkout.test.ts:165:    const request = new NextRequest('http://localhost/api/checkout', {
+apps/web/__tests__/api/stripe-cancel.test.ts:254:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-cancel.test.ts:288:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-cancel.test.ts:332:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-cancel.test.ts:371:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-cancel.test.ts:419:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-cancel.test.ts:461:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-cancel.test.ts:503:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-cancel.test.ts:540:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-cancel.test.ts:578:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-cancel.test.ts:630:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-cancel.test.ts:680:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-cancel.test.ts:720:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-cancel.test.ts:760:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-cancel.test.ts:796:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-cancel.test.ts:831:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-cancel.test.ts:868:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/chat-conversation-single.test.ts:105:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1');
+apps/web/__tests__/api/chat-conversation-single.test.ts:139:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
+apps/web/__tests__/api/chat-conversation-single.test.ts:165:        const request = new NextRequest('http://localhost/api/chat/conversations/nonexistent', {
+apps/web/__tests__/api/chat-conversation-single.test.ts:184:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
+apps/web/__tests__/api/chat-conversation-single.test.ts:220:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
+apps/web/__tests__/api/chat-conversation-single.test.ts:257:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
+apps/web/__tests__/api/chat-conversation-single.test.ts:287:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
+apps/web/__tests__/api/chat-conversation-single.test.ts:320:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
+apps/web/__tests__/api/chat-conversation-single.test.ts:351:        const request = new NextRequest('http://localhost/api/chat/conversations/nonexistent', {
+apps/web/__tests__/api/chat-conversation-single.test.ts:368:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
+apps/web/__tests__/api/chat-conversation-single.test.ts:393:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
+apps/web/__tests__/api/chat-conversation-single.test.ts:422:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
+apps/web/__tests__/api/chat-conversation-single.test.ts:435:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
+apps/web/__tests__/api/chat-conversation-single.test.ts:452:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
+apps/web/__tests__/api/media-image-generate.test.ts:110:function makeRequest(body: unknown, headers: Record<string, string> = {}): NextRequest {
+apps/web/__tests__/api/media-image-generate.test.ts:111:  return new NextRequest(BASE_URL, {
+apps/web/__tests__/api/media-image-generate.test.ts:121:function makeAuthedRequest(body: unknown, extraHeaders: Record<string, string> = {}): NextRequest {
+apps/web/__tests__/api/media-image-generate.test.ts:122:  return makeRequest(body, {
+apps/web/__tests__/api/media-image-generate.test.ts:184:      const request = new NextRequest(BASE_URL, { method: 'OPTIONS' });
+apps/web/__tests__/api/media-image-generate.test.ts:196:      const request = makeRequest({ prompt: 'a cat' });
+apps/web/__tests__/api/media-image-generate.test.ts:207:      const request = makeRequest({ prompt: 'a cat' }, { Authorization: 'Token abc123' });
+apps/web/__tests__/api/media-image-generate.test.ts:222:      const response = await POST(makeAuthedRequest({ prompt: 'a cat' }));
+apps/web/__tests__/api/media-image-generate.test.ts:233:      const response = await POST(makeAuthedRequest({ prompt: 'a cat' }));
+apps/web/__tests__/api/media-image-generate.test.ts:256:      const response = await POST(makeAuthedRequest({ prompt: 'a cat' }));
+apps/web/__tests__/api/media-image-generate.test.ts:277:      const response = await POST(makeAuthedRequest({ prompt: 'a cat' }));
+apps/web/__tests__/api/media-image-generate.test.ts:292:      await POST(makeAuthedRequest({ prompt: 'a cat' }));
+apps/web/__tests__/api/media-image-generate.test.ts:305:      const response = await POST(makeAuthedRequest({ prompt: 'a cat' }));
+apps/web/__tests__/api/media-image-generate.test.ts:315:      const response = await POST(makeAuthedRequest({ prompt: 'a cat' }));
+apps/web/__tests__/api/media-image-generate.test.ts:325:      const response = await POST(makeAuthedRequest({ prompt: 'a cat' }));
+apps/web/__tests__/api/media-image-generate.test.ts:335:      const response = await POST(makeAuthedRequest({ prompt: 'a cat' }));
+apps/web/__tests__/api/media-image-generate.test.ts:346:      const response = await POST(makeAuthedRequest({ prompt: 'a cat' }));
+apps/web/__tests__/api/media-image-generate.test.ts:360:      const response = await POST(makeAuthedRequest({ prompt: 'a cat' }));
+apps/web/__tests__/api/media-image-generate.test.ts:372:      const response = await POST(makeAuthedRequest({ prompt: 'a cat' }));
+apps/web/__tests__/api/media-image-generate.test.ts:383:      const request = new NextRequest(BASE_URL, {
+apps/web/__tests__/api/media-image-generate.test.ts:400:      const response = await POST(makeAuthedRequest({ size: '1024x1024' }));
+apps/web/__tests__/api/media-image-generate.test.ts:408:      const response = await POST(makeAuthedRequest({ prompt: '' }));
+apps/web/__tests__/api/media-image-generate.test.ts:416:      const response = await POST(makeAuthedRequest({ prompt: 'x'.repeat(4001) }));
+apps/web/__tests__/api/media-image-generate.test.ts:424:      const response = await POST(makeAuthedRequest({ prompt: 'a cat', n: 5 }));
+apps/web/__tests__/api/media-image-generate.test.ts:433:      const response = await POST(makeAuthedRequest({ prompt: 'a cat', provider: 'google' }));
+apps/web/__tests__/api/media-image-generate.test.ts:450:      const response = await POST(makeAuthedRequest({ prompt: 'a cat' }));
+apps/web/__tests__/api/media-image-generate.test.ts:471:        makeAuthedRequest({ prompt: 'a cat sitting on a throne', provider: 'openai' }),
+apps/web/__tests__/api/media-image-generate.test.ts:494:        makeAuthedRequest({ prompt: 'landscape', provider: 'openai', quality: 'hd' }),
+apps/web/__tests__/api/media-image-generate.test.ts:521:        makeAuthedRequest({ prompt: 'a mountain landscape', provider: 'google' }),
+apps/web/__tests__/api/media-image-generate.test.ts:552:        makeAuthedRequest({ prompt: 'futuristic cityscape', provider: 'stability' }),
+apps/web/__tests__/api/media-image-generate.test.ts:575:      const response = await POST(makeAuthedRequest({ prompt: 'a cat', provider: 'openai' }));
+apps/web/__tests__/api/media-image-generate.test.ts:594:        makeAuthedRequest({ prompt: 'violating prompt', provider: 'openai' }),
+apps/web/__tests__/api/media-image-generate.test.ts:613:      const response = await POST(makeAuthedRequest({ prompt: 'a cat', provider: 'openai' }));
+apps/web/__tests__/api/media-image-generate.test.ts:623:      const response = await POST(makeAuthedRequest({ prompt: 'a cat', provider: 'openai' }));
+apps/web/__tests__/api/media-image-generate.test.ts:644:      const response = await POST(makeAuthedRequest({ prompt: 'a cat' }));
+apps/web/__tests__/api/media-image-generate.test.ts:660:      const response = await POST(makeAuthedRequest({ prompt: 'a cat' }));
+apps/web/__tests__/api/auth-callback.test.ts:59:function createRequest(url: string): Request {
+apps/web/__tests__/api/auth-callback.test.ts:60:  return new Request(url);
+apps/web/__tests__/api/auth-callback.test.ts:72:    const request = createRequest('http://localhost:3000/auth/callback?code=test-auth-code');
+apps/web/__tests__/api/auth-callback.test.ts:83:    const request = createRequest(
+apps/web/__tests__/api/auth-callback.test.ts:97:    const request = createRequest(
+apps/web/__tests__/api/auth-callback.test.ts:109:    const request = createRequest(
+apps/web/__tests__/api/auth-callback.test.ts:129:    const request = createRequest('http://localhost:3000/auth/callback?code=expired-code');
+apps/web/__tests__/api/auth-callback.test.ts:140:    const request = createRequest('http://localhost:3000/auth/callback');
+apps/web/__tests__/api/auth-callback.test.ts:155:    const request = createRequest('http://localhost:3000/auth/callback?code=some-code');
+apps/web/__tests__/api/auth-callback.test.ts:169:    const request = createRequest(
+apps/web/__tests__/api/gdpr.test.ts:198:      const request = new NextRequest('http://localhost/api/user/data', {
+apps/web/__tests__/api/gdpr.test.ts:216:      const request = new NextRequest('http://localhost/api/user/data', {
+apps/web/__tests__/api/gdpr.test.ts:240:      const request = new NextRequest('http://localhost/api/user/data', {
+apps/web/__tests__/api/gdpr.test.ts:259:      const request = new NextRequest('http://localhost/api/user/data', {
+apps/web/__tests__/api/gdpr.test.ts:279:      const request = new NextRequest('http://localhost/api/user/data', {
+apps/web/__tests__/api/gdpr.test.ts:296:      const request = new NextRequest('http://localhost/api/user/data', {
+apps/web/__tests__/api/gdpr.test.ts:320:      const request = new NextRequest('http://localhost/api/user/data', {
+apps/web/__tests__/api/gdpr.test.ts:353:      const request = new NextRequest('http://localhost/api/user/data', {
+apps/web/__tests__/api/gdpr.test.ts:379:      const request = new NextRequest('http://localhost/api/user/data', {
+apps/web/__tests__/api/gdpr.test.ts:407:      const request = new NextRequest('http://localhost/api/user/data', {
+apps/web/__tests__/api/gdpr.test.ts:458:      const request = new NextRequest('http://localhost/api/user/export', {
+apps/web/__tests__/api/gdpr.test.ts:476:      const request = new NextRequest('http://localhost/api/user/export', {
+apps/web/__tests__/api/gdpr.test.ts:493:      const request = new NextRequest('http://localhost/api/user/export', {
+apps/web/__tests__/api/gdpr.test.ts:510:      const request = new NextRequest('http://localhost/api/user/export', {
+apps/web/__tests__/api/gdpr.test.ts:530:      const request = new NextRequest('http://localhost/api/user/export?download=true', {
+apps/web/__tests__/api/gdpr.test.ts:547:      const request = new NextRequest('http://localhost/api/user/export', {
+apps/web/__tests__/api/gdpr.test.ts:581:      const request = new NextRequest('http://localhost/api/user/export', {
+apps/web/__tests__/api/gdpr.test.ts:603:      const request = new NextRequest('http://localhost/api/user/export', {
+apps/web/__tests__/api/gdpr.test.ts:635:      const request = new NextRequest('http://localhost/api/user/export', {
+apps/web/__tests__/api/gdpr.test.ts:658:      const request = new NextRequest('http://localhost/api/user/export', {
+apps/web/__tests__/api/gdpr.test.ts:681:      const request = new NextRequest('http://localhost/api/user/export', {
+apps/web/__tests__/api/gdpr.test.ts:728:    const request = new NextRequest('http://localhost/api/user/export', {
+apps/web/__tests__/api/gdpr.test.ts:758:    const request = new NextRequest('http://localhost/api/user/data', {
+packages/providers/ollama/src/translate.ts:101:export function translateChatRequest(req: ChatRequest): OllamaChatRequest {
+apps/web/__tests__/api/schedules.test.ts:123:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:137:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:167:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:181:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:196:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:210:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:223:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:238:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:259:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:283:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:300:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:314:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:328:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:343:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:357:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:371:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:385:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:402:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:413:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:439:        const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:454:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:468:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:493:        const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:508:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:522:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:536:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:554:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:568:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:586:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:600:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:614:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:628:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:642:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:661:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:684:      const request = new NextRequest('http://localhost/api/schedules', {
+apps/web/__tests__/api/schedules.test.ts:695:      const request = new NextRequest('http://localhost/api/schedules', {
+packages/providers/ollama/src/index.ts:73:      const translated = translateChatRequest(req);
+apps/web/__tests__/api/media-video-generate.test.ts:121:function makeAuthedRequest(body: unknown, extraHeaders: Record<string, string> = {}): NextRequest {
+apps/web/__tests__/api/media-video-generate.test.ts:122:  return new NextRequest(BASE_URL, {
+apps/web/__tests__/api/media-video-generate.test.ts:186:      const request = new NextRequest(BASE_URL, { method: 'OPTIONS' });
+apps/web/__tests__/api/media-video-generate.test.ts:198:      const request = new NextRequest(BASE_URL, {
+apps/web/__tests__/api/media-video-generate.test.ts:212:      const request = new NextRequest(BASE_URL, {
+apps/web/__tests__/api/media-video-generate.test.ts:234:      const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
+apps/web/__tests__/api/media-video-generate.test.ts:244:      const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
+apps/web/__tests__/api/media-video-generate.test.ts:266:      const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
+apps/web/__tests__/api/media-video-generate.test.ts:280:      await POST(makeAuthedRequest({ prompt: 'a sunset' }));
+apps/web/__tests__/api/media-video-generate.test.ts:293:      const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
+apps/web/__tests__/api/media-video-generate.test.ts:304:      const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
+apps/web/__tests__/api/media-video-generate.test.ts:315:      const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
+apps/web/__tests__/api/media-video-generate.test.ts:326:      const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
+apps/web/__tests__/api/media-video-generate.test.ts:340:      const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
+apps/web/__tests__/api/media-video-generate.test.ts:352:      const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
+apps/web/__tests__/api/media-video-generate.test.ts:363:      const request = new NextRequest(BASE_URL, {
+apps/web/__tests__/api/media-video-generate.test.ts:380:      const response = await POST(makeAuthedRequest({ duration_secs: 5 }));
+apps/web/__tests__/api/media-video-generate.test.ts:388:      const response = await POST(makeAuthedRequest({ prompt: '' }));
+apps/web/__tests__/api/media-video-generate.test.ts:396:      const response = await POST(makeAuthedRequest({ prompt: 'x'.repeat(2001) }));
+apps/web/__tests__/api/media-video-generate.test.ts:404:      const response = await POST(makeAuthedRequest({ prompt: 'a sunset', duration_secs: 1 }));
+apps/web/__tests__/api/media-video-generate.test.ts:412:      const response = await POST(makeAuthedRequest({ prompt: 'a sunset', duration_secs: 11 }));
+apps/web/__tests__/api/media-video-generate.test.ts:420:      const response = await POST(makeAuthedRequest({ prompt: 'a sunset', resolution: '480p' }));
+apps/web/__tests__/api/media-video-generate.test.ts:436:      const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
+apps/web/__tests__/api/media-video-generate.test.ts:455:        makeAuthedRequest({ prompt: 'a cinematic sunset', provider: 'runway' }),
+apps/web/__tests__/api/media-video-generate.test.ts:474:        makeAuthedRequest({ prompt: 'a sunset', provider: 'runway', duration_secs: 8 }),
+apps/web/__tests__/api/media-video-generate.test.ts:489:      const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
+apps/web/__tests__/api/media-video-generate.test.ts:513:        makeAuthedRequest({ prompt: 'a snowy mountain', provider: 'google' }),
+apps/web/__tests__/api/media-video-generate.test.ts:537:      const response = await POST(makeAuthedRequest({ prompt: 'a sunset', provider: 'runway' }));
+apps/web/__tests__/api/media-video-generate.test.ts:553:      const response = await POST(makeAuthedRequest({ prompt: 'a sunset', provider: 'runway' }));
+apps/web/__tests__/api/media-video-generate.test.ts:568:      const response = await POST(makeAuthedRequest({ prompt: 'a sunset', provider: 'runway' }));
+apps/web/__tests__/api/media-video-generate.test.ts:581:      const response = await POST(makeAuthedRequest({ prompt: 'a sunset', provider: 'runway' }));
+apps/web/__tests__/api/media-video-generate.test.ts:599:      const response = await POST(makeAuthedRequest({ prompt: 'a sunset', provider: 'google' }));
+apps/web/__tests__/api/media-video-generate.test.ts:617:      const response = await POST(makeAuthedRequest({ prompt: 'a sunset', provider: 'google' }));
+apps/web/__tests__/api/media-video-generate.test.ts:627:      const response = await POST(makeAuthedRequest({ prompt: 'a sunset', provider: 'runway' }));
+apps/web/__tests__/api/memory-search.test.ts:155:      const request = new NextRequest('http://localhost/api/memory/search?q=dark+mode', {
+apps/web/__tests__/api/memory-search.test.ts:170:      const request = new NextRequest('http://localhost/api/memory/search?q=dark+mode', {
+apps/web/__tests__/api/memory-search.test.ts:183:      const request = new NextRequest('http://localhost/api/memory/search?q=dark+mode', {
+apps/web/__tests__/api/memory-search.test.ts:199:      const request = new NextRequest('http://localhost/api/memory/search', {
+apps/web/__tests__/api/memory-search.test.ts:212:      const request = new NextRequest('http://localhost/api/memory/search?q=', {
+apps/web/__tests__/api/memory-search.test.ts:224:      const request = new NextRequest('http://localhost/api/memory/search?q=   ', {
+apps/web/__tests__/api/memory-search.test.ts:237:      const request = new NextRequest(
+apps/web/__tests__/api/memory-search.test.ts:251:      const request = new NextRequest(
+apps/web/__tests__/api/memory-search.test.ts:267:      const request = new NextRequest('http://localhost/api/memory/search?q=dark+mode', {
+apps/web/__tests__/api/memory-search.test.ts:282:      const request = new NextRequest('http://localhost/api/memory/search?q=dark', {
+apps/web/__tests__/api/memory-search.test.ts:301:      const request = new NextRequest('http://localhost/api/memory/search?q=no-match', {
+apps/web/__tests__/api/memory-search.test.ts:316:      const request = new NextRequest('http://localhost/api/memory/search?q=test', {
+apps/web/__tests__/api/memory-search.test.ts:338:      const request = new NextRequest('http://localhost/api/memory/search?q=dark+mode', {
+apps/web/__tests__/api/memory-search.test.ts:361:      const request = new NextRequest('http://localhost/api/memory/search?q=dark+mode', {
+apps/web/__tests__/api/memory-search.test.ts:382:      const request = new NextRequest('http://localhost/api/memory/search?q=dark+mode', {
+apps/web/__tests__/api/memory-search.test.ts:397:      const request = new NextRequest('http://localhost/api/memory/search?q=50%25+off', {
+apps/web/__tests__/api/memory-search.test.ts:407:      const request = new NextRequest('http://localhost/api/memory/search?q=hello_world', {
+apps/web/__tests__/api/routing-preferences.test.ts:143:  function buildBearerRequest() {
+apps/web/__tests__/api/routing-preferences.test.ts:144:    return new NextRequest('http://localhost/api/me/routing-preferences', {
+apps/web/__tests__/api/routing-preferences.test.ts:156:    const response = await GET(buildBearerRequest());
+apps/web/__tests__/api/routing-preferences.test.ts:167:    const response = await GET(buildBearerRequest());
+apps/web/__tests__/api/routing-preferences.test.ts:175:    const response = await GET(buildBearerRequest());
+apps/web/__tests__/api/routing-preferences.test.ts:186:    const response = await GET(buildBearerRequest());
+apps/web/__tests__/api/routing-preferences.test.ts:197:    const response = await GET(buildBearerRequest());
+apps/web/__tests__/api/routing-preferences.test.ts:203:  function buildPutRequest(body: unknown) {
+apps/web/__tests__/api/routing-preferences.test.ts:204:    return new NextRequest('http://localhost/api/me/routing-preferences', {
+apps/web/__tests__/api/routing-preferences.test.ts:216:    const response = await PUT(buildPutRequest({ us_only: true }));
+apps/web/__tests__/api/routing-preferences.test.ts:227:    const response = await PUT(buildPutRequest({ us_only: false, geo_overlay: 'us' }));
+apps/web/__tests__/api/routing-preferences.test.ts:233:    const response = await PUT(buildPutRequest({ us_only: 'yes' }));
+apps/web/__tests__/api/routing-preferences.test.ts:238:    const response = await PUT(buildPutRequest({ geo_overlay: 'mars' }));
+apps/web/__tests__/api/routing-preferences.test.ts:243:    const response = await PUT(buildPutRequest({ us_only: true, malicious: 'xss' }));
+apps/web/__tests__/api/routing-preferences.test.ts:256:    const response = await PUT(buildPutRequest({ us_only: true }));
+apps/web/__tests__/api/routing-preferences.test.ts:266:    const response = await PUT(buildPutRequest({ us_only: true }));
+apps/web/__tests__/api/routing-preferences.test.ts:276:    const response = await PUT(buildPutRequest({ us_only: true }));
+apps/web/__tests__/api/routing-preferences.test.ts:281:    const request = new NextRequest('http://localhost/api/me/routing-preferences', {
+apps/web/__tests__/api/routing-preferences.test.ts:297:    const response = await PUT(buildPutRequest({}));
+apps/desktop/src/hooks/useApiPromptCompletion.ts:116:    invalidatePendingRequest();
+apps/desktop/src/hooks/useApiPromptCompletion.ts:309:      invalidatePendingRequest();
+apps/web/__tests__/api/stripe-refund.test.ts:232:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-refund.test.ts:267:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-refund.test.ts:301:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-refund.test.ts:340:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-refund.test.ts:385:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-refund.test.ts:420:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-refund.test.ts:453:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-refund.test.ts:498:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-refund.test.ts:537:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-refund.test.ts:575:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-refund.test.ts:615:      const request1 = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-refund.test.ts:660:      const request2 = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/image-generation.test.ts:107:function makeAuthedRequest(body: unknown): NextRequest {
+apps/web/__tests__/api/image-generation.test.ts:108:  return new NextRequest('http://localhost/api/media/image/generate', {
+apps/web/__tests__/api/image-generation.test.ts:145:      const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
+apps/web/__tests__/api/image-generation.test.ts:159:      const response = await POST(makeAuthedRequest({ prompt: 'a sunset', n: 1 }));
+apps/web/__tests__/api/image-generation.test.ts:171:      await POST(makeAuthedRequest({ prompt: 'a sunset' }));
+apps/web/__tests__/api/image-generation.test.ts:184:      await POST(makeAuthedRequest({ prompt: 'a mountain', provider: 'openai' }));
+apps/web/__tests__/api/image-generation.test.ts:200:      await POST(makeAuthedRequest({ prompt: 'a forest' }));
+apps/web/__tests__/api/image-generation.test.ts:215:      const response = await POST(makeAuthedRequest({ prompt: 'a volcano' }));
+apps/web/__tests__/api/image-generation.test.ts:233:      await POST(makeAuthedRequest({ prompt: 'a storm' }));
+apps/web/__tests__/api/image-generation.test.ts:254:      const response = await POST(makeAuthedRequest({ prompt: 'a cave' }));
+apps/web/__tests__/api/image-generation.test.ts:267:      const response = await POST(makeAuthedRequest({ prompt: 'a rainbow' }));
+apps/web/__tests__/api/image-generation.test.ts:281:      const response = await POST(makeAuthedRequest({ prompt: 'a river' }));
+apps/web/__tests__/api/image-generation.test.ts:293:      await POST(makeAuthedRequest({ prompt: 'a lighthouse' }));
+apps/desktop/src/lib/retry.ts:118: *   () => fetch('/api/data'),
+apps/desktop/src/hooks/useVoiceTranscription.ts:653:            fetch(`${API_BASE_URL}/api/voice/transcribe`, {
+apps/web/__tests__/security/rt-01-provider-stream-auth.test.ts:81:function makeRequest(
+apps/web/__tests__/security/rt-01-provider-stream-auth.test.ts:86:  const req = new NextRequest('http://localhost/api/v1/providers/' + providerId + '/stream', {
+apps/web/__tests__/security/rt-01-provider-stream-auth.test.ts:122:    const { req, params } = makeRequest('anthropic', VALID_BODY);
+apps/web/__tests__/security/rt-01-provider-stream-auth.test.ts:131:    const { req, params } = makeRequest('anthropic', VALID_BODY, 'Bearer expired.jwt.token');
+apps/web/__tests__/security/rt-01-provider-stream-auth.test.ts:137:    const { req, params } = makeRequest('../../../etc/passwd', VALID_BODY, 'Bearer valid.jwt');
+apps/web/__tests__/security/rt-01-provider-stream-auth.test.ts:145:    const { req, params } = makeRequest('evil-provider', VALID_BODY, 'Bearer valid.jwt');
+apps/web/__tests__/security/rt-01-provider-stream-auth.test.ts:151:    const { req, params } = makeRequest(
+apps/web/__tests__/security/rt-01-provider-stream-auth.test.ts:163:    const { req, params } = makeRequest(
+apps/web/__tests__/security/rt-01-provider-stream-auth.test.ts:174:    const { req, params } = makeRequest('anthropic', VALID_BODY, 'Bearer valid.jwt');
+apps/web/__tests__/security/rt-01-provider-stream-auth.test.ts:184:    const { req, params } = makeRequest('anthropic', VALID_BODY, 'Bearer valid.jwt');
+apps/web/__tests__/security/rt-01-provider-stream-auth.test.ts:190:    const { req, params } = makeRequest('anthropic', VALID_BODY, 'Bearer valid.jwt');
+apps/web/__tests__/security/rt-01-provider-stream-auth.test.ts:205:    const { req, params } = makeRequest('anthropic', VALID_BODY, 'Bearer valid.jwt');
+apps/web/__tests__/security/rt-01-provider-stream-auth.test.ts:217:    const { req, params } = makeRequest('anthropic', VALID_BODY, 'Bearer valid.jwt');
+apps/web/__tests__/security/rt-01-provider-stream-auth.test.ts:243:      const { req, params } = makeRequest(providerId, VALID_BODY, 'Bearer valid.jwt');
+apps/cli/src/tui/app_event.rs:119:    FatalExitRequest(String),
+apps/cli/src/tui/app_event.rs:512:    FullScreenApprovalRequest(ApprovalRequest),
+apps/web/__tests__/security/b4-audio-mime-bypass.test.ts:61:function makeRequest(file: File): NextRequest {
+apps/web/__tests__/security/b4-audio-mime-bypass.test.ts:65:  return new NextRequest('http://localhost/api/llm/v1/audio/transcriptions', {
+apps/web/__tests__/security/b4-audio-mime-bypass.test.ts:88:    const res = await POST(makeRequest(file));
+apps/web/__tests__/security/b4-audio-mime-bypass.test.ts:95:    const res = await POST(makeRequest(file));
+apps/web/__tests__/security/b4-audio-mime-bypass.test.ts:108:    const res = await POST(makeRequest(file));
+apps/web/__tests__/security/b4-audio-mime-bypass.test.ts:125:    const res = await POST(makeRequest(file));
+apps/web/__tests__/security/rt-05-github-anon-client.test.ts:102:function makeWebhookRequest(payload: unknown, overrideSig?: string): NextRequest {
+apps/web/__tests__/security/rt-05-github-anon-client.test.ts:104:  return new NextRequest('http://localhost/api/github/webhook', {
+apps/web/__tests__/security/rt-05-github-anon-client.test.ts:142:    const req = makeWebhookRequest(VALID_PAYLOAD);
+apps/web/__tests__/security/rt-05-github-anon-client.test.ts:156:    const req = makeWebhookRequest(VALID_PAYLOAD);
+apps/web/__tests__/security/rt-05-github-anon-client.test.ts:167:    const req = makeWebhookRequest(VALID_PAYLOAD);
+apps/web/__tests__/security/rt-05-github-anon-client.test.ts:178:    const req = makeWebhookRequest(VALID_PAYLOAD);
+apps/web/__tests__/security/rt-05-github-anon-client.test.ts:186:    const req = makeWebhookRequest(VALID_PAYLOAD, 'sha256=deadbeef0000');
+apps/web/__tests__/security/rt-05-github-anon-client.test.ts:197:    const req = makeWebhookRequest(VALID_PAYLOAD);
+apps/web/__tests__/security/rt-05-github-anon-client.test.ts:207:    const req = makeWebhookRequest({ ...VALID_PAYLOAD, installation: { id: 9999 } });
+apps/cli/src/tui/bottom_pane/chat_composer_history.rs:329:    fn navigation_with_async_fetch() {
+apps/web/__tests__/security/rt-03-prompt-injection.test.ts:97:function makeWebhookRequest(payload: unknown): NextRequest {
+apps/web/__tests__/security/rt-03-prompt-injection.test.ts:100:  return new NextRequest('http://localhost/api/github/webhook', {
+apps/web/__tests__/security/rt-03-prompt-injection.test.ts:147:    const req = makeWebhookRequest(BASE_PAYLOAD);
+apps/web/__tests__/security/rt-03-prompt-injection.test.ts:159:    const req = makeWebhookRequest(BASE_PAYLOAD);
+apps/web/__tests__/security/rt-03-prompt-injection.test.ts:169:    const req = makeWebhookRequest(BASE_PAYLOAD);
+apps/web/__tests__/security/rt-03-prompt-injection.test.ts:181:    const req = makeWebhookRequest(BASE_PAYLOAD);
+apps/web/__tests__/security/rt-03-prompt-injection.test.ts:191:    const req = makeWebhookRequest(BASE_PAYLOAD);
+apps/web/__tests__/security/rt-03-prompt-injection.test.ts:202:    const req = makeWebhookRequest(BASE_PAYLOAD);
+apps/web/__tests__/security/rt-03-prompt-injection.test.ts:213:    const req = makeWebhookRequest(BASE_PAYLOAD);
+apps/web/__tests__/security/rt-03-prompt-injection.test.ts:233:    const req = makeWebhookRequest(BASE_PAYLOAD);
+apps/web/__tests__/security/rt-03-prompt-injection.test.ts:251:    const req = new NextRequest('http://localhost/api/github/webhook', {
+packages/providers/ollama/src/__tests__/tool-result-split.test.ts:38:    const translated = translateChatRequest(req);
+packages/providers/ollama/src/__tests__/tool-result-split.test.ts:63:    const translated = translateChatRequest(req);
+packages/providers/ollama/src/__tests__/tool-result-split.test.ts:94:    const translated = translateChatRequest(req);
+packages/providers/ollama/src/__tests__/tool-result-split.test.ts:108:    const translated = translateChatRequest(req);
+packages/providers/ollama/src/__tests__/tool-result-split.test.ts:128:    const translated = translateChatRequest(req);
+packages/providers/ollama/src/__tests__/tool-result-split.test.ts:161:    const translated = translateChatRequest(req);
+apps/cli/src/tools/mod.rs:188:    execute_web_fetch(args).await
+apps/cli/src/tools/mod.rs:662:        let result = execute_web_fetch(&args).await.unwrap();
+apps/cli/src/tools/mod.rs:671:        let result = execute_web_fetch(&args).await.unwrap();
+apps/cli/src/tools/web.rs:10:    let parsed = match reqwest::Url::parse(url) {
+apps/cli/src/tools/web.rs:113:    let url = reqwest::Url::parse(url_str).map_err(|e| format!("Invalid URL: {}", e))?;
+apps/cli/src/tools/web.rs:202:    let client = reqwest::Client::new();
+apps/cli/src/tools/web.rs:239:pub(super) async fn execute_web_fetch(args: &HashMap<String, String>) -> Result<ToolResult> {
+apps/cli/src/tools/web.rs:272:    let redirect_policy = reqwest::redirect::Policy::custom(|attempt| {
+apps/cli/src/tools/web.rs:286:    let mut client_builder = reqwest::Client::builder()
+apps/cli/src/tools/web.rs:291:        if let Some(host) = reqwest::Url::parse(url)
+apps/web/__tests__/security/b2-set-token.test.ts:83:function makeRequest(body: unknown): NextRequest {
+apps/web/__tests__/security/b2-set-token.test.ts:84:  return new NextRequest('http://localhost/api/auth/set-token', {
+apps/web/__tests__/security/b2-set-token.test.ts:102:    const res = await POST(makeRequest({}));
+apps/web/__tests__/security/b2-set-token.test.ts:111:    const res = await POST(makeRequest({ token: huge }));
+apps/web/__tests__/security/b2-set-token.test.ts:117:    const res = await POST(makeRequest({ refreshToken: huge }));
+apps/web/__tests__/security/b2-set-token.test.ts:123:    const res = await POST(makeRequest({ token: 'bogus-but-long-enough-token-1234' }));
+apps/web/__tests__/security/b2-set-token.test.ts:130:    const res = await POST(makeRequest({ refreshToken: 'valid-refresh-token-1234567890' }));
+apps/web/__tests__/security/b2-set-token.test.ts:142:    const res = await POST(makeRequest({ refreshToken: 'forged-refresh-token-1234567890' }));
+apps/web/__tests__/security/b2-set-token.test.ts:150:    const res = await POST(makeRequest({ refreshToken: 'token-that-causes-throw-12345' }));
+apps/web/__tests__/security/b2-set-token.test.ts:159:      makeRequest({
+apps/web/__tests__/security/b2-set-token.test.ts:174:      makeRequest({
+apps/web/__tests__/security/b2-set-token.test.ts:188:    const res = await POST(makeRequest({ token: 'access-token-1234567890abcdef' }));
+apps/web/__tests__/security/b2-set-token.test.ts:204:      makeRequest({
+packages/providers/anthropic/src/translate.ts:188:export function translateChatRequest(req: ChatRequest): AnthropicTranslatedRequest {
+packages/providers/anthropic/src/index.ts:103:      const translated = translateChatRequest(req);
+apps/web/__tests__/security/web-high-1-cookie-parser.test.ts:93:  function makeRequest(cookieHeader: string): Request {
+apps/web/__tests__/security/web-high-1-cookie-parser.test.ts:94:    return new Request('https://example.com/api/test', {
+apps/web/__tests__/security/web-high-1-cookie-parser.test.ts:103:    const id = await getSessionIdFromRequest(makeRequest('__Host-anon-session-id=legit-1234'));
+apps/web/__tests__/security/web-high-1-cookie-parser.test.ts:111:    const id = await getSessionIdFromRequest(makeRequest('x-anon-session-id=ATTACKER'));
+apps/web/__tests__/security/web-high-1-cookie-parser.test.ts:117:    const id = await getSessionIdFromRequest(
+apps/web/__tests__/security/web-high-1-cookie-parser.test.ts:118:      makeRequest('__Host-anon-session-id=host-secure-id; anon-session-id=legacy-id'),
+apps/web/__tests__/security/web-high-1-cookie-parser.test.ts:125:  function makeRequest(cookieHeader: string): Request {
+apps/web/__tests__/security/web-high-1-cookie-parser.test.ts:126:    return new Request('https://example.com/api/csrf', {
+apps/web/__tests__/security/web-high-1-cookie-parser.test.ts:133:      makeRequest('__Host-anon-session-id=existing-host-id'),
+apps/web/__tests__/security/web-high-1-cookie-parser.test.ts:140:    const result = await getOrCreateAnonSession(makeRequest('crafted-anon-session-id=ATTACKER'));
+apps/web/__tests__/security/rt-04-csrf-bearer-bypass.test.ts:44:function makeRequest(
+apps/web/__tests__/security/rt-04-csrf-bearer-bypass.test.ts:53:  return new Request('http://localhost/api/test', { method, headers });
+apps/web/__tests__/security/rt-04-csrf-bearer-bypass.test.ts:102:      const req = makeRequest('POST', {
+apps/web/__tests__/security/rt-04-csrf-bearer-bypass.test.ts:112:      const req = makeRequest('POST', {
+apps/web/__tests__/security/rt-04-csrf-bearer-bypass.test.ts:129:      const req = makeRequest('POST', {
+apps/web/__tests__/security/rt-04-csrf-bearer-bypass.test.ts:140:      const req = makeRequest('POST', {});
+apps/web/__tests__/security/rt-04-csrf-bearer-bypass.test.ts:147:      const req = makeRequest('GET', { bearerToken: 'bogus' });
+apps/web/__tests__/security/rt-04-csrf-bearer-bypass.test.ts:154:      const req = makeRequest('DELETE', { bearerToken: 'bogus_token_xyz' });
+apps/web/__tests__/security/rt-04-csrf-bearer-bypass.test.ts:162:      const req = makeRequest('PUT', { bearerToken: 'bogus' });
+apps/web/__tests__/security/rt-04-csrf-bearer-bypass.test.ts:172:      const req = makeRequest('POST', {
+apps/web/__tests__/security/rt-04-csrf-bearer-bypass.test.ts:175:      const result = await validateCsrfFromRequest(req);
+apps/web/__tests__/security/rt-04-csrf-bearer-bypass.test.ts:181:      const req = makeRequest('POST', { bearerToken: 'bogus' });
+apps/web/__tests__/security/rt-04-csrf-bearer-bypass.test.ts:182:      const result = await validateCsrfFromRequest(req);
+apps/web/__tests__/security/rt-04-csrf-bearer-bypass.test.ts:187:      const req = makeRequest('GET', { bearerToken: 'bogus' });
+apps/web/__tests__/security/rt-04-csrf-bearer-bypass.test.ts:188:      const result = await validateCsrfFromRequest(req);
+packages/providers/perplexity/src/index.ts:140:      const params = translateChatRequest(req, {
+apps/desktop/src/__tests__/features.test.ts:1026:      store.addApprovalRequest({
+apps/desktop/src/__tests__/modelRouter.test.ts:42:    const result = getModelForRequest('grok-4', 'Analyze this tweet from X.com', false);
+apps/desktop/src/__tests__/modelRouter.test.ts:101:    const result = getModelForRequest('mistral-large-3', 'Write code for me', false);
+apps/desktop/src/__tests__/modelRouter.test.ts:140:    const result = getModelForRequest('claude-opus-4.6', 'Solve this hard math problem', false);
+apps/desktop/src/__tests__/modelRouter.test.ts:191:    const result = getModelForRequest('auto-economy', 'Quick question', false);
+apps/desktop/src/__tests__/modelRouter.test.ts:198:    const result = getModelForRequest('auto-balanced', 'Explain this concept', false);
+apps/desktop/src/__tests__/modelRouter.test.ts:203:    const result = getModelForRequest('auto-premium', 'Architect a system', false);
+apps/desktop/src/__tests__/modelRouter.test.ts:208:    const result = getModelForRequest('auto', 'Hello', false);
+apps/web/shared/stores/workforce-store.ts:81:          const response = await fetch('/api/workforce', {
+apps/web/shared/stores/workforce-store.ts:152:          const response = await fetch('/api/workforce', {
+apps/web/shared/stores/workforce-store.ts:236:          const response = await fetch(
+apps/web/__tests__/api/voice-transcribe.test.ts:91:function makeFormDataRequest(
+apps/web/__tests__/api/voice-transcribe.test.ts:127:  return new NextRequest('http://localhost/api/voice/transcribe', {
+apps/web/__tests__/api/voice-transcribe.test.ts:169:    const request = makeFormDataRequest({ authHeader: '' });
+apps/web/__tests__/api/voice-transcribe.test.ts:179:    const request = makeFormDataRequest({ authHeader: 'Basic some-base64' });
+apps/web/__tests__/api/voice-transcribe.test.ts:193:    const request = makeFormDataRequest({ authHeader: 'Bearer bad-token' });
+apps/web/__tests__/api/voice-transcribe.test.ts:203:    const request = makeFormDataRequest({ includeFile: false });
+apps/web/__tests__/api/voice-transcribe.test.ts:212:    const request = makeFormDataRequest();
+apps/web/__tests__/api/voice-transcribe.test.ts:221:    const request = makeFormDataRequest();
+apps/web/__tests__/api/voice-transcribe.test.ts:234:    const request = makeFormDataRequest(); // no model specified
+apps/web/__tests__/api/voice-transcribe.test.ts:247:    const request = makeFormDataRequest({ model: 'whisper-large-v3' });
+apps/web/__tests__/api/voice-transcribe.test.ts:256:    const request = makeFormDataRequest({ language: 'es' });
+apps/web/__tests__/api/voice-transcribe.test.ts:265:    const request = makeFormDataRequest(); // no language
+apps/web/__tests__/api/voice-transcribe.test.ts:276:    const request = makeFormDataRequest();
+apps/web/__tests__/api/voice-transcribe.test.ts:287:    const request = makeFormDataRequest();
+apps/web/__tests__/api/voice-transcribe.test.ts:304:    const request = makeFormDataRequest();
+apps/web/__tests__/api/voice-transcribe.test.ts:313:    const request = new NextRequest('http://localhost/api/voice/transcribe', {
+apps/cli/src/tui/bottom_pane/approval_overlay.rs:382:                        .send(AppEvent::FullScreenApprovalRequest(request.clone()));
+apps/web/shared/lib/api.ts:123:        fetch('/api/auth/set-token', {
+apps/web/shared/lib/api.ts:153:        fetch('/api/auth/set-token', {
+apps/web/shared/lib/api.ts:172:        fetch('/api/auth/clear-token', {
+apps/web/shared/lib/api.ts:212:      return this.retryRequest(requestFn, attempt + 1);
+apps/web/shared/lib/api.ts:228:    const response = await fetch(`${this.config.baseURL}/auth/refresh`, {
+apps/web/shared/lib/api.ts:276:      const response = await this.retryRequest(() => fetch(url, requestOptions));
+apps/web/shared/lib/api.ts:289:          const retryResponse = await fetch(url, retryOptions);
+apps/web/shared/lib/api.ts:471:      const xhr = new XMLHttpRequest();
+apps/web/shared/lib/api.ts:640:      const response = await fetch(url, {
+apps/web/shared/lib/api.ts:818:  async processRequest(config: RequestInit): Promise<RequestInit> {
+apps/web/__tests__/api/usage.test.ts:113:function makeGetRequest(authHeader?: string) {
+apps/web/__tests__/api/usage.test.ts:118:  return new NextRequest('http://localhost/api/usage', {
+apps/web/__tests__/api/usage.test.ts:168:    const request = makeGetRequest(); // no auth header
+apps/web/__tests__/api/usage.test.ts:182:    const request = makeGetRequest(FAKE_BEARER);
+apps/web/__tests__/api/usage.test.ts:196:    const request = makeGetRequest(); // no Bearer token — falls through to SSR cookie auth
+apps/web/__tests__/api/usage.test.ts:207:    const request = makeGetRequest(FAKE_BEARER);
+apps/web/__tests__/api/usage.test.ts:226:    const request = makeGetRequest(FAKE_BEARER);
+apps/web/__tests__/api/usage.test.ts:243:    const request = makeGetRequest(FAKE_BEARER);
+apps/web/__tests__/api/usage.test.ts:258:    const request = makeGetRequest(FAKE_BEARER);
+apps/web/__tests__/api/usage.test.ts:280:    const request = makeGetRequest(FAKE_BEARER);
+apps/web/__tests__/api/usage.test.ts:292:    const request = makeGetRequest(FAKE_BEARER);
+apps/web/__tests__/api/usage.test.ts:303:    const request = makeGetRequest(FAKE_BEARER);
+apps/web/__tests__/api/usage.test.ts:323:    const request = makeGetRequest(FAKE_BEARER);
+apps/web/__tests__/api/usage.test.ts:337:    const request = makeGetRequest(FAKE_BEARER);
+apps/cli/src/tui/tooltips.rs:178:        let client = reqwest::blocking::Client::builder()
+apps/desktop/src-tauri/src/data/supabase_sync.rs:8:use reqwest::Client;
+apps/web/__tests__/api/chat-conversations.test.ts:87:        const request = new NextRequest('http://localhost/api/chat/conversations');
+apps/web/__tests__/api/chat-conversations.test.ts:106:        const request = new NextRequest('http://localhost/api/chat/conversations', {
+apps/web/__tests__/api/chat-conversations.test.ts:122:        const request = new NextRequest('http://localhost/api/chat/conversations', {
+apps/web/__tests__/api/chat-conversations.test.ts:145:        const request = new NextRequest('http://localhost/api/chat/conversations', {
+apps/web/__tests__/api/chat-conversations.test.ts:168:        const request = new NextRequest('http://localhost/api/chat/conversations', {
+apps/web/__tests__/api/chat-conversations.test.ts:193:        const request = new NextRequest('http://localhost/api/chat/conversations', {
+apps/web/__tests__/api/chat-conversations.test.ts:217:        const request = new NextRequest('http://localhost/api/chat/conversations', {
+apps/web/__tests__/api/chat-conversations.test.ts:241:        const request = new NextRequest('http://localhost/api/chat/conversations', {
+apps/web/__tests__/api/chat-conversations.test.ts:265:        const request = new NextRequest('http://localhost/api/chat/conversations', {
+apps/web/__tests__/api/chat-conversations.test.ts:289:        const request = new NextRequest('http://localhost/api/chat/conversations', {
+apps/web/__tests__/api/chat-conversations.test.ts:317:        const request = new NextRequest('http://localhost/api/chat/conversations', {
+apps/web/__tests__/api/chat-conversations.test.ts:343:        const request = new NextRequest('http://localhost/api/chat/conversations', {
+apps/web/__tests__/api/chat-conversations.test.ts:364:        const request = new NextRequest('http://localhost/api/chat/conversations', {
+apps/web/__tests__/api/chat-conversations.test.ts:377:        const request = new NextRequest('http://localhost/api/chat/conversations', {
+apps/cli/src/tui/app/pending_interactive_replay.rs:52:            EventMsg::ExecApprovalRequest(_)
+apps/cli/src/tui/app/pending_interactive_replay.rs:53:                | EventMsg::ApplyPatchApprovalRequest(_)
+apps/cli/src/tui/app/pending_interactive_replay.rs:54:                | EventMsg::ElicitationRequest(_)
+apps/cli/src/tui/app/pending_interactive_replay.rs:138:            EventMsg::ExecApprovalRequest(ev) => {
+apps/cli/src/tui/app/pending_interactive_replay.rs:153:            EventMsg::ApplyPatchApprovalRequest(ev) => {
+apps/cli/src/tui/app/pending_interactive_replay.rs:167:            EventMsg::ElicitationRequest(ev) => {
+apps/cli/src/tui/app/pending_interactive_replay.rs:210:            EventMsg::ExecApprovalRequest(ev) => {
+apps/cli/src/tui/app/pending_interactive_replay.rs:219:            EventMsg::ApplyPatchApprovalRequest(ev) => {
+apps/cli/src/tui/app/pending_interactive_replay.rs:227:            EventMsg::ElicitationRequest(ev) => {
+apps/cli/src/tui/app/pending_interactive_replay.rs:274:            EventMsg::ExecApprovalRequest(ev) => self
+apps/cli/src/tui/app/pending_interactive_replay.rs:277:            EventMsg::ApplyPatchApprovalRequest(ev) => {
+apps/cli/src/tui/app/pending_interactive_replay.rs:280:            EventMsg::ElicitationRequest(ev) => {
+apps/cli/src/tui/app/pending_interactive_replay.rs:444:            msg: EventMsg::ExecApprovalRequest(
+apps/cli/src/tui/app/pending_interactive_replay.rs:560:            msg: EventMsg::ApplyPatchApprovalRequest(
+apps/cli/src/tui/app/pending_interactive_replay.rs:588:            msg: EventMsg::ExecApprovalRequest(
+apps/cli/src/tui/app/pending_interactive_replay.rs:608:            msg: EventMsg::ApplyPatchApprovalRequest(
+apps/cli/src/tui/app/pending_interactive_replay.rs:630:                EventMsg::ExecApprovalRequest(_) | EventMsg::ApplyPatchApprovalRequest(_)
+apps/cli/src/tui/app/pending_interactive_replay.rs:641:            msg: EventMsg::ElicitationRequest(
+apps/cli/src/tui/app/pending_interactive_replay.rs:680:            msg: EventMsg::ExecApprovalRequest(
+apps/web/__tests__/api/memory.test.ts:166:      const request = new NextRequest('http://localhost/api/memory', {
+apps/web/__tests__/api/memory.test.ts:197:      const request = new NextRequest('http://localhost/api/memory', {
+apps/web/__tests__/api/memory.test.ts:220:      const request = new NextRequest('http://localhost/api/memory', {
+apps/web/__tests__/api/memory.test.ts:242:      const request = new NextRequest('http://localhost/api/memory', {
+apps/web/__tests__/api/memory.test.ts:257:      const request = new NextRequest('http://localhost/api/memory', {
+apps/web/__tests__/api/memory.test.ts:272:      const request = new NextRequest('http://localhost/api/memory', {
+apps/web/__tests__/api/memory.test.ts:295:      const request = new NextRequest('http://localhost/api/memory', {
+apps/web/__tests__/api/memory.test.ts:316:      const request = new NextRequest('http://localhost/api/memory', {
+apps/web/__tests__/api/memory.test.ts:326:      const request = new NextRequest('http://localhost/api/memory?limit=200', {
+apps/web/__tests__/api/memory.test.ts:336:      const request = new NextRequest('http://localhost/api/memory?limit=abc', {
+apps/web/__tests__/api/memory.test.ts:345:      const request = new NextRequest('http://localhost/api/memory?offset=-5', {
+apps/web/__tests__/api/memory.test.ts:360:      const request = new NextRequest('http://localhost/api/memory', {
+apps/web/__tests__/api/memory.test.ts:377:      const request = new NextRequest('http://localhost/api/memory', {
+apps/web/__tests__/api/memory.test.ts:392:      const request = new NextRequest('http://localhost/api/memory', {
+apps/web/__tests__/api/memory.test.ts:407:      const request = new NextRequest('http://localhost/api/memory', {
+apps/web/__tests__/api/memory.test.ts:421:      const request = new NextRequest('http://localhost/api/memory', {
+apps/web/__tests__/api/memory.test.ts:445:      const request = new NextRequest('http://localhost/api/memory', {
+apps/web/__tests__/api/memory.test.ts:456:      const request = new NextRequest('http://localhost/api/memory', {
+apps/web/__tests__/api/memory.test.ts:468:      const request = new NextRequest('http://localhost/api/memory', {
+apps/web/__tests__/api/memory.test.ts:480:        const request = new NextRequest('http://localhost/api/memory', {
+apps/web/__tests__/api/memory.test.ts:501:      const request = new NextRequest('http://localhost/api/memory', {
+apps/web/__tests__/api/memory.test.ts:524:      const request = new NextRequest('http://localhost/api/memory', {
+apps/web/__tests__/api/memory.test.ts:535:      const request = new NextRequest('http://localhost/api/memory', {
+apps/web/__tests__/api/memory.test.ts:549:      const request = new NextRequest('http://localhost/api/memory', {
+apps/web/__tests__/api/credits-balance.test.ts:103:        const request = new NextRequest('http://localhost/api/llm/v1/credits/balance');
+apps/web/__tests__/api/credits-balance.test.ts:113:        const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
+apps/web/__tests__/api/credits-balance.test.ts:127:        const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
+apps/web/__tests__/api/credits-balance.test.ts:143:        const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
+apps/web/__tests__/api/credits-balance.test.ts:157:        const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
+apps/web/__tests__/api/credits-balance.test.ts:172:        const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
+apps/web/__tests__/api/credits-balance.test.ts:185:        const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
+apps/web/__tests__/api/credits-balance.test.ts:200:        const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
+apps/web/__tests__/api/credits-balance.test.ts:216:        const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
+apps/web/__tests__/api/credits-balance.test.ts:236:        const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
+apps/web/__tests__/api/credits-balance.test.ts:248:        const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
+apps/web/__tests__/api/credits-balance.test.ts:264:        const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
+apps/web/__tests__/api/credits-balance.test.ts:280:        const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
+apps/web/__tests__/api/credits-balance.test.ts:294:      const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
+apps/web/__tests__/api/device-poll.test.ts:75:        const request = new NextRequest('http://localhost/api/device/poll', {
+apps/web/__tests__/api/device-poll.test.ts:85:        const request = new NextRequest('http://localhost/api/device/poll', {
+apps/web/__tests__/api/device-poll.test.ts:99:        const request = new NextRequest('http://localhost/api/device/poll', {
+apps/web/__tests__/api/device-poll.test.ts:156:        const request = new NextRequest('http://localhost/api/device/poll', {
+apps/web/__tests__/api/device-poll.test.ts:196:        const request = new NextRequest('http://localhost/api/device/poll', {
+apps/web/__tests__/api/device-poll.test.ts:234:        const request = new NextRequest('http://localhost/api/device/poll', {
+apps/web/__tests__/api/device-poll.test.ts:272:        const request = new NextRequest('http://localhost/api/device/poll', {
+apps/web/__tests__/api/device-poll.test.ts:292:      const request = new NextRequest('http://localhost/api/device/poll', {
+apps/web/__tests__/api/device-poll.test.ts:328:      const request = new NextRequest('http://localhost/api/device/poll', {
+apps/web/__tests__/api/device-poll.test.ts:363:      const request = new NextRequest('http://localhost/api/device/poll', {
+apps/web/__tests__/api/device-poll.test.ts:415:      const request = new NextRequest('http://localhost/api/device/poll', {
+apps/web/__tests__/api/llm-completion.test.ts:120:    sendRequest: (...args: unknown[]) => mockSendRequest(...args),
+apps/web/__tests__/api/llm-completion.test.ts:121:    streamRequest: (...args: unknown[]) => mockStreamRequest(...args),
+apps/web/__tests__/api/llm-completion.test.ts:191:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:208:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:232:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:254:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:280:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:306:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:339:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:371:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:403:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:439:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:471:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:517:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:555:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:580:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:612:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:635:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:678:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:710:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:734:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:752:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:770:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:789:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:815:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:840:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:868:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:893:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:922:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-completion.test.ts:950:      const request = new NextRequest('http://localhost/api/llm/completion', {
+apps/web/__tests__/api/llm-v1-chat-completions-routing.test.ts:143:    sendRequest: (...args: unknown[]) => mockSendRequest(...args),
+apps/web/__tests__/api/llm-v1-chat-completions-routing.test.ts:164:function makeRequest(message: string, stream = false): NextRequest {
+apps/web/__tests__/api/llm-v1-chat-completions-routing.test.ts:165:  return new NextRequest('http://localhost/api/llm/v1/chat/completions', {
+apps/web/__tests__/api/llm-v1-chat-completions-routing.test.ts:235:    const request = makeRequest('Hello, how are you?');
+apps/web/__tests__/api/llm-v1-chat-completions-routing.test.ts:257:    const request = makeRequest(
+apps/web/__tests__/api/llm-v1-chat-completions-routing.test.ts:278:    const request = makeRequest(
+apps/web/__tests__/api/llm-v1-chat-completions-routing.test.ts:296:    const request = makeRequest('hi there');
+apps/web/__tests__/api/llm-v1-chat-completions-routing.test.ts:314:    const request = makeRequest('write a function to parse JSON safely');
+apps/web/__tests__/api/llm-v1-chat-completions-routing.test.ts:336:    const request = makeRequest('write a Python script');
+apps/web/__tests__/api/llm-v1-chat-completions-routing.test.ts:346:    const request = makeRequest('implement a quicksort algorithm in JavaScript');
+apps/web/__tests__/api/llm-v1-chat-completions-routing.test.ts:369:    const request = makeRequest('write a recursive function');
+apps/web/__tests__/api/csrf.test.ts:115:function makeMemoryRequest(method: 'GET' | 'PUT' | 'DELETE', body?: unknown): NextRequest {
+apps/web/__tests__/api/csrf.test.ts:116:  return new NextRequest('http://localhost/api/memory/test-id', {
+apps/web/__tests__/api/csrf.test.ts:126:function makeConvRequest(method: 'GET' | 'PUT' | 'DELETE', body?: unknown): NextRequest {
+apps/web/__tests__/api/csrf.test.ts:127:  return new NextRequest('http://localhost/api/chat/conversations/test-conv-id', {
+apps/web/__tests__/api/csrf.test.ts:188:        makeMemoryRequest('PUT', { content: 'updated' }),
+apps/web/__tests__/api/csrf.test.ts:201:        makeMemoryRequest('PUT', { content: 'updated content' }),
+apps/web/__tests__/api/csrf.test.ts:212:      await memoryPUT(makeMemoryRequest('PUT', { content: 'test' }), routeContext);
+apps/web/__tests__/api/csrf.test.ts:223:      const response = await memoryDELETE(makeMemoryRequest('DELETE'), routeContext);
+apps/web/__tests__/api/csrf.test.ts:238:      const response = await memoryDELETE(makeMemoryRequest('DELETE'), routeContext);
+apps/web/__tests__/api/csrf.test.ts:246:      await memoryDELETE(makeMemoryRequest('DELETE'), routeContext);
+apps/web/__tests__/api/csrf.test.ts:255:      await memoryGET(makeMemoryRequest('GET'), routeContext);
+apps/web/__tests__/api/csrf.test.ts:267:        makeConvRequest('PUT', { title: 'New title' }),
+apps/web/__tests__/api/csrf.test.ts:280:        makeConvRequest('PUT', { title: 'New title' }),
+apps/web/__tests__/api/csrf.test.ts:290:      await convPUT(makeConvRequest('PUT', { title: 'test' }), convRouteContext);
+apps/web/__tests__/api/csrf.test.ts:301:      const response = await convDELETE(makeConvRequest('DELETE'), convRouteContext);
+apps/web/__tests__/api/csrf.test.ts:316:      const response = await convDELETE(makeConvRequest('DELETE'), convRouteContext);
+apps/web/__tests__/api/csrf.test.ts:324:      await convDELETE(makeConvRequest('DELETE'), convRouteContext);
+apps/web/__tests__/api/csrf.test.ts:333:      await convGET(makeConvRequest('GET'), convRouteContext);
+apps/web/__tests__/api/chat-messages.test.ts:130:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
+apps/web/__tests__/api/chat-messages.test.ts:156:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
+apps/web/__tests__/api/chat-messages.test.ts:182:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
+apps/web/__tests__/api/chat-messages.test.ts:212:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
+apps/web/__tests__/api/chat-messages.test.ts:242:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
+apps/web/__tests__/api/chat-messages.test.ts:268:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
+apps/web/__tests__/api/chat-messages.test.ts:335:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
+apps/web/__tests__/api/chat-messages.test.ts:394:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
+apps/web/__tests__/api/chat-messages.test.ts:461:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
+apps/web/__tests__/api/chat-messages.test.ts:501:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
+apps/web/__tests__/api/chat-messages.test.ts:569:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
+apps/web/__tests__/api/chat-messages.test.ts:641:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
+apps/web/__tests__/api/chat-messages.test.ts:712:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
+apps/web/__tests__/api/chat-messages.test.ts:769:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
+apps/web/__tests__/api/chat-messages.test.ts:837:        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
+apps/web/__tests__/api/device-approve.test.ts:90:        const request = new NextRequest('http://localhost/api/device/approve', {
+apps/web/__tests__/api/device-approve.test.ts:119:        const request = new NextRequest('http://localhost/api/device/approve', {
+apps/web/__tests__/api/device-approve.test.ts:135:        const request = new NextRequest('http://localhost/api/device/approve', {
+apps/web/__tests__/api/device-approve.test.ts:145:        const request = new NextRequest('http://localhost/api/device/approve', {
+apps/web/__tests__/api/device-approve.test.ts:156:        const request = new NextRequest('http://localhost/api/device/approve', {
+apps/web/__tests__/api/device-approve.test.ts:167:        const request = new NextRequest('http://localhost/api/device/approve', {
+apps/web/__tests__/api/device-approve.test.ts:178:        const request = new NextRequest('http://localhost/api/device/approve', {
+apps/web/__tests__/api/device-approve.test.ts:216:        const request = new NextRequest('http://localhost/api/device/approve', {
+apps/web/__tests__/api/device-approve.test.ts:264:        const request = new NextRequest('http://localhost/api/device/approve', {
+apps/web/__tests__/api/device-approve.test.ts:279:        const request = new NextRequest('http://localhost/api/device/approve', {
+apps/web/__tests__/api/device-approve.test.ts:303:        const request = new NextRequest('http://localhost/api/device/approve', {
+apps/web/__tests__/api/device-approve.test.ts:332:        const request = new NextRequest('http://localhost/api/device/approve', {
+apps/web/__tests__/api/device-approve.test.ts:358:        const request = new NextRequest('http://localhost/api/device/approve', {
+apps/web/__tests__/api/device-approve.test.ts:372:      const request = new NextRequest('http://localhost/api/device/approve', {
+apps/web/__tests__/api/stripe-downgrade.test.ts:317:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-downgrade.test.ts:357:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-downgrade.test.ts:402:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-downgrade.test.ts:493:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-downgrade.test.ts:532:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-downgrade.test.ts:623:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-downgrade.test.ts:670:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-downgrade.test.ts:711:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-downgrade.test.ts:789:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-downgrade.test.ts:830:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-downgrade.test.ts:872:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-downgrade.test.ts:911:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-downgrade.test.ts:977:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-downgrade.test.ts:1019:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-downgrade.test.ts:1062:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-downgrade.test.ts:1105:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/credit-topup.test.ts:131:function makeRequest(body: unknown): NextRequest {
+apps/web/__tests__/api/credit-topup.test.ts:132:  return new NextRequest('http://localhost/api/credit-topup', {
+apps/web/__tests__/api/credit-topup.test.ts:144:function makeRawRequest(rawBody: string): NextRequest {
+apps/web/__tests__/api/credit-topup.test.ts:145:  return new NextRequest('http://localhost/api/credit-topup', {
+apps/web/__tests__/api/credit-topup.test.ts:177:    const response = await POST(makeRequest({ amount_cents: 5000 }));
+apps/web/__tests__/api/credit-topup.test.ts:190:    const response = await POST(makeRequest({ amount_cents: 5000 }));
+apps/web/__tests__/api/credit-topup.test.ts:212:    const response = await POST(makeRawRequest('{not: valid json'));
+apps/web/__tests__/api/credit-topup.test.ts:234:    const response = await POST(makeRequest({}));
+apps/web/__tests__/api/credit-topup.test.ts:243:    const response = await POST(makeRequest({ amount_cents: null }));
+apps/web/__tests__/api/credit-topup.test.ts:251:    const response = await POST(makeRawRequest('"just a string"'));
+apps/web/__tests__/api/credit-topup.test.ts:274:    const response = await POST(makeRequest({ amount_cents: '5000' }));
+apps/web/__tests__/api/credit-topup.test.ts:283:    const response = await POST(makeRequest({ amount_cents: '1000' }));
+apps/web/__tests__/api/credit-topup.test.ts:294:    const response = await POST(makeRequest({ amount_cents: null }));
+apps/web/__tests__/api/credit-topup.test.ts:302:    const response = await POST(makeRequest({ amount_cents: true }));
+apps/web/__tests__/api/credit-topup.test.ts:310:    const response = await POST(makeRequest({ amount_cents: [5000] }));
+apps/web/__tests__/api/credit-topup.test.ts:318:    const response = await POST(makeRequest({ amount_cents: { value: 5000 } }));
+apps/web/__tests__/api/credit-topup.test.ts:340:    const response = await POST(makeRequest({ amount_cents: -500 }));
+apps/web/__tests__/api/credit-topup.test.ts:349:    const response = await POST(makeRequest({ amount_cents: 0 }));
+apps/web/__tests__/api/credit-topup.test.ts:357:    const response = await POST(makeRequest({ amount_cents: 999 }));
+apps/web/__tests__/api/credit-topup.test.ts:366:    const response = await POST(makeRequest({ amount_cents: 100001 }));
+apps/web/__tests__/api/credit-topup.test.ts:375:    const response = await POST(makeRequest({ amount_cents: 1500.5 }));
+apps/web/__tests__/api/credit-topup.test.ts:398:    const response = await POST(makeRequest({ amount_cents: 1000 }));
+apps/web/__tests__/api/credit-topup.test.ts:408:    const response = await POST(makeRequest({ amount_cents: 100000 }));
+apps/web/__tests__/api/credit-topup.test.ts:416:    const response = await POST(makeRequest({ amount_cents: 5000 }));
+apps/web/__tests__/api/credit-topup.test.ts:424:    const response = await POST(makeRequest({ amount_cents: 2500 }));
+apps/web/__tests__/api/credit-topup.test.ts:446:    const res = await POST(makeRequest({ amount_cents: 1000 }));
+apps/web/__tests__/api/credit-topup.test.ts:451:    const res = await POST(makeRequest({ amount_cents: 999 }));
+apps/web/__tests__/api/credit-topup.test.ts:456:    const res = await POST(makeRequest({ amount_cents: 100000 }));
+apps/web/__tests__/api/credit-topup.test.ts:461:    const res = await POST(makeRequest({ amount_cents: 100001 }));
+apps/web/components/modals/CreditAlertModal.tsx:43:      const res = await fetch('/api/credit-topup', {
+apps/web/__tests__/api/stripe-webhook.test.ts:246:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-webhook.test.ts:279:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-webhook.test.ts:314:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-webhook.test.ts:350:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-webhook.test.ts:375:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-webhook.test.ts:407:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-webhook.test.ts:445:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-webhook.test.ts:476:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-webhook.test.ts:507:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/__tests__/api/stripe-webhook.test.ts:536:      const request = new NextRequest('http://localhost/api/stripe-webhook', {
+apps/web/utils/supabase/proxy.ts:138:    // API routes must NEVER redirect to an HTML login page — fetch() follows
+apps/web/__tests__/api/me.test.ts:137:        const request = new NextRequest('http://localhost/api/me', {
+apps/web/__tests__/api/me.test.ts:152:        const request = new NextRequest('http://localhost/api/me', {
+apps/web/__tests__/api/me.test.ts:166:        const request = new NextRequest('http://localhost/api/me', {
+apps/web/__tests__/api/me.test.ts:181:        const request = new NextRequest('http://localhost/api/me', {
+apps/web/__tests__/api/me.test.ts:199:        const request = new NextRequest('http://localhost/api/me', {
+apps/web/__tests__/api/me.test.ts:210:        const request = new NextRequest('http://localhost/api/me', {
+apps/web/__tests__/api/me.test.ts:231:        const request = new NextRequest('http://localhost/api/me', {
+apps/web/__tests__/api/me.test.ts:250:        const request = new NextRequest('http://localhost/api/me', {
+apps/web/__tests__/api/me.test.ts:265:        const request = new NextRequest('http://localhost/api/me', {
+apps/web/__tests__/api/me.test.ts:289:        const request = new NextRequest('http://localhost/api/me', {
+apps/web/__tests__/api/me.test.ts:300:        const request = new NextRequest('http://localhost/api/me', {
+apps/web/__tests__/api/me.test.ts:328:        const request = new NextRequest('http://localhost/api/me', {
+apps/web/__tests__/api/me.test.ts:351:        const request = new NextRequest('http://localhost/api/me', {
+apps/web/__tests__/api/me.test.ts:365:      const request = new NextRequest('http://localhost/api/me', {
+apps/web/components/settings/ChatSettings.tsx:35:    fetch('/api/llm/v1/models', {
+apps/web/__tests__/api/agents-execute.test.ts:199:function makeRequest(body: Record<string, unknown>, authHeader?: string) {
+apps/web/__tests__/api/agents-execute.test.ts:204:  return new NextRequest('http://localhost/api/agents/execute', {
+apps/web/__tests__/api/agents-execute.test.ts:246:    const request = makeRequest({ message: 'Hello' }); // no auth header
+apps/web/__tests__/api/agents-execute.test.ts:260:    const request = makeRequest({ message: 'Hello' }, FAKE_BEARER);
+apps/web/__tests__/api/agents-execute.test.ts:269:    const request = makeRequest({ employeeId: 'eng-001' }, FAKE_BEARER);
+apps/web/__tests__/api/agents-execute.test.ts:286:    const request = makeRequest(
+apps/web/__tests__/api/agents-execute.test.ts:301:    const request = makeRequest(
+apps/web/__tests__/api/agents-execute.test.ts:314:    const request = makeRequest(
+apps/web/__tests__/api/agents-execute.test.ts:336:    const request = makeRequest(
+apps/web/__tests__/api/agents-execute.test.ts:364:    const request = makeRequest({ message: 'Hello', employeeId: 'test-employee' }, FAKE_BEARER);
+apps/web/__tests__/api/agents-execute.test.ts:376:    const request = makeRequest({ message: 'Hello', employeeId: 'test-employee' }, FAKE_BEARER);
+apps/web/__tests__/api/agents-execute.test.ts:385:    const request = makeRequest({ message: 'Hello', employeeId: 'legal-advisor' }, FAKE_BEARER);
+apps/web/components/settings/CustomModelsSettings.tsx:92:      const response = await fetch(`${baseUrl}/models`, {
+apps/web/components/settings/CustomModelsSettings.tsx:106:      chatResp = await fetch(`${baseUrl}/chat/completions`, {
+apps/web/__tests__/api/media-video-status.test.ts:87:function makeRequest(
+apps/web/__tests__/api/media-video-status.test.ts:92:  return new NextRequest(url, {
+apps/web/__tests__/api/media-video-status.test.ts:101:function makeUnauthRequest(taskId: string): NextRequest {
+apps/web/__tests__/api/media-video-status.test.ts:102:  return new NextRequest(`${BASE_URL}?task_id=${encodeURIComponent(taskId)}`, {
+apps/web/__tests__/api/media-video-status.test.ts:138:      const request = new NextRequest(BASE_URL, { method: 'OPTIONS' });
+apps/web/__tests__/api/media-video-status.test.ts:150:      const response = await GET(makeUnauthRequest('runway_task-abc'));
+apps/web/__tests__/api/media-video-status.test.ts:158:      const request = new NextRequest(`${BASE_URL}?task_id=runway_abc`, {
+apps/web/__tests__/api/media-video-status.test.ts:176:      const response = await GET(makeRequest('runway_task-abc'));
+apps/web/__tests__/api/media-video-status.test.ts:186:      const response = await GET(makeRequest('runway_task-abc'));
+apps/web/__tests__/api/media-video-status.test.ts:208:      const response = await GET(makeRequest('runway_task-abc'));
+apps/web/__tests__/api/media-video-status.test.ts:222:      await GET(makeRequest('runway_task-abc'));
+apps/web/__tests__/api/media-video-status.test.ts:233:      const response = await GET(makeRequest(null));
+apps/web/__tests__/api/media-video-status.test.ts:242:      const response = await GET(makeRequest('invalidtaskid'));
+apps/web/__tests__/api/media-video-status.test.ts:251:      const response = await GET(makeRequest('runway_task/../etc/passwd'));
+apps/web/__tests__/api/media-video-status.test.ts:259:      const response = await GET(makeRequest('google_op/<script>'));
+apps/web/__tests__/api/media-video-status.test.ts:281:      const response = await GET(makeRequest('runway_task-abc123'));
+apps/web/__tests__/api/media-video-status.test.ts:301:      const response = await GET(makeRequest('runway_task-abc123'));
+apps/web/__tests__/api/media-video-status.test.ts:320:      const response = await GET(makeRequest('runway_task-abc123'));
+apps/web/__tests__/api/media-video-status.test.ts:338:      const response = await GET(makeRequest('runway_task-abc123'));
+apps/web/__tests__/api/media-video-status.test.ts:355:      const response = await GET(makeRequest('runway_task-abc123'));
+apps/web/__tests__/api/media-video-status.test.ts:380:      const response = await GET(makeRequest('google_12345678'));
+apps/web/__tests__/api/media-video-status.test.ts:403:      const response = await GET(makeRequest('google_12345678'));
+apps/web/__tests__/api/media-video-status.test.ts:426:      const response = await GET(makeRequest('google_12345678'));
+apps/web/__tests__/api/media-video-status.test.ts:447:      const response = await GET(makeRequest('google_12345678'));
+apps/web/__tests__/api/media-video-status.test.ts:468:      const response = await GET(makeRequest('google_12345678'));
+apps/web/__tests__/api/media-video-status.test.ts:486:      const response = await GET(makeRequest('google_12345678'));
+apps/web/__tests__/api/media-video-status.test.ts:507:      const response = await GET(makeRequest('runway_task-missing'));
+apps/web/__tests__/api/media-video-status.test.ts:522:      const response = await GET(makeRequest('runway_task-abc'));
+apps/web/__tests__/api/media-video-status.test.ts:537:      const response = await GET(makeRequest('runway_task-abc'));
+apps/web/__tests__/api/media-video-status.test.ts:547:      const response = await GET(makeRequest('runway_task-abc'));
+apps/web/__tests__/api/media-video-status.test.ts:563:      const response = await GET(makeRequest('google_op-missing'));
+apps/web/__tests__/api/media-video-status.test.ts:578:      const response = await GET(makeRequest('google_op-abc'));
+apps/web/__tests__/api/media-video-status.test.ts:592:      const response = await GET(makeRequest('google_op-abc'));
+apps/web/__tests__/api/media-video-status.test.ts:601:      const response = await GET(makeRequest('google_op-abc'));
+apps/web/__tests__/api/media-video-status.test.ts:615:      const response = await GET(makeRequest('google_op-abc'));
+apps/web/__tests__/api/media-video-status.test.ts:625:      const response = await GET(makeRequest('runway_task-abc'));
+apps/web/__tests__/api/media-video-status.test.ts:645:      const response = await GET(makeRequest('runway_task-abc'));
+apps/web/__tests__/api/media-video-status.test.ts:661:      const response = await GET(makeRequest('google_99999'));
+apps/web/__tests__/api/media-video-status.test.ts:678:      const response = await GET(makeRequest('runway_task-abc'));
+packages/providers/lmstudio/src/index.ts:92:      const params = translateChatRequest(req, {
+apps/web/stores/unified/auth.ts:131:        const response = await fetch('/api/me', {
+apps/web/shared/lib/error-utils.ts:315:    const response = await fetch(url, {
+packages/providers/xai/src/index.ts:99:      const params = translateChatRequest(req, {
+apps/desktop/src/__tests__/agenticChatSmoke.test.ts:213:    useToolStore.getState().addApprovalRequest({
+apps/desktop/src/__tests__/agenticChatSmoke.test.ts:229:    useToolStore.getState().addApprovalRequest({
+apps/web/shared/stores/workforce-store.test.ts:5: * The store now calls /api/workforce (GET, POST, DELETE) via fetch()
+packages/providers/deepseek/src/index.ts:96:      const params = translateChatRequest(req, {
+apps/web/stores/unified/billingUsage.ts:139:      const response = await fetch('/api/usage', { credentials: 'include' });
+apps/web/shared/stores/chat-store.ts:568:            const response = await fetch('/api/llm/v1/chat/completions', {
+apps/web/shared/stores/company-hub-store.test.ts:345:      addUpsellRequest({
+apps/web/shared/stores/company-hub-store.test.ts:364:      addUpsellRequest({
+apps/web/shared/stores/company-hub-store.test.ts:387:      addUpsellRequest({
+packages/providers/google/src/translate.ts:155:export function translateChatRequest(req: ChatRequest): GeminiGenerateContentRequest {
+apps/web/shared/stores/query-client.ts:363:    const response = await fetch(fullUrl, config);
+packages/providers/google/src/index.ts:90:      const body = translateChatRequest(req);
+packages/providers/google/src/__tests__/tool-result-name.test.ts:48:    const translated = translateChatRequest(req);
+packages/providers/google/src/__tests__/tool-result-name.test.ts:94:    const translated = translateChatRequest(req);
+packages/providers/google/src/__tests__/tool-result-name.test.ts:114:    const translated = translateChatRequest(req);
+packages/providers/google/src/__tests__/tool-result-name.test.ts:148:    const translated = translateChatRequest(req);
+apps/web/features/media/services/media-api-service.ts:89:  const response = await fetch('/api/media/image/generate', {
+apps/web/features/media/services/media-api-service.ts:126:  const response = await fetch('/api/media/video/generate', {
+apps/web/features/media/services/media-api-service.ts:149:  const response = await fetch(`/api/media/video/status?task_id=${encodeURIComponent(taskId)}`, {
+apps/desktop/src-tauri/src/sys/error/translator.rs:1127:        "reqwest::Error",
+apps/desktop/src-tauri/src/sys/error/mod.rs:276:impl From<reqwest::Error> for AGIError {
+apps/desktop/src-tauri/src/sys/error/mod.rs:277:    fn from(err: reqwest::Error) -> Self {
+apps/desktop/src-tauri/src/sys/error/mod.rs:282:        } else if err.status() == Some(reqwest::StatusCode::TOO_MANY_REQUESTS) {
+apps/desktop/src-tauri/src/features/productivity/asana_client.rs:5:use reqwest::Client;
+apps/desktop/src-tauri/src/features/productivity/trello_client.rs:5:use reqwest::Client;
+apps/desktop/src-tauri/src/features/productivity/notion_client.rs:4:use reqwest::{header, Client};
+apps/desktop/src-tauri/src/features/communications/imap_client.rs:135:            .uid_fetch(
+apps/desktop/src-tauri/src/features/communications/imap_client.rs:320:            .uid_fetch(uid.to_string(), "(BODY.PEEK[])")
+apps/desktop/src-tauri/src/sys/telemetry/collector.rs:196:        let client = reqwest::Client::builder()
+apps/desktop/src-tauri/src/features/communications/gmail_oauth.rs:29:use reqwest::Client;
+apps/web/features/billing/services/stripe-payments.ts:36:  const response = await fetch('/api/portal', {
+apps/web/features/billing/services/stripe-payments.ts:137:  const response = await fetch('/api/checkout', {
+apps/desktop/src-tauri/src/features/communications/gmail_pubsub.rs:30:use reqwest::Client;
+apps/desktop/src-tauri/src/features/communications/gmail_pubsub.rs:569:                if status == reqwest::StatusCode::NOT_FOUND || error_text.contains("historyId") {
+apps/web/features/billing/services/token-pack-purchase.ts:53:    const response = await fetch('/api/credit-topup', {
+apps/desktop/src-tauri/src/features/messaging/slack.rs:2:use reqwest::{header, Client};
+apps/desktop/src-tauri/src/features/messaging/slack.rs:166:        let form = reqwest::multipart::Form::new()
+apps/desktop/src-tauri/src/features/messaging/slack.rs:170:                reqwest::multipart::Part::bytes(file_content).file_name(filename.to_string()),
+apps/desktop/src-tauri/src/features/messaging/whatsapp.rs:2:use reqwest::{header, Client};
+apps/desktop/src/components/Governance/PendingApprovals.tsx:17:    setSelectedRequest(request);
+apps/desktop/src/components/Governance/PendingApprovals.tsx:22:    setSelectedRequest(request);
+apps/desktop/src/components/Governance/PendingApprovals.tsx:27:    setSelectedRequest(null);
+apps/desktop/src-tauri/src/automation/browser/tab_manager.rs:271:        let client = reqwest::Client::builder()
+apps/desktop/src-tauri/src/automation/browser/tab_manager.rs:511:        let client = reqwest::Client::builder()
+apps/desktop/src/components/Governance/ApprovalModal.tsx:32:        await approveRequest(request.id, currentUserId, notes || undefined);
+apps/desktop/src/components/Governance/ApprovalModal.tsx:39:        await rejectRequest(request.id, currentUserId, notes);
+apps/desktop/src-tauri/src/automation/browser/playwright_bridge.rs:110:    fn http_client(&self) -> Result<reqwest::Client> {
+apps/desktop/src-tauri/src/automation/browser/playwright_bridge.rs:111:        reqwest::Client::builder()
+packages/unified-chat/src/components/RewindTimeline.tsx:330:                        onClick={() => handleRewindRequest(checkpoint)}
+apps/web/features/pages/ApiReference.tsx:297:                          <code>{`const response = await fetch('https://api.agiworkforce.com/api/chat/completion', {
+apps/web/features/pages/ApiReference.tsx:318:                              `const response = await fetch('https://api.agiworkforce.com/api/chat/completion', {
+apps/desktop/src-tauri/src/features/messaging/discord.rs:3:use reqwest::Client;
+apps/desktop/src-tauri/src/features/messaging/teams.rs:1:use reqwest::{header, Client};
+apps/desktop/src-tauri/src/sys/commands/voice.rs:17:use reqwest::Client;
+apps/desktop/src-tauri/src/sys/commands/voice.rs:421:    let file_part = reqwest::multipart::Part::bytes(audio_data)
+apps/desktop/src-tauri/src/sys/commands/voice.rs:426:    let mut form = reqwest::multipart::Form::new()
+apps/desktop/src-tauri/src/sys/commands/voice.rs:439:    form: reqwest::multipart::Form,
+apps/desktop/src-tauri/src/sys/commands/voice.rs:499:    let file_part = reqwest::multipart::Part::bytes(audio_data)
+apps/desktop/src-tauri/src/sys/commands/voice.rs:504:    let mut form = reqwest::multipart::Form::new()
+apps/desktop/src-tauri/src/features/messaging/telegram.rs:3:use reqwest::Client;
+apps/desktop/src-tauri/src/features/webhooks/mod.rs:64:    client: reqwest::Client,
+apps/desktop/src-tauri/src/features/webhooks/mod.rs:73:            client: reqwest::Client::new(),
+apps/web/features/teams/stores/team-store.ts:126:          const res = await fetch('/api/teams', { credentials: 'include' });
+apps/web/features/teams/stores/team-store.ts:148:          const res = await fetch(`/api/teams/${teamId}`, { credentials: 'include' });
+apps/web/features/teams/stores/team-store.ts:266:        const res = await fetch('/api/teams', {
+apps/web/features/teams/stores/team-store.ts:292:        const res = await fetch(`/api/teams/${teamId}`, {
+apps/web/features/teams/stores/team-store.ts:309:        const res = await fetch(`/api/teams/${teamId}`, {
+apps/web/features/teams/stores/team-store.ts:326:        const res = await fetch(`/api/teams/${teamId}/members`, {
+apps/web/features/teams/stores/team-store.ts:355:        const res = await fetch(`/api/teams/${teamId}/members`, {
+apps/web/features/teams/stores/team-store.ts:376:        const res = await fetch(`/api/teams/${teamId}/members?memberId=${memberId}`, {
+apps/web/features/support/services/support-service.ts:362:      const response = await fetch('/.netlify/functions/notifications/send-email', {
+apps/desktop/src-tauri/src/features/calendar/outlook_calendar.rs:2:use reqwest::Client;
+apps/desktop/src-tauri/src/features/search/web_search.rs:6:use reqwest::Client;
+apps/desktop/src-tauri/src/features/calendar/google_calendar.rs:2:use reqwest::Client;
+apps/desktop/src-tauri/src/sys/commands/scheduler.rs:1447:            let client = reqwest::Client::new();
+apps/desktop/src-tauri/src/features/speech/local_stt.rs:410:        let client = reqwest::Client::new();
+apps/desktop/src-tauri/src/features/speech/local_tts.rs:530:        let client = reqwest::Client::new();
+apps/desktop/src-tauri/src/features/speech/local_tts.rs:551:        client: &reqwest::Client,
+apps/desktop/src-tauri/src/features/speech/local_tts.rs:652:        let client = reqwest::Client::new();
+apps/desktop/src-tauri/src/features/speech/tts.rs:112:    client: reqwest::Client,
+apps/desktop/src-tauri/src/features/speech/tts.rs:119:            client: reqwest::Client::new(),
+apps/desktop/src-tauri/src/features/speech/tts.rs:229:    client: reqwest::Client,
+apps/desktop/src-tauri/src/features/speech/tts.rs:236:            client: reqwest::Client::new(),
+apps/desktop/src-tauri/src/sys/commands/mcp_oauth.rs:449:    http_client: reqwest::Client,
+apps/desktop/src-tauri/src/sys/commands/mcp_oauth.rs:460:            let http_client = reqwest::Client::builder()
+apps/desktop/src-tauri/src/sys/commands/mcp_oauth.rs:463:                .unwrap_or_else(|_| reqwest::Client::new());
+apps/desktop/src-tauri/src/sys/commands/mcp_oauth.rs:476:            http_client: reqwest::Client::builder()
+apps/desktop/src-tauri/src/sys/commands/mcp_oauth.rs:1348:    client: &reqwest::Client,
+apps/desktop/src-tauri/src/sys/commands/error_reporting.rs:80:                if let Ok(client) = reqwest::Client::builder()
+apps/desktop/src-tauri/src/sys/commands/feedback.rs:161:    let client = reqwest::Client::builder()
+apps/web/features/schedules/stores/schedule-store.ts:77:        const res = await fetch('/api/schedules', { credentials: 'include' });
+apps/web/features/schedules/stores/schedule-store.ts:112:        const res = await fetch(url, {
+apps/web/features/schedules/stores/schedule-store.ts:151:        const res = await fetch(`/api/schedules/${id}`, {
+apps/web/features/schedules/stores/schedule-store.ts:173:        const res = await fetch(`/api/schedules/${id}`, {
+apps/web/features/schedules/stores/schedule-store.ts:195:        const res = await fetch(`/api/schedules/${id}/runs`, {
+apps/web/features/schedules/stores/schedule-store.ts:278:        const res = await fetch(`/api/schedules/${id}/runs?limit=10`, {
+apps/desktop/src-tauri/src/sys/commands/mcpb.rs:2165:    let client = reqwest::Client::builder()
+apps/desktop/src-tauri/src/sys/commands/github.rs:92:                .fetch(&[branch_name], Some(&mut fetch_opts), None)
+apps/desktop/src-tauri/src/sys/commands/media.rs:128:    let client = reqwest::Client::builder()
+apps/desktop/src-tauri/src/sys/commands/media.rs:231:    let client = reqwest::Client::builder()
+apps/desktop/src-tauri/src/sys/commands/media.rs:273:    let poll_client = reqwest::Client::builder()
+apps/desktop/src-tauri/src/sys/commands/git.rs:435:            .fetch(&[&branch_name], Some(&mut fetch_opts), None)
+apps/desktop/src-tauri/src/sys/commands/git.rs:860:pub async fn git_fetch(path: String, remote: Option<String>) -> Result<String, String> {
+apps/desktop/src-tauri/src/sys/commands/git.rs:877:            .fetch(&[] as &[&str], Some(&mut fetch_opts), None)
+apps/desktop/src-tauri/src/core/mcp/tests.rs:14:            McpMessage::Request(req) => {
+apps/desktop/src-tauri/src/core/mcp/tests.rs:32:        let msg = McpMessage::Request(req);
+apps/desktop/src-tauri/src/core/mcp/tests.rs:756:        if let Ok(McpMessage::Request(req)) = result {
+apps/desktop/src-tauri/src/core/mcp/tests.rs:769:        if let Ok(McpMessage::Request(_)) = result {
+apps/desktop/src-tauri/src/core/mcp/tests.rs:785:            Ok(McpMessage::Request(req)) => {
+apps/desktop/src-tauri/src/core/mcp/tests.rs:878:        if let Ok(McpMessage::Request(req)) = result {
+apps/desktop/src-tauri/src/core/mcp/tests.rs:885:        if let Ok(McpMessage::Request(req)) = result {
+apps/desktop/src-tauri/src/core/mcp/tests.rs:906:        if let Ok(McpMessage::Request(req)) = result {
+apps/desktop/src-tauri/src/core/mcp/tests.rs:918:        if let Ok(McpMessage::Request(req)) = result {
+apps/desktop/src-tauri/src/core/mcp/tests.rs:933:        if let Ok(McpMessage::Request(req)) = result {
+apps/desktop/src-tauri/src/core/mcp/tests.rs:947:        if let Ok(McpMessage::Request(req)) = result {
+apps/desktop/src-tauri/src/core/mcp/tests.rs:954:        if let Ok(McpMessage::Request(req)) = result {
+apps/desktop/src-tauri/src/core/mcp/tests.rs:979:        if let Ok(McpMessage::Request(req)) = result {
+apps/desktop/src-tauri/src/core/mcp/tests.rs:997:            Ok(McpMessage::Request(req)) => {
+apps/desktop/src-tauri/src/core/mcp/tests.rs:1036:        let msg = McpMessage::Request(original_request.clone());
+apps/desktop/src-tauri/src/core/mcp/tests.rs:1040:        if let McpMessage::Request(req) = parsed {
+apps/desktop/src-tauri/src/sys/commands/llm.rs:598:        let client = reqwest::Client::builder()
+apps/desktop/src-tauri/src/sys/commands/llm.rs:766:    let client = reqwest::Client::builder()
+apps/desktop/src-tauri/src/sys/commands/llm.rs:849:        let client = reqwest::Client::builder()
+apps/desktop/src-tauri/src/core/mcp/oauth.rs:451:            .request_async(oauth2::reqwest::async_http_client)
+apps/desktop/src-tauri/src/core/mcp/oauth.rs:618:            .request_async(oauth2::reqwest::async_http_client)
+apps/desktop/src/components/Settings/CustomModelsSettings.tsx:99:      const response = await fetch(`${baseUrl}/models`, {
+apps/desktop/src/components/Settings/CustomModelsSettings.tsx:111:    const chatResp = await fetch(`${baseUrl}/chat/completions`, {
+apps/desktop/src-tauri/src/sys/api/oauth.rs:2:use reqwest::Client;
+apps/desktop/src-tauri/src/sys/commands/ollama.rs:96:    let client = reqwest::Client::builder()
+apps/desktop/src-tauri/src/sys/commands/ollama.rs:119:    let client = reqwest::Client::builder()
+apps/desktop/src-tauri/src/sys/commands/ollama.rs:209:    let client = reqwest::Client::builder()
+apps/desktop/src-tauri/src/sys/commands/ollama.rs:247:    let client = reqwest::Client::builder()
+apps/desktop/src-tauri/src/sys/commands/chat/cloud.rs:9:use reqwest::Client;
+apps/desktop/src-tauri/src/sys/commands/chat/cloud.rs:100:async fn check_response(res: reqwest::Response, context: &str) -> Result<String, String> {
+apps/web/app/api/media/image/generate/route.ts:167:    const response = await fetch('https://api.openai.com/v1/images/generations', {
+apps/web/app/api/media/image/generate/route.ts:238:  const response = await fetch(
+apps/web/app/api/media/image/generate/route.ts:365:    const response = await fetch('https://api.stability.ai/v2beta/stable-image/generate/core', {
+apps/web/app/api/media/image/generate/route.ts:405:  const preflightResponse = handleCorsPreflightRequest(request);
+apps/web/app/api/media/image/generate/route.ts:872:    handleCorsPreflightRequest(request) ??
+apps/web/app/api/media/video/generate/route.ts:138:  const response = await fetch('https://api.dev.runwayml.com/v1/text_to_video', {
+apps/web/app/api/media/video/generate/route.ts:236:  const response = await fetch(endpoint, {
+apps/web/app/api/media/video/generate/route.ts:313:  const preflightResponse = handleCorsPreflightRequest(request);
+apps/web/app/api/media/video/generate/route.ts:524:    handleCorsPreflightRequest(request) ??
+apps/web/app/api/media/video/status/route.ts:119:  const response = await fetch(`https://api.dev.runwayml.com/v1/tasks/${taskId}`, {
+apps/web/app/api/media/video/status/route.ts:198:  const response = await fetch(endpoint, {
+apps/web/app/api/media/video/status/route.ts:283:  const preflightResponse = handleCorsPreflightRequest(request);
+apps/web/app/api/media/video/status/route.ts:392:    handleCorsPreflightRequest(request) ??
+apps/web/features/chat/services/chat-ai-service.ts:195:      const response = await fetch('/api/llm/v1/chat/completions', {
+apps/desktop/src/components/Settings/AutomationPermissionsSettings.tsx:55:          onClick={() => onRequest(kind)}
+apps/web/app/api/control-plane/status/route.ts:60:    const res = await fetch(url, {
+apps/web/app/api/control-plane/status/route.ts:75:async function authenticateRequest(request: NextRequest): Promise<string | null> {
+apps/web/app/api/control-plane/status/route.ts:112:  const userId = await authenticateRequest(request);
+apps/web/app/api/control-plane/status/route.ts:248:  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+apps/desktop/src/components/UnifiedAgenticChat/RewindTimeline.tsx:247:                        onClick={() => handleRewindRequest(checkpoint)}
+apps/web/features/chat/services/document-generation-service.ts:39:export function isDocumentRequest(message: string): boolean {
+apps/web/features/chat/services/document-generation-service.ts:76:export function parseDocumentRequest(message: string): DocumentRequest {
+apps/web/features/chat/services/document-generation-service.ts:124:  const userMessage = buildDocumentRequest(request);
+apps/web/features/chat/services/document-generation-service.ts:232:function buildDocumentRequest(request: DocumentRequest): string {
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/HtmlArtifact.tsx:72:    // connect-src 'none': blocks ALL fetch(), XMLHttpRequest, WebSocket calls.
+apps/web/app/api/device/poll/route.ts:247:  const preflightResponse = handleCorsPreflightRequest(request);
+apps/web/app/api/device/link/route.ts:186:  const preflightResponse = handleCorsPreflightRequest(request);
+apps/web/app/api/device/approve/route.ts:186:  const preflightResponse = handleCorsPreflightRequest(request);
+apps/desktop/src/components/StatusBanner.tsx:73:    const response = await fetch(STATUS_URL, {
+apps/desktop/src/components/UnifiedAgenticChat/Cards/ScreenshotCard.tsx:37:      const response = await fetch(imageUrl);
+apps/desktop/src/components/UnifiedAgenticChat/index.tsx:755:      : getModelForRequest(currentModel, content, hasImages, currentTier);
+apps/web/app/api/me/route.ts:249:  const preflightResponse = handleCorsPreflightRequest(request);
+apps/desktop/src/components/UnifiedAgenticChat/ShareConversationDialog.tsx:60:      const response = await fetch(`${WEB_APP_URL}/api/shared`, {
+apps/web/app/api/me/routing-preferences/route.ts:186:  const preflightResponse = handleCorsPreflightRequest(request);
+apps/web/app/api/download/route.ts:56:  const githubResponse = await fetch(
+apps/web/app/api/download/route.ts:112:    const fileResponse = await fetch(downloadUrl);
+apps/web/app/api/github/webhook/route.ts:346:      const reviewResponse = await fetch('https://api.anthropic.com/v1/messages', {
+apps/desktop/src-tauri/src/sys/api/client.rs:2:use reqwest::{Client, Method, Response};
+apps/desktop/src-tauri/src/sys/api/client.rs:300:        let mut form = reqwest::multipart::Form::new();
+apps/desktop/src-tauri/src/sys/api/client.rs:302:        let file_part = reqwest::multipart::Part::bytes(file_content).file_name(file_name);
+apps/desktop/src-tauri/src/sys/diagnostics/checks/network.rs:57:        let client = reqwest::Client::builder()
+apps/desktop/src-tauri/src/sys/diagnostics/checks/network.rs:60:            .unwrap_or_else(|_| reqwest::Client::new());
+apps/desktop/src-tauri/src/core/mcp/transport.rs:47:fn classify_reqwest_error(err: reqwest::Error, url: &str) -> McpError {
+apps/desktop/src-tauri/src/core/mcp/transport.rs:522:                            McpMessage::Request(req) => Some(req.id.clone()),
+apps/desktop/src-tauri/src/core/mcp/transport.rs:621:                    Ok(McpMessage::Request(_)) => {
+apps/desktop/src-tauri/src/core/mcp/transport.rs:760:        self.tx.send(McpMessage::Request(request)).map_err(|_| {
+apps/desktop/src-tauri/src/core/mcp/transport.rs:931:    client: reqwest::Client,
+apps/desktop/src-tauri/src/core/mcp/transport.rs:935:    sse_client: reqwest::Client,
+apps/desktop/src-tauri/src/core/mcp/transport.rs:1058:        let mut client_builder = reqwest::Client::builder()
+apps/desktop/src-tauri/src/core/mcp/transport.rs:1062:        let client_builder = reqwest::Client::builder()
+apps/desktop/src-tauri/src/core/mcp/transport.rs:1075:        let mut sse_client_builder = reqwest::Client::builder()
+apps/desktop/src-tauri/src/core/mcp/transport.rs:1079:        let sse_client_builder = reqwest::Client::builder()
+apps/desktop/src-tauri/src/core/mcp/transport.rs:1339:        client: &reqwest::Client,
+apps/desktop/src-tauri/src/core/mcp/transport.rs:1341:        headers: &reqwest::header::HeaderMap,
+apps/desktop/src-tauri/src/core/mcp/transport.rs:1342:    ) -> McpResult<reqwest::Response> {
+apps/desktop/src-tauri/src/core/mcp/transport.rs:1393:        response: reqwest::Response,
+apps/desktop/src-tauri/src/core/mcp/transport.rs:1546:            Ok(McpMessage::Request(req)) => {
+apps/desktop/src-tauri/src/core/mcp/transport.rs:1565:    fn build_headers(&self) -> McpResult<reqwest::header::HeaderMap> {
+apps/desktop/src-tauri/src/core/mcp/transport.rs:1566:        use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+apps/desktop/src-tauri/src/core/mcp/transport.rs:2035:        let msg = McpMessage::Request(req);
+apps/desktop/src-tauri/src/core/mcp/transport.rs:2151:        // We cannot easily fabricate reqwest::Error internals, so we verify the
+apps/desktop/src-tauri/src/core/mcp/transport.rs:2165:            let client = reqwest::Client::builder()
+apps/desktop/src-tauri/src/core/mcp/transport.rs:2211:        let client = reqwest::Client::builder()
+apps/desktop/src-tauri/src/core/mcp/transport.rs:2216:        let headers = reqwest::header::HeaderMap::new();
+apps/desktop/src-tauri/src/core/mcp/config.rs:968:    let client = reqwest::Client::new();
+apps/web/app/api/mission/route.ts:151:  const preflightResponse = handleCorsPreflightRequest(request);
+apps/web/app/api/mission/route.ts:298:    const llmResponse = await LLMProviderFactory.sendRequest(missionProvider, {
+apps/web/app/api/mission/route.ts:370:    handleCorsPreflightRequest(request) ??
+apps/web/features/chat/components/Budget/BudgetTrackerDisplay.tsx:29:    const response = await fetch('/api/llm/v1/credits/balance', {
+apps/desktop/src-tauri/src/core/mcp/protocol.rs:60:    Request(JsonRpcRequest),
+apps/desktop/src-tauri/src/core/mcp/protocol.rs:69:            return Ok(McpMessage::Request(req));
+apps/desktop/src-tauri/src/core/mcp/protocol.rs:91:            McpMessage::Request(req) => serde_json::to_string(req),
+apps/desktop/src-tauri/src/core/mcp/protocol.rs:411:            McpMessage::Request(req) => {
+apps/desktop/src-tauri/src/core/mcp/protocol.rs:450:        let msg = McpMessage::Request(req);
+apps/web/app/api/checkout/route.ts:245:  const preflightResponse = handleCorsPreflightRequest(request);
+apps/web/features/chat/components/tokens/UsageWarningBanner.tsx:196:        const response = await fetch('/api/usage', {
+apps/web/features/chat/components/tokens/TokenBalanceDisplay.tsx:45:      const response = await fetch('/api/usage', {
+apps/web/app/shared/[id]/page.tsx:32:    const res = await fetch(`${appUrl}/api/shared?token=${encodeURIComponent(token)}`, {
+apps/web/app/auth/device/page.tsx:33:      const res = await fetch('/api/auth/device/approve', {
+apps/desktop/src-tauri/src/core/agent/undo_manager.rs:772:            .fetch(&[branch], Some(&mut fetch_options), None)
+apps/web/app/contact/page.tsx:20:      const res = await fetch('/api/contact', {
+apps/web/app/api/models/route.ts:126:  const preflightResponse = handleCorsPreflightRequest(request);
+apps/web/app/api/models/route.ts:183:    handleCorsPreflightRequest(request) ??
+apps/web/app/verify/verify-client.tsx:15:      const csrfRes = await fetch('/api/csrf', { method: 'GET', credentials: 'include' });
+apps/web/app/verify/verify-client.tsx:21:      const res = await fetch('/api/device/approve', {
+apps/web/app/api/user/data/route.ts:37:  const preflightResponse = handleCorsPreflightRequest(request);
+apps/web/app/api/user/data/route.ts:194:    handleCorsPreflightRequest(request) ??
+apps/web/core/billing/token-enforcement-service.test.ts:79:      const estimate = estimateTokensForRequest(400, 0);
+apps/web/core/billing/token-enforcement-service.test.ts:87:      const estimate = estimateTokensForRequest(400, 400);
+apps/web/core/billing/token-enforcement-service.test.ts:95:      const estimate = estimateTokensForRequest(0, 0);
+apps/web/core/billing/token-enforcement-service.test.ts:100:      const estimate = estimateTokensForRequest(401, 0);
+apps/web/core/billing/token-enforcement-service.test.ts:482:      const result = await canUserMakeRequest(mockUserId, 1000);
+apps/web/core/billing/token-enforcement-service.test.ts:500:      const result = await canUserMakeRequest(mockUserId, 1000);
+apps/web/core/billing/token-enforcement-service.test.ts:527:      const result = await canUserMakeRequest(mockUserId, 1000);
+apps/web/app/api/user/export/route.ts:35:  const preflightResponse = handleCorsPreflightRequest(request);
+apps/web/app/api/user/export/route.ts:272:    handleCorsPreflightRequest(request) ??
+apps/web/core/billing/token-enforcement-service.ts:314:export function estimateTokensForRequest(
+apps/web/core/billing/token-enforcement-service.ts:377:export async function canUserMakeRequest(
+apps/web/core/billing/token-enforcement-service.ts:402:export async function canUserMakeUsagePricedRequest(
+apps/desktop/src-tauri/src/core/embeddings/generator.rs:2:use reqwest::Client;
+apps/web/app/api/user/delete-account/route.ts:110:  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+apps/web/app/api/usage/route.ts:69:  const preflightResponse = handleCorsPreflightRequest(request);
+apps/web/app/api/agents/session/route.ts:22:  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+apps/web/app/api/agents/session/route.ts:42:    throw createError.badRequest('Invalid JSON in request body');
+apps/web/app/api/agents/session/route.ts:47:    throw createError.badRequest(
+apps/web/app/api/agents/session/route.ts:92:        throw createError.badRequest('sessionId is required');
+apps/web/app/api/agents/session/route.ts:122:        throw createError.badRequest('sessionId is required');
+apps/web/app/api/agents/session/route.ts:140:      throw createError.badRequest(`Unknown action: ${action}`);
+apps/web/core/ai/orchestration/agent-communication-protocol.ts:72:  async sendRequest(
+apps/web/core/ai/orchestration/agent-communication-protocol.ts:490:export function sendAgentRequest(
+apps/web/core/ai/orchestration/agent-communication-protocol.ts:496:  return agentCommunicator.sendRequest(from, to, request, priority);
+apps/web/app/api/agents/execute/route.ts:19:  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+apps/web/app/api/agents/execute/route.ts:121:    throw createError.badRequest('Invalid JSON in request body');
+apps/web/app/api/agents/execute/route.ts:126:    throw createError.badRequest(
+apps/web/app/api/agents/execute/route.ts:137:    throw createError.badRequest(`Employee "${employeeId}" not found`);
+apps/web/app/api/agents/execute/route.ts:183:      throw createError.badRequest(
+apps/web/app/api/agents/execute/route.ts:191:    const stream = await llmProvider.streamRequest({
+apps/web/app/api/agents/communication/route.ts:199:  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+apps/desktop/src-tauri/src/sys/security/oauth.rs:264:            .request_async(oauth2::reqwest::async_http_client)
+apps/desktop/src-tauri/src/sys/security/oauth.rs:306:            .request_async(oauth2::reqwest::async_http_client)
+apps/desktop/src-tauri/src/sys/security/oauth.rs:335:        let client = reqwest::Client::new();
+apps/web/app/api/agents/collaboration/route.ts:39:  const preflightResponse = handleCorsPreflightRequest(request);
+apps/web/app/api/agents/collaboration/route.ts:119:    handleCorsPreflightRequest(request) ??
+apps/desktop/src-tauri/src/core/llm/tool_executor/search_tools.rs:328:        let client = reqwest::Client::builder()
+apps/web/app/api/completion/route.ts:37:  const preflightResponse = handleCorsPreflightRequest(request);
+apps/web/app/api/completion/route.ts:84:    const llmResponse = await LLMProviderFactory.sendRequest(provider, {
+apps/web/app/api/completion/route.ts:119:  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+apps/desktop/src-tauri/src/core/llm/tool_executor/api_tools.rs:133:        let client = reqwest::Client::new();
+apps/desktop/src-tauri/src/core/llm/tool_executor/api_tools.rs:265:        let part = reqwest::multipart::Part::bytes(file_content).file_name(file_name.to_string());
+apps/desktop/src-tauri/src/core/llm/tool_executor/api_tools.rs:266:        let form = reqwest::multipart::Form::new().part("file", part);
+apps/desktop/src-tauri/src/core/llm/tool_executor/api_tools.rs:268:        let client = reqwest::Client::new();
+apps/web/core/ai/llm/providers/qwen-ai.ts:133:      const response = await fetch(proxyUrl, {
+apps/web/core/ai/llm/providers/qwen-ai.ts:240:      const response = await fetch(proxyUrl, {
+apps/web/core/ai/llm/providers/deepseek-ai.ts:130:      const response = await fetch(proxyUrl, {
+apps/web/core/ai/llm/providers/deepseek-ai.ts:240:      const response = await fetch(proxyUrl, {
+apps/web/features/chat/components/SkillsMenu.tsx:59:        const res = await fetch('/api/skills');
+apps/web/features/chat/components/SkillsMenu.tsx:87:      const res = await fetch(`/api/skills/${encodeURIComponent(skill.name)}`);
+apps/desktop/src-tauri/src/core/llm/capability_detection.rs:65:    client: &reqwest::Client,
+apps/desktop/src-tauri/src/core/llm/capability_detection.rs:92:    client: &reqwest::Client,
+apps/web/app/api/admin/security/route.ts:129:            createError.badRequest(
+apps/web/app/api/admin/security/route.ts:148:          return errorResponse(createError.badRequest('userId parameter required'));
+apps/web/app/api/admin/security/route.ts:166:          createError.badRequest(
+apps/web/app/api/admin/security/route.ts:227:          return errorResponse(createError.badRequest('userId and reason are required'));
+apps/web/app/api/admin/security/route.ts:231:          return errorResponse(createError.badRequest('Cannot modify your own account'));
+apps/web/app/api/admin/security/route.ts:277:          return errorResponse(createError.badRequest('userId and reason are required'));
+apps/web/app/api/admin/security/route.ts:281:          return errorResponse(createError.badRequest('Cannot modify your own account'));
+apps/web/app/api/admin/security/route.ts:336:          return errorResponse(createError.badRequest('userId and reason are required'));
+apps/web/app/api/admin/security/route.ts:340:          return errorResponse(createError.badRequest('Cannot modify your own account'));
+apps/web/app/api/admin/security/route.ts:386:          createError.badRequest(
+apps/web/app/api/portal/route.ts:397:  const preflightResponse = handleCorsPreflightRequest(request);
+apps/web/core/ai/llm/providers/openai-gpt.ts:244:        return await this.executeRequest(messages, sessionId, userId);
+apps/web/core/ai/llm/providers/openai-gpt.ts:283:  private async executeRequest(
+apps/web/core/ai/llm/providers/openai-gpt.ts:304:      const response = await fetch(proxyUrl, {
+apps/web/core/ai/llm/providers/openai-gpt.ts:416:        yield* this.executeStreamRequest(messages, sessionId, userId);
+apps/web/core/ai/llm/providers/openai-gpt.ts:456:  private async *executeStreamRequest(
+apps/web/core/ai/llm/providers/openai-gpt.ts:485:      const response = await fetch(proxyUrl, {
+apps/desktop/src-tauri/src/integrations/sync/cloud.rs:2:use reqwest::Client;
+apps/desktop/src-tauri/src/integrations/sync/cloud.rs:246:        let form = reqwest::multipart::Form::new().part(
+apps/desktop/src-tauri/src/integrations/sync/cloud.rs:248:            reqwest::multipart::Part::bytes(file_data).file_name(file_path.to_string()),
+apps/web/core/ai/llm/providers/grok-ai.ts:146:      const response = await fetch(proxyUrl, {
+apps/web/core/ai/llm/providers/grok-ai.ts:261:      const response = await fetch(proxyUrl, {
+apps/web/app/api/workforce/route.ts:31:async function authenticateRequest(
+apps/web/app/api/workforce/route.ts:43:  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+apps/web/app/api/workforce/route.ts:54:    const { userId, supabase } = await authenticateRequest(request);
+apps/web/app/api/workforce/route.ts:174:    const { userId, supabase } = await authenticateRequest(request);
+apps/web/app/api/workforce/route.ts:271:    const { userId, supabase } = await authenticateRequest(request);
+apps/web/core/ai/llm/providers/perplexity-ai.ts:142:      const response = await fetch(proxyUrl, {
+apps/web/core/ai/llm/providers/perplexity-ai.ts:284:      const response = await fetch(proxyUrl, {
+apps/web/app/api/llm/v2/chat/route.ts:304:      const stream = await LLMProviderFactory.streamRequest(provider, llmRequest);
+apps/web/app/api/llm/v2/chat/route.ts:376:    llmResponse = await LLMProviderFactory.sendRequest(provider, llmRequest);
+apps/web/app/api/llm/v2/chat/route.ts:488:  const preflight = handleCorsPreflightRequest(request);
+apps/web/app/api/llm/v2/chat/route.ts:1118:    handleCorsPreflightRequest(request) ??
+apps/web/core/ai/llm/providers/google-gemini.ts:139:      const response = await fetch(proxyUrl, {
+apps/web/core/ai/llm/providers/google-gemini.ts:269:      const response = await fetch(proxyUrl, {
+apps/web/app/api/marketplace/route.ts:45:  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+apps/web/app/api/llm/completion/route.ts:390:      const stream = await LLMProviderFactory.streamRequest(provider, llmRequest);
+apps/web/app/api/llm/completion/route.ts:592:    llmResponse = await LLMProviderFactory.sendRequest(provider, llmRequest);
+apps/web/app/api/llm/completion/route.ts:750:  const preflightResponse = handleCorsPreflightRequest(request);
+apps/web/app/api/credit-topup/route.ts:209:  const preflightResponse = handleCorsPreflightRequest(request);
+apps/web/app/api/sync-subscription/route.ts:78:  const preflightResponse = handleCorsPreflightRequest(request);
+apps/web/app/api/health/route.ts:144:  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+apps/web/core/ai/llm/providers/anthropic-claude.ts:246:        return await this.executeRequest(messages, sessionId, userId);
+apps/web/core/ai/llm/providers/anthropic-claude.ts:285:  private async executeRequest(
+apps/web/core/ai/llm/providers/anthropic-claude.ts:306:      const response = await fetch(proxyUrl, {
+apps/web/core/ai/llm/providers/anthropic-claude.ts:420:        yield* this.executeStreamRequest(messages, sessionId, userId);
+apps/web/core/ai/llm/providers/anthropic-claude.ts:460:  private async *executeStreamRequest(
+apps/web/core/ai/llm/providers/anthropic-claude.ts:489:      const response = await fetch(proxyUrl, {
+apps/web/core/ai/llm/unified-language-model.ts:426:        const estimatedPromptTokens = estimateTokensForRequest(messageLength);
+apps/web/core/ai/llm/unified-language-model.ts:428:        const permission = await canUserMakeUsagePricedRequest(actualUserId, {
+apps/web/core/ai/llm/unified-language-model.ts:447:        const estimatedTokens = estimateTokensForRequest(
+apps/desktop/src/stores/__tests__/unifiedChatStore.test.ts:317:    addApprovalRequest({
+apps/web/app/api/chat/conversations/[id]/messages/route.ts:155:  const llmResponse = await fetch(llmEndpoint, {
+apps/desktop/src-tauri/src/core/llm/tests/sse_parser_tests.rs:765:// SseStreamParser is private (requires a real reqwest::Response), so these tests
+apps/web/app/api/llm/v1/audio/transcriptions/route.ts:67:  const preflightResponse = handleCorsPreflightRequest(request);
+apps/web/app/api/llm/v1/audio/transcriptions/route.ts:253:  const response = await fetch(OPENAI_TRANSCRIPTION_URL, {
+apps/web/app/api/llm/v1/audio/transcriptions/route.ts:308:    handleCorsPreflightRequest(request) ??
+apps/web/app/api/llm/v1/models/route.ts:83:async function listModelsForRequest(request: NextRequest, userTier: string) {
+apps/web/app/api/llm/v1/models/route.ts:122:    return listModelsForRequest(request, 'free');
+apps/web/app/api/llm/v1/models/route.ts:126:  return listModelsForRequest(request, subscription?.plan_tier || 'free');
+apps/desktop/src-tauri/src/core/llm/providers/direct_api_provider.rs:14:use reqwest::Client;
+apps/desktop/src-tauri/src/core/llm/providers/direct_api_provider.rs:115:    fn apply_auth(&self, builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+apps/desktop/src-tauri/src/core/llm/providers/direct_api_provider.rs:208:        .parse::<reqwest::Url>()
+apps/desktop/src-tauri/src/core/llm/providers/direct_api_provider.rs:351:                .get(reqwest::header::RETRY_AFTER)
+apps/desktop/src-tauri/src/core/llm/providers/direct_api_provider.rs:408:                .get(reqwest::header::RETRY_AFTER)
+apps/web/app/api/waitlist/route.ts:110:  const preflightResponse = handleCorsPreflightRequest(request);
+apps/desktop/src-tauri/src/core/llm/providers/ollama.rs:6:use reqwest::Client;
+apps/desktop/src-tauri/src/core/llm/providers/bedrock.rs:17:use reqwest::Client;
+apps/desktop/src-tauri/src/core/llm/providers/bedrock.rs:711:    ) -> Result<reqwest::Response, Box<dyn Error + Send + Sync>> {
+apps/desktop/src-tauri/src/core/llm/providers/bedrock.rs:714:            .parse::<reqwest::Url>()
+apps/desktop/src-tauri/src/core/llm/providers/bedrock.rs:979:    S: Stream<Item = Result<bytes::Bytes, reqwest::Error>> + Unpin + Send,
+apps/desktop/src/stores/modelStore.ts:946:          const routingResult = getModelForRequest(effectiveModel, message, hasImages, currentPlan);
+apps/desktop/src-tauri/src/core/llm/providers/http_client_factory.rs:8:use reqwest::{Certificate, Client, Proxy};
+apps/desktop/src-tauri/src/core/llm/providers/http_client_factory.rs:47:/// Build a [`reqwest::Client`] from the given configuration.
+apps/desktop/src-tauri/src/core/llm/providers/http_client_factory.rs:54:/// - The underlying `reqwest::ClientBuilder::build()` call fails.
+apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts:30:  const preflightResponse = handleCorsPreflightRequest(request);
+apps/desktop/src-tauri/src/integrations/api_integrations/mod.rs:11:    HttpError(#[from] reqwest::Error),
+apps/desktop/src-tauri/src/core/llm/providers/http_client.rs:3:use reqwest::Client;
+apps/desktop/src-tauri/src/core/llm/providers/http_client.rs:9:/// This uses `reqwest::Client::new()` which is infallible with default settings.
+apps/desktop/src-tauri/src/integrations/api_integrations/veo3.rs:6:    client: reqwest::Client,
+apps/desktop/src-tauri/src/integrations/api_integrations/veo3.rs:78:        let client = reqwest::Client::builder()
+apps/web/app/api/v1/providers/[providerId]/stream/route.ts:160:    upstream = await fetch(
+apps/web/features/settings/pages/AIConfiguration.tsx:303:      const response = await fetch('/api/settings/test-provider', {
+apps/desktop/src-tauri/src/core/llm/providers/managed_cloud_provider.rs:10:use reqwest::Client;
+apps/desktop/src-tauri/src/core/llm/providers/managed_cloud_provider.rs:106:    async fn extract_error_detail(res: reqwest::Response) -> Option<String> {
+apps/desktop/src-tauri/src/integrations/api_integrations/runway.rs:9:    client: reqwest::Client,
+apps/desktop/src-tauri/src/integrations/api_integrations/runway.rs:183:        let client = reqwest::Client::builder()
+apps/desktop/src-tauri/src/integrations/api_integrations/runway.rs:266:        response: reqwest::Response,
+apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:229:export async function processRequest(
+apps/desktop/src-tauri/src/integrations/api_integrations/image_gen.rs:32:    client: reqwest::Client,
+apps/desktop/src-tauri/src/integrations/api_integrations/image_gen.rs:97:        let client = reqwest::Client::builder()
+apps/desktop/src-tauri/src/integrations/api_integrations/image_gen.rs:178:        response: reqwest::Response,
+apps/desktop/src-tauri/src/integrations/api_integrations/image_gen.rs:312:        response: reqwest::Response,
+apps/web/features/settings/pages/UserSettings.tsx:228:      const res = await fetch('/api/user/export?download=true', {
+apps/web/features/settings/pages/UserSettings.tsx:254:      const res = await fetch('/api/user/data', {
+apps/web/features/settings/pages/UserSettings.tsx:402:          <Button onClick={() => refetch()} variant="outline">
+apps/desktop/src-tauri/src/integrations/api_integrations/perplexity.rs:43:    client: reqwest::Client,
+apps/desktop/src-tauri/src/integrations/api_integrations/perplexity.rs:113:        let client = reqwest::Client::builder()
+apps/desktop/src-tauri/src/core/llm/llm_router.rs:1002:                if let Ok(Some(cached_entry)) = cache_manager.fetch(&conn, &cache_key) {
+apps/web/app/api/llm/v1/chat/completions/route.ts:28:  const processResult = await processRequest(request, authResult);
+apps/web/app/api/llm/v1/chat/completions/route.ts:37:      stream = await LLMProviderFactory.streamRequest(processed.provider, processed.llmRequest);
+apps/web/app/api/llm/v1/chat/completions/route.ts:70:    llmResponse = await LLMProviderFactory.sendRequest(processed.provider, processed.llmRequest);
+apps/web/app/api/llm/v1/chat/completions/route.ts:99:    handleCorsPreflightRequest(request) ??
+apps/web/features/settings/pages/SettingsPage.tsx:186:      const res = await fetch('/api/user/export', {
+apps/web/features/settings/pages/SettingsPage.tsx:216:      const res = await fetch('/api/user/delete-account', {
+apps/web/features/settings/pages/SettingsPage.tsx:433:      const res = await fetch('/api/portal', {
+apps/web/core/ai/tools/tool-invocation-handler.ts:239:    const response = await fetch(`${n8nBaseUrl}/api/v1/workflows/${n8nWorkflowId}/execute`, {
+apps/web/core/ai/tools/tool-invocation-handler.ts:276:    const response = await fetch('/.netlify/functions/llm-proxies/openai-proxy', {
+apps/web/core/ai/tools/tool-invocation-handler.ts:317:    const response = await fetch('/.netlify/functions/llm-proxies/anthropic-proxy', {
+apps/web/core/ai/tools/tool-invocation-handler.ts:352:    const response = await fetch(cursorEndpoint, {
+apps/web/core/ai/tools/tool-invocation-handler.ts:384:    const response = await fetch(replitEndpoint, {
+apps/web/core/ai/tools/tool-invocation-handler.ts:433:    const response = await fetch(apiUrl, {
+apps/web/core/ai/tools/tool-invocation-handler.ts:461:    const response = await fetch(webhookUrl, {
+apps/desktop/src-tauri/src/core/llm/cache_manager.rs:96:    pub fn fetch(&self, conn: &Connection, cache_key: &str) -> SqlResult<Option<CacheEntry>> {
+apps/desktop/src-tauri/src/integrations/cloud/dropbox.rs:6:use reqwest::Client;
+apps/desktop/src-tauri/src/core/llm/sse_parser.rs:80:    inner: Pin<Box<dyn Stream<Item = Result<bytes::Bytes, reqwest::Error>> + Send>>,
+apps/desktop/src-tauri/src/core/llm/sse_parser.rs:89:    fn new(response: reqwest::Response, provider: crate::core::llm::Provider) -> Self {
+apps/desktop/src-tauri/src/core/llm/sse_parser.rs:266:    response: reqwest::Response,
+apps/desktop/src-tauri/src/core/llm/sse_parser.rs:1196:                res.map_err(|_e: std::convert::Infallible| -> reqwest::Error { unreachable!() })
+apps/web/app/api/llm/v1/chat/completions/__tests__/auth-contract.test.ts:87:    sendRequest: (...args: unknown[]) => mockSendRequest(...args),
+apps/web/app/api/llm/v1/chat/completions/__tests__/auth-contract.test.ts:97:function makeRequest(headers: Record<string, string> = {}): NextRequest {
+apps/web/app/api/llm/v1/chat/completions/__tests__/auth-contract.test.ts:98:  return new NextRequest('http://localhost/api/llm/v1/chat/completions', {
+apps/web/app/api/llm/v1/chat/completions/__tests__/auth-contract.test.ts:122:    const response = await POST(makeRequest());
+apps/web/app/api/llm/v1/chat/completions/__tests__/auth-contract.test.ts:139:    const response = await POST(makeRequest({ Authorization: 'Basic dXNlcjpwYXNz' }));
+apps/web/app/api/llm/v1/chat/completions/__tests__/auth-contract.test.ts:156:      makeRequest({
+apps/web/app/api/llm/v1/chat/completions/__tests__/auth-contract.test.ts:179:    const response = await POST(makeRequest({ Authorization: 'Bearer ' }));
+apps/web/core/integrations/marketing-endpoints.ts:28:  const response = await fetch(`${SUPABASE_URL}/functions/v1/contact-form`, {
+apps/web/core/integrations/marketing-endpoints.ts:56:  const response = await fetch(`${SUPABASE_URL}/functions/v1/newsletter-subscribe`, {
+apps/web/core/integrations/marketing-endpoints.ts:115:  const response = await fetch(`${SUPABASE_URL}/functions/v1/blog-posts?${queryParams}`);
+apps/web/core/integrations/marketing-endpoints.ts:167:  const response = await fetch(`${SUPABASE_URL}/functions/v1/resource-download`, {
+apps/web/app/api/v1/providers/[providerId]/catalog/route.ts:22:  const res = await fetch(
+apps/web/features/chat/stores/voice-input-store.ts:124:  const response = await fetch('/api/voice/transcriptions', {
+apps/desktop/src-tauri/src/integrations/cloud/google_drive.rs:10:use reqwest::Client;
+apps/web/core/integrations/dalle-image-service.ts:109:      const response = await fetch(this.proxyUrl, {
+apps/web/app/api/v1/providers/route.ts:23:  const res = await fetch(`${gatewayUrl}/api/v1/providers`, {
+apps/web/app/api/releases/check/route.ts:164:    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/latest`, {
+apps/web/features/chat/components/messages/MessageListNew.tsx:280:        await fetch(`/api/chat/conversations/${message.sessionId}/messages/${message.id}`, {
+apps/web/app/api/settings/test-provider/route.ts:45:    throw createError.badRequest('provider is required');
+apps/web/app/api/settings/test-provider/route.ts:50:    throw createError.badRequest(`Unknown provider: ${providerKey}`);
+apps/web/app/api/settings/test-provider/route.ts:54:    throw createError.badRequest(`No probe model configured for provider: ${providerKey}`);
+apps/web/app/api/settings/test-provider/route.ts:72:    await llmProvider.sendRequest({
+apps/web/app/api/settings/test-provider/route.ts:143:  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+apps/web/core/integrations/google-veo-service.ts:257:    const apiResponse = await fetch(VEO_PROXY_URL, {
+apps/web/core/integrations/google-veo-service.ts:296:      const pollResponse = await fetch(`${VEO_PROXY_URL}/status`, {
+apps/web/core/integrations/google-veo-service.ts:445:      const apiResponse = await fetch('/.netlify/functions/llm-proxies/google-proxy', {
+apps/web/core/integrations/google-veo-service.ts:487:        const response = await fetch(videoUrl);
+apps/web/core/integrations/google-veo-service.ts:492:        const response = await fetch(videoUrl);
+apps/web/app/api/releases/[target]/[version]/route.ts:126:  const response = await fetch(GITHUB_API_URL, { headers, next: { revalidate: 300 } });
+apps/web/app/api/releases/[target]/[version]/route.ts:162:  const sigResponse = await fetch(signatureAsset.browser_download_url, { headers });
+apps/web/app/api/releases/latest/[platform]/route.ts:139:    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/latest`, {
+apps/web/app/api/releases/latest/[platform]/route.ts:172:    const sigResponse = await fetch(sigAsset.browser_download_url, { headers });
+apps/web/features/settings/hooks/use-settings-queries.ts:519:      profileQuery.refetch();
+apps/web/features/settings/hooks/use-settings-queries.ts:520:      settingsQuery.refetch();
+apps/web/features/settings/hooks/use-settings-queries.ts:521:      apiKeysQuery.refetch();
+apps/desktop/src-tauri/src/integrations/cloud/one_drive.rs:7:use reqwest::Client;
+apps/web/core/integrations/google-imagen-service.ts:206:    const apiResponse = await fetch(IMAGEN_PROXY_URL, {
+apps/web/core/integrations/google-imagen-service.ts:313:      const apiResponse = await fetch('/.netlify/functions/llm-proxies/google-proxy', {
+apps/web/core/integrations/google-imagen-service.ts:355:        const response = await fetch(imageUrl);
+apps/web/core/integrations/google-imagen-service.ts:360:        const response = await fetch(imageUrl);
+apps/web/features/connectors/pages/ConnectorsPage.tsx:511:      const res = await fetch('/api/connectors/mcp', {
+apps/web/features/connectors/pages/ConnectorsPage.tsx:851:        const res = await fetch('/api/connectors');
+apps/web/features/connectors/pages/ConnectorsPage.tsx:900:      const res = await fetch('/api/connectors', {
+apps/web/features/connectors/pages/ConnectorsPage.tsx:939:      const res = await fetch(`/api/connectors?connectorId=${encodeURIComponent(id)}`, {
+apps/desktop/src-tauri/src/core/research/agents.rs:159:    http_client: reqwest::Client,
+apps/desktop/src-tauri/src/core/research/agents.rs:175:            http_client: reqwest::Client::builder()
+apps/desktop/src-tauri/src/core/agi/conversation_summarizer.rs:35:use reqwest::Client;
+apps/desktop/src-tauri/src/core/agi/tests/tool_integration_tests.rs:972:        use reqwest::Client;
+apps/desktop/src/stores/connectionStore.ts:287:          const response = await fetch(`${SIGNALING_HTTP_URL.replace(/\/+$/, '')}/pairings`, {
+apps/desktop/src-tauri/src/core/agi/executors/media_executor.rs:56:    http_client: reqwest::Client,
+apps/desktop/src-tauri/src/core/agi/executors/media_executor.rs:66:        let http_client = reqwest::Client::builder()
+apps/desktop/src-tauri/src/core/agi/executors/media_executor.rs:71:                reqwest::Client::new()
+apps/desktop/src-tauri/src/core/agi/executors/email_executor.rs:55:            "email_fetch" => execute_fetch(parameters, context).await,
+apps/desktop/src-tauri/src/core/agi/executors/email_executor.rs:240:async fn execute_fetch(
+apps/desktop/src/stores/chat/agentWorkflowEvents.ts:497:  addNormalizedApprovalRequest({
+apps/desktop/src/stores/chat/agentWorkflowEvents.ts:728:  addNormalizedApprovalRequest(payload.approval);
+apps/desktop/src/stores/chat/agentWorkflowEvents.ts:736:  addNormalizedApprovalRequest({
+apps/desktop/src/stores/chat/agentWorkflowEvents.ts:803:export function applyApprovalRequest(payload: ApprovalRequestPayload): void {
+apps/desktop/src/stores/chat/agentWorkflowEvents.ts:808:  addNormalizedApprovalRequest({
+apps/desktop/src/stores/chat/agentWorkflowEvents.ts:1094:        applyApprovalRequest(payload);
+apps/desktop/src-tauri/src/core/agi/executors/search_executor.rs:283:        let client = reqwest::Client::new();
+apps/desktop/src-tauri/src/core/agi/executors/search_executor.rs:433:        let client = reqwest::Client::new();
+apps/desktop/src/stores/chat/__tests__/agentWorkflowEvents.test.ts:354:    applyApprovalRequest({
+apps/web/core/security/prompt-injection-detector.test.ts:483:          return fetch('https://api.example.com')
+apps/web/core/security/gradual-rollout.ts:261:      await fetch(webhookUrl, {
+apps/desktop/src/stores/chat/__tests__/toolStore.approvals.test.ts:43:    store.addApprovalRequest(baseApproval);
+apps/desktop/src/stores/chat/__tests__/toolStore.approvals.test.ts:62:    store.addApprovalRequest(baseApproval);
+apps/desktop/src/stores/chat/runtimeEventBindings.ts:108:export function normalizeApprovalRequest(
+apps/desktop/src/stores/chat/runtimeEventBindings.ts:169:export function addNormalizedApprovalRequest(request: ApprovalRequestInput): void {
+apps/desktop/src/stores/chat/runtimeEventBindings.ts:172:    .addApprovalRequest(normalizeApprovalRequest(request, useChatStore.getState()));

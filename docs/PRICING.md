@@ -1,8 +1,10 @@
 # Pricing — AGI
 
+> Docs audit note, 2026-05-20: this file reflects the platform Local + BYOK / paid-waitlist posture. Mobile v1 is Local + explicit BYOK, with AGI-managed cloud credits waitlisted. See [`docs/decisions/CURRENT_DECISIONS.md`](decisions/CURRENT_DECISIONS.md) before changing mobile pricing or launch copy.
+>
 > Decided 2026-05-03. Reconciled 2026-05-15 against `packages/types/src/billing-catalog.ts` (the SSOT) and `tasks/auto-routing-spec.md` §1 + §6. **Reopened 2026-05-16** to add **$99 Pro Max tier** (between Pro+ and Max) and flip all paid tiers to **email-only waitlist** until **August 1, 2026 graduation**. All prices wired in code with Stripe price IDs (`STRIPE_PRICE_{HOBBY,PRO,PRO_PLUS,PRO_MAX,MAX,ENTERPRISE}_{MONTHLY,YEARLY}`) — checkout dormant until Aug 1.
 >
-> **BYOK-first launch posture**: v1 ships as **BYOK + Local only**. Free tiers active; paid tiers visible on /pricing with "Join Waitlist" CTAs. No subscription sold during waitlist period. See [`memory/byok-first-pivot-2026-05-16.md`](../memory/byok-first-pivot-2026-05-16.md). Aug 1 graduation: Stripe flips live + waitlist members get 50% off first 6 months as a "thank you for waiting."
+> **BYOK-first launch posture**: v1 ships as **BYOK + Local only**. Free tiers active; paid tiers visible on /pricing with "Join Waitlist" CTAs. No subscription sold during waitlist period. Original evidence lives in Claude memory outside the repo; see [`docs/decisions/CURRENT_DECISIONS.md`](decisions/CURRENT_DECISIONS.md) for mobile-v1 scope. Aug 1 graduation: Stripe flips live + waitlist members get 50% off first 6 months as a "thank you for waiting."
 
 ## Tiers
 
@@ -17,6 +19,17 @@
 | **Pro Max**    | **$99 NEW** | **~$999** (~17% off)     | 📝 Waitlist       | **Uninterrupted deep-work tier** (anchor vs Claude Max 5× / ChatGPT Pro $100). Pro+ pool + **higher premium quotas** (no clock-watching) + **4-model side-by-side compare** + **highest-priority routing** + flagship reasoning + research. Capability details locked Wave 6.                                                                                                          |
 | **Max**        | **$299.99** | **$2,999.88** (~17% off) | 📝 Waitlist       | Pro Max pool + Opus 4.7 **1M tokens/mo** + GPT-5.5 **1M tokens/mo** + **5 min/mo Runway video (720p or 1024p)** + computer use **1K soft / 2.5K hard actions/mo** + Deep Research workflow + **voice unlimited** + local provider surface unlocked (BYOK + Local + managed).                                                                                                           |
 | **Enterprise** | Contact     | Contact                  | ✅ Contact sales  | SSO (SAML / OIDC), SCIM provisioning, custom retention windows, audit log export, dedicated support, custom MSA. Reach out at https://agiworkforce.com/contact.                                                                                                                                                                                                                        |
+
+## Managed Credits / Top-Ups (Future)
+
+AGI Compute Credits are a future managed-cloud product, not mobile v1. They must be closed-loop and non-transferable: usable only for AGI inference/tools, not presented as stored cash value.
+
+Credit yield must be payment-rail-aware:
+
+- Reserve for processor fees, tax/VAT, refunds, chargebacks, provider cost, and target margin.
+- Do not promise fixed USD parity such as "$10 buys $9 of provider spend" across all payment methods.
+- Use cards for convenience, ACH/invoice/wire for larger purchases, and provider discounts only after they are actually contracted.
+- Require usage ledger tables, provider-rate tables, pre-call balance reservation, post-call settlement, refund/chargeback handling, and fraud controls before public launch.
 
 ## Provider / API map per slot (which APIs we route to)
 
@@ -54,9 +67,11 @@ AGI Workforce ships in **2 modes**. The mode you pick determines which tiers are
 - **Mode picker**: `apps/desktop/src/components/Onboarding/OnboardingWizard.tsx` (consolidated; `ModeSelectionDialog` deleted)
 - **Runtime detection**: `packages/runtime/src/detect.ts` (`isTauri`, `isCloudWeb`)
 
-### Local ↔ Cloud chat transfer
+### Local -> BYOK / Managed Cloud chat movement
 
-If a Local user upgrades to Hobby+ (Cloud mode) — or downgrades back to Local — chats can be migrated in either direction:
+Mobile Local chats are never silently migrated into BYOK or Managed Cloud. The mobile rule is stricter than the older platform migration text: Local -> BYOK creates a new fork after context selection, secret scan, and payload preview; the original Local thread remains unchanged.
+
+For non-mobile Local users who later opt into Hobby+ managed cloud, migration still requires explicit consent:
 
 - **Local → Cloud**: existing SQLite conversations are uploaded into the user's Supabase row on first Cloud sign-in. Everything older than the migration cutoff is uploaded once and then continues syncing in real time.
 - **Cloud → Local**: the user's Supabase conversations are mirrored into a fresh local SQLite store on first Local sign-in. Existing local data is preserved (the migration writes into the same store, dedupe-by-id).

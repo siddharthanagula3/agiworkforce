@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
+use serde::Deserialize;
+use serde_json::Value;
 
 use crate::agent::ToolCall;
 
@@ -15,13 +17,13 @@ mod web;
 pub use task_registry::session_task_summaries;
 
 use bash::execute_run_command;
-use common::print_tool_status;
 #[cfg(test)]
 use common::{
     format_size, generate_simple_diff, is_dangerous_command, tool_size_cap, truncate_by_lines,
-    truncate_line, truncate_output_with_save, MAX_FILE_LINES, MAX_LINE_LENGTH, MAX_OUTPUT_BYTES,
-    MAX_OUTPUT_LINES, TRUNCATION_HEAD_LINES, TRUNCATION_TAIL_LINES,
+    truncate_line, MAX_FILE_LINES, MAX_LINE_LENGTH, MAX_OUTPUT_BYTES, MAX_OUTPUT_LINES,
+    TRUNCATION_HEAD_LINES, TRUNCATION_TAIL_LINES,
 };
+use common::{print_tool_status, truncate_output_with_save};
 use dir_ops::{execute_glob, execute_grep_files, execute_list_directory, execute_search_files};
 use file_ops::{
     execute_apply_patch, execute_multiedit, execute_read_file, execute_read_many_files,
@@ -29,16 +31,16 @@ use file_ops::{
 };
 use git::{execute_enter_worktree, execute_exit_worktree, execute_list_worktrees};
 use task_registry::{
-    execute_advisor, execute_ask_user, execute_cron_create, execute_cron_delete,
-    execute_cron_list, execute_lsp_completion, execute_lsp_definition,
-    execute_lsp_diagnostics, execute_lsp_document_symbols, execute_lsp_format,
-    execute_lsp_hover, execute_task_create, execute_task_get, execute_task_list,
-    execute_task_output, execute_task_stop, execute_task_update, execute_team_create,
-    execute_team_delete, execute_todo_read, execute_todo_write,
+    execute_advisor, execute_ask_user, execute_cron_create, execute_cron_delete, execute_cron_list,
+    execute_lsp_completion, execute_lsp_definition, execute_lsp_diagnostics,
+    execute_lsp_document_symbols, execute_lsp_format, execute_lsp_hover, execute_task_create,
+    execute_task_get, execute_task_list, execute_task_output, execute_task_stop,
+    execute_task_update, execute_team_create, execute_team_delete, execute_todo_read,
+    execute_todo_write,
 };
-use web::{execute_tool_search, execute_web_fetch, execute_web_search};
 #[cfg(test)]
 use web::is_private_or_internal_ip;
+use web::{execute_tool_search, execute_web_fetch, execute_web_search};
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -83,29 +85,11 @@ pub async fn execute_tool(call: &ToolCall, require_confirmation: bool) -> Result
 }
 
 pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> Result<ToolResult> {
-    let is_safe_tool = matches!(
-        call.name.as_str(),
-        "read_file"
-            | "search_files"
-            | "list_directory"
-            | "web_search"
-            | "web_fetch"
-            | "glob"
-            | "todo_read"
-            | "ask_user"
-            | "tool_search"
-            | "grep_files"
-            | "task_get"
-            | "task_list"
-            | "task_output"
-            | "cron_list"
-            | "lsp_completion"
-            | "lsp_document_symbols"
-            | "lsp_format"
-    );
+    let canonical_name = canonical_tool_name(&call.name);
+    let is_safe_tool = is_catalog_read_only_tool(canonical_name);
     let require_confirm = opts.require_confirmation && !(opts.auto_approve_safe && is_safe_tool);
 
-    let result = match call.name.as_str() {
+    let result = match canonical_name {
         "read_file" => execute_read_file_with_opts(&call.args, opts.quiet).await,
         "write_file" => execute_write_file(&call.args, require_confirm).await,
         "run_command" => execute_run_command(&call.args, require_confirm).await,
@@ -120,6 +104,8 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         "glob" => execute_glob(&call.args).await,
         "batch" => Box::pin(execute_batch(call, opts)).await,
         "multiedit" => execute_multiedit(&call.args, require_confirm).await,
+        "powershell" => execute_powershell(&call.args).await,
+        "notebook_edit" => execute_notebook_edit(&call.args, require_confirm).await,
         "todo_read" => execute_todo_read().await,
         "todo_write" => execute_todo_write(&call.args).await,
         "ask_user" => execute_ask_user(&call.args).await,
@@ -153,6 +139,54 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
     };
 
     result
+}
+
+fn canonical_tool_name(tool_name: &str) -> &str {
+    match tool_name {
+        // Claude Code / claw-code compatibility aliases.
+        "Read" | "read" | "ReadFile" => "read_file",
+        "Write" | "write" | "WriteFile" => "write_file",
+        "Edit" | "edit" | "EditFile" => "edit_file",
+        "MultiEdit" | "multi_edit" | "Multi_Edit" => "multiedit",
+        "Bash" | "bash" | "Shell" | "shell" | "RunCommand" => "run_command",
+        "PowerShell" => "powershell",
+        "Glob" | "glob_search" | "GlobSearch" => "glob",
+        "Grep" | "grep" | "GrepFiles" | "grep_search" | "GrepSearch" => "grep_files",
+        "LS" | "Ls" | "ls" | "List" | "ListDirectory" => "list_directory",
+        "WebFetch" => "web_fetch",
+        "WebSearch" => "web_search",
+        "ToolSearch" => "tool_search",
+        "ApplyPatch" => "apply_patch",
+        "Batch" => "batch",
+        "NotebookEdit" => "notebook_edit",
+        "TodoRead" => "todo_read",
+        "TodoWrite" => "todo_write",
+        "AskUser" | "AskUserQuestion" => "ask_user",
+        "ReadManyFiles" => "read_many_files",
+        "TaskCreate" => "task_create",
+        "TaskGet" => "task_get",
+        "TaskList" => "task_list",
+        "TaskUpdate" => "task_update",
+        "TaskStop" => "task_stop",
+        "TaskOutput" => "task_output",
+        "TeamCreate" => "team_create",
+        "TeamDelete" => "team_delete",
+        "CronCreate" => "cron_create",
+        "CronDelete" => "cron_delete",
+        "CronList" => "cron_list",
+        "Advisor" => "advisor",
+        "EnterWorktree" => "enter_worktree",
+        "ExitWorktree" => "exit_worktree",
+        "ListWorktrees" => "list_worktrees",
+        _ => tool_name,
+    }
+}
+
+fn is_catalog_read_only_tool(tool_name: &str) -> bool {
+    let canonical_name = canonical_tool_name(tool_name);
+    crate::runtime::tool_catalog::all_builtin_tool_definitions()
+        .into_iter()
+        .any(|tool| tool.name == canonical_name && tool.is_read_only)
 }
 
 // ---------------------------------------------------------------------------
@@ -203,19 +237,33 @@ async fn execute_web_fetch_with_opts(
 // ---------------------------------------------------------------------------
 
 async fn execute_batch(call: &ToolCall, opts: &ToolExecOptions) -> Result<ToolResult> {
-    let calls_json = match call.args.get("tool_calls") {
+    let calls_json = match call
+        .args
+        .get("calls")
+        .or_else(|| call.args.get("tool_calls"))
+    {
         Some(j) => j,
         None => {
             return Ok(ToolResult {
                 tool_name: "batch".into(),
                 success: false,
-                output: "Missing required argument: tool_calls (JSON array)".into(),
+                output: "Missing required argument: calls (JSON array)".into(),
             });
         }
     };
 
-    let parsed: Vec<serde_json::Value> = serde_json::from_str(calls_json)
-        .map_err(|e| anyhow::anyhow!("Invalid tool_calls JSON: {}", e))?;
+    #[derive(Debug, Deserialize)]
+    struct BatchItem {
+        #[serde(default)]
+        name: Option<String>,
+        #[serde(default)]
+        tool: Option<String>,
+        #[serde(default)]
+        args: serde_json::Map<String, Value>,
+    }
+
+    let parsed: Vec<BatchItem> = serde_json::from_str(calls_json)
+        .map_err(|e| anyhow::anyhow!("Invalid calls JSON: {}", e))?;
 
     const MAX_BATCH: usize = 25;
     if parsed.len() > MAX_BATCH {
@@ -235,19 +283,22 @@ async fn execute_batch(call: &ToolCall, opts: &ToolExecOptions) -> Result<ToolRe
     let mut results: Vec<Result<ToolResult>> = Vec::new();
     for item in &parsed {
         let name = item
-            .get("tool")
-            .and_then(|v| v.as_str())
+            .name
+            .as_deref()
+            .or(item.tool.as_deref())
             .unwrap_or("unknown")
             .to_string();
         let args: HashMap<String, String> = item
-            .get("args")
-            .and_then(|v| v.as_object())
-            .map(|obj| {
-                obj.iter()
-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
-                    .collect()
+            .args
+            .iter()
+            .map(|(k, v)| {
+                let value = match v {
+                    Value::String(s) => s.clone(),
+                    _ => v.to_string(),
+                };
+                (k.clone(), value)
             })
-            .unwrap_or_default();
+            .collect();
 
         let tool_call = ToolCall { name, args };
         results.push(execute_tool_with_opts(&tool_call, opts).await);
@@ -290,6 +341,234 @@ async fn execute_batch(call: &ToolCall, opts: &ToolExecOptions) -> Result<ToolRe
     })
 }
 
+async fn execute_powershell(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let command = match args.get("command") {
+        Some(command) => command.clone(),
+        None => {
+            return Ok(ToolResult {
+                tool_name: "powershell".into(),
+                success: false,
+                output: "Missing required argument: command".into(),
+            });
+        }
+    };
+
+    let timeout_sec = args
+        .get("timeout_sec")
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(30);
+    let safe_mode = args
+        .get("safe_mode")
+        .map(|value| {
+            matches!(
+                value.as_str(),
+                "1" | "true" | "TRUE" | "True" | "yes" | "YES"
+            )
+        })
+        .unwrap_or(true);
+
+    print_tool_status("powershell", &format!("PowerShell({})", command));
+
+    let request = crate::powershell_tool::PowerShellRequest {
+        command,
+        working_dir: args.get("working_dir").cloned(),
+        timeout_sec,
+        safe_mode,
+    };
+
+    let result =
+        tokio::task::spawn_blocking(move || crate::powershell_tool::execute(&request)).await;
+    match result {
+        Ok(Ok(output)) => {
+            let mut combined = String::new();
+            if !output.stdout.is_empty() {
+                combined.push_str(&output.stdout);
+            }
+            if !output.stderr.is_empty() {
+                if !combined.is_empty() {
+                    combined.push('\n');
+                }
+                combined.push_str("[stderr]\n");
+                combined.push_str(&output.stderr);
+            }
+            if combined.is_empty() {
+                combined = "(no output)".into();
+            }
+            if !output.warnings.is_empty() {
+                combined.push_str("\n[warnings]\n");
+                combined.push_str(&output.warnings.join("\n"));
+            }
+            Ok(ToolResult {
+                tool_name: "powershell".into(),
+                success: output.exit_code == 0,
+                output: truncate_output_with_save(
+                    "powershell",
+                    format!("Exit code: {}\n{}", output.exit_code, combined),
+                ),
+            })
+        }
+        Ok(Err(e)) => Ok(ToolResult {
+            tool_name: "powershell".into(),
+            success: false,
+            output: format!("PowerShell command failed: {}", e),
+        }),
+        Err(e) => Ok(ToolResult {
+            tool_name: "powershell".into(),
+            success: false,
+            output: format!("PowerShell task failed: {}", e),
+        }),
+    }
+}
+
+async fn execute_notebook_edit(
+    args: &HashMap<String, String>,
+    require_confirm: bool,
+) -> Result<ToolResult> {
+    let path = match args.get("path") {
+        Some(path) => path,
+        None => {
+            return Ok(ToolResult {
+                tool_name: "notebook_edit".into(),
+                success: false,
+                output: "Missing required argument: path".into(),
+            });
+        }
+    };
+    let mode = match args.get("mode") {
+        Some(mode) => mode,
+        None => {
+            return Ok(ToolResult {
+                tool_name: "notebook_edit".into(),
+                success: false,
+                output: "Missing required argument: mode".into(),
+            });
+        }
+    };
+
+    let validated_path = match common::validate_file_path(path) {
+        Ok(path) => path,
+        Err(reason) => {
+            return Ok(ToolResult {
+                tool_name: "notebook_edit".into(),
+                success: false,
+                output: format!("Path rejected: {}", reason),
+            });
+        }
+    };
+
+    if validated_path.extension().and_then(|ext| ext.to_str()) != Some("ipynb") {
+        return Ok(ToolResult {
+            tool_name: "notebook_edit".into(),
+            success: false,
+            output: "File must be a Jupyter notebook (.ipynb)".into(),
+        });
+    }
+    let edit_mode = match mode.as_str() {
+        "insert" => crate::notebook_edit::NotebookEditMode::Insert,
+        "replace" => crate::notebook_edit::NotebookEditMode::Replace,
+        "delete" => crate::notebook_edit::NotebookEditMode::Delete,
+        _ => {
+            return Ok(ToolResult {
+                tool_name: "notebook_edit".into(),
+                success: false,
+                output: "mode must be one of: insert, replace, delete".into(),
+            });
+        }
+    };
+
+    let kind = match args.get("kind").map(String::as_str) {
+        Some("code") => Some(crate::notebook_edit::CellKind::Code),
+        Some("markdown") => Some(crate::notebook_edit::CellKind::Markdown),
+        Some("raw") => Some(crate::notebook_edit::CellKind::Raw),
+        Some(_) => {
+            return Ok(ToolResult {
+                tool_name: "notebook_edit".into(),
+                success: false,
+                output: "kind must be one of: code, markdown, raw".into(),
+            });
+        }
+        None => None,
+    };
+
+    let index = match args.get("index") {
+        Some(value) => match value.parse::<usize>() {
+            Ok(index) => Some(index),
+            Err(_) => {
+                return Ok(ToolResult {
+                    tool_name: "notebook_edit".into(),
+                    success: false,
+                    output: "index must be a non-negative integer".into(),
+                });
+            }
+        },
+        None => None,
+    };
+
+    if let Err(message) = crate::file_state::ensure_previously_read_and_fresh(&validated_path) {
+        return Ok(ToolResult {
+            tool_name: "notebook_edit".into(),
+            success: false,
+            output: message,
+        });
+    }
+
+    print_tool_status(
+        "notebook_edit",
+        &format!("NotebookEdit({}, {})", path, mode),
+    );
+
+    if require_confirm {
+        let confirmed = dialoguer::Confirm::new()
+            .with_prompt("Allow this notebook edit?")
+            .default(true)
+            .interact()
+            .unwrap_or(false);
+        if !confirmed {
+            return Ok(ToolResult {
+                tool_name: "notebook_edit".into(),
+                success: false,
+                output: "User denied notebook edit".into(),
+            });
+        }
+    }
+
+    let request = crate::notebook_edit::NotebookEditRequest {
+        path: validated_path.to_string_lossy().into_owned(),
+        mode: edit_mode,
+        cell_id: args.get("cell_id").cloned(),
+        index,
+        kind,
+        content: args.get("content").cloned(),
+    };
+
+    let result = tokio::task::spawn_blocking(move || crate::notebook_edit::apply(&request)).await;
+    match result {
+        Ok(Ok(output)) => {
+            if let Ok(content) = std::fs::read_to_string(&validated_path) {
+                crate::file_state::record_file_write(&validated_path, &content);
+            }
+            Ok(ToolResult {
+                tool_name: "notebook_edit".into(),
+                success: true,
+                output: format!(
+                    "Notebook edit applied: {:?} cell {:?} at index {} ({} total cells)",
+                    output.mode, output.affected_cell_id, output.affected_index, output.total_cells
+                ),
+            })
+        }
+        Ok(Err(e)) => Ok(ToolResult {
+            tool_name: "notebook_edit".into(),
+            success: false,
+            output: format!("Notebook edit failed: {}", e),
+        }),
+        Err(e) => Ok(ToolResult {
+            tool_name: "notebook_edit".into(),
+            success: false,
+            output: format!("Notebook edit task failed: {}", e),
+        }),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -304,9 +583,85 @@ mod tests {
         assert_eq!(tool_size_cap("web_fetch"), 200_000);
         assert_eq!(tool_size_cap("web_search"), 100_000);
         assert_eq!(tool_size_cap("run_command"), 50_000);
+        assert_eq!(tool_size_cap("powershell"), 50_000);
         assert_eq!(tool_size_cap("list_directory"), 20_000);
         assert_eq!(tool_size_cap("write_file"), 5_000);
+        assert_eq!(tool_size_cap("multiedit"), 5_000);
+        assert_eq!(tool_size_cap("notebook_edit"), 5_000);
         assert_eq!(tool_size_cap("unknown_tool"), MAX_OUTPUT_BYTES);
+    }
+
+    #[test]
+    fn auto_approve_safe_uses_catalog_read_only_metadata() {
+        assert!(is_catalog_read_only_tool("read_file"));
+        assert!(is_catalog_read_only_tool("Read"));
+        assert!(is_catalog_read_only_tool("Grep"));
+        assert!(is_catalog_read_only_tool("lsp_hover"));
+        assert!(is_catalog_read_only_tool("read_many_files"));
+        assert!(!is_catalog_read_only_tool("write_file"));
+        assert!(!is_catalog_read_only_tool("Write"));
+        assert!(!is_catalog_read_only_tool("notebook_edit"));
+    }
+
+    #[test]
+    fn claude_style_tool_names_are_canonicalized() {
+        assert_eq!(canonical_tool_name("Read"), "read_file");
+        assert_eq!(canonical_tool_name("Bash"), "run_command");
+        assert_eq!(canonical_tool_name("Grep"), "grep_files");
+        assert_eq!(canonical_tool_name("Glob"), "glob");
+        assert_eq!(canonical_tool_name("TodoWrite"), "todo_write");
+        assert_eq!(canonical_tool_name("TaskOutput"), "task_output");
+        assert_eq!(canonical_tool_name("unknown_tool"), "unknown_tool");
+    }
+
+    #[tokio::test]
+    async fn batch_accepts_public_calls_schema() {
+        let mut args = HashMap::new();
+        args.insert(
+            "calls".to_string(),
+            serde_json::json!([
+                {
+                    "name": "list_directory",
+                    "args": { "path": "." }
+                }
+            ])
+            .to_string(),
+        );
+        let call = ToolCall {
+            name: "batch".into(),
+            args,
+        };
+        let opts = ToolExecOptions {
+            require_confirmation: false,
+            auto_approve_safe: true,
+            quiet: true,
+        };
+
+        let result = execute_batch(&call, &opts).await.unwrap();
+
+        assert!(result.success, "batch should succeed: {}", result.output);
+        assert!(result.output.contains("list_directory"));
+    }
+
+    #[tokio::test]
+    async fn notebook_edit_requires_read_state_for_existing_file() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let path = tmp.path().join("notebook.ipynb");
+        std::fs::write(
+            &path,
+            r#"{"cells":[{"cell_type":"markdown","source":["alpha"],"metadata":{}}],"metadata":{},"nbformat":4,"nbformat_minor":5}"#,
+        )
+        .expect("write notebook");
+
+        let mut args = HashMap::new();
+        args.insert("path".to_string(), path.display().to_string());
+        args.insert("mode".to_string(), "delete".to_string());
+        args.insert("index".to_string(), "0".to_string());
+
+        let result = execute_notebook_edit(&args, false).await.unwrap();
+
+        assert!(!result.success);
+        assert!(result.output.contains("File has not been read yet"));
     }
 
     #[test]
@@ -443,14 +798,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_read_file_not_found() {
+        let tmp = tempfile::tempdir_in(".").unwrap();
+        let missing = tmp.path().join("missing.txt");
+
         let mut args = HashMap::new();
-        args.insert(
-            "path".to_string(),
-            "/tmp/__agiworkforce_nonexistent_test_file__".to_string(),
-        );
+        args.insert("path".to_string(), missing.display().to_string());
         let result = execute_read_file(&args).await.unwrap();
         assert!(!result.success);
-        assert!(result.output.contains("File not found"));
+        assert!(
+            result.output.contains("File not found"),
+            "unexpected output: {}",
+            result.output
+        );
     }
 
     #[test]
@@ -749,7 +1108,10 @@ mod path_validation_regressions {
             "expected per-path rejection message, got: {}",
             result.output
         );
-        assert!(!result.success, "tool should report failure when no path could be read");
+        assert!(
+            !result.success,
+            "tool should report failure when no path could be read"
+        );
     }
 
     #[tokio::test]
@@ -767,12 +1129,9 @@ mod path_validation_regressions {
 
     #[tokio::test]
     async fn glob_refuses_outside_base_path() {
-        let result = execute_glob(&args(&[
-            ("pattern", "*.txt"),
-            ("path", "/etc"),
-        ]))
-        .await
-        .expect("tool should return ToolResult");
+        let result = execute_glob(&args(&[("pattern", "*.txt"), ("path", "/etc")]))
+            .await
+            .expect("tool should return ToolResult");
         assert!(
             result.output.contains("Refusing to glob outside project"),
             "expected base-path rejection, got: {}",
@@ -863,7 +1222,9 @@ mod private_ip_classifier_tests {
     #[test]
     fn rejects_v6_loopback_and_link_local() {
         assert!(is_private_or_internal_ip(&IpAddr::V6(Ipv6Addr::LOCALHOST)));
-        assert!(is_private_or_internal_ip(&IpAddr::V6(Ipv6Addr::UNSPECIFIED)));
+        assert!(is_private_or_internal_ip(&IpAddr::V6(
+            Ipv6Addr::UNSPECIFIED
+        )));
         assert!(is_private_or_internal_ip(&IpAddr::V6(
             "fe80::1".parse().unwrap()
         )));

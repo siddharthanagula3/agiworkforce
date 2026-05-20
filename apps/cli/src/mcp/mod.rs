@@ -28,19 +28,19 @@ pub mod elicitation;
 mod http;
 mod oauth_flow;
 mod oauth_store;
-mod sse;
 pub mod resources;
+mod sse;
 pub mod status;
 pub mod tui_handler;
 
 use http::{connect_http, send_request_http};
 use sse::connect_sse;
 
+#[allow(unused_imports)]
+pub use connection_pool::McpConnectionManager;
 pub use oauth_store::McpOAuthStore;
 #[allow(unused_imports)]
 pub use oauth_store::McpOAuthToken;
-#[allow(unused_imports)]
-pub use connection_pool::McpConnectionManager;
 #[allow(unused_imports)]
 pub use resources::{McpResource, McpResourceList};
 #[allow(unused_imports)]
@@ -475,10 +475,7 @@ impl McpConnection {
                     if lines.is_empty() {
                         e
                     } else {
-                        e.context(format!(
-                            "[{}] server stderr:\n{}",
-                            conn.server_name, lines
-                        ))
+                        e.context(format!("[{}] server stderr:\n{}", conn.server_name, lines))
                     }
                 })?;
                 Ok(conn)
@@ -487,7 +484,15 @@ impl McpConnection {
                 connect_sse(name, &url, &headers, timeouts, config.clone()).await
             }
             McpTransport::Http { url, headers, auth } => {
-                connect_http(name, &url, &headers, auth.as_ref(), timeouts, config.clone()).await
+                connect_http(
+                    name,
+                    &url,
+                    &headers,
+                    auth.as_ref(),
+                    timeouts,
+                    config.clone(),
+                )
+                .await
             }
         }
     }
@@ -520,8 +525,17 @@ impl McpConnection {
 
         // Re-inject only a minimal safe allowlist from the parent environment.
         const ALLOWED_FROM_PARENT: &[&str] = &[
-            "PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE",
-            "TMPDIR", "TERM", "SHELL", "XDG_RUNTIME_DIR",
+            "PATH",
+            "HOME",
+            "USER",
+            "LOGNAME",
+            "LANG",
+            "LC_ALL",
+            "LC_CTYPE",
+            "TMPDIR",
+            "TERM",
+            "SHELL",
+            "XDG_RUNTIME_DIR",
         ];
         for var in ALLOWED_FROM_PARENT {
             if let Ok(val) = std::env::var(var) {
@@ -796,8 +810,7 @@ impl McpConnection {
 
         match self.config.as_transport() {
             McpTransport::Stdio { command, args, env } => {
-                let mut child =
-                    Self::spawn_stdio_child(&self.server_name, &command, &args, &env)?;
+                let mut child = Self::spawn_stdio_child(&self.server_name, &command, &args, &env)?;
                 if let Ok(mut locked) = self.stderr_buf.lock() {
                     locked.clear();
                 }
@@ -921,25 +934,24 @@ impl McpConnection {
                 let mut request_json = serde_json::to_string(&request)?;
                 request_json.push('\n');
 
-                let stdin = child.stdin.as_mut().context(format!(
-                    "[{}] MCP server stdin not available",
-                    server_name
-                ))?;
+                let stdin = child
+                    .stdin
+                    .as_mut()
+                    .context(format!("[{}] MCP server stdin not available", server_name))?;
                 stdin.write_all(request_json.as_bytes()).await?;
                 stdin.flush().await?;
 
-                let stdout = child.stdout.as_mut().context(format!(
-                    "[{}] MCP server stdout not available",
-                    server_name
-                ))?;
+                let stdout = child
+                    .stdout
+                    .as_mut()
+                    .context(format!("[{}] MCP server stdout not available", server_name))?;
                 let mut reader = BufReader::new(stdout);
                 let mut line = String::new();
 
                 // Channel to send elicitation replies back to the server.
                 // The async block below sends the frame JSON; the loop outside
                 // writes it to stdin after the borrow on stdout is released.
-                let (elicit_tx, mut elicit_rx) =
-                    mpsc::channel::<String>(4);
+                let (elicit_tx, mut elicit_rx) = mpsc::channel::<String>(4);
 
                 let result = match tokio::time::timeout(timeout, async {
                     loop {
@@ -949,10 +961,10 @@ impl McpConnection {
                         // in the channel and get drained below.
 
                         line.clear();
-                        let bytes_read = reader.read_line(&mut line).await.context(format!(
-                            "[{}] Failed to read from MCP server",
-                            server_name
-                        ))?;
+                        let bytes_read = reader
+                            .read_line(&mut line)
+                            .await
+                            .context(format!("[{}] Failed to read from MCP server", server_name))?;
 
                         if bytes_read == 0 {
                             bail!("[{}] MCP server closed connection", server_name);
@@ -972,10 +984,15 @@ impl McpConnection {
                         };
 
                         // Detect server-initiated elicitation/create requests.
-                        if let Some((srv_method, req_id, params)) = Self::as_server_request(&frame) {
+                        if let Some((srv_method, req_id, params)) = Self::as_server_request(&frame)
+                        {
                             if srv_method == "elicitation/create" {
-                                if let Ok(elicit_req) = serde_json::from_value::<elicitation::ElicitationRequest>(params) {
-                                    let resp = elicitation_handler.handle(&server_name, elicit_req).await;
+                                if let Ok(elicit_req) = serde_json::from_value::<
+                                    elicitation::ElicitationRequest,
+                                >(params)
+                                {
+                                    let resp =
+                                        elicitation_handler.handle(&server_name, elicit_req).await;
                                     let reply = serde_json::json!({
                                         "jsonrpc": "2.0",
                                         "id": req_id,
@@ -989,7 +1006,10 @@ impl McpConnection {
                                 }
                             }
                             // Other server-initiated methods: log and skip.
-                            eprintln!("[{}] Unhandled server request method '{}'", server_name, srv_method);
+                            eprintln!(
+                                "[{}] Unhandled server request method '{}'",
+                                server_name, srv_method
+                            );
                             continue;
                         }
 
@@ -1097,10 +1117,15 @@ impl McpConnection {
                         };
 
                         // Handle server-initiated elicitation/create.
-                        if let Some((srv_method, req_id, params)) = Self::as_server_request(&frame) {
+                        if let Some((srv_method, req_id, params)) = Self::as_server_request(&frame)
+                        {
                             if srv_method == "elicitation/create" {
-                                if let Ok(elicit_req) = serde_json::from_value::<elicitation::ElicitationRequest>(params) {
-                                    let elicit_resp = elicitation_handler.handle(&server_name, elicit_req).await;
+                                if let Ok(elicit_req) = serde_json::from_value::<
+                                    elicitation::ElicitationRequest,
+                                >(params)
+                                {
+                                    let elicit_resp =
+                                        elicitation_handler.handle(&server_name, elicit_req).await;
                                     Self::reply_elicitation_sse(
                                         &post_url_clone,
                                         &headers_clone,
@@ -1109,7 +1134,8 @@ impl McpConnection {
                                         &req_id,
                                         &elicit_resp,
                                         &server_name,
-                                    ).await;
+                                    )
+                                    .await;
                                 }
                             }
                             continue;
@@ -1391,6 +1417,43 @@ impl Default for McpManager {
     }
 }
 
+fn load_mcp_config_file_into(
+    path: &std::path::Path,
+    configs: &mut HashMap<String, McpServerConfig>,
+    overwrite_existing: bool,
+) {
+    let Ok(contents) = std::fs::read_to_string(path) else {
+        return;
+    };
+
+    // Flat format: { "server_name": { "command": "...", ... } }
+    if let Ok(parsed) = serde_json::from_str::<HashMap<String, McpServerConfig>>(&contents) {
+        for (name, config) in parsed {
+            if overwrite_existing {
+                configs.insert(name, config);
+            } else {
+                configs.entry(name).or_insert(config);
+            }
+        }
+    }
+
+    // Nested format: { "mcpServers": { ... } }
+    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&contents) {
+        if let Some(servers) = parsed.get("mcpServers").and_then(|s| s.as_object()) {
+            for (name, config) in servers {
+                if let Ok(server_config) = serde_json::from_value::<McpServerConfig>(config.clone())
+                {
+                    if overwrite_existing {
+                        configs.insert(name.clone(), server_config);
+                    } else {
+                        configs.entry(name.clone()).or_insert(server_config);
+                    }
+                }
+            }
+        }
+    }
+}
+
 impl McpManager {
     pub fn new() -> Self {
         Self {
@@ -1399,53 +1462,24 @@ impl McpManager {
         }
     }
 
-    /// Load MCP server configurations from config.toml and .mcp.json.
+    /// Load MCP server configurations from project/global MCP JSON files.
     pub fn load_configs() -> Result<HashMap<String, McpServerConfig>> {
         let mut configs = HashMap::new();
 
-        // Load from .mcp.json in current directory
-        let mcp_json = std::path::Path::new(".mcp.json");
-        if mcp_json.exists() {
-            if let Ok(contents) = std::fs::read_to_string(mcp_json) {
-                // Try flat format: { "server_name": { "command": "...", ... } }
-                if let Ok(parsed) =
-                    serde_json::from_str::<HashMap<String, McpServerConfig>>(&contents)
-                {
-                    configs.extend(parsed);
-                }
-                // Also try nested format: { "mcpServers": { ... } }
-                if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&contents) {
-                    if let Some(servers) = parsed.get("mcpServers").and_then(|s| s.as_object()) {
-                        for (name, config) in servers {
-                            if let Ok(server_config) =
-                                serde_json::from_value::<McpServerConfig>(config.clone())
-                            {
-                                configs.insert(name.clone(), server_config);
-                            }
-                        }
-                    }
-                }
-            }
+        // Project configs win over globals. Support both the historical
+        // `.mcp.json` name and the visible `mcp.json` that `agiworkforce init`
+        // creates.
+        for path in [
+            std::path::Path::new(".mcp.json"),
+            std::path::Path::new("mcp.json"),
+        ] {
+            load_mcp_config_file_into(path, &mut configs, true);
         }
 
-        // Load from ~/.agiworkforce/.mcp.json
+        // Load from ~/.agiworkforce/.mcp.json and ~/.agiworkforce/mcp.json.
         if let Ok(config_dir) = crate::config::CliConfig::config_dir() {
-            let global_mcp = config_dir.join(".mcp.json");
-            if global_mcp.exists() {
-                if let Ok(contents) = std::fs::read_to_string(&global_mcp) {
-                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&contents) {
-                        if let Some(servers) = parsed.get("mcpServers").and_then(|s| s.as_object())
-                        {
-                            for (name, config) in servers {
-                                if let Ok(server_config) =
-                                    serde_json::from_value::<McpServerConfig>(config.clone())
-                                {
-                                    configs.entry(name.clone()).or_insert(server_config);
-                                }
-                            }
-                        }
-                    }
-                }
+            for filename in [".mcp.json", "mcp.json"] {
+                load_mcp_config_file_into(&config_dir.join(filename), &mut configs, false);
             }
         }
 
@@ -1556,11 +1590,11 @@ impl McpManager {
         params: serde_json::Value,
         handler: &elicitation::SharedElicitationHandler,
     ) -> Result<serde_json::Value> {
-        let elicitation_request: elicitation::ElicitationRequest =
-            serde_json::from_value(params).context(format!(
-                "[{}] elicitation/create: invalid params",
-                server_name
-            ))?;
+        let elicitation_request: elicitation::ElicitationRequest = serde_json::from_value(params)
+            .context(format!(
+            "[{}] elicitation/create: invalid params",
+            server_name
+        ))?;
 
         let response = handler.handle(server_name, elicitation_request).await;
 
@@ -1603,6 +1637,25 @@ mod tests {
         let configs = McpManager::load_configs().unwrap();
         // Result depends on environment -- just verify it doesn't panic
         let _ = configs;
+    }
+
+    #[test]
+    fn load_mcp_config_file_supports_visible_and_nested_configs() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("mcp.json");
+        std::fs::write(
+            &path,
+            r#"{"mcpServers":{"docs":{"command":"node","args":["server.js"]},"remote":{"transport":"sse","url":"http://localhost:3000/sse"}}}"#,
+        )
+        .expect("write mcp config");
+
+        let mut configs = HashMap::new();
+        load_mcp_config_file_into(&path, &mut configs, true);
+
+        assert!(configs.contains_key("docs"));
+        assert!(configs.contains_key("remote"));
+        assert_eq!(configs["docs"].transport_kind(), "stdio");
+        assert_eq!(configs["remote"].transport_kind(), "sse");
     }
 
     #[test]
@@ -1780,8 +1833,8 @@ mod tests {
         let mut blocked_keys = Vec::new();
         for (k, v) in manifest_env {
             let key_upper = k.to_uppercase();
-            let is_blocked = BLOCKED.iter().any(|b| b.eq_ignore_ascii_case(k))
-                || key_upper.ends_with("_PROXY");
+            let is_blocked =
+                BLOCKED.iter().any(|b| b.eq_ignore_ascii_case(k)) || key_upper.ends_with("_PROXY");
             if is_blocked {
                 blocked_keys.push(k.clone());
             } else {
@@ -1792,7 +1845,10 @@ mod tests {
     }
 
     fn manifest_env(pairs: &[(&str, &str)]) -> HashMap<String, String> {
-        pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
     }
 
     #[test]
@@ -1821,11 +1877,20 @@ mod tests {
 
     #[test]
     fn mcp_env_blocks_http_proxy() {
-        for var in &["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY"] {
+        for var in &[
+            "HTTP_PROXY",
+            "HTTPS_PROXY",
+            "http_proxy",
+            "https_proxy",
+            "ALL_PROXY",
+        ] {
             let env = manifest_env(&[(var, "http://attacker.com")]);
             let (allowed, blocked) = filter_manifest_env(&env);
             assert!(allowed.get(*var).is_none(), "{var} should be blocked");
-            assert!(blocked.iter().any(|k| k.eq_ignore_ascii_case(var)), "{var} not in blocked list");
+            assert!(
+                blocked.iter().any(|k| k.eq_ignore_ascii_case(var)),
+                "{var} not in blocked list"
+            );
         }
     }
 
@@ -1867,8 +1932,17 @@ mod tests {
         // ANTHROPIC_API_KEY is not in the ALLOWED_FROM_PARENT list — verify it
         // would not reach the child via the allowlist re-injection path.
         const ALLOWED_FROM_PARENT: &[&str] = &[
-            "PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE",
-            "TMPDIR", "TERM", "SHELL", "XDG_RUNTIME_DIR",
+            "PATH",
+            "HOME",
+            "USER",
+            "LOGNAME",
+            "LANG",
+            "LC_ALL",
+            "LC_CTYPE",
+            "TMPDIR",
+            "TERM",
+            "SHELL",
+            "XDG_RUNTIME_DIR",
         ];
         assert!(
             !ALLOWED_FROM_PARENT.contains(&"ANTHROPIC_API_KEY"),

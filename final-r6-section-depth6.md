@@ -1,0 +1,547 @@
+- generic [ref=f27e5] [box=0,0,8452,1082]:
+  - generic [ref=f27e7] [box=60,0,8332,94]:
+    - generic [ref=f27e8] [box=58,0,349,33]: R6 · AGI Mobile v1 canonical
+    - generic [ref=f27e9] [box=60,39,8332,19]: Light-first core flow · BYOK truth boundaries · dark mode samples · Android checks
+  - generic [ref=f27e10] [box=0,94,8452,988]:
+    - generic [ref=f27e11] [box=60,94,480,988]:
+      - generic [ref=f27e12] [box=56,66,484,24]:
+        - generic [ref=f27e13] [box=56,66,438,24]:
+          - generic "Drag to reorder" [ref=f27e14] [box=56,67,17,23]:
+            - img [ref=f27e15] [box=60,72,9,13]
+          - generic "Click to focus" [ref=f27e22] [cursor=pointer] [box=77,68,417,21]:
+            - generic [ref=f27e23] [box=81,71,222,15]: 01 · Onboarding hero · iOS light
+        - generic [ref=f27e24] [box=494,67,46,22]:
+          - button "More" [ref=f27e26] [cursor=pointer] [box=494,67,22,22]:
+            - img [ref=f27e27] [box=499,72,12,12]
+          - button "Focus" [ref=f27e31] [cursor=pointer] [box=518,67,22,22]:
+            - img [ref=f27e32] [box=523,72,12,12]
+      - generic [ref=f27e36] [box=85,122,430,932]:
+        - generic [box=85,122,430,72]:
+          - generic [box=115,157,37,21]: 9:41
+          - generic [box=414,161,71,13]:
+            - img [box=414,162,18,11]
+            - img [box=438,162,16,11]
+            - img [box=460,162,25,12]
+        - generic [ref=f27e39] [box=85,176,430,844]:
+          - generic [ref=f27e40] [box=85,176,430,729]:
+            - img [ref=f27e41] [box=264,340,72,72]
+            - generic [ref=f27e48] [box=117,444,366,79]: AGI runs on your device.
+            - generic [ref=f27e49] [box=166,537,269,23]: No account. No cloud. Free forever.
+            - generic [ref=f27e50] [box=140,592,320,149]
+          - generic [ref=f27e63] [box=85,905,430,115]:
+            - button "Start chatting" [ref=f27e64] [box=105,905,390,54]
+            - generic [ref=f27e66] [box=196,977,209,14]: AGI Automation LLC · Delaware, USA
+    - generic [ref=f27e68] [box=588,94,480,988]:
+      - generic [ref=f27e69] [box=584,66,484,24]:
+        - generic [ref=f27e70] [box=584,66,438,24]:
+          - generic "Drag to reorder" [ref=f27e71] [box=584,67,17,23]:
+            - img [ref=f27e72] [box=588,72,9,13]
+          - generic "Click to focus" [ref=f27e79] [cursor=pointer] [box=605,68,417,21]:
+            - generic [ref=f27e80] [box=609,71,330,15]: 02 · Device tier and model download · iOS light
+        - generic [ref=f27e81] [box=1022,67,46,22]:
+          - button "More" [ref=f27e83] [cursor=pointer] [box=1022,67,22,22]:
+            - img [ref=f27e84] [box=1027,72,12,12]
+          - button "Focus" [ref=f27e88] [cursor=pointer] [box=1046,67,22,22]:
+            - img [ref=f27e89] [box=1051,72,12,12]
+      - generic [ref=f27e93] [box=613,122,430,932]:
+        - generic [box=613,122,430,72]:
+          - generic [box=643,157,37,21]: 9:41
+          - generic [box=942,161,71,13]:
+            - img [box=942,162,18,11]
+            - img [box=966,162,16,11]
+            - img [box=988,162,25,12]
+        - generic [ref=f27e96] [box=613,176,430,844]:
+          - generic [ref=f27e97] [box=613,176,430,69]:
+            - img [ref=f27e99] [box=640,201,20,20]
+            - generic [ref=f27e101] [box=950,204,77,14]: Step 2 of 3
+          - generic [ref=f27e102] [box=613,245,430,147]:
+            - img [ref=f27e104] [box=648,278,26,26]
+            - generic [ref=f27e106] [box=635,335,386,31]: Your iPhone is ready.
+            - generic [ref=f27e107] [box=635,374,386,18]
+          - generic [ref=f27e109] [box=627,414,402,235]:
+            - generic [ref=f27e110] [box=644,431,369,23]
+            - generic [ref=f27e114] [box=644,462,369,24]: Apple Foundation 3B
+            - generic [ref=f27e115] [box=644,491,369,16]: Uses your Neural Engine directly. Fastest on this device.
+            - generic [ref=f27e116] [box=644,521,369,52]
+            - generic [ref=f27e126] [box=644,587,369,46]
+          - generic [ref=f27e135] [box=635,670,107,13]: Or pick another
+          - generic [ref=f27e136] [box=627,692,402,60]:
+            - img [ref=f27e138] [box=650,713,18,18]
+            - generic [ref=f27e140] [box=689,707,298,31]
+            - img [ref=f27e143] [box=999,714,16,16]
+          - generic [ref=f27e145] [box=627,760,402,60]:
+            - img [ref=f27e147] [box=650,781,18,18]
+            - generic [ref=f27e149] [box=689,775,298,31]
+            - img [ref=f27e152] [box=999,782,16,16]
+          - button "Download Apple Foundation 3B" [ref=f27e156] [box=631,952,394,52]:
+            - img [ref=f27e157] [box=694,969,18,18]
+            - generic [ref=f27e159] [box=720,968,242,19]: Download Apple Foundation 3B
+    - generic [ref=f27e161] [box=1116,94,480,988]:
+      - generic [ref=f27e162] [box=1112,66,484,24]:
+        - generic [ref=f27e163] [box=1112,66,438,24]:
+          - generic "Drag to reorder" [ref=f27e164] [box=1112,67,17,23]:
+            - img [ref=f27e165] [box=1116,72,9,13]
+          - generic "Click to focus" [ref=f27e172] [cursor=pointer] [box=1133,68,417,21]:
+            - generic [ref=f27e173] [box=1137,71,186,15]: 03 · Empty chat · iOS light
+        - generic [ref=f27e174] [box=1550,67,46,22]:
+          - button "More" [ref=f27e176] [cursor=pointer] [box=1550,67,22,22]:
+            - img [ref=f27e177] [box=1555,72,12,12]
+          - button "Focus" [ref=f27e181] [cursor=pointer] [box=1574,67,22,22]:
+            - img [ref=f27e182] [box=1579,72,12,12]
+      - generic [ref=f27e186] [box=1141,122,430,932]:
+        - generic [box=1141,122,430,72]:
+          - generic [box=1171,157,37,21]: 9:41
+          - generic [box=1470,161,71,13]:
+            - img [box=1470,162,18,11]
+            - img [box=1494,162,16,11]
+            - img [box=1516,162,25,12]
+        - generic [ref=f27e189] [box=1141,176,430,844]:
+          - generic [ref=f27e190] [box=1141,176,430,65]:
+            - img [ref=f27e192] [box=1166,199,20,20]
+            - generic [ref=f27e195] [box=1223,191,265,36]
+            - img [ref=f27e205] [box=1527,200,18,18]
+          - generic [ref=f27e208] [box=1242,247,228,25]:
+            - img [ref=f27e209] [box=1250,254,12,12]
+            - generic [ref=f27e211] [box=1268,253,190,14]: On-device · Private · Works offline
+          - generic [ref=f27e212] [box=1141,272,430,682]:
+            - img [ref=f27e213] [box=1334,542,44,44]
+            - generic [ref=f27e220] [box=1254,608,203,36]: Ask anything.
+            - generic [ref=f27e221] [box=1226,652,260,33]: Llama 3.2 3B is loaded. No internet needed.
+          - generic [ref=f27e223] [box=1155,962,402,44]:
+            - button [ref=f27e224] [box=1155,962,44,44]
+            - generic [ref=f27e227] [box=1207,962,298,44]
+            - button [ref=f27e231] [box=1513,962,44,44]
+    - generic [ref=f27e239] [box=1644,94,480,988]:
+      - generic [ref=f27e240] [box=1640,66,484,24]:
+        - generic [ref=f27e241] [box=1640,66,438,24]:
+          - generic "Drag to reorder" [ref=f27e242] [box=1640,67,17,23]:
+            - img [ref=f27e243] [box=1644,72,9,13]
+          - generic "Click to focus" [ref=f27e250] [cursor=pointer] [box=1661,68,417,21]:
+            - generic [ref=f27e251] [box=1665,71,185,15]: 04 · Active chat · iOS light
+        - generic [ref=f27e252] [box=2078,67,46,22]:
+          - button "More" [ref=f27e254] [cursor=pointer] [box=2078,67,22,22]:
+            - img [ref=f27e255] [box=2083,72,12,12]
+          - button "Focus" [ref=f27e259] [cursor=pointer] [box=2102,67,22,22]:
+            - img [ref=f27e260] [box=2107,72,12,12]
+      - generic [ref=f27e264] [box=1669,122,430,932]:
+        - generic [box=1669,122,430,72]:
+          - generic [box=1699,157,37,21]: 9:41
+          - generic [box=1998,161,71,13]:
+            - img [box=1998,162,18,11]
+            - img [box=2022,162,16,11]
+            - img [box=2044,162,25,12]
+        - generic [ref=f27e267] [box=1669,176,430,844]:
+          - generic [ref=f27e268] [box=1669,176,430,65]:
+            - img [ref=f27e270] [box=1694,199,20,20]
+            - generic [ref=f27e273] [box=1752,191,265,36]
+            - img [ref=f27e283] [box=2056,200,18,18]
+          - generic [ref=f27e285] [box=1669,241,430,713]:
+            - generic [ref=f27e288] [box=1743,265,306,41]: What's a good 78% hydration bulk time at 22°C?
+            - generic [ref=f27e289] [box=1669,330,430,261]
+          - generic [ref=f27e306] [box=1683,962,402,44]:
+            - button [ref=f27e307] [box=1683,962,44,44]
+            - generic [ref=f27e310] [box=1735,962,298,44]
+            - button [ref=f27e314] [box=2041,962,44,44]
+    - generic [ref=f27e322] [box=2172,94,480,988]:
+      - generic [ref=f27e323] [box=2168,66,484,24]:
+        - generic [ref=f27e324] [box=2168,66,438,24]:
+          - generic "Drag to reorder" [ref=f27e325] [box=2168,67,17,23]:
+            - img [ref=f27e326] [box=2172,72,9,13]
+          - generic "Click to focus" [ref=f27e333] [cursor=pointer] [box=2189,68,417,21]:
+            - generic [ref=f27e334] [box=2193,71,175,15]: 05 · Drawer IA · iOS light
+        - generic [ref=f27e335] [box=2606,67,46,22]:
+          - button "More" [ref=f27e337] [cursor=pointer] [box=2606,67,22,22]:
+            - img [ref=f27e338] [box=2611,72,12,12]
+          - button "Focus" [ref=f27e342] [cursor=pointer] [box=2630,67,22,22]:
+            - img [ref=f27e343] [box=2635,72,12,12]
+      - generic [ref=f27e347] [box=2197,122,430,932]:
+        - generic [box=2197,122,430,72]:
+          - generic [box=2227,157,37,21]: 9:41
+          - generic [box=2526,161,71,13]:
+            - img [box=2526,162,18,11]
+            - img [box=2550,162,16,11]
+            - img [box=2572,162,25,12]
+        - generic [ref=f27e350] [box=2197,176,430,844]:
+          - generic [ref=f27e351] [box=2197,176,422,844]:
+            - generic [ref=f27e352] [box=2219,196,378,34]
+            - generic [ref=f27e361] [box=2219,252,378,44]
+            - generic [ref=f27e365] [box=2219,296,378,44]
+            - generic [ref=f27e369] [box=2219,340,378,44]
+            - generic [ref=f27e373] [box=2219,384,378,44]
+            - generic [ref=f27e377] [box=2219,428,378,44]
+            - generic [ref=f27e381] [box=2219,472,378,44]
+            - generic [ref=f27e385] [box=2219,516,378,44]
+            - generic [ref=f27e390] [box=2219,580,59,14]: Recents
+            - generic [ref=f27e391] [box=2219,599,378,421]
+          - generic [ref=f27e408] [box=2219,958,386,48]:
+            - generic [ref=f27e409] [box=2219,962,183,41]
+            - img [ref=f27e414] [box=2571,972,20,20]
+    - generic [ref=f27e418] [box=2700,94,480,988]:
+      - generic [ref=f27e419] [box=2696,66,484,24]:
+        - generic [ref=f27e420] [box=2696,66,438,24]:
+          - generic "Drag to reorder" [ref=f27e421] [box=2696,67,17,23]:
+            - img [ref=f27e422] [box=2700,72,9,13]
+          - generic "Click to focus" [ref=f27e429] [cursor=pointer] [box=2717,68,417,21]:
+            - generic [ref=f27e430] [box=2721,71,179,15]: 06 · Plus menu · iOS light
+        - generic [ref=f27e431] [box=3134,67,46,22]:
+          - button "More" [ref=f27e433] [cursor=pointer] [box=3134,67,22,22]:
+            - img [ref=f27e434] [box=3139,72,12,12]
+          - button "Focus" [ref=f27e438] [cursor=pointer] [box=3158,67,22,22]:
+            - img [ref=f27e439] [box=3163,72,12,12]
+      - generic [ref=f27e443] [box=2725,122,430,932]:
+        - generic [box=2725,122,430,72]:
+          - generic [box=2755,157,37,21]: 9:41
+          - generic [box=3054,161,71,13]:
+            - img [box=3054,162,18,11]
+            - img [box=3078,162,16,11]
+            - img [box=3100,162,25,12]
+        - generic [ref=f27e446] [box=2725,176,430,844]:
+          - img [ref=f27e448] [box=2920,246,40,40]
+          - generic [ref=f27e456] [box=2725,476,430,544]:
+            - generic [ref=f27e458] [box=2725,505,430,53]
+            - generic [ref=f27e463] [box=2725,558,430,135]
+            - generic [ref=f27e477] [box=2725,694,430,326]
+    - generic [ref=f27e511] [box=3228,94,480,988]:
+      - generic [ref=f27e512] [box=3224,66,484,24]:
+        - generic [ref=f27e513] [box=3224,66,438,24]:
+          - generic "Drag to reorder" [ref=f27e514] [box=3224,67,17,23]:
+            - img [ref=f27e515] [box=3228,72,9,13]
+          - generic "Click to focus" [ref=f27e522] [cursor=pointer] [box=3245,68,417,21]:
+            - generic [ref=f27e523] [box=3249,71,341,15]: 07 · Model picker · on-device / BYOK / AGI Cloud
+        - generic [ref=f27e524] [box=3662,67,46,22]:
+          - button "More" [ref=f27e526] [cursor=pointer] [box=3662,67,22,22]:
+            - img [ref=f27e527] [box=3667,72,12,12]
+          - button "Focus" [ref=f27e531] [cursor=pointer] [box=3686,67,22,22]:
+            - img [ref=f27e532] [box=3691,72,12,12]
+      - generic [ref=f27e536] [box=3253,122,430,932]:
+        - generic [box=3253,122,430,72]:
+          - generic [box=3283,157,37,21]: 9:41
+          - generic [box=3582,161,71,13]:
+            - img [box=3582,162,18,11]
+            - img [box=3606,162,16,11]
+            - img [box=3628,162,25,12]
+        - generic [ref=f27e542] [box=3253,217,430,803]:
+          - generic [ref=f27e544] [box=3253,243,430,45]:
+            - generic [ref=f27e545] [box=3275,250,79,27]: Models
+            - img [ref=f27e547] [box=3632,255,16,16]
+          - generic [ref=f27e549] [box=3253,288,430,732]:
+            - generic [ref=f27e550] [box=3253,292,430,56]
+            - generic [ref=f27e554] [box=3253,348,430,61]
+            - generic [ref=f27e562] [box=3253,409,430,61]
+            - generic [ref=f27e570] [box=3253,469,430,61]
+            - generic [ref=f27e579] [box=3253,543,430,56]
+            - generic [ref=f27e583] [box=3253,599,430,61]
+            - generic [ref=f27e594] [box=3253,660,430,61]
+            - generic [ref=f27e602] [box=3253,720,430,61]
+            - generic [ref=f27e610] [box=3253,781,430,61]
+            - generic [ref=f27e618] [box=3253,842,430,61]
+            - generic [ref=f27e626] [box=3253,903,430,61]
+            - generic [ref=f27e636] [box=3253,964,430,61]
+            - generic [ref=f27e648] [box=3275,1051,386,36]
+            - generic [ref=f27e650] [box=3253,1093,430,61]
+            - generic [ref=f27e659] [box=3275,1168,386,54]
+    - generic [ref=f27e664] [box=3756,94,480,988]:
+      - generic [ref=f27e665] [box=3752,66,484,24]:
+        - generic [ref=f27e666] [box=3752,66,438,24]:
+          - generic "Drag to reorder" [ref=f27e667] [box=3752,67,17,23]:
+            - img [ref=f27e668] [box=3756,72,9,13]
+          - generic "Click to focus" [ref=f27e675] [cursor=pointer] [box=3773,68,417,21]:
+            - generic [ref=f27e676] [box=3777,71,236,15]: 08 · Keys / BYOK setup · iOS light
+        - generic [ref=f27e677] [box=4190,67,46,22]:
+          - button "More" [ref=f27e679] [cursor=pointer] [box=4190,67,22,22]:
+            - img [ref=f27e680] [box=4195,72,12,12]
+          - button "Focus" [ref=f27e684] [cursor=pointer] [box=4214,67,22,22]:
+            - img [ref=f27e685] [box=4219,72,12,12]
+      - generic [ref=f27e689] [box=3781,122,430,932]:
+        - generic [box=3781,122,430,72]:
+          - generic [box=3811,157,37,21]: 9:41
+          - generic [box=4110,161,71,13]:
+            - img [box=4110,162,18,11]
+            - img [box=4134,162,16,11]
+            - img [box=4156,162,25,12]
+        - generic [ref=f27e692] [box=3781,176,430,844]:
+          - generic [ref=f27e693] [box=3781,176,430,69]:
+            - img [ref=f27e695] [box=3808,201,20,20]
+            - generic [ref=f27e698] [box=3976,200,41,21]: Keys
+          - generic [ref=f27e700] [box=3803,253,386,85]:
+            - img [ref=f27e701] [box=3818,270,16,16]
+            - generic [ref=f27e703] [box=3844,268,331,56]
+          - generic [ref=f27e706] [box=3781,352,430,668]:
+            - generic [ref=f27e707] [box=3781,352,430,64]
+            - generic [ref=f27e722] [box=3781,416,430,65]
+            - generic [ref=f27e730] [box=3781,481,430,65]
+            - generic [ref=f27e738] [box=3781,545,430,65]
+            - generic [ref=f27e746] [box=3781,610,430,65]
+            - generic [ref=f27e754] [box=3781,674,430,65]
+            - generic [ref=f27e764] [box=3781,739,430,65]
+            - generic [ref=f27e772] [box=3781,803,430,65]
+    - generic [ref=f27e781] [box=4284,94,480,988]:
+      - generic [ref=f27e782] [box=4280,66,484,24]:
+        - generic [ref=f27e783] [box=4280,66,438,24]:
+          - generic "Drag to reorder" [ref=f27e784] [box=4280,67,17,23]:
+            - img [ref=f27e785] [box=4284,72,9,13]
+          - generic "Click to focus" [ref=f27e792] [cursor=pointer] [box=4301,68,417,21]:
+            - generic [ref=f27e793] [box=4305,71,296,15]: 09 · Local to BYOK fork preview · iOS light
+        - generic [ref=f27e794] [box=4718,67,46,22]:
+          - button "More" [ref=f27e796] [cursor=pointer] [box=4718,67,22,22]:
+            - img [ref=f27e797] [box=4723,72,12,12]
+          - button "Focus" [ref=f27e801] [cursor=pointer] [box=4742,67,22,22]:
+            - img [ref=f27e802] [box=4747,72,12,12]
+      - generic [ref=f27e806] [box=4309,122,430,932]:
+        - generic [box=4309,122,430,72]:
+          - generic [box=4339,157,37,21]: 9:41
+          - generic [box=4638,161,71,13]:
+            - img [box=4638,162,18,11]
+            - img [box=4662,162,16,11]
+            - img [box=4684,162,25,12]
+        - generic [ref=f27e809] [box=4309,176,430,896]:
+          - generic [ref=f27e810] [box=4309,176,430,69]:
+            - img [ref=f27e812] [box=4337,202,18,18]
+            - generic [ref=f27e814] [box=4366,194,317,34]
+          - generic [ref=f27e817] [box=4309,245,430,720]:
+            - generic [ref=f27e818] [box=4325,251,398,94]
+            - generic [ref=f27e824] [box=4325,359,398,76]
+            - generic [ref=f27e837] [box=4325,448,398,16]
+            - generic [ref=f27e840] [box=4325,471,398,237]
+            - generic [ref=f27e871] [box=4325,722,398,56]
+            - generic [ref=f27e879] [box=4325,790,398,51]
+            - generic [ref=f27e885] [box=4325,855,398,110]
+          - generic [ref=f27e888] [box=4309,965,430,107]:
+            - button "Send to Claude · start new chat" [ref=f27e889] [box=4327,977,394,52]
+            - generic [ref=f27e891] [box=4468,1040,112,16]
+    - generic [ref=f27e894] [box=4812,94,480,988]:
+      - generic [ref=f27e895] [box=4808,66,484,24]:
+        - generic [ref=f27e896] [box=4808,66,438,24]:
+          - generic "Drag to reorder" [ref=f27e897] [box=4808,67,17,23]:
+            - img [ref=f27e898] [box=4812,72,9,13]
+          - generic "Click to focus" [ref=f27e905] [cursor=pointer] [box=4829,68,417,21]:
+            - generic [ref=f27e906] [box=4833,71,204,15]: 10 · Settings index · iOS light
+        - generic [ref=f27e907] [box=5246,67,46,22]:
+          - button "More" [ref=f27e909] [cursor=pointer] [box=5246,67,22,22]:
+            - img [ref=f27e910] [box=5251,72,12,12]
+          - button "Focus" [ref=f27e914] [cursor=pointer] [box=5270,67,22,22]:
+            - img [ref=f27e915] [box=5275,72,12,12]
+      - generic [ref=f27e919] [box=4837,122,430,932]:
+        - generic [box=4837,122,430,72]:
+          - generic [box=4867,157,37,21]: 9:41
+          - generic [box=5166,161,71,13]:
+            - img [box=5166,162,18,11]
+            - img [box=5190,162,16,11]
+            - img [box=5212,162,25,12]
+        - generic [ref=f27e922] [box=4837,176,430,992]:
+          - generic [ref=f27e923] [box=4837,176,430,69]:
+            - generic [ref=f27e924] [box=5017,200,69,21]: Settings
+            - img [ref=f27e927] [box=5222,203,16,16]
+          - generic [ref=f27e929] [box=4837,245,430,923]:
+            - generic [ref=f27e930] [box=4837,245,430,146]
+            - generic [ref=f27e935] [box=4837,391,430,43]: Mode
+            - generic [ref=f27e936] [box=4851,435,402,145]
+            - generic [ref=f27e958] [box=4837,592,430,43]: Personalize
+            - generic [ref=f27e959] [box=4851,635,402,145]
+            - generic [ref=f27e979] [box=4837,792,430,43]: Device
+            - generic [ref=f27e980] [box=4851,836,402,145]
+            - generic [ref=f27e1001] [box=4837,993,430,43]: About
+            - generic [ref=f27e1002] [box=4851,1036,402,97]
+    - generic [ref=f27e1016] [box=5340,94,480,988]:
+      - generic [ref=f27e1017] [box=5336,66,484,24]:
+        - generic [ref=f27e1018] [box=5336,66,438,24]:
+          - generic "Drag to reorder" [ref=f27e1019] [box=5336,67,17,23]:
+            - img [ref=f27e1020] [box=5340,72,9,13]
+          - generic "Click to focus" [ref=f27e1027] [cursor=pointer] [box=5357,68,417,21]:
+            - generic [ref=f27e1028] [box=5361,71,206,15]: 11 · Storage export · iOS light
+        - generic [ref=f27e1029] [box=5774,67,46,22]:
+          - button "More" [ref=f27e1031] [cursor=pointer] [box=5774,67,22,22]:
+            - img [ref=f27e1032] [box=5779,72,12,12]
+          - button "Focus" [ref=f27e1036] [cursor=pointer] [box=5798,67,22,22]:
+            - img [ref=f27e1037] [box=5803,72,12,12]
+      - generic [ref=f27e1041] [box=5365,122,430,932]:
+        - generic [box=5365,122,430,72]:
+          - generic [box=5395,157,37,21]: 9:41
+          - generic [box=5694,161,71,13]:
+            - img [box=5694,162,18,11]
+            - img [box=5718,162,16,11]
+            - img [box=5740,162,25,12]
+        - generic [ref=f27e1044] [box=5365,176,430,844]:
+          - generic [ref=f27e1045] [box=5365,176,430,69]:
+            - img [ref=f27e1047] [box=5392,201,20,20]
+            - generic [ref=f27e1050] [box=5548,200,65,21]: Storage
+          - generic [ref=f27e1052] [box=5383,253,394,172]:
+            - generic [ref=f27e1053] [box=5399,274,31,13]: USED
+            - generic [ref=f27e1054] [box=5399,293,362,39]: 2.18 GB
+            - generic [ref=f27e1059] [box=5399,368,362,42]
+          - generic [ref=f27e1069] [box=5379,439,402,194]:
+            - generic [ref=f27e1070] [box=5379,439,402,49]
+            - generic [ref=f27e1077] [box=5379,488,402,49]
+            - generic [ref=f27e1084] [box=5379,536,402,49]
+            - generic [ref=f27e1089] [box=5379,585,402,48]
+          - generic [ref=f27e1097] [box=5387,649,384,34]: Export creates a .zip on your device and opens the iOS share sheet. Nothing is uploaded.
+          - generic [ref=f27e1098] [box=5365,684,430,43]: Danger zone
+          - generic [ref=f27e1100] [box=5379,728,402,48]:
+            - img [ref=f27e1101] [box=5395,742,20,20]
+            - generic [ref=f27e1103] [box=5429,742,336,19]: Reset on-device data
+    - generic [ref=f27e1105] [box=5868,94,480,988]:
+      - generic [ref=f27e1106] [box=5864,66,484,24]:
+        - generic [ref=f27e1107] [box=5864,66,438,24]:
+          - generic "Drag to reorder" [ref=f27e1108] [box=5864,67,17,23]:
+            - img [ref=f27e1109] [box=5868,72,9,13]
+          - generic "Click to focus" [ref=f27e1116] [cursor=pointer] [box=5885,68,417,21]:
+            - generic [ref=f27e1117] [box=5889,71,238,15]: 12 · Privacy boundaries · iOS light
+        - generic [ref=f27e1118] [box=6302,67,46,22]:
+          - button "More" [ref=f27e1120] [cursor=pointer] [box=6302,67,22,22]:
+            - img [ref=f27e1121] [box=6307,72,12,12]
+          - button "Focus" [ref=f27e1125] [cursor=pointer] [box=6326,67,22,22]:
+            - img [ref=f27e1126] [box=6331,72,12,12]
+      - generic [ref=f27e1130] [box=5893,122,430,932]:
+        - generic [box=5893,122,430,72]:
+          - generic [box=5923,157,37,21]: 9:41
+          - generic [box=6222,161,71,13]:
+            - img [box=6222,162,18,11]
+            - img [box=6246,162,16,11]
+            - img [box=6268,162,25,12]
+        - generic [ref=f27e1133] [box=5893,176,430,938]:
+          - generic [ref=f27e1134] [box=5893,176,430,69]:
+            - img [ref=f27e1136] [box=5919,201,20,20]
+            - generic [ref=f27e1139] [box=6077,200,62,21]: Privacy
+          - generic [ref=f27e1141] [box=5911,253,394,116]:
+            - img [ref=f27e1142] [box=5925,268,18,18]
+            - generic [ref=f27e1144] [box=5925,296,365,18]: On-device by default
+            - generic [ref=f27e1145] [box=5925,318,365,36]: Conversations never leave your phone unless you explicitly choose BYOK. Local mode uses no AGI cloud servers.
+          - generic [ref=f27e1146] [box=5893,383,430,43]: Trust signals
+          - generic [ref=f27e1147] [box=5907,426,402,194]:
+            - generic [ref=f27e1148] [box=5907,426,402,49]
+            - generic [ref=f27e1152] [box=5907,475,402,49]
+            - generic [ref=f27e1156] [box=5907,523,402,49]
+            - generic [ref=f27e1160] [box=5907,572,402,48]
+          - generic [ref=f27e1164] [box=5893,632,430,43]: When you use BYOK
+          - generic [ref=f27e1165] [box=5907,675,402,178]:
+            - generic [ref=f27e1166] [box=5907,675,402,60]
+            - generic [ref=f27e1172] [box=5907,735,402,60]
+            - generic [ref=f27e1178] [box=5907,794,402,59]
+          - generic [ref=f27e1184] [box=5893,865,430,43]: Documents
+          - generic [ref=f27e1185] [box=5907,909,402,194]:
+            - generic [ref=f27e1186] [box=5907,909,402,49]
+            - generic [ref=f27e1192] [box=5907,957,402,49]
+            - generic [ref=f27e1198] [box=5907,1006,402,49]
+            - generic [ref=f27e1204] [box=5907,1054,402,48]
+    - generic [ref=f27e1211] [box=6396,94,446,928]:
+      - generic [ref=f27e1212] [box=6392,66,450,24]:
+        - generic [ref=f27e1213] [box=6392,66,404,24]:
+          - generic "Drag to reorder" [ref=f27e1214] [box=6392,67,17,23]:
+            - img [ref=f27e1215] [box=6396,72,9,13]
+          - generic "Click to focus" [ref=f27e1222] [cursor=pointer] [box=6413,68,383,21]:
+            - generic [ref=f27e1223] [box=6417,71,253,15]: 13 · Onboarding hero · Android light
+        - generic [ref=f27e1224] [box=6796,67,46,22]:
+          - button "More" [ref=f27e1226] [cursor=pointer] [box=6796,67,22,22]:
+            - img [ref=f27e1227] [box=6801,72,12,12]
+          - button "Focus" [ref=f27e1231] [cursor=pointer] [box=6820,67,22,22]:
+            - img [ref=f27e1232] [box=6825,72,12,12]
+      - generic [ref=f27e1236] [box=6414,111,410,895]:
+        - generic [ref=f27e1238] [box=6416,112,407,48]:
+          - generic [ref=f27e1239] [box=6438,128,26,16]: 9:41
+          - generic [ref=f27e1240] [box=6773,129,28,14]: ▴ ⌬ ▮
+        - generic [ref=f27e1241] [box=6416,144,407,832]:
+          - generic [ref=f27e1242] [box=6416,144,407,723]:
+            - img [ref=f27e1243] [box=6587,325,64,64]
+            - generic [ref=f27e1250] [box=6448,416,343,70]: AGI runs on your device.
+            - generic [ref=f27e1251] [box=6493,501,252,18]: No account. No cloud. Free forever.
+            - generic [ref=f27e1252] [box=6459,547,320,139]
+          - generic [ref=f27e1265] [box=6416,867,407,109]:
+            - button "Start chatting" [ref=f27e1266] [box=6436,867,367,52]
+            - generic [ref=f27e1268] [box=6515,933,209,14]: AGI Automation LLC · Delaware, USA
+    - generic [ref=f27e1270] [box=6890,94,446,928]:
+      - generic [ref=f27e1271] [box=6886,66,450,24]:
+        - generic [ref=f27e1272] [box=6886,66,404,24]:
+          - generic "Drag to reorder" [ref=f27e1273] [box=6886,67,17,23]:
+            - img [ref=f27e1274] [box=6890,72,9,13]
+          - generic "Click to focus" [ref=f27e1281] [cursor=pointer] [box=6907,68,383,21]:
+            - generic [ref=f27e1282] [box=6911,71,203,15]: 14 · Drawer IA · Android light
+        - generic [ref=f27e1283] [box=7290,67,46,22]:
+          - button "More" [ref=f27e1285] [cursor=pointer] [box=7290,67,22,22]:
+            - img [ref=f27e1286] [box=7295,72,12,12]
+          - button "Focus" [ref=f27e1290] [cursor=pointer] [box=7314,67,22,22]:
+            - img [ref=f27e1291] [box=7319,72,12,12]
+      - generic [ref=f27e1295] [box=6908,111,410,895]:
+        - generic [ref=f27e1297] [box=6910,112,407,48]:
+          - generic [ref=f27e1298] [box=6932,128,26,16]: 9:41
+          - generic [ref=f27e1299] [box=7267,129,28,14]: ▴ ⌬ ▮
+        - generic [ref=f27e1300] [box=6910,144,407,832]:
+          - generic [ref=f27e1301] [box=6910,144,407,72]:
+            - img [ref=f27e1302] [box=6924,169,22,22]
+            - generic [ref=f27e1304] [box=6958,169,31,22]: AGI
+          - generic [ref=f27e1305] [box=6910,176,312,772]:
+            - generic [ref=f27e1306] [box=6910,176,312,72]
+            - generic [ref=f27e1313] [box=6910,249,312,354]
+    - generic [ref=f27e1344] [box=7384,94,480,988]:
+      - generic [ref=f27e1345] [box=7380,66,484,24]:
+        - generic [ref=f27e1346] [box=7380,66,438,24]:
+          - generic "Drag to reorder" [ref=f27e1347] [box=7380,67,17,23]:
+            - img [ref=f27e1348] [box=7384,72,9,13]
+          - generic "Click to focus" [ref=f27e1355] [cursor=pointer] [box=7401,68,417,21]:
+            - generic [ref=f27e1356] [box=7405,71,211,15]: D1 · Empty chat · dark sample
+        - generic [ref=f27e1357] [box=7818,67,46,22]:
+          - button "More" [ref=f27e1359] [cursor=pointer] [box=7818,67,22,22]:
+            - img [ref=f27e1360] [box=7823,72,12,12]
+          - button "Focus" [ref=f27e1364] [cursor=pointer] [box=7842,67,22,22]:
+            - img [ref=f27e1365] [box=7847,72,12,12]
+      - generic [ref=f27e1369] [box=7409,122,430,932]:
+        - generic [box=7409,122,430,72]:
+          - generic [box=7439,157,37,21]: 9:41
+          - generic [box=7738,161,71,13]:
+            - img [box=7738,162,18,11]
+            - img [box=7762,162,16,11]
+            - img [box=7784,162,25,12]
+        - generic [ref=f27e1372] [box=7409,176,430,844]:
+          - generic [ref=f27e1373] [box=7409,176,430,65]:
+            - img [ref=f27e1375] [box=7433,199,20,20]
+            - generic [ref=f27e1378] [box=7491,191,265,36]
+            - img [ref=f27e1388] [box=7795,200,18,18]
+          - generic [ref=f27e1391] [box=7510,247,228,25]:
+            - img [ref=f27e1392] [box=7518,254,12,12]
+            - generic [ref=f27e1394] [box=7536,253,190,14]: On-device · Private · Works offline
+          - generic [ref=f27e1395] [box=7409,272,430,682]:
+            - img [ref=f27e1396] [box=7602,542,44,44]
+            - generic [ref=f27e1403] [box=7522,608,203,36]: Ask anything.
+            - generic [ref=f27e1404] [box=7494,652,260,33]: Llama 3.2 3B is loaded. No internet needed.
+          - generic [ref=f27e1406] [box=7423,962,402,44]:
+            - button [ref=f27e1407] [box=7423,962,44,44]
+            - generic [ref=f27e1410] [box=7475,962,298,44]
+            - button [ref=f27e1414] [box=7781,962,44,44]
+    - generic [ref=f27e1422] [box=7912,94,480,988]:
+      - generic [ref=f27e1423] [box=7908,66,484,24]:
+        - generic [ref=f27e1424] [box=7908,66,438,24]:
+          - generic "Drag to reorder" [ref=f27e1425] [box=7908,67,17,23]:
+            - img [ref=f27e1426] [box=7912,72,9,13]
+          - generic "Click to focus" [ref=f27e1433] [cursor=pointer] [box=7929,68,417,21]:
+            - generic [ref=f27e1434] [box=7933,71,224,15]: D2 · Model picker · dark sample
+        - generic [ref=f27e1435] [box=8346,67,46,22]:
+          - button "More" [ref=f27e1437] [cursor=pointer] [box=8346,67,22,22]:
+            - img [ref=f27e1438] [box=8351,72,12,12]
+          - button "Focus" [ref=f27e1442] [cursor=pointer] [box=8370,67,22,22]:
+            - img [ref=f27e1443] [box=8375,72,12,12]
+      - generic [ref=f27e1447] [box=7937,122,430,932]:
+        - generic [box=7937,122,430,72]:
+          - generic [box=7967,157,37,21]: 9:41
+          - generic [box=8266,161,71,13]:
+            - img [box=8266,162,18,11]
+            - img [box=8290,162,16,11]
+            - img [box=8312,162,25,12]
+        - generic [ref=f27e1453] [box=7937,217,430,803]:
+          - generic [ref=f27e1455] [box=7937,243,430,45]:
+            - generic [ref=f27e1456] [box=7959,250,79,27]: Models
+            - img [ref=f27e1458] [box=8316,255,16,16]
+          - generic [ref=f27e1460] [box=7937,288,430,732]:
+            - generic [ref=f27e1461] [box=7937,292,430,56]
+            - generic [ref=f27e1465] [box=7937,348,430,61]
+            - generic [ref=f27e1473] [box=7937,409,430,61]
+            - generic [ref=f27e1481] [box=7937,469,430,61]
+            - generic [ref=f27e1490] [box=7937,543,430,56]
+            - generic [ref=f27e1494] [box=7937,599,430,61]
+            - generic [ref=f27e1505] [box=7937,660,430,61]
+            - generic [ref=f27e1513] [box=7937,720,430,61]
+            - generic [ref=f27e1521] [box=7937,781,430,61]
+            - generic [ref=f27e1529] [box=7937,842,430,61]
+            - generic [ref=f27e1537] [box=7937,903,430,61]
+            - generic [ref=f27e1547] [box=7937,964,430,61]
+            - generic [ref=f27e1559] [box=7959,1051,386,36]
+            - generic [ref=f27e1561] [box=7937,1093,430,61]
+            - generic [ref=f27e1570] [box=7959,1168,386,54]

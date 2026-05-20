@@ -1,70 +1,100 @@
-# AGI Workforce — Documentation Index
+# AGI Documentation Index
 
-The `docs/` directory is the canonical home for everything that doesn't belong in source comments or memory files. This index links to the load-bearing documents and explains how they relate.
+Last organized: 2026-05-20.
 
-> **Single source of truth at the repo root**: `AGI_WORKFORCE.md` (product spec), `CLAUDE.md` (engineering rules), `BUILD.md` (per-surface commands), `README.md` (user-facing). Read those before non-trivial changes.
+This directory is for durable repo documentation. Generated files, build artifacts, personal memory, and one-off transcripts should not live here unless they are explicitly archived.
 
-## Architecture & scaling
+## Read First
 
-| File                                   | What it covers                                                                                                                                     |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`ARCHITECTURE.md`](./ARCHITECTURE.md) | System map: 6 surfaces, shared packages, backend services, abstraction layers, cross-surface contracts.                                            |
-| [`SCALING.md`](./SCALING.md)           | Migration playbooks: Supabase → Neon, Auth0/Clerk swap, S3/R2/B2 storage, Pusher/Ably realtime, connection pooling, read replicas.                 |
-| [`HOSTING.md`](./HOSTING.md)           | Multi-cloud deployment: Vercel / Cloudflare / Netlify for web; Fly.io / Railway / Render for services; domain switching, edge vs origin functions. |
-| [`PERFORMANCE.md`](./PERFORMANCE.md)   | Heavy-traffic patterns: pool sizing, caching layers, streaming backpressure, provider failover, cost-aware routing.                                |
+1. [`../AGI_WORKFORCE.md`](../AGI_WORKFORCE.md) - root entry point for agents and maintainers.
+2. [`../PLAN.md`](../PLAN.md) - active Anthropic Applications parity transition plan.
+3. [`../TODO.md`](../TODO.md) - active transition checklist.
+4. [`../BUILD.md`](../BUILD.md) - toolchain, build, test, and release commands.
+5. [`agent-context/`](./agent-context/) - canonical LLM-operability maps, known flaws, risk areas, and commands for coding agents.
+6. [`plans/pre-release-repo-organization-2026-05-20.md`](./plans/pre-release-repo-organization-2026-05-20.md) - pre-release repo organization, naming, ownership, and team-onboarding plan.
+7. [`../audit/anthropic-apps-parity/`](../audit/anthropic-apps-parity/) - source-backed parity evidence, including competitive baseline, SDK strategy, and compute/artifact research.
+8. [`PRD.md`](./PRD.md) - repo product spec.
+9. [`decisions/CURRENT_DECISIONS.md`](./decisions/CURRENT_DECISIONS.md) - latest decision index and mobile-v1 launch clarification.
+10. [`surfaces/`](./surfaces/) - one operational guide per shipping surface.
 
-The `packages/data-layer/` package is the seam that makes Supabase → Neon (or any other Postgres provider) a config change instead of a rewrite. The interfaces in `data-layer/src/types.ts` are the contract every cloud-portable feature consumes.
+## Current Product Specs
 
-## Product & business
+| File                                                                                                         | Purpose                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| [`PRD.md`](./PRD.md)                                                                                         | Platform product spec. Contains current repo-level requirements, risks, success metrics, and locked decisions. |
+| [`PRD-MOBILE.md`](./PRD-MOBILE.md)                                                                           | Mobile-specific PRD. Supersedes platform PRD on mobile-only implementation details.                            |
+| [`PRD-APPENDIX-A-DATA-MODELS.md`](./PRD-APPENDIX-A-DATA-MODELS.md)                                           | Supabase, SQLite, billing, dispatch, waitlist, and model-policy data contracts.                                |
+| [`PRD-APPENDIX-B-API-CONTRACTS.md`](./PRD-APPENDIX-B-API-CONTRACTS.md)                                       | Web API, Tauri command, mobile dispatch, and consent-copy contracts.                                           |
+| [`PRD-APPENDIX-C-MONOREPO-LAYOUT.md`](./PRD-APPENDIX-C-MONOREPO-LAYOUT.md)                                   | Repo layout, ownership, env vars, build commands, and CI contracts.                                            |
+| [`PRD-APPENDIX-D-SCALING-OBSERVABILITY-COMPLIANCE.md`](./PRD-APPENDIX-D-SCALING-OBSERVABILITY-COMPLIANCE.md) | Scaling, observability, privacy, EU AI Act, and compliance planning.                                           |
+| [`PRD-RESOLUTIONS-AND-AUDIT.md`](./PRD-RESOLUTIONS-AND-AUDIT.md)                                             | Prior PRD conflict audit and Delete / Update / Retain classification.                                          |
+| [`VISION.md`](./VISION.md)                                                                                   | Durable product vision.                                                                                        |
+| [`ROADMAP.md`](./ROADMAP.md)                                                                                 | Wave and launch timeline.                                                                                      |
+| [`PRICING.md`](./PRICING.md)                                                                                 | Tier matrix and pricing/billing posture.                                                                       |
 
-| File                         | What it covers                                                                                                          |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| [`PRICING.md`](./PRICING.md) | Locked tier matrix (Local/BYOK Free, Hobby $10, Pro $29.99 waitlist, Pro+ $49.99, Max $299.99).                         |
-| [`ROADMAP.md`](./ROADMAP.md) | High-level product roadmap pointing at the per-phase plans.                                                             |
-| [`DESIGN.md`](./DESIGN.md)   | Visual unity rules across the 6 surfaces (composer pill, model picker chevron-pill, brand mark, 3-color palette, etc.). |
-| [`HANDOFF.md`](./HANDOFF.md) | Cross-team handoff protocol for releases.                                                                               |
+## Current Engineering References
 
-## Per-domain references
+| File                                                                                       | Purpose                                                     |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| [`ARCHITECTURE.md`](./ARCHITECTURE.md)                                                     | Cross-surface system map.                                   |
+| [`architecture/foundation-2026.md`](./architecture/foundation-2026.md)                     | Accepted Foundation Sprint architecture.                    |
+| [`architecture/worker-protocol.md`](./architecture/worker-protocol.md)                     | Worker direction-inversion protocol.                        |
+| [`HOSTING.md`](./HOSTING.md)                                                               | Web/service hosting, domains, and deployment options.       |
+| [`SCALING.md`](./SCALING.md)                                                               | Supabase-to-Neon and provider-swap playbooks.               |
+| [`PERFORMANCE.md`](./PERFORMANCE.md)                                                       | Performance, caching, provider failover, and traffic notes. |
+| [`OWNERSHIP.md`](./OWNERSHIP.md)                                                           | High-risk ownership boundaries.                             |
+| [`cli/COMMAND_SURFACE.md`](./cli/COMMAND_SURFACE.md)                                       | CLI process, slash command, and TUI command inventory.      |
+| [`api/openapi.yaml`](./api/openapi.yaml)                                                   | OpenAPI reference.                                          |
+| [`api/AGI_Workforce.postman_collection.json`](./api/AGI_Workforce.postman_collection.json) | Postman collection.                                         |
 
-| Folder                   | Purpose                                                                                                               |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `api/`                   | API reference material.                                                                                               |
-| `audit/`                 | Cross-surface audits — see `audit/AUDIT_2026-05-03.md`, `audit/AUDIT_REPORT_2026-05-01.md`, and `audit/FIX_QUEUE.md`. |
-| `launch/`                | Launch runbooks for each tier (Hobby, Pro+, Max).                                                                     |
-| `planning/` and `plans/` | Sprint-level plans and active workstreams.                                                                            |
-| `security/`              | Security policies + threat models + audit trails.                                                                     |
-| `superpowers/`           | Skill packs + extended capability references.                                                                         |
-| `archive/`               | Historical / superseded material.                                                                                     |
+## Surface Guides
 
-## Quickstart for new contributors
+- [`surfaces/desktop.md`](./surfaces/desktop.md)
+- [`surfaces/web.md`](./surfaces/web.md)
+- [`surfaces/mobile.md`](./surfaces/mobile.md)
+- [`surfaces/cli.md`](./surfaces/cli.md)
+- [`surfaces/chrome-extension.md`](./surfaces/chrome-extension.md)
+- [`surfaces/vscode-extension.md`](./surfaces/vscode-extension.md)
 
-1. Read `AGI_WORKFORCE.md` (product) and `CLAUDE.md` (rules).
-2. Read [`ARCHITECTURE.md`](./ARCHITECTURE.md) (system).
-3. Read the surface guide for whatever you're working on (`applications/<surface>.md`).
-4. Run `scripts/verify-surfaces.sh fast` to confirm your environment is green before changes.
-5. Commit conventions: lowercase, ≤100 chars, Conventional Commits, with `Co-Authored-By:` footer (commitlint enforces).
+## Design
 
-## Verification harness
+| File                                                                                                           | Purpose                                                                            |
+| -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| [`design/design-spec-2026-05-15.md`](./design/design-spec-2026-05-15.md)                                       | Current design spec. Replaces old `docs/DESIGN.md` links.                          |
+| [`design/mobile-screen-design-prompt-2026-05-18.md`](./design/mobile-screen-design-prompt-2026-05-18.md)       | Mobile v1 design prompt, updated for local-first/managed-cloud-waitlist direction. |
+| [`design/mobile-claude-design-prompt-r2-2026-05-18.md`](./design/mobile-claude-design-prompt-r2-2026-05-18.md) | Round 2 mobile Claude Design prompt.                                               |
+| [`design/mobile-wireframes-2026-05-18/`](./design/mobile-wireframes-2026-05-18/)                               | Mobile wireframe bundle and prototype files.                                       |
+| [`design/brand-mark-proposals/`](./design/brand-mark-proposals/)                                               | Brand mark options A/B/C. Founder decision still pending.                          |
 
-`scripts/verify-surfaces.sh` runs the full 6-surface gate: typecheck + tests + builds where feasible. Modes:
+## Security And Audit
 
-```bash
-scripts/verify-surfaces.sh           # all surfaces (slow — runs full builds)
-scripts/verify-surfaces.sh fast      # typecheck + test only, skip builds
-scripts/verify-surfaces.sh cli       # one surface
-scripts/verify-surfaces.sh desktop   # one surface
-scripts/verify-surfaces.sh web       # one surface
-scripts/verify-surfaces.sh mobile    # one surface
-scripts/verify-surfaces.sh chrome    # one surface
-scripts/verify-surfaces.sh vscode    # one surface
-```
+| Folder                     | Purpose                                                                          |
+| -------------------------- | -------------------------------------------------------------------------------- |
+| [`audit/`](./audit/)       | General codebase audits, fix queues, desktop audit, and docs organization audit. |
+| [`security/`](./security/) | Threat models, red-team reports, and per-surface security findings.              |
 
-Use this before merging any cross-surface change.
+## Launch, Research, And Plans
 
-## How docs and memory differ
+| Folder                           | Purpose                                                               |
+| -------------------------------- | --------------------------------------------------------------------- |
+| [`launch/`](./launch/)           | Launch copy, channel drafts, store listings, and operator checklists. |
+| [`research/`](./research/)       | Repo-level product validation research.                               |
+| [`planning/`](./planning/)       | Older planning specs retained for historical context.                 |
+| [`plans/`](./plans/)             | Active or recent plans.                                               |
+| [`decisions/`](./decisions/)     | ADRs and current decision index.                                      |
+| [`superpowers/`](./superpowers/) | Historical superpowers plans/specs and UI audit corpus.               |
 
-- **`docs/`** — durable, repo-checked, code-reviewed. Belongs here when it's a reference engineers need to read.
-- **`~/.claude/projects/.../memory/`** — Claude's auto-memory. Personal session context, not for cross-team docs.
-- **Source comments** — only when the WHY is non-obvious (constraint, invariant, workaround). See `CLAUDE.md` "Doing tasks" section.
+## Archive
 
-If you find yourself adding the same context to multiple memory files or PR descriptions, promote it to `docs/`.
+[`archive/`](./archive/) contains superseded plans and snapshots. Treat archived files as historical evidence only. Do not cite them as current unless a current doc explicitly says to.
+
+## Mobile-V1 Clarification
+
+The 2026-05-20 docs audit found one important scoped clarification:
+
+- Platform docs say v1 includes Local + BYOK free with paid tiers waitlisted to 2026-08-01.
+- Founder clarification narrowed the 2026-05-18 local-first/cloud-waitlist locks to mobile v1 first.
+- Mobile v1 is Local + explicit BYOK. Managed Cloud / AGI Compute Credits stay waitlisted or private beta.
+- Mobile-specific docs still need a focused rewrite so Local -> BYOK is consistently an explicit fork with context selection, secret scan, payload preview, and visible provider labeling.
+
+See [`decisions/CURRENT_DECISIONS.md`](./decisions/CURRENT_DECISIONS.md) before editing mobile launch, pricing, onboarding, or PRD docs.

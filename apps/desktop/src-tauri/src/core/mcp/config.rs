@@ -1314,13 +1314,13 @@ pub fn install_bundle(bundle: &McpBundle, config: &mut McpServersConfig) -> McpR
     for (server_name, server_config) in &bundle.servers {
         if let Some(ref m) = allowlist {
             for arg in &server_config.args {
-                if arg.starts_with('@') || arg.starts_with("@modelcontextprotocol/") {
-                    if !crate::core::mcp::manifest::is_allowed(m, arg) {
-                        return Err(crate::core::mcp::McpError::InvalidConfig(format!(
-                            "MCP package '{}' (server '{}') is not on the allow-list",
-                            arg, server_name
-                        )));
-                    }
+                if (arg.starts_with('@') || arg.starts_with("@modelcontextprotocol/"))
+                    && !crate::core::mcp::manifest::is_allowed(m, arg)
+                {
+                    return Err(crate::core::mcp::McpError::InvalidConfig(format!(
+                        "MCP package '{}' (server '{}') is not on the allow-list",
+                        arg, server_name
+                    )));
                 }
             }
         }
