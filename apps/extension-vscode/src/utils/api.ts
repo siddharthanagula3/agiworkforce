@@ -12,6 +12,7 @@ import * as vscode from 'vscode';
 import * as http from 'http';
 import * as https from 'https';
 import { URL } from 'url';
+import { PROVIDER_STREAM_PROVIDER_PRESET_IDS } from '@agiworkforce/types';
 // AUDIT-FIX: vscode-reorg
 import { getModelMetrics } from '../features/model-picker/modelMetrics';
 import { normalizeConfiguredModelId } from '../features/model-picker/modelConstants';
@@ -768,9 +769,15 @@ export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<Tier
 // via the `agiWorkforce.useProviderStream: true` setting. Requires a
 // Supabase JWT in SecretStorage (set via "AGI Workforce: Set Supabase JWT").
 
-import { streamFromProvider } from '../integrations/providerStreamClient';
+import {
+  streamFromProvider,
+  type ProviderStreamProvider,
+} from '../integrations/providerStreamClient';
 
-type ProviderStreamId = 'anthropic' | 'openai' | 'google' | 'ollama';
+type ProviderStreamId = ProviderStreamProvider;
+const VALID_PROVIDER_STREAM_IDS: ReadonlySet<ProviderStreamId> = new Set(
+  PROVIDER_STREAM_PROVIDER_PRESET_IDS,
+);
 
 /**
  * Map a model id to its provider stream id. Best-effort by prefix; falls
@@ -781,6 +788,15 @@ type ProviderStreamId = 'anthropic' | 'openai' | 'google' | 'ollama';
 function inferProviderFromModel(model: string): ProviderStreamId {
   const id = model.toLowerCase();
   if (id.startsWith('claude') || id.startsWith('anthropic/')) return 'anthropic';
+  if (id.startsWith('grok-')) return 'xai';
+  if (id.startsWith('deepseek-')) return 'deepseek';
+  if (id.includes(':free') || id.startsWith('openrouter/')) return 'open_router';
+  if (id.startsWith('accounts/fireworks/')) return 'fireworks';
+  if (id.startsWith('meta-llama/') && id.includes('turbo')) return 'together';
+  if (id === 'llama-3.3-70b-versatile' || id.startsWith('openai/gpt-oss')) return 'groq';
+  if (id.startsWith('mistral') || id.startsWith('codestral') || id.startsWith('pixtral')) {
+    return 'mistral';
+  }
   if (
     id.startsWith('gpt-') ||
     id.startsWith('o1') ||
@@ -806,8 +822,8 @@ function getGatewayUrl(): string {
 function getProviderOverride(): ProviderStreamId | undefined {
   const config = vscode.workspace.getConfiguration('agiWorkforce');
   const raw = config.get<string>('providerStreamProvider');
-  if (raw === 'anthropic' || raw === 'openai' || raw === 'google' || raw === 'ollama') {
-    return raw;
+  if (raw && VALID_PROVIDER_STREAM_IDS.has(raw as ProviderStreamId)) {
+    return raw as ProviderStreamId;
   }
   return undefined;
 }

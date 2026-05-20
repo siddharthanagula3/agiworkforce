@@ -3518,9 +3518,35 @@
         "label": "GLM-5.1"
       }
     ],
-    "mistral": [],
+    "mistral": [
+      {
+        "value": "mistral-large-3",
+        "label": "Mistral Large 3"
+      },
+      {
+        "value": "mistral-medium-3",
+        "label": "Mistral Medium 3.1"
+      },
+      {
+        "value": "codestral-2",
+        "label": "Codestral 2"
+      }
+    ],
     "nvidia_nim": [],
-    "open_router": []
+    "open_router": [
+      {
+        "value": "meta-llama/llama-3.3-70b-instruct:free",
+        "label": "Llama 3.3 70B Instruct (Free)"
+      },
+      {
+        "value": "qwen/qwen3-coder:free",
+        "label": "Qwen3 Coder (Free)"
+      },
+      {
+        "value": "nvidia/nemotron-3-super-120b-a12b:free",
+        "label": "Nemotron 3 Super 120B (Free)"
+      }
+    ]
   },
   "providersInOrder": [
     "managed_cloud",
@@ -3533,6 +3559,7 @@
     "moonshot",
     "perplexity",
     "zhipu",
+    "mistral",
     "open_router",
     "nvidia_nim",
     "ollama"

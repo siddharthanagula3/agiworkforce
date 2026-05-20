@@ -76,7 +76,7 @@ const DEFAULT_PROVIDERS: ProviderEntry[] = [
   {
     id: 'together',
     label: 'Together',
-    pingUrl: 'https://api.together.xyz/v1/models',
+    pingUrl: 'https://api.together.ai/v1/models',
     family: 'inference',
   },
   {
@@ -114,7 +114,7 @@ const PROVIDER_HEALTH_ALLOWED_HOSTS = new Set<string>([
   'api.mistral.ai',
   'api.groq.com',
   'api.deepseek.com',
-  'api.together.xyz',
+  'api.together.ai',
   'api.perplexity.ai',
   'api.cohere.com',
   'api.fireworks.ai',

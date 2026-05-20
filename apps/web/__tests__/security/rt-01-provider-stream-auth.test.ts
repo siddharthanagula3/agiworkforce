@@ -7,6 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { PROVIDER_STREAM_PROVIDER_PRESET_IDS } from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 
@@ -220,21 +221,8 @@ describe('RT-01: /api/v1/providers/[providerId]/stream authentication', () => {
     expect(mockDeductCredits).toHaveBeenCalledTimes(2);
   });
 
-  it('accepts all valid provider IDs in allowlist', async () => {
-    const validProviders = [
-      'anthropic',
-      'openai',
-      'google',
-      'xai',
-      'deepseek',
-      'perplexity',
-      'qwen',
-      'moonshot',
-      'zhipu',
-      'ollama',
-      'lmstudio',
-    ];
-    for (const providerId of validProviders) {
+  it('accepts provider IDs currently served by the api-gateway adapter factory', async () => {
+    for (const providerId of PROVIDER_STREAM_PROVIDER_PRESET_IDS) {
       vi.clearAllMocks();
       mockGetAuthenticatedUser.mockResolvedValue({ id: 'user-123' });
       mockCheckAvailable.mockResolvedValue(true);
@@ -244,5 +232,71 @@ describe('RT-01: /api/v1/providers/[providerId]/stream authentication', () => {
       const res = await POST(req, { params });
       expect(res.status).toBe(200);
     }
+  });
+
+  it('preserves canonical ChatRequest fields when forwarding to the api-gateway', async () => {
+    const body = {
+      model: 'claude-opus-4-7',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'use the tool',
+              cacheControl: { type: 'ephemeral', ttl: '5m' },
+            },
+          ],
+        },
+      ],
+      system: [{ type: 'text', text: 'system prompt' }],
+      tools: [
+        {
+          name: 'read_file',
+          description: 'Read a file',
+          inputSchema: {
+            type: 'object',
+            properties: { path: { type: 'string' } },
+            required: ['path'],
+          },
+          strict: true,
+        },
+      ],
+      toolChoice: { type: 'tool', name: 'read_file' },
+      maxOutputTokens: 256,
+      temperature: 0.2,
+      topP: 0.9,
+      topK: 40,
+      stopSequences: ['END'],
+      thinking: { type: 'enabled', budgetTokens: 4096 },
+      metadata: { surface: 'web', requestId: 'req-1' },
+    };
+
+    const { req, params } = makeRequest('anthropic', body, 'Bearer valid.jwt');
+    const res = await POST(req, { params });
+
+    expect(res.status).toBe(200);
+    expect(mockFetch).toHaveBeenCalledOnce();
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual(body);
+  });
+
+  it('translates legacy max_tokens to canonical maxOutputTokens before forwarding', async () => {
+    const body = {
+      model: 'claude-opus-4-7',
+      messages: [{ role: 'user', content: 'hello' }],
+      max_tokens: 512,
+    };
+
+    const { req, params } = makeRequest('anthropic', body, 'Bearer valid.jwt');
+    const res = await POST(req, { params });
+
+    expect(res.status).toBe(200);
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({
+      model: 'claude-opus-4-7',
+      messages: [{ role: 'user', content: 'hello' }],
+      maxOutputTokens: 512,
+    });
   });
 });

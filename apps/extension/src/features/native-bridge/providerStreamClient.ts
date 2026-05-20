@@ -11,7 +11,9 @@
  * `/api/v1/providers/*` Next.js proxy forward to the api-gateway.
  */
 
-export type ProviderStreamProvider = 'anthropic' | 'openai' | 'ollama' | 'google';
+import type { ProviderStreamProviderPresetId } from '@agiworkforce/types';
+
+export type ProviderStreamProvider = ProviderStreamProviderPresetId;
 
 export interface ProviderStreamMessage {
   role: 'user' | 'assistant' | 'system';

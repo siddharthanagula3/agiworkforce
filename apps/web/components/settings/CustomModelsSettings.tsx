@@ -13,7 +13,10 @@ import {
   WifiOff,
   X,
 } from 'lucide-react';
-import type { CustomModelConfig } from '@agiworkforce/types';
+import {
+  listCustomOpenAICompatibleProviderPresets,
+  type CustomModelConfig,
+} from '@agiworkforce/types';
 import { useSettingsStore } from '@/stores/settingsStore';
 import {
   Button,
@@ -31,18 +34,24 @@ import {
   Switch,
 } from '@/components/ui';
 
-const PROVIDER_PRESETS: Record<string, string> = {
-  Ollama: 'http://localhost:11434/v1',
-  'LM Studio': 'http://localhost:1234/v1',
-  vLLM: 'http://localhost:8000/v1',
-  Groq: 'https://api.groq.com/openai/v1',
-  OpenRouter: 'https://openrouter.ai/api/v1',
-  'Together AI': 'https://api.together.xyz/v1',
-  Fireworks: 'https://api.fireworks.ai/inference/v1',
-  Mistral: 'https://api.mistral.ai/v1',
-  DeepSeek: 'https://api.deepseek.com/v1',
-  Custom: '',
-};
+function buildProviderPresets(): Record<string, string> {
+  const presets: Record<string, string> = {
+    Ollama: 'http://localhost:11434/v1',
+    'LM Studio': 'http://localhost:1234/v1',
+    vLLM: 'http://localhost:8000/v1',
+  };
+
+  for (const preset of listCustomOpenAICompatibleProviderPresets()) {
+    if (preset.endpoint) {
+      presets[preset.label] = preset.endpoint.baseUrl;
+    }
+  }
+
+  presets['Custom'] = '';
+  return presets;
+}
+
+const PROVIDER_PRESETS = buildProviderPresets();
 
 const PROVIDER_NAMES = Object.keys(PROVIDER_PRESETS);
 

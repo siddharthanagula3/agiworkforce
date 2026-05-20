@@ -32,9 +32,13 @@ const BYOK_PROVIDERS = [
   { id: 'xai', name: 'xAI (Grok)', placeholder: 'xai-...' },
   { id: 'deepseek', name: 'DeepSeek', placeholder: 'sk-...' },
   { id: 'mistral', name: 'Mistral', placeholder: 'API key...' },
+  { id: 'groq', name: 'Groq', placeholder: 'gsk_...' },
   { id: 'perplexity', name: 'Perplexity', placeholder: 'pplx-...' },
-  { id: 'openrouter', name: 'OpenRouter', placeholder: 'sk-or-...' },
+  { id: 'open_router', name: 'OpenRouter', placeholder: 'sk-or-...' },
+  { id: 'together', name: 'Together AI', placeholder: 'API key...' },
+  { id: 'fireworks', name: 'Fireworks AI', placeholder: 'fw_...' },
   { id: 'nvidia_nim', name: 'NVIDIA NIM', placeholder: 'nvapi-...' },
+  { id: 'cohere', name: 'Cohere', placeholder: 'API key...' },
 ] as const;
 
 function BYOKApiKeysSection() {

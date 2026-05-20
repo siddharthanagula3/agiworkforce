@@ -11,8 +11,9 @@
  */
 
 import { secureFetch } from '@/services/secureFetch';
+import type { ProviderStreamProviderPresetId } from '@agiworkforce/types';
 
-export type ProviderStreamProvider = 'anthropic' | 'openai' | 'ollama' | 'google';
+export type ProviderStreamProvider = ProviderStreamProviderPresetId;
 
 export interface ProviderStreamMessage {
   role: 'user' | 'assistant' | 'system';

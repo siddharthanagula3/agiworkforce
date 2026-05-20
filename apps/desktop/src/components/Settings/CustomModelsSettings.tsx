@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { listCustomOpenAICompatibleProviderPresets } from '@agiworkforce/types';
 import type { CustomModelConfig } from '../../types/customModel';
 import { useSettingsStore } from '../../stores/settingsStore';
 import {
@@ -37,19 +38,25 @@ import { Label } from '../ui/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 import { Switch } from '../ui/Switch';
 
-const PROVIDER_PRESETS: Record<string, string> = {
-  Ollama: 'http://localhost:11434/v1',
-  'LM Studio': 'http://localhost:1234/v1',
-  vLLM: 'http://localhost:8000/v1',
-  Groq: 'https://api.groq.com/openai/v1',
-  OpenRouter: 'https://openrouter.ai/api/v1',
-  'Together AI': 'https://api.together.xyz/v1',
-  Fireworks: 'https://api.fireworks.ai/inference/v1',
-  Mistral: 'https://api.mistral.ai/v1',
-  DeepSeek: 'https://api.deepseek.com/v1',
-  'NVIDIA NIM': 'https://integrate.api.nvidia.com/v1',
-  Custom: '',
-};
+function buildProviderPresets(): Record<string, string> {
+  const presets: Record<string, string> = {
+    Ollama: 'http://localhost:11434/v1',
+    'LM Studio': 'http://localhost:1234/v1',
+    vLLM: 'http://localhost:8000/v1',
+  };
+
+  for (const preset of listCustomOpenAICompatibleProviderPresets()) {
+    if (preset.endpoint) {
+      presets[preset.label] = preset.endpoint.baseUrl;
+    }
+  }
+
+  presets['NVIDIA NIM'] = 'https://integrate.api.nvidia.com/v1';
+  presets['Custom'] = '';
+  return presets;
+}
+
+const PROVIDER_PRESETS = buildProviderPresets();
 
 const PROVIDER_NAMES = Object.keys(PROVIDER_PRESETS);
 

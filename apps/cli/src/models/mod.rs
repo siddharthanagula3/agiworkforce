@@ -147,6 +147,51 @@ pub fn mistral_provider() -> Provider {
     }
 }
 
+/// OpenRouter — router/fallback layer exposed through an OpenAI-compatible endpoint.
+pub fn openrouter_provider() -> Provider {
+    Provider::OpenAICompatible {
+        name: "open_router",
+        base_url: "https://openrouter.ai/api/v1/chat/completions",
+        api_key_env: Some("OPENROUTER_API_KEY"),
+    }
+}
+
+/// Groq — speed-first OpenAI-compatible inference endpoint.
+pub fn groq_provider() -> Provider {
+    Provider::OpenAICompatible {
+        name: "groq",
+        base_url: "https://api.groq.com/openai/v1/chat/completions",
+        api_key_env: Some("GROQ_API_KEY"),
+    }
+}
+
+/// Together AI — OpenAI-compatible open-model host.
+pub fn together_provider() -> Provider {
+    Provider::OpenAICompatible {
+        name: "together",
+        base_url: "https://api.together.ai/v1/chat/completions",
+        api_key_env: Some("TOGETHER_API_KEY"),
+    }
+}
+
+/// Fireworks AI — OpenAI-compatible open-model host.
+pub fn fireworks_provider() -> Provider {
+    Provider::OpenAICompatible {
+        name: "fireworks",
+        base_url: "https://api.fireworks.ai/inference/v1/chat/completions",
+        api_key_env: Some("FIREWORKS_API_KEY"),
+    }
+}
+
+/// Hugging Face Inference Providers — routed OpenAI-compatible chat endpoint.
+pub fn huggingface_provider() -> Provider {
+    Provider::OpenAICompatible {
+        name: "huggingface",
+        base_url: "https://router.huggingface.co/v1/chat/completions",
+        api_key_env: Some("HF_TOKEN"),
+    }
+}
+
 /// A content block within a message (supports text and tool interactions).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]

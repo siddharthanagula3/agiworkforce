@@ -6,6 +6,7 @@ import {
   type ProviderStreamProvider,
   type StreamChunk as ProviderStreamChunk,
 } from '@/lib/providerStreamClient';
+import { PROVIDER_STREAM_PROVIDER_PRESET_IDS } from '@agiworkforce/types';
 import { supabase } from './supabase';
 import { secureFetch } from './secureFetch';
 import { ApiPaywallError } from './api';
@@ -184,25 +185,26 @@ async function attemptStream(
  */
 const USE_PROVIDER_STREAM = process.env.EXPO_PUBLIC_USE_PROVIDER_STREAM === '1';
 
-const VALID_PROVIDER_IDS: ReadonlySet<ProviderStreamProvider> = new Set([
-  'anthropic',
-  'openai',
-  'google',
-  'ollama',
-]);
+const VALID_PROVIDER_IDS: ReadonlySet<ProviderStreamProvider> = new Set(
+  PROVIDER_STREAM_PROVIDER_PRESET_IDS,
+);
 
 function inferProviderFromModel(modelId: string | undefined): ProviderStreamProvider {
   if (!modelId) return 'anthropic';
   const m = modelId.toLowerCase();
   if (m.startsWith('claude-')) return 'anthropic';
+  if (m.startsWith('grok-')) return 'xai';
+  if (m.startsWith('deepseek-')) return 'deepseek';
+  if (m.includes(':free') || m.startsWith('openrouter/')) return 'open_router';
+  if (m.startsWith('accounts/fireworks/')) return 'fireworks';
+  if (m.startsWith('meta-llama/') && m.includes('turbo')) return 'together';
+  if (m === 'llama-3.3-70b-versatile' || m.startsWith('openai/gpt-oss')) return 'groq';
+  if (m.startsWith('mistral') || m.startsWith('codestral') || m.startsWith('pixtral')) {
+    return 'mistral';
+  }
   if (m.startsWith('gpt-') || m.startsWith('o1-') || m.startsWith('codex-')) return 'openai';
   if (m.startsWith('gemini-')) return 'google';
-  if (
-    m === 'ollama-local' ||
-    m.startsWith('llama') ||
-    m.startsWith('qwen') ||
-    m.startsWith('mistral')
-  ) {
+  if (m === 'ollama-local' || m.startsWith('llama') || m.startsWith('qwen')) {
     return 'ollama';
   }
   return 'anthropic';

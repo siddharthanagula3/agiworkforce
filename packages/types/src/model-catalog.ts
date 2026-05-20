@@ -452,7 +452,14 @@ const MANAGED_CLOUD_PROVIDER_IDS = [
   'zhipu',
 ] as const;
 const SEARCH_ONLY_MANAGED_CLOUD_PROVIDER_IDS = ['perplexity'] as const;
-const BYOK_PROVIDER_IDS = ['open_router', 'nvidia_nim'] as const;
+const BYOK_PROVIDER_IDS = [
+  'mistral',
+  'groq',
+  'together',
+  'fireworks',
+  'open_router',
+  'nvidia_nim',
+] as const;
 const LOCAL_PROVIDER_IDS = ['ollama'] as const;
 const MANAGED_CLOUD_PROVIDER_SET = new Set<string>([
   'managed_cloud',

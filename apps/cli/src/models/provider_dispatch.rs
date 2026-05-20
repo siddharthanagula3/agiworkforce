@@ -5,8 +5,9 @@ use crate::config::CliConfig;
 use crate::errors::CliError;
 
 use super::{
-    deepseek_provider, lmstudio_provider, mistral_provider, moonshot_provider, openai_provider,
-    perplexity_provider, qwen_provider, xai_provider, zhipu_provider, OllamaMode, Provider,
+    deepseek_provider, fireworks_provider, groq_provider, huggingface_provider, lmstudio_provider,
+    mistral_provider, moonshot_provider, openai_provider, openrouter_provider, perplexity_provider,
+    qwen_provider, together_provider, xai_provider, zhipu_provider, OllamaMode, Provider,
 };
 
 // ---------------------------------------------------------------------------
@@ -18,7 +19,7 @@ use super::{
 /// Returns `None` if the name is not recognized, in which case callers
 /// should fall back to [`detect_provider`] for model-name-based detection.
 ///
-/// Recognizes the 10 pre-registered cloud providers, the two Ollama modes,
+/// Recognizes pre-registered cloud providers, the two Ollama modes,
 /// LM Studio, plus any custom provider registered through the dynamic
 /// registry (see `register_custom_providers`).
 pub fn provider_from_name(name: &str) -> Option<Provider> {
@@ -39,6 +40,11 @@ pub fn provider_from_name(name: &str) -> Option<Provider> {
         "zhipu" | "glm" => Some(zhipu_provider()),
         "lmstudio" | "lm-studio" | "lm_studio" => Some(lmstudio_provider()),
         "mistral" | "mistral-ai" | "mistralai" => Some(mistral_provider()),
+        "openrouter" | "open-router" | "open_router" => Some(openrouter_provider()),
+        "groq" => Some(groq_provider()),
+        "together" | "together-ai" | "together_ai" | "togetherai" => Some(together_provider()),
+        "fireworks" | "fireworks-ai" | "fireworks_ai" | "fireworksai" => Some(fireworks_provider()),
+        "huggingface" | "hugging-face" | "hugging_face" | "hf" => Some(huggingface_provider()),
         _ => lookup_custom_provider(&lower),
     }
 }
@@ -63,6 +69,10 @@ pub fn detect_provider(model: &str) -> Provider {
         Provider::Google
     } else if m.starts_with("mistral") || m.starts_with("codestral") {
         mistral_provider()
+    } else if m.contains(":free") || m.starts_with("openrouter/") {
+        openrouter_provider()
+    } else if m.starts_with("llama-3.3-70b-versatile") || m.starts_with("openai/gpt-oss") {
+        groq_provider()
     } else if m.starts_with("grok") {
         xai_provider()
     } else if m.starts_with("deepseek") {
@@ -118,7 +128,10 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
             if key.is_none() {
                 return Err(CliError::auth(
                     *pname,
-                    format!("No API key found. Set the {} environment variable.", env_var),
+                    format!(
+                        "No API key found. Set the {} environment variable.",
+                        env_var
+                    ),
                 )
                 .into());
             }
@@ -138,7 +151,10 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
             if key.is_none() {
                 return Err(CliError::auth(
                     pname.clone(),
-                    format!("No API key found. Set the {} environment variable.", env_var),
+                    format!(
+                        "No API key found. Set the {} environment variable.",
+                        env_var
+                    ),
                 )
                 .into());
             }
@@ -191,15 +207,13 @@ fn lookup_custom_provider(name: &str) -> Option<Provider> {
 /// Process-wide registry of user-defined OpenAI-compatible providers loaded from
 /// `[providers.<name>]` config blocks. Populated once at startup by
 /// `register_custom_providers`.
-static CUSTOM_PROVIDERS: once_cell::sync::Lazy<
-    std::sync::RwLock<HashMap<String, Provider>>,
-> = once_cell::sync::Lazy::new(|| std::sync::RwLock::new(HashMap::new()));
+static CUSTOM_PROVIDERS: once_cell::sync::Lazy<std::sync::RwLock<HashMap<String, Provider>>> =
+    once_cell::sync::Lazy::new(|| std::sync::RwLock::new(HashMap::new()));
 
 /// Register custom OpenAI-compatible providers loaded from the user config file.
 ///
-/// Skips entries whose name collides with a pre-registered provider (Anthropic,
-/// OpenAI, Google, Ollama, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu,
-/// LM Studio, Mistral) so users cannot accidentally hijack a native handler.
+/// Skips entries whose name collides with a pre-registered provider so users
+/// cannot accidentally hijack a native handler.
 ///
 /// Each entry needs a `base_url`; `api_key_env` is optional (omit for keyless
 /// local endpoints). Base URLs without `/chat/completions` get the path
@@ -229,6 +243,22 @@ pub fn register_custom_providers(config: &CliConfig) {
         "mistral",
         "mistral-ai",
         "mistralai",
+        "openrouter",
+        "open-router",
+        "open_router",
+        "groq",
+        "together",
+        "together-ai",
+        "together_ai",
+        "togetherai",
+        "fireworks",
+        "fireworks-ai",
+        "fireworks_ai",
+        "fireworksai",
+        "huggingface",
+        "hugging-face",
+        "hugging_face",
+        "hf",
     ];
 
     let Ok(mut registry) = CUSTOM_PROVIDERS.write() else {
@@ -427,6 +457,14 @@ mod tests {
             provider_name(&detect_provider("codestral-latest")),
             "mistral"
         );
+        assert_eq!(
+            provider_name(&detect_provider("qwen/qwen3-coder:free")),
+            "open_router"
+        );
+        assert_eq!(
+            provider_name(&detect_provider("llama-3.3-70b-versatile")),
+            "groq"
+        );
         assert_eq!(provider_name(&detect_provider("grok-4.1")), "xai");
         assert_eq!(provider_name(&detect_provider("grok-beta")), "xai");
         assert_eq!(provider_name(&detect_provider("deepseek-chat")), "deepseek");
@@ -449,7 +487,10 @@ mod tests {
             provider_from_name("anthropic"),
             Some(Provider::Anthropic)
         ));
-        assert_eq!(provider_name(&provider_from_name("openai").unwrap()), "openai");
+        assert_eq!(
+            provider_name(&provider_from_name("openai").unwrap()),
+            "openai"
+        );
         assert_eq!(provider_name(&provider_from_name("xai").unwrap()), "xai");
         assert_eq!(
             provider_name(&provider_from_name("deepseek").unwrap()),
@@ -459,10 +500,7 @@ mod tests {
             provider_name(&provider_from_name("perplexity").unwrap()),
             "perplexity"
         );
-        assert_eq!(
-            provider_name(&provider_from_name("qwen").unwrap()),
-            "qwen"
-        );
+        assert_eq!(provider_name(&provider_from_name("qwen").unwrap()), "qwen");
         assert_eq!(
             provider_name(&provider_from_name("moonshot").unwrap()),
             "moonshot"
@@ -475,9 +513,33 @@ mod tests {
             provider_name(&provider_from_name("lmstudio").unwrap()),
             "lmstudio"
         );
+        assert_eq!(
+            provider_name(&provider_from_name("openrouter").unwrap()),
+            "open_router"
+        );
+        assert_eq!(
+            provider_name(&provider_from_name("open_router").unwrap()),
+            "open_router"
+        );
+        assert_eq!(provider_name(&provider_from_name("groq").unwrap()), "groq");
+        assert_eq!(
+            provider_name(&provider_from_name("together").unwrap()),
+            "together"
+        );
+        assert_eq!(
+            provider_name(&provider_from_name("fireworks").unwrap()),
+            "fireworks"
+        );
+        assert_eq!(
+            provider_name(&provider_from_name("huggingface").unwrap()),
+            "huggingface"
+        );
         // Aliases
         assert_eq!(provider_name(&provider_from_name("grok").unwrap()), "xai");
-        assert_eq!(provider_name(&provider_from_name("kimi").unwrap()), "moonshot");
+        assert_eq!(
+            provider_name(&provider_from_name("kimi").unwrap()),
+            "moonshot"
+        );
         assert_eq!(provider_name(&provider_from_name("glm").unwrap()), "zhipu");
         assert_eq!(
             provider_name(&provider_from_name("dashscope").unwrap()),
@@ -529,6 +591,57 @@ mod tests {
             panic!("Expected OpenAICompatible");
         };
         assert_eq!(*api_key_env, Some("MISTRAL_API_KEY"));
+    }
+
+    #[test]
+    fn provider_presets_are_wired_to_openai_compatible_endpoints() {
+        let cases = [
+            (
+                "openrouter",
+                "open_router",
+                "https://openrouter.ai/api/v1/chat/completions",
+                "OPENROUTER_API_KEY",
+            ),
+            (
+                "groq",
+                "groq",
+                "https://api.groq.com/openai/v1/chat/completions",
+                "GROQ_API_KEY",
+            ),
+            (
+                "together",
+                "together",
+                "https://api.together.ai/v1/chat/completions",
+                "TOGETHER_API_KEY",
+            ),
+            (
+                "fireworks",
+                "fireworks",
+                "https://api.fireworks.ai/inference/v1/chat/completions",
+                "FIREWORKS_API_KEY",
+            ),
+            (
+                "huggingface",
+                "huggingface",
+                "https://router.huggingface.co/v1/chat/completions",
+                "HF_TOKEN",
+            ),
+        ];
+
+        for (input, expected_name, expected_base_url, expected_env) in cases {
+            let provider = provider_from_name(input).expect("provider is pre-registered");
+            let Provider::OpenAICompatible {
+                name,
+                base_url,
+                api_key_env,
+            } = &provider
+            else {
+                panic!("Expected OpenAICompatible");
+            };
+            assert_eq!(*name, expected_name);
+            assert_eq!(*base_url, expected_base_url);
+            assert_eq!(*api_key_env, Some(expected_env));
+        }
     }
 
     #[test]

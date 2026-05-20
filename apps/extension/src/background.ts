@@ -5,7 +5,7 @@ import type {
   RunPageAction,
   ScheduledTask,
 } from './types';
-import { getDefaultModelFor } from '@agiworkforce/types';
+import { getDefaultModelFor, PROVIDER_STREAM_PROVIDER_PRESET_IDS } from '@agiworkforce/types';
 import { logger, RateLimiter, withTimeout, storageUtils, sleep } from './utils';
 import {
   loadShortcuts,
@@ -514,7 +514,7 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
   // (in the connect-handshake response), latch it for subsequent MAC
   // computation. Best-effort: a missing secret falls back to the legacy
   // no-MAC behavior with a one-time warn.
-  const maybeSecret = (message as Record<string, unknown>)['session_secret'];
+  const maybeSecret = (message as unknown as Record<string, unknown>)['session_secret'];
   if (typeof maybeSecret === 'string' && !nativeSessionSecret) {
     setNativeSessionSecret(maybeSecret);
   }
@@ -533,8 +533,8 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
       // integrity check by simply stripping the `mac`/`timestamp` fields
       // (downgrade attack). Only when no secret has ever been negotiated
       // do we accept the legacy success/error envelope.
-      const respMac = (message as Record<string, unknown>)['mac'];
-      const respTs = (message as Record<string, unknown>)['timestamp'];
+      const respMac = (message as unknown as Record<string, unknown>)['mac'];
+      const respTs = (message as unknown as Record<string, unknown>)['timestamp'];
       if (nativeSessionSecret) {
         if (typeof respMac !== 'string' || typeof respTs !== 'number') {
           logger.warn(
@@ -548,7 +548,9 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
         // The host signs with the same payload shape: id|ts|body. Body is
         // the message *without* id/mac/timestamp/session_secret so the
         // signature is over a stable canonical form.
-        const body: Record<string, unknown> = { ...(message as Record<string, unknown>) };
+        const body: Record<string, unknown> = {
+          ...(message as unknown as Record<string, unknown>),
+        };
         delete body['id'];
         delete body['mac'];
         delete body['timestamp'];
@@ -2404,12 +2406,9 @@ const GATEWAY_URL_KEY = 'agi_gateway_url';
 const PROVIDER_OVERRIDE_KEY = 'agi_provider_override';
 const SUPABASE_JWT_SESSION_KEY = 'agi_supabase_jwt';
 const DEFAULT_GATEWAY_URL = 'https://api.agiworkforce.com';
-const VALID_PROVIDER_IDS: ReadonlySet<ProviderStreamProvider> = new Set([
-  'anthropic',
-  'openai',
-  'google',
-  'ollama',
-]);
+const VALID_PROVIDER_IDS: ReadonlySet<ProviderStreamProvider> = new Set(
+  PROVIDER_STREAM_PROVIDER_PRESET_IDS,
+);
 
 // validateGatewayUrl is now imported from `./background/policy` (M-02 audit
 // 2026-05-19). The function deliberately uses an EXACT-match allowlist —
@@ -2576,14 +2575,18 @@ function inferProviderFromModel(modelId: string | undefined): ProviderStreamProv
   if (!modelId) return 'anthropic';
   const m = modelId.toLowerCase();
   if (m.startsWith('claude-')) return 'anthropic';
+  if (m.startsWith('grok-')) return 'xai';
+  if (m.startsWith('deepseek-')) return 'deepseek';
+  if (m.includes(':free') || m.startsWith('openrouter/')) return 'open_router';
+  if (m.startsWith('accounts/fireworks/')) return 'fireworks';
+  if (m.startsWith('meta-llama/') && m.includes('turbo')) return 'together';
+  if (m === 'llama-3.3-70b-versatile' || m.startsWith('openai/gpt-oss')) return 'groq';
+  if (m.startsWith('mistral') || m.startsWith('codestral') || m.startsWith('pixtral')) {
+    return 'mistral';
+  }
   if (m.startsWith('gpt-') || m.startsWith('o1-') || m.startsWith('codex-')) return 'openai';
   if (m.startsWith('gemini-')) return 'google';
-  if (
-    m === 'ollama-local' ||
-    m.startsWith('llama') ||
-    m.startsWith('qwen') ||
-    m.startsWith('mistral')
-  ) {
+  if (m === 'ollama-local' || m.startsWith('llama') || m.startsWith('qwen')) {
     return 'ollama';
   }
   return 'anthropic';

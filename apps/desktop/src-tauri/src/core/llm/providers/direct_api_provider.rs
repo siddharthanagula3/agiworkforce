@@ -296,7 +296,7 @@ fn default_base_url(provider: Provider) -> &'static str {
         Provider::Zhipu => "https://open.bigmodel.cn/api/paas/v4",
         // New OpenAI-compatible providers
         Provider::Groq => "https://api.groq.com/openai/v1",
-        Provider::Together => "https://api.together.xyz/v1",
+        Provider::Together => "https://api.together.ai/v1",
         Provider::Fireworks => "https://api.fireworks.ai/inference/v1",
         Provider::Cerebras => "https://api.cerebras.ai/v1",
         Provider::DeepInfra => "https://api.deepinfra.com/v1/openai",

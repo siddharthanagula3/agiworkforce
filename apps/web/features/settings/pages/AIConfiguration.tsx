@@ -38,7 +38,9 @@ import {
   getModelIdsForProvider,
   getModelMetadataById,
   getProviderDefaultModel,
+  getProviderPreset,
   providerLabels,
+  type ProviderPresetId,
 } from '@agiworkforce/types';
 
 interface ProviderConfig {
@@ -64,9 +66,17 @@ const SUPPORTED_PROVIDER_IDS = [
   'qwen',
   'moonshot',
   'zhipu',
+  'mistral',
+  'open_router',
 ] as const;
 
 type SupportedProviderId = (typeof SUPPORTED_PROVIDER_IDS)[number];
+
+const SUPPORTED_PROVIDER_ID_SET = new Set<string>(SUPPORTED_PROVIDER_IDS);
+
+function isSupportedProviderId(value: string): value is SupportedProviderId {
+  return SUPPORTED_PROVIDER_ID_SET.has(value);
+}
 
 const CATALOG_PROVIDER_ID: Record<SupportedProviderId, string> = {
   openai: 'openai',
@@ -78,37 +88,21 @@ const CATALOG_PROVIDER_ID: Record<SupportedProviderId, string> = {
   qwen: 'qwen',
   moonshot: 'moonshot',
   zhipu: 'zhipu',
+  mistral: 'mistral',
+  open_router: 'open_router',
 };
 
-const PROVIDER_LINKS: Record<
-  SupportedProviderId,
-  { documentation: string; pricing: string; label?: string }
-> = {
-  openai: {
-    documentation: 'https://platform.openai.com/docs',
-    pricing: 'https://openai.com/pricing',
-  },
-  anthropic: {
-    documentation: 'https://docs.anthropic.com',
-    pricing: 'https://www.anthropic.com/pricing',
-  },
-  google: {
-    documentation: 'https://ai.google.dev/docs',
-    pricing: 'https://ai.google.dev/pricing',
-  },
+interface ProviderLinks {
+  documentation: string;
+  pricing: string;
+  label?: string;
+}
+
+const PROVIDER_LINKS: Partial<Record<SupportedProviderId, ProviderLinks>> = {
   perplexity: {
     documentation: 'https://docs.perplexity.ai',
     pricing: 'https://www.perplexity.ai/pricing',
     label: 'Perplexity (Sonar)',
-  },
-  grok: {
-    documentation: 'https://docs.x.ai',
-    pricing: 'https://x.ai/pricing',
-    label: 'xAI (Grok)',
-  },
-  deepseek: {
-    documentation: 'https://platform.deepseek.com/docs',
-    pricing: 'https://platform.deepseek.com/pricing',
   },
   qwen: {
     documentation: 'https://help.aliyun.com/qwen',
@@ -126,6 +120,34 @@ const PROVIDER_LINKS: Record<
     label: 'Zhipu (GLM)',
   },
 };
+
+const PROVIDER_PRESET_ID_BY_UI_ID: Partial<Record<SupportedProviderId, ProviderPresetId>> = {
+  openai: 'openai',
+  anthropic: 'anthropic',
+  google: 'google',
+  grok: 'xai',
+  deepseek: 'deepseek',
+  mistral: 'mistral',
+  open_router: 'open_router',
+};
+
+function getProviderLinks(provider: SupportedProviderId): ProviderLinks {
+  const presetId = PROVIDER_PRESET_ID_BY_UI_ID[provider];
+  const preset = presetId ? getProviderPreset(presetId) : null;
+  const fallback = PROVIDER_LINKS[provider] ?? null;
+  const documentation = preset?.docsUrl ?? fallback?.documentation;
+  const pricing = preset?.pricingUrl ?? fallback?.pricing;
+
+  if (!documentation || !pricing) {
+    throw new Error(`Missing provider documentation links for ${provider}`);
+  }
+
+  return {
+    documentation,
+    pricing,
+    label: fallback?.label ?? preset?.label,
+  };
+}
 
 const FEATURE_LABELS: Array<{
   label: string;
@@ -183,7 +205,7 @@ function getProviderFeatures(provider: SupportedProviderId): string[] {
 
 function getProviderDisplayName(provider: SupportedProviderId): string {
   return (
-    PROVIDER_LINKS[provider].label ?? providerLabels[toCatalogProviderId(provider)] ?? provider
+    getProviderLinks(provider).label ?? providerLabels[toCatalogProviderId(provider)] ?? provider
   );
 }
 
@@ -193,8 +215,13 @@ const PROVIDER_CONFIGS: Record<
 > = Object.fromEntries(
   SUPPORTED_PROVIDER_IDS.map((provider) => {
     const models = getProviderModelIds(provider);
-    const defaultModel = getProviderDefaultModel(toCatalogProviderId(provider)) ?? models[0] ?? '';
+    const catalogDefaultModel = getProviderDefaultModel(toCatalogProviderId(provider));
+    const defaultModel =
+      catalogDefaultModel && models.includes(catalogDefaultModel)
+        ? catalogDefaultModel
+        : (models[0] ?? '');
     const defaultModelMetadata = getModelMetadataById(defaultModel);
+    const links = getProviderLinks(provider);
 
     return [
       provider,
@@ -205,8 +232,8 @@ const PROVIDER_CONFIGS: Record<
         costPerToken: (defaultModelMetadata?.inputCost ?? 0) / 1_000_000,
         maxTokens: defaultModelMetadata?.maxOutputTokens ?? 8192,
         features: getProviderFeatures(provider),
-        documentation: PROVIDER_LINKS[provider].documentation,
-        pricing: PROVIDER_LINKS[provider].pricing,
+        documentation: links.documentation,
+        pricing: links.pricing,
       },
     ];
   }),
@@ -221,7 +248,7 @@ const AIConfigurationPageContent: React.FC = () => {
   );
 
   // User AI preferences
-  const [defaultProvider, setDefaultProvider] = useState<string>('openai');
+  const [defaultProvider, setDefaultProvider] = useState<SupportedProviderId>('openai');
   const [defaultModel, setDefaultModel] = useState<string>(PROVIDER_CONFIGS.openai.defaultModel);
   const [preferStreaming, setPreferStreaming] = useState<boolean>(true);
   const [aiTemperature, setAiTemperature] = useState<number>(0.7);
@@ -237,7 +264,9 @@ const AIConfigurationPageContent: React.FC = () => {
     const loadUserPreferences = async () => {
       const { data, error } = await settingsService.getSettings();
       if (!error && data) {
-        if (data.default_ai_provider) setDefaultProvider(data.default_ai_provider);
+        if (data.default_ai_provider && isSupportedProviderId(data.default_ai_provider)) {
+          setDefaultProvider(data.default_ai_provider);
+        }
         if (data.default_ai_model) setDefaultModel(data.default_ai_model);
         if (data.prefer_streaming !== undefined) setPreferStreaming(data.prefer_streaming);
         if (data.ai_temperature !== undefined) setAiTemperature(data.ai_temperature);
@@ -337,20 +366,27 @@ const AIConfigurationPageContent: React.FC = () => {
     toast.success(`${provider} API key cleared`);
   };
 
+  const getModelsForProvider = (provider: string): string[] => {
+    if (!isSupportedProviderId(provider)) {
+      return [];
+    }
+    const config = PROVIDER_CONFIGS[provider];
+    return config ? config.models : [];
+  };
+
+  const defaultProviderModels = getModelsForProvider(defaultProvider);
+  const canSaveAIPreferences = defaultProviderModels.length > 0;
+
   const handleSaveAIPreferences = async () => {
+    if (!canSaveAIPreferences) {
+      toast.error('Select a provider with catalog models before saving AI preferences');
+      return;
+    }
+
     setIsSavingPreferences(true);
     try {
       const { error } = await settingsService.updateSettings({
-        default_ai_provider: defaultProvider as
-          | 'openai'
-          | 'anthropic'
-          | 'google'
-          | 'perplexity'
-          | 'grok'
-          | 'deepseek'
-          | 'qwen'
-          | 'moonshot'
-          | 'zhipu',
+        default_ai_provider: defaultProvider,
         default_ai_model: defaultModel,
         prefer_streaming: preferStreaming,
         ai_temperature: aiTemperature,
@@ -368,11 +404,6 @@ const AIConfigurationPageContent: React.FC = () => {
     } finally {
       setIsSavingPreferences(false);
     }
-  };
-
-  const getModelsForProvider = (provider: string): string[] => {
-    const config = PROVIDER_CONFIGS[provider as SupportedProviderId];
-    return config ? config.models : [];
   };
 
   const configuredProviders = Object.values(configs).filter((config) => config.isConfigured);
@@ -642,7 +673,11 @@ const AIConfigurationPageContent: React.FC = () => {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Default AI Settings</CardTitle>
-                <Button onClick={handleSaveAIPreferences} disabled={isSavingPreferences} size="sm">
+                <Button
+                  onClick={handleSaveAIPreferences}
+                  disabled={isSavingPreferences || !canSaveAIPreferences}
+                  size="sm"
+                >
                   {isSavingPreferences ? (
                     <>
                       <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600" />
@@ -671,8 +706,11 @@ const AIConfigurationPageContent: React.FC = () => {
                   <Select
                     value={defaultProvider}
                     onValueChange={(value) => {
+                      if (!isSupportedProviderId(value)) {
+                        return;
+                      }
                       setDefaultProvider(value);
-                      const providerConfig = PROVIDER_CONFIGS[value as SupportedProviderId];
+                      const providerConfig = PROVIDER_CONFIGS[value];
                       if (providerConfig) {
                         setDefaultModel(providerConfig.defaultModel);
                       }
@@ -696,12 +734,16 @@ const AIConfigurationPageContent: React.FC = () => {
 
                 <div className="space-y-2">
                   <Label htmlFor="default-model">Default AI Model</Label>
-                  <Select value={defaultModel} onValueChange={setDefaultModel}>
+                  <Select
+                    value={defaultModel}
+                    onValueChange={setDefaultModel}
+                    disabled={defaultProviderModels.length === 0}
+                  >
                     <SelectTrigger id="default-model">
                       <SelectValue placeholder="Select model" />
                     </SelectTrigger>
                     <SelectContent>
-                      {getModelsForProvider(defaultProvider).map((model) => (
+                      {defaultProviderModels.map((model) => (
                         <SelectItem key={model} value={model}>
                           {model}
                         </SelectItem>
@@ -709,7 +751,9 @@ const AIConfigurationPageContent: React.FC = () => {
                     </SelectContent>
                   </Select>
                   <p className="text-sm text-muted-foreground">
-                    Model to use for the selected provider
+                    {defaultProviderModels.length === 0
+                      ? 'No catalog models are configured for this provider yet'
+                      : 'Model to use for the selected provider'}
                   </p>
                 </div>
 

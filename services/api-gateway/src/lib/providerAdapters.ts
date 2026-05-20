@@ -17,11 +17,36 @@ import {
 import { createOpenAIAdapter, type OpenAIAdapterConfig } from '@agiworkforce/providers-openai';
 import { createOllamaAdapter, type OllamaAdapterConfig } from '@agiworkforce/providers-ollama';
 import { createGoogleAdapter, type GoogleAdapterConfig } from '@agiworkforce/providers-google';
-import type { ProviderAdapter } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  getProviderPreset,
+  modelsCatalogJson,
+  PROVIDER_STREAM_PROVIDER_PRESET_IDS,
+  type ModelInfo,
+  type ModelMetadata,
+  type Provider,
+  type ProviderAdapter,
+  type ProviderPreset,
+  type ProviderStreamProviderPresetId,
+} from '@agiworkforce/types';
 
-export type ProviderId = 'anthropic' | 'openai' | 'ollama' | 'google';
+export type ProviderId = ProviderStreamProviderPresetId;
 
-export const SUPPORTED_PROVIDER_IDS = ['anthropic', 'openai', 'ollama', 'google'] as const;
+export const SUPPORTED_PROVIDER_IDS = PROVIDER_STREAM_PROVIDER_PRESET_IDS;
+
+type OpenAICompatibleProviderId = Extract<
+  ProviderId,
+  'xai' | 'deepseek' | 'open_router' | 'groq' | 'mistral' | 'together' | 'fireworks'
+>;
+
+interface ModelsCatalogShape {
+  models: Record<string, ModelMetadata>;
+}
+
+type ProviderPresetWithEndpoint = ProviderPreset & {
+  provider: Provider;
+  endpoint: NonNullable<ProviderPreset['endpoint']>;
+};
 
 interface ProviderAvailability {
   id: ProviderId;
@@ -49,8 +74,100 @@ export function listProviderAvailability(): ProviderAvailability[] {
         return process.env['GOOGLE_API_KEY']
           ? { id, available: true }
           : { id, available: false, unavailableReason: 'GOOGLE_API_KEY not set' };
+      case 'xai':
+      case 'deepseek':
+      case 'open_router':
+      case 'groq':
+      case 'mistral':
+      case 'together':
+      case 'fireworks':
+        return openAICompatibleAvailability(id);
     }
   });
+}
+
+function requirePreset(id: OpenAICompatibleProviderId): ProviderPresetWithEndpoint {
+  const preset = getProviderPreset(id);
+  if (!preset?.provider || !preset.endpoint) {
+    throw new Error(`Provider preset "${id}" is missing endpoint metadata`);
+  }
+  return preset as ProviderPresetWithEndpoint;
+}
+
+function openAICompatibleAvailability(id: OpenAICompatibleProviderId): ProviderAvailability {
+  const preset = requirePreset(id);
+  const envVar = preset.endpoint.apiKeyEnv;
+  return process.env[envVar]
+    ? { id, available: true }
+    : { id, available: false, unavailableReason: `${envVar} not set` };
+}
+
+function toModelInfo(meta: ModelMetadata): ModelInfo {
+  return {
+    id: meta.id,
+    name: meta.name,
+    provider: meta.provider,
+    contextWindow: meta.contextWindow,
+    ...(meta.maxOutputTokens !== undefined ? { maxOutputTokens: meta.maxOutputTokens } : {}),
+    capabilities: meta.capabilities,
+    inputCostPerMillion: meta.inputCost,
+    outputCostPerMillion: meta.outputCost,
+  };
+}
+
+function catalogForProvider(provider: Provider): ModelInfo[] {
+  const catalog = modelsCatalogJson as unknown as ModelsCatalogShape;
+  return Object.values(catalog.models)
+    .filter((model) => model.provider === provider)
+    .map(toModelInfo);
+}
+
+function resolveUpstreamModelId(model: string, provider: Provider): string {
+  const metadata = getModelMetadataById(model);
+  if (metadata?.provider === provider && metadata.apiModelId) {
+    return metadata.apiModelId;
+  }
+  return model;
+}
+
+function buildOpenAICompatiblePresetAdapter(
+  id: OpenAICompatibleProviderId,
+): ProviderAdapter | null {
+  const preset = requirePreset(id);
+  const apiKey = process.env[preset.endpoint.apiKeyEnv];
+  if (!apiKey) return null;
+
+  const config: OpenAIAdapterConfig = {
+    apiKey,
+    baseUrl: preset.endpoint.baseUrl,
+    skipDiscovery: true,
+  };
+  const adapter = createOpenAIAdapter(config);
+  const auth = [
+    {
+      kind: 'api-key' as const,
+      envVar: preset.endpoint.apiKeyEnv,
+      required: true,
+      label: `${preset.label} API Key`,
+    },
+  ];
+
+  return {
+    ...adapter,
+    id: preset.provider,
+    label: preset.label,
+    auth,
+    config,
+    async catalog(): Promise<ModelInfo[]> {
+      return catalogForProvider(preset.provider);
+    },
+    stream(req, signal) {
+      return adapter.stream(
+        { ...req, model: resolveUpstreamModelId(req.model, preset.provider) },
+        signal,
+      );
+    },
+  };
 }
 
 /**
@@ -106,6 +223,14 @@ export function buildProviderAdapter(id: ProviderId): ProviderAdapter | null {
       }
       return createGoogleAdapter(config);
     }
+    case 'xai':
+    case 'deepseek':
+    case 'open_router':
+    case 'groq':
+    case 'mistral':
+    case 'together':
+    case 'fireworks':
+      return buildOpenAICompatiblePresetAdapter(id);
   }
 }
 

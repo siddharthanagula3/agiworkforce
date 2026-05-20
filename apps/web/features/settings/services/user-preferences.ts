@@ -241,7 +241,9 @@ export interface UserSettings {
     | 'deepseek'
     | 'qwen'
     | 'moonshot'
-    | 'zhipu';
+    | 'zhipu'
+    | 'mistral'
+    | 'open_router';
   default_ai_model?: string;
   prefer_streaming?: boolean;
   ai_temperature?: number;
