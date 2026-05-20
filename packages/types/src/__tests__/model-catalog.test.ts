@@ -119,7 +119,7 @@ describe('model catalog helpers', () => {
     expect(getProviderSurface('open_router')).toBe('byok');
     expect(getProviderSurface('nvidia_nim')).toBe('byok');
     expect(getProviderSurface('ollama')).toBe('local');
-    expect(getProviderSurface('groq')).toBe('hidden');
+    expect(getProviderSurface('groq')).toBe('byok');
 
     expect(getManagedCloudProviderIds()).toEqual([
       'openai',
