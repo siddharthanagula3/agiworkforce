@@ -90,10 +90,15 @@ export function validateMcpInputSchema(schema: unknown): SchemaValidationResult 
   let totalRefs = 0;
   let totalKeys = 0;
   function walk(node: unknown, depth: number): SchemaValidationResult {
+    // FIX (Codex P2, 2026-05-20): short-circuit on primitives BEFORE the
+    // depth check. The previous order rejected primitive leaves at depth
+    // SCHEMA_MAX_DEPTH+1, making the effective object cap shallower than
+    // the documented 16-level limit. Depth is now spent only on
+    // object/array recursion, matching the spec.
+    if (node === null || typeof node !== 'object') return { ok: true };
     if (depth > SCHEMA_MAX_DEPTH) {
       return { ok: false, reason: `depth exceeded ${SCHEMA_MAX_DEPTH}` };
     }
-    if (node === null || typeof node !== 'object') return { ok: true };
     if (Array.isArray(node)) {
       for (const item of node) {
         const r = walk(item, depth + 1);

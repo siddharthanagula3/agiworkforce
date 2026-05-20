@@ -12,26 +12,31 @@ import { logRateLimitExceeded } from './security-audit';
 // still allowed to run without Redis (failClosed configs already absorb that
 // safely for security-sensitive routes).
 //
-// FIX (CI 2026-05-20): scope the throw to actual Vercel production runtime,
-// not any NODE_ENV=production context. `next build` always sets
-// NODE_ENV=production during page-data collection — including in CI and in
-// local prod builds — which made this guard fire at build time on every
-// machine that wasn't a Vercel preview, blocking the `check` job. The
-// runtime intent is preserved: Vercel production functions WITHOUT Redis
-// still abort at cold-start, the moment the module is first loaded by the
-// runtime. `VERCEL_ENV` is set only inside Vercel environments, so CI
-// builds and local builds now pass cleanly.
+// FIX (Codex P1, 2026-05-20): scope by *phase*, not by *Vercel*. The previous
+// patch over-narrowed the guard to `VERCEL_ENV === 'production'`, which
+// removed the runtime protection from self-hosted/horizontally-scaled prod
+// deployments (AWS / GCP / Fly / bare Node) — exactly the topology this
+// guard was created for. Instead, distinguish build-time from runtime via
+// Next.js's canonical `NEXT_PHASE`: `phase-production-build` is the build,
+// anything else (`phase-production-server`, undefined) is runtime. CI and
+// local builds set the build phase too, so they skip the throw without
+// needing Vercel-specific knowledge; production cold-starts on ANY runtime
+// (Vercel or self-hosted) hit the throw if Redis isn't wired up.
 const hasRedisEnv =
   !!process.env['UPSTASH_REDIS_REST_URL'] && !!process.env['UPSTASH_REDIS_REST_TOKEN'];
 const vercelEnv = process.env['VERCEL_ENV']; // 'production' | 'preview' | 'development' | undefined
-const isVercelProductionDeploy = vercelEnv === 'production';
+const isNextBuildPhase = process.env['NEXT_PHASE'] === 'phase-production-build';
+const isProductionRuntime =
+  !isNextBuildPhase &&
+  vercelEnv !== 'preview' &&
+  (vercelEnv === 'production' || process.env['NODE_ENV'] === 'production');
 
-if (isVercelProductionDeploy && !hasRedisEnv) {
-  // Loud, fail-fast error so the deploy aborts at module init time rather
-  // than silently allowing N× rate limits in serverless.
+if (isProductionRuntime && !hasRedisEnv) {
+  // Loud, fail-fast error at runtime cold-start so the function errors out
+  // visibly rather than silently allowing N× rate limits in serverless.
   throw new Error(
     'SEV-WEB-13: UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required ' +
-      'in production. In-memory rate limiting is ineffective across Vercel function ' +
+      'in production. In-memory rate limiting is ineffective across function ' +
       'instances. Set the env vars on the agiworkforce project (Production + Preview).',
   );
 }

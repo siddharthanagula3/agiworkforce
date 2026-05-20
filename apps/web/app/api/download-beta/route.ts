@@ -44,13 +44,22 @@ const FILE_PATHS: Record<string, string> = {
  * Lock externalUrl down to our own download host + the GitHub releases
  * CDN. Any other host returns 400 so the operator can see the misconfig
  * immediately rather than discover it from a phishing report.
+ *
+ * FIX (Codex P2, 2026-05-20): pin GitHub redirects to the trusted owner+
+ * repo pair, not just the path *shape*. Without this, an env-var
+ * compromise could point at github.com/<attacker>/<fork>/releases/...
+ * and still pass the gate.
  */
 const EXTERNAL_URL_ALLOWED_HOSTS = new Set<string>([
   'downloads.agiworkforce.com',
   'cdn.agiworkforce.com',
   'github.com',
-  'objects.githubusercontent.com', // GitHub release-asset CDN
+  'objects.githubusercontent.com', // GitHub release-asset CDN (signed URLs)
 ]);
+
+const TRUSTED_GITHUB_RELEASES: ReadonlyArray<{ owner: string; repo: string }> = [
+  { owner: 'siddharthanagula3', repo: 'agiworkforce' },
+];
 
 function isExternalRedirectAllowed(rawUrl: string): boolean {
   let parsed: URL;
@@ -63,13 +72,19 @@ function isExternalRedirectAllowed(rawUrl: string): boolean {
   // installer integrity even if they hit a known host.
   if (parsed.protocol !== 'https:') return false;
   if (!EXTERNAL_URL_ALLOWED_HOSTS.has(parsed.hostname)) return false;
-  // For github.com, only allow /<org>/<repo>/releases/* to avoid being a
-  // generic GitHub open-redirect (e.g. github.com/<user>/<malicious-fork>).
+  // For github.com, only allow /<trusted-owner>/<trusted-repo>/releases/*
+  // — not a generic GitHub redirect.
   if (parsed.hostname === 'github.com') {
     const segments = parsed.pathname.split('/').filter(Boolean);
-    // Path shape: /<org>/<repo>/releases/...
     if (segments.length < 4) return false;
-    if (segments[2] !== 'releases') return false;
+    const [owner, repo, kind] = segments;
+    if (kind !== 'releases') return false;
+    const ownerLower = owner?.toLowerCase() ?? '';
+    const repoLower = repo?.toLowerCase() ?? '';
+    const matched = TRUSTED_GITHUB_RELEASES.some(
+      (pair) => pair.owner.toLowerCase() === ownerLower && pair.repo.toLowerCase() === repoLower,
+    );
+    if (!matched) return false;
   }
   return true;
 }
