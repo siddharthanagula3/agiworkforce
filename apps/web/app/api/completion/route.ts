@@ -96,15 +96,22 @@ async function handleCompletion(request: NextRequest): Promise<NextResponse> {
   //   - Lookalike NFD-decomposed forms of ASCII characters.
   // The cleanup is conservative — NFC-normalize, then drop the listed
   // control + zero-width ranges. The 4096-char cap stays.
+  // FIX (review 2026-05-20): also strip the literal fence tag from the
+  // caller content. Without this, a caller embedding `</untrusted_context>`
+  // in their payload closes the fence and any text that follows lands
+  // OUTSIDE the sentinel \u2014 defeating the isolation. Mirrors the strip in
+  // apps/web/app/api/agents/execute/route.ts:172.
+  const fenceTag = 'untrusted_context';
   const fencedContext = (() => {
     if (!context || context.trim().length === 0) return null;
     const normalized = context
       .normalize('NFC')
 
       .replace(/[\u200B-\u200D\uFEFF\u202A-\u202E\u2066-\u2069]/g, '')
+      .replace(new RegExp(`</?${fenceTag}>`, 'gi'), '')
       .replace(/\r?\n/g, ' ')
       .slice(0, 4096);
-    return `<untrusted_context>\n${normalized}\n</untrusted_context>`;
+    return `<${fenceTag}>\n${normalized}\n</${fenceTag}>`;
   })();
 
   let suggestion = '';
