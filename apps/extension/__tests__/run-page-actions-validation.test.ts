@@ -69,4 +69,48 @@ describe('handleRunPageActions / desktop-bridge plan validation', () => {
   it('rejects an empty-string action type', () => {
     expect(validateShortcutActions([{ id: '1', type: '' }] as never)).toBe(false);
   });
+
+  // FIX (audit 2026-05-20, §1): per-parameter validation. The legacy gate
+  // only checked the action TYPE; selector/value/url could still smuggle
+  // attacker payloads past the gate.
+
+  it('rejects a navigate action with a javascript: url', () => {
+    expect(
+      validateShortcutActions([{ id: '1', type: 'navigate', url: 'javascript:alert(1)' }] as never),
+    ).toBe(false);
+  });
+
+  it('rejects a navigate action with a data: url', () => {
+    expect(
+      validateShortcutActions([
+        { id: '1', type: 'navigate', url: 'data:text/html,<script>alert(1)</script>' },
+      ] as never),
+    ).toBe(false);
+  });
+
+  it('rejects a click action with an oversized selector', () => {
+    const huge = '#a' + ' > div'.repeat(500); // way over 1024 chars
+    expect(validateShortcutActions([{ id: '1', type: 'click', selector: huge }] as never)).toBe(
+      false,
+    );
+  });
+
+  it('rejects a type action with an oversized value', () => {
+    const huge = 'x'.repeat(20_000);
+    expect(validateShortcutActions([{ id: '1', type: 'type', value: huge }] as never)).toBe(false);
+  });
+
+  it('rejects a navigate action with a non-string url', () => {
+    expect(
+      validateShortcutActions([{ id: '1', type: 'navigate', url: { evil: true } }] as never),
+    ).toBe(false);
+  });
+
+  it('accepts a navigate action with an https url under cap', () => {
+    expect(
+      validateShortcutActions([
+        { id: '1', type: 'navigate', url: 'https://example.com/path' },
+      ] as never),
+    ).toBe(true);
+  });
 });
