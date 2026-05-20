@@ -17,12 +17,12 @@ Everything else (Stripe / paid Hobby / two-supabase-migrations / Dispatch / push
 | -------------------------- | --------- | ---------- | --- | ------ | ------ | ------ | -------------- | -------------- |
 | **P0**                     | 1         | 0          | 0   | 0      | 0      | 0      | 0              | **1**          |
 | **P1**                     | 4         | 0          | 3   | 1      | 1      | 0      | 2              | **11**         |
-| **P2**                     | 2         | 3          | 4   | 4      | 3      | 2      | 2              | **20**         |
+| **P2**                     | 2         | 3          | 4   | 4      | 2      | 2      | 2              | **19**         |
 | **P3**                     | 1         | 3          | 2   | 2      | 2      | 3      | 2              | **15**         |
-| **Total findings**         | 8         | 6          | 9   | 7      | 6      | 5      | 8 + 41 semgrep | **47 + 41**    |
-| **Per-squad effort (hrs)** | ~20       | ~5.5       | ~16 | ~16.25 | ~4.25  | ~2.75  | ~28            | **~92.75 raw** |
+| **Total findings**         | 8         | 6          | 9   | 7      | 5      | 5      | 6 + 41 semgrep | **46 + 41**    |
+| **Per-squad effort (hrs)** | ~20       | ~5.5       | ~16 | ~16.25 | ~3.25  | ~2.75  | ~28            | **~91.75 raw** |
 
-Cross-cut's 8 finding rows cover the 41 semgrep findings categorically; the 41 semgrep items contribute mostly P2/P3 distributed across squads #2/#3/#4 (already included in their effort).
+Cross-cut's 6 severity-bucketed findings cover the 41 semgrep findings categorically (the 8 categorical groups in `squad-cross-cut.md` minus 2 that are not severity-classified); the 41 semgrep items contribute mostly P2/P3 distributed across squads #2/#3/#4 (already included in their effort). Chrome P2 count drops 3→2 after retraction of Finding #4 (`tabId` schema drift — confirmed false positive on spot-check; see § 4); chrome effort drops 4.25→3.25.
 
 **Effort reconciliation:** the **~92.75 hrs** above is the sum of each squad's per-finding effort (raw bottom-up). The **3-wave totals below add to 68.75 hrs** because (a) some squad findings overlap across surfaces and are de-duplicated when assigned to a single wave fix, (b) several items are explicitly deferred out of waves as "not v1 LOCAL ONLY scope" (Section 5), and (c) cross-cut's ~22 hrs of distributed work is already accounted for within other squads' rows. Use 68.75 hrs as the **executable fix budget**; 92.75 is the **diagnostic surface area**.
 
@@ -237,7 +237,7 @@ I opened these cited findings in the actual files and confirmed reproduction:
 - chrome `selected_text_query` `tabId` ↔ Rust `#[serde(rename = "tabId")]` matches; no drift despite initial appearance.
 - Mobile dispatch + push: feature-gated via `FEATURES.dispatch = false`, `FEATURES.auth = false`. Correct v1 behavior.
 
-No findings reclassified as false positive on spot-check.
+**One finding reclassified as false positive during PR review** (added to the list above): chrome Finding #4 (`tabId` schema drift, P2) — `native_messaging/mod.rs:173` has `#[serde(rename = "tabId")]`. The remaining 6 pre-flagged false-positive classes above were caught during the squads' own self-checks and are documented as such in each source report. Chrome P2 count and totals in § 1 updated accordingly.
 
 ---
 
