@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { spawnSync } from 'node:child_process';
 
 const root = process.cwd();
 const errors = [];
@@ -114,10 +115,26 @@ const allowedRootDirs = new Set([
   'tasks',
 ]);
 
+function isGitIgnored(entryName) {
+  const result = spawnSync('git', ['check-ignore', '-q', '--', entryName], {
+    cwd: root,
+    stdio: 'ignore',
+  });
+  return result.status === 0;
+}
+
 for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+  if (isGitIgnored(entry.name)) {
+    continue;
+  }
+
   if (entry.isDirectory()) {
     if (!allowedRootDirs.has(entry.name)) {
-      errors.push(`Unclassified root directory: ${entry.name}`);
+      if (knownRootDebt.has(entry.name)) {
+        warnings.push(`Known root cleanup debt: ${entry.name}`);
+      } else {
+        errors.push(`Unclassified root directory: ${entry.name}`);
+      }
     }
     continue;
   }

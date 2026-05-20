@@ -24,6 +24,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
   - `scripts/check-agent-context.mjs`
   - `scripts/check-repo-organization.mjs`
   - `scripts/check-boundaries.mjs`
+- `audit/repo-organization/current-monorepo-grade-2026-05-20.md` grading the current monorepo as C+ with a concrete path to A- hiring readiness.
 - `audit/anthropic-apps-parity/` evidence ledger with:
   - `README.md` - evidence folder contract.
   - `application-suite-thesis-2026-05-20.md` - official OpenAI/Anthropic suite research and AGI's locked local-first/BYOK/multi-provider/privacy-controlled managed-compute thesis.
@@ -47,6 +48,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - `PLAN.md` and `TODO.md` now include pre-release repo organization as a first-class workstream before broad hiring or release operations.
 - `AGENTS.md` is now the canonical tool-neutral coding-agent entry point; `CLAUDE.md` is a Claude-specific mirror.
 - Root `package.json` now exposes `check:agent-context`, `check:repo-organization`, `check:boundaries`, and `check:llm-operability`.
+- `scripts/check-repo-organization.mjs` now ignores git-ignored local/build output while warning on known root cleanup debt.
 - `docs/README.md` now points maintainers to root `PLAN.md` and `TODO.md` immediately after `AGI_WORKFORCE.md`.
 - CLI parity commands continue moving into shared `apps/cli/src/claude_parity.rs` so TUI and REPL behavior does not drift.
 - `PLAN.md`, `TODO.md`, and the evidence ledgers now include the first parallel-explorer findings for AGI surfaces and local reference architecture.

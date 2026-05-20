@@ -63,6 +63,8 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Make root `AGENTS.md` the canonical tool-neutral coding-agent entry point.
 - [x] Convert `CLAUDE.md` into a Claude-specific mirror of `AGENTS.md`.
 - [x] Add `pnpm check:agent-context`, `pnpm check:repo-organization`, `pnpm check:boundaries`, and `pnpm check:llm-operability`.
+- [x] Grade current monorepo developer-friendliness and record path to A-.
+- [ ] Commit repo-organization script fix and monorepo grade report.
 - [ ] Add or update README files for each shared package.
 - [ ] Add `CODEOWNERS` with role-based ownership.
 - [ ] Expand `CONTRIBUTING.md` into a real engineering workflow guide.
