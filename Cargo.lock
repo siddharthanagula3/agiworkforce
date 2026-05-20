@@ -254,6 +254,7 @@ dependencies = [
  "oauth2",
  "objc",
  "once_cell",
+ "open",
  "parking_lot",
  "pbkdf2",
  "pdf-extract",
