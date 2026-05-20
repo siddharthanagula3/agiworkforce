@@ -13,16 +13,18 @@ Everything else (Stripe / paid Hobby / two-supabase-migrations / Dispatch / push
 
 ## 1. Per-severity counts (across all 7 reports)
 
-| Severity           | rust-core | desktop-fe | web | mobile | chrome | vscode | cross-cut      | **Total**   |
-| ------------------ | --------- | ---------- | --- | ------ | ------ | ------ | -------------- | ----------- |
-| **P0**             | 1         | 0          | 0   | 0      | 0      | 0      | 0              | **1**       |
-| **P1**             | 3         | 0          | 3   | 1      | 1      | 0      | 2              | **10**      |
-| **P2**             | 2         | 3          | 4   | 4      | 3      | 2      | 2              | **20**      |
-| **P3**             | 2         | 3          | 2   | 2      | 2      | 3      | 2              | **16**      |
-| **Total findings** | 8         | 6          | 9   | 7      | 6      | 5      | 8 + 41 semgrep | **47 + 41** |
-| **Effort (hrs)**   | ~20       | ~5.5       | ~16 | ~16.25 | ~4.25  | ~2.75  | ~28            | **~92.75**  |
+| Severity                   | rust-core | desktop-fe | web | mobile | chrome | vscode | cross-cut      | **Total**      |
+| -------------------------- | --------- | ---------- | --- | ------ | ------ | ------ | -------------- | -------------- |
+| **P0**                     | 1         | 0          | 0   | 0      | 0      | 0      | 0              | **1**          |
+| **P1**                     | 4         | 0          | 3   | 1      | 1      | 0      | 2              | **11**         |
+| **P2**                     | 2         | 3          | 4   | 4      | 3      | 2      | 2              | **20**         |
+| **P3**                     | 1         | 3          | 2   | 2      | 2      | 3      | 2              | **15**         |
+| **Total findings**         | 8         | 6          | 9   | 7      | 6      | 5      | 8 + 41 semgrep | **47 + 41**    |
+| **Per-squad effort (hrs)** | ~20       | ~5.5       | ~16 | ~16.25 | ~4.25  | ~2.75  | ~28            | **~92.75 raw** |
 
 Cross-cut's 8 finding rows cover the 41 semgrep findings categorically; the 41 semgrep items contribute mostly P2/P3 distributed across squads #2/#3/#4 (already included in their effort).
+
+**Effort reconciliation:** the **~92.75 hrs** above is the sum of each squad's per-finding effort (raw bottom-up). The **3-wave totals below add to 68.75 hrs** because (a) some squad findings overlap across surfaces and are de-duplicated when assigned to a single wave fix, (b) several items are explicitly deferred out of waves as "not v1 LOCAL ONLY scope" (Section 5), and (c) cross-cut's ~22 hrs of distributed work is already accounted for within other squads' rows. Use 68.75 hrs as the **executable fix budget**; 92.75 is the **diagnostic surface area**.
 
 **True P0 count: 1** (rust-core #1 — hardcoded model ID in CLI agent fallback).
 
@@ -91,7 +93,7 @@ Cross-cut's 8 finding rows cover the 41 semgrep findings categorically; the 41 s
 
 ### L. Two-supabase-migrations drift (NOT v1)
 
-27. **web P2 / cross-cut P2-6**: `supabase/migrations/` (50 files; newest `20260519092127`) vs `apps/web/supabase/migrations/` (45 files; newest `20260505000002`). Web-local diverged and is behind by 19 migrations. Stripe idempotency RPC exists in BOTH dirs with table-extend ALTER statements — running both against same DB risks duplicate-extend. **Reconciliation blocks paid-tier launch, NOT v1 LOCAL ONLY.**
+27. **web P2 / cross-cut P2-6**: `supabase/migrations/` (**45 files** canonical) vs `apps/web/supabase/migrations/` (**50 files** legacy web-local). Stripe idempotency RPC exists in BOTH dirs with table-extend ALTER statements — running both against same DB risks duplicate-extend. **Reconciliation blocks paid-tier launch, NOT v1 LOCAL ONLY.**
 
 ### M. Runtime config inventory (web)
 
@@ -134,7 +136,7 @@ Cross-cut's 8 finding rows cover the 41 semgrep findings categorically; the 41 s
 **Acceptance criteria:**
 
 - `pnpm --filter @agiworkforce/extension typecheck` exits 0.
-- `scripts/check-no-hardcoded-models.sh` exits 0 (already does — that gate catches the literal pattern; this fix removes the literal at source).
+- Direct grep verification: `rg 'claude-haiku-4-5-20251001' apps/cli/src/agent/mod.rs` returns no match. **Note:** `scripts/check-no-hardcoded-models.sh` does NOT currently catch this pattern — its Gate 1 targets the literal `claude-opus-4-6-mini` and Gate 2 targets `const FAST_*_MODEL = "..."` const-assignment patterns; an `.unwrap_or("literal")` site does not match either gate. Wave 1 should either (a) verify the fix by direct grep above, or (b) extend the script with a Gate 3 covering `unwrap_or\("[a-z]+-[a-z0-9-]+"\)` patterns in `apps/cli/src/agent/`.
 - `cargo test -p agiworkforce-cli` green.
 - Both fixes land as ONE small PR labeled `v1-blocker`.
 
@@ -214,16 +216,17 @@ Cross-cut's 8 finding rows cover the 41 semgrep findings categorically; the 41 s
 
 I opened these cited findings in the actual files and confirmed reproduction:
 
-| Finding                              | File:line                                                               | Status                                                                                                                                                                |
-| ------------------------------------ | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| rust-core #1 (P0)                    | `apps/cli/src/agent/mod.rs:488`                                         | **Confirmed.** `.unwrap_or("claude-haiku-4-5-20251001")` present; comment cites "rule-models-json exception" but no link to `model_catalog::economy_default_model()`. |
-| chrome #1 (P1)                       | `apps/extension/src/features/background/shortcuts.ts:31`                | **Confirmed.** Lines 31–40 construct `SavedShortcut` without `createdByOrigin`. TS2741 will fire.                                                                     |
-| web #1 (P1)                          | `apps/web/features/chat/components/ArtifactBlock.tsx:150`               | **Confirmed.** `new Blob([code], { type: 'text/html' })` on line 150; comment cites WEB-25 noopener guard.                                                            |
-| web #7 (P1)                          | `apps/web/lib/llm-providers/openai.ts:78`                               | **Confirmed.** `body['tools'] = request.tools.map((tool: any) => {` on line 78.                                                                                       |
-| mobile F-1 (P1)                      | `apps/mobile/lib/pinning.ts:94`                                         | **Confirmed.** `export const PINNING_ENFORCED = true` at line 94; `hasPlaceholderPins()` defined at 99.                                                               |
-| vscode #2 (P2)                       | `apps/extension-vscode/src/features/model-picker/modelConstants.ts:211` | **Confirmed.** `'auto-economy': resolveAutoModeModel('auto-economy', 'hobby') ?? 'gpt-5.5-mini'` literal at line 211.                                                 |
-| cross-cut P1-1 (todo reconciliation) | `apps/web/app/api/**/SUPABASE_SERVICE_ROLE_KEY`                         | **Confirmed STALE.** `grep -rl SUPABASE_SERVICE_ROLE_KEY apps/web/app/api/                                                                                            | wc -l`= 15, not 56 as`todo.md` claims. |
-| cross-cut workflow inventory         | `.github/workflows/*.yml` `continue-on-error: true`                     | **Confirmed.** 3 instances: `ci.yml:111` (Semgrep), `ci.yml:416` (Windows cargo test), `deploy-signaling-server.yml:248` (prune).                                     |
+| Finding                               | File:line                                                               | Status                                                                                                                                                                                                                                                                                                |
+| ------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| rust-core #1 (P0)                     | `apps/cli/src/agent/mod.rs:488`                                         | **Confirmed.** `.unwrap_or("claude-haiku-4-5-20251001")` present; comment cites "rule-models-json exception" but no link to `model_catalog::economy_default_model()`.                                                                                                                                 |
+| chrome #1 (P1)                        | `apps/extension/src/features/background/shortcuts.ts:31`                | **Confirmed.** Lines 31–40 construct `SavedShortcut` without `createdByOrigin`. TS2741 will fire.                                                                                                                                                                                                     |
+| web #1 (P1)                           | `apps/web/features/chat/components/ArtifactBlock.tsx:150`               | **Confirmed.** `new Blob([code], { type: 'text/html' })` on line 150; comment cites WEB-25 noopener guard.                                                                                                                                                                                            |
+| web #7 (P1)                           | `apps/web/lib/llm-providers/openai.ts:78`                               | **Confirmed.** `body['tools'] = request.tools.map((tool: any) => {` on line 78.                                                                                                                                                                                                                       |
+| mobile F-1 (P1)                       | `apps/mobile/lib/pinning.ts:94`                                         | **Confirmed.** `export const PINNING_ENFORCED = true` at line 94; `hasPlaceholderPins()` defined at 99.                                                                                                                                                                                               |
+| vscode #2 (P2)                        | `apps/extension-vscode/src/features/model-picker/modelConstants.ts:211` | **Confirmed.** `'auto-economy': resolveAutoModeModel('auto-economy', 'hobby') ?? 'gpt-5.5-mini'` literal at line 211.                                                                                                                                                                                 |
+| cross-cut P1-1 (todo reconciliation)  | `apps/web/app/api/**/SUPABASE_SERVICE_ROLE_KEY`                         | **Confirmed STALE.** `rg -l SUPABASE_SERVICE_ROLE_KEY apps/web/app/api/` returns 15 files, not 56 as `todo.md` claims.                                                                                                                                                                                |
+| cross-cut workflow inventory          | `.github/workflows/*.yml` `continue-on-error: true`                     | **Confirmed.** 3 instances: `ci.yml:111` (Semgrep), `ci.yml:416` (Windows cargo test), `deploy-signaling-server.yml:248` (prune).                                                                                                                                                                     |
+| chrome #4 (P2) — `tabId` schema drift | `apps/desktop/src-tauri/src/integrations/native_messaging/mod.rs:173`   | **FALSE POSITIVE on re-check.** Line 173 has `#[serde(rename = "tabId")]` on `SelectedTextQuery.tab_id`. The chrome squad's own Finding #4 description (lines 116–117) and its message-schema table (line 112) both later state the rename IS present. Drop this from Wave 3; downgrade to no-action. |
 
 **False positives noted (cite-and-skip — already in source reports):**
 
