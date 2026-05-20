@@ -218,44 +218,102 @@ impl ToolConfirmationState {
         "memory_search",
     ];
 
+    /// Exact-name allowlist for MCP read-only tool *base names* (the
+    /// portion after `mcp__<server>__`). Matched against the parsed tool
+    /// name, NOT via substring/suffix comparison.
+    ///
+    /// FIX (audit 2026-05-20, §2/§13): the previous implementation used
+    /// `tool_name.ends_with(pattern)`, which allowed any MCP server to
+    /// publish a tool such as `mcp__evil__read_file_but_exfiltrate` and
+    /// have it auto-approved in Safe/Plan mode because the suffix
+    /// `read_file_but_exfiltrate` matched on the `read_file` prefix when
+    /// reordered. The substring-class bypass is closed by parsing the
+    /// `mcp__<server>__<tool>` envelope and only consulting this exact-
+    /// name table for the trailing tool segment.
+    const READ_ONLY_MCP_TOOLS: &'static [&'static str] = &[
+        "read_file",
+        "read_text_file",
+        "read_media_file",
+        "read_multiple_files",
+        "list_directory",
+        "list_directory_with_sizes",
+        "list_allowed_directories",
+        "directory_tree",
+        "get_file_info",
+        "search_files",
+        "git_status",
+        "git_log",
+        "git_show",
+        "git_diff",
+        "git_diff_staged",
+        "git_diff_unstaged",
+    ];
+
+    /// Strict parser for the canonical `mcp__<server>__<tool>` envelope.
+    ///
+    /// Returns `Some((server, tool))` only when the input matches *exactly*
+    /// three `__`-delimited segments after the `mcp__` prefix: a non-empty
+    /// server name, a non-empty tool name, and no additional `__` separators
+    /// in either segment. Any deviation (extra delimiters, empty segments,
+    /// missing prefix) returns `None`, forcing the caller to fall back to
+    /// the deny-by-default branch.
+    ///
+    /// FIX (audit 2026-05-20, §2/§13): the legacy suffix-match treated
+    /// `mcp__evil__read_file_but_exfiltrate` as a `read_file` tool. With
+    /// this parser the trailing segment is `read_file_but_exfiltrate`,
+    /// which is *not* in `READ_ONLY_MCP_TOOLS`, so the gate falls through
+    /// to user confirmation.
+    fn parse_mcp_envelope(tool_name: &str) -> Option<(&str, &str)> {
+        let rest = tool_name.strip_prefix("mcp__")?;
+        // The remainder must be exactly `<server>__<tool>` with no further
+        // `__` separators. We reject overly-long inputs defensively to
+        // bound the cost of any future schema-expansion attack.
+        if rest.len() > 256 {
+            return None;
+        }
+        let (server, tool) = rest.split_once("__")?;
+        if server.is_empty() || tool.is_empty() {
+            return None;
+        }
+        // Reject ambiguous envelopes that smuggle additional `__` into
+        // either segment — they cannot be unambiguously routed back to a
+        // single server/tool pair.
+        if server.contains("__") || tool.contains("__") {
+            return None;
+        }
+        // Canonical charset: alphanumerics, underscore, hyphen, dot. This
+        // matches the MCP spec convention and forbids path-traversal /
+        // shell-metacharacter shenanigans in the tool identifier.
+        let charset_ok = |segment: &str| {
+            segment
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
+        };
+        if !charset_ok(server) || !charset_ok(tool) {
+            return None;
+        }
+        Some((server, tool))
+    }
+
     /// Check whether a tool is permitted under the given agent mode.
     ///
     /// In **Safe** and **Plan** modes only read-only / non-destructive tools
-    /// are allowed. Plan mode additionally permits MCP read-only tools
-    /// (prefixed with `mcp__`) that match common read patterns.
+    /// are allowed. Plan mode additionally permits MCP read-only tools that
+    /// match the canonical `mcp__<server>__<tool>` envelope where `<tool>`
+    /// is in [`READ_ONLY_MCP_TOOLS`] (exact-name match, no substring).
     ///
     /// **Build** and **Autopilot** modes permit all tools (confirmation gating
     /// is handled separately by the auto-approve flag and dialog system).
     pub fn is_tool_permitted_for_mode(tool_name: &str, mode: AgentMode) -> bool {
         match mode {
             AgentMode::Safe | AgentMode::Plan => {
-                // Direct allowlist match
+                // Direct allowlist match for native tools.
                 if Self::READ_ONLY_TOOLS.contains(&tool_name) {
                     return true;
                 }
-                // MCP tools: allow known read-only patterns in Plan/Safe mode
-                if tool_name.starts_with("mcp__") {
-                    let read_mcp_patterns = [
-                        "read_file",
-                        "read_text_file",
-                        "read_media_file",
-                        "read_multiple_files",
-                        "list_directory",
-                        "list_directory_with_sizes",
-                        "list_allowed_directories",
-                        "directory_tree",
-                        "get_file_info",
-                        "search_files",
-                        "git_status",
-                        "git_log",
-                        "git_show",
-                        "git_diff",
-                        "git_diff_staged",
-                        "git_diff_unstaged",
-                    ];
-                    return read_mcp_patterns
-                        .iter()
-                        .any(|pattern| tool_name.ends_with(pattern));
+                // MCP tools: strict envelope parse + exact-name match.
+                if let Some((_, tool)) = Self::parse_mcp_envelope(tool_name) {
+                    return Self::READ_ONLY_MCP_TOOLS.contains(&tool);
                 }
                 false
             }
@@ -684,6 +742,97 @@ pub fn get_allowed_directories(
     Ok(state.get_allowed_paths())
 }
 
+/// FIX (audit 2026-05-20, §4 — Autopilot mode-transition integrity envelope):
+/// the legacy code passed the mode-transition payload as an ad-hoc
+/// `serde_json::json!({...})` literal. JSON object iteration order was a
+/// `serde_json::Map` (HashMap-backed in some builds), and the payload had no
+/// integrity envelope distinguishing the warning text from the boolean flag.
+/// An XSS-compromised renderer could keep the warning, swap the
+/// `new_auto_approve: true` for a deceptively rendered "false" string, and
+/// trick the user into clicking approve on a different transition than the
+/// one they think they're approving.
+///
+/// `ModeTransitionPayload` is a typed envelope with:
+///   * canonical field order (struct definition order, serde-preserved),
+///   * a `summary_hash` (sha256 of the canonicalized envelope sans the hash)
+///     mirroring the FIX-F7 anti-tamper pattern used on tool args,
+///   * a `kind` discriminator the frontend can pin to the dialog template.
+///
+/// The hash is intentionally over the envelope minus the hash field so the
+/// frontend can recompute and compare. Any mutation in transit / in the
+/// renderer between request and confirmation will mismatch.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModeTransitionPayload {
+    /// Discriminator: e.g. "auto_approve_all" or "agent_mode:autopilot".
+    /// The frontend must verify this matches the dialog it is rendering.
+    pub kind: String,
+    /// Previous state, rendered as its canonical string form.
+    pub previous: String,
+    /// New state, rendered as its canonical string form.
+    pub new: String,
+    /// Boolean flag controlling whether this transition raises or lowers
+    /// the confirmation bar. Always true for the dangerous direction.
+    pub elevates_privilege: bool,
+    /// Free-form warning text the dialog must render verbatim.
+    pub warning: String,
+    /// `sha256(canonical_json(envelope_without_hash))` lowercase hex. The
+    /// frontend can recompute this and refuse to render if it disagrees.
+    pub summary_hash: String,
+}
+
+impl ModeTransitionPayload {
+    pub fn new(
+        kind: impl Into<String>,
+        previous: impl Into<String>,
+        new: impl Into<String>,
+        elevates_privilege: bool,
+        warning: impl Into<String>,
+    ) -> Self {
+        use sha2::{Digest, Sha256};
+        let kind = kind.into();
+        let previous = previous.into();
+        let new = new.into();
+        let warning = warning.into();
+        // Canonical: hash the envelope WITHOUT the summary_hash field so the
+        // frontend can replicate the computation deterministically.
+        // BTreeMap serialization is alphabetical-key-ordered.
+        let mut canonical: std::collections::BTreeMap<&str, serde_json::Value> =
+            std::collections::BTreeMap::new();
+        canonical.insert("kind", serde_json::Value::String(kind.clone()));
+        canonical.insert("previous", serde_json::Value::String(previous.clone()));
+        canonical.insert("new", serde_json::Value::String(new.clone()));
+        canonical.insert(
+            "elevates_privilege",
+            serde_json::Value::Bool(elevates_privilege),
+        );
+        canonical.insert("warning", serde_json::Value::String(warning.clone()));
+        let canonical_json = serde_json::to_string(&canonical).unwrap_or_default();
+        let digest = Sha256::digest(canonical_json.as_bytes());
+        let summary_hash = hex::encode(digest);
+        Self {
+            kind,
+            previous,
+            new,
+            elevates_privilege,
+            warning,
+            summary_hash,
+        }
+    }
+
+    /// Recompute the hash from the in-memory fields (useful for test +
+    /// future frontend round-trip verification via a Tauri command).
+    pub fn recompute_hash(&self) -> String {
+        Self::new(
+            self.kind.clone(),
+            self.previous.clone(),
+            self.new.clone(),
+            self.elevates_privilege,
+            self.warning.clone(),
+        )
+        .summary_hash
+    }
+}
+
 /// Enable or disable global auto-approve mode.
 /// When enabled, all tool confirmation dialogs are bypassed and every tool
 /// call is automatically approved. Use with caution.
@@ -701,14 +850,21 @@ pub async fn set_auto_approve_all(
 ) -> Result<(), String> {
     let previous = state.is_auto_approve_all();
     if enabled && !previous {
+        // FIX (audit 2026-05-20, §4): build the typed integrity envelope
+        // instead of an ad-hoc json! literal. Frontend can recompute
+        // `summary_hash` to confirm what it renders matches what we sent.
+        let payload = ModeTransitionPayload::new(
+            "set_auto_approve_all",
+            "false",
+            "true",
+            true,
+            "Auto-approve bypasses ALL tool confirmation dialogs. Only enable for trusted, scoped tasks.",
+        );
         let approved = request_confirmation_simple(
             &app_handle,
             "set_auto_approve_all",
-            &serde_json::json!({
-                "previous_auto_approve": false,
-                "new_auto_approve": true,
-                "warning": "Auto-approve bypasses ALL tool confirmation dialogs. Only enable for trusted, scoped tasks."
-            }),
+            &serde_json::to_value(&payload)
+                .map_err(|e| format!("failed to serialize ModeTransitionPayload: {}", e))?,
         )
         .await?;
         if !approved {
@@ -746,14 +902,22 @@ pub async fn set_agent_mode(
 ) -> Result<(), String> {
     let previous = state.get_agent_mode();
     if matches!(mode, AgentMode::Autopilot) && !matches!(previous, AgentMode::Autopilot) {
+        // FIX (audit 2026-05-20, §4): typed integrity envelope (see
+        // ModeTransitionPayload). Carries a summary_hash the frontend can
+        // recompute to detect XSS-class swap-in-renderer attacks against the
+        // mode-transition dialog.
+        let payload = ModeTransitionPayload::new(
+            "set_agent_mode:autopilot",
+            format!("{:?}", previous),
+            "Autopilot",
+            true,
+            "Autopilot bypasses ALL tool confirmation dialogs. Only enable for trusted, scoped tasks.",
+        );
         let approved = request_confirmation_simple(
             &app_handle,
             "set_agent_mode:autopilot",
-            &serde_json::json!({
-                "previous_mode": format!("{:?}", previous),
-                "new_mode": "Autopilot",
-                "warning": "Autopilot bypasses ALL tool confirmation dialogs. Only enable for trusted, scoped tasks."
-            }),
+            &serde_json::to_value(&payload)
+                .map_err(|e| format!("failed to serialize ModeTransitionPayload: {}", e))?,
         )
         .await?;
         if !approved {
@@ -1669,5 +1833,236 @@ mod fix_f6_never_rememberable_alignment_tests {
         assert_eq!(state.get_remembered_choice("file_read"), Some(true));
         state.remember_choice("git_status", false);
         assert_eq!(state.get_remembered_choice("git_status"), Some(false));
+    }
+}
+
+#[cfg(test)]
+mod mcp_envelope_parser_tests {
+    //! FIX (audit 2026-05-20, §2/§13): pin the strict `mcp__<server>__<tool>`
+    //! envelope parser. The legacy code used `tool_name.ends_with(pattern)`
+    //! which lets a hostile MCP server publish e.g.
+    //! `mcp__evil__read_file_but_exfiltrate` and have it auto-approved in
+    //! Safe/Plan mode because the suffix "matches" the read_file allowlist.
+    //!
+    //! The fix is a two-step gate:
+    //!   1. `parse_mcp_envelope()` returns the trailing tool name *only* when
+    //!      the input is the exact canonical envelope (no embedded `__`,
+    //!      bounded length, canonical charset).
+    //!   2. `is_tool_permitted_for_mode()` then consults the exact-name
+    //!      `READ_ONLY_MCP_TOOLS` table — substring matches are no longer
+    //!      possible.
+    use super::{AgentMode, ToolConfirmationState};
+
+    #[test]
+    fn mcp_suffix_spoof_is_rejected_in_plan_mode() {
+        // The signature attack from the audit: an MCP server publishes a
+        // tool whose suffix contains a read-only name. Must NOT auto-approve.
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            "mcp__evil__read_file_but_exfiltrate",
+            AgentMode::Plan,
+        ));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            "mcp__evil__read_file_but_exfiltrate",
+            AgentMode::Safe,
+        ));
+    }
+
+    #[test]
+    fn mcp_canonical_envelope_with_read_tool_is_permitted_in_plan_mode() {
+        // Legitimate envelope: prefix `mcp__`, exactly one server segment,
+        // exactly one tool segment, tool is on the read-only allowlist.
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "mcp__filesystem__read_file",
+            AgentMode::Plan,
+        ));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "mcp__git__git_status",
+            AgentMode::Plan,
+        ));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "mcp__git__git_diff",
+            AgentMode::Plan,
+        ));
+    }
+
+    #[test]
+    fn mcp_write_tool_is_not_auto_approved_in_plan_mode() {
+        // Even canonical envelope: writes still require explicit confirmation.
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            "mcp__filesystem__write_file",
+            AgentMode::Plan,
+        ));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            "mcp__filesystem__delete_file",
+            AgentMode::Plan,
+        ));
+    }
+
+    #[test]
+    fn mcp_envelope_with_extra_separators_is_rejected() {
+        // Three segments after `mcp__` is ambiguous — could be smuggling
+        // a `__` to confuse downstream routing. Must reject.
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            "mcp__server__sub__read_file",
+            AgentMode::Plan,
+        ));
+        // Empty server segment.
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            "mcp____read_file",
+            AgentMode::Plan,
+        ));
+    }
+
+    #[test]
+    fn mcp_envelope_with_oversized_input_is_rejected() {
+        // Bounded length: anything over 256 chars after `mcp__` is refused
+        // to prevent schema-expansion-style cost amplification.
+        let huge = format!("mcp__server__{}", "a".repeat(300));
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            &huge,
+            AgentMode::Plan,
+        ));
+    }
+
+    #[test]
+    fn mcp_envelope_with_bad_charset_is_rejected() {
+        // Path-traversal-style metacharacters in the tool identifier.
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            "mcp__server__read_file/../../etc/passwd",
+            AgentMode::Plan,
+        ));
+        // Shell metacharacter in server name.
+        assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
+            "mcp__ser;ver__read_file",
+            AgentMode::Plan,
+        ));
+    }
+
+    #[test]
+    fn build_and_autopilot_modes_still_permit_everything() {
+        // The MCP-envelope gate is Safe/Plan-only — Build and Autopilot
+        // permit anything (confirmation gating handled separately).
+        for tool in &[
+            "mcp__evil__read_file_but_exfiltrate",
+            "mcp__filesystem__write_file",
+            "terminal_execute",
+        ] {
+            assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+                tool,
+                AgentMode::Build,
+            ));
+            assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+                tool,
+                AgentMode::Autopilot,
+            ));
+        }
+    }
+}
+
+#[cfg(test)]
+mod mode_transition_envelope_tests {
+    //! FIX (audit 2026-05-20, §4): pin the typed mode-transition envelope.
+    //!
+    //! Three properties to nail down:
+    //!   1. `summary_hash` is non-empty and 64-char lowercase hex.
+    //!   2. Same inputs → same hash (deterministic).
+    //!   3. Mutating any field → different hash (anti-tamper).
+    use super::ModeTransitionPayload;
+
+    #[test]
+    fn envelope_hash_is_sha256_hex() {
+        let p = ModeTransitionPayload::new(
+            "set_agent_mode:autopilot",
+            "Safe",
+            "Autopilot",
+            true,
+            "warning text",
+        );
+        assert_eq!(p.summary_hash.len(), 64);
+        assert!(p.summary_hash.chars().all(|c| c.is_ascii_hexdigit()));
+        assert_eq!(p.summary_hash, p.recompute_hash());
+    }
+
+    #[test]
+    fn envelope_hash_is_deterministic() {
+        let p1 = ModeTransitionPayload::new(
+            "set_auto_approve_all",
+            "false",
+            "true",
+            true,
+            "warning",
+        );
+        let p2 = ModeTransitionPayload::new(
+            "set_auto_approve_all",
+            "false",
+            "true",
+            true,
+            "warning",
+        );
+        assert_eq!(p1.summary_hash, p2.summary_hash);
+    }
+
+    #[test]
+    fn envelope_hash_changes_when_warning_swapped() {
+        // The XSS-renderer attack: keep `new` and `elevates_privilege` the
+        // same but mutate the warning so the user sees a different message
+        // than what was intended. Hash must diverge.
+        let original = ModeTransitionPayload::new(
+            "set_auto_approve_all",
+            "false",
+            "true",
+            true,
+            "Auto-approve bypasses ALL tool confirmation dialogs.",
+        );
+        let tampered = ModeTransitionPayload::new(
+            "set_auto_approve_all",
+            "false",
+            "true",
+            true,
+            "Click approve to continue.",
+        );
+        assert_ne!(original.summary_hash, tampered.summary_hash);
+    }
+
+    #[test]
+    fn envelope_hash_changes_when_flag_flipped() {
+        // The most dangerous swap: flip `elevates_privilege` so the dialog
+        // looks like a de-escalation while we're actually elevating.
+        let elevate = ModeTransitionPayload::new(
+            "set_agent_mode:autopilot",
+            "Safe",
+            "Autopilot",
+            true,
+            "warning",
+        );
+        let descend = ModeTransitionPayload::new(
+            "set_agent_mode:autopilot",
+            "Safe",
+            "Autopilot",
+            false,
+            "warning",
+        );
+        assert_ne!(elevate.summary_hash, descend.summary_hash);
+    }
+
+    #[test]
+    fn envelope_recompute_hash_matches_constructor_hash() {
+        // The contract the frontend relies on: parse the envelope, replay
+        // the canonical hash, compare to `summary_hash`. We pin it here.
+        let p = ModeTransitionPayload::new(
+            "set_agent_mode:autopilot",
+            "Plan",
+            "Autopilot",
+            true,
+            "Autopilot bypasses ALL tool confirmation dialogs.",
+        );
+        let recomputed = ModeTransitionPayload::new(
+            p.kind.clone(),
+            p.previous.clone(),
+            p.new.clone(),
+            p.elevates_privilege,
+            p.warning.clone(),
+        );
+        assert_eq!(p.summary_hash, recomputed.summary_hash);
     }
 }

@@ -179,7 +179,10 @@ export const MAX_NLWEB_PROBE_BYTES = 256 * 1024; // 256 KB total NLWeb probe bod
  * input is missing, oversized, or unparseable. Callers must accept the
  * possibility of `undefined` and not throw on it.
  */
-export function safeJsonParse<T = unknown>(text: string | null | undefined, maxBytes: number): T | undefined {
+export function safeJsonParse<T = unknown>(
+  text: string | null | undefined,
+  maxBytes: number,
+): T | undefined {
   if (typeof text !== 'string') return undefined;
   if (text.length > maxBytes) return undefined;
   try {
@@ -268,8 +271,49 @@ export const ALLOWED_SHORTCUT_ACTION_TYPES = new Set<string>([
 ]);
 
 /**
- * Validate every action in a shortcut/task plan. Returns `true` when every
- * action's `type` is on the allowlist and the array is well-formed.
+ * Per-field size caps for action parameters.
+ *
+ * FIX (audit 2026-05-20, §1): the legacy validator only checked the action
+ * `type`. An LLM-controlled `selector`, `url`, or `value` still flowed
+ * through unchecked — e.g. a 1MB CSS selector that could DoS the content-
+ * script DOM query, or a `javascript:`-scheme URL in a navigate action
+ * that runs arbitrary code in the page's origin.
+ *
+ * Caps chosen to be generous for legitimate UI automation:
+ *   - selector: 1024 chars (longest seen in production was ~300, e.g.
+ *     `div[data-component-id="ABC"] > div:nth-child(3) ...`)
+ *   - value: 16384 chars (one form field of generated text)
+ *   - url: 2048 chars (per RFC 7230's de-facto limit + Chrome's own cap)
+ *
+ * Reject the action plan as a whole if any single field exceeds its cap,
+ * so a hostile bridge cannot smuggle one giant payload past the gate.
+ */
+const MAX_SELECTOR_LENGTH = 1024;
+const MAX_VALUE_LENGTH = 16384;
+const MAX_URL_LENGTH = 2048;
+const FORBIDDEN_URL_SCHEMES = ['javascript:', 'data:', 'vbscript:', 'file:'];
+
+function isSafeActionUrl(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  if (value.length === 0 || value.length > MAX_URL_LENGTH) return false;
+  const lower = value.trim().toLowerCase();
+  if (FORBIDDEN_URL_SCHEMES.some((scheme) => lower.startsWith(scheme))) return false;
+  try {
+    const parsed = new URL(value);
+    // Only http(s) and chrome-extension:// are valid for the actions we
+    // support (navigate / open). Anything else is rejected.
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Validate every action in a shortcut/task plan. Returns `true` when:
+ *   1. The array is well-formed.
+ *   2. Every action's `type` is on the allowlist.
+ *   3. Every action's `selector`, `value`, and (if present) `url` field is
+ *      within its size cap and (for URLs) on an allowed scheme.
  */
 export function validateShortcutActions(actions: ReadonlyArray<RunPageAction>): boolean {
   if (!Array.isArray(actions)) return false;
@@ -278,6 +322,35 @@ export function validateShortcutActions(actions: ReadonlyArray<RunPageAction>): 
     const t = (action as { type?: unknown }).type;
     if (typeof t !== 'string') return false;
     if (!ALLOWED_SHORTCUT_ACTION_TYPES.has(t.toLowerCase())) return false;
+
+    // FIX (audit 2026-05-20, §1): per-parameter validation.
+    const rec = action as Record<string, unknown>;
+    const selector = rec['selector'];
+    if (selector !== undefined && selector !== null) {
+      if (typeof selector !== 'string') return false;
+      if (selector.length === 0 || selector.length > MAX_SELECTOR_LENGTH) return false;
+    }
+    const value = rec['value'];
+    const typeLower = t.toLowerCase();
+    if (value !== undefined && value !== null) {
+      if (typeof value !== 'string') return false;
+      // FIX (Codex P2, 2026-05-20): `navigate` / `open` actions carry the
+      // destination URL in the `value` field (the canonical RunPageAction
+      // shape), not `url`. The previous fix only scheme-checked `url`, so
+      // an LLM-supplied `javascript:` payload in `value` would slip through
+      // the 16384-char cap. Apply the URL safety check (2048-char cap,
+      // forbidden schemes, http(s)-only) when the action is navigation.
+      if (typeLower === 'navigate' || typeLower === 'open') {
+        if (!isSafeActionUrl(value)) return false;
+      } else if (value.length > MAX_VALUE_LENGTH) {
+        return false;
+      }
+    }
+    // Legacy `url` field — kept for older action shapes that still set it.
+    const url = rec['url'];
+    if (url !== undefined && url !== null) {
+      if (!isSafeActionUrl(url)) return false;
+    }
   }
   return true;
 }

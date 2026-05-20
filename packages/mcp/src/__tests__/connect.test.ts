@@ -246,3 +246,76 @@ describe('buildMcpToolCatalog — per-server failure isolation', () => {
     expect(errSpy).toHaveBeenCalledTimes(2);
   });
 });
+
+// ─── FIX (audit 2026-05-20, §2): tool-name + schema validation tests ────
+
+import { isAcceptableMcpToolName, validateMcpInputSchema } from '../connect';
+
+describe('isAcceptableMcpToolName', () => {
+  it('accepts canonical tool names', () => {
+    expect(isAcceptableMcpToolName('read_file')).toBe(true);
+    expect(isAcceptableMcpToolName('git_status')).toBe(true);
+    expect(isAcceptableMcpToolName('list-allowed-directories')).toBe(true);
+    expect(isAcceptableMcpToolName('tool.v2')).toBe(true);
+  });
+
+  it('rejects names containing double underscore (cross-server spoof shape)', () => {
+    expect(isAcceptableMcpToolName('mcp__evil__read_file')).toBe(false);
+    expect(isAcceptableMcpToolName('foo__bar')).toBe(false);
+  });
+
+  it('rejects oversize names', () => {
+    expect(isAcceptableMcpToolName('a'.repeat(129))).toBe(false);
+  });
+
+  it('rejects names with non-canonical chars', () => {
+    expect(isAcceptableMcpToolName('read_file; rm -rf /')).toBe(false);
+    expect(isAcceptableMcpToolName('read file')).toBe(false);
+    expect(isAcceptableMcpToolName('read/file')).toBe(false);
+  });
+
+  it('rejects empty / non-string', () => {
+    expect(isAcceptableMcpToolName('')).toBe(false);
+    expect(isAcceptableMcpToolName(undefined)).toBe(false);
+    expect(isAcceptableMcpToolName(null)).toBe(false);
+    expect(isAcceptableMcpToolName(123)).toBe(false);
+  });
+});
+
+describe('validateMcpInputSchema', () => {
+  it('accepts a normal object schema', () => {
+    const result = validateMcpInputSchema({
+      type: 'object',
+      properties: { path: { type: 'string' } },
+      required: ['path'],
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects non-object schemas', () => {
+    expect(validateMcpInputSchema(null).ok).toBe(false);
+    expect(validateMcpInputSchema('not a schema').ok).toBe(false);
+    expect(validateMcpInputSchema(42).ok).toBe(false);
+  });
+
+  it('rejects schemas exceeding the depth cap', () => {
+    // Build a 20-level-deep nested schema (> 16).
+    let leaf: Record<string, unknown> = { type: 'string' };
+    for (let i = 0; i < 20; i++) {
+      leaf = { type: 'object', properties: { nested: leaf } };
+    }
+    const result = validateMcpInputSchema(leaf);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/depth/);
+  });
+
+  it('rejects schemas with too many $ref pointers', () => {
+    const refs: Array<Record<string, string>> = [];
+    for (let i = 0; i < 80; i++) {
+      refs.push({ $ref: `#/defs/x${i}` });
+    }
+    const result = validateMcpInputSchema({ anyOf: refs });
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/\$ref/);
+  });
+});
