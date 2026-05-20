@@ -144,17 +144,17 @@ Cross-cut's 6 severity-bucketed findings cover the 41 semgrep findings categoric
 
 **Scope:** lint errors that already fire ERROR in CI, type holes in production routing, security ops items.
 
-| #   | Finding                                                                                                                  | File:line                                                                                       | Effort (hrs) | Squad     |
-| --- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | ------------ | --------- |
-| 2.1 | 4 `Blob(text/html)` XSS lint errors (web P1 #1–3)                                                                        | `ArtifactBlock.tsx:150`, `ArtifactPreview.tsx:252,280`, `EnhancedExportDialog.tsx:150`          | 1.5          | web       |
-| 2.2 | LLM tool-transform `: any` in OpenAI provider (web P1 #7)                                                                | `lib/llm-providers/openai.ts:78,229`                                                            | 0.75         | web       |
-| 2.3 | TLS SPKI pin placeholders + native config not populated (mobile P1 F-1)                                                  | `apps/mobile/lib/pinning.ts:94` + `app.config.js`                                               | 4            | mobile    |
-| 2.4 | `setState` in `useEffect` body (web P2 #4 — also a lint ERROR)                                                           | `src/features/projects/components/ProjectSettingsDialog.tsx:81`                                 | 0.5          | web       |
-| 2.5 | CLI daemon `Regex::new().unwrap()` x12 → `LazyLock<Regex>` (rust-core P1 #2)                                             | `apps/cli/src/daemon.rs:1007–1033`                                                              | 1            | rust-core |
-| 2.6 | CLI init.rs hardcoded model in `config.toml` template comment (rust-core P1 #4)                                          | `apps/cli/src/init.rs:63`                                                                       | 0.5          | rust-core |
-| 2.7 | api-gateway `routes/models.ts` ~50 hardcoded IDs → derived-from-catalog (cross-cut #2, FIXME P1-MODEL-CATALOG-MIGRATION) | `services/api-gateway/src/routes/models.ts` + `routes/cloudChat.ts:526`, `routes/dotfile.ts:73` | 8            | web       |
-| 2.8 | api-gateway `child_process.spawn` with caller-controlled command (cross-cut #1)                                          | `services/api-gateway/src/mcp/mcpProxy.ts:312`                                                  | 3            | web       |
-| 2.9 | 10 stale `eslint-disable` warnings — auto-fixable (web P3 #9)                                                            | various                                                                                         | 0.25         | web       |
+| #   | Finding                                                                                                                                           | File:line                                                                                       | Effort (hrs) | Squad     |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------ | --------- |
+| 2.1 | 4 `Blob(text/html)` XSS lint errors (web P1 #1–3)                                                                                                 | `ArtifactBlock.tsx:150`, `ArtifactPreview.tsx:252,280`, `EnhancedExportDialog.tsx:150`          | 1.5          | web       |
+| 2.2 | LLM tool-transform `: any` in OpenAI provider (web P2 #7; synthesis upgrades to Wave 2 P1-soft because this is the one real production type hole) | `lib/llm-providers/openai.ts:78,229`                                                            | 0.75         | web       |
+| 2.3 | TLS SPKI pin placeholders + native config not populated (mobile P1 F-1)                                                                           | `apps/mobile/lib/pinning.ts:94` + `app.config.js`                                               | 4            | mobile    |
+| 2.4 | `setState` in `useEffect` body (web P2 #4 — also a lint ERROR)                                                                                    | `src/features/projects/components/ProjectSettingsDialog.tsx:81`                                 | 0.5          | web       |
+| 2.5 | CLI daemon `Regex::new().unwrap()` x12 → `LazyLock<Regex>` (rust-core P1 #2)                                                                      | `apps/cli/src/daemon.rs:1007–1033`                                                              | 1            | rust-core |
+| 2.6 | CLI init.rs hardcoded model in `config.toml` template comment (rust-core P1 #4)                                                                   | `apps/cli/src/init.rs:63`                                                                       | 0.5          | rust-core |
+| 2.7 | api-gateway `routes/models.ts` ~50 hardcoded IDs → derived-from-catalog (cross-cut #2, FIXME P1-MODEL-CATALOG-MIGRATION)                          | `services/api-gateway/src/routes/models.ts` + `routes/cloudChat.ts:526`, `routes/dotfile.ts:73` | 8            | web       |
+| 2.8 | api-gateway `child_process.spawn` with caller-controlled command (cross-cut #1)                                                                   | `services/api-gateway/src/mcp/mcpProxy.ts:312`                                                  | 3            | web       |
+| 2.9 | 10 stale `eslint-disable` warnings — auto-fixable (web P3 #9)                                                                                     | various                                                                                         | 0.25         | web       |
 
 **Wave 2 total: 19.5 hours.**
 
@@ -284,7 +284,7 @@ Re-surfaced with synthesis context. Each maps to a wave decision:
 
 **Q4. Two-supabase-migrations reconciliation — v1 LOCAL ONLY scope?**
 
-- _Source_: `here-is-a-draft-generic-llama.md:204`. CLAUDE.md "Common pitfalls" explicitly defers to paid-tier. cross-cut report confirms two trees diverged by 19 migrations.
+- _Source_: `here-is-a-draft-generic-llama.md:204`. CLAUDE.md "Common pitfalls" explicitly defers to paid-tier. cross-cut report confirms two trees diverged: canonical `supabase/migrations/` (45 files, newer timestamps) vs legacy `apps/web/supabase/migrations/` (50 files, 5 extra older Stripe-idempotency variants). Divergence is in content not in monotonic count.
 - _Decision_: **NO**, not in v1 LOCAL ONLY scope. Defer until paid Hobby launch prep.
 
 **Q5. `continue-on-error: true` (3 instances) — which become hard failures pre-launch?**

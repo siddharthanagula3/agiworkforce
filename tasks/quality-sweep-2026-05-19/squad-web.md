@@ -8,7 +8,7 @@
 - `describe.skip / it.skip / test.skip` in `apps/web`: 1 instance
 - `pnpm typecheck` against `apps/web` is currently GREEN on this checkout
 - 231 routes + 86 API endpoints + 392 feature files + 249 components
-- 56 web API routes use `SUPABASE_SERVICE_ROLE_KEY` directly per `tasks/todo.md` P1-1 (bypass RLS) — still open
+- ~~56~~ **15** web API routes use `SUPABASE_SERVICE_ROLE_KEY` directly (cross-cut re-count: `rg -l SUPABASE_SERVICE_ROLE_KEY apps/web/app/api/` = 15; `tasks/todo.md` P1-1 still says 56 — stale by ~3 migration waves). Remaining 15 are admin/device-flow/webhook/cron routes where service-role is legitimately required.
 
 ## Checker output (source of truth)
 
