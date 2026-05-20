@@ -38,6 +38,7 @@ import { useUnifiedChatStore } from './unifiedChatStore';
 import { useCodingCheckpointStore } from './codingCheckpointStore';
 import { useProjectMemoryStore } from './projectMemoryStore';
 import { useSecurityStore } from './securityStore';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 
 /**
  * Clears all store state on logout.
@@ -195,7 +196,7 @@ export function clearPersistedUserData(): void {
     'agiworkforce-agent-tasks',
     'billing-usage-store',
     'connectors-store',
-    'id-mappings',
+    STORAGE_KEYS.ID_MAPPINGS,
     // Legacy store keys (now consolidated)
     'billing-storage', // Legacy - now in unified-auth-storage
     'auth-storage', // Legacy - now in unified-auth-storage

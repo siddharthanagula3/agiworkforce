@@ -3,6 +3,18 @@
  *
  * Centralizes all auth state handling to prevent race conditions.
  *
+ * TODO(audit 2026-05-20, §12 — DEFERRED): this module duplicates large parts
+ * of `stores/auth.ts` (subscription cache, listener fan-out, plan-tier
+ * resolution). The audit flagged the 391-LOC `auth.ts` vs ~400-LOC
+ * `authOrchestrator.ts` divergence as a real semantic-drift risk: both
+ * subscribe to `supabaseAuth.onAuthStateChange()`, both maintain their own
+ * caches, and the two listener chains can race on subscription refresh.
+ *
+ * Merging them is intentionally NOT in scope for this audit sweep because
+ * it needs a unified session-management design (see also the desktop /
+ * web / mobile / CLI auth-semantic-drift roadmap entry). Track the merge
+ * under a follow-up task; do not paper over the duplication piecemeal.
+ *
  * PROBLEM SOLVED:
  * Previously, App.tsx called initializeAuthStore(), initializeAccountStore(),
  * and initializeBillingStore() - each subscribing separately to supabaseAuth.onAuthStateChange().
@@ -266,17 +278,43 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
     const fetchStatus: SubscriptionFetchStatus =
       authState.subscriptionFetchStatus === 'succeeded' ? 'succeeded' : 'failed';
 
-    // Set Stripe customer info
-    unifiedAuthStore.setStripeCustomer({
-      id: authState.user.id,
-      stripe_customer_id: authState.subscription?.stripe_customer_id || '',
-      email: authState.user.email || '',
-      name: authState.profile?.display_name || undefined,
-      created_at: Math.floor(new Date(authState.user.created_at).getTime() / 1000),
-      updated_at: Date.now() / 1000,
-    });
+    // Set Stripe customer info.
+    //
+    // FIX (audit 2026-05-20, §14): the legacy code unconditionally wrote a
+    // CustomerInfo record with `stripe_customer_id: '' ` when the user had
+    // no subscription. Downstream code that branches on
+    // `stripeCustomer.stripe_customer_id` saw an empty string (truthy as a
+    // key but invalid as a Stripe ID) and silently called the Billing API
+    // with an empty customer reference, masking the "no subscription yet"
+    // case as a "Stripe says no such customer" error.
+    //
+    // Now: only push a CustomerInfo when we actually have a stripe_customer_id;
+    // otherwise push null and let the unified store surface a non-error
+    // "no subscription yet" state.
+    const stripeCustomerIdValue = authState.subscription?.stripe_customer_id ?? null;
+    if (stripeCustomerIdValue) {
+      unifiedAuthStore.setStripeCustomer({
+        id: authState.user.id,
+        stripe_customer_id: stripeCustomerIdValue,
+        email: authState.user.email || '',
+        name: authState.profile?.display_name || undefined,
+        created_at: Math.floor(new Date(authState.user.created_at).getTime() / 1000),
+        updated_at: Date.now() / 1000,
+      });
+    } else {
+      unifiedAuthStore.setStripeCustomer(null);
+    }
 
-    // Set Stripe subscription if available
+    // Set Stripe subscription if available.
+    //
+    // FIX (audit 2026-05-20, §14): the empty-string fallbacks below are
+    // intentional — they only fire inside the `if (authState.subscription)`
+    // guard, which already proves the user has *some* subscription record.
+    // An absent stripe_subscription_id at this level means "subscription
+    // row exists but Stripe provisioning has not completed yet"; the empty
+    // string is the canonical UI sentinel for that state and is consumed
+    // by the billing UI as "provisioning". Do not change to null without
+    // updating every consumer.
     if (authState.subscription) {
       const sub = authState.subscription;
       unifiedAuthStore.setStripeSubscription({
