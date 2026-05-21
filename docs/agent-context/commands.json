@@ -15,6 +15,8 @@
     "mobileHygiene": "pnpm check:mobile-hygiene",
     "serviceLayer": "pnpm check:service-layer",
     "laneOwnership": "pnpm check:lane-ownership",
+    "laneOwnershipScoped": "node scripts/check-lane-ownership.mjs --lane <lane-id> --staged",
+    "laneOwnershipPathPreview": "node scripts/check-lane-ownership.mjs --lane <lane-id> --changed-file <path>",
     "generatedArtifacts": "pnpm check:generated-artifacts",
     "reportRetention": "pnpm check:report-retention",
     "supabaseMigrations": "pnpm check:supabase-migrations",

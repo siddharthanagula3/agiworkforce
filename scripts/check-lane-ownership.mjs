@@ -22,12 +22,50 @@ function existsForPattern(pattern) {
   return fs.existsSync(path.join(root, base));
 }
 
+function escapeRegex(value) {
+  return value.replace(/[|\\{}()[\]^$+?.]/g, '\\$&');
+}
+
+function patternToRegex(pattern) {
+  let regex = '^';
+  for (let index = 0; index < pattern.length; index += 1) {
+    const char = pattern[index];
+    const next = pattern[index + 1];
+    if (char === '*' && next === '*') {
+      regex += '.*';
+      index += 1;
+    } else if (char === '*') {
+      regex += '[^/]*';
+    } else {
+      regex += escapeRegex(char);
+    }
+  }
+  return new RegExp(`${regex}$`);
+}
+
 function matchesPattern(filePath, pattern) {
   if (pattern.endsWith('/**')) {
     const prefix = pattern.slice(0, -3);
     return filePath === prefix || filePath.startsWith(`${prefix}/`);
   }
+  if (pattern.includes('*')) {
+    return patternToRegex(pattern).test(filePath);
+  }
   return filePath === pattern;
+}
+
+function repeatedArgValues(flagName) {
+  const values = [];
+  for (let index = 0; index < process.argv.length; index += 1) {
+    const arg = process.argv[index];
+    if (arg === flagName && process.argv[index + 1]) {
+      values.push(process.argv[index + 1]);
+      index += 1;
+    } else if (arg.startsWith(`${flagName}=`)) {
+      values.push(arg.slice(flagName.length + 1));
+    }
+  }
+  return values.filter(Boolean);
 }
 
 function gitLines(args) {
@@ -107,21 +145,32 @@ if (lanesDoc) {
     } else {
       const useStaged = process.argv.includes('--staged');
       const baseArgIndex = process.argv.indexOf('--base');
+      const explicitChangedFiles = repeatedArgValues('--changed-file');
       const changedFiles =
-        baseArgIndex >= 0
-          ? gitLines(['diff', '--name-only', process.argv[baseArgIndex + 1], '--'])
-          : useStaged
-            ? gitLines(['diff', '--cached', '--name-only', '--'])
-            : gitLines(['diff', '--name-only', '--']);
+        explicitChangedFiles.length > 0
+          ? explicitChangedFiles
+          : baseArgIndex >= 0
+            ? gitLines(['diff', '--name-only', process.argv[baseArgIndex + 1], '--'])
+            : useStaged
+              ? gitLines(['diff', '--cached', '--name-only', '--'])
+              : gitLines(['diff', '--name-only', '--']);
 
       const sharedPatterns = lanesDoc.sharedFilePolicy?.paths ?? [];
       const integrationLaneIds = new Set(lanesDoc.sharedFilePolicy?.integrationLaneIds ?? []);
 
       for (const changedFile of changedFiles) {
+        const blockedPattern = (lane.blockedPaths ?? []).find((pattern) =>
+          matchesPattern(changedFile, pattern),
+        );
         const owned = (lane.ownedWritePaths ?? []).some((pattern) =>
           matchesPattern(changedFile, pattern),
         );
         const shared = sharedPatterns.some((pattern) => matchesPattern(changedFile, pattern));
+        if (blockedPattern) {
+          errors.push(
+            `lane ${laneId} changed blocked path: ${changedFile} (matched ${blockedPattern})`,
+          );
+        }
         if (!owned) {
           errors.push(`lane ${laneId} changed unowned path: ${changedFile}`);
         }

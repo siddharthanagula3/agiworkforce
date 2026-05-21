@@ -69,6 +69,7 @@ If two agents need the same path:
 ## What To Automate First
 
 - Lane validation in CI with `pnpm check:lane-ownership`.
+- Lane-scoped preflight with `node scripts/check-lane-ownership.mjs --lane <lane-id> --staged` or `--changed-file <path>` before assigning or merging an agent task.
 - Task manifests for agent-created branches.
 - GitHub issue labels that map to lane IDs.
 - PR template checks for lane ID, owned paths, shared files, and verification.

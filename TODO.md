@@ -146,6 +146,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Add machine-readable parallel-agent lane map for 15+ writer agents.
 - [x] Add shared-file collision policy for manifests, locks, root docs, CI, schemas, migrations, and native projects.
 - [x] Add `pnpm check:lane-ownership` and include it in `pnpm check:llm-operability`.
+- [x] Enforce lane `blockedPaths` and wildcard lane patterns in `pnpm check:lane-ownership`.
 - [x] Add parallel-agent PR template and playbook.
 - [x] Add autonomous feedback-to-patch software-company roadmap.
 - [x] Add Claude Code at-scale harness rollout rules for context, hooks, skills, plugins, LSP/MCP, and subagents.
