@@ -38,7 +38,7 @@ import { subscribeToDispatch, unsubscribeFromDispatch } from '@/services/dispatc
 import { startDesktopStatusPolling } from '@/services/desktopStatus';
 import { useChatStore } from '@/stores/chatStore';
 import { isAgeGateConfirmed } from '@/services/ageGate';
-import { OfflineBanner } from '@/components/edge-cases/OfflineBanner';
+import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
 import '../global.css';
 
 export default function RootLayout() {

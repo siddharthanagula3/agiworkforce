@@ -93,7 +93,7 @@ jest.mock('react-native-safe-area-context', () => {
 // Imports after mocks
 // ---------------------------------------------------------------------------
 
-import { ChatEmptyState } from '../components/chat/ChatEmptyState';
+import { ChatEmptyState } from '../src/features/chat/components/ChatEmptyState';
 import { useSettingsStore } from '../stores/settingsStore';
 
 // ---------------------------------------------------------------------------

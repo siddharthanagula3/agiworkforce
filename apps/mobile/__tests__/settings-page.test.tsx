@@ -162,7 +162,7 @@ jest.mock('../services/streaming', () => ({
   streamChat: jest.fn(),
 }));
 
-jest.mock('../components/voice/VoiceSelector', () => {
+jest.mock('../src/features/voice/components/VoiceSelector', () => {
   const { View } = require('react-native');
   const { forwardRef } = require('react');
   return {

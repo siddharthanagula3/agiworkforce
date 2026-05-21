@@ -43,7 +43,7 @@ import { useConnectionStore } from '@/stores/connectionStore';
 import { useModelStore } from '@/stores/modelStore';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useThemeColors } from '@/hooks/useTheme';
-import { VoiceSelector } from '@/components/voice/VoiceSelector';
+import { VoiceSelector } from '@/src/features/voice/components/VoiceSelector';
 
 // ---------------------------------------------------------------------------
 // Types

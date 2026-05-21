@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { ImageIcon, Camera } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { ImageWithQuestion } from '@/components/image/ImageWithQuestion';
+import { ImageWithQuestion } from '@/src/features/image/components/ImageWithQuestion';
 import { useThemeColors } from '@/hooks/useTheme';
 
 /**

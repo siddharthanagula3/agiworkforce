@@ -77,7 +77,7 @@ jest.mock('../services/streaming', () => ({
 // Imports after mocks
 // ---------------------------------------------------------------------------
 
-import { ToolAccessSelector } from '../components/chat/ToolAccessSelector';
+import { ToolAccessSelector } from '../src/features/chat/components/ToolAccessSelector';
 import { useChatStore } from '../stores/chatStore';
 
 // ---------------------------------------------------------------------------

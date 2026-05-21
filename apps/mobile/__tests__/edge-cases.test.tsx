@@ -43,16 +43,16 @@ import React from 'react';
 import { AccessibilityInfo } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
 
-import { EDGE_COPY } from '@/components/edge-cases/copy';
-import { OfflineBanner } from '@/components/edge-cases/OfflineBanner';
-import { ModelLoadingFirstRunModal } from '@/components/edge-cases/ModelLoadingFirstRunModal';
-import { StorageFullModal } from '@/components/edge-cases/StorageFullModal';
-import { ThermalThrottleModal } from '@/components/edge-cases/ThermalThrottleModal';
-import { BatteryLowModal } from '@/components/edge-cases/BatteryLowModal';
-import { ImageTooLargeModal } from '@/components/edge-cases/ImageTooLargeModal';
-import { FileTooLargeModal } from '@/components/edge-cases/FileTooLargeModal';
-import { FileUnreadableModal } from '@/components/edge-cases/FileUnreadableModal';
-import { CloudTeaseModal } from '@/components/edge-cases/CloudTeaseModal';
+import { EDGE_COPY } from '@/src/features/edge-cases/components/copy';
+import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
+import { ModelLoadingFirstRunModal } from '@/src/features/edge-cases/components/ModelLoadingFirstRunModal';
+import { StorageFullModal } from '@/src/features/edge-cases/components/StorageFullModal';
+import { ThermalThrottleModal } from '@/src/features/edge-cases/components/ThermalThrottleModal';
+import { BatteryLowModal } from '@/src/features/edge-cases/components/BatteryLowModal';
+import { ImageTooLargeModal } from '@/src/features/edge-cases/components/ImageTooLargeModal';
+import { FileTooLargeModal } from '@/src/features/edge-cases/components/FileTooLargeModal';
+import { FileUnreadableModal } from '@/src/features/edge-cases/components/FileUnreadableModal';
+import { CloudTeaseModal } from '@/src/features/edge-cases/components/CloudTeaseModal';
 
 // ---------------------------------------------------------------------------
 // 4. OfflineBanner

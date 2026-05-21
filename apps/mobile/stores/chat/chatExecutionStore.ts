@@ -7,7 +7,7 @@ import { streamChat, type StreamDelta } from '@/services/streaming';
 import { useProjectStore } from '@/stores/projectStore';
 import { retrieveMemoryContext } from '@/stores/memoryStore';
 import type { ChatMessage, MessageAttachment } from '@/types/chat';
-import type { Attachment } from '@/components/chat/AttachmentPreview';
+import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import type { UploadFileInput, UploadFileResult } from '@/services/api';
 
 /** Paywall error state captured when the API returns a tier-cap paywall response. */

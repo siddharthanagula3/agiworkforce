@@ -52,7 +52,7 @@ jest.mock('@/components/ui/separator', () => ({
   Separator: jest.fn().mockReturnValue(null),
 }));
 
-jest.mock('@/components/companion/AgentDashboard', () => ({
+jest.mock('@/src/features/companion/components/AgentDashboard', () => ({
   AgentDashboard: jest.fn().mockReturnValue(null),
 }));
 
@@ -70,16 +70,16 @@ import {
   StaleApprovalBanner,
   DisconnectedDesktopBanner,
   ReconnectingBanner,
-} from '../components/companion/StatusBanners';
+} from '../src/features/companion/components/StatusBanners';
 
 import {
   DisconnectedView,
   ConnectingView,
   ErrorView,
   SessionExpiredView,
-} from '../components/companion/ConnectionStateViews';
+} from '../src/features/companion/components/ConnectionStateViews';
 
-import { DesktopInfoCard } from '../components/companion/DesktopInfoCard';
+import { DesktopInfoCard } from '../src/features/companion/components/DesktopInfoCard';
 
 describe('StatusBanners', () => {
   it('StaleApprovalBanner renders nothing when heartbeat is fresh', () => {

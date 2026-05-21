@@ -110,7 +110,9 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Add `pnpm check:codeowners` for provisional CODEOWNERS coverage before real GitHub teams exist.
 - [x] Move the Mobile billing service into `apps/mobile/src/features/billing`.
 - [x] Move the first Desktop small-domain wave into `apps/desktop/src/features`: quick query, voice, simple mode, subscription, pricing, planning, reminders, messaging, mobile companion, teams, terminal, tools, vision, and workflows.
-- [ ] Execute Mobile domain-first moves into `apps/mobile/src/features` from `docs/plans/domain-first-reorg.md` after root/docs/package contracts are stable.
+- [x] Move Mobile component-heavy domains into `apps/mobile/src/features`: agents, auth, chat, companion, connectors, drawer, edge cases, image, integrations, messaging, model picker, onboarding, paywall, settings, sidebar, and voice.
+- [x] Move Mobile voice and messaging services/state into their feature domains and guard the old service/store paths.
+- [ ] Continue Mobile domain ownership by moving remaining feature-specific hooks/services/stores out of layer-first roots when a domain has a clear owner.
 - [ ] Execute Desktop domain-first moves into `apps/desktop/src/features` from `docs/plans/domain-first-reorg.md` after root/docs/package contracts are stable.
 
 ## Agent-Native Development Tasks

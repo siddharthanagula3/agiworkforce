@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { RecurrencePicker } from './RecurrencePicker';
-import { ModelPickerSheet } from '@/components/model-picker/ModelPickerSheet';
+import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import { getDisplayName } from '@/lib/models';
 import { colors } from '@/lib/theme';
 import type { Schedule, RecurrenceType } from '../store';

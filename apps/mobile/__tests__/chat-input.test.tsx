@@ -60,7 +60,7 @@ jest.mock('../services/supabase', () => ({
 }));
 
 // Mock sub-components to simplify testing
-jest.mock('../components/chat/ModelSelectorButton', () => {
+jest.mock('../src/features/chat/components/ModelSelectorButton', () => {
   const React = require('react');
   const { Pressable, Text } = require('react-native');
   return {
@@ -72,7 +72,7 @@ jest.mock('../components/chat/ModelSelectorButton', () => {
   };
 });
 
-jest.mock('../components/chat/AttachmentPreview', () => {
+jest.mock('../src/features/chat/components/AttachmentPreview', () => {
   const React = require('react');
   const { View } = require('react-native');
   return {
@@ -80,7 +80,7 @@ jest.mock('../components/chat/AttachmentPreview', () => {
   };
 });
 
-jest.mock('../components/chat/SendButton', () => {
+jest.mock('../src/features/chat/components/SendButton', () => {
   const React = require('react');
   const { Pressable, Text } = require('react-native');
   return {
@@ -106,7 +106,7 @@ jest.mock('../components/chat/SendButton', () => {
   };
 });
 
-jest.mock('../components/chat/CommandPalette', () => {
+jest.mock('../src/features/chat/components/CommandPalette', () => {
   const React = require('react');
   const { View } = require('react-native');
   return {
@@ -114,7 +114,7 @@ jest.mock('../components/chat/CommandPalette', () => {
   };
 });
 
-jest.mock('../components/voice/VoiceInputButton', () => {
+jest.mock('../src/features/voice/components/VoiceInputButton', () => {
   const React = require('react');
   const { Pressable, Text } = require('react-native');
   return {
@@ -126,7 +126,7 @@ jest.mock('../components/voice/VoiceInputButton', () => {
   };
 });
 
-jest.mock('../components/voice/RecordingOverlay', () => {
+jest.mock('../src/features/voice/components/RecordingOverlay', () => {
   const React = require('react');
   const { View } = require('react-native');
   return {
@@ -134,7 +134,7 @@ jest.mock('../components/voice/RecordingOverlay', () => {
   };
 });
 
-jest.mock('../services/voice', () => ({
+jest.mock('../src/features/voice/services/voice', () => ({
   isRecording: jest.fn().mockReturnValue(false),
   cancelRecording: jest.fn().mockResolvedValue(undefined),
   stopRecording: jest.fn().mockResolvedValue('mock-uri'),
@@ -175,11 +175,11 @@ jest.mock('../lib/models', () => ({
   PROVIDERS: [],
 }));
 
-jest.mock('../components/chat/AutoApproveToggle', () => ({
+jest.mock('../src/features/chat/components/AutoApproveToggle', () => ({
   AutoApproveToggle: jest.fn().mockReturnValue(null),
 }));
 
-jest.mock('../components/chat/TemporaryChatToggle', () => ({
+jest.mock('../src/features/chat/components/TemporaryChatToggle', () => ({
   TemporaryChatToggle: jest.fn().mockReturnValue(null),
 }));
 
@@ -199,7 +199,7 @@ jest.mock('../lib/constants', () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { ChatInput } from '../components/chat/ChatInput';
+import { ChatInput } from '../src/features/chat/components/ChatInput';
 
 // ---------------------------------------------------------------------------
 // Helpers

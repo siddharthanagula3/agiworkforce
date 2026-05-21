@@ -24,7 +24,7 @@ import Constants from 'expo-constants';
 import { storage } from '@/lib/mmkv';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/hooks/useTheme';
-import { FirstRunDisclosureModal } from '@/components/onboarding/FirstRunDisclosureModal';
+import { FirstRunDisclosureModal } from '@/src/features/onboarding/components/FirstRunDisclosureModal';
 import {
   composeFirstRunDisclosure,
   isDisclosureSatisfied,

@@ -1,6 +1,6 @@
 import { useWindowDimensions } from 'react-native';
 import { Drawer } from 'expo-router/drawer';
-import { DrawerContent } from '@/components/drawer/DrawerContent';
+import { DrawerContent } from '@/src/features/drawer/components/DrawerContent';
 import { useThemeColors } from '@/hooks/useTheme';
 
 /**

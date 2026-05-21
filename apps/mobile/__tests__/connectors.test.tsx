@@ -87,12 +87,12 @@ jest.mock('../components/ui/switch', () => {
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { ConnectorItem } from '../components/connectors/ConnectorItem';
+import { ConnectorItem } from '../src/features/connectors/components/ConnectorItem';
 import {
   CONNECTORS,
   CONNECTOR_CATEGORIES,
   CONNECTOR_META,
-} from '../components/connectors/connectorData';
+} from '../src/features/connectors/components/connectorData';
 
 // ---------------------------------------------------------------------------
 // Tests — ConnectorItem

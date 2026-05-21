@@ -100,7 +100,7 @@ jest.mock('../components/ui/text', () => {
 // Imports
 // ---------------------------------------------------------------------------
 
-import { PaywallBottomSheet } from '../components/chat/PaywallBottomSheet';
+import { PaywallBottomSheet } from '../src/features/chat/components/PaywallBottomSheet';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 
 // Typed reference to the mocked function

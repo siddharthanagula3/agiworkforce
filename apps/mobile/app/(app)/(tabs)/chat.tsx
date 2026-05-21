@@ -7,14 +7,14 @@ import { Plus, Menu } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
-import { ChatInput } from '@/components/chat/ChatInput';
-import { AddToChatSheet } from '@/components/chat/AddToChatSheet';
-import { ProjectSelectorBar } from '@/components/chat/ProjectSelectorBar';
-import { ModelPickerSheet } from '@/components/model-picker/ModelPickerSheet';
-import { VoiceConversationScreen } from '@/components/voice/VoiceConversationScreen';
-import { ConversationList } from '@/components/sidebar/ConversationList';
-import { SearchBar } from '@/components/sidebar/SearchBar';
-import { TagFilter } from '@/components/sidebar/TagFilter';
+import { ChatInput } from '@/src/features/chat/components/ChatInput';
+import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
+import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelectorBar';
+import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
+import { VoiceConversationScreen } from '@/src/features/voice/components/VoiceConversationScreen';
+import { ConversationList } from '@/src/features/sidebar/components/ConversationList';
+import { SearchBar } from '@/src/features/sidebar/components/SearchBar';
+import { TagFilter } from '@/src/features/sidebar/components/TagFilter';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/stores/modelStore';
@@ -35,7 +35,9 @@ export default function ChatTabScreen() {
   const modelPickerRef = useRef<BottomSheet>(null);
   const addToChatRef = useRef<BottomSheet>(null);
   const chatInputAttachRef = useRef<{
-    addAttachments: (items: import('@/components/chat/AttachmentPreview').Attachment[]) => void;
+    addAttachments: (
+      items: import('@/src/features/chat/components/AttachmentPreview').Attachment[],
+    ) => void;
   } | null>(null);
   const [voiceModeVisible, setVoiceModeVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -66,7 +68,7 @@ export default function ChatTabScreen() {
   const handleSend = useCallback(
     async (
       text: string,
-      attachments?: import('@/components/chat/AttachmentPreview').Attachment[],
+      attachments?: import('@/src/features/chat/components/AttachmentPreview').Attachment[],
     ) => {
       try {
         const title = text.length > 40 ? text.slice(0, 40).trim() + '...' : text;
@@ -110,7 +112,7 @@ export default function ChatTabScreen() {
       exif: false,
     });
     if (!result.canceled && result.assets.length > 0) {
-      const attachments: import('@/components/chat/AttachmentPreview').Attachment[] =
+      const attachments: import('@/src/features/chat/components/AttachmentPreview').Attachment[] =
         result.assets.map((asset) => ({
           id: `cam-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           uri: asset.uri,
@@ -142,7 +144,7 @@ export default function ChatTabScreen() {
       exif: false,
     });
     if (!result.canceled && result.assets.length > 0) {
-      const attachments: import('@/components/chat/AttachmentPreview').Attachment[] =
+      const attachments: import('@/src/features/chat/components/AttachmentPreview').Attachment[] =
         result.assets.map((asset) => ({
           id: `photo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           uri: asset.uri,

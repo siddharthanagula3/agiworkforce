@@ -163,7 +163,9 @@
       "ownerRole": "Mobile lead",
       "ownedWritePaths": [
         "apps/mobile/app/**",
-        "apps/mobile/components/**",
+        "apps/mobile/src/features/**",
+        "apps/mobile/src/shared/**",
+        "apps/mobile/components/ui/**",
         "apps/mobile/services/**",
         "apps/mobile/stores/**",
         "apps/mobile/storage/**",

@@ -7,7 +7,7 @@ import type BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { ModelPickerSheet } from '@/components/model-picker/ModelPickerSheet';
+import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import { useModelStore } from '@/stores/modelStore';
 import { useThemeColors } from '@/hooks/useTheme';
 import { AUTO_MODES, MODEL_LIST } from '@/lib/models';

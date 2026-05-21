@@ -461,7 +461,10 @@ import { scheduleLocalNotification } from '../services/notifications';
 
 import { getCategoryForType } from '../stores/notificationPrefsStore';
 
-import { getTimeElapsed, estimateTimeRemaining } from '../components/companion/AgentDashboard';
+import {
+  getTimeElapsed,
+  estimateTimeRemaining,
+} from '../src/features/companion/components/AgentDashboard';
 
 import { startMobileHeartbeat, logApprovalDecision, logEmergencyStop } from '../services/heartbeat';
 

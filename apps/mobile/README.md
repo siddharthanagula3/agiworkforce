@@ -26,12 +26,13 @@ Authoritative specs (read these before non-trivial changes):
 ```
 apps/mobile/
 ├── app/                          Expo Router screens (file-based routing — DO NOT restructure casually)
-├── src/features/                 Canonical feature-domain root for moved Mobile domains
-├── components/                   React components, feature-grouped (kebab-case dirs, PascalCase files)
+├── src/features/                 Canonical product-domain root for Mobile feature code
+├── src/shared/                   Cross-feature components/helpers without a single feature owner
+├── components/ui/                Shared UI primitives retained for Expo-era import compatibility
 ├── lib/                          Pure utilities — no React state, no async I/O, no platform APIs
-├── services/                     Async I/O — HTTP, native bridges, MCP, dispatch, providers
-├── stores/                       Zustand global state (one file per slice; `chat/` is the multi-slice exception)
-├── hooks/                        React hooks (cross-feature; feature-scoped hooks colocate in components/<feature>/)
+├── services/                     Remaining cross-feature async I/O; feature-owned I/O moves into src/features/<domain>/
+├── stores/                       Remaining cross-feature Zustand state; feature-owned stores move into src/features/<domain>/
+├── hooks/                        Cross-feature React hooks; feature-scoped hooks colocate in src/features/<domain>/
 ├── storage/                      SQLCipher + MMKV + sqlite-vec; SQL inlined in storage/migrations.ts
 ├── native/                       Custom Swift/Kotlin native modules (Tier 1/2/3 runtime, HealthKit, voice)
 ├── types/                        TypeScript ambient + module declarations
@@ -50,13 +51,17 @@ Tracked iOS project output lives at root `ios/`. Do not create or hand-maintain 
 
 ```
 Does it have state or render UI?
-├── Yes, React component                    → components/<feature>/
-├── Yes, global state (Zustand)             → stores/<slice>Store.ts
+├── Yes, domain-owned React component       → src/features/<domain>/components/
+├── Yes, shared UI primitive                → components/ui/
+├── Yes, cross-feature shared component     → src/shared/components/
+├── Yes, feature-owned state                → src/features/<domain>/store.ts
+├── Yes, cross-feature global state         → stores/<slice>Store.ts
 ├── Yes, React hook (cross-feature)         → hooks/use<X>.ts
-├── Yes, React hook (single feature)        → components/<feature>/use<X>.ts
+├── Yes, React hook (single feature)        → src/features/<domain>/hooks/use<X>.ts
 └── No, pure logic
     ├── Pure function / type guard / format → lib/<x>.ts
-    ├── Async I/O wrapper (fetch, RN bridge, MCP, Supabase) → services/<x>.ts
+    ├── Feature-owned async I/O             → src/features/<domain>/service.ts
+    ├── Cross-feature async I/O             → services/<x>.ts
     └── Database / cache / persistence      → storage/<x>.ts
 ```
 
@@ -133,8 +138,8 @@ EAS signing runbook: `scripts/release/EAS_SIGNING_RUNBOOK.md`.
 - **Permissions** (camera/mic/photos/calendar/HealthKit) are declared in `app.config.js` -> `ios.infoPlist` and `android.permissions`. Edit Expo config first; root `ios/agiworkforce/Info.plist` is the tracked Xcode-consumed copy.
 - **NativeWind v4** is the styling layer; `global.css` + `tailwind.config.js` are its inputs. Don't import the React Native `StyleSheet` API for new components — use Tailwind classes.
 
-## Known caveats (2026-05-18)
+## Known caveats (2026-05-21)
 
-- `pnpm --filter @agiworkforce/mobile typecheck` has 5 pre-existing errors (ModeSwitchModal, @agiworkforce/compliance package not yet wired into mobile, `/legal/article-50` route typing, detox dep). Tracked in `/docs/archive/2026-05-18-exploration-report.md`.
-- `stores/chat/` is the only subdirectory inside `stores/` — chat needed 3 stores split by concern (execution, message, view); other features use a single file.
+- `pnpm --filter @agiworkforce/mobile typecheck` is expected to pass after the feature-domain move.
+- `stores/chat/` is the only subdirectory inside `stores/` — chat needed 3 stores split by concern (execution, message, view); remaining layer-first stores should migrate only when a feature owner is clear.
 - `dist/`, `.expo/`, `.cache/` are build output (gitignored).

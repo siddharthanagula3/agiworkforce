@@ -18,17 +18,17 @@ import { MoreHorizontal, WifiOff, SquarePen, Menu, Cpu } from 'lucide-react-nati
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
-import { MessageList } from '@/components/chat/MessageList';
-import { Composer } from '@/components/Composer/Composer';
-import { QuotedReplyBar } from '@/components/chat/QuotedReplyBar';
-import { ModeSwitchModal, type AppMode } from '@/components/chat/ModeSwitchModal';
-import { AddToChatSheet } from '@/components/chat/AddToChatSheet';
-import { ConversationExportSheet } from '@/components/chat/ConversationExportSheet';
-import { ThinkingBottomSheet } from '@/components/chat/ThinkingBottomSheet';
-import { PaywallBottomSheet } from '@/components/chat/PaywallBottomSheet';
-import { ModelPickerSheet } from '@/components/model-picker/ModelPickerSheet';
-import { VoiceConversationScreen } from '@/components/voice/VoiceConversationScreen';
-import { ModeToggle } from '@/components/chat/ModeToggle';
+import { MessageList } from '@/src/features/chat/components/MessageList';
+import { Composer } from '@/src/features/chat/components/Composer/Composer';
+import { QuotedReplyBar } from '@/src/features/chat/components/QuotedReplyBar';
+import { ModeSwitchModal, type AppMode } from '@/src/features/chat/components/ModeSwitchModal';
+import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
+import { ConversationExportSheet } from '@/src/features/chat/components/ConversationExportSheet';
+import { ThinkingBottomSheet } from '@/src/features/chat/components/ThinkingBottomSheet';
+import { PaywallBottomSheet } from '@/src/features/chat/components/PaywallBottomSheet';
+import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
+import { VoiceConversationScreen } from '@/src/features/voice/components/VoiceConversationScreen';
+import { ModeToggle } from '@/src/features/chat/components/ModeToggle';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/stores/modelStore';
@@ -57,7 +57,9 @@ export default function ChatScreen() {
   const exportSheetRef = useRef<BottomSheet>(null);
   const addToChatRef = useRef<BottomSheet>(null);
   const chatInputAttachRef = useRef<{
-    addAttachments: (items: import('@/components/chat/AttachmentPreview').Attachment[]) => void;
+    addAttachments: (
+      items: import('@/src/features/chat/components/AttachmentPreview').Attachment[],
+    ) => void;
   } | null>(null);
   const [quotedMessage, setQuotedMessage] = useState<ChatMessage | null>(null);
   const [thinkingSheetIndex, setThinkingSheetIndex] = useState(-1);
@@ -150,7 +152,10 @@ export default function ChatScreen() {
   }, [paywallError]);
 
   const handleSend = useCallback(
-    (text: string, attachments?: import('@/components/chat/AttachmentPreview').Attachment[]) => {
+    (
+      text: string,
+      attachments?: import('@/src/features/chat/components/AttachmentPreview').Attachment[],
+    ) => {
       if (!id) return;
       stopSpeaking?.();
 
@@ -280,7 +285,7 @@ export default function ChatScreen() {
       exif: false,
     });
     if (!result.canceled && result.assets.length > 0) {
-      const attachments: import('@/components/chat/AttachmentPreview').Attachment[] =
+      const attachments: import('@/src/features/chat/components/AttachmentPreview').Attachment[] =
         result.assets.map((asset) => ({
           id: `cam-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           uri: asset.uri,
@@ -312,7 +317,7 @@ export default function ChatScreen() {
       exif: false,
     });
     if (!result.canceled && result.assets.length > 0) {
-      const attachments: import('@/components/chat/AttachmentPreview').Attachment[] =
+      const attachments: import('@/src/features/chat/components/AttachmentPreview').Attachment[] =
         result.assets.map((asset) => ({
           id: `photo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           uri: asset.uri,
@@ -339,7 +344,7 @@ export default function ChatScreen() {
         copyToCacheDirectory: true,
       });
       if (!result.canceled && result.assets.length > 0) {
-        const attachments: import('@/components/chat/AttachmentPreview').Attachment[] =
+        const attachments: import('@/src/features/chat/components/AttachmentPreview').Attachment[] =
           result.assets.map((asset) => ({
             id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             uri: asset.uri,

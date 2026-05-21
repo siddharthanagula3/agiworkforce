@@ -100,7 +100,7 @@ jest.mock('../services/healthData', () => ({
 // Mock the sub-sheet components imported by AddToChatSheet via relative paths.
 // The component uses `import { StyleSelector } from './StyleSelector'` which
 // resolves to `components/chat/StyleSelector` — we mock that path.
-jest.mock('../components/chat/StyleSelector', () => {
+jest.mock('../src/features/chat/components/StyleSelector', () => {
   const React = require('react');
   const { View } = require('react-native');
   return {
@@ -110,7 +110,7 @@ jest.mock('../components/chat/StyleSelector', () => {
   };
 });
 
-jest.mock('../components/chat/ToolAccessSelector', () => {
+jest.mock('../src/features/chat/components/ToolAccessSelector', () => {
   const React = require('react');
   const { View } = require('react-native');
   return {
@@ -124,7 +124,7 @@ jest.mock('../components/chat/ToolAccessSelector', () => {
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { AddToChatSheet } from '../components/chat/AddToChatSheet';
+import { AddToChatSheet } from '../src/features/chat/components/AddToChatSheet';
 import { useChatStore } from '../stores/chatStore';
 import { useProjectStore } from '../stores/projectStore';
 

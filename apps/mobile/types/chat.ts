@@ -117,7 +117,7 @@ export interface ChatMessage extends Omit<CanonicalChatMessage, 'attachments'> {
   /** On-device performance — first-token latency in milliseconds */
   firstTokenLatencyMs?: number;
   /** Runtime tier: 'Tier 1' | 'Tier 2' | 'Tier 3' */
-  runtimeTier?: import('@/components/chat/PerformanceChip').RuntimeTier;
+  runtimeTier?: import('@/src/features/chat/components/PerformanceChip').RuntimeTier;
 }
 
 export interface ConversationSummary {

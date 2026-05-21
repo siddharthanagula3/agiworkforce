@@ -40,11 +40,11 @@ import {
   requestHealthPermission,
   type HealthPermissionStatus,
 } from '@/services/healthData';
-import { PlatformCard } from '@/components/integrations/PlatformCard';
-import { DeviceIntegrationStatus } from '@/components/integrations/DeviceIntegrationStatus';
+import { PlatformCard } from '@/src/features/integrations/components/PlatformCard';
+import { DeviceIntegrationStatus } from '@/src/features/integrations/components/DeviceIntegrationStatus';
 import { useIntegrationStore } from '@/stores/integrationStore';
-import { PlatformSetupSheet } from '@/components/messaging/PlatformSetupSheet';
-import type { MessagingPlatform } from '@/stores/messagingStore';
+import { PlatformSetupSheet } from '@/src/features/messaging/components/PlatformSetupSheet';
+import type { MessagingPlatform } from '@/src/features/messaging/store';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
 // ---------------------------------------------------------------------------

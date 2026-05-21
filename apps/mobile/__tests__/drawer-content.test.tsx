@@ -84,7 +84,7 @@ jest.mock('lucide-react-native', () => ({
 
 jest.mock('@react-navigation/drawer', () => ({}));
 
-jest.mock('../components/shared/DesktopCompanionWidget', () => ({
+jest.mock('../src/shared/components/DesktopCompanionWidget', () => ({
   DesktopCompanionWidget: jest.fn().mockReturnValue(null),
 }));
 
@@ -92,7 +92,7 @@ jest.mock('../components/shared/DesktopCompanionWidget', () => ({
 // Import modules under test AFTER mocks
 // ---------------------------------------------------------------------------
 
-import { DrawerContent } from '../components/drawer/DrawerContent';
+import { DrawerContent } from '../src/features/drawer/components/DrawerContent';
 import { useChatStore } from '../stores/chatStore';
 import { useAuthStore } from '../stores/authStore';
 import { FEATURES } from '../lib/v1FeatureFlags';

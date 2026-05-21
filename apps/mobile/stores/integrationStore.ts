@@ -14,7 +14,10 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
-import { connectMessagingPlatform, disconnectMessagingPlatform } from '@/services/messaging';
+import {
+  connectMessagingPlatform,
+  disconnectMessagingPlatform,
+} from '@/src/features/messaging/service';
 import {
   getCalendarPermissionStatus,
   getContactsPermissionStatus,
@@ -27,7 +30,7 @@ import {
 } from '@/services/healthData';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import type { MessagingPlatformId } from '@/components/integrations/PlatformCard';
+import type { MessagingPlatformId } from '@/src/features/integrations/components/PlatformCard';
 
 // ---------------------------------------------------------------------------
 // Platform integration types

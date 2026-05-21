@@ -1,8 +1,8 @@
 import { View, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
-import { LoginForm } from '@/components/auth/LoginForm';
-import { OAuthButtons } from '@/components/auth/OAuthButtons';
+import { LoginForm } from '@/src/features/auth/components/LoginForm';
+import { OAuthButtons } from '@/src/features/auth/components/OAuthButtons';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
 export default function LoginScreen() {

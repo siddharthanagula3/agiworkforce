@@ -15,13 +15,13 @@ import { ArrowLeft, Link2 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/hooks/useTheme';
 import { useIntegrationStore } from '@/stores/integrationStore';
-import { ConnectorItem } from '@/components/connectors/ConnectorItem';
+import { ConnectorItem } from '@/src/features/connectors/components/ConnectorItem';
 import {
   CONNECTORS,
   CONNECTOR_CATEGORIES,
   type Connector,
   type ConnectorCategory,
-} from '@/components/connectors/connectorData';
+} from '@/src/features/connectors/components/connectorData';
 
 // ---------------------------------------------------------------------------
 // Section type for SectionList

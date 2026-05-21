@@ -26,13 +26,13 @@ import { X, MicOff, Mic, Volume2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
-import { Waveform } from '@/components/voice/Waveform';
-import { PerformanceChip } from '@/components/chat/PerformanceChip';
+import { Waveform } from '@/src/features/voice/components/Waveform';
+import { PerformanceChip } from '@/src/features/chat/components/PerformanceChip';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/stores/modelStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import * as VoiceInput from '@/services/voiceInput';
-import * as VoiceOutput from '@/services/voiceOutput';
+import * as VoiceInput from '@/src/features/voice/services/voiceInput';
+import * as VoiceOutput from '@/src/features/voice/services/voiceOutput';
 import { colors } from '@/lib/theme';
 import { getDisplayName } from '@/lib/models';
 

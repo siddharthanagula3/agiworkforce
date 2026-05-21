@@ -4,25 +4,25 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, RefreshCw, HelpCircle } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { QRScanner } from '@/components/companion/QRScanner';
-import { PairingStatus } from '@/components/companion/PairingStatus';
+import { QRScanner } from '@/src/features/companion/components/QRScanner';
+import { PairingStatus } from '@/src/features/companion/components/PairingStatus';
 import {
   CompanionDemoWalkthrough,
   useDemoStore,
-} from '@/components/companion/CompanionDemoWalkthrough';
+} from '@/src/features/companion/components/CompanionDemoWalkthrough';
 import {
   StaleApprovalBanner,
   DisconnectedDesktopBanner,
   ReconnectingBanner,
-} from '@/components/companion/StatusBanners';
+} from '@/src/features/companion/components/StatusBanners';
 import {
   DisconnectedView,
   ConnectingView,
   ErrorView,
   SessionExpiredView,
-} from '@/components/companion/ConnectionStateViews';
-import { DesktopInfoCard } from '@/components/companion/DesktopInfoCard';
-import { ApprovalModal, useApprovalModal } from '@/components/shared/ApprovalModal';
+} from '@/src/features/companion/components/ConnectionStateViews';
+import { DesktopInfoCard } from '@/src/features/companion/components/DesktopInfoCard';
+import { ApprovalModal, useApprovalModal } from '@/src/shared/components/ApprovalModal';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useAgentStore } from '@/stores/agentStore';
 import {

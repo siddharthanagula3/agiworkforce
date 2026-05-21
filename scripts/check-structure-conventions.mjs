@@ -138,7 +138,7 @@ const activeReferencePaths = [
   'apps/web/app/api/me/route.ts',
   'apps/desktop/src-tauri/src/sys/commands/migration.rs',
   'apps/extension/THREAT_MODEL.md',
-  'apps/mobile/components/onboarding/ByokConsentModal.tsx',
+  'apps/mobile/src/features/onboarding/components/ByokConsentModal.tsx',
 ].filter((file, index, all) => exists(file) && all.indexOf(file) === index);
 
 for (const file of activeReferencePaths) {
@@ -155,7 +155,26 @@ for (const file of activeReferencePaths) {
   }
 }
 
-for (const retiredMobileWaitlistPath of [
+const retiredMobileFeaturePaths = [
+  'apps/mobile/components/agents',
+  'apps/mobile/components/auth',
+  'apps/mobile/components/chat',
+  'apps/mobile/components/Composer',
+  'apps/mobile/components/companion',
+  'apps/mobile/components/connectors',
+  'apps/mobile/components/drawer',
+  'apps/mobile/components/edge-cases',
+  'apps/mobile/components/image',
+  'apps/mobile/components/integrations',
+  'apps/mobile/components/messaging',
+  'apps/mobile/components/model-picker',
+  'apps/mobile/components/onboarding',
+  'apps/mobile/components/Paywall',
+  'apps/mobile/components/paywall',
+  'apps/mobile/components/settings',
+  'apps/mobile/components/shared',
+  'apps/mobile/components/sidebar',
+  'apps/mobile/components/voice',
   'apps/mobile/components/waitlist/CloudWaitlistSheet.tsx',
   'apps/mobile/services/waitlist.ts',
   'apps/mobile/stores/waitlistStore.ts',
@@ -169,9 +188,25 @@ for (const retiredMobileWaitlistPath of [
   'apps/mobile/components/schedules/ScheduleRunHistory.tsx',
   'apps/mobile/services/schedules.ts',
   'apps/mobile/stores/scheduleStore.ts',
-]) {
-  if (exists(retiredMobileWaitlistPath)) {
-    errors.push(`Retired Mobile feature path must stay removed: ${retiredMobileWaitlistPath}`);
+  'apps/mobile/services/messaging.ts',
+  'apps/mobile/services/tts.ts',
+  'apps/mobile/services/voice.ts',
+  'apps/mobile/services/voiceInput.ts',
+  'apps/mobile/services/voiceOutput.ts',
+  'apps/mobile/stores/messagingStore.ts',
+];
+
+for (const retiredMobileFeaturePath of retiredMobileFeaturePaths) {
+  if (!exists(retiredMobileFeaturePath)) continue;
+
+  const absoluteRetiredPath = path.join(root, retiredMobileFeaturePath);
+  if (fs.statSync(absoluteRetiredPath).isFile()) {
+    errors.push(`Retired Mobile feature path must stay removed: ${retiredMobileFeaturePath}`);
+    continue;
+  }
+
+  for (const file of walk(retiredMobileFeaturePath)) {
+    errors.push(`Retired Mobile feature path must stay removed: ${file}`);
   }
 }
 
@@ -184,7 +219,45 @@ for (const file of walk('apps/web/features')) {
   }
 }
 
-const mobileWaitlistForbiddenImports = [
+const mobileFeatureForbiddenImports = [
+  '@/components/agents/',
+  '@/components/auth/',
+  '@/components/chat/',
+  '@/components/Composer/',
+  '@/components/companion/',
+  '@/components/connectors/',
+  '@/components/drawer/',
+  '@/components/edge-cases/',
+  '@/components/image/',
+  '@/components/integrations/',
+  '@/components/messaging/',
+  '@/components/model-picker/',
+  '@/components/onboarding/',
+  '@/components/Paywall/',
+  '@/components/paywall/',
+  '@/components/settings/',
+  '@/components/shared/',
+  '@/components/sidebar/',
+  '@/components/voice/',
+  '../components/agents/',
+  '../components/auth/',
+  '../components/chat/',
+  '../components/Composer/',
+  '../components/companion/',
+  '../components/connectors/',
+  '../components/drawer/',
+  '../components/edge-cases/',
+  '../components/image/',
+  '../components/integrations/',
+  '../components/messaging/',
+  '../components/model-picker/',
+  '../components/onboarding/',
+  '../components/Paywall/',
+  '../components/paywall/',
+  '../components/settings/',
+  '../components/shared/',
+  '../components/sidebar/',
+  '../components/voice/',
   '@/components/waitlist/CloudWaitlistSheet',
   '@/services/waitlist',
   '@/stores/waitlistStore',
@@ -205,6 +278,18 @@ const mobileWaitlistForbiddenImports = [
   '@/stores/scheduleStore',
   '../services/schedules',
   '../stores/scheduleStore',
+  '@/services/messaging',
+  '@/services/tts',
+  '@/services/voice',
+  '@/services/voiceInput',
+  '@/services/voiceOutput',
+  '@/stores/messagingStore',
+  '../services/messaging',
+  '../services/tts',
+  '../services/voice',
+  '../services/voiceInput',
+  '../services/voiceOutput',
+  '../stores/messagingStore',
 ];
 
 const retiredDesktopFeatureShimPaths = [
@@ -375,9 +460,9 @@ for (const file of workspaceFilterFiles) {
 for (const file of walk('apps/mobile')) {
   if (!/\.(ts|tsx)$/.test(file)) continue;
   const body = readText(file);
-  for (const marker of mobileWaitlistForbiddenImports) {
+  for (const marker of mobileFeatureForbiddenImports) {
     if (body.includes(marker)) {
-      errors.push(`${file} imports retired Mobile waitlist path: ${marker}`);
+      errors.push(`${file} imports retired Mobile feature path: ${marker}`);
     }
   }
 }
@@ -403,6 +488,9 @@ requireIncludes(
   'apps/mobile/src/features/schedules',
 );
 requireIncludes('apps/mobile/src/features/schedules/index.ts', 'public API barrel');
+requireIncludes('apps/mobile/components/README.md', 'retained only for shared UI primitives');
+requireIncludes('apps/mobile/src/features/voice/README.md', 'Cloud STT/TTS calls');
+requireIncludes('apps/mobile/src/features/messaging/README.md', 'store.ts');
 requireIncludes('docs/engineering/naming-conventions.md', 'Primary CLI command: `agi`.');
 requireIncludes(
   'docs/engineering/naming-conventions.md',

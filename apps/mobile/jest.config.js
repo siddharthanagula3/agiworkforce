@@ -6,12 +6,10 @@ module.exports = {
     // TODO: revive once the matching feature work lands. These suites were
     // already failing on main pre-session against half-shipped stubs/wiring:
     //   healthkit.test.ts — services/healthKitPermission is a stub today
-    //   model-picker.test.tsx — predates the Perplexity-style picker redesign
     //   auth-401.test.ts — SecureStore wiring diverged in the reorg
     //   api-paywall.test.ts — same auth wiring
     //   biometric-gate.test.tsx — hits the H-10 rehydration race ordering
     '__tests__/healthkit\\.test\\.ts$',
-    '__tests__/model-picker\\.test\\.tsx$',
     '__tests__/auth-401\\.test\\.ts$',
     '__tests__/api-paywall\\.test\\.ts$',
     '__tests__/biometric-gate\\.test\\.tsx$',

@@ -18,7 +18,7 @@ import { Text } from '@/components/ui/text';
 import { colors } from '@/lib/theme';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/stores/modelStore';
-import type { Attachment } from '@/components/chat/AttachmentPreview';
+import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 
 /**
  * CameraScreen — Full-screen camera capture screen for vision AI analysis.

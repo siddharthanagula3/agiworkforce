@@ -15,7 +15,7 @@ import { useChatViewStore } from './chat/chatViewStore';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
 import type { ChatMode, ChatStyle, ToolAccess, ChatFeatures } from './chat/chatViewStore';
 import type { PaywallErrorState } from './chat/chatExecutionStore';
-import type { Attachment } from '@/components/chat/AttachmentPreview';
+import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 
 /** Combined state shape — mirrors the original useChatStore state interface. */
 export interface CombinedChatState {

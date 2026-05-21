@@ -1,5 +1,5 @@
 ---
-status: ACTIVE - Web complete, Mobile domain moves in progress
+status: ACTIVE - Web complete, Mobile component-domain wave complete, Desktop large domains pending
 owner: team-lead
 last-updated: 2026-05-21
 phase: D (Architecture cleanup, post-launch backlog)
@@ -18,9 +18,7 @@ The stale `apps/web/src/features` split has been removed, and
 `pnpm check:structure-conventions` prevents new Web product-domain files from
 being added under `apps/web/src/features`.
 
-Mobile and Desktop domain-first moves remain pending and should be handled one
-domain at a time with surface typecheck coverage. Mobile and Desktop use
-`src/features`; Web uses root `features`.
+Mobile and Desktop use `src/features`; Web uses root `features`.
 
 The Mobile waitlist pilot is complete: app/tests import from
 `apps/mobile/src/features/waitlist`, and the old temporary waitlist barrels have
@@ -29,6 +27,14 @@ been removed.
 The Mobile projects, billing, and schedules domains have moved: `ProjectCard`,
 `UpsellCard`, the billing portal service, and the schedule components/API/store
 now live under `apps/mobile/src/features`.
+
+The Mobile component-heavy domain wave is complete: agents, auth, chat,
+companion, connectors, drawer, edge cases, image, integrations, messaging,
+model picker, onboarding, paywall, settings, sidebar, and voice UI now live
+under `apps/mobile/src/features`. Voice STT/TTS services and messaging
+service/state also moved into their owning feature domains. The only remaining
+legacy `apps/mobile/components` code is the documented `components/ui`
+primitive layer.
 
 The Desktop small-domain wave has moved quick query, voice, simple mode,
 subscription, pricing, planning, reminders, messaging, mobile companion, teams,
