@@ -319,6 +319,7 @@ Tasks:
 - Add provider smoke test before saving key config.
 - Add Local -> BYOK fork UI on Desktop/Mobile/Web.
 - Add secret scan and payload preview before any Local -> BYOK handoff.
+- Local -> BYOK forks must store the accepted redacted preview payload and hash evidence only; they must not clone original Local messages into the BYOK conversation.
 
 ### 3A. Chat Sync Boundary
 
@@ -479,6 +480,7 @@ Tasks:
 - Carry Local/BYOK/Managed mode through Desktop, Mobile, Web, VS Code, Chrome.
 - Add visible labels and route previews.
 - Make Local -> BYOK an explicit fork everywhere.
+- Ensure Local -> BYOK forks are preview-only transfers, not hidden full-thread copies.
 - Implement Web/Mobile/Desktop-only chat sync.
 - Keep CLI/VS Code/Chrome out of global chat sync unless explicit handoff is implemented.
 - Define provider modes and SDK boundaries so Local/BYOK/Managed cannot route through an unintended SDK or gateway.

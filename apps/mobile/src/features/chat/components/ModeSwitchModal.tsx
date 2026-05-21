@@ -20,7 +20,7 @@ export interface ModeSwitchModalProps {
   currentMode?: AppMode;
   sourceSessionId?: string;
   contextItems?: HandoffPreviewContextItem[];
-  onConfirm?: () => void;
+  onConfirm?: (preview?: LocalToByokHandoffPreview | null) => void;
   onCancel?: () => void;
   onSelectMode?: (mode: AppMode) => void;
   onClose?: () => void;
@@ -110,7 +110,7 @@ export function ModeSwitchModal({
     if (requiresHandoffPreview && (isBuildingPreview || previewError || hasBlockingFindings)) {
       return;
     }
-    onConfirm?.();
+    onConfirm?.(preview);
     onClose?.();
   };
 

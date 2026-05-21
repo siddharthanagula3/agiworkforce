@@ -221,6 +221,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Add Local -> BYOK fork flow on Mobile.
   - [x] Replace placeholder Mobile mode-switch modal with shared secret-scan and payload-preview gate.
   - [x] Persist the confirmed Mobile handoff as a new forked conversation instead of only changing the active model.
+  - [x] Prevent Mobile Local -> BYOK forks from cloning original Local messages; the fork stores only the accepted redacted preview payload with hash evidence.
 - [x] Add Local -> BYOK fork flow on Web.
 - [x] Add payload preview and secret scan UI before BYOK handoff.
   - [x] Add shared Local -> BYOK draft builder with redacted payload preview, findings, checksums, and preview hash evidence.

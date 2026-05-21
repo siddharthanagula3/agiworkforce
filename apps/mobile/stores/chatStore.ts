@@ -13,6 +13,7 @@ import { useChatMessageStore } from './chat/chatMessageStore';
 import { useChatExecutionStore } from './chat/chatExecutionStore';
 import { useChatViewStore } from './chat/chatViewStore';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
+import type { ForkConversationOptions } from './chat/chatMessageStore';
 import type { ChatMode, ChatStyle, ToolAccess, ChatFeatures } from './chat/chatViewStore';
 import type { PaywallErrorState } from './chat/chatExecutionStore';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
@@ -49,7 +50,7 @@ export interface CombinedChatState {
   createConversation: (title?: string, projectId?: string) => Promise<string>;
   forkConversation: (
     sourceConversationId: string,
-    options?: { title?: string; model?: string },
+    options?: ForkConversationOptions,
   ) => Promise<string>;
   deleteConversation: (id: string) => Promise<void>;
   loadMessages: (conversationId: string) => Promise<void>;
