@@ -24,7 +24,7 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatPrivacyModeLabel } from '@agiworkforce/types';
+import { formatChatExecutionModeLabel, formatPrivacyModeLabel } from '@agiworkforce/types';
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
@@ -74,6 +74,7 @@ import { invoke, isTauri } from '../../lib/tauri-mock';
 import { useBillingUsageStore, selectBudgetPercentage } from '../../stores/billingUsage';
 import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
 import { useAppModeStore, selectMode } from '../../stores/appModeStore';
+import { openExternalUrl } from '../../utils/navigation';
 
 interface SidebarProps {
   className?: string;
@@ -938,8 +939,8 @@ export function Sidebar({
           <div
             title={
               mode === 'local'
-                ? `${formatPrivacyModeLabel('local')} mode`
-                : `${formatPrivacyModeLabel('managed')} mode`
+                ? formatChatExecutionModeLabel('local_only')
+                : formatChatExecutionModeLabel('cloud_managed')
             }
             className={cn(
               'w-2 h-2 rounded-full',
@@ -1390,11 +1391,17 @@ export function Sidebar({
             {!collapsed && isTauri && (
               <button
                 type="button"
-                onClick={() => setMode(mode === 'local' ? 'cloud' : 'local')}
+                onClick={() => {
+                  if (mode === 'local') {
+                    void openExternalUrl('https://agiworkforce.com/waitlist');
+                    return;
+                  }
+                  setMode('local');
+                }}
                 title={
                   mode === 'local'
-                    ? `Switch to ${formatPrivacyModeLabel('managed')} mode`
-                    : `Switch to ${formatPrivacyModeLabel('local')} mode`
+                    ? 'Join Cloud Managed waitlist'
+                    : `Switch to ${formatChatExecutionModeLabel('local_only')}`
                 }
                 className={cn(
                   'px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider shrink-0 transition-colors cursor-pointer',
@@ -1404,8 +1411,8 @@ export function Sidebar({
                 )}
               >
                 {mode === 'local'
-                  ? formatPrivacyModeLabel('local')
-                  : formatPrivacyModeLabel('managed')}
+                  ? formatChatExecutionModeLabel('local_only')
+                  : formatChatExecutionModeLabel('cloud_managed')}
               </button>
             )}
             {!collapsed && <NotificationCenter className="shrink-0" />}

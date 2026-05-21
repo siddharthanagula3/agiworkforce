@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Pressable } from 'react-native';
 import { Zap, Check, X } from 'lucide-react-native';
-import { formatPrivacyModeLabel } from '@agiworkforce/types';
+import { formatChatExecutionModeLabel } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { storage } from '@/lib/mmkv';
@@ -19,7 +19,7 @@ const MMKV_DISMISS_KEY = 'tier_upsell_dismissed_at';
 const DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 const FEATURE_BULLETS: string[] = [
-  `${formatPrivacyModeLabel('managed')} cloud — no API keys required`,
+  `${formatChatExecutionModeLabel('cloud_managed')} — no API keys required`,
   'Access to basic cloud models',
   'Limited monthly credits included',
   'Shared chats and cross-device sync',

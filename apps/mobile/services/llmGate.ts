@@ -6,9 +6,11 @@
  * HTTP request. On Article50DisclosureRequiredError, route the user back to
  * the onboarding disclosure screen.
  *
- * Mobile has three product modes: Local Only, BYOK, and Cloud Managed. This
- * wrapper is only for outbound provider/API requests after a mode-specific
- * gate allows them. Local-only requests should never reach this path.
+ * Mobile has three product modes: Local Mode + Local LLMs, future lightweight
+ * Local Mode + BYOK after secure device key storage ships, and Cloud Managed.
+ * This wrapper is only for outbound provider/API requests after a
+ * mode-specific gate allows them. Local-LLM requests and heavy
+ * generated-file/browser/code environments should never reach this path.
  */
 
 import {

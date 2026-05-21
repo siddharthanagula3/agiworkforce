@@ -124,7 +124,7 @@ The CLI now has the first enforceable parity foundation:
 - `/privacy-mode` and `/continue-with-byok` for explicit trust-boundary changes.
 - Shared suite chat execution contracts now define `ChatExecutionMode`, `ChatIntent`, connector status snapshots, permission decisions, and compact tool events for all six surfaces.
 - VS Code sidebar model switching now has a host-backed inline popover instead of a broken pill click path.
-- Mobile remote chat now fails closed while v1 is Local Only, including attachment upload avoidance and a typed error path before BYOK/Cloud Managed are enabled.
+- Mobile remote chat now fails closed while v1 is Local Mode + Local LLMs, including attachment upload avoidance and a typed error path until secure Mobile BYOK key storage or Cloud Managed access is enabled.
 
 This is not enough to claim Claude Code parity. It is the foundation.
 

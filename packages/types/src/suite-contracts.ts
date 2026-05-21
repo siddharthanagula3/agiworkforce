@@ -124,18 +124,19 @@ export const PROVIDER_MODE_DISPLAY = {
 
 export const CHAT_EXECUTION_MODE_DISPLAY = {
   local_only: {
-    label: 'Local Only',
-    shortLabel: 'Local',
+    label: 'Local Mode + Local LLMs',
+    shortLabel: 'Local LLMs',
     privacyMode: 'local',
     defaultProviderMode: 'Local',
-    description: 'Runs locally and must not call AGI managed cloud or direct BYOK providers.',
+    description:
+      'Runs local or on-device models and must not call AGI managed cloud or direct BYOK providers.',
   },
   byok: {
-    label: 'BYOK',
-    shortLabel: 'BYOK',
+    label: 'Local Mode + BYOK',
+    shortLabel: 'Local + BYOK',
     privacyMode: 'byok',
     defaultProviderMode: 'DirectByok',
-    description: 'Uses user-owned provider keys and sends requests directly to that provider.',
+    description: 'Keeps the app local while requests go directly to the user-owned provider key.',
   },
   cloud_managed: {
     label: 'Cloud Managed',

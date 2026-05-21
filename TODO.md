@@ -48,7 +48,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Convert Desktop inline web search output to compact Claude-style favicon/title/domain result rows while preserving citations.
 - [x] Add shared `ChatExecutionMode`, `ChatIntent`, connector status, permission decision, and suite tool-event contracts.
 - [x] Fix the VS Code sidebar model picker so the pill opens a real inline model popover backed by extension-host model data.
-- [x] Add Mobile v1 remote-chat guard so Local Only mode cannot silently upload attachments or stream through remote BYOK/managed APIs.
+- [x] Add Mobile v1 remote-chat guard so Local Mode + Local LLMs cannot silently upload attachments or stream through remote BYOK/managed APIs.
 
 ## Exploration Tasks
 
@@ -258,7 +258,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Replace desktop hook stats placeholder with real stats or visible unsupported state.
 - [x] Replace VS Code managed-plan usage stub with real usage-source reporting.
 - [x] Fix VS Code sidebar inline model picker crash and add webview regression coverage.
-- [x] Fail Mobile remote chat closed while v1 Local Only flags are active.
+- [x] Fail Mobile remote chat closed while v1 Local Mode + Local LLM flags are active.
 - [x] Finish Chrome native host installer automation, including Windows.
 - [x] Fix docs drift found by surface audit: CLI MCP transports, desktop onboarding paths, outdated HMAC comments.
 

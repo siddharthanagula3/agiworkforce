@@ -1,19 +1,21 @@
 /**
  * Onboarding Wizard — single-step mode selection flow
  *
- * One screen: Cloud vs Local/BYOK mode selection with inline API key paste
- * and Ollama auto-detection. Replaces the previous 6-step wizard.
+ * One screen: Cloud Managed waitlist vs Local Mode + Local LLMs/BYOK setup
+ * with inline API key paste and Ollama auto-detection. Replaces the previous
+ * 6-step wizard.
  *
  * Persisted via useSimpleModeStore (onboardingCompleted flag in ui.ts).
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { Cloud, HardDrive, X, CheckCircle2, ChevronRight, Key } from 'lucide-react';
-import { formatPrivacyModeLabel } from '@agiworkforce/types';
+import { formatChatExecutionModeLabel } from '@agiworkforce/types';
 import { useSimpleModeStore } from '../../stores/ui';
 import { useAppModeStore } from '../../stores/appModeStore';
 import { invoke } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
 import { OllamaClient } from '../../api/ollama';
+import { openExternalUrl } from '../../utils/navigation';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -118,12 +120,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
     onComplete();
   }, [completeOnboarding, setHasSelectedMode, onComplete]);
 
-  const handleCloud = useCallback(() => {
-    setMode('cloud');
-    completeOnboarding();
-    setHasSelectedMode(true);
-    onComplete();
-  }, [setMode, completeOnboarding, setHasSelectedMode, onComplete]);
+  const handleCloudWaitlist = useCallback(() => {
+    void openExternalUrl('https://agiworkforce.com/waitlist');
+  }, []);
 
   const handleLocal = useCallback(() => {
     setMode('local');
@@ -185,34 +184,35 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
 
           {/* Mode cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-            {/* Managed card */}
+            {/* Cloud Managed waitlist card */}
             <div className="flex flex-col items-start gap-3 rounded-xl border border-white/10 p-5 bg-card">
               <div className="flex items-center gap-2 w-full">
                 <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
                   <Cloud className="w-5 h-5 text-blue-400" />
                 </div>
                 <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                  Hobby
+                  Waitlist
                 </span>
               </div>
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-foreground">
-                  {formatPrivacyModeLabel('managed')}
+                  {formatChatExecutionModeLabel('cloud_managed')}
                 </p>
-                <p className="text-xs text-blue-400 font-medium">Sync across devices</p>
+                <p className="text-xs text-blue-400 font-medium">Hosted compute and sync</p>
                 <p className="text-xs text-muted-foreground leading-relaxed mt-1">
-                  Managed cloud LLMs. Requires Hobby ($5/mo target) or higher.
+                  AGI-managed hosted compute, storage, provider routing, and credits. Opens after
+                  cost, billing, fraud, and quota controls are ready.
                 </p>
               </div>
               <button
                 type="button"
-                onClick={handleCloud}
+                onClick={handleCloudWaitlist}
                 className={cn(
                   'mt-auto w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
                   'bg-primary text-white hover:bg-primary/90',
                 )}
               >
-                Start {formatPrivacyModeLabel('managed')}
+                Join Cloud Managed waitlist
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
@@ -224,10 +224,14 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
               </div>
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-foreground">
-                  {formatPrivacyModeLabel('local')} / {formatPrivacyModeLabel('byok')}
+                  {formatChatExecutionModeLabel('local_only')}
+                </p>
+                <p className="text-xs text-amber-300 font-medium">
+                  or {formatChatExecutionModeLabel('byok')}
                 </p>
                 <p className="text-xs text-muted-foreground leading-relaxed mt-1">
-                  Use Ollama, LM Studio, or your own API keys.
+                  Use Ollama or LM Studio locally. Paste your own API key to keep the desktop app
+                  local while sending model requests directly to your provider account.
                 </p>
               </div>
               {/* Ollama status */}
@@ -252,7 +256,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
                   'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20',
                 )}
               >
-                Start Local
+                Start Local Mode
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
@@ -262,7 +266,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
           <div className="mb-5">
             <div className="flex items-center gap-3 mb-3">
               <div className="flex-1 h-px bg-border" />
-              <span className="text-xs text-muted-foreground">OR paste an API key</span>
+              <span className="text-xs text-muted-foreground">
+                OR paste an API key for Local Mode + BYOK
+              </span>
               <div className="flex-1 h-px bg-border" />
             </div>
             <div className="relative">

@@ -7,7 +7,7 @@ export interface RemoteChatFeatureFlags {
 }
 
 export const MOBILE_REMOTE_CHAT_DISABLED_MESSAGE =
-  'Remote chat is disabled while Mobile is in Local Only mode. Use on-device/local models, or enable BYOK/Cloud Managed mode after setup is available.';
+  'Remote chat is disabled while Mobile is in Local Mode + Local LLMs. Mobile BYOK is disabled until secure device key storage ships; generated PDFs, docs, slides, code execution, and browser environments require Desktop or Cloud Managed waitlist access.';
 
 export class RemoteChatDisabledError extends Error {
   readonly code = 'MOBILE_REMOTE_CHAT_DISABLED';

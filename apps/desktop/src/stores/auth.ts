@@ -29,7 +29,6 @@ import { StripeService, type CustomerInfo, type SubscriptionInfo } from '../serv
 import { subscriptionService, type PlanFeatures } from '../services/subscriptionService';
 import { isSubscriptionActive, isInGracePeriod } from '../utils/featureGates';
 import { type PlanTier, asPlanTier, PLAN_DISPLAY_NAMES } from '../lib/supabase';
-import { formatPrivacyModeLabel } from '@agiworkforce/types';
 
 // =============================================================================
 // Helpers
@@ -1417,7 +1416,7 @@ export function getPlanDescription(plan: PlanTier): string {
   const descriptions: Record<PlanTier, string> = {
     'local-only':
       'Run everything on your own machine with Ollama / LMStudio. No managed cloud, no sync.',
-    byok: `Bring your own API keys. Optional managed-cloud sync if ${formatPrivacyModeLabel('managed')} mode is enabled.`,
+    byok: 'Bring your own API keys while the desktop app stays local. Cloud Managed sync is waitlist-gated.',
     hobby: 'Perfect for getting started; 350 credits per billing cycle on the $10 Hobby plan.',
     free: 'Limited automations; Community support',
     pro: 'Unlimited automations; 1,050 credits per billing cycle; Priority support',

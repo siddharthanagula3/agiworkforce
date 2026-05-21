@@ -1,8 +1,4 @@
-import {
-  formatPrivacyModeLabel,
-  getPlanPriceUsd,
-  getPlanUsageBudgetCents,
-} from '@agiworkforce/types';
+import { getPlanPriceUsd, getPlanUsageBudgetCents } from '@agiworkforce/types';
 
 export const STRIPE_PRICE_IDS = {
   hobby_monthly: 'price_1Sgwx10zEfO6BZMh7thtFU77',
@@ -60,7 +56,7 @@ export interface PricingPlan {
 export const PRICING_PLANS: PricingPlan[] = [
   {
     id: 'local-only',
-    name: `${formatPrivacyModeLabel('local')}-only`,
+    name: 'Local Mode',
     description: 'Run Ollama or LM Studio on your machine. No account required.',
     monthlyPrice: 0,
     yearlyPrice: 0,
@@ -83,8 +79,8 @@ export const PRICING_PLANS: PricingPlan[] = [
   },
   {
     id: 'byok',
-    name: formatPrivacyModeLabel('byok'),
-    description: 'Bring your own API keys for any first-party provider.',
+    name: 'Local Mode + BYOK',
+    description: 'Keep the desktop app local while using your own provider API keys.',
     monthlyPrice: 0,
     yearlyPrice: 0,
     stripePriceId: {
@@ -94,7 +90,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     features: [
       'Bring your own API keys (Anthropic, OpenAI, Google, xAI, ...)',
       'Use any provider you have access to',
-      'Optional Cloud sync if Cloud mode enabled',
+      'No AGI-managed model credits; pay providers directly',
     ],
     limits: {
       automations: 10,

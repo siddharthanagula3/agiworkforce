@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import { View, Pressable } from 'react-native';
 import { ChevronDown, ChevronUp, Check } from 'lucide-react-native';
-import { formatPrivacyModeLabel } from '@agiworkforce/types';
+import { formatChatExecutionModeLabel } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 
@@ -22,16 +22,16 @@ const MODE_META: Record<
   { title: string; body: string; privacy: string; testIdPrefix: string }
 > = {
   local: {
-    title: `${formatPrivacyModeLabel('local')} — fully on device`,
+    title: formatChatExecutionModeLabel('local_only'),
     body: 'Free forever. No account. No internet needed after one download. Best for sensitive prompts.',
     privacy: 'Your prompts never leave your device. AI runs locally using your phone hardware.',
     testIdPrefix: 'mode-local',
   },
   cloud: {
-    title: `${formatPrivacyModeLabel('byok')} — bring your own keys`,
-    body: `Use Claude, GPT, Gemini and more with your own API keys (${formatPrivacyModeLabel('byok')}). We charge $0. Pay providers directly.`,
+    title: `${formatChatExecutionModeLabel('cloud_managed')} waitlist`,
+    body: 'Hosted compute, cross-device sync, generated PDFs/docs/slides, code execution, and browser environments are waitlist-gated until billing, fraud, quota, and provider-cost controls are ready.',
     privacy:
-      'Prompts are sent to the provider you choose. Each provider has its own privacy policy.',
+      'Cloud Managed uses AGI-managed infrastructure only after explicit launch consent. Mobile BYOK keys stay disabled until secure device key storage ships.',
     testIdPrefix: 'mode-cloud',
   },
   decide_later: {

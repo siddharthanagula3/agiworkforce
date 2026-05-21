@@ -184,8 +184,8 @@ describe('suite contracts — trust boundaries', () => {
   });
 
   it('locks chat execution modes to privacy and provider defaults', () => {
-    expect(formatChatExecutionModeLabel('local_only')).toBe('Local Only');
-    expect(formatChatExecutionModeLabel('byok')).toBe('BYOK');
+    expect(formatChatExecutionModeLabel('local_only')).toBe('Local Mode + Local LLMs');
+    expect(formatChatExecutionModeLabel('byok')).toBe('Local Mode + BYOK');
     expect(formatChatExecutionModeLabel('cloud_managed')).toBe('Cloud Managed');
 
     expect(chatExecutionModeToPrivacyMode('local_only')).toBe('local');

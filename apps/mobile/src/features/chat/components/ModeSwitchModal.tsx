@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, View } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import { AlertTriangle, CheckCircle2 } from 'lucide-react-native';
-import { formatPrivacyModeLabel } from '@agiworkforce/types';
+import { formatChatExecutionModeLabel } from '@agiworkforce/types';
 import {
   buildLocalToByokHandoffDraft,
   type HandoffPreviewContextItem,
@@ -27,8 +27,8 @@ export interface ModeSwitchModalProps {
 }
 
 function modeLabel(mode?: AppMode): string {
-  if (mode === 'local') return formatPrivacyModeLabel('local');
-  if (mode === 'cloud') return formatPrivacyModeLabel('byok');
+  if (mode === 'local') return formatChatExecutionModeLabel('local_only');
+  if (mode === 'cloud') return formatChatExecutionModeLabel('byok');
   if (mode === 'agent') return 'Agent';
   if (mode === 'voice') return 'Voice';
   return 'Chat';
@@ -49,8 +49,8 @@ export function ModeSwitchModal({
   onClose,
 }: ModeSwitchModalProps) {
   const colors = useThemeColors();
-  const localLabel = formatPrivacyModeLabel('local');
-  const byokLabel = formatPrivacyModeLabel('byok');
+  const localLabel = formatChatExecutionModeLabel('local_only');
+  const byokLabel = formatChatExecutionModeLabel('byok');
   const requiresHandoffPreview = fromMode === 'local' && toMode === 'cloud';
   const [preview, setPreview] = useState<LocalToByokHandoffPreview | null>(null);
   const [isBuildingPreview, setIsBuildingPreview] = useState(false);
@@ -58,9 +58,9 @@ export function ModeSwitchModal({
   const hasBlockingFindings = preview?.redactionReport.blocked ?? false;
 
   const title = useMemo(() => {
-    if (requiresHandoffPreview) return `${localLabel} -> ${byokLabel} fork preview`;
+    if (requiresHandoffPreview) return `Review ${byokLabel} fork`;
     return `Switch from ${modeLabel(fromMode)} to ${modeLabel(toMode)}?`;
-  }, [byokLabel, fromMode, localLabel, requiresHandoffPreview, toMode]);
+  }, [byokLabel, fromMode, requiresHandoffPreview, toMode]);
 
   useEffect(() => {
     if (!visible || !requiresHandoffPreview) {

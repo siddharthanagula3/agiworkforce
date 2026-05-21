@@ -1,6 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { Cloud, Loader2, Shield } from 'lucide-react';
-import { formatPrivacyModeLabel } from '@agiworkforce/types';
+import { formatChatExecutionModeLabel } from '@agiworkforce/types';
 import { isTauri, isCloudWeb } from '@/lib/tauri-mock';
 import { Button } from '@/components/ui/Button';
 import { Label } from '@/components/ui/Label';
@@ -17,6 +17,7 @@ import { useAuthStore } from '../../../../stores/auth';
 import { useSimpleModeStore } from '../../../../stores/ui';
 import { SUPPORTED_LANGUAGES } from '../../../../i18n';
 import { cn } from '@/lib/utils';
+import { openExternalUrl } from '@/utils/navigation';
 import type { Language, GlobalHotkeyPreferences } from '../../../../stores/settingsStore';
 
 const LazyResourceMonitor = lazy(() =>
@@ -54,7 +55,7 @@ function AppModeSection() {
     <div>
       <h3 className="text-lg font-semibold mb-1">Mode</h3>
       <p className="text-sm text-muted-foreground mb-4">
-        Choose between fully local (offline) or cloud-connected.
+        Choose local execution or join the Cloud Managed path when hosted compute is enabled.
       </p>
       <div className="flex gap-2 mb-4">
         <button
@@ -68,12 +69,12 @@ function AppModeSection() {
           )}
         >
           <Shield className="h-4 w-4 shrink-0" />
-          <span>{formatPrivacyModeLabel('local')}</span>
+          <span>{formatChatExecutionModeLabel('local_only')}</span>
           <span className="text-xs opacity-70">(Free)</span>
         </button>
         <button
           type="button"
-          onClick={() => useAppModeStore.getState().setMode('cloud')}
+          onClick={() => void openExternalUrl('https://agiworkforce.com/waitlist')}
           className={cn(
             'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors',
             mode === 'cloud'
@@ -82,7 +83,7 @@ function AppModeSection() {
           )}
         >
           <Cloud className="h-4 w-4 shrink-0" />
-          <span>{formatPrivacyModeLabel('managed')}</span>
+          <span>{formatChatExecutionModeLabel('cloud_managed')}</span>
         </button>
       </div>
 
@@ -96,8 +97,8 @@ function AppModeSection() {
         <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 flex items-center gap-3">
           <Cloud className="h-4 w-4 text-blue-400 shrink-0" />
           <p className="text-sm text-blue-400 flex-1">
-            Sign in to unlock {formatPrivacyModeLabel('managed')} mode and sync your conversations
-            across devices.
+            Sign in to join the {formatChatExecutionModeLabel('cloud_managed')} waitlist and sync
+            conversations when hosted compute is enabled.
           </p>
           <button
             type="button"
@@ -110,7 +111,7 @@ function AppModeSection() {
             }
             className="shrink-0 px-3 py-1.5 rounded-md text-xs font-medium bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/50 hover:bg-blue-500/30 transition-colors"
           >
-            Sign in to enable {formatPrivacyModeLabel('managed')} mode
+            Sign in for waitlist
           </button>
         </div>
       )}
@@ -181,8 +182,8 @@ export function GeneralTab({
         <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 flex items-center gap-3">
           <Cloud className="h-4 w-4 text-blue-400 shrink-0" />
           <p className="text-sm text-blue-400">
-            You are using AGI Workforce {formatPrivacyModeLabel('managed')}. Models and billing are
-            managed by your plan.
+            You are using AGI Workforce {formatChatExecutionModeLabel('cloud_managed')}. Models and
+            billing are managed by your plan.
           </p>
         </div>
       ) : (
