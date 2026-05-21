@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/DropdownMenu';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ProjectSettingsDialog } from './ProjectSettingsDialog';
+import { ProjectEditDetailsDialog } from './ProjectEditDetailsDialog';
 import {
   useProjectStore,
   selectActiveProjects,
@@ -57,8 +58,10 @@ export function ProjectsView() {
   const [filterMode, setFilterMode] = useState<FilterMode>('active');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isEditDetailsDialogOpen, setIsEditDetailsDialogOpen] = useState(false);
+  const [isProjectSettingsDialogOpen, setIsProjectSettingsDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [settingsProject, setSettingsProject] = useState<Project | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
 
@@ -112,9 +115,14 @@ export function ProjectsView() {
     setIsCreateDialogOpen(true);
   };
 
-  const handleEditProject = (project: Project) => {
+  const handleEditProjectDetails = (project: Project) => {
     setEditingProject(project);
-    setIsEditDialogOpen(true);
+    setIsEditDetailsDialogOpen(true);
+  };
+
+  const handleOpenProjectSettings = (project: Project) => {
+    setSettingsProject(project);
+    setIsProjectSettingsDialogOpen(true);
   };
 
   const handleDeleteProject = (project: Project) => {
@@ -262,7 +270,8 @@ export function ProjectsView() {
                   project={project}
                   isSelected={selectedProjectId === project.id}
                   onClick={() => handleProjectClick(project)}
-                  onEdit={() => handleEditProject(project)}
+                  onEditDetails={() => handleEditProjectDetails(project)}
+                  onOpenSettings={() => handleOpenProjectSettings(project)}
                   onDelete={() => handleDeleteProject(project)}
                   onArchive={() => handleArchiveProject(project)}
                   onOpen={() => handleOpenProject(project)}
@@ -278,7 +287,8 @@ export function ProjectsView() {
         {selectedProject ? (
           <ProjectDetails
             project={selectedProject}
-            onEdit={() => handleEditProject(selectedProject)}
+            onEditDetails={() => handleEditProjectDetails(selectedProject)}
+            onOpenSettings={() => handleOpenProjectSettings(selectedProject)}
             onOpen={() => handleOpenProject(selectedProject)}
             onOpenConversation={(conversationId) =>
               handleOpenConversation(selectedProject.id, conversationId)
@@ -299,10 +309,16 @@ export function ProjectsView() {
         mode="create"
       />
 
-      <ProjectSettingsDialog
-        open={isEditDialogOpen}
-        onOpenChange={setIsEditDialogOpen}
+      <ProjectEditDetailsDialog
+        open={isEditDetailsDialogOpen}
+        onOpenChange={setIsEditDetailsDialogOpen}
         project={editingProject}
+      />
+
+      <ProjectSettingsDialog
+        open={isProjectSettingsDialogOpen}
+        onOpenChange={setIsProjectSettingsDialogOpen}
+        project={settingsProject}
         mode="edit"
       />
 
@@ -324,7 +340,8 @@ interface ProjectListItemProps {
   project: Project;
   isSelected: boolean;
   onClick: () => void;
-  onEdit: () => void;
+  onEditDetails: () => void;
+  onOpenSettings: () => void;
   onDelete: () => void;
   onArchive: () => void;
   onOpen: () => void;
@@ -334,7 +351,8 @@ function ProjectListItem({
   project,
   isSelected,
   onClick,
-  onEdit,
+  onEditDetails,
+  onOpenSettings,
   onDelete,
   onArchive,
   onOpen,
@@ -398,9 +416,13 @@ function ProjectListItem({
               <FolderOpen className="w-4 h-4 mr-2" />
               Open Project
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={onEdit} className="text-foreground">
+            <DropdownMenuItem onClick={onEditDetails} className="text-foreground">
+              <File className="w-4 h-4 mr-2" />
+              Edit Details
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onOpenSettings} className="text-foreground">
               <Settings className="w-4 h-4 mr-2" />
-              Edit Settings
+              Project Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-accent" />
             <DropdownMenuItem onClick={onArchive} className="text-foreground">
@@ -421,12 +443,19 @@ function ProjectListItem({
 // Project Details Component
 interface ProjectDetailsProps {
   project: Project;
-  onEdit: () => void;
+  onEditDetails: () => void;
+  onOpenSettings: () => void;
   onOpen: () => void;
   onOpenConversation: (conversationId: string) => void;
 }
 
-function ProjectDetails({ project, onEdit, onOpen, onOpenConversation }: ProjectDetailsProps) {
+function ProjectDetails({
+  project,
+  onEditDetails,
+  onOpenSettings,
+  onOpen,
+  onOpenConversation,
+}: ProjectDetailsProps) {
   const conversations = useUnifiedChatStore((state) => state.conversations);
 
   // Get linked conversations
@@ -467,7 +496,15 @@ function ProjectDetails({ project, onEdit, onOpen, onOpenConversation }: Project
           <div className="flex gap-2">
             <Button
               variant="outline"
-              onClick={onEdit}
+              onClick={onEditDetails}
+              className="border-border text-foreground hover:bg-accent"
+            >
+              <File className="w-4 h-4 mr-2" />
+              Edit Details
+            </Button>
+            <Button
+              variant="outline"
+              onClick={onOpenSettings}
               className="border-border text-foreground hover:bg-accent"
             >
               <Settings className="w-4 h-4 mr-2" />

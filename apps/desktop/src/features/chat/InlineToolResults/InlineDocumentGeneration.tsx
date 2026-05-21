@@ -144,7 +144,6 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
       data?.computeSession,
       data?.generatedFile,
       data?.artifactManifest,
-      data?.generatedFile?.mimeType,
       fileName,
       extension,
       primaryUri,
