@@ -137,12 +137,23 @@ requireIncludes('AGENTS.md', 'known-flaws.md');
 requireIncludes('CLAUDE.md', 'AGENTS.md');
 requireIncludes('CLAUDE.md', 'Claude-specific notes');
 requireIncludes('CLAUDE.md', 'docs/engineering/naming-conventions.md');
+requireIncludes('CLAUDE.md', 'docs/engineering/agent-harness-rollout.md');
 requireIncludes('AGENTS.md', 'docs/engineering/agent-native-development.md');
 requireIncludes('AGENTS.md', 'docs/engineering/naming-conventions.md');
 requireIncludes('AGENTS.md', 'docs/engineering/agent-harness-rollout.md');
 requireIncludes('AGENTS.md', 'docs/engineering/service-layer-architecture.md');
 requireIncludes('AGENTS.md', 'Hooks And Local Gates');
 requireIncludes('AGENTS.md', 'docs/agent-context/lanes.json');
+
+const claudeMd = readText('CLAUDE.md');
+for (const forbiddenSection of ['## Repo Map', '## Product Lock', '## Commands']) {
+  if (claudeMd.includes(forbiddenSection)) {
+    errors.push(
+      `CLAUDE.md must stay a thin Claude-specific adapter; move ${forbiddenSection} content to AGENTS.md or docs/agent-context/.`,
+    );
+  }
+}
+
 requireIncludes('docs/current/README.md', 'Archived Source Material');
 requireIncludes('docs/current/product-suite.md', 'Trust Modes');
 requireIncludes('docs/current/technical-architecture.md', 'Enterprise Control Plane');

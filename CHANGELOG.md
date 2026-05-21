@@ -134,6 +134,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - Mobile imports that previously targeted retired theme/voice layer-first paths now resolve through the new `src/ui/theme` and `src/features/voice` ownership boundaries.
 - Agent context, engineering docs, command maps, and LLM-operability checks now include the service-layer architecture rule so repeated mechanics move behind explicit service APIs instead of drifting across routes/actions.
 - Root agent read order now treats `AGENTS.md` as the entry point before `docs/agent-context`, removing circular first-read wording.
+- Agent docs now explicitly distinguish canonical `AGENTS.md` source-of-truth content from thin tool-specific adapters such as `CLAUDE.md`; guardrails reject duplicated repo-map/product-lock/command sections in `CLAUDE.md`.
 - CLI executor output truncation now reads per-tool size caps from the central tool catalog instead of maintaining a second hand-written cap table.
 - CLI distribution now treats `agi` as the primary user-facing command and keeps `agiworkforce` as a backward-compatible alias across Cargo, npm, Homebrew, release archives, install script behavior, docs, and user-facing CLI hints.
 - Root audit fire log moved from `AUDIT_LOG.md` to `audit/audit-log.md`; active references now point at the audit folder.
