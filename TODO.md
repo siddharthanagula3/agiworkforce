@@ -176,7 +176,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Local privacy guard before cloud/BYOK sends.
 - [x] Custom slash commands from `.agiworkforce/commands` and imported `.claude/commands`.
 - [x] MCP prompts as dynamic slash commands.
-- [ ] Full `/agents` management UI in TUI/REPL.
+- [x] Full `/agents` management UI in TUI/REPL.
 - [x] Hook matcher compatibility with Claude tool names.
 - [x] Persist output style and privacy mode in project-local settings.
 - [x] Define typed CLI event stream for future Desktop/Web/Mobile clients.

@@ -171,6 +171,10 @@ Connected MCP servers that support prompts expose them as
 `/mcp:<server>:<prompt>`. Arguments can be passed as `name=value` pairs; if a
 prompt has one required argument, plain trailing text is assigned to it.
 
+Agent definitions live in `.agiworkforce/agents/` and `~/.agiworkforce/agents/`.
+Use `/agents`, `/agents show <name>`, `/agents create <name> [--global]`, and
+`/agents validate` to manage them from either REPL or TUI mode.
+
 ## Demo flow (90 seconds)
 
 ```

@@ -70,7 +70,7 @@ pub fn handle_shared_command(
         "/stats" => ParityCommandResult::SystemMessage(render_stats(session)),
         "/passes" => ParityCommandResult::SystemMessage(render_passes(session)),
         "/sandbox" => ParityCommandResult::SystemMessage(render_sandbox(session)),
-        "/agents" => ParityCommandResult::SystemMessage(render_agents()),
+        "/agents" => ParityCommandResult::SystemMessage(render_agents(arg)),
         "/chrome" => ParityCommandResult::SystemMessage(render_chrome()),
         "/ide" => ParityCommandResult::SystemMessage(render_ide()),
         "/doctor" | "/diagnose" | "/health" => {
@@ -654,32 +654,8 @@ pub fn render_statusline() -> String {
     "Statusline setup is available in TUI mode. In REPL mode, use /status, /usage, and /context for the same session telemetry.".to_string()
 }
 
-pub fn render_agents() -> String {
-    let agents = crate::agents::discover_agents();
-    if agents.is_empty() {
-        return [
-            "Agents",
-            "  none discovered",
-            "  add markdown agents to .agiworkforce/agents/ or ~/.agiworkforce/agents/",
-        ]
-        .join("\n");
-    }
-
-    let mut lines = vec![format!("Agents ({})", agents.len())];
-    for agent in agents {
-        let model = agent.model.as_deref().unwrap_or("default model");
-        let description = if agent.description.trim().is_empty() {
-            "no description"
-        } else {
-            agent.description.trim()
-        };
-        lines.push(format!(
-            "  {:<24} {:<18} {}",
-            agent.name, model, description
-        ));
-        lines.push(format!("    {}", agent.path.display()));
-    }
-    lines.join("\n")
+pub fn render_agents(arg: &str) -> String {
+    crate::agents::render_agents_command(arg)
 }
 
 pub fn render_chrome() -> String {
