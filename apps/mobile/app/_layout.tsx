@@ -17,12 +17,12 @@ import {
   type AppStateStatus,
 } from 'react-native';
 import { Fingerprint } from 'lucide-react-native';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore } from '@/src/features/auth/store';
 import { useTierStore } from '@/stores/tierStore';
 import { supabase } from '@/services/supabase';
 import { storage, initMmkvEncryption } from '@/lib/mmkv';
 import { hydrateBiometricFlag } from '@/lib/biometricFlagStore';
-import { useBiometricGate } from '@/hooks/useBiometricGate';
+import { useBiometricGate } from '@/src/features/auth/hooks/useBiometricGate';
 import { useTheme } from '@/hooks/useTheme';
 import {
   registerForPushNotifications,
@@ -37,7 +37,7 @@ import { subscribeToRealtime, unsubscribeFromRealtime } from '@/services/realtim
 import { subscribeToDispatch, unsubscribeFromDispatch } from '@/services/dispatchRealtime';
 import { startDesktopStatusPolling } from '@/services/desktopStatus';
 import { useChatStore } from '@/stores/chatStore';
-import { isAgeGateConfirmed } from '@/services/ageGate';
+import { isAgeGateConfirmed } from '@/src/features/auth/services/ageGate';
 import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
 import '../global.css';
 

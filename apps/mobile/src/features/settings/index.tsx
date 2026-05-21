@@ -37,7 +37,7 @@ import {
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore } from '@/src/features/auth/store';
 import { useSettingsStore, type ThemeMode } from '@/stores/settingsStore';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useModelStore } from '@/src/features/model-picker/store';

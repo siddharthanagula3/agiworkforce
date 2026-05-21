@@ -94,7 +94,7 @@ jest.mock('../src/shared/components/DesktopCompanionWidget', () => ({
 
 import { DrawerContent } from '../src/features/drawer/components/DrawerContent';
 import { useChatStore } from '../stores/chatStore';
-import { useAuthStore } from '../stores/authStore';
+import { useAuthStore } from '../src/features/auth/store';
 import { FEATURES } from '../lib/v1FeatureFlags';
 
 // ---------------------------------------------------------------------------

@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { fetchPortalSessionUrl, UpsellCard } from '@/src/features/billing';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore } from '@/src/features/auth/store';
 import { useChatStore } from '@/stores/chatStore';
 import { useAgentStore } from '@/stores/agentStore';
 import { api } from '@/services/api';

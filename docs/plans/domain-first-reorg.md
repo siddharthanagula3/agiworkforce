@@ -55,6 +55,10 @@ The Mobile image ownership slice is complete: image generation, OCR, and vision
 routing helpers now live under `apps/mobile/src/features/image/services`, with
 structure checks guarding the old image service paths.
 
+The Mobile auth ownership slice is complete: auth state, age-gate helpers, and
+the biometric gate hook now live under `apps/mobile/src/features/auth`, with
+structure checks guarding the old auth hook/service/store paths.
+
 The Desktop small-domain wave has moved quick query, voice, simple mode,
 subscription, pricing, planning, reminders, messaging, mobile companion, teams,
 terminal, tools, vision, and workflows out of `src/components` into

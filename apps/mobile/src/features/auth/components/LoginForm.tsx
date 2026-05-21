@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View, Alert } from 'react-native';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore } from '@/src/features/auth/store';
 
 export function LoginForm() {
   const [email, setEmail] = useState('');

@@ -5,7 +5,7 @@ import * as Linking from 'expo-linking';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Text } from '@/components/ui/text';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore } from '@/src/features/auth/store';
 import { supabase } from '@/services/supabase';
 import * as Crypto from 'expo-crypto';
 

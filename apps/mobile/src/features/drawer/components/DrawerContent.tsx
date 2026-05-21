@@ -20,7 +20,7 @@ import { type DrawerContentComponentProps } from '@react-navigation/drawer';
 import { Text } from '@/components/ui/text';
 import { DesktopCompanionWidget } from '@/src/shared/components/DesktopCompanionWidget';
 import { useChatStore } from '@/stores/chatStore';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore } from '@/src/features/auth/store';
 import { useThemeColors } from '@/hooks/useTheme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 

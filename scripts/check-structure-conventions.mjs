@@ -206,6 +206,9 @@ const retiredMobileFeaturePaths = [
   'apps/mobile/services/imagegen.ts',
   'apps/mobile/services/ocr.ts',
   'apps/mobile/services/vision.ts',
+  'apps/mobile/hooks/useBiometricGate.ts',
+  'apps/mobile/services/ageGate.ts',
+  'apps/mobile/stores/authStore.ts',
 ];
 
 for (const retiredMobileFeaturePath of retiredMobileFeaturePaths) {
@@ -326,6 +329,12 @@ const mobileFeatureForbiddenImports = [
   '../services/imagegen',
   '../services/ocr',
   '../services/vision',
+  '@/hooks/useBiometricGate',
+  '@/services/ageGate',
+  '@/stores/authStore',
+  '../hooks/useBiometricGate',
+  '../services/ageGate',
+  '../stores/authStore',
 ];
 
 const retiredDesktopFeatureShimPaths = [
