@@ -55,7 +55,7 @@ Add tests for action validation, blocked destinations, capture redaction, and br
 
 ## Release / Deployment Notes
 
-This package should be wrapped behind the AGI `ComputerAction` protocol before broad managed/cloud use.
+Use `computerActionToBrowserAction` or `runComputerAction` when callers have suite-level `ComputerAction` records. Unsupported native-only actions fail closed and should be routed to Desktop/native computer use.
 
 ## Known Caveats
 
