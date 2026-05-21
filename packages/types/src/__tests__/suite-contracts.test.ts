@@ -97,6 +97,22 @@ describe('suite contracts — trust boundaries', () => {
     expect(isDeveloperSessionSurface('mobile')).toBe(false);
   });
 
+  it('throws when assertSurfaceCanSyncChats receives a developer-session surface', async () => {
+    // Round-2 audit (2026-05-21): the runtime guard fails fast when a
+    // CLI / VS Code / Chrome surface is wired into the synced-app chat
+    // pipeline. Type-only enforcement isn't enough at boundaries that
+    // take a raw SourceSurface from external input (gateway query param,
+    // supabase channel id, deserialized telemetry).
+    const { assertSurfaceCanSyncChats } = await import('../suite-contracts');
+
+    expect(() => assertSurfaceCanSyncChats('web')).not.toThrow();
+    expect(() => assertSurfaceCanSyncChats('desktop')).not.toThrow();
+    expect(() => assertSurfaceCanSyncChats('mobile')).not.toThrow();
+    expect(() => assertSurfaceCanSyncChats('cli')).toThrowError(/sync-rule violation/);
+    expect(() => assertSurfaceCanSyncChats('vscode')).toThrowError(/sync-rule violation/);
+    expect(() => assertSurfaceCanSyncChats('chrome')).toThrowError(/sync-rule violation/);
+  });
+
   it('locks the developer-session event stream vocabulary', () => {
     expect(DEVELOPER_SESSION_EVENT_KINDS).toEqual([
       'session.started',
