@@ -36,7 +36,7 @@ import {
 import { useProjectStore, selectActiveProjects } from '../../stores/projectStore';
 import { supabaseAuth } from '../../services/supabaseAuth';
 import { resetInFlightChatState } from '../../lib/newChatReset';
-import { UserProfile } from '../Layout/UserProfile';
+import { UserProfile } from '@/features/layout/UserProfile';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { ResizeHandle } from '../ui/ResizeHandle';
@@ -59,8 +59,8 @@ import {
   AlertDialogTitle,
 } from '../ui/AlertDialog';
 import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/ui';
-import { SimpleModeToggle } from '../SimpleMode';
-import { NotificationCenter } from '../Notifications';
+import { SimpleModeToggle } from '@/features/simple-mode';
+import { NotificationCenter } from '@/features/notifications';
 import { ShareConversationDialog } from './ShareConversationDialog';
 // SidebarFeaturesPopover removed — features accessible via chat or Cmd+K
 import { TransferDialog } from './TransferDialog';

@@ -105,6 +105,11 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Require ownership READMEs for every top-level Web, Mobile, and Desktop feature folder.
 - [x] Remove the duplicate CLI release workflow and enforce the canonical `release-cli.yml` / stable `v-cli-*` artifact contract.
 - [x] Freeze legacy `apps/web/supabase/migrations` with `pnpm check:supabase-migrations` so new migrations can only land in root `supabase/migrations`.
+- [x] Add report-retention READMEs and `pnpm check:report-retention` for `reports/` and `audit/reports/`.
+- [x] Add `pnpm check:ci-guardrails` for the CI baseline and explicit Semgrep advisory debt.
+- [x] Add `pnpm check:codeowners` for provisional CODEOWNERS coverage before real GitHub teams exist.
+- [x] Move the Mobile billing service into `apps/mobile/src/features/billing`.
+- [x] Move the first Desktop small-domain wave into `apps/desktop/src/features`: quick query, voice, simple mode, subscription, pricing, planning, reminders, messaging, mobile companion, teams, terminal, tools, vision, and workflows.
 - [ ] Execute Mobile domain-first moves into `apps/mobile/src/features` from `docs/plans/domain-first-reorg.md` after root/docs/package contracts are stable.
 - [ ] Execute Desktop domain-first moves into `apps/desktop/src/features` from `docs/plans/domain-first-reorg.md` after root/docs/package contracts are stable.
 

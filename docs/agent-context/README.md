@@ -29,3 +29,4 @@ This folder is the tool-neutral map for coding agents. Codex, Claude Code, Curso
 - Split parallel agent work by disjoint write paths from `lanes.json` and record verification evidence before committing.
 - Do not edit shared files from feature lanes; route them through the integrator or a lane that owns shared files.
 - Run `pnpm check:hooks` after editing Husky hooks, commit rules, package scripts, or repo-operability checks.
+- Run `pnpm check:llm-operability` after editing report retention, CI, CODEOWNERS, structure, ownership, or agent-context rules.

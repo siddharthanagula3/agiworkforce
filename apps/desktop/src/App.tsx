@@ -104,17 +104,17 @@ const CommandPalette = lazy(() =>
   })),
 );
 const QuickQuery = lazy(() =>
-  import('./components/QuickQuery').then((m) => ({
+  import('./features/quick-query').then((m) => ({
     default: m.QuickQuery,
   })),
 );
 const VoiceInputOverlay = lazy(() =>
-  import('./components/Voice/VoiceInputOverlay').then((m) => ({
+  import('./features/voice/VoiceInputOverlay').then((m) => ({
     default: m.VoiceInputOverlay,
   })),
 );
 const OnboardingWelcome = lazy(() =>
-  import('./components/Onboarding').then((m) => ({
+  import('./features/onboarding').then((m) => ({
     default: m.OnboardingWelcome,
   })),
 );
@@ -127,7 +127,7 @@ const SettingsPanel = lazy(() =>
   import('./components/Settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })),
 );
 const UpdateChecker = lazy(() =>
-  import('./components/Updates').then((m) => ({
+  import('./features/updates').then((m) => ({
     default: m.UpdateChecker,
   })),
 );
@@ -142,17 +142,17 @@ const TimeoutWarningDialog = lazy(() =>
   })),
 );
 const StatusBanner = lazy(() =>
-  import('./components/StatusBanner').then((m) => ({
+  import('./features/status-banner').then((m) => ({
     default: m.StatusBanner,
   })),
 );
 const OfflineIndicator = lazy(() =>
-  import('./components/OfflineIndicator').then((m) => ({
+  import('./features/offline-indicator').then((m) => ({
     default: m.OfflineIndicator,
   })),
 );
 const ErrorToastContainer = lazy(() =>
-  import('./components/Errors/ErrorToast').then((m) => ({
+  import('./features/errors/ErrorToast').then((m) => ({
     default: m.default,
   })),
 );
@@ -160,7 +160,7 @@ import { useSessionPersistence } from './hooks/useSessionPersistence';
 import { initializeSyncManager, cleanupSyncManager } from './lib/offline/offlineSync';
 import { CHAT_COMPOSER_CAPTURE_EVENT } from './lib/chatComposerEvents';
 import type { CaptureResult } from './types/capture';
-import { PlansModal } from './components/Pricing/PlansModal';
+import { PlansModal } from './features/pricing/PlansModal';
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center h-full w-full bg-background">

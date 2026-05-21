@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { MessageHistory } from '../Messaging/MessageHistory';
+import { MessageHistory } from '../../features/messaging/MessageHistory';
 import { invoke } from '../../lib/tauri-mock';
 
 // Mock Radix Select to render a simple native <select> that triggers onValueChange

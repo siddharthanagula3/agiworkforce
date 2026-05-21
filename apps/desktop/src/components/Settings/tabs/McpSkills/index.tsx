@@ -13,7 +13,7 @@ const LazyMCPServerSettings = lazy(() =>
   import('../../MCPServerSettings').then((m) => ({ default: m.MCPServerSettings })),
 );
 const LazyToolsPanel = lazy(() =>
-  import('../../../Tools/ToolsPanel').then((m) => ({ default: m.ToolsPanel })),
+  import('@/features/tools/ToolsPanel').then((m) => ({ default: m.ToolsPanel })),
 );
 const LazyResearchSettings = lazy(() =>
   import('../../ResearchSettings').then((m) => ({ default: m.ResearchSettings })),

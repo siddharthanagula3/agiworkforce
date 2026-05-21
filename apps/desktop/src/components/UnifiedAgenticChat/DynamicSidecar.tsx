@@ -54,7 +54,7 @@ const LazyFilesystemWorkspace = lazy(() =>
   import('../Filesystem/FilesystemWorkspace').then((m) => ({ default: m.FilesystemWorkspace })),
 );
 const LazyVisionWorkspace = lazy(() =>
-  import('../Vision/VisionWorkspace').then((m) => ({ default: m.VisionWorkspace })),
+  import('@/features/vision/VisionWorkspace').then((m) => ({ default: m.VisionWorkspace })),
 );
 const LazyComputerUseMonitor = lazy(() =>
   import('../ComputerUse/ComputerUseMonitor').then((m) => ({ default: m.ComputerUseMonitor })),
@@ -72,7 +72,9 @@ const LazyMarketplacePage = lazy(() =>
   import('../Marketplace/MarketplacePage').then((m) => ({ default: m.MarketplacePage })),
 );
 const LazyMessagingIntegrations = lazy(() =>
-  import('../Messaging/MessagingIntegrations').then((m) => ({ default: m.MessagingIntegrations })),
+  import('@/features/messaging/MessagingIntegrations').then((m) => ({
+    default: m.MessagingIntegrations,
+  })),
 );
 const LazyProductivityWorkspace = lazy(() =>
   import('../Productivity/ProductivityWorkspace').then((m) => ({

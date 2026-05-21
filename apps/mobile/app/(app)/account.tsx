@@ -20,7 +20,7 @@ import { Separator } from '@/components/ui/separator';
 import { useAuthStore } from '@/stores/authStore';
 import { useTierStore } from '@/stores/tierStore';
 import { useChatStore } from '@/stores/chatStore';
-import { fetchPortalSessionUrl } from '@/services/billing';
+import { fetchPortalSessionUrl } from '@/src/features/billing';
 import { isAllowedExternalUrl, openExternalUrl } from '@/lib/safeOpenURL';
 import { useThemeColors } from '@/hooks/useTheme';
 

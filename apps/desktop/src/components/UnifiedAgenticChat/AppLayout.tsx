@@ -6,7 +6,7 @@ import { useBillingStore } from '../../stores/auth';
 import { useArtifactStore } from '../../stores/artifactStore';
 import { resetInFlightChatState } from '../../lib/newChatReset';
 import { CustomInstructionsDialog } from '../CustomInstructions';
-import { FeedbackDialog } from '../Feedback';
+import { FeedbackDialog } from '@/features/feedback';
 import { ArtifactPanel } from '../Artifacts/ArtifactPanel';
 import { ResizeHandle } from '../ui/ResizeHandle';
 import { DynamicSidecar } from './DynamicSidecar';
@@ -29,7 +29,7 @@ import { ScheduledTasksPanel } from '../Scheduler/ScheduledTasksPanel';
 import { ArtifactsGallery } from '../Artifacts/ArtifactsGallery';
 import { ShareConversationDialog } from './ShareConversationDialog';
 import { ExecutionSidecar } from '../ExecutionSidecar';
-import { ReminderList } from '../Reminders/ReminderList';
+import { ReminderList } from '@/features/reminders/ReminderList';
 import { CoworkTab } from '../Cowork/CoworkTab';
 
 // Lazy load MediaLab for code splitting

@@ -3,8 +3,8 @@ import { useShallow } from 'zustand/react/shallow';
 import { Smartphone, Wifi, WifiOff } from 'lucide-react';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useToolStore } from '../../stores/chat/toolStore';
-import { QRPairingCard } from '../../components/Mobile/QRPairingCard';
-import { RemoteApprovalCard } from '../../components/Mobile/RemoteApprovalCard';
+import { QRPairingCard } from '../mobile-companion/QRPairingCard';
+import { RemoteApprovalCard } from '../mobile-companion/RemoteApprovalCard';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 

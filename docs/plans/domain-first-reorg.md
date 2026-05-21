@@ -27,8 +27,13 @@ The Mobile waitlist pilot is complete: app/tests import from
 been removed.
 
 The Mobile projects, billing, and schedules domains have moved: `ProjectCard`,
-`UpsellCard`, and the schedule components/API/store now live under
-`apps/mobile/src/features`.
+`UpsellCard`, the billing portal service, and the schedule components/API/store
+now live under `apps/mobile/src/features`.
+
+The Desktop small-domain wave has moved quick query, voice, simple mode,
+subscription, pricing, planning, reminders, messaging, mobile companion, teams,
+terminal, tools, vision, and workflows out of `src/components` into
+`apps/desktop/src/features`, with call sites and structure checks updated.
 
 Every current Web, Mobile, and Desktop top-level feature folder now has a local
 ownership README, and `pnpm check:readme-ownership` enforces feature README

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { ErrorToastContainer, useErrorToast } from '../components/Errors/ErrorToast';
+import { ErrorToastContainer, useErrorToast } from '../features/errors/ErrorToast';
 import useErrorStore from '../stores/ui';
 
 describe('ErrorToast', () => {

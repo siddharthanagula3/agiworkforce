@@ -161,6 +161,7 @@ for (const retiredMobileWaitlistPath of [
   'apps/mobile/stores/waitlistStore.ts',
   'apps/mobile/components/projects/ProjectCard.tsx',
   'apps/mobile/components/billing/UpsellCard.tsx',
+  'apps/mobile/services/billing.ts',
   'apps/mobile/components/schedules/QuickSchedule.tsx',
   'apps/mobile/components/schedules/RecurrencePicker.tsx',
   'apps/mobile/components/schedules/ScheduleCard.tsx',
@@ -193,6 +194,8 @@ const mobileWaitlistForbiddenImports = [
   '../components/projects/ProjectCard',
   '@/components/billing/UpsellCard',
   '../components/billing/UpsellCard',
+  '@/services/billing',
+  '../services/billing',
   '@/components/schedules/QuickSchedule',
   '@/components/schedules/RecurrencePicker',
   '@/components/schedules/ScheduleCard',
@@ -202,6 +205,127 @@ const mobileWaitlistForbiddenImports = [
   '@/stores/scheduleStore',
   '../services/schedules',
   '../stores/scheduleStore',
+];
+
+const retiredDesktopFeatureShimPaths = [
+  'apps/desktop/src/components/Analytics/index.ts',
+  'apps/desktop/src/components/Errors/ErrorToast.tsx',
+  'apps/desktop/src/components/Feedback/index.ts',
+  'apps/desktop/src/components/Layout/UserProfile.tsx',
+  'apps/desktop/src/components/Layout/index.ts',
+  'apps/desktop/src/components/Notifications/index.ts',
+  'apps/desktop/src/components/OfflineIndicator.tsx',
+  'apps/desktop/src/components/Onboarding/index.ts',
+  'apps/desktop/src/components/ResourceMonitor/index.ts',
+  'apps/desktop/src/components/StatusBanner.tsx',
+  'apps/desktop/src/components/Updates/index.tsx',
+];
+
+const retiredDesktopFeatureDirs = [
+  'apps/desktop/src/components/Messaging',
+  'apps/desktop/src/components/Mobile',
+  'apps/desktop/src/components/Planning',
+  'apps/desktop/src/components/Pricing',
+  'apps/desktop/src/components/QuickQuery',
+  'apps/desktop/src/components/Reminders',
+  'apps/desktop/src/components/SimpleMode',
+  'apps/desktop/src/components/Subscription',
+  'apps/desktop/src/components/Teams',
+  'apps/desktop/src/components/Terminal',
+  'apps/desktop/src/components/Tools',
+  'apps/desktop/src/components/Vision',
+  'apps/desktop/src/components/Voice',
+  'apps/desktop/src/components/Workflows',
+];
+
+for (const retiredDesktopFeatureShimPath of retiredDesktopFeatureShimPaths) {
+  if (exists(retiredDesktopFeatureShimPath)) {
+    errors.push(`Retired Desktop feature shim must stay removed: ${retiredDesktopFeatureShimPath}`);
+  }
+}
+
+for (const retiredDesktopFeatureDir of retiredDesktopFeatureDirs) {
+  for (const file of walk(retiredDesktopFeatureDir)) {
+    errors.push(`Retired Desktop feature directory must stay empty/removed: ${file}`);
+  }
+}
+
+const desktopFeatureForbiddenImports = [
+  './components/Analytics',
+  './components/Errors/ErrorToast',
+  './components/Feedback',
+  './components/Layout',
+  './components/Layout/UserProfile',
+  './components/Notifications',
+  './components/OfflineIndicator',
+  './components/Onboarding',
+  './components/ResourceMonitor',
+  './components/StatusBanner',
+  './components/Updates',
+  '../components/Analytics',
+  '../components/Errors/ErrorToast',
+  '../components/Feedback',
+  '../components/Layout',
+  '../components/Layout/UserProfile',
+  '../components/Notifications',
+  '../components/OfflineIndicator',
+  '../components/Onboarding',
+  '../components/ResourceMonitor',
+  '../components/StatusBanner',
+  '../components/Updates',
+  '@/components/Analytics',
+  '@/components/Errors/ErrorToast',
+  '@/components/Feedback',
+  '@/components/Layout',
+  '@/components/Layout/UserProfile',
+  '@/components/Notifications',
+  '@/components/OfflineIndicator',
+  '@/components/Onboarding',
+  '@/components/ResourceMonitor',
+  '@/components/StatusBanner',
+  '@/components/Updates',
+  './components/Messaging',
+  './components/Mobile',
+  './components/Planning',
+  './components/Pricing',
+  './components/QuickQuery',
+  './components/Reminders',
+  './components/SimpleMode',
+  './components/Subscription',
+  './components/Teams',
+  './components/Terminal',
+  './components/Tools',
+  './components/Vision',
+  './components/Voice',
+  './components/Workflows',
+  '../components/Messaging',
+  '../components/Mobile',
+  '../components/Planning',
+  '../components/Pricing',
+  '../components/QuickQuery',
+  '../components/Reminders',
+  '../components/SimpleMode',
+  '../components/Subscription',
+  '../components/Teams',
+  '../components/Terminal',
+  '../components/Tools',
+  '../components/Vision',
+  '../components/Voice',
+  '../components/Workflows',
+  '@/components/Messaging',
+  '@/components/Mobile',
+  '@/components/Planning',
+  '@/components/Pricing',
+  '@/components/QuickQuery',
+  '@/components/Reminders',
+  '@/components/SimpleMode',
+  '@/components/Subscription',
+  '@/components/Teams',
+  '@/components/Terminal',
+  '@/components/Tools',
+  '@/components/Vision',
+  '@/components/Voice',
+  '@/components/Workflows',
 ];
 
 const userFacingCliDocs = [
@@ -254,6 +378,16 @@ for (const file of walk('apps/mobile')) {
   for (const marker of mobileWaitlistForbiddenImports) {
     if (body.includes(marker)) {
       errors.push(`${file} imports retired Mobile waitlist path: ${marker}`);
+    }
+  }
+}
+
+for (const file of walk('apps/desktop/src')) {
+  if (!/\.(ts|tsx)$/.test(file)) continue;
+  const body = readText(file);
+  for (const marker of desktopFeatureForbiddenImports) {
+    if (body.includes(marker)) {
+      errors.push(`${file} imports retired Desktop feature shim: ${marker}`);
     }
   }
 }

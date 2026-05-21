@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import type { Language, GlobalHotkeyPreferences } from '../../../../stores/settingsStore';
 
 const LazyResourceMonitor = lazy(() =>
-  import('../../../ResourceMonitor').then((m) => ({ default: m.ResourceMonitor })),
+  import('@/features/resource-monitor').then((m) => ({ default: m.ResourceMonitor })),
 );
 const LazyAutomationPermissionsSettings = lazy(() =>
   import('../../AutomationPermissionsSettings').then((m) => ({

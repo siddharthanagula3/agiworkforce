@@ -5,3 +5,5 @@
  * live under this feature.
  */
 export { UpsellCard } from './components/UpsellCard';
+export { fetchPortalSessionUrl } from './service';
+export type { PortalSessionResult } from './service';

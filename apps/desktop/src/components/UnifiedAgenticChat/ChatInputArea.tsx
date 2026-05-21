@@ -37,7 +37,7 @@ import {
 } from '../../stores/unifiedChatStore';
 import { SubscriptionGateResult, type SubscriptionStatus } from '../../utils/subscriptionGate';
 import { SectionErrorBoundary } from '../ui/SectionErrorBoundary';
-import { SubscriptionLockDialog } from '../Subscription';
+import { SubscriptionLockDialog } from '@/features/subscription';
 import { useBillingUsageStore } from '../../stores/billingUsage';
 import { useBillingStore } from '../../stores/auth';
 import { useSettingsStore } from '../../stores/settingsStore';

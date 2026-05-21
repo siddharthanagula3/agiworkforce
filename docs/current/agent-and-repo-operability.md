@@ -19,6 +19,9 @@ The repo must be easy for humans and LLM coding agents to navigate, split, audit
 - `docs/agent-context/` is the machine-readable agent map.
 - `docs/engineering/naming-conventions.md` locks product, CLI, file, folder, package, branch, commit, version, and docs naming rules.
 - `scripts/check-hooks.mjs` locks Husky hook wiring and commitlint policy.
+- `scripts/check-report-retention.mjs` locks report collection ownership and retention metadata.
+- `scripts/check-ci-guardrails.mjs` locks the CI baseline and makes advisory security gates explicit.
+- `scripts/check-codeowners-contract.mjs` locks provisional ownership coverage until real GitHub teams exist.
 
 ## Parallel-Agent Rules
 
@@ -35,6 +38,7 @@ The repo must be easy for humans and LLM coding agents to navigate, split, audit
 - Working notes belong in `tasks` until promoted.
 - Evidence belongs in `audit`.
 - Generated reports belong in `reports` or `audit`, not root.
+- Report roots and direct child collections need `Status`, `Owner`, `Purpose`, and `Retention` metadata.
 - If a doc is too long to be an entry point, summarize it in `docs/current` and archive the original.
 
 ## Naming Rules
@@ -63,6 +67,9 @@ The repo is A+ when:
 - structural conventions are checked by CI,
 - import boundaries fail fast,
 - generated artifacts are ignored or classified,
+- report collections are owned and retention-scoped,
+- CI guardrails prove lint/typecheck/test/audit/release-operability baselines,
+- provisional CODEOWNERS covers all high-risk paths until real teams are created,
 - parallel-agent lanes are explicit,
 - high-risk areas route to owners.
 

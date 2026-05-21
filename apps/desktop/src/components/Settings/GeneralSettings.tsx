@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { Label } from '../ui/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 import { Switch } from '../ui/Switch';
-import { ResourceMonitor } from '../ResourceMonitor';
+import { ResourceMonitor } from '@/features/resource-monitor';
 import { AutomationPermissionsSettings } from './AutomationPermissionsSettings';
 import { UpdateSettings } from './UpdateSettings';
 import { VoiceSettings } from './VoiceSettings';

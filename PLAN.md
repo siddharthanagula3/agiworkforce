@@ -207,6 +207,7 @@ Rules:
 - Add ownership, naming, import-boundary, docs-status, and root-clutter guardrails before hiring engineers.
 - Keep `apps/web/features` as the canonical Web product-domain root; `apps/web/src` is reserved for layer primitives, and `apps/web/src/features` is forbidden.
 - Make the repo LLM-operable through canonical `AGENTS.md`, `docs/agent-context/`, machine-readable repo/risk/command/doc-status maps, and known-flaws tracking.
+- Keep report retention, CI baselines, and provisional CODEOWNERS coverage enforced through `pnpm check:llm-operability`.
 
 Deliverable:
 
