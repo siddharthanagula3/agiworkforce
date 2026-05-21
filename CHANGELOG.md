@@ -25,6 +25,20 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
   - `scripts/check-repo-organization.mjs`
   - `scripts/check-boundaries.mjs`
 - `audit/repo-organization/current-monorepo-grade-2026-05-20.md` grading the current monorepo as C+ with a concrete path to A- hiring readiness.
+- Repo organization classification ledgers:
+  - `audit/repo-organization/agentic-development-outlook-2026-05-20.md`
+  - `audit/repo-organization/root-classification-2026-05-20.md`
+  - `audit/repo-organization/tool-folder-classification-2026-05-20.md`
+  - `audit/repo-organization/package-readme-coverage-2026-05-20.md`
+  - `audit/repo-organization/ownership-model-2026-05-20.md`
+  - `audit/repo-organization/docs-status-2026-05-20.md`
+  - `audit/repo-organization/generated-artifact-policy-2026-05-20.md`
+- `docs/agent-context/agent-task-templates.md` with standard exploration, implementation, review, and verification task templates for parallel coding agents.
+- Debt-aware repo-operability checks:
+  - `scripts/check-generated-artifacts.mjs`
+  - `scripts/check-readme-ownership.mjs`
+  - `scripts/check-doc-status.mjs`
+- `.github/workflows/repo-operability.yml` so docs-only and agent-context changes run `pnpm check:llm-operability`.
 - `audit/anthropic-apps-parity/` evidence ledger with:
   - `README.md` - evidence folder contract.
   - `application-suite-thesis-2026-05-20.md` - official OpenAI/Anthropic suite research and AGI's locked local-first/BYOK/multi-provider/privacy-controlled managed-compute thesis.
@@ -52,6 +66,10 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - `docs/README.md` now points maintainers to root `PLAN.md` and `TODO.md` immediately after `AGI_WORKFORCE.md`.
 - CLI parity commands continue moving into shared `apps/cli/src/claude_parity.rs` so TUI and REPL behavior does not drift.
 - `PLAN.md`, `TODO.md`, and the evidence ledgers now include the first parallel-explorer findings for AGI surfaces and local reference architecture.
+- `PLAN.md` now treats agent-native development as a first-class repo design requirement: human-directed, agent-executed, evidence-backed, review-gated work.
+- `docs/agent-context/commands.json` and `package.json` now include generated-artifact, README ownership, doc-status, and full LLM-operability checks.
+- `scripts/check-agent-context.mjs` now validates the known-flaws table shape and the expanded repo-wide command map.
+- `scripts/check-node-version.sh` now prints the actionable too-old-Node error instead of exiting early under `set -e`.
 - `audit/anthropic-apps-parity/reference-notes.md` now records a full 1902-file read pass over `/Users/siddhartha/Desktop/reference/src`, including scope counts, architecture lessons, AGI implementation targets, study-first files, and copying cautions.
 - `PLAN.md` now locks normal chat sync to Web, Mobile, and Desktop only. CLI, VS Code, and Chrome stay local/workspace/task scoped unless an explicit preview/redaction handoff is implemented.
 - `PLAN.md` and `TODO.md` now record that OpenAI, Anthropic, and Vercel SDKs are adapter/UI-edge dependencies only. AGI owns runtime schemas, event streams, privacy modes, provider routing, and usage accounting.

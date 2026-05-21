@@ -119,25 +119,25 @@ This is not enough to claim Claude Code parity. It is the foundation.
 
 ## Parity Matrix
 
-| Anthropic application area | AGI target | Engine owner | Surface owners | Status |
-| --- | --- | --- | --- | --- |
-| Claude Code slash commands | Built-in commands, aliases, dynamic custom commands, MCP slash prompts | `apps/cli`, `crates/agiworkforce-command-registry` | CLI/TUI, REPL | Partial |
-| Claude Code tools | Read/write/edit/bash/search/web/todo/task with Claude-compatible names | `apps/cli/src/features/exec/tools` | CLI, Desktop, VS Code | Partial |
-| Claude Code permissions | Read-only, accept edits, bypass, plan mode, per-tool allow/deny | `apps/cli`, `crates/sandbox-policy` | CLI, Desktop | Partial |
-| Claude Code memory | Project/user/local memory files and migration | `apps/cli/src/memory*`, `packages/skills` | All surfaces | Partial |
-| Claude Code settings | Hierarchical settings, local project settings, output style persistence | `apps/cli/src/config.rs` | CLI/Desktop/Web | Partial |
-| Claude Code hooks | PreToolUse/PostToolUse/UserPromptSubmit/Stop/SubagentStop/PreCompact/SessionStart/SessionEnd | `apps/cli/src/features/hooks` | CLI, future cloud runners | Partial |
-| Claude Code subagents | Agent definitions, tool-scoped agents, task delegation, separate context | `apps/cli/src/agents.rs`, task runtime crates | CLI/Desktop/VS Code | Partial |
-| Claude MCP/connectors | MCP servers, OAuth, prompts as slash commands, marketplace | `apps/cli/src/mcp`, `packages/mcp`, Desktop MCP commands | CLI/Desktop/Web | Partial |
-| Claude artifacts | Dedicated artifact workspace, runnable previews, sandboxed rendering, sharing | `apps/desktop`, `apps/web`, `apps/sandbox`, `packages/unified-chat` | Desktop/Web/Mobile | Partial |
-| Claude/ChatGPT file creation | Compute sessions, generated-file manifests, native PDF/DOCX/XLSX/PPTX creation, preview, download, app library | `packages/types`, `crates/agiworkforce-task-runtime`, `apps/desktop/src-tauri/src/features/document`, `apps/web`, `apps/mobile` | Desktop/Web/Mobile/CLI | Partial |
-| Claude/ChatGPT computer use | Screenshot/action loop over isolated browser or desktop session | `packages/browser-tool`, future computer session protocol | Desktop/Web/CLI/Chrome | Partial |
-| Claude projects | Project instructions, files, memory, shared chats, model/provider defaults | `packages/stores`, `apps/*` | Desktop/Web/Mobile | Partial/unclear |
-| Claude mobile | Chat, files, voice, camera, privacy mode, local/BYOK onboarding | `apps/mobile`, `packages/local-llm` | Mobile | Partial |
-| Claude desktop | Rich chat shell, MCP, local files, artifacts, connectors | `apps/desktop`, `src-tauri` | Desktop | Partial |
-| Claude web | Chat, projects, artifacts, sharing, account, onboarding | `apps/web` | Web | Partial |
-| Claude enterprise | Admin policy, audit logs, SSO, team billing, compliance | `services`, `supabase`, `packages/compliance` | Web/Desktop | Early |
-| Claude GitHub automation | PR/issue mention workflow, review comments, CI action | `services`, GitHub app future | Web/Cloud/CLI | Early |
+| Anthropic application area   | AGI target                                                                                                     | Engine owner                                                                                                                    | Surface owners            | Status          |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | --------------- |
+| Claude Code slash commands   | Built-in commands, aliases, dynamic custom commands, MCP slash prompts                                         | `apps/cli`, `crates/agiworkforce-command-registry`                                                                              | CLI/TUI, REPL             | Partial         |
+| Claude Code tools            | Read/write/edit/bash/search/web/todo/task with Claude-compatible names                                         | `apps/cli/src/features/exec/tools`                                                                                              | CLI, Desktop, VS Code     | Partial         |
+| Claude Code permissions      | Read-only, accept edits, bypass, plan mode, per-tool allow/deny                                                | `apps/cli`, `crates/sandbox-policy`                                                                                             | CLI, Desktop              | Partial         |
+| Claude Code memory           | Project/user/local memory files and migration                                                                  | `apps/cli/src/memory*`, `packages/skills`                                                                                       | All surfaces              | Partial         |
+| Claude Code settings         | Hierarchical settings, local project settings, output style persistence                                        | `apps/cli/src/config.rs`                                                                                                        | CLI/Desktop/Web           | Partial         |
+| Claude Code hooks            | PreToolUse/PostToolUse/UserPromptSubmit/Stop/SubagentStop/PreCompact/SessionStart/SessionEnd                   | `apps/cli/src/features/hooks`                                                                                                   | CLI, future cloud runners | Partial         |
+| Claude Code subagents        | Agent definitions, tool-scoped agents, task delegation, separate context                                       | `apps/cli/src/agents.rs`, task runtime crates                                                                                   | CLI/Desktop/VS Code       | Partial         |
+| Claude MCP/connectors        | MCP servers, OAuth, prompts as slash commands, marketplace                                                     | `apps/cli/src/mcp`, `packages/mcp`, Desktop MCP commands                                                                        | CLI/Desktop/Web           | Partial         |
+| Claude artifacts             | Dedicated artifact workspace, runnable previews, sandboxed rendering, sharing                                  | `apps/desktop`, `apps/web`, `apps/sandbox`, `packages/unified-chat`                                                             | Desktop/Web/Mobile        | Partial         |
+| Claude/ChatGPT file creation | Compute sessions, generated-file manifests, native PDF/DOCX/XLSX/PPTX creation, preview, download, app library | `packages/types`, `crates/agiworkforce-task-runtime`, `apps/desktop/src-tauri/src/features/document`, `apps/web`, `apps/mobile` | Desktop/Web/Mobile/CLI    | Partial         |
+| Claude/ChatGPT computer use  | Screenshot/action loop over isolated browser or desktop session                                                | `packages/browser-tool`, future computer session protocol                                                                       | Desktop/Web/CLI/Chrome    | Partial         |
+| Claude projects              | Project instructions, files, memory, shared chats, model/provider defaults                                     | `packages/stores`, `apps/*`                                                                                                     | Desktop/Web/Mobile        | Partial/unclear |
+| Claude mobile                | Chat, files, voice, camera, privacy mode, local/BYOK onboarding                                                | `apps/mobile`, `packages/local-llm`                                                                                             | Mobile                    | Partial         |
+| Claude desktop               | Rich chat shell, MCP, local files, artifacts, connectors                                                       | `apps/desktop`, `src-tauri`                                                                                                     | Desktop                   | Partial         |
+| Claude web                   | Chat, projects, artifacts, sharing, account, onboarding                                                        | `apps/web`                                                                                                                      | Web                       | Partial         |
+| Claude enterprise            | Admin policy, audit logs, SSO, team billing, compliance                                                        | `services`, `supabase`, `packages/compliance`                                                                                   | Web/Desktop               | Early           |
+| Claude GitHub automation     | PR/issue mention workflow, review comments, CI action                                                          | `services`, GitHub app future                                                                                                   | Web/Cloud/CLI             | Early           |
 
 ## Transition Workstreams
 
@@ -164,6 +164,7 @@ Deliverables:
 - `audit/anthropic-apps-parity/competitive-baseline-2026-05-20.md`
 - `audit/anthropic-apps-parity/sdk-strategy-2026-05-20.md`
 - `audit/anthropic-apps-parity/compute-artifacts-2026-05-20.md`
+- Agentic development outlook: `audit/repo-organization/agentic-development-outlook-2026-05-20.md`
 - Updates to this `PLAN.md` and root `TODO.md`.
 
 ### 1A. Root Document Contract
@@ -199,6 +200,31 @@ Deliverable:
 
 - `docs/plans/pre-release-repo-organization-2026-05-20.md`
 - `docs/agent-context/`
+
+### 1C. Agent-Native Development
+
+Goal: build the repo for a future where humans direct, review, and release while LLM agents do most exploration, implementation, refactoring, and verification work.
+
+Long-term assumption:
+
+- Development will become increasingly agentic: multiple agents in isolated sessions/worktrees, scoped tasks, evidence-backed edits, resumable context, generated PRs, and human approval gates.
+- The repo itself must become part of the product. If the repo is hard for agents to navigate, AGI Workforce will move slower than competitors even if the product idea is strong.
+- Humans still own product judgment, architecture, privacy, safety, billing risk, and final review. Agents accelerate work; they do not replace accountability.
+
+Rules:
+
+- Treat `AGENTS.md`, `docs/agent-context/`, `PLAN.md`, `TODO.md`, and `CHANGELOG.md` as the agent operating system.
+- Keep agent instructions layered: root instructions stay short; path-specific rules live close to code.
+- Make every workstream splittable by owner path so parallel agents can work without overlapping writes.
+- Keep smallest-useful and pre-merge verification commands close to each app/package/crate/service.
+- Require evidence for broad claims: source link, AGI path, test/check result, and status.
+- Keep local/BYOK/managed trust boundaries explicit in code owners, docs, schemas, and tests.
+- Add CI guardrails that catch stale docs, root clutter, missing README ownership, generated artifact drift, and import-boundary breaks.
+- Use `/Users/siddhartha/Desktop/reference/src` and the wider `/Users/siddhartha/Desktop/reference` corpus for architecture lessons, not unreviewed code copying.
+
+Deliverable:
+
+- `audit/repo-organization/agentic-development-outlook-2026-05-20.md`
 
 ### 2. CLI As Engine
 

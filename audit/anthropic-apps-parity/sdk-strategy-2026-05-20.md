@@ -1,5 +1,7 @@
 # SDK Strategy: OpenAI, Anthropic, And Vercel AI SDK
 
+Status: Current evidence
+Owner: Product/platform
 Last updated: 2026-05-20.
 
 This ledger records the SDK decision for AGI Workforce. It is based on current
@@ -23,39 +25,39 @@ The core runtime must remain AGI-owned:
 
 The codebase already points in the right direction.
 
-| Area | Current state | Implication |
-| --- | --- | --- |
-| Web app | `apps/web` depends on `ai`, `@ai-sdk/openai`, `@ai-sdk/anthropic`, `@ai-sdk/google`, `openai`, and `@anthropic-ai/sdk`. | Keep the AI SDK path for Web streaming, but translate to AGI schemas. |
-| Web AI SDK path | `apps/web/lib/ai-sdk/providers.ts` and `apps/web/lib/ai-sdk/stream-handler.ts` wrap Vercel AI SDK v6. | Treat this as a Web transport path, not a shared runtime replacement. |
-| OpenAI provider package | `packages/providers/openai` wraps the official `openai` SDK and has both Chat Completions and Responses translation paths. | Make Responses first-class for native OpenAI, keep Chat Completions for compatible endpoints. |
-| Anthropic provider package | `packages/providers/anthropic` wraps `@anthropic-ai/sdk` and translates SDK stream events to AGI `StreamChunk`. | Good pattern. Update versions later, but keep the adapter boundary. |
-| Rust/Desktop code | Rust code calls provider APIs directly in places. | Long term, route through shared provider contracts or generated protocol bindings. |
-| API gateway | `services/api-gateway` has direct provider HTTP calls and provider health logic. | Do not introduce Vercel Gateway as the default AGI gateway. Preserve AGI's own gateway boundary. |
+| Area                       | Current state                                                                                                              | Implication                                                                                      |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Web app                    | `apps/web` depends on `ai`, `@ai-sdk/openai`, `@ai-sdk/anthropic`, `@ai-sdk/google`, `openai`, and `@anthropic-ai/sdk`.    | Keep the AI SDK path for Web streaming, but translate to AGI schemas.                            |
+| Web AI SDK path            | `apps/web/lib/ai-sdk/providers.ts` and `apps/web/lib/ai-sdk/stream-handler.ts` wrap Vercel AI SDK v6.                      | Treat this as a Web transport path, not a shared runtime replacement.                            |
+| OpenAI provider package    | `packages/providers/openai` wraps the official `openai` SDK and has both Chat Completions and Responses translation paths. | Make Responses first-class for native OpenAI, keep Chat Completions for compatible endpoints.    |
+| Anthropic provider package | `packages/providers/anthropic` wraps `@anthropic-ai/sdk` and translates SDK stream events to AGI `StreamChunk`.            | Good pattern. Update versions later, but keep the adapter boundary.                              |
+| Rust/Desktop code          | Rust code calls provider APIs directly in places.                                                                          | Long term, route through shared provider contracts or generated protocol bindings.               |
+| API gateway                | `services/api-gateway` has direct provider HTTP calls and provider health logic.                                           | Do not introduce Vercel Gateway as the default AGI gateway. Preserve AGI's own gateway boundary. |
 
 ## Source Findings
 
-| Source | Finding | AGI decision |
-| --- | --- | --- |
-| OpenAI SDKs and CLI | OpenAI says official SDKs are for direct API requests. The docs separately say to use the Agents SDK when code-first orchestration needs agents, tools, handoffs, guardrails, tracing, or sandbox execution. | Use official OpenAI SDK inside provider adapters. Do not use OpenAI Agents SDK as the AGI runtime. |
-| OpenAI Responses API | OpenAI recommends Responses for new projects. Responses adds built-in tools, multi-turn state, multimodal input, structured output changes, and native agentic primitives. | Native OpenAI provider should prefer Responses for `api.openai.com` when feature parity matters. Keep stateless mode by default unless the user selected managed/cloud state. |
-| OpenAI Sandbox Agents | OpenAI separates harness/control plane from sandbox/compute plane. The harness owns agent loop, tool routing, approvals, tracing, recovery, and run state; compute owns filesystem/shell/packages/ports/snapshots. | Adopt the boundary concept. AGI's harness should stay in AGI runtime; sandbox providers are interchangeable execution backends. |
-| Anthropic Client SDKs | Anthropic official SDKs provide idiomatic interfaces, type safety, streaming, retries, and error handling. | Keep Anthropic SDK inside the Anthropic adapter. Do not make Anthropic Agent SDK the platform core. |
-| Vercel AI SDK | Vercel AI SDK abstracts model-provider differences, supports text, structured data, tools, and web UI integration. | Use it in Web/Next.js paths where it speeds streaming UI, but keep AGI schemas as source of truth. |
-| Vercel AI Gateway | AI Gateway provides one endpoint, budgets, usage monitoring, load balancing, and fallbacks. Its docs say AI SDK string model names default to Gateway unless another default provider is configured. | Use only for explicit Managed mode experiments. Do not use it for Local or BYOK privacy modes by default. |
-| Vercel Gateway BYOK | Vercel BYOK credentials can be team-scoped or request-scoped. Docs say requests may fall back to system credentials if provided credentials fail. | This fallback is not acceptable for strict AGI BYOK unless users explicitly consent to managed fallback. |
+| Source                | Finding                                                                                                                                                                                                            | AGI decision                                                                                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OpenAI SDKs and CLI   | OpenAI says official SDKs are for direct API requests. The docs separately say to use the Agents SDK when code-first orchestration needs agents, tools, handoffs, guardrails, tracing, or sandbox execution.       | Use official OpenAI SDK inside provider adapters. Do not use OpenAI Agents SDK as the AGI runtime.                                                                            |
+| OpenAI Responses API  | OpenAI recommends Responses for new projects. Responses adds built-in tools, multi-turn state, multimodal input, structured output changes, and native agentic primitives.                                         | Native OpenAI provider should prefer Responses for `api.openai.com` when feature parity matters. Keep stateless mode by default unless the user selected managed/cloud state. |
+| OpenAI Sandbox Agents | OpenAI separates harness/control plane from sandbox/compute plane. The harness owns agent loop, tool routing, approvals, tracing, recovery, and run state; compute owns filesystem/shell/packages/ports/snapshots. | Adopt the boundary concept. AGI's harness should stay in AGI runtime; sandbox providers are interchangeable execution backends.                                               |
+| Anthropic Client SDKs | Anthropic official SDKs provide idiomatic interfaces, type safety, streaming, retries, and error handling.                                                                                                         | Keep Anthropic SDK inside the Anthropic adapter. Do not make Anthropic Agent SDK the platform core.                                                                           |
+| Vercel AI SDK         | Vercel AI SDK abstracts model-provider differences, supports text, structured data, tools, and web UI integration.                                                                                                 | Use it in Web/Next.js paths where it speeds streaming UI, but keep AGI schemas as source of truth.                                                                            |
+| Vercel AI Gateway     | AI Gateway provides one endpoint, budgets, usage monitoring, load balancing, and fallbacks. Its docs say AI SDK string model names default to Gateway unless another default provider is configured.               | Use only for explicit Managed mode experiments. Do not use it for Local or BYOK privacy modes by default.                                                                     |
+| Vercel Gateway BYOK   | Vercel BYOK credentials can be team-scoped or request-scoped. Docs say requests may fall back to system credentials if provided credentials fail.                                                                  | This fallback is not acceptable for strict AGI BYOK unless users explicitly consent to managed fallback.                                                                      |
 
 ## SDK Use Matrix
 
-| SDK/API | Use in AGI? | Allowed scope | Not allowed scope |
-| --- | --- | --- | --- |
-| OpenAI official SDK | Yes | `OpenAIProvider` adapter, service-side direct OpenAI calls, tests. | Central agent runtime, shared AGI schema definition. |
-| OpenAI Responses API | Yes | Preferred native OpenAI path for modern models, reasoning, tool items, and multimodal work. | Provider-compatible proxies unless verified; Local mode cloud sends. |
-| OpenAI Agents SDK | Limited | Research, prototypes, sandbox architecture study, optional hosted-agent experiments. | Core AGI engine, CLI runtime, cross-surface session model. |
-| Anthropic official SDK | Yes | `AnthropicProvider` adapter transport, streaming, retries, error handling. | Core runtime or provider-neutral tool/session schema. |
-| Anthropic Agent SDK | No by default | Compatibility research only. | AGI core, CLI core, migration-dependent runtime. |
-| Vercel AI SDK Core | Yes, selectively | Web/Next.js streaming, structured output, tool streaming adapters. | Rust engine, CLI runtime, canonical event schema. |
-| Vercel AI SDK UI | Maybe | Web chat UI helpers if wrapped behind AGI conversation state. | Replacing AGI synced conversation schema. |
-| Vercel AI Gateway | Later | Explicit Managed mode, admin-enabled gateway experiments, fallback/budget studies. | Default BYOK, Local mode, privacy-sensitive developer sessions. |
+| SDK/API                | Use in AGI?      | Allowed scope                                                                               | Not allowed scope                                                    |
+| ---------------------- | ---------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| OpenAI official SDK    | Yes              | `OpenAIProvider` adapter, service-side direct OpenAI calls, tests.                          | Central agent runtime, shared AGI schema definition.                 |
+| OpenAI Responses API   | Yes              | Preferred native OpenAI path for modern models, reasoning, tool items, and multimodal work. | Provider-compatible proxies unless verified; Local mode cloud sends. |
+| OpenAI Agents SDK      | Limited          | Research, prototypes, sandbox architecture study, optional hosted-agent experiments.        | Core AGI engine, CLI runtime, cross-surface session model.           |
+| Anthropic official SDK | Yes              | `AnthropicProvider` adapter transport, streaming, retries, error handling.                  | Core runtime or provider-neutral tool/session schema.                |
+| Anthropic Agent SDK    | No by default    | Compatibility research only.                                                                | AGI core, CLI core, migration-dependent runtime.                     |
+| Vercel AI SDK Core     | Yes, selectively | Web/Next.js streaming, structured output, tool streaming adapters.                          | Rust engine, CLI runtime, canonical event schema.                    |
+| Vercel AI SDK UI       | Maybe            | Web chat UI helpers if wrapped behind AGI conversation state.                               | Replacing AGI synced conversation schema.                            |
+| Vercel AI Gateway      | Later            | Explicit Managed mode, admin-enabled gateway experiments, fallback/budget studies.          | Default BYOK, Local mode, privacy-sensitive developer sessions.      |
 
 ## Architecture Rule
 
@@ -121,14 +123,14 @@ decisions, persistence model, and privacy boundary.
 
 ## Risks
 
-| Risk | Why it matters | Mitigation |
-| --- | --- | --- |
-| Runtime lock-in | Agents SDKs encode vendor-specific agent loop semantics. | Use only behind experiments; AGI owns runtime. |
-| Privacy leakage | Gateway BYOK or hosted state can silently move traffic outside expected boundary. | Require explicit mode labels, consent, and no fallback for strict BYOK. |
-| Schema drift | AI SDK UI messages, OpenAI Responses items, and Anthropic Messages blocks differ. | Normalize into AGI-owned event/item schemas. |
-| Version drift | Current repo has multiple OpenAI/Anthropic SDK versions. | Consolidate versions in one dependency-maintenance slice. |
-| Proxy incompatibility | Responses features do not map to every OpenAI-compatible endpoint. | Feature-gate Responses by endpoint class and capability metadata. |
-| Cost surprises | Native tools, server state, gateway fallbacks, and reasoning can change costs. | Attach provider, mode, usage, and consent metadata to every turn. |
+| Risk                  | Why it matters                                                                    | Mitigation                                                              |
+| --------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Runtime lock-in       | Agents SDKs encode vendor-specific agent loop semantics.                          | Use only behind experiments; AGI owns runtime.                          |
+| Privacy leakage       | Gateway BYOK or hosted state can silently move traffic outside expected boundary. | Require explicit mode labels, consent, and no fallback for strict BYOK. |
+| Schema drift          | AI SDK UI messages, OpenAI Responses items, and Anthropic Messages blocks differ. | Normalize into AGI-owned event/item schemas.                            |
+| Version drift         | Current repo has multiple OpenAI/Anthropic SDK versions.                          | Consolidate versions in one dependency-maintenance slice.               |
+| Proxy incompatibility | Responses features do not map to every OpenAI-compatible endpoint.                | Feature-gate Responses by endpoint class and capability metadata.       |
+| Cost surprises        | Native tools, server state, gateway fallbacks, and reasoning can change costs.    | Attach provider, mode, usage, and consent metadata to every turn.       |
 
 ## Immediate Implementation Tasks
 

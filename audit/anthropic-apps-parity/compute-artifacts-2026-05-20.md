@@ -1,5 +1,7 @@
 # Compute, Computer Use, And Generated Artifacts
 
+Status: Current evidence
+Owner: Product/platform
 Last updated: 2026-05-20.
 
 This report answers how Claude and ChatGPT appear to create files, use web or computer environments, and present generated artifacts to users, based on public vendor documentation only. It does not claim access to Anthropic or OpenAI private infrastructure.
@@ -109,30 +111,30 @@ OpenAI's Codex app docs say the task sidebar can preview non-code artifacts such
 
 The vendor pattern is consistent enough to use as an AGI blueprint:
 
-| Layer | What it does | AGI owner |
-| --- | --- | --- |
-| Tool policy | Decides whether a task can use browser, desktop, code, shell, document generation, network, or file write tools. | Shared engine |
-| Compute session | Runs code in local, BYOK, or managed compute with explicit privacy mode. | Shared Rust/TS runtime |
-| Computer session | Runs browser or desktop UI control loop with screenshots/actions. | Browser/desktop runtime |
-| File store | Stores uploaded and generated files with TTL, owner, privacy mode, checksum, and download permissions. | Data layer |
-| Artifact manifest | Records generated files, previews, source messages, versions, and renderers. | Shared types |
-| Preview renderer | Shows HTML/React/SVG/Mermaid/docs/PDF/spreadsheet/presentation previews safely. | Web/Desktop/Mobile UI |
-| Download/share | Exposes generated files through local file paths, signed URLs, share sheets, or app library entries. | Surface adapters |
+| Layer             | What it does                                                                                                     | AGI owner               |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| Tool policy       | Decides whether a task can use browser, desktop, code, shell, document generation, network, or file write tools. | Shared engine           |
+| Compute session   | Runs code in local, BYOK, or managed compute with explicit privacy mode.                                         | Shared Rust/TS runtime  |
+| Computer session  | Runs browser or desktop UI control loop with screenshots/actions.                                                | Browser/desktop runtime |
+| File store        | Stores uploaded and generated files with TTL, owner, privacy mode, checksum, and download permissions.           | Data layer              |
+| Artifact manifest | Records generated files, previews, source messages, versions, and renderers.                                     | Shared types            |
+| Preview renderer  | Shows HTML/React/SVG/Mermaid/docs/PDF/spreadsheet/presentation previews safely.                                  | Web/Desktop/Mobile UI   |
+| Download/share    | Exposes generated files through local file paths, signed URLs, share sheets, or app library entries.             | Surface adapters        |
 
 ## AGI Current State
 
 AGI already has useful pieces, but they are not yet unified into a Claude/ChatGPT-style compute and generated-file platform.
 
-| Area | Existing AGI paths | Status |
-| --- | --- | --- |
-| Shared artifact type | `packages/types/src/artifacts.ts`, `packages/types/src/conversation.ts`, `packages/unified-chat/src/lib/types.ts` | Partial. Good starting schema, but not enough for file-backed generated artifacts. |
-| Artifact renderer | `packages/unified-chat/src/components/ArtifactRenderer.tsx` | Partial. Renders many inline artifact types and supports native export callbacks. |
-| Cross-origin artifact sandbox | `apps/sandbox`, `apps/web/lib/artifact-sandbox.ts`, `apps/web/features/chat/components/SandboxedIframe.tsx` | Strong web foundation for safe HTML/React/SVG/Mermaid rendering. |
-| Browser automation | `packages/browser-tool/src/index.ts`, `packages/browser-tool/src/types.ts` | Partial. Isolated Playwright browser tool exists, but it is not yet a full computer-use screenshot/action protocol. |
+| Area                          | Existing AGI paths                                                                                                                                                               | Status                                                                                                                                    |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Shared artifact type          | `packages/types/src/artifacts.ts`, `packages/types/src/conversation.ts`, `packages/unified-chat/src/lib/types.ts`                                                                | Partial. Good starting schema, but not enough for file-backed generated artifacts.                                                        |
+| Artifact renderer             | `packages/unified-chat/src/components/ArtifactRenderer.tsx`                                                                                                                      | Partial. Renders many inline artifact types and supports native export callbacks.                                                         |
+| Cross-origin artifact sandbox | `apps/sandbox`, `apps/web/lib/artifact-sandbox.ts`, `apps/web/features/chat/components/SandboxedIframe.tsx`                                                                      | Strong web foundation for safe HTML/React/SVG/Mermaid rendering.                                                                          |
+| Browser automation            | `packages/browser-tool/src/index.ts`, `packages/browser-tool/src/types.ts`                                                                                                       | Partial. Isolated Playwright browser tool exists, but it is not yet a full computer-use screenshot/action protocol.                       |
 | Desktop native document tools | `apps/desktop/src-tauri/src/features/document/*`, `apps/desktop/src-tauri/src/core/llm/tool_executor/document_tools.rs`, `apps/desktop/src-tauri/src/sys/commands/chat/tools.rs` | Partial. Desktop can create/read PDF/DOCX/XLSX and has a PPTX creator, but this is not yet a cross-surface compute session/file manifest. |
-| Web document export | `apps/web/features/chat/services/document-export-service.ts`, `apps/web/features/chat/services/document-generation-service.ts` | Partial. Client-side markdown/PDF/DOCX export exists, but not a trusted generated-file pipeline. |
-| Mobile export | `apps/mobile/services/fileCreation.ts` | Partial. Local export/share exists, but not generated-file sync or shared artifact manifest. |
-| Task runtime | `crates/agiworkforce-task-runtime/src/lib.rs` | Early. Useful task registry, but not yet a compute session with generated files, TTL, policy, and artifact linkage. |
+| Web document export           | `apps/web/features/chat/services/document-export-service.ts`, `apps/web/features/chat/services/document-generation-service.ts`                                                   | Partial. Client-side markdown/PDF/DOCX export exists, but not a trusted generated-file pipeline.                                          |
+| Mobile export                 | `apps/mobile/services/fileCreation.ts`                                                                                                                                           | Partial. Local export/share exists, but not generated-file sync or shared artifact manifest.                                              |
+| Task runtime                  | `crates/agiworkforce-task-runtime/src/lib.rs`                                                                                                                                    | Early. Useful task registry, but not yet a compute session with generated files, TTL, policy, and artifact linkage.                       |
 
 ## AGI Target Design
 
@@ -231,12 +233,12 @@ The current `packages/browser-tool` can become the first implementation for brow
 
 Use different engines for different privacy modes:
 
-| Mode | Recommended generation path |
-| --- | --- |
-| Local CLI/Desktop | Local libraries and headless converters on the user's machine. |
-| Local Mobile | Native share/export libraries for simple files; heavy generation delegated to Desktop/local host or future managed compute. Mobile still needs request, status, preview, download, and share UX. |
-| BYOK | Prefer local generation after model produces structured plan/content; do not send local files to provider unless user approves. |
-| Managed | Future container with LibreOffice/headless, Python, Node, document libraries, and file-store capture. |
+| Mode              | Recommended generation path                                                                                                                                                                      |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Local CLI/Desktop | Local libraries and headless converters on the user's machine.                                                                                                                                   |
+| Local Mobile      | Native share/export libraries for simple files; heavy generation delegated to Desktop/local host or future managed compute. Mobile still needs request, status, preview, download, and share UX. |
+| BYOK              | Prefer local generation after model produces structured plan/content; do not send local files to provider unless user approves.                                                                  |
+| Managed           | Future container with LibreOffice/headless, Python, Node, document libraries, and file-store capture.                                                                                            |
 
 Initial high-leverage stack:
 

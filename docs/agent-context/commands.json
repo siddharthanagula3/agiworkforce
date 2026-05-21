@@ -10,7 +10,11 @@
     "rustCheck": "cargo check --workspace",
     "agentContext": "pnpm check:agent-context",
     "repoOrganization": "pnpm check:repo-organization",
-    "boundaries": "pnpm check:boundaries"
+    "boundaries": "pnpm check:boundaries",
+    "generatedArtifacts": "pnpm check:generated-artifacts",
+    "readmeOwnership": "pnpm check:readme-ownership",
+    "docStatus": "pnpm check:doc-status",
+    "llmOperability": "pnpm check:llm-operability"
   },
   "surfaces": {
     "desktop": {

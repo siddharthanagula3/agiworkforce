@@ -41,6 +41,7 @@ const requiredFiles = [
   'AGENTS.md',
   'CLAUDE.md',
   'docs/agent-context/README.md',
+  'docs/agent-context/agent-task-templates.md',
   'docs/agent-context/bug-finding-guide.md',
   'docs/agent-context/known-flaws.md',
   'docs/agent-context/repo-map.json',
@@ -93,7 +94,19 @@ if (riskMap) {
 
 const commands = readJson('docs/agent-context/commands.json');
 if (commands) {
-  for (const commandKey of ['lint', 'typecheckAll', 'agentContext', 'repoOrganization', 'boundaries']) {
+  for (const commandKey of [
+    'lint',
+    'typecheckAll',
+    'testAll',
+    'rustCheck',
+    'agentContext',
+    'repoOrganization',
+    'boundaries',
+    'generatedArtifacts',
+    'readmeOwnership',
+    'docStatus',
+    'llmOperability',
+  ]) {
     if (!commands.repoWide?.[commandKey]) {
       errors.push(`commands.json repoWide missing ${commandKey}`);
     }
@@ -121,6 +134,51 @@ for (const requiredId of ['AGENT-DOC-01', 'ORG-ROOT-01', 'BOUNDARY-01', 'PRIVACY
   if (!knownFlaws.includes(requiredId)) {
     errors.push(`known-flaws.md must include ${requiredId}`);
   }
+}
+
+const knownFlawsTableLines = knownFlaws
+  .split('\n')
+  .filter((line) => line.startsWith('|') && line.endsWith('|'));
+if (knownFlawsTableLines.length >= 2) {
+  function splitMarkdownTableRow(line) {
+    const cells = [];
+    let current = '';
+    let escaping = false;
+
+    for (const char of line) {
+      if (escaping) {
+        current += char;
+        escaping = false;
+        continue;
+      }
+      if (char === '\\') {
+        current += char;
+        escaping = true;
+        continue;
+      }
+      if (char === '|') {
+        cells.push(current);
+        current = '';
+        continue;
+      }
+      current += char;
+    }
+
+    cells.push(current);
+    return cells;
+  }
+
+  const expectedCells = splitMarkdownTableRow(knownFlawsTableLines[0]).length;
+  for (const [index, line] of knownFlawsTableLines.entries()) {
+    const cellCount = splitMarkdownTableRow(line).length;
+    if (cellCount !== expectedCells) {
+      errors.push(
+        `known-flaws.md table row ${index + 1} has ${cellCount - 2} cells; expected ${expectedCells - 2}`,
+      );
+    }
+  }
+} else {
+  errors.push('known-flaws.md must include a markdown table.');
 }
 
 if (errors.length > 0) {

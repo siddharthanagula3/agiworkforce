@@ -1,4 +1,4 @@
-# Current Monorepo Grade And Developer-Friendliness Plan
+# Current Monorepo Grade And A+ Developer-Friendliness Plan
 
 Status: Current assessment
 Owner: Platform lead
@@ -7,7 +7,7 @@ Baseline commit: `b7d6debf0` (`chore: snapshot workspace before repo organizatio
 
 ## Executive Grade
 
-Overall grade: **C+ today, with a credible path to A- before hiring a broad team.**
+Overall grade: **C+ today, with a credible path to A+ before hiring a broad team.**
 
 The core monorepo spine is strong: `apps/`, `packages/`, `crates/`, `services/`, `supabase/`, `docs/`, `audit/`, `tasks/`, `reports/`, `examples/`, and `scripts/` are the right large buckets for an OpenAI/Anthropic-style application suite.
 
@@ -69,7 +69,21 @@ The current problem is not that the repo is fundamentally wrong. The problem is 
 8. **The first LLM-operability layer is working.**
    `AGENTS.md` is now canonical, `CLAUDE.md` is a mirror, and `docs/agent-context/` gives agents repo maps, risk maps, known flaws, and commands. This should be expanded, not replaced.
 
-## Refactor Plan To Reach A-
+## A+ Definition
+
+An A+ AGI Workforce repo is not merely tidy. It is a repo where a new senior engineer, a contractor, and an LLM coding agent can all answer the same questions from the same source graph:
+
+- What is current, historical, generated, local-only, or deprecated?
+- Who owns each app, package, crate, service, schema, and runtime boundary?
+- Which command proves a change is safe?
+- Which imports, data flows, privacy modes, generated artifacts, and cloud paths are forbidden?
+- Which product surface should own a feature?
+- Which docs can be trusted as current source of truth?
+- Which high-risk areas deserve extra review before merge?
+
+The A+ bar is enforceable, not aspirational. Repo structure, docs freshness, root hygiene, generated artifact retention, package boundaries, ownership, and agent context must be checked by CI or explicit review policy.
+
+## Refactor Plan To Reach A+
 
 ### Phase 0: Baseline And Rules
 
@@ -85,6 +99,8 @@ Status: mostly done.
 ### Phase 1: Classification Ledgers
 
 Goal: make every file class obvious before moving anything.
+
+Status: in progress.
 
 Tasks:
 
@@ -104,6 +120,8 @@ Acceptance:
 
 Goal: make root boring and predictable.
 
+Status: next.
+
 Tasks:
 
 - Move scratch root markdown/images into dated folders under `reports/` or `_archive/`.
@@ -120,6 +138,8 @@ Acceptance:
 ### Phase 3: Documentation And Agent Context
 
 Goal: one current doc graph for humans and agents.
+
+Status: in progress.
 
 Tasks:
 
@@ -138,6 +158,8 @@ Acceptance:
 
 Goal: every shared boundary explains itself locally.
 
+Status: next.
+
 Tasks:
 
 - Add README files to all top-level packages.
@@ -153,6 +175,8 @@ Acceptance:
 ### Phase 5: Boundary Enforcement
 
 Goal: make architecture hard to accidentally break.
+
+Status: in progress.
 
 Tasks:
 
@@ -222,20 +246,20 @@ Acceptance:
 
 ## Immediate Next 10 Tasks
 
-1. Commit the repo-organization script fix and this grade report.
-2. Add root classification ledger.
-3. Add tool-folder classification ledger.
-4. Add package README coverage ledger.
-5. Add docs status ledger.
-6. Add generated artifact policy.
+1. Commit the repo-organization script fix and this grade report. Done in `0d842263b`.
+2. Add root classification ledger. Done.
+3. Add tool-folder classification ledger. Done.
+4. Add package README coverage ledger. Done.
+5. Add docs status ledger. Done.
+6. Add generated artifact policy. Done.
 7. Move root scratch files into a dated archive/report folder.
 8. Add missing READMEs for `apps/web`, `apps/desktop`, `apps/extension`, and both services.
-9. Add CI job for `pnpm check:llm-operability`.
+9. Add CI job for `pnpm check:llm-operability`. Done in `.github/workflows/repo-operability.yml`.
 10. Start Web domain-first cleanup only after tasks 1-9 are green.
 
 ## Target State
 
-Grade target before broad hiring: **A-**.
+Grade target before broad hiring: **A+**.
 
 The repo is ready for scale when:
 

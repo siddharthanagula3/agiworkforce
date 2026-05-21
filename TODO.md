@@ -29,6 +29,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Add OpenAI/Anthropic/Vercel SDK strategy ledger.
 - [x] Add Claude/ChatGPT compute, computer-use, and generated-file architecture ledger.
 - [ ] Begin per-file AGI audit ledger by surface, starting with CLI and shared engine files.
+- [x] Lock the long-term agent-native development thesis for AGI Workforce.
 
 ## Exploration Tasks
 
@@ -48,10 +49,12 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 
 ## Pre-Release Repo Organization Tasks
 
-- [ ] Create root file classification ledger.
-- [ ] Create hidden AI/tool folder ledger for `.claude`, `.codex`, `.cursor`, `.opencode`, `.agents`, `.agent`, `.minimax`, `.superpowers`, `.remember`, and `.playwright-mcp`.
-- [ ] Create docs status ledger: current, superseded, archive, scratch, or generated.
-- [ ] Create package/service/crate ownership ledger.
+- [x] Create root file classification ledger.
+- [x] Create hidden AI/tool folder ledger for `.claude`, `.codex`, `.cursor`, `.opencode`, `.agents`, `.agent`, `.minimax`, `.superpowers`, `.remember`, and `.playwright-mcp`.
+- [x] Create docs status ledger: current, superseded, archive, scratch, or generated.
+- [x] Create package/service/crate README coverage ledger.
+- [x] Create generated artifact policy.
+- [x] Create full package/service/crate ownership ledger and CODEOWNERS map.
 - [ ] Decide whether root `ios/` belongs at root or under `apps/mobile/ios`.
 - [ ] Decide whether `reference-index/` belongs under `audit/`, `docs/reference/`, or `_archive/`.
 - [ ] Move root scratch markdown files to a dated archive/report folder.
@@ -63,10 +66,10 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Make root `AGENTS.md` the canonical tool-neutral coding-agent entry point.
 - [x] Convert `CLAUDE.md` into a Claude-specific mirror of `AGENTS.md`.
 - [x] Add `pnpm check:agent-context`, `pnpm check:repo-organization`, `pnpm check:boundaries`, and `pnpm check:llm-operability`.
-- [x] Grade current monorepo developer-friendliness and record path to A-.
-- [ ] Commit repo-organization script fix and monorepo grade report.
+- [x] Grade current monorepo developer-friendliness and record path to A+.
+- [x] Commit repo-organization script fix and monorepo grade report.
 - [ ] Add or update README files for each shared package.
-- [ ] Add `CODEOWNERS` with role-based ownership.
+- [ ] Add `.github/CODEOWNERS` with real GitHub teams/handles after org ownership names are available.
 - [ ] Expand `CONTRIBUTING.md` into a real engineering workflow guide.
 - [ ] Add PR templates by change type.
 - [ ] Normalize `docs/plans` vs `docs/planning` and archive superseded plans.
@@ -74,6 +77,19 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [ ] Create `docs/support/`.
 - [ ] Create `docs/legal/`.
 - [ ] Execute Web/Mobile/Desktop domain-first moves from `docs/plans/domain-first-reorg.md` after root/docs/package contracts are stable.
+
+## Agent-Native Development Tasks
+
+- [x] Add external and local-reference evidence for agentic development as the expected future workflow.
+- [x] Add `PLAN.md` rules for agent-native repo design.
+- [ ] Add path-scoped agent rules for high-risk surfaces after root cleanup.
+- [x] Add agent task templates for exploration, implementation, review, and verification.
+- [ ] Add worktree/session isolation guidance for parallel AGI development.
+- [x] Add CI enforcement for docs and LLM-operability checks on docs-only changes.
+- [x] Add debt-aware README ownership coverage enforcement for apps, packages, crates, and services.
+- [x] Add debt-aware generated artifact drift check.
+- [ ] Tighten README ownership check after P0/P1 READMEs are created.
+- [ ] Tighten generated artifact check after root scratch and `.playwright-mcp` debt are moved.
 
 ## CLI Engine Tasks
 

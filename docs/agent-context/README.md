@@ -15,6 +15,7 @@ This folder is the tool-neutral map for coding agents. Codex, Claude Code, Curso
 5. `known-flaws.md` - open issues and stale claims agents should not rediscover as new.
 6. `doc-status.json` - which docs are current, historical, or working notes.
 7. `bug-finding-guide.md` - workflow for finding bugs without getting lost in stale docs.
+8. `agent-task-templates.md` - standard prompts for exploration, implementation, review, and verification agents.
 
 ## Rules
 
@@ -22,3 +23,4 @@ This folder is the tool-neutral map for coding agents. Codex, Claude Code, Curso
 - If a bug is already listed in `known-flaws.md`, update its status instead of creating a duplicate finding.
 - If a source-of-truth conflict appears, prefer `docs/decisions/CURRENT_DECISIONS.md`, `PLAN.md`, and this folder over older launch plans.
 - Keep JSON files parseable without comments.
+- Split parallel agent work by disjoint write paths and record verification evidence before committing.

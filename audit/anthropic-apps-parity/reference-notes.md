@@ -1,40 +1,42 @@
 # Local Reference Notes
 
+Status: Current evidence
+Owner: Product/platform
 Last updated: 2026-05-20.
 
 This file records architecture patterns from `/Users/siddhartha/Desktop/reference`. It is not permission to copy code.
 
 ## License Snapshot
 
-| Reference | Path | License status observed | Guidance |
-| --- | --- | --- | --- |
-| Codex CLI | `/Users/siddhartha/Desktop/reference/codex-cli` | Apache-2.0 license file present. | Architecture is safe to study. Do not copy source unless Apache-2.0 obligations and `NOTICE` handling are explicitly preserved. |
-| OpenClaw | `/Users/siddhartha/Desktop/reference/openclaw` | MIT license file present. | Concepts can be reimplemented cleanly. Copied source would require copyright/license notice. |
-| Gemini CLI | `/Users/siddhartha/Desktop/reference/gemini-cli` | Apache-2.0 license file present. | Architecture is safe to study. Copied source would need Apache headers/notices as required by that repo. |
-| opencode | `/Users/siddhartha/Desktop/reference/opencode` | MIT license file present. | Concepts can be reimplemented cleanly. Copied source would require copyright/license notice. |
-| claw-code | `/Users/siddhartha/Desktop/reference/claw-code` | MIT declared in `rust/Cargo.toml`, but no root `LICENSE` found in inspected paths. | Treat as license-uncertain until a repository-level license is verified. Use high-level ideas only. |
-| `reference/src` | `/Users/siddhartha/Desktop/reference/src` | No license metadata found in inspected paths. | Treat as internal/proprietary unless owner clearance says otherwise. Do not redistribute or copy from it. |
+| Reference       | Path                                             | License status observed                                                            | Guidance                                                                                                                        |
+| --------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Codex CLI       | `/Users/siddhartha/Desktop/reference/codex-cli`  | Apache-2.0 license file present.                                                   | Architecture is safe to study. Do not copy source unless Apache-2.0 obligations and `NOTICE` handling are explicitly preserved. |
+| OpenClaw        | `/Users/siddhartha/Desktop/reference/openclaw`   | MIT license file present.                                                          | Concepts can be reimplemented cleanly. Copied source would require copyright/license notice.                                    |
+| Gemini CLI      | `/Users/siddhartha/Desktop/reference/gemini-cli` | Apache-2.0 license file present.                                                   | Architecture is safe to study. Copied source would need Apache headers/notices as required by that repo.                        |
+| opencode        | `/Users/siddhartha/Desktop/reference/opencode`   | MIT license file present.                                                          | Concepts can be reimplemented cleanly. Copied source would require copyright/license notice.                                    |
+| claw-code       | `/Users/siddhartha/Desktop/reference/claw-code`  | MIT declared in `rust/Cargo.toml`, but no root `LICENSE` found in inspected paths. | Treat as license-uncertain until a repository-level license is verified. Use high-level ideas only.                             |
+| `reference/src` | `/Users/siddhartha/Desktop/reference/src`        | No license metadata found in inspected paths.                                      | Treat as internal/proprietary unless owner clearance says otherwise. Do not redistribute or copy from it.                       |
 
 ## Architecture Patterns To Evaluate
 
-| Pattern | References to inspect | AGI use |
-| --- | --- | --- |
-| Typed event protocol | Codex submission/event queues, Gemini `stream-json`, OpenClaw WebSocket events, Claw lane events | Define one NDJSON/WebSocket event model with `seq`, `stateVersion`, `sessionId`, `workerId`, `toolCallId`, provenance, and replay support. |
-| Durable session manager | Codex thread lifecycle, opencode sessions, AGI task/session stores | Parent/child sessions, fork/resume/archive, branch metadata, snapshots, usage/cost, and persistent task outputs. |
-| Rust CLI as engine with protocol contracts | Codex CLI, AGI `apps/cli`, `crates/*` | Keep CLI/Rust engine as canonical behavior source instead of letting surfaces diverge. |
-| Declarative tool registry | Codex tool registry plan, opencode tools, `reference/src/Tool.ts` | Split tool declarations from executors: schema, visibility, diagnostics, permissions, parallelism, owner, executor reference. |
-| Worker lifecycle states | Claw worker states, opencode child sessions, AGI task runtime | Standard states: `spawning`, `trust_required`, `ready_for_prompt`, `prompt_accepted`, `running`, `blocked`, `finished`, `failed`. |
-| Permission profiles | opencode permissions, Codex sandbox/exec policy, Claude tool permission behavior | Build/plan/review/explore/general profiles, session grants, turn grants, persisted approvals, and deny-by-default dangerous operations. |
-| Gateway daemon | OpenClaw gateway, AGI future local engine | A local daemon owns sessions, workers, tools, plugins, credentials, device pairing, and event broadcast; CLI/TUI/Web/Mobile become clients. |
-| Team topology | `reference/src` team/swarm/task primitives, opencode child tasks | Manager/worker topology, mailboxes, task assignment, quotas, cancellation, worker health, reconnection, and visible lane state. |
-| Plugin activation plan | OpenClaw manifest-first plugins, Codex/Gemini extension patterns | Validate manifests without executing plugin code; dependency resolution, capability registration, startup diagnostics, stable SDK public types. |
-| Parity harness | Gemini tests/perf/checkpoints, Claw compat harness, Codex protocol tests | Golden task scenarios, mock providers, deterministic shell fixtures, sandbox matrix, memory/perf baselines, event transcript replay. |
-| Command palette and slash command registry | `reference/src/commands`, Codex/Gemini/opencode command layers | Finish custom commands and MCP prompt commands. |
-| Provider abstraction | OpenClaw packages, AGI `packages/providers`, `packages/llm-runtime` | Multi-provider BYOK without per-surface drift. |
-| MCP/connectors | Claude docs, Codex/OpenClaw/Gemini MCP code, AGI `packages/mcp` | Unified connector registry and OAuth state. |
-| Artifacts/sandbox rendering | Claude artifact behavior, AGI `apps/sandbox`, `packages/unified-chat` | Dedicated artifact contract and secure renderer. |
-| Agents/subagents/tasks | Claude subagents docs, opencode/Gemini task patterns, AGI task crates | Agent manager plus separate context execution. |
-| Local/BYOK boundary | AGI product decision, local model packages | Carry privacy mode through all surfaces. |
+| Pattern                                    | References to inspect                                                                            | AGI use                                                                                                                                         |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Typed event protocol                       | Codex submission/event queues, Gemini `stream-json`, OpenClaw WebSocket events, Claw lane events | Define one NDJSON/WebSocket event model with `seq`, `stateVersion`, `sessionId`, `workerId`, `toolCallId`, provenance, and replay support.      |
+| Durable session manager                    | Codex thread lifecycle, opencode sessions, AGI task/session stores                               | Parent/child sessions, fork/resume/archive, branch metadata, snapshots, usage/cost, and persistent task outputs.                                |
+| Rust CLI as engine with protocol contracts | Codex CLI, AGI `apps/cli`, `crates/*`                                                            | Keep CLI/Rust engine as canonical behavior source instead of letting surfaces diverge.                                                          |
+| Declarative tool registry                  | Codex tool registry plan, opencode tools, `reference/src/Tool.ts`                                | Split tool declarations from executors: schema, visibility, diagnostics, permissions, parallelism, owner, executor reference.                   |
+| Worker lifecycle states                    | Claw worker states, opencode child sessions, AGI task runtime                                    | Standard states: `spawning`, `trust_required`, `ready_for_prompt`, `prompt_accepted`, `running`, `blocked`, `finished`, `failed`.               |
+| Permission profiles                        | opencode permissions, Codex sandbox/exec policy, Claude tool permission behavior                 | Build/plan/review/explore/general profiles, session grants, turn grants, persisted approvals, and deny-by-default dangerous operations.         |
+| Gateway daemon                             | OpenClaw gateway, AGI future local engine                                                        | A local daemon owns sessions, workers, tools, plugins, credentials, device pairing, and event broadcast; CLI/TUI/Web/Mobile become clients.     |
+| Team topology                              | `reference/src` team/swarm/task primitives, opencode child tasks                                 | Manager/worker topology, mailboxes, task assignment, quotas, cancellation, worker health, reconnection, and visible lane state.                 |
+| Plugin activation plan                     | OpenClaw manifest-first plugins, Codex/Gemini extension patterns                                 | Validate manifests without executing plugin code; dependency resolution, capability registration, startup diagnostics, stable SDK public types. |
+| Parity harness                             | Gemini tests/perf/checkpoints, Claw compat harness, Codex protocol tests                         | Golden task scenarios, mock providers, deterministic shell fixtures, sandbox matrix, memory/perf baselines, event transcript replay.            |
+| Command palette and slash command registry | `reference/src/commands`, Codex/Gemini/opencode command layers                                   | Finish custom commands and MCP prompt commands.                                                                                                 |
+| Provider abstraction                       | OpenClaw packages, AGI `packages/providers`, `packages/llm-runtime`                              | Multi-provider BYOK without per-surface drift.                                                                                                  |
+| MCP/connectors                             | Claude docs, Codex/OpenClaw/Gemini MCP code, AGI `packages/mcp`                                  | Unified connector registry and OAuth state.                                                                                                     |
+| Artifacts/sandbox rendering                | Claude artifact behavior, AGI `apps/sandbox`, `packages/unified-chat`                            | Dedicated artifact contract and secure renderer.                                                                                                |
+| Agents/subagents/tasks                     | Claude subagents docs, opencode/Gemini task patterns, AGI task crates                            | Agent manager plus separate context execution.                                                                                                  |
+| Local/BYOK boundary                        | AGI product decision, local model packages                                                       | Carry privacy mode through all surfaces.                                                                                                        |
 
 ## Reference Strengths
 
@@ -67,16 +69,16 @@ Inventory command: `rg --files -g '!node_modules' -g '!dist' -g '!build' -g '!ta
 
 Coverage: 1902 of 1902 scoped files were read through assigned parallel explorer passes. This is a coverage record, not permission to copy code.
 
-| Scope | Files | Coverage notes |
-| --- | ---: | --- |
-| Core runtime, entrypoints, bridge, remote, state, tasks, types, migrations, native shims, top-level files | 157 | Covered by the core explorer. Includes `QueryEngine.ts`, `query.ts`, `Tool.ts`, `Task.ts`, `commands.ts`, `main.tsx`, `screens/REPL.tsx`, bridge/remote/session/task files. |
-| `commands/` | 207 | Covered by the commands explorer. |
-| `components/` + `ink/` | 485 | Covered by the terminal UI explorer. |
-| `tools/` | 184 | Covered by the tools explorer. |
-| `services/` + `hooks/` | 234 | Covered by the services/hooks explorer and verified by checksumming the file set. |
-| `utils/` | 564 | Covered by the utils explorer. |
-| `constants/`, `keybindings/`, `memdir/`, `plugins/`, `skills/`, `buddy/` | 71 | Covered by the small-scope explorer; an initial count mismatch was reconciled to 71 files and no omissions. |
-| **Total** | **1902** | Matches the scoped inventory. |
+| Scope                                                                                                     |    Files | Coverage notes                                                                                                                                                              |
+| --------------------------------------------------------------------------------------------------------- | -------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Core runtime, entrypoints, bridge, remote, state, tasks, types, migrations, native shims, top-level files |      157 | Covered by the core explorer. Includes `QueryEngine.ts`, `query.ts`, `Tool.ts`, `Task.ts`, `commands.ts`, `main.tsx`, `screens/REPL.tsx`, bridge/remote/session/task files. |
+| `commands/`                                                                                               |      207 | Covered by the commands explorer.                                                                                                                                           |
+| `components/` + `ink/`                                                                                    |      485 | Covered by the terminal UI explorer.                                                                                                                                        |
+| `tools/`                                                                                                  |      184 | Covered by the tools explorer.                                                                                                                                              |
+| `services/` + `hooks/`                                                                                    |      234 | Covered by the services/hooks explorer and verified by checksumming the file set.                                                                                           |
+| `utils/`                                                                                                  |      564 | Covered by the utils explorer.                                                                                                                                              |
+| `constants/`, `keybindings/`, `memdir/`, `plugins/`, `skills/`, `buddy/`                                  |       71 | Covered by the small-scope explorer; an initial count mismatch was reconciled to 71 files and no omissions.                                                                 |
+| **Total**                                                                                                 | **1902** | Matches the scoped inventory.                                                                                                                                               |
 
 ### Main Architecture Lessons
 
