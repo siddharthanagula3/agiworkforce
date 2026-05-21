@@ -147,6 +147,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 
 ### Fixed
 
+- Mobile v1 local-only no longer dead-ends on a blank screen after Face ID. The `(auth)/login` route now redirects to `(app)` when `FEATURES.auth` is false (previously rendered `null`), the root navigator's auth guard skips the login redirect when auth is feature-gated off, and `services/api.ts` `handleUnrecoverableAuth` silently clears the stale Supabase session instead of firing a Session-Expired alert that the user can't act on in v1.
 - Mobile physical iPhone Debug builds now compile under the installed Xcode/iOS SDK by aligning React Native to Expo SDK 55, removing unused `expo-av`, patching the Expo root-view optional dev-menu mismatch, and updating `AGITranslate` for the current Translation framework API.
 - Mobile notification deep links now target `/(app)/companion/agent/[id]` with the correct `id` route param, restoring Expo typed-route typecheck.
 - Mobile AppShortcuts localization now compiles from the supported root `AppShortcuts.xcstrings` resource path instead of the invalid nested `en.lproj` placement.

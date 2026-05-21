@@ -1,12 +1,16 @@
 import { View, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Redirect } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { LoginForm } from '@/src/features/auth/components/LoginForm';
 import { OAuthButtons } from '@/src/features/auth/components/OAuthButtons';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
 export default function LoginScreen() {
-  if (!FEATURES.auth) return null;
+  // v1 local-only: auth UI is gated off. Bounce to the app shell instead of
+  // returning null (which stranded users on a blank screen when the auth
+  // guard in app/_layout.tsx redirected here on a 401).
+  if (!FEATURES.auth) return <Redirect href="/(app)" />;
   return (
     <SafeAreaView className="flex-1 bg-surface-base">
       <KeyboardAvoidingView
