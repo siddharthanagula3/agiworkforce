@@ -87,6 +87,7 @@ pub mod sandbox;
 pub mod shell_snapshot;
 pub mod sync;
 pub mod tier_cache;
+pub(crate) mod tool_filters;
 pub mod tool_search;
 
 // Phase-2 candidates — implementations exist but the user-facing surface is
@@ -971,6 +972,10 @@ pub async fn run_main() -> Result<()> {
                 let mut session = agent::AgentSession::new(&m, &sys_ctx, None);
                 session.set_provider_override(&app_config.default.provider);
                 session.apply_ui_config(&app_config);
+                session.apply_tool_filters(
+                    &normalized_cli_options.allowed_tools,
+                    &normalized_cli_options.disallowed_tools,
+                );
                 if chain.primaries.len() > 1 {
                     session.fallback_chain = Some(chain);
                 }
@@ -1120,6 +1125,8 @@ pub async fn run_main() -> Result<()> {
                     false,
                     cli_options::PermissionMode::Default,
                     false,
+                    normalized_cli_options.allowed_tools.clone(),
+                    normalized_cli_options.disallowed_tools.clone(),
                 )
                 .await
             }
@@ -1148,6 +1155,8 @@ pub async fn run_main() -> Result<()> {
                     false,
                     cli_options::PermissionMode::Default,
                     false,
+                    normalized_cli_options.allowed_tools.clone(),
+                    normalized_cli_options.disallowed_tools.clone(),
                 )
                 .await
             }
@@ -1966,6 +1975,8 @@ pub async fn run_main() -> Result<()> {
             cli.quiet,
             effective_permission_mode,
             effective_auto_approve_plan,
+            normalized_cli_options.allowed_tools.clone(),
+            normalized_cli_options.disallowed_tools.clone(),
         )
         .await;
     }
@@ -2073,6 +2084,8 @@ pub async fn run_main() -> Result<()> {
             cli.quiet,
             effective_permission_mode,
             effective_auto_approve_plan,
+            normalized_cli_options.allowed_tools.clone(),
+            normalized_cli_options.disallowed_tools.clone(),
         )
         .await
     } else {
@@ -2094,6 +2107,8 @@ pub async fn run_main() -> Result<()> {
             effective_permission_mode,
             effective_auto_approve_plan,
             cli.no_sandbox,
+            normalized_cli_options.allowed_tools.clone(),
+            normalized_cli_options.disallowed_tools.clone(),
         )
         .await
     }
@@ -2187,6 +2202,8 @@ pub async fn run_oneshot(
     quiet: bool,
     permission_mode: cli_options::PermissionMode,
     auto_approve_plan: bool,
+    allowed_tools: Vec<String>,
+    disallowed_tools: Vec<String>,
 ) -> Result<()> {
     let mut session = agent::AgentSession::new(model, sys_context, custom_system_prompt);
     // Apply config-based provider override (e.g. "ollama-cloud") when the
@@ -2202,6 +2219,7 @@ pub async fn run_oneshot(
     // the plan-mode reminder and the dispatcher gates mutating tools.
     session.permission_mode = permission_mode;
     session.auto_approve_plan = auto_approve_plan;
+    session.apply_tool_filters(&allowed_tools, &disallowed_tools);
     if matches!(permission_mode, cli_options::PermissionMode::Plan) {
         session.plan_mode = true;
     }

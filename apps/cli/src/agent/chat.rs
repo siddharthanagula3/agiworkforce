@@ -128,16 +128,7 @@ message -- revise and call `update_plan` again.\n\n",
 
         let max_tokens = config.default.max_tokens;
 
-        let mcp_tool_definitions = self
-            .mcp_manager
-            .as_ref()
-            .map(|mcp_manager| mcp_manager.tool_definitions());
-        let tool_defs = crate::runtime::tool_catalog::effective_tool_definitions(
-            self.plan_mode,
-            self.team_manager.is_some(),
-            self.allowed_tools.as_deref(),
-            mcp_tool_definitions.as_deref(),
-        );
+        let tool_defs = self.effective_tool_definitions();
         let available_tool_names = tool_defs
             .iter()
             .map(|tool_definition| tool_definition.name.as_str())
@@ -682,6 +673,26 @@ message -- revise and call `update_plan` again.\n\n",
                         });
                         continue;
                     }
+                    let legacy_args = value_to_legacy_args(&tc.arguments);
+                    if let Err(violation) = crate::tool_filters::ensure_tool_call_allowed(
+                        &tc.name,
+                        &legacy_args,
+                        self.allowed_tools.as_deref(),
+                        &self.disallowed_tools,
+                    ) {
+                        result_blocks.push(ContentBlock::ToolResult {
+                            tool_use_id: tc.id.clone(),
+                            content: serde_json::json!({
+                                "ok": false,
+                                "error": "tool_filter_violation",
+                                "rule": violation.rule,
+                                "message": violation.reason,
+                            })
+                            .to_string(),
+                            is_error: true,
+                        });
+                        continue;
+                    }
                     runnable.push(tc);
                 }
 
@@ -869,6 +880,26 @@ message -- revise and call `update_plan` again.\n\n",
                     name: tc.name.clone(),
                     args: value_to_legacy_args(&effective_args),
                 };
+
+                if let Err(violation) = crate::tool_filters::ensure_tool_call_allowed(
+                    &tc.name,
+                    &legacy.args,
+                    self.allowed_tools.as_deref(),
+                    &self.disallowed_tools,
+                ) {
+                    result_blocks.push(ContentBlock::ToolResult {
+                        tool_use_id: tc.id.clone(),
+                        content: serde_json::json!({
+                            "ok": false,
+                            "error": "tool_filter_violation",
+                            "rule": violation.rule,
+                            "message": violation.reason,
+                        })
+                        .to_string(),
+                        is_error: true,
+                    });
+                    continue;
+                }
 
                 let tool_result = if tc.name == "update_plan" {
                     let payload = self.handle_update_plan(&effective_args);

@@ -8,7 +8,6 @@ use crate::context::SystemContext;
 use crate::hooks;
 use crate::mcp;
 use crate::memory::{self, MemoryManager};
-#[cfg(test)]
 use crate::models::ToolDefinition;
 use crate::models::{self, Message, Provider};
 use crate::runtime::session::ManagedSession;
@@ -96,6 +95,7 @@ pub struct AgentSession {
     #[allow(dead_code)]
     pub fallback_model: Option<String>,
     pub allowed_tools: Option<Vec<String>>,
+    pub disallowed_tools: Vec<String>,
     pub privacy_mode: PrivacyMode,
     pub additional_context_dirs: Vec<PathBuf>,
     pub attached_context_files: Vec<PathBuf>,
@@ -277,6 +277,7 @@ impl AgentSession {
             session_name: None,
             fallback_model: None,
             allowed_tools: None,
+            disallowed_tools: Vec::new(),
             privacy_mode,
             additional_context_dirs: Vec::new(),
             attached_context_files: Vec::new(),
@@ -320,18 +321,53 @@ impl AgentSession {
         ));
     }
 
+    pub(crate) fn apply_tool_filters(
+        &mut self,
+        allowed_tools: &[String],
+        disallowed_tools: &[String],
+    ) {
+        self.allowed_tools = if allowed_tools.is_empty() {
+            None
+        } else {
+            Some(allowed_tools.to_vec())
+        };
+        self.disallowed_tools = disallowed_tools.to_vec();
+    }
+
+    pub(crate) fn effective_tool_definitions(&self) -> Vec<ToolDefinition> {
+        let mcp_tool_definitions = self
+            .mcp_manager
+            .as_ref()
+            .map(|mcp_manager| mcp_manager.tool_definitions());
+        let mut tool_definitions = crate::runtime::tool_catalog::effective_tool_definitions(
+            self.plan_mode,
+            self.team_manager.is_some(),
+            self.allowed_tools.as_deref(),
+            mcp_tool_definitions.as_deref(),
+        );
+
+        if !self.disallowed_tools.is_empty() {
+            tool_definitions.retain(|tool_definition| {
+                !self.disallowed_tools.iter().any(|spec| {
+                    crate::tool_filters::spec_blocks_entire_tool_for_schema(
+                        spec,
+                        &tool_definition.name,
+                    )
+                })
+            });
+        }
+
+        tool_definitions
+    }
+
     /// Generate an A2A AgentCard representing this session's capabilities.
     #[allow(dead_code)]
     pub fn a2a_card(&self) -> crate::a2a::AgentCard {
-        let tool_names: Vec<String> = crate::runtime::tool_catalog::effective_tool_definitions(
-            false,
-            self.team_manager.is_some(),
-            self.allowed_tools.as_deref(),
-            None,
-        )
-        .iter()
-        .map(|t| t.name.clone())
-        .collect();
+        let tool_names: Vec<String> = self
+            .effective_tool_definitions()
+            .iter()
+            .map(|t| t.name.clone())
+            .collect();
 
         crate::a2a::AgentCard {
             agent_id: crate::a2a::generate_agent_id(),
@@ -815,6 +851,24 @@ mod tests {
     };
     use history::build_assistant_message;
     use tools::is_team_tool;
+
+    fn test_context() -> SystemContext {
+        SystemContext {
+            cwd: "/tmp".to_string(),
+            git_branch: None,
+            git_status_summary: None,
+            git_remote_url: None,
+            project_type: None,
+            project_language: None,
+            ci_providers: vec![],
+            monorepo_type: None,
+            package_manager: None,
+            containerization: vec![],
+            editor_configs: vec![],
+            os: "test".to_string(),
+            shell: "test".to_string(),
+        }
+    }
 
     #[test]
     fn test_build_tool_definitions_count() {
@@ -1334,5 +1388,39 @@ mod tests {
         };
         let session = AgentSession::new("test-model", &ctx, None);
         assert!(!session.skip_permissions);
+    }
+
+    #[test]
+    fn tool_filters_hide_only_entire_disallowed_schema_rules() {
+        let ctx = test_context();
+        let mut session = AgentSession::new("test-model", &ctx, None);
+        session.apply_tool_filters(&[], &["Bash(*)".to_string()]);
+
+        let names = session
+            .effective_tool_definitions()
+            .into_iter()
+            .map(|tool| tool.name)
+            .collect::<Vec<_>>();
+
+        assert!(!names.iter().any(|name| name == "run_command"));
+
+        session.apply_tool_filters(&[], &["Bash(rm*)".to_string()]);
+        let names = session
+            .effective_tool_definitions()
+            .into_iter()
+            .map(|tool| tool.name)
+            .collect::<Vec<_>>();
+
+        assert!(names.iter().any(|name| name == "run_command"));
+    }
+
+    #[test]
+    fn apply_tool_filters_stores_empty_allowlist_as_unrestricted() {
+        let ctx = test_context();
+        let mut session = AgentSession::new("test-model", &ctx, None);
+        session.apply_tool_filters(&[], &["WebFetch(*)".to_string()]);
+
+        assert!(session.allowed_tools.is_none());
+        assert_eq!(session.disallowed_tools, vec!["WebFetch(*)"]);
     }
 }

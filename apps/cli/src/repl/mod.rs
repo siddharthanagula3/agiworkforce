@@ -45,6 +45,8 @@ pub async fn run_repl(
     quiet: bool,
     permission_mode: crate::cli_options::PermissionMode,
     auto_approve_plan: bool,
+    allowed_tools: Vec<String>,
+    disallowed_tools: Vec<String>,
 ) -> Result<()> {
     let provider_name = crate::models::detect_provider(model);
     let provider_str = format!("{:?}", provider_name).to_lowercase();
@@ -62,6 +64,7 @@ pub async fn run_repl(
     session.session_name = session_name;
     session.permission_mode = permission_mode;
     session.auto_approve_plan = auto_approve_plan;
+    session.apply_tool_filters(&allowed_tools, &disallowed_tools);
     if matches!(permission_mode, crate::cli_options::PermissionMode::Plan) {
         session.plan_mode = true;
     }

@@ -2120,6 +2120,8 @@ pub async fn run(
     permission_mode: crate::cli_options::PermissionMode,
     auto_approve_plan: bool,
     sandbox_disabled: bool,
+    allowed_tools: Vec<String>,
+    disallowed_tools: Vec<String>,
 ) -> Result<()> {
     let mut session = AgentSession::new(model, sys_context, custom_system_prompt);
     if let Some(ref provider) = provider_override {
@@ -2135,6 +2137,7 @@ pub async fn run(
     // semantics from `repl::run_repl` and `run_oneshot`.
     session.permission_mode = permission_mode;
     session.auto_approve_plan = auto_approve_plan;
+    session.apply_tool_filters(&allowed_tools, &disallowed_tools);
     if matches!(permission_mode, crate::cli_options::PermissionMode::Plan) {
         session.plan_mode = true;
     }
