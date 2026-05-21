@@ -12,23 +12,6 @@ pub(super) const TEAM_TOOL_NAMES: &[&str] = &[
     "list_teammates",
 ];
 
-/// Built-in tools considered mutating for the plan-mode gate.
-pub(super) const MUTATING_TOOL_NAMES: &[&str] = &[
-    "write_file",
-    "edit_file",
-    "run_command",
-    "apply_patch",
-    "multiedit",
-    "task",
-    "batch",
-    "todo_write",
-];
-
-/// True when the named tool is considered mutating for plan-mode gating.
-pub(super) fn is_mutating_tool(name: &str) -> bool {
-    MUTATING_TOOL_NAMES.contains(&name) || name.starts_with("mcp_")
-}
-
 /// Check if a tool name is a team tool.
 pub(super) fn is_team_tool(name: &str) -> bool {
     TEAM_TOOL_NAMES.contains(&name)

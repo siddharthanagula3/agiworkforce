@@ -205,6 +205,22 @@ pub fn tool_result_size_cap(tool_name: &str) -> Option<usize> {
         .and_then(|tool| tool.max_result_size_chars)
 }
 
+pub fn is_plan_mode_mutating_tool_definition(tool_definition: &ToolDefinition) -> bool {
+    tool_definition.name != "update_plan"
+        && !tool_definition.is_read_only
+        && tool_definition.permission_class != "read_only"
+}
+
+pub fn is_plan_mode_mutating_tool(tool_name: &str) -> bool {
+    let canonical_name = canonical_tool_name(tool_name);
+    built_in_tool_definitions()
+        .into_iter()
+        .chain(team_tool_definitions())
+        .find(|tool| tool.name == canonical_name)
+        .map(|tool| is_plan_mode_mutating_tool_definition(&tool))
+        .unwrap_or(true)
+}
+
 /// Build native API tool definitions with JSON Schema for each built-in tool.
 pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
     vec![
@@ -1059,6 +1075,22 @@ mod tests {
                 _ => assert_eq!(tool.permission_class, "mutating"),
             }
         }
+    }
+
+    #[test]
+    fn plan_mode_mutating_classification_uses_catalog_metadata() {
+        assert!(!is_plan_mode_mutating_tool("read_file"));
+        assert!(!is_plan_mode_mutating_tool("Read"));
+        assert!(is_plan_mode_mutating_tool("run_command"));
+        assert!(is_plan_mode_mutating_tool("Bash"));
+        assert!(is_plan_mode_mutating_tool("todo_write"));
+        assert!(!is_plan_mode_mutating_tool("update_plan"));
+        assert!(is_plan_mode_mutating_tool("send_message"));
+        assert!(is_plan_mode_mutating_tool("team_task"));
+        assert!(is_plan_mode_mutating_tool("read_messages"));
+        assert!(!is_plan_mode_mutating_tool("list_teammates"));
+        assert!(is_plan_mode_mutating_tool("mcp_custom_tool"));
+        assert!(is_plan_mode_mutating_tool("future_tool_without_metadata"));
     }
 
     #[test]

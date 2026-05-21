@@ -182,6 +182,8 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Define typed CLI event stream for future Desktop/Web/Mobile clients.
 - [x] Define durable session/fork/replay contract for parent and child sessions.
 - [x] Split CLI tool declarations from executors with schema, diagnostics, permissions, and owner metadata.
+- [x] Apply CLI allowed/disallowed tool filters consistently across one-shot, REPL, and TUI sessions.
+- [x] Route CLI plan-mode mutation gates through the central tool catalog and restore mutable tools after plan approval.
 - [x] Add `agi doctor --json` covering runtime deps, auth, sandbox, MCP, plugins, model access, writable state dirs, stale branches, and transport health.
 - [x] Test that every registered slash command has runtime behavior in both TUI and REPL.
 

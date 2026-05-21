@@ -13,7 +13,7 @@ use super::executor::{
     LOOP_DETECTION_THRESHOLD, MAX_AGENTIC_ITERATIONS,
 };
 use super::history::build_assistant_message;
-use super::tools::{execute_mcp_tool, execute_team_tool, is_mutating_tool, is_team_tool};
+use super::tools::{execute_mcp_tool, execute_team_tool, is_team_tool};
 use super::{AgentSession, TurnResult};
 
 impl AgentSession {
@@ -391,6 +391,15 @@ message -- revise and call `update_plan` again.\n\n",
                 .iter()
                 .filter(|t| t.is_concurrency_safe)
                 .map(|t| t.name.clone())
+                .collect();
+            let plan_mode_mutating_names: std::collections::HashSet<&str> = tool_defs
+                .iter()
+                .filter(|tool_definition| {
+                    crate::runtime::tool_catalog::is_plan_mode_mutating_tool_definition(
+                        tool_definition,
+                    )
+                })
+                .map(|tool_definition| tool_definition.name.as_str())
                 .collect();
             let concurrent_eligible = |name: &str| -> bool {
                 self.skip_permissions
@@ -808,7 +817,7 @@ message -- revise and call `update_plan` again.\n\n",
                     self.permission_mode,
                     crate::cli_options::PermissionMode::Plan
                 ) && !self.plan_approved
-                    && is_mutating_tool(&tc.name)
+                    && plan_mode_mutating_names.contains(tc.name.as_str())
                 {
                     let payload = serde_json::json!({
                         "ok": false,

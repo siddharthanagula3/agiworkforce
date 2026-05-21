@@ -339,8 +339,9 @@ impl AgentSession {
             .mcp_manager
             .as_ref()
             .map(|mcp_manager| mcp_manager.tool_definitions());
+        let planning_locked = self.plan_mode && !self.plan_approved;
         let mut tool_definitions = crate::runtime::tool_catalog::effective_tool_definitions(
-            self.plan_mode,
+            planning_locked,
             self.team_manager.is_some(),
             self.allowed_tools.as_deref(),
             mcp_tool_definitions.as_deref(),
@@ -1422,5 +1423,29 @@ mod tests {
 
         assert!(session.allowed_tools.is_none());
         assert_eq!(session.disallowed_tools, vec!["WebFetch(*)"]);
+    }
+
+    #[test]
+    fn effective_tool_definitions_restore_mutating_tools_after_plan_approval() {
+        let ctx = test_context();
+        let mut session = AgentSession::new("test-model", &ctx, None);
+        session.plan_mode = true;
+
+        let locked_names = session
+            .effective_tool_definitions()
+            .into_iter()
+            .map(|tool| tool.name)
+            .collect::<Vec<_>>();
+        assert!(!locked_names.iter().any(|name| name == "run_command"));
+        assert!(locked_names.iter().any(|name| name == "update_plan"));
+
+        session.plan_approved = true;
+        let approved_names = session
+            .effective_tool_definitions()
+            .into_iter()
+            .map(|tool| tool.name)
+            .collect::<Vec<_>>();
+        assert!(approved_names.iter().any(|name| name == "run_command"));
+        assert!(!approved_names.iter().any(|name| name == "update_plan"));
     }
 }
