@@ -26,7 +26,7 @@ interface UseChatStreamReturn {
  */
 async function saveMessageToDb(
   conversationId: string,
-  message: { role: string; content: string; model?: string },
+  message: { role: string; content: string; model?: string; metadata?: Record<string, unknown> },
   authToken: string,
 ): Promise<{ id: string } | null> {
   try {
@@ -40,6 +40,7 @@ async function saveMessageToDb(
         role: message.role,
         content: message.content,
         model: message.model,
+        metadata: message.metadata,
         skipLlm: true, // Flag to save message without triggering LLM call
       }),
     });

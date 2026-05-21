@@ -217,14 +217,17 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Define separate developer session schema for CLI/VS Code/Chrome.
 - [x] Define Desktop/local-host remote-control schema for Mobile approvals, notifications, generated-file preview, and task steering.
 - [x] Define explicit developer-session handoff schema into synced app chats.
-- [ ] Add Local -> BYOK fork flow on Desktop.
+- [x] Add Local -> BYOK fork flow on Desktop.
 - [x] Add Local -> BYOK fork flow on Mobile.
   - [x] Replace placeholder Mobile mode-switch modal with shared secret-scan and payload-preview gate.
   - [x] Persist the confirmed Mobile handoff as a new forked conversation instead of only changing the active model.
-- [ ] Add Local -> BYOK fork flow on Web.
-- [ ] Add payload preview and secret scan UI before BYOK handoff.
+- [x] Add Local -> BYOK fork flow on Web.
+- [x] Add payload preview and secret scan UI before BYOK handoff.
   - [x] Add shared Local -> BYOK draft builder with redacted payload preview, findings, checksums, and preview hash evidence.
-  - [ ] Wire the shared preview/finding result into Desktop, Mobile, and Web handoff UI.
+  - [x] Wire the shared preview/finding result into Desktop, Mobile, and Web handoff UI.
+    - [x] Desktop conversation action.
+    - [x] Mobile mode-switch modal.
+    - [x] Web conversation/model handoff.
 - [x] Define shared project schema.
 - [x] Define shared artifact schema.
 - [x] Define shared `ComputeSession`, `GeneratedFile`, and `ArtifactManifest` schemas.

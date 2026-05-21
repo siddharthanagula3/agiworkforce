@@ -44,7 +44,7 @@ interface ChatComposerProps {
       thinkingEnabled?: boolean;
       codeExecutionEnabled?: boolean;
     },
-  ) => void;
+  ) => void | false;
   isLoading?: boolean;
   /**
    * True while an SSE stream is actively generating output.
@@ -70,6 +70,8 @@ interface ChatComposerProps {
   onTypingChange?: (isTyping: boolean) => void;
   /** Called when the user clicks the stop button. Overrides the default ChatAIService.stopGeneration(). */
   onStop?: () => void;
+  /** Increment to clear composer state after a parent-owned deferred send. */
+  clearSignal?: number;
 }
 
 const TOOLS = [
@@ -109,6 +111,7 @@ const ChatComposerNewComponent = ({
   onDroppedFilesConsumed,
   onTypingChange,
   onStop,
+  clearSignal,
 }: ChatComposerProps) => {
   const [message, setMessage] = useState('');
   const {
@@ -150,6 +153,7 @@ const ChatComposerNewComponent = ({
   const slashMenuRef = useRef<SlashCommandMenuHandle>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wasTypingRef = useRef(false);
+  const lastClearSignalRef = useRef(clearSignal);
 
   // Track empty <-> non-empty transitions with 500ms debounce on clearing
   useEffect(() => {
@@ -193,6 +197,27 @@ const ChatComposerNewComponent = ({
   } = useApiPromptCompletion(message, {
     enabled: promptCompletionEnabled && !showSlashMenu && !showMentions,
   });
+
+  const clearComposerState = useCallback(() => {
+    setMessage('');
+    clearAttachments();
+    setSelectedTools([]);
+    setSelectedSkill(null);
+    setWebSearchEnabled(false);
+    setThinkingEnabled(false);
+    setResearchEnabled(false);
+    clearSuggestion();
+
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+  }, [clearAttachments, clearSuggestion]);
+
+  useEffect(() => {
+    if (clearSignal === undefined || clearSignal === lastClearSignalRef.current) return;
+    lastClearSignalRef.current = clearSignal;
+    clearComposerState();
+  }, [clearComposerState, clearSignal]);
 
   // Handle prefillText prop — React "derived state from props" pattern.
   // When the parent passes a new non-empty prefillText, we update message
@@ -388,26 +413,21 @@ const ChatComposerNewComponent = ({
       if (!message.trim() && attachments.length === 0) return;
       if (isLoading || disabled) return;
 
-      onSend(message, attachments.length > 0 ? attachments : undefined, selectedSkill?.id, {
-        agentMode,
-        folderId: selectedFolderId,
-        webSearchEnabled,
-        thinkingEnabled,
-        codeExecutionEnabled: selectedTools.includes('code-execution'),
-      });
+      const result = onSend(
+        message,
+        attachments.length > 0 ? attachments : undefined,
+        selectedSkill?.id,
+        {
+          agentMode,
+          folderId: selectedFolderId,
+          webSearchEnabled,
+          thinkingEnabled,
+          codeExecutionEnabled: selectedTools.includes('code-execution'),
+        },
+      );
 
-      setMessage('');
-      clearAttachments();
-      setSelectedTools([]);
-      setSelectedSkill(null);
-      setWebSearchEnabled(false);
-      setThinkingEnabled(false);
-      setResearchEnabled(false);
-      clearSuggestion();
-
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-      }
+      if (result === false) return;
+      clearComposerState();
       // selectedTools/thinkingEnabled/webSearchEnabled are read at send-time only;
       // including them would re-create the callback on every toggle and break
       // child memoization without changing behavior.
@@ -421,8 +441,7 @@ const ChatComposerNewComponent = ({
       agentMode,
       selectedFolderId,
       onSend,
-      clearAttachments,
-      clearSuggestion,
+      clearComposerState,
     ],
   );
 
@@ -890,7 +909,8 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     prev.onPrefillConsumed === next.onPrefillConsumed &&
     prev.droppedFiles === next.droppedFiles &&
     prev.onDroppedFilesConsumed === next.onDroppedFilesConsumed &&
-    prev.onTypingChange === next.onTypingChange
+    prev.onTypingChange === next.onTypingChange &&
+    prev.clearSignal === next.clearSignal
   );
 });
 

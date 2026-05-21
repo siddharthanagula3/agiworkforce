@@ -11,6 +11,7 @@ import {
   Download,
   FileText,
   FolderOpen,
+  KeyRound,
   Layers,
   Link2,
   MessageSquare,
@@ -32,6 +33,7 @@ import {
   selectConversations,
   selectActiveConversationId,
   selectActiveView,
+  uuidToDbId,
   type ConversationSummary,
 } from '../../stores/chat/chatStore';
 import { useProjectStore, selectActiveProjects } from '../../stores/projectStore';
@@ -65,6 +67,7 @@ import { NotificationCenter } from '@/features/notifications';
 import { ShareConversationDialog } from './ShareConversationDialog';
 // SidebarFeaturesPopover removed — features accessible via chat or Cmd+K
 import { TransferDialog } from './TransferDialog';
+import { LocalByokHandoffDialog } from './LocalByokHandoffDialog';
 import { IncognitoToggle } from './IncognitoToggle';
 import { save } from '@tauri-apps/plugin-dialog';
 import { invoke, isTauri } from '../../lib/tauri-mock';
@@ -121,6 +124,7 @@ interface ConversationItemProps {
   onTogglePin: (id: string) => void;
   onShare: (id: string, title: string) => void;
   onTransfer: (id: string, title: string) => void;
+  onForkToByok: (id: string, title: string) => void;
   onExport: (id: string, title: string) => void;
   onExportPdf: (id: string, title: string) => void;
   onArchive: (id: string) => void;
@@ -147,6 +151,7 @@ const ConversationItem = memo<ConversationItemProps>(
     onTogglePin,
     onShare,
     onTransfer,
+    onForkToByok,
     onExport,
     onExportPdf,
     onArchive,
@@ -261,6 +266,18 @@ const ConversationItem = memo<ConversationItemProps>(
                     title="Transfer conversation"
                   >
                     <Cloud className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onForkToByok(conv.id, conv.title || 'Untitled');
+                    }}
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-[hsl(var(--muted-foreground))] hover:text-amber-500"
+                    title={`Fork to ${formatPrivacyModeLabel('byok')}`}
+                  >
+                    <KeyRound className="h-3 w-3" />
                   </Button>
                   <Button
                     onClick={(e) => {
@@ -512,6 +529,10 @@ export function Sidebar({
     title: string;
     localDbId?: number;
   } | null>(null);
+  const [handoffTarget, setHandoffTarget] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
 
   // Get projects for filtering - use useShallow to prevent re-renders from array reference changes
   const projects = useProjectStore(useShallow(selectActiveProjects));
@@ -732,7 +753,11 @@ export function Sidebar({
   }, []);
 
   const handleTransfer = useCallback((id: string, title: string) => {
-    setTransferTarget({ id, title });
+    setTransferTarget({ id, title, localDbId: uuidToDbId(id) });
+  }, []);
+
+  const handleForkToByok = useCallback((id: string, title: string) => {
+    setHandoffTarget({ id, title });
   }, []);
 
   const handleArchive = useCallback(
@@ -819,6 +844,7 @@ export function Sidebar({
         onTogglePin={togglePinnedConversation}
         onShare={handleShare}
         onTransfer={handleTransfer}
+        onForkToByok={handleForkToByok}
         onExport={handleExportConversation}
         onExportPdf={handleExportPdf}
         onArchive={handleArchive}
@@ -841,6 +867,7 @@ export function Sidebar({
       togglePinnedConversation,
       handleShare,
       handleTransfer,
+      handleForkToByok,
       handleExportConversation,
       handleExportPdf,
       handleArchive,
@@ -963,6 +990,13 @@ export function Sidebar({
           direction={mode === 'local' ? 'local_to_cloud' : 'cloud_to_local'}
           localDbId={transferTarget.localDbId}
           onClose={() => setTransferTarget(null)}
+        />
+      )}
+      {handoffTarget && (
+        <LocalByokHandoffDialog
+          conversationId={handoffTarget.id}
+          conversationTitle={handoffTarget.title}
+          onClose={() => setHandoffTarget(null)}
         />
       )}
 

@@ -5,6 +5,13 @@ import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 
 // Types
 export interface MessageMetadata {
+  /** Explicit trust-boundary labels for cross-mode handoff and persisted evidence. */
+  privacyMode?: 'local' | 'byok' | 'managed';
+  providerMode?: 'Local' | 'DirectByok' | 'ManagedGateway' | 'ManagedNative';
+  /** Local -> BYOK handoff evidence persisted on the fork system message. */
+  handoffDraftId?: string;
+  handoffPreviewHashSha256?: string;
+  handoffSourceConversationId?: string;
   /** Raw extended thinking text rendered by ThinkingBlock */
   thinkingContent?: string;
   /** True while thinking content is still streaming */
@@ -67,6 +74,7 @@ export interface Conversation {
   title: string;
   createdAt: string;
   updatedAt: string;
+  model?: string | null;
   messageCount?: number;
 }
 
