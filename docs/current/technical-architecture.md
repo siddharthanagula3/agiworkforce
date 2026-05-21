@@ -80,6 +80,8 @@ Desktop/Web UI direction uses the latest Claude desktop modal references as the 
 
 The Desktop settings surface now implements the first pass of that baseline: settings stay in a focused centered modal, the left rail has search, and settings are grouped into primary account/preferences, customization, and desktop-app sections without changing save behavior.
 
+Desktop file previews also use the shared focused dialog shell, keeping generated/local file inspection in a modal unless the user explicitly opens a deeper artifact workspace.
+
 Generated files need:
 
 - owner session,

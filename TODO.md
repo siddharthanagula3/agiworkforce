@@ -215,6 +215,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Define `ProviderMode`: `Local`, `DirectByok`, `ManagedGateway`, `ManagedNative`.
 - [x] Add provider capability matrix for Responses, Chat Completions, reasoning, tools, native tools, vision, files, structured output, server state, and ZDR compatibility.
 - [x] Lock latest Claude desktop modal references as the UI baseline and apply the first Desktop settings modal pass with search and grouped navigation.
+- [x] Convert Desktop file preview to the shared focused modal shell matching the verified Claude project-file preview pattern.
 - [x] Define synced app conversation schema for Web/Mobile/Desktop.
 - [x] Define separate developer session schema for CLI/VS Code/Chrome.
 - [x] Define Desktop/local-host remote-control schema for Mobile approvals, notifications, generated-file preview, and task steering.

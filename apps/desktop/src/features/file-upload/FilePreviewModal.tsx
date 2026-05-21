@@ -1,6 +1,13 @@
 import { convertFileSrc, invoke } from '@/lib/tauri-mock';
-import { Download, Eye, FileText, Image as ImageIcon, X } from 'lucide-react';
+import { Download, Eye, FileText, Image as ImageIcon } from 'lucide-react';
 import React, { useCallback, useEffect, useState } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/Dialog';
 import type { DownloadableFile } from './FileDownloadButton';
 import { PDFViewer } from './PDFViewer';
 
@@ -77,10 +84,10 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const renderPreview = () => {
     if (isLoading) {
       return (
-        <div className="flex items-center justify-center h-96">
+        <div className="flex h-96 items-center justify-center">
           <div className="flex flex-col items-center gap-2">
-            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm text-gray-500">Loading preview...</p>
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+            <p className="text-sm text-muted-foreground">Loading preview...</p>
           </div>
         </div>
       );
@@ -88,17 +95,17 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
     if (error) {
       return (
-        <div className="flex items-center justify-center h-96">
+        <div className="flex h-96 items-center justify-center">
           <div className="flex flex-col items-center gap-2 text-center">
-            <Eye className="w-12 h-12 text-gray-400" />
-            <p className="text-sm text-gray-500">{error}</p>
+            <Eye className="h-12 w-12 text-muted-foreground/60" />
+            <p className="text-sm text-muted-foreground">{error}</p>
             {file && onDownload && (
               <button
                 type="button"
                 onClick={() => onDownload(file)}
-                className="mt-2 px-3 py-1.5 text-sm font-medium rounded-md border hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                className="mt-2 rounded-md border border-border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
               >
-                <Download className="w-4 h-4 mr-2 inline" />
+                <Download className="mr-2 inline h-4 w-4" />
                 Download to View
               </button>
             )}
@@ -113,7 +120,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
     if (file.type.startsWith('image/')) {
       return (
-        <div className="flex items-center justify-center bg-gray-100 dark:bg-gray-900 rounded-lg overflow-hidden">
+        <div className="flex items-center justify-center overflow-hidden rounded-lg bg-muted/50">
           <img
             src={previewContent}
             alt={file.name}
@@ -125,8 +132,8 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
     if (file.type.startsWith('text/') || file.type.includes('json') || file.type.includes('xml')) {
       return (
-        <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 overflow-auto max-h-[70vh]">
-          <pre className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-mono">
+        <div className="max-h-[70vh] overflow-auto rounded-lg border border-border bg-muted/40 p-4">
+          <pre className="whitespace-pre-wrap font-mono text-sm text-foreground">
             {previewContent}
           </pre>
         </div>
@@ -159,57 +166,42 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col m-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            {file?.type.startsWith('image/') ? (
-              <ImageIcon className="w-5 h-5 text-gray-500" />
-            ) : (
-              <FileText className="w-5 h-5 text-gray-500" />
-            )}
-            <div className="flex-1 min-w-0">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
-                {file?.name}
-              </h2>
-              {file && (
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {formatFileSize(file.size)} · {file.type}
-                </p>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="flex max-h-[88vh] w-[min(780px,calc(100vw-48px))] max-w-none flex-col overflow-hidden border-border/70 bg-background p-0 shadow-2xl sm:rounded-xl">
+        <DialogHeader className="border-b border-border px-6 py-5">
+          <div className="flex min-w-0 items-start justify-between gap-4 pr-8">
+            <div className="flex min-w-0 flex-1 items-start gap-3">
+              {file?.type.startsWith('image/') ? (
+                <ImageIcon className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" />
+              ) : (
+                <FileText className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" />
               )}
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="truncate text-lg font-semibold">
+                  {file?.name ?? 'File preview'}
+                </DialogTitle>
+                {file && (
+                  <DialogDescription className="mt-1 text-sm text-muted-foreground">
+                    {formatFileSize(file.size)} · {file.type}
+                  </DialogDescription>
+                )}
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
             {file && onDownload && (
               <button
                 type="button"
                 onClick={() => onDownload(file)}
-                className="px-3 py-1.5 text-sm font-medium rounded-md border hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                className="shrink-0 rounded-md border border-border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
               >
-                <Download className="w-4 h-4 mr-2 inline" />
+                <Download className="mr-2 inline h-4 w-4" />
                 Download
               </button>
             )}
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
           </div>
-        </div>
+        </DialogHeader>
 
-        {}
-        <div className="flex-1 overflow-auto p-4">{renderPreview()}</div>
-      </div>
-    </div>
+        <div className="flex-1 overflow-auto bg-background p-5">{renderPreview()}</div>
+      </DialogContent>
+    </Dialog>
   );
 };
