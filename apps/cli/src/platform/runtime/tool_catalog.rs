@@ -188,6 +188,15 @@ fn diagnostic_tags(name: &str, permission_class: &str) -> Vec<String> {
     ]
 }
 
+pub fn tool_result_size_cap(tool_name: &str) -> Option<usize> {
+    let canonical_name = canonical_tool_name(tool_name);
+    built_in_tool_definitions()
+        .into_iter()
+        .chain(team_tool_definitions())
+        .find(|tool| tool.name == canonical_name)
+        .and_then(|tool| tool.max_result_size_chars)
+}
+
 /// Build native API tool definitions with JSON Schema for each built-in tool.
 pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
     vec![
@@ -1145,5 +1154,14 @@ mod tests {
         assert_eq!(caps.get("tool_search"), Some(&Some(20_000)));
         assert_eq!(caps.get("task"), Some(&None));
         assert_eq!(caps.get("update_plan"), Some(&Some(2_000)));
+    }
+
+    #[test]
+    fn tool_result_size_cap_uses_catalog_metadata_and_aliases() {
+        assert_eq!(tool_result_size_cap("run_command"), Some(50_000));
+        assert_eq!(tool_result_size_cap("Bash"), Some(50_000));
+        assert_eq!(tool_result_size_cap("web_fetch"), Some(200_000));
+        assert_eq!(tool_result_size_cap("task"), None);
+        assert_eq!(tool_result_size_cap("unknown_tool"), None);
     }
 }

@@ -118,14 +118,7 @@ pub(super) fn is_dangerous_command(command: &str) -> bool {
 }
 
 pub(super) fn tool_size_cap(tool_name: &str) -> usize {
-    match tool_name {
-        "read_file" | "web_search" => 100_000,
-        "web_fetch" => 200_000,
-        "search_files" | "grep_files" | "run_command" | "powershell" => 50_000,
-        "list_directory" | "tool_search" => 20_000,
-        "write_file" | "edit_file" | "apply_patch" | "multiedit" | "notebook_edit" => 5_000,
-        _ => MAX_OUTPUT_BYTES,
-    }
+    crate::runtime::tool_catalog::tool_result_size_cap(tool_name).unwrap_or(MAX_OUTPUT_BYTES)
 }
 
 pub(super) fn truncate_output_with_save(tool_name: &str, output: String) -> String {
