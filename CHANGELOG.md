@@ -116,7 +116,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 ### Changed
 
 - Mobile physical-iPhone development builds now use an explicit `ios:device:dev` script that clean-prebuilds with development-safe entitlements, and `ios:device:dev:no-prebuild` for retrying after generated iOS artifacts are already correct.
-- Mobile physical-iPhone development builds now pin generated Xcode signing to the company Apple team `D2PR62RLT4` by default and fail fast if no company `Apple Development` identity is installed locally.
+- Mobile physical-iPhone development builds now pin generated Xcode signing to the company Apple team `D2PR62RLT4` by default and fail fast if no local `Apple Development` identity is installed.
 - Mobile iOS native-module prebuild wiring now handles Expo SDK 55 Xcode project groups, registers `AppShortcuts.xcstrings` as an app resource, and raises generated iOS deployment targets to 17.0 for AppShortcuts/local-runtime compatibility.
 - Mobile README and architecture docs now document the local iPhone trust step, RN 0.83.6 runtime pin, iOS 17.0 floor, and root `patches/` ownership rule.
 - VS Code sidebar model switching now uses a real inline model popover backed by `modelPickerData` from the extension host, with webview regression coverage for the previously undefined popover variables.
