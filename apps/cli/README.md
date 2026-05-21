@@ -1,5 +1,13 @@
 # AGI Workforce CLI
 
+Status: Current
+Owner role: CLI lead
+Last updated: 2026-05-20
+Kind: app
+Criticality: high
+
+## Purpose
+
 > Beyond one model. Beyond one surface. AGI in your hands.
 
 The terminal-native AI coding agent that doesn't surprise you.

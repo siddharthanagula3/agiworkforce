@@ -1,0 +1,66 @@
+# @agiworkforce/browser-tool
+
+Status: Current
+Owner role: Tooling/security owner
+Last updated: 2026-05-20
+Kind: ts-package
+Criticality: high
+
+## Purpose
+
+Shared browser automation primitives backed by Playwright Core.
+
+## Consumers
+
+Chrome extension, Desktop, Web/managed experiments, and future computer-use adapters.
+
+## Public API / Exports
+
+`package.json#exports`: `.` -> `./src/index.ts`.
+
+## What Belongs Here
+
+- Browser/session/action abstractions.
+- Playwright-backed browser tool helpers.
+- Surface-neutral computer-use support code.
+
+## What Does Not Belong Here
+
+- Chrome extension UI or permissions.
+- Desktop-specific Tauri commands.
+- Provider-native computer-use clients.
+- Persistent user browsing data.
+
+## Key Files
+
+- `src/index.ts` - public export surface.
+
+## Commands
+
+- `pnpm --filter @agiworkforce/browser-tool typecheck`
+- `pnpm --filter @agiworkforce/browser-tool test`
+- `pnpm --filter @agiworkforce/browser-tool build`
+
+## Environment / Secrets
+
+Do not commit browser profiles, cookies, session recordings, credentials, screenshots, or local captures.
+
+## Security, Privacy, Data Boundaries
+
+Security/privacy review is required for navigation, page capture, screenshots, downloads, file uploads, cross-origin behavior, credential handling, and action execution.
+
+## Tests Required For Changes
+
+Add tests for action validation, blocked destinations, capture redaction, and browser lifecycle behavior.
+
+## Release / Deployment Notes
+
+This package should be wrapped behind the AGI `ComputerAction` protocol before broad managed/cloud use.
+
+## Known Caveats
+
+Generated captures must live in approved reports or artifact locations, not package source.
+
+## CODEOWNERS
+
+Primary: Tooling/security owner. Secondary: extension/desktop owner when consumed by those surfaces.

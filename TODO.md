@@ -71,7 +71,8 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Add `pnpm check:agent-context`, `pnpm check:repo-organization`, `pnpm check:boundaries`, and `pnpm check:llm-operability`.
 - [x] Grade current monorepo developer-friendliness and record path to A+.
 - [x] Commit repo-organization script fix and monorepo grade report.
-- [ ] Add or update README files for each shared package.
+- [x] Add or update README files for each shared package.
+- [x] Add P0/P1 README ownership files for Web, Desktop, Chrome extension, API gateway, signaling server, types, runtime, providers, and unified-chat.
 - [ ] Add `.github/CODEOWNERS` with real GitHub teams/handles after org ownership names are available.
 - [ ] Expand `CONTRIBUTING.md` into a real engineering workflow guide.
 - [ ] Add PR templates by change type.
@@ -91,7 +92,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Add CI enforcement for docs and LLM-operability checks on docs-only changes.
 - [x] Add debt-aware README ownership coverage enforcement for apps, packages, crates, and services.
 - [x] Add debt-aware generated artifact drift check.
-- [ ] Tighten README ownership check after P0/P1 READMEs are created.
+- [x] Tighten README ownership check after README coverage is created.
 - [ ] Tighten generated artifact check after root scratch and `.playwright-mcp` debt are moved.
 
 ## CLI Engine Tasks

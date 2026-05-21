@@ -7,47 +7,9 @@ const root = process.cwd();
 const errors = [];
 const warnings = [];
 
-const scanRoots = ['apps', 'packages', 'crates', 'services'];
+const scanRoots = ['apps', 'packages', 'packages/providers', 'crates', 'services'];
 
-const missingReadmeDebt = new Set([
-  'apps/desktop',
-  'apps/extension',
-  'apps/web',
-  'services/api-gateway',
-  'services/signaling-server',
-  'packages/api',
-  'packages/apply-patch',
-  'packages/browser-tool',
-  'packages/compliance',
-  'packages/design-tokens',
-  'packages/llm-runtime',
-  'packages/local-llm',
-  'packages/mcp',
-  'packages/providers',
-  'packages/react-native-worklets',
-  'packages/routing',
-  'packages/runtime',
-  'packages/skills',
-  'packages/stores',
-  'packages/types',
-  'packages/unified-chat',
-  'packages/utils',
-  'crates/agiworkforce-app-server',
-  'crates/agiworkforce-apply-patch',
-  'crates/agiworkforce-async-utils',
-  'crates/agiworkforce-command-registry',
-  'crates/agiworkforce-execpolicy',
-  'crates/agiworkforce-network-proxy',
-  'crates/agiworkforce-plugin-runtime',
-  'crates/agiworkforce-task-runtime',
-  'crates/agiworkforce-utils-absolute-path',
-  'crates/agiworkforce-utils-cache',
-  'crates/agiworkforce-utils-home-dir',
-  'crates/agiworkforce-utils-image',
-  'crates/agiworkforce-utils-rustls-provider',
-  'crates/agiworkforce-utils-string',
-  'crates/sandbox-policy',
-]);
+const missingReadmeDebt = new Set([]);
 
 const requiredReadmeMarkers = ['Status:', 'Owner', 'Purpose'];
 

@@ -15,18 +15,18 @@ The current problem is not that the repo is fundamentally wrong. The problem is 
 
 ## Evidence Snapshot
 
-| Area                            | Finding                                                                                             |
-| ------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Scoped non-generated file count | `6156` files excluding common generated/build folders.                                              |
-| Largest top-level buckets       | `apps` 4752, `packages` 492, `crates` 178, `tasks` 163, `docs` 150, `services` 88.                  |
-| Largest product surfaces        | `apps/desktop` 2178 tracked files, `apps/web` 1292, `apps/cli` 552, `apps/mobile` 507.              |
-| Shared package README coverage  | 2 of 18 top-level packages have README files: `data-layer`, `llm-normalize`.                        |
-| App/service README coverage     | Apps missing README: `apps/desktop`, `apps/extension`, `apps/web`. Services missing README: both.   |
-| Crate README coverage           | 2 of 17 top-level crates have README files: `agiworkforce-protocol`, `agiworkforce-utils-template`. |
-| Root source files               | Root still contains scratch markdown/images and older source-of-truth candidates.                   |
-| Agent operability               | First-pass `docs/agent-context/` is implemented and checks pass.                                    |
-| Guardrails                      | `pnpm check:agent-context`, `pnpm check:repo-organization`, and `pnpm check:boundaries` pass.       |
-| Environment warning             | Current shell uses Node `v20.11.0`; repo expects Node `22`.                                         |
+| Area                            | Finding                                                                                           |
+| ------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Scoped non-generated file count | `6156` files excluding common generated/build folders.                                            |
+| Largest top-level buckets       | `apps` 4752, `packages` 492, `crates` 178, `tasks` 163, `docs` 150, `services` 88.                |
+| Largest product surfaces        | `apps/desktop` 2178 tracked files, `apps/web` 1292, `apps/cli` 552, `apps/mobile` 507.            |
+| Shared package README coverage  | Top-level packages now have README ownership files. Provider leaf packages now have README files. |
+| App/service README coverage     | Apps missing README: `apps/desktop`, `apps/extension`, `apps/web`. Services missing README: both. |
+| Crate README coverage           | Top-level crates now have README ownership files.                                                 |
+| Root source files               | Root still contains scratch markdown/images and older source-of-truth candidates.                 |
+| Agent operability               | First-pass `docs/agent-context/` is implemented and checks pass.                                  |
+| Guardrails                      | `pnpm check:agent-context`, `pnpm check:repo-organization`, and `pnpm check:boundaries` pass.     |
+| Environment warning             | Current shell uses Node `v20.11.0`; repo expects Node `22`.                                       |
 
 ## Scorecard
 
@@ -51,8 +51,8 @@ The current problem is not that the repo is fundamentally wrong. The problem is 
 2. **Docs have too many historical source-of-truth claims.**
    New docs now point to `PLAN.md`, `TODO.md`, `docs/decisions/CURRENT_DECISIONS.md`, and `docs/agent-context/`, but older PRDs, archive docs, and launch docs still use words like canonical/source of truth. Agents and engineers need a doc-status ledger enforced by CI.
 
-3. **Most packages and crates lack local ownership context.**
-   Only 2 of 18 top-level packages and 2 of 17 top-level crates have README files. This slows every new engineer and every coding agent.
+3. **Package and crate ownership context is now covered at the README level.**
+   The remaining ownership work is CODEOWNERS mapping to real GitHub teams and deeper feature/domain READMEs inside large apps.
 
 4. **Large app surfaces need domain-first cleanup.**
    `apps/desktop` and `apps/web` are large enough that layer-first folders become expensive. Existing `docs/plans/domain-first-reorg.md` is the right sub-plan, but it should start only after root/docs/package contracts are stable.
@@ -245,7 +245,7 @@ Acceptance:
 
 - Engineers, GTM, support, and legal do not need to read each other's internal working notes to find their materials.
 
-## Immediate Next 10 Tasks
+## Immediate Next Tasks
 
 1. Commit the repo-organization script fix and this grade report. Done in `0d842263b`.
 2. Add root classification ledger. Done.
@@ -254,9 +254,10 @@ Acceptance:
 5. Add docs status ledger. Done.
 6. Add generated artifact policy. Done.
 7. Move root scratch files into a dated archive/report folder. Done in `reports/root-scratch-archive/2026-05-20/`.
-8. Add missing READMEs for `apps/web`, `apps/desktop`, `apps/extension`, and both services.
-9. Add CI job for `pnpm check:llm-operability`. Done in `.github/workflows/repo-operability.yml`.
-10. Start Web domain-first cleanup only after tasks 1-9 are green.
+8. Add missing READMEs for `apps/web`, `apps/desktop`, `apps/extension`, and both services. Done.
+9. Add P0 package READMEs for `packages/types`, `packages/runtime`, `packages/providers`, and `packages/unified-chat`. Done.
+10. Add CI job for `pnpm check:llm-operability`. Done in `.github/workflows/repo-operability.yml`.
+11. Start Web domain-first cleanup only after tasks 1-10 are green.
 
 ## Target State
 

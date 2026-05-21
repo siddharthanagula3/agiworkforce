@@ -1,5 +1,13 @@
 # @agiworkforce/mobile
 
+Status: Current
+Owner role: Mobile lead
+Last updated: 2026-05-20
+Kind: app
+Criticality: high
+
+## Purpose
+
 Expo 55 + React Native 0.84 + React 19 mobile app for **AGI** (iOS + Android).
 Target launch: **2026-08-06**. Bundle id `com.agiworkforce.app`. Apple Developer ID `D2PR62RLT4`.
 

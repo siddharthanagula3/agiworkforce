@@ -1,5 +1,13 @@
 # `@agiworkforce/sandbox`
 
+Status: Current
+Owner role: Web lead
+Last updated: 2026-05-20
+Kind: app
+Criticality: high
+
+## Purpose
+
 Cross-origin artifact renderer at `sandbox.agiworkforce.com`. Single static
 HTML, no build step. Receives LLM-generated HTML / React / SVG / Mermaid /
 markdown / code via `postMessage` from the parent app, renders in a fully

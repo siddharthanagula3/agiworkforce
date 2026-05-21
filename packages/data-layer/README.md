@@ -1,5 +1,13 @@
 # @agiworkforce/data-layer
 
+Status: Current
+Owner role: Backend/data owner
+Last updated: 2026-05-20
+Kind: ts-package
+Criticality: high
+
+## Purpose
+
 Cloud-provider-portable data layer for AGI Workforce. The seam that lets us swap **Supabase → Neon** (or PlanetScale, RDS, self-hosted Postgres) by changing a config value, NOT by rewriting feature code.
 
 ## Why this exists
