@@ -118,6 +118,14 @@ const requiredFiles = [
   'packages/providers/AGENTS.md',
   '.opencode/opencode.json',
   '.opencode/instructions/INSTRUCTIONS.md',
+  '.claude/README.md',
+  '.codex/README.md',
+  '.cursor/README.md',
+  '.opencode/README.md',
+  '.agents/README.md',
+  '.agents/skills/README.md',
+  '.minimax/README.md',
+  '.superpowers/README.md',
 ];
 
 for (const file of requiredFiles) {
@@ -169,6 +177,13 @@ requireIncludes('.github/PULL_REQUEST_TEMPLATE/security-privacy.md', 'Affected T
 requireIncludes('README.md', 'For coding agents');
 requireIncludes('README.md', '[AGENTS.md](AGENTS.md)');
 requireIncludes('README.md', 'AGI_WORKFORCE.md) — product source of truth');
+requireIncludes('apps/web/README.md', 'apps/web/pnpm-workspace.yaml');
+requireIncludes('apps/web/README.md', 'root `pnpm-workspace.yaml` remains canonical');
+requireIncludes(
+  '.agents/README.md',
+  'Each tracked skill directory under `.agents/skills/` must include `SKILL.md`',
+);
+requireIncludes('.opencode/README.md', 'Root `opencode.json` is retired');
 
 if (exists('opencode.json')) {
   errors.push('Root opencode.json is retired; use .opencode/opencode.json');
@@ -206,6 +221,14 @@ if (opencodeConfig) {
     if (!exists(relativePath)) {
       errors.push(`.opencode/opencode.json file reference does not exist: ${fileRef}`);
     }
+  }
+}
+
+for (const entry of fs.readdirSync(path.join(root, '.agents/skills'), { withFileTypes: true })) {
+  if (!entry.isDirectory()) continue;
+  const skillPath = path.join('.agents/skills', entry.name, 'SKILL.md');
+  if (!exists(skillPath)) {
+    errors.push(`Tracked agent skill is missing SKILL.md: .agents/skills/${entry.name}`);
   }
 }
 

@@ -151,6 +151,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - `docs/agent-context/lanes.json`, `repo-map.json`, and `risk-map.json` entries for enterprise admin/control-plane parallel-agent work.
 - `docs/engineering/agent-harness-rollout.md` locking Claude Code at-scale harness lessons into AGI's agent-native repo rules: lean context files, deterministic hooks, on-demand skills, distributable plugins, LSP/MCP integrations, subagents, rollout phases, and harness ownership.
 - `.opencode/instructions/INSTRUCTIONS.md` and first-class `.opencode/commands/*.md` templates so opencode uses the same canonical repo context and command vocabulary as the other agent harnesses.
+- Contract READMEs for tracked hidden tool folders (`.claude`, `.codex`, `.cursor`, `.opencode`, `.agents`, `.minimax`, `.superpowers`) plus missing `SKILL.md` metadata for tracked `.agents/skills` entries.
 - `docs/current/` as the compact current docs layer:
   - `README.md` for read order and archive rule.
   - `product-suite.md` for product thesis, surfaces, trust modes, and sync boundary.
@@ -167,6 +168,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - Root `opencode.json` is retired in favor of `.opencode/opencode.json`, and `pnpm check:agent-context` now validates opencode instruction paths, `{file:...}` command/prompt references, and stale tool-agent phrases.
 - `pnpm check:lane-ownership` now enforces lane `blockedPaths`, supports wildcard path patterns such as `scripts/check-*.mjs` and `.env.*`, and accepts `--changed-file` for lane preflight without staging files.
 - Root docs scripts no longer reference the nonexistent `@agiworkforce/docs` workspace; `build:docs` now runs the canonical docs validation gate.
+- `apps/web/pnpm-workspace.yaml` is now documented as a web-subdirectory install adapter, and repo-organization checks require that documentation if the nested workspace file exists.
 - Root `package.json` now exposes `check:agent-context`, `check:repo-organization`, `check:boundaries`, and `check:llm-operability`.
 - `scripts/check-repo-organization.mjs` now ignores git-ignored local/build output while warning on known root cleanup debt.
 - `docs/README.md` now points maintainers to root `PLAN.md` and `TODO.md` immediately after `AGI_WORKFORCE.md`.

@@ -197,6 +197,7 @@ ms-playwright/
 .claude/*
 # but track project-scoped subagent definitions + commands + rules so the
 # whole team / AI sessions get the same orchestration baseline
+!.claude/README.md
 !.claude/agents/
 !.claude/commands/
 !.claude/rules/

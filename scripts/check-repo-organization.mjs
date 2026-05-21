@@ -37,7 +37,6 @@ const allowedRootFiles = new Set([
   'eslint.config.mjs',
   'node-version.txt',
   'ollama-manifest.json',
-  'opencode.json',
   'package.json',
   'pnpm-lock.yaml',
   'pnpm-workspace.yaml',
@@ -153,6 +152,19 @@ for (const staleConfig of ['app.json', 'apps/mobile/app.json']) {
     errors.push(
       `Stale Expo config must stay removed: ${staleConfig}. Use apps/mobile/app.config.js.`,
     );
+  }
+}
+
+if (fs.existsSync(path.join(root, 'opencode.json'))) {
+  errors.push('Root opencode.json is retired. Use .opencode/opencode.json.');
+}
+
+if (fs.existsSync(path.join(root, 'apps/web/pnpm-workspace.yaml'))) {
+  const webReadme = fs.existsSync(path.join(root, 'apps/web/README.md'))
+    ? fs.readFileSync(path.join(root, 'apps/web/README.md'), 'utf8')
+    : '';
+  if (!webReadme.includes('apps/web/pnpm-workspace.yaml')) {
+    errors.push('apps/web/pnpm-workspace.yaml must be documented in apps/web/README.md');
   }
 }
 
