@@ -2081,6 +2081,11 @@ function sendMessage(text: string): void {
 
         const pageCtx = _ctx.pendingPageContext;
         _ctx.pendingPageContext = null;
+        // Round-2 audit P0 #3 fix (2026-05-21): snapshot pendingAttachments
+        // BEFORE clearing so the wire payload below carries them. Prior
+        // behaviour cleared the buffer first, so attachments never reached
+        // the background handler.
+        const attachmentsToSend = pendingAttachments.slice();
         pendingAttachments.length = 0;
         updateContextButton();
         updateAttachmentPreview();
@@ -2111,6 +2116,9 @@ function sendMessage(text: string): void {
             text: actualPrompt,
             pageContext: pageCtx ?? undefined,
             conversationHistory: history,
+            // Round-2 audit P0 #3 (2026-05-21): forward the snapshot taken
+            // above so the model can see the user's images / pastes.
+            attachments: attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
             // SECURITY (H-10 audit 2026-05-19): `apiKey:` removed from the
             // CHAT_MESSAGE wire payload. The background handler ignores any
             // apiKey field per chrome-HIGH-3 and resolves the key from
@@ -2147,6 +2155,9 @@ function sendMessage(text: string): void {
 
   const pageCtx = _ctx.pendingPageContext;
   _ctx.pendingPageContext = null;
+  // Round-2 audit P0 #3 fix (2026-05-21): snapshot before clearing so the
+  // CHAT_MESSAGE payload below actually carries the user's attachments.
+  const attachmentsToSend = pendingAttachments.slice();
   pendingAttachments.length = 0;
   updateContextButton();
   updateAttachmentPreview();
@@ -2179,6 +2190,9 @@ function sendMessage(text: string): void {
       text: userMsg.content,
       pageContext: pageCtx ?? undefined,
       conversationHistory: history,
+      // Round-2 audit P0 #3 (2026-05-21): forward the snapshot so attachments
+      // actually reach the model.
+      attachments: attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
       // SECURITY (H-10 audit 2026-05-19): `apiKey:` removed from the
       // CHAT_MESSAGE wire payload. See chrome-HIGH-3.
       // Phase 3 bridge: bridge must consume extendedThinking and

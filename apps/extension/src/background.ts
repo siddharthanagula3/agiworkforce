@@ -2687,7 +2687,7 @@ async function handleChatMessage(
   // own session storage — written exclusively by the trusted side-panel UI
   // — and never from the message wire. The `apiKey` destructure is gone;
   // the resolution path below queries `chrome.storage.session.agi_api_key`.
-  const { id, text, pageContext, conversationHistory = [] } = message;
+  const { id, text, pageContext, conversationHistory = [], attachments } = message;
 
   const broadcastChunk = (chunkText: string, done: boolean, error?: string): void => {
     const chunk: import('./types').ChatChunkMessage = {
@@ -2732,9 +2732,26 @@ async function handleChatMessage(
   const fenceNonce = Array.from(crypto.getRandomValues(new Uint8Array(8)))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
-  const userContent = pageContext
+  let userContent = pageContext
     ? `${text}\n\n<page_context_${fenceNonce}>\n${pageContext}\n</page_context_${fenceNonce}>`
     : text;
+
+  // Round-2 audit P0 #3 fix (2026-05-21): if the side panel forwarded inline
+  // data-URL attachments, surface them as a structured annotation so the
+  // model can reference them. The provider-stream and bridge layers can
+  // upgrade this into proper multi-modal content in a follow-up; today the
+  // annotation alone closes the regression of attachments being silently
+  // dropped between the composer and the model.
+  if (attachments && attachments.length > 0) {
+    const attachmentSummary = attachments
+      .map((dataUrl, idx) => {
+        const mimeMatch = /^data:([^;,]+)/.exec(dataUrl);
+        const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+        return `- attachment_${idx + 1}: ${mime} (${dataUrl.length} chars)`;
+      })
+      .join('\n');
+    userContent += `\n\n<attachments_${fenceNonce}>\n${attachmentSummary}\n</attachments_${fenceNonce}>`;
+  }
 
   messages.push({ role: 'user', content: userContent });
 
