@@ -125,7 +125,7 @@ export interface ScreenCapture {
   height: number;
   timestamp: string;
 }
-export interface ComputerUseSession {
+export interface DesktopComputerUseSession {
   id: string;
   status: string;
   startedAt: string;
@@ -377,11 +377,11 @@ export async function computerUseMoveMouse(x: number, y: number): Promise<void> 
 export async function computerUseTypeText(text: string): Promise<void> {
   return command<void>('computer_use_type_text', { text });
 }
-export async function computerUseGetSession(sessionId: string): Promise<ComputerUseSession> {
-  return command<ComputerUseSession>('computer_use_get_session', { sessionId });
+export async function computerUseGetSession(sessionId: string): Promise<DesktopComputerUseSession> {
+  return command<DesktopComputerUseSession>('computer_use_get_session', { sessionId });
 }
-export async function computerUseListSessions(): Promise<ComputerUseSession[]> {
-  return command<ComputerUseSession[]>('computer_use_list_sessions');
+export async function computerUseListSessions(): Promise<DesktopComputerUseSession[]> {
+  return command<DesktopComputerUseSession[]>('computer_use_list_sessions');
 }
 export async function computerUseExecuteTool(toolName: string, args: unknown): Promise<unknown> {
   return command<unknown>('computer_use_execute_tool', { toolName, args });

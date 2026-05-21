@@ -23,7 +23,7 @@ export type ActionType =
   | 'scroll'
   | 'zoom';
 
-export interface ComputerAction {
+export interface DesktopComputerAction {
   action_type: ActionType;
   coordinates: [number, number] | null;
   text: string | null;
@@ -31,10 +31,10 @@ export interface ComputerAction {
   timestamp: number;
 }
 
-// Session type from computer_use.rs ComputerUseSession
-export interface ComputerUseSession {
+// Session payload returned by the desktop-native computer_use.rs commands.
+export interface DesktopComputerUseSession {
   id: string;
-  actions: ComputerAction[];
+  actions: DesktopComputerAction[];
   screenshots: ScreenCapture[];
   started_at: number;
 }
@@ -77,8 +77,8 @@ interface ComputerUseState {
   currentScreenshot: string | null;
   screenWidth: number | null;
   screenHeight: number | null;
-  actionLog: ComputerAction[];
-  sessions: ComputerUseSession[];
+  actionLog: DesktopComputerAction[];
+  sessions: DesktopComputerUseSession[];
   error: string | null;
   isExecutingOpa: boolean;
   lastOpaResult: OpaTaskResult | null;
@@ -94,7 +94,7 @@ interface ComputerUseState {
   startSession: () => Promise<void>;
   stopSession: () => Promise<void>;
   captureScreen: () => Promise<void>;
-  logAction: (action: ComputerAction) => void;
+  logAction: (action: DesktopComputerAction) => void;
   clearLog: () => void;
   reset: () => void;
 
@@ -111,8 +111,8 @@ interface ComputerUseState {
   click: (x: number, y: number) => Promise<void>;
   moveMouse: (x: number, y: number) => Promise<void>;
   typeText: (text: string) => Promise<void>;
-  getSession: (sessionId: string) => Promise<ComputerUseSession | null>;
-  listSessions: () => Promise<ComputerUseSession[]>;
+  getSession: (sessionId: string) => Promise<DesktopComputerUseSession | null>;
+  listSessions: () => Promise<DesktopComputerUseSession[]>;
   executeTool: (toolName: string, args: Record<string, unknown>) => Promise<unknown>;
   zoomRegion: (request: ZoomRegionRequest) => Promise<ZoomRegionResponse | null>;
   zoomAtPoint: (
@@ -365,7 +365,7 @@ export const useComputerUseStore = create<ComputerUseState>()(
 
       getSession: async (sessionId) => {
         try {
-          const session = await invoke<ComputerUseSession>('computer_use_get_session', {
+          const session = await invoke<DesktopComputerUseSession>('computer_use_get_session', {
             sessionId,
           });
           return session;
@@ -383,7 +383,7 @@ export const useComputerUseStore = create<ComputerUseState>()(
 
       listSessions: async () => {
         try {
-          const sessions = await invoke<ComputerUseSession[]>('computer_use_list_sessions');
+          const sessions = await invoke<DesktopComputerUseSession[]>('computer_use_list_sessions');
           set(
             (state) => {
               state.sessions = sessions;

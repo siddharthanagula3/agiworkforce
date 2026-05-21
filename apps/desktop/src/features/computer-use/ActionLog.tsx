@@ -4,7 +4,7 @@ import {
   useComputerUseStore,
   selectActionLog,
   type ActionType,
-  type ComputerAction,
+  type DesktopComputerAction,
 } from '../../stores/computerUseStore';
 import { cn } from '../../lib/utils';
 
@@ -42,7 +42,7 @@ function formatTimestamp(ts: number): string {
   });
 }
 
-function describeAction(action: ComputerAction): string {
+function describeAction(action: DesktopComputerAction): string {
   switch (action.action_type) {
     case 'click':
       return action.coordinates

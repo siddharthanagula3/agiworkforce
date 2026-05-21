@@ -93,6 +93,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 
 ### Changed
 
+- Desktop and API native computer-use action/session payloads now use `DesktopComputerAction` and `DesktopComputerUseSession`, reserving canonical `ComputerAction` and `ComputerUseSession` names for suite-level shared contracts.
 - Desktop and Web MCP surface types now source the canonical `McpServerConfig` name from `@agiworkforce/mcp`; Desktop-only config requirements use `DesktopMcpServerConfig`.
 - API gateway now mounts `agents` at `/api/agents` and MCP at `/api/mcp`; MCP proxy initialization is lazy on first authenticated route use.
 - Web and Mobile conversation-sync services now import `web_conversations` / `web_messages` compatibility record types from `@agiworkforce/types` instead of redefining `SyncedConversation` and `SyncedMessage` locally.
