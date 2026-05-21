@@ -1,5 +1,6 @@
 /**
- * Apple 5.1.2(i) BYOK consent modal — verbatim copy per docs/PRD-APPENDIX-B-API-CONTRACTS.md §B.7.
+ * Apple 5.1.2(i) BYOK consent modal. Legacy copy source:
+ * docs/archive/2026-05-21-docs-consolidation/PRD-APPENDIX-B-API-CONTRACTS.md §B.7.
  *
  * Rules (from PRD §B.7 + App Review policy):
  *  - Renders BEFORE the provider list is unlocked.

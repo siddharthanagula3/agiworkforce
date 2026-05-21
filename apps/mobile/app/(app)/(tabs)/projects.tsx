@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FolderOpen, Plus, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
-import { ProjectCard } from '@/components/projects/ProjectCard';
+import { ProjectCard } from '@/src/features/projects';
 import { useProjectStore, type Project } from '@/stores/projectStore';
 import { useThemeColors } from '@/hooks/useTheme';
 

@@ -32,16 +32,16 @@ When moving `apps/mobile/<old-path>/X.ts` to `apps/mobile/src/<layer>/<feature>/
 1. `git mv` the file to its new location.
 2. Replace the old path with a barrel that re-exports the new location, e.g.:
    ```ts
-   // apps/mobile/services/waitlist.ts
-   export * from '@/src/features/waitlist/service';
+   // apps/mobile/services/example.ts
+   export * from '@/src/features/example/service';
    ```
 3. Add or update `apps/mobile/src/<layer>/<feature>/index.ts` so the new location has its own public barrel.
 4. Do **not** rewrite call sites in the same commit. Active teammates' edits keep working unchanged.
 
-Barrels at OLD paths are removed only after every call site has been migrated AND the import-boundary lint check is enforced as an error. That cleanup is a separate phase.
+Barrels at old paths are removed only after every call site has been migrated and the import-boundary lint check is enforced as an error. That cleanup is a separate phase.
 
 ## Status
 
-Pilot in flight: `features/waitlist/` (per `tasks/team-status/reorg-mobile-pilot.md`).
+Pilot complete: `features/waitlist/` callers now use the canonical `src/features/waitlist` barrel.
 
 Out-of-scope this phase: any other surface (`apps/cli/`, `apps/desktop/`, `apps/web/`, `apps/extension/`, `apps/extension-vscode/`).

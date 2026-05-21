@@ -19,7 +19,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
-import { UpsellCard } from '@/components/billing/UpsellCard';
+import { UpsellCard } from '@/src/features/billing';
 import { useAuthStore } from '@/stores/authStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useAgentStore } from '@/stores/agentStore';

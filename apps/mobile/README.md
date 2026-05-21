@@ -14,8 +14,9 @@ Target launch: **2026-08-06**. Bundle id `com.agiworkforce.app`. Apple Developer
 Authoritative specs (read these before non-trivial changes):
 
 - Root `/AGI_WORKFORCE.md` — product SSOT
-- `/docs/PRD.md` — V5 product requirements
-- `/docs/PRD-APPENDIX-D-SCALING-OBSERVABILITY-COMPLIANCE.md` — scaling/observability/compliance
+- `/docs/current/product-suite.md` — product thesis, surfaces, trust modes, and sync boundary
+- `/docs/current/technical-architecture.md` — cross-surface architecture and generated-file strategy
+- `/docs/current/commercial-and-launch.md` — Local/BYOK/Managed launch posture and waitlist gates
 - `/docs/surfaces/mobile.md` — mobile surface deep-dive
 - `/docs/decisions/CURRENT_DECISIONS.md` — latest decision index and mobile-v1 launch clarification
 - `/docs/archive/2026-05-18-exploration-report.md` — 24-teammate verification report
@@ -25,6 +26,7 @@ Authoritative specs (read these before non-trivial changes):
 ```
 apps/mobile/
 ├── app/                          Expo Router screens (file-based routing — DO NOT restructure casually)
+├── src/features/                 Canonical feature-domain root for moved Mobile domains
 ├── components/                   React components, feature-grouped (kebab-case dirs, PascalCase files)
 ├── lib/                          Pure utilities — no React state, no async I/O, no platform APIs
 ├── services/                     Async I/O — HTTP, native bridges, MCP, dispatch, providers

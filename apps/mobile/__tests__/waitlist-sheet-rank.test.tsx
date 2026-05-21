@@ -34,7 +34,7 @@ jest.mock('react-native-safe-area-context', () => ({
 
 import React from 'react';
 import { render, fireEvent, act } from '@testing-library/react-native';
-import { CloudWaitlistSheet } from '@/components/waitlist/CloudWaitlistSheet';
+import { CloudWaitlistSheet } from '@/src/features/waitlist';
 
 // ---------------------------------------------------------------------------
 // Helpers
