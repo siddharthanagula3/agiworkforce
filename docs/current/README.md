@@ -10,9 +10,10 @@ This folder is the compact source-of-truth layer for AGI Workforce. It replaces 
 
 1. [`product-suite.md`](./product-suite.md) - product thesis, surfaces, trust modes, parity target, and current scope.
 2. [`technical-architecture.md`](./technical-architecture.md) - monorepo shape, runtime boundaries, data ownership, provider strategy, and generated-file architecture.
-3. [`commercial-and-launch.md`](./commercial-and-launch.md) - bootstrap-safe monetization, waitlist/private-beta gates, enterprise posture, and launch rules.
-4. [`agent-and-repo-operability.md`](./agent-and-repo-operability.md) - repo organization, docs rules, agent-native workflow, and A+ criteria.
-5. [`../engineering/naming-conventions.md`](../engineering/naming-conventions.md) - locked naming rules for product, CLI, repo files, packages, branches, commits, docs, and releases.
+3. [`provider-capability-matrix.md`](./provider-capability-matrix.md) - provider route capabilities, privacy claims, and routing constraints.
+4. [`commercial-and-launch.md`](./commercial-and-launch.md) - bootstrap-safe monetization, waitlist/private-beta gates, enterprise posture, and launch rules.
+5. [`agent-and-repo-operability.md`](./agent-and-repo-operability.md) - repo organization, docs rules, agent-native workflow, and A+ criteria.
+6. [`../engineering/naming-conventions.md`](../engineering/naming-conventions.md) - locked naming rules for product, CLI, repo files, packages, branches, commits, docs, and releases.
 
 ## Canonical Root Docs
 

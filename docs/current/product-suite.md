@@ -29,6 +29,19 @@ AGI does not try to be the next frontier-model lab. It tries to be the applicati
 | VS Code | IDE-native developer assistant. Workspace scoped unless explicit handoff is built.                                          |
 | Chrome  | Browser-side assistant, page context, extension/native-host bridge. Workspace/task scoped unless explicit handoff is built. |
 
+## Suite Requirements
+
+Every surface must expose the same product contract even when the native implementation differs.
+
+| Surface | Must ship before broad launch                                                                                                                       | Must not do                                                                |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Web     | Synced app chats, projects, artifacts, account/admin, waitlist/private-beta managed labels, generated-file preview/download.                        | Pretend Local compute is available in-browser without a connected host.    |
+| Desktop | Local-first chat, BYOK handoff preview, MCP/connectors, local files, generated-file manifests, computer-use approvals, Mobile/Desktop handoff host. | Silently upload Local chats or local generated files.                      |
+| Mobile  | Local/private default, explicit BYOK fork, preview/share generated files received from Desktop or managed compute, clear privacy labels.            | Make heavy PDF/PPTX/DOCX generation the first local mobile compute battle. |
+| CLI     | Developer sessions, workspace-scoped tools, MCP/skills/hooks/plugins/subagents, privacy-mode commands, reproducible session/fork/replay contracts.  | Sync developer work into app chats without explicit handoff.               |
+| VS Code | IDE chat participant/sidebar, workspace context, provider labels, tier/usage source, Desktop bridge, safe command execution.                        | Trust workspace settings for tier/API endpoint/security-sensitive config.  |
+| Chrome  | Browser context assistant, page-action approvals, native-host bridge, connector import, explicit page data boundary.                                | Treat browser page data as synced app-chat memory by default.              |
+
 ## Trust Modes
 
 | Mode    | Meaning                                             | Rule                                                                                     |

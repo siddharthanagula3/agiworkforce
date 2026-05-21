@@ -34,6 +34,18 @@ Last updated: 2026-05-21
 - Services must not import UI packages.
 - Root `supabase/migrations` is canonical for database schema changes.
 
+## Cross-Surface Data Ownership
+
+| Data class                | Source of truth                                                               | Surfaces allowed to write                                              | Surfaces allowed to read                                          | Sync rule                                                                                     |
+| ------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Projects                  | `packages/types` contract plus Web/Desktop/Mobile persistence adapters        | Web, Desktop, Mobile                                                   | Web, Desktop, Mobile                                              | Synced app data. CLI/VS Code/Chrome may hand off selected project context only.               |
+| App chat conversations    | Web/Desktop/Mobile conversation stores using shared sync contracts            | Web, Desktop, Mobile                                                   | Web, Desktop, Mobile                                              | Normal chat sync boundary.                                                                    |
+| Developer sessions        | CLI session store and future developer-session contract                       | CLI, VS Code, Chrome                                                   | Owning developer surface                                          | Not synced to app chats unless the user creates a handoff draft.                              |
+| Artifacts/generated files | `ComputeSession`, `GeneratedFile`, and `ArtifactManifest` in `packages/types` | Desktop first, Web managed compute later, Mobile as requester/receiver | Web, Desktop, Mobile                                              | Must carry privacy mode, owner session, checksum, TTL/retention, and source compute metadata. |
+| Memory                    | Local/BYOK/Managed memory stores keyed by privacy mode                        | Surface that collected consent                                         | Only surfaces within the same trust boundary                      | Local memory cannot be promoted to BYOK/Managed without preview and approval.                 |
+| Teams/orgs                | Enterprise control-plane tables and `packages/types/src/enterprise`           | Web admin/API gateway                                                  | Web admin/API gateway; other surfaces through scoped policy reads | Managed/enterprise only; never required for Local/BYOK.                                       |
+| Billing/usage             | API gateway/enterprise control plane plus provider-cost ledger                | Backend services only                                                  | Web/admin and usage-label surfaces                                | No client invents quota, reset, or credit values.                                             |
+
 ## Provider Strategy
 
 OpenAI, Anthropic, Vercel AI SDK, and provider SDKs are adapter dependencies, not AGI architecture. AGI owns:

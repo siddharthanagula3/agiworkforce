@@ -187,11 +187,11 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 
 ## Cross-Surface Product Tasks
 
-- [ ] Define suite-level product requirements for Web, Desktop, Mobile, CLI, VS Code, and Chrome using the locked application-suite thesis.
+- [x] Define suite-level product requirements for Web, Desktop, Mobile, CLI, VS Code, and Chrome using the locked application-suite thesis.
 - [x] Define shared `PrivacyMode` contract for Desktop/Mobile/Web/VS Code/Chrome.
 - [ ] Add visible Local/BYOK/Managed labels to every surface.
 - [x] Define `ProviderMode`: `Local`, `DirectByok`, `ManagedGateway`, `ManagedNative`.
-- [ ] Add provider capability matrix for Responses, Chat Completions, reasoning, tools, native tools, vision, files, structured output, server state, and ZDR compatibility.
+- [x] Add provider capability matrix for Responses, Chat Completions, reasoning, tools, native tools, vision, files, structured output, server state, and ZDR compatibility.
 - [x] Define synced app conversation schema for Web/Mobile/Desktop.
 - [x] Define separate developer session schema for CLI/VS Code/Chrome.
 - [x] Define Desktop/local-host remote-control schema for Mobile approvals, notifications, generated-file preview, and task steering.
@@ -206,7 +206,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Define shared `ComputerAction` protocol for screenshot/action computer use.
 - [x] Define connector/MCP registry schema.
 - [x] Define agent/subagent schema.
-- [ ] Define cross-surface data ownership for projects, artifacts, memory, teams, and billing.
+- [x] Define cross-surface data ownership for projects, artifacts, memory, teams, and billing.
 - [x] Migrate allowed legacy duplicate local contracts to canonical `packages/types/src/suite-contracts.ts` imports.
   - [x] Move Web/Mobile `web_conversations` / `web_messages` compatibility sync types into `@agiworkforce/types`.
   - [x] Move or rename duplicate MCP config contracts.
