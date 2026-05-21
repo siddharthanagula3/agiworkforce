@@ -140,6 +140,10 @@ from `~/.agiworkforce/output-styles/<name>.md`:
 /output-style explanatory    # switch on the fly
 ```
 
+When changed from the CLI, `output_style` and `privacy_mode` are persisted in
+the project `.agiworkforce/config.toml` under `[ui]`, so the boundary and style
+load automatically in later sessions for that repo.
+
 ## Slash commands (selected)
 
 ```

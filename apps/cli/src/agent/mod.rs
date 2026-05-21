@@ -490,6 +490,20 @@ impl AgentSession {
         self.privacy_mode = mode;
     }
 
+    pub fn apply_ui_config(&mut self, config: &CliConfig) {
+        if let Some(style) = config.ui.output_style.as_deref() {
+            self.apply_output_style(style);
+        }
+        if let Some(mode) = config
+            .ui
+            .privacy_mode
+            .as_deref()
+            .and_then(PrivacyMode::from_arg)
+        {
+            self.set_privacy_mode(mode);
+        }
+    }
+
     pub fn provider_privacy_mode(&self) -> PrivacyMode {
         provider_privacy_mode(&self.provider)
     }
@@ -1186,6 +1200,34 @@ mod tests {
 
         assert_eq!(session.privacy_mode, PrivacyMode::Byok);
         assert!(session.validate_privacy_boundary().is_ok());
+    }
+
+    #[test]
+    fn ui_config_applies_output_style_and_privacy_mode() {
+        let ctx = SystemContext {
+            cwd: "/tmp".to_string(),
+            git_branch: None,
+            git_status_summary: None,
+            git_remote_url: None,
+            project_type: None,
+            project_language: None,
+            ci_providers: vec![],
+            monorepo_type: None,
+            package_manager: None,
+            containerization: vec![],
+            editor_configs: vec![],
+            os: "test".to_string(),
+            shell: "test".to_string(),
+        };
+        let mut session = AgentSession::new("claude-sonnet-4-5", &ctx, None);
+        let mut config = CliConfig::default();
+        config.ui.output_style = Some("learning".to_string());
+        config.ui.privacy_mode = Some("local".to_string());
+
+        session.apply_ui_config(&config);
+
+        assert_eq!(session.output_style, "learning");
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
     }
 
     #[test]

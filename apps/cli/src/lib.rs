@@ -970,6 +970,7 @@ pub async fn run_main() -> Result<()> {
                     .unwrap_or(raw_model.clone());
                 let mut session = agent::AgentSession::new(&m, &sys_ctx, None);
                 session.set_provider_override(&app_config.default.provider);
+                session.apply_ui_config(&app_config);
                 if chain.primaries.len() > 1 {
                     session.fallback_chain = Some(chain);
                 }
@@ -2191,6 +2192,7 @@ pub async fn run_oneshot(
     // Apply config-based provider override (e.g. "ollama-cloud") when the
     // configured provider differs from the model-name-based detection.
     session.set_provider_override(&config.default.provider);
+    session.apply_ui_config(config);
     session.max_turns = max_turns;
     session.skip_permissions = skip_permissions;
     session.auto_approve_safe = auto_approve_safe;

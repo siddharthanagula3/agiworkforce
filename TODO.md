@@ -178,7 +178,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [ ] MCP prompts as dynamic slash commands.
 - [ ] Full `/agents` management UI in TUI/REPL.
 - [x] Hook matcher compatibility with Claude tool names.
-- [ ] Persist output style and privacy mode in project-local settings.
+- [x] Persist output style and privacy mode in project-local settings.
 - [x] Define typed CLI event stream for future Desktop/Web/Mobile clients.
 - [x] Define durable session/fork/replay contract for parent and child sessions.
 - [ ] Split CLI tool declarations from executors with schema, diagnostics, permissions, and owner metadata.

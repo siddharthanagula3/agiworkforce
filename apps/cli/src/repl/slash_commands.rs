@@ -44,6 +44,7 @@ pub(super) fn handle_slash_command(
 
     match crate::claude_parity::handle_shared_command(cmd.as_str(), arg, session) {
         crate::claude_parity::ParityCommandResult::SystemMessage(message) => {
+            persist_shared_ui_config(cmd.as_str(), arg, session, config);
             eprintln!("{message}");
             return SlashResult::Handled;
         }
@@ -394,6 +395,24 @@ pub(super) fn handle_slash_command(
     }
 
     SlashResult::Handled
+}
+
+fn persist_shared_ui_config(cmd: &str, arg: &str, session: &AgentSession, config: &mut CliConfig) {
+    match cmd {
+        "/output-style" if !arg.trim().is_empty() => {
+            if let Err(err) = config.persist_output_style_project(&session.output_style) {
+                output::print_warn(&format!("Failed to persist output style: {err}"));
+            }
+        }
+        "/privacy-mode" | "/trust-boundary"
+            if crate::agent::PrivacyMode::from_arg(arg).is_some() =>
+        {
+            if let Err(err) = config.persist_privacy_mode_project(session.privacy_mode.label()) {
+                output::print_warn(&format!("Failed to persist privacy mode: {err}"));
+            }
+        }
+        _ => {}
+    }
 }
 
 pub(super) fn print_help() {

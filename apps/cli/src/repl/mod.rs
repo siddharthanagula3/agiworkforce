@@ -53,6 +53,7 @@ pub async fn run_repl(
     output::print_tier_status();
 
     let mut session = AgentSession::new(model, sys_context, custom_system_prompt);
+    session.apply_ui_config(config);
     session.max_turns = max_turns;
     session.skip_permissions = skip_permissions;
     session.auto_approve_safe = auto_approve_safe;

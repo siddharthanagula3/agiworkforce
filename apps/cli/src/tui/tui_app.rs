@@ -1431,10 +1431,17 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 SlashResult::SystemMessage(lines.join("\n"))
             } else {
                 app.session.apply_output_style(arg);
-                SlashResult::SystemMessage(format!(
+                let mut message = format!(
                     "Output style: {} (applies on next turn)",
                     app.session.output_style
-                ))
+                );
+                if let Err(err) = app
+                    .config
+                    .persist_output_style_project(&app.session.output_style)
+                {
+                    message.push_str(&format!("\nFailed to persist output style: {err}"));
+                }
+                SlashResult::SystemMessage(message)
             }
         }
 
@@ -2009,7 +2016,11 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 return SlashResult::SendPrompt(prompt);
             }
 
-            match crate::claude_parity::handle_shared_command(cmd.as_str(), arg, &mut app.session) {
+            let shared =
+                crate::claude_parity::handle_shared_command(cmd.as_str(), arg, &mut app.session);
+            persist_tui_shared_ui_config(cmd.as_str(), arg, app);
+
+            match shared {
                 crate::claude_parity::ParityCommandResult::SystemMessage(message) => {
                     SlashResult::SystemMessage(message)
                 }
@@ -2026,6 +2037,24 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 crate::claude_parity::ParityCommandResult::NotHandled => SlashResult::SendAsPrompt,
             }
         }
+    }
+}
+
+fn persist_tui_shared_ui_config(cmd: &str, arg: &str, app: &mut TuiApp) {
+    match cmd {
+        "/output-style" if !arg.trim().is_empty() => {
+            let _ = app
+                .config
+                .persist_output_style_project(&app.session.output_style);
+        }
+        "/privacy-mode" | "/trust-boundary"
+            if crate::agent::PrivacyMode::from_arg(arg).is_some() =>
+        {
+            let _ = app
+                .config
+                .persist_privacy_mode_project(app.session.privacy_mode.label());
+        }
+        _ => {}
     }
 }
 
@@ -2057,6 +2086,7 @@ pub async fn run(
     if let Some(ref provider) = provider_override {
         session.set_provider_override(provider);
     }
+    session.apply_ui_config(config);
     session.max_turns = max_turns;
     session.skip_permissions = skip_permissions;
     session.auto_approve_safe = auto_approve_safe;
