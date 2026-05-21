@@ -1,5 +1,16 @@
-import { useState } from 'react';
-import { Eye, Code2, Copy, ChevronDown, RotateCcw, X, Download, Globe } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Code2,
+  Copy,
+  Download,
+  Eye,
+  Globe,
+  RotateCcw,
+  X,
+} from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from './ui/Button';
 import type { Artifact } from '../lib/types';
@@ -9,6 +20,16 @@ export interface ArtifactPanelProps {
   viewMode: 'preview' | 'code';
   onViewModeChange: (mode: 'preview' | 'code') => void;
   onClose: () => void;
+  /**
+   * Optional version history for the current artifact. When provided with
+   * more than one entry, the header renders a prev/next stepper so the user
+   * can navigate edits. Round-2 audit P0 #9 (Artifacts versioning,
+   * 2026-05-21). Host apps build this from the artifactStore by grouping
+   * artifacts that share a `title` (or a stable group id) per conversation.
+   */
+  versions?: Artifact[];
+  /** Called when the user picks a different version from the stepper. */
+  onSelectVersion?: (artifact: Artifact) => void;
 }
 
 function getTypeLabel(artifact: Artifact): string {
@@ -183,8 +204,33 @@ export function ArtifactPanel({
   viewMode,
   onViewModeChange,
   onClose,
+  versions,
+  onSelectVersion,
 }: ArtifactPanelProps) {
   const [headerCopied, setHeaderCopied] = useState(false);
+
+  // The host supplies versions ordered oldest-first; the stepper trusts
+  // that ordering and maps array indices to "v1 / v2 / ..." labels. When
+  // the host omits versions or supplies only one entry, the stepper hides.
+  const sortedVersions = useMemo<Artifact[]>(() => {
+    if (!versions || versions.length === 0) return [];
+    return versions;
+  }, [versions]);
+
+  const currentVersionIndex = useMemo(() => {
+    if (!artifact || sortedVersions.length === 0) return -1;
+    return sortedVersions.findIndex((v) => v.id === artifact.id);
+  }, [artifact, sortedVersions]);
+
+  const hasPreviousVersion = currentVersionIndex > 0;
+  const hasNextVersion =
+    currentVersionIndex >= 0 && currentVersionIndex < sortedVersions.length - 1;
+
+  function goToVersion(index: number): void {
+    if (index < 0 || index >= sortedVersions.length) return;
+    const next = sortedVersions[index];
+    if (next) onSelectVersion?.(next);
+  }
 
   async function handleCopyContent() {
     if (!artifact) return;
@@ -289,6 +335,48 @@ export function ArtifactPanel({
             <span className="text-sm text-[var(--chat-text-muted)]">No artifact</span>
           )}
         </div>
+
+        {/* Version stepper — only when host supplies a version history */}
+        {sortedVersions.length > 1 && artifact ? (
+          <div
+            className="flex items-center gap-0.5 shrink-0 rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-1"
+            aria-label="Artifact version stepper"
+          >
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Previous version"
+              disabled={!hasPreviousVersion}
+              onClick={() => goToVersion(currentVersionIndex - 1)}
+              className={cn(
+                'h-6 w-6',
+                hasPreviousVersion
+                  ? 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]'
+                  : 'text-[var(--chat-text-muted)] opacity-40 cursor-not-allowed',
+              )}
+            >
+              <ChevronLeft size={13} />
+            </Button>
+            <span className="px-1 text-[11px] font-mono tabular-nums text-[var(--chat-text-secondary)]">
+              v{currentVersionIndex + 1}/{sortedVersions.length}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Next version"
+              disabled={!hasNextVersion}
+              onClick={() => goToVersion(currentVersionIndex + 1)}
+              className={cn(
+                'h-6 w-6',
+                hasNextVersion
+                  ? 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]'
+                  : 'text-[var(--chat-text-muted)] opacity-40 cursor-not-allowed',
+              )}
+            >
+              <ChevronRight size={13} />
+            </Button>
+          </div>
+        ) : null}
 
         {/* Right: actions */}
         <div className="flex items-center gap-0.5 shrink-0">
