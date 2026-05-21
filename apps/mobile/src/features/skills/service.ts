@@ -18,8 +18,8 @@
 import type { Skill } from '@agiworkforce/skills';
 
 import { API_URL } from '@/lib/constants';
-import { secureFetch } from './secureFetch';
-import { supabase } from './supabase';
+import { secureFetch } from '@/services/secureFetch';
+import { supabase } from '@/services/supabase';
 
 export type SkillSummary = Pick<Skill, 'name' | 'description' | 'filePath' | 'source'>;
 

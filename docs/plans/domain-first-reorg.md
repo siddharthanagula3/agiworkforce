@@ -68,6 +68,10 @@ helpers, import parsers, context budgeting, compaction, RAG chunking, and RAG
 indexing now live under `apps/mobile/src/features/memory`, with structure
 checks guarding the old memory service/store paths.
 
+The Mobile skills ownership slice is complete: catalog access and installed
+skill state now live under `apps/mobile/src/features/skills`, with structure
+checks guarding the old skills service/store paths.
+
 The Desktop small-domain wave has moved quick query, voice, simple mode,
 subscription, pricing, planning, reminders, messaging, mobile companion, teams,
 terminal, tools, vision, and workflows out of `src/components` into

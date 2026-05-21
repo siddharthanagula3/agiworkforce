@@ -217,6 +217,8 @@ const retiredMobileFeaturePaths = [
   'apps/mobile/services/ragChunker.ts',
   'apps/mobile/services/ragIndex.ts',
   'apps/mobile/stores/memoryStore.ts',
+  'apps/mobile/services/skills.ts',
+  'apps/mobile/stores/skillsStore.ts',
 ];
 
 for (const retiredMobileFeaturePath of retiredMobileFeaturePaths) {
@@ -359,6 +361,10 @@ const mobileFeatureForbiddenImports = [
   '../services/ragChunker',
   '../services/ragIndex',
   '../stores/memoryStore',
+  '@/services/skills',
+  '@/stores/skillsStore',
+  '../services/skills',
+  '../stores/skillsStore',
 ];
 
 const retiredDesktopFeatureShimPaths = [

@@ -119,6 +119,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Move Mobile auth state, age gate, and biometric gate into `apps/mobile/src/features/auth`.
 - [x] Move Mobile subscription tier state into `apps/mobile/src/features/billing`.
 - [x] Move Mobile memory state, import, context budgeting, compaction, and RAG services into `apps/mobile/src/features/memory`.
+- [x] Move Mobile skills catalog service and installed-skill state into `apps/mobile/src/features/skills`.
 - [x] Move Desktop Settings and MCP domains into `apps/desktop/src/features/settings` and `apps/desktop/src/features/mcp`.
 - [x] Move Desktop Unified Agentic Chat into `apps/desktop/src/features/chat`.
 - [x] Move Desktop execution, execution sidecar, memory, memory panel, and tool-calling domains into `apps/desktop/src/features`.

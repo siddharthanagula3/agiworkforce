@@ -9,7 +9,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
-import type { InstalledSkill, SkillCatalogEntry } from '@/services/skills';
+import type { InstalledSkill, SkillCatalogEntry } from '@/src/features/skills/service';
 
 interface SkillsState {
   /** MMKV-persisted: installed skill bundles keyed by skill ID */
