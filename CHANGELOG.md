@@ -14,6 +14,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 
 - `packages/types/src/suite-contracts.ts` as the canonical cross-surface contract layer for `PrivacyMode`, `ProviderMode`, synced Web/Desktop/Mobile app conversations, CLI/VS Code/Chrome developer sessions, explicit handoff drafts, projects, compute sessions, generated files, artifact manifests, remote-control/computer actions, connector/MCP registry records, and agent/subagent event records.
 - Canonical `Local` / `BYOK` / `Managed` privacy-mode display copy and provider-mode label helpers in `@agiworkforce/types`, so surfaces can stop inventing trust-boundary wording independently.
+- Shared Local-to-BYOK handoff preview utilities in `@agiworkforce/utils` that build typed `HandoffDraft` records with redaction findings, redacted payload preview text, checksum evidence, and preview hashes.
 - Developer-session event stream contracts with ordered typed payloads, stream frames, checkpoints, forks, and replay request/result records for CLI, VS Code, Chrome, and future Desktop/Web/Mobile viewers.
 - Managed-compute private-beta gate in `services/api-gateway/src/middleware/managedComputeGate.ts`, wired onto AGI-held-key execution paths for cloud chat send, OpenAI-compatible LLM proxy, and provider streaming.
 - Mobile domain-closure slice for theme and voice ownership: theme tokens/hooks now live under `apps/mobile/src/ui/theme`, and voice playback/presets now live under `apps/mobile/src/features/voice`.

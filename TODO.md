@@ -221,6 +221,8 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [ ] Add Local -> BYOK fork flow on Mobile.
 - [ ] Add Local -> BYOK fork flow on Web.
 - [ ] Add payload preview and secret scan UI before BYOK handoff.
+  - [x] Add shared Local -> BYOK draft builder with redacted payload preview, findings, checksums, and preview hash evidence.
+  - [ ] Wire the shared preview/finding result into Desktop, Mobile, and Web handoff UI.
 - [x] Define shared project schema.
 - [x] Define shared artifact schema.
 - [x] Define shared `ComputeSession`, `GeneratedFile`, and `ArtifactManifest` schemas.
