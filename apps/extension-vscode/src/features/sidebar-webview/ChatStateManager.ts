@@ -69,7 +69,18 @@ export type WebviewToExtMessage =
   | { type: 'openModelPopover' }
   | { type: 'selectModel'; payload: { modelId: string } }
   | { type: 'proposeDiff'; payload: { code: string; language: string } }
-  | { type: 'openFilePicker' };
+  | { type: 'openFilePicker' }
+  | {
+      type: 'attachFiles';
+      payload: {
+        files: Array<{
+          name: string;
+          mimeType: string;
+          sizeBytes: number;
+          dataUrl: string;
+        }>;
+      };
+    };
 
 export type ExtToWebviewMessage =
   | { type: 'token'; payload: { text: string } }
@@ -97,7 +108,14 @@ export type ExtToWebviewMessage =
         currentModel: string;
       };
     }
-  | { type: 'diffProposed'; payload: { sessionId: string; filePath: string } };
+  | { type: 'diffProposed'; payload: { sessionId: string; filePath: string } }
+  | {
+      type: 'attachFilesAck';
+      payload: {
+        added: string[];
+        skipped: Array<{ name: string; reason: string }>;
+      };
+    };
 
 export interface UsageMeterWebviewPayload {
   source: UsageMeter['source'];
@@ -447,6 +465,80 @@ export class ChatStateManager {
             await vscode.commands.executeCommand('agi-workforce.addToContext', uri);
           }
         }
+        break;
+      }
+
+      // ── 2026-05-21: composer drag-drop + paste-image attachments ──────────────
+      // Round-2 audit P0 #3 vscode-ext wire. The webview composer reads dropped
+      // and pasted files into data URLs and posts them here. We sanitize the
+      // names, write each one to a per-session directory under globalStorageUri,
+      // and add to the context panel through the existing command path.
+      case 'attachFiles': {
+        const added: string[] = [];
+        const skipped: Array<{ name: string; reason: string }> = [];
+        const sessionDir = vscode.Uri.joinPath(
+          this._context.globalStorageUri,
+          '.attachments',
+          Date.now().toString(36),
+        );
+        try {
+          await vscode.workspace.fs.createDirectory(sessionDir);
+        } catch (err) {
+          for (const file of msg.payload.files) {
+            skipped.push({
+              name: file.name,
+              reason: err instanceof Error ? err.message : 'storage unavailable',
+            });
+          }
+          this._post({ type: 'attachFilesAck', payload: { added, skipped } });
+          break;
+        }
+
+        for (const file of msg.payload.files) {
+          const safeName = file.name.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 200) || 'attachment';
+          const commaIndex = file.dataUrl.indexOf(',');
+          if (commaIndex < 0) {
+            skipped.push({ name: file.name, reason: 'malformed data URL' });
+            continue;
+          }
+          const meta = file.dataUrl.slice(5, commaIndex); // strip leading "data:"
+          const body = file.dataUrl.slice(commaIndex + 1);
+          const isBase64 = /;base64$/i.test(meta);
+          let bytes: Uint8Array;
+          try {
+            if (isBase64) {
+              bytes = Buffer.from(body, 'base64');
+            } else {
+              bytes = Buffer.from(decodeURIComponent(body), 'utf8');
+            }
+          } catch (err) {
+            skipped.push({
+              name: file.name,
+              reason: err instanceof Error ? err.message : 'decode failed',
+            });
+            continue;
+          }
+          // Defence-in-depth: clamp persisted bytes to the protocol's payload
+          // cap. The Zod schema also enforces this, but a single sanity check
+          // keeps the on-disk write bounded if the cap ever drifts.
+          if (bytes.byteLength > 10_000_000) {
+            skipped.push({ name: file.name, reason: 'file too large (>10 MB)' });
+            continue;
+          }
+          const target = vscode.Uri.joinPath(sessionDir, safeName);
+          try {
+            await vscode.workspace.fs.writeFile(target, bytes);
+            await vscode.commands.executeCommand('agi-workforce.addToContext', target);
+            added.push(safeName);
+          } catch (err) {
+            skipped.push({
+              name: file.name,
+              reason: err instanceof Error ? err.message : 'write failed',
+            });
+          }
+        }
+
+        this._post({ type: 'attachFilesAck', payload: { added, skipped } });
         break;
       }
 

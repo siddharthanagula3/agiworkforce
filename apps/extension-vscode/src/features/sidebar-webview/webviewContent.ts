@@ -854,6 +854,63 @@ export function getWebviewContent(
       transition: background 0.12s, color 0.12s;
     }
     .prompt-chip:hover { background: var(--bg-overlay); color: var(--text-primary); }
+
+    /* ── Composer drag-drop overlay + attachment strip (2026-05-21 P0 #3) ── */
+    .composer-card.dragover {
+      border-color: var(--accent-teal);
+      box-shadow: 0 0 0 2px rgba(33, 128, 141, 0.35);
+    }
+
+    .attachment-strip {
+      display: none;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 6px 10px 0;
+    }
+    .attachment-strip.visible { display: flex; }
+
+    .attachment-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 220px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: var(--bg-overlay);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-size: 11px;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .attachment-chip.uploading { opacity: 0.65; }
+    .attachment-chip.failed {
+      color: var(--agi-vscode-danger);
+      border-color: var(--agi-vscode-danger-border);
+      background: var(--agi-vscode-danger-bg);
+    }
+    .attachment-chip .codicon {
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    .attachment-chip__name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1 1 auto;
+    }
+    .attachment-chip__remove {
+      background: none;
+      border: 0;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 0;
+      font-size: 13px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .attachment-chip__remove:hover { color: var(--text-primary); }
   </style>
 </head>
 <body>
@@ -935,7 +992,9 @@ export function getWebviewContent(
     <div class="model-popover" id="modelPopover" role="menu" aria-label="Select model"></div>
 
     <!-- Composer card -->
-    <div class="composer-card">
+    <div class="composer-card" id="composerCard">
+      <!-- Attachment chips strip — populated by drag-drop / paste / +menu -->
+      <div class="attachment-strip" id="attachmentStrip" role="list" aria-label="Pending attachments"></div>
       <div class="input-row">
         <div class="input-wrapper">
           <div class="mention-dropdown" id="mentionDropdown"></div>
@@ -1418,6 +1477,152 @@ export function getWebviewContent(
       if (e.key === 'Enter') saveKeyBtn.click();
     });
 
+    // ── Composer drag-drop + paste-image (P0 #3, 2026-05-21) ──────────────────
+    var composerCard = document.getElementById('composerCard');
+    var attachmentStrip = document.getElementById('attachmentStrip');
+    // Local ledger: name → chipElement for "uploading" state. The host owns
+    // the durable attachment list via addToContext; this strip is purely a
+    // visual confirmation that the drop/paste was received.
+    var pendingAttachmentChips = {};
+    var attachmentBatchSeq = 0;
+
+    var MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // matches host Zod cap
+
+    function renderAttachmentStrip() {
+      if (!attachmentStrip) return;
+      attachmentStrip.classList.toggle(
+        'visible',
+        attachmentStrip.children.length > 0,
+      );
+    }
+
+    function makeAttachmentChip(name, state) {
+      var chip = document.createElement('span');
+      chip.className = 'attachment-chip' + (state ? ' ' + state : '');
+      chip.setAttribute('role', 'listitem');
+
+      var icon = document.createElement('span');
+      icon.className = 'codicon codicon-file';
+      icon.setAttribute('aria-hidden', 'true');
+
+      var label = document.createElement('span');
+      label.className = 'attachment-chip__name';
+      label.textContent = name;
+
+      var removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'attachment-chip__remove';
+      removeBtn.setAttribute('aria-label', 'Dismiss attachment chip');
+      removeBtn.textContent = '×';
+      removeBtn.addEventListener('click', function() {
+        chip.remove();
+        renderAttachmentStrip();
+      });
+
+      chip.appendChild(icon);
+      chip.appendChild(label);
+      chip.appendChild(removeBtn);
+      return chip;
+    }
+
+    function readFileAsDataUrl(file) {
+      return new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function() { resolve(String(reader.result || '')); };
+        reader.onerror = function() { reject(new Error('read failed')); };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function acceptIncomingFiles(fileList) {
+      if (!fileList || fileList.length === 0) return;
+      var files = Array.from(fileList).slice(0, 8);
+
+      // Render uploading chips immediately so the user sees the drop landed.
+      var batchKey = 'batch_' + (++attachmentBatchSeq);
+      pendingAttachmentChips[batchKey] = [];
+      for (var i = 0; i < files.length; i++) {
+        var f = files[i];
+        if (!f) continue;
+        if (f.size > MAX_ATTACHMENT_BYTES) {
+          var failChip = makeAttachmentChip(f.name + ' (too large)', 'failed');
+          if (attachmentStrip) attachmentStrip.appendChild(failChip);
+          continue;
+        }
+        var chip = makeAttachmentChip(f.name, 'uploading');
+        if (attachmentStrip) attachmentStrip.appendChild(chip);
+        pendingAttachmentChips[batchKey].push({ name: f.name, chip: chip });
+      }
+      renderAttachmentStrip();
+
+      // Read all files in parallel, then post a single attachFiles message.
+      Promise.all(files.map(function(f) {
+        if (!f || f.size > MAX_ATTACHMENT_BYTES) return null;
+        return readFileAsDataUrl(f).then(function(dataUrl) {
+          return {
+            name: f.name || 'attachment',
+            mimeType: f.type || 'application/octet-stream',
+            sizeBytes: f.size || 0,
+            dataUrl: dataUrl,
+          };
+        }).catch(function() { return null; });
+      })).then(function(results) {
+        var payload = results.filter(function(entry) { return entry !== null; });
+        if (payload.length === 0) {
+          // Mark every uploading chip in this batch as failed.
+          var entries = pendingAttachmentChips[batchKey] || [];
+          for (var j = 0; j < entries.length; j++) {
+            entries[j].chip.classList.remove('uploading');
+            entries[j].chip.classList.add('failed');
+          }
+          delete pendingAttachmentChips[batchKey];
+          return;
+        }
+        vscode.postMessage({ type: 'attachFiles', payload: { files: payload } });
+      });
+    }
+
+    if (composerCard) {
+      composerCard.addEventListener('dragover', function(e) {
+        if (!e.dataTransfer || !e.dataTransfer.types) return;
+        if (Array.prototype.indexOf.call(e.dataTransfer.types, 'Files') < 0) return;
+        e.preventDefault();
+        composerCard.classList.add('dragover');
+      });
+      composerCard.addEventListener('dragleave', function(e) {
+        // Only clear when the cursor leaves the card, not when crossing
+        // a nested child element.
+        if (composerCard.contains(e.relatedTarget)) return;
+        composerCard.classList.remove('dragover');
+      });
+      composerCard.addEventListener('drop', function(e) {
+        if (!e.dataTransfer) return;
+        e.preventDefault();
+        composerCard.classList.remove('dragover');
+        acceptIncomingFiles(e.dataTransfer.files);
+      });
+    }
+
+    // Paste handler on the textarea — captures clipboard images (e.g. screenshot
+    // from grim/Snipping Tool) without inserting the binary blob into the input.
+    userInput.addEventListener('paste', function(e) {
+      var items = e.clipboardData ? e.clipboardData.items : null;
+      if (!items) return;
+      var pasted = [];
+      for (var k = 0; k < items.length; k++) {
+        var item = items[k];
+        if (!item) continue;
+        if (item.kind === 'file') {
+          var file = item.getAsFile();
+          if (file) pasted.push(file);
+        }
+      }
+      if (pasted.length > 0) {
+        e.preventDefault();
+        acceptIncomingFiles(pasted);
+      }
+    });
+
     // ── Messages from extension ───────────────────────────────────────────────
     window.addEventListener('message', (event) => {
       const msg = event.data;
@@ -1548,6 +1753,30 @@ export function getWebviewContent(
 
       else if (msg.type === 'usageMeter') {
         renderUsageMeter(msg.payload);
+      }
+
+      else if (msg.type === 'attachFilesAck') {
+        // The host wrote each file to disk and added it to the context panel.
+        // Transition uploading chips → success, mark skipped → failed.
+        var ack = msg.payload || { added: [], skipped: [] };
+        var skippedByName = {};
+        for (var s = 0; s < (ack.skipped || []).length; s++) {
+          skippedByName[(ack.skipped[s] || {}).name] = (ack.skipped[s] || {}).reason || 'failed';
+        }
+        var allChips = attachmentStrip ? attachmentStrip.querySelectorAll('.attachment-chip.uploading') : [];
+        for (var c = 0; c < allChips.length; c++) {
+          var chipEl = allChips[c];
+          var nameEl = chipEl.querySelector('.attachment-chip__name');
+          var attachName = nameEl ? (nameEl.textContent || '') : '';
+          if (skippedByName[attachName]) {
+            chipEl.classList.remove('uploading');
+            chipEl.classList.add('failed');
+            if (nameEl) nameEl.textContent = attachName + ' (' + skippedByName[attachName] + ')';
+          } else {
+            chipEl.classList.remove('uploading');
+          }
+        }
+        renderAttachmentStrip();
       }
     });
 
