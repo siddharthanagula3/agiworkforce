@@ -80,15 +80,20 @@ There are two TUI command paths:
 - Modern `ChatWidget` path: uses `SlashCommand` enum and handles every enum variant in `dispatch_command` / `dispatch_command_with_args`.
 - Legacy `TuiApp` path: advertises the shared registry through help and popup composition, then dispatches by matching canonical registry names in `handle_slash`.
 
-The legacy `TuiApp` path currently handles these shared-registry canonical commands:
+The legacy `TuiApp` path has two coverage layers:
+
+- Direct match arms for TUI-native behavior and overlays.
+- Shared Claude-parity fallback via `claude_parity::handle_shared_command` for registry commands that do not need a TUI-only implementation.
+
+Direct TUI match arms currently handle these shared-registry canonical commands:
 
 `model`, `plan`, `fast`, `compact`, `clear`, `review`, `diff`, `copy`, `init`, `new`, `resume`, `fork`, `rename`, `save`, `history`, `export`, `rewind`, `mcp`, `skills`, `permissions`, `hooks`, `plugin`, `tasks`, `status`, `cost`, `usage`, `output-style`, `fallback`, `replay`, `insights`, `context`, `config`, `models`, `memory`, `btw`, `voice`, `theme`, `login`, `logout`, `feedback`, `help`, `exit`, `focus`, `background`, `advisor`, `team-onboarding`, `terminal-setup`, `reload-plugins`, `extra-usage`, `remote-env`.
 
-Known explicitly advertised-but-unhandled shared registry commands in that path:
+Shared-fallback commands include:
 
 `agents`, `chrome`, `ide`, `sandbox`, `doctor`, `recap`, `release-notes`, `keybindings`.
 
-These are allowed only because they are documented here and guarded by `shared_registry_tui_surface_is_classified`. A new shared builtin must either be handled in the TUI path or added to the explicit allowlist with a reason.
+Coverage is enforced by `registered_builtin_commands_have_tui_runtime_coverage`: a new shared builtin must be handled by a direct TUI arm, an exact alias arm, or the shared parity fallback.
 
 ## Drift Rules
 

@@ -610,6 +610,15 @@ if (exists('docs/surfaces/desktop.md')) {
   }
 }
 
+if (exists('docs/cli/COMMAND_SURFACE.md')) {
+  const commandSurfaceDoc = readText('docs/cli/COMMAND_SURFACE.md');
+  if (commandSurfaceDoc.includes('Known explicitly advertised-but-unhandled')) {
+    errors.push(
+      'docs/cli/COMMAND_SURFACE.md must classify TUI slash-command coverage through direct arms and shared parity fallback, not a stale unhandled list.',
+    );
+  }
+}
+
 requireIncludes('apps/web/README.md', '`features/` - product-domain feature code.');
 requireIncludes('apps/web/src/README.md', 'Product-domain code belongs in');
 requireIncludes('apps/web/features/index.ts', 'canonical Web product-domain root');
@@ -618,6 +627,11 @@ requireIncludes('docs/plans/domain-first-reorg.md', '`apps/mobile/src/features')
 requireIncludes('docs/plans/domain-first-reorg.md', '`apps/desktop/src/features');
 requireIncludes('docs/surfaces/desktop.md', 'Retired chat folder');
 requireIncludes('docs/surfaces/desktop.md', 'apps/desktop/src/features/chat/');
+requireIncludes('docs/cli/COMMAND_SURFACE.md', 'Shared Claude-parity fallback');
+requireIncludes(
+  'docs/cli/COMMAND_SURFACE.md',
+  'registered_builtin_commands_have_tui_runtime_coverage',
+);
 requireIncludes(
   'apps/mobile/src/features/schedules/README.md',
   'apps/mobile/src/features/schedules',

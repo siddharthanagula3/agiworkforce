@@ -1750,17 +1750,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/hooks" => {
             let hooks = crate::hooks::load_hooks().unwrap_or_default();
-            let mut msg = String::from("Hooks:\n");
-            if hooks.hooks.is_empty() {
-                msg.push_str("  No hooks configured.\n");
-                msg.push_str("  Add hooks to ~/.agiworkforce/hooks.yaml or .agiworkforce/hooks.yaml\n");
-            } else {
-                for (event, hook_list) in &hooks.hooks {
-                    for h in hook_list {
-                        msg.push_str(&format!("  {:<20} {}\n", event, h.command));
-                    }
-                }
-            }
+            let msg = crate::hooks::format_hooks_list(&hooks);
             SlashResult::SystemMessage(msg)
         }
 
