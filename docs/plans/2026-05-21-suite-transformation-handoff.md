@@ -2,9 +2,46 @@
 
 Status: Current
 Owner: Next session lead
-Last updated: 2026-05-21 (extended through round 6)
+Last updated: 2026-05-21 (extended through round 7)
 Branch: `fix/extension-typecheck-and-c02-sync-2026-05-20`
-Head pushed: `b1c2bb428`
+Head pushed: `faa457419`
+
+## Round 7 additions (after `b1c2bb428`)
+
+After the round-6 boundary, an additional autonomous loop shipped 6 commits closing two top-10 P0 gaps end-to-end at the shared-package level:
+
+- `fe22c59cb` `feat(unified-chat): artifact panel live preview for html and react` — extracted `lib/artifact-sandbox.ts` (shared CSP envelope), wired `ArtifactPanel`'s HTML preview to a sandboxed iframe with `allow-scripts allow-modals` + run/stop control, delegated React artifacts to `ReactPreview`, refactored `ArtifactRenderer.HtmlArtifact` to consume the same helper. Round-2 P0 #9 live-preview quadrant.
+- `b0578ce9f` `feat(vscode-ext): composer drag-drop and paste-image wire` — new `attachFiles` webview→host protocol with zod-validated payloads (≤10 MB / ≤8 files / `data:` URLs only, path-separator rejection), webview drag/drop/paste handlers with attachment chips, host writes to `globalStorageUri/.attachments/<timestamp>` and routes through `agi-workforce.addToContext`. Round-2 P0 #3 vscode-ext side.
+- `8fec8a0b5` `feat(extension): composer drag-drop and paste-image attachments` — chrome side panel image-only drag-drop + paste handler, single `acceptIncomingComposerFiles` helper with same 10 MB / 8-attachment caps. Round-2 P0 #3 chrome-ext side.
+- `d1d8bbc2f` `feat(unified-chat): artifact panel edit-in-place` — `onSaveEdit` prop on `ArtifactPanel`, Edit/Save/Discard toolbar, draft buffer auto-clears on artifact swap. Round-2 P0 #9 final quadrant.
+- `8b183c60a` `docs(control-files): record round 7 autonomous suite-transformation slices` — CHANGELOG + TODO entries.
+- `faa457419` `feat(unified-chat): shared generated-file card for compute-session outputs` — new `GeneratedFileCard` consumes `GeneratedFilePresentation` (already exposed by `@agiworkforce/types`) with status badge / metadata / privacy chips / preview thumbnail / action callbacks; opens the path to close the "Add Web/Mobile/Desktop generated-file UI" TODO.
+
+22 new regression tests across `ArtifactPanel.live-preview.test.tsx`, `webviewAttachFiles.test.ts`, `sidePanelComposerDragDrop.test.ts`, and `GeneratedFileCard.test.tsx`. Repo guardrails (`pnpm check:llm-operability`, repo typecheck, lint) clean on every commit. Branch pushed (`3dcc4933b..faa457419`).
+
+### Round 7 — known consumer-adoption gap
+
+The round-2 audit estimates for P0 #9 (Artifacts: 186h) and the new generated-file TODO included **host consumer adoption**, not only the shared primitive. Round 7 closed the shared-package work; host adoption remains open:
+
+| Shared primitive shipped this round     | Host consumers using it |
+| --------------------------------------- | ----------------------- |
+| `ArtifactPanel` live preview            | none yet                |
+| `ArtifactPanel` edit-in-place           | none yet                |
+| `GeneratedFileCard`                     | none yet                |
+| VS Code webview drag-drop / paste       | ✅ shipped to users     |
+| Chrome ext side-panel drag-drop / paste | ✅ shipped to users     |
+
+The two drag-drop wires are real user-facing changes. The three artifact primitives are exported and tested but not yet mounted in Web/Desktop/Mobile, both of which carry their own pre-existing artifact UIs (`apps/web/features/chat/components/artifacts/ArtifactPreview.tsx` and `apps/desktop/src/features/artifacts/ArtifactPanel.tsx`). Next session has three honest paths:
+
+1. **Wedge the shared `ArtifactPanel` into Web's chat shell** as the panel wrapper while keeping `ArtifactPreview` as the body. Adapter ~30 LOC (web's `ArtifactData` already carries `type`; only `version` defaults to 1). Trade-off: the host then has two artifact panels, which doubles maintenance until one consolidates.
+2. **Drop `GeneratedFileCard` into Web's `ArtifactPreview` header** as the compute-session summary block (replaces the inline status + privacy chip pair the file already renders inline). Smaller blast radius than option 1.
+3. **Reconcile**: keep the shared primitives available as the canonical path for future surfaces (chrome ext sidebar artifact viewer, mobile artifact details), and migrate Web/Desktop opportunistically when they next touch their viewers.
+
+Whichever path the next session picks, record it in this handoff before writing code so the trade-off is durable.
+
+## Previous session head (round 6)
+
+The state below describes the round-6 boundary at `b1c2bb428`. Everything above is round-7 additions.
 
 ## Round 5 + 6 additions (after 5630924d7)
 
