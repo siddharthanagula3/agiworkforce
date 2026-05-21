@@ -14,13 +14,14 @@ import {
   Code2,
   Copy,
   Download,
-  GitBranch,
+  Eye,
   History,
   Maximize2,
   Minimize2,
   Pencil,
   Pin,
   PinOff,
+  RefreshCw,
   Share2,
   Trash2,
   X,
@@ -31,7 +32,6 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ScrollArea } from '@/components/ui/ScrollArea';
-import { Separator } from '@/components/ui/Separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/Tooltip';
 import {
@@ -329,6 +329,29 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
     setShareDialogArtifactId(activeArtifactId);
   }, [activeArtifactId]);
 
+  const handleRefreshRenderedArtifact = useCallback(async () => {
+    if (!activeArtifactId) return;
+    try {
+      const refreshed = await getRenderedArtifact(activeArtifactId);
+      setRenderedArtifact(refreshed);
+      toast.success('Artifact refreshed');
+    } catch (err: unknown) {
+      console.error('Failed to refresh artifact:', err);
+      toast.error('Failed to refresh artifact');
+    }
+  }, [activeArtifactId, getRenderedArtifact]);
+
+  const handleInnerTabChange = useCallback(
+    (value: InnerTab) => {
+      if (isEditing) {
+        setIsEditing(false);
+        setEditingArtifact(null);
+      }
+      setInnerTab(value);
+    },
+    [isEditing],
+  );
+
   if (!panelOpen) return null;
 
   const activeArtifact = artifacts.find((a) => a.id === activeArtifactId);
@@ -422,20 +445,58 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
               >
                 {renderedArtifact && renderedArtifact.id === artifact.id ? (
                   <>
-                    {/* Status bar */}
-                    <div className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 shrink-0">
-                      <div className="flex items-center gap-2">
+                    {/* Viewer toolbar */}
+                    <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 shrink-0">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="inline-flex shrink-0 rounded-lg border border-zinc-200 bg-white p-0.5 dark:border-zinc-800 dark:bg-zinc-950">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant={
+                                  innerTab === 'preview' && !isEditing ? 'secondary' : 'ghost'
+                                }
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => handleInnerTabChange('preview')}
+                                aria-label="Preview artifact"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Preview</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant={innerTab === 'code' || isEditing ? 'secondary' : 'ghost'}
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => handleInnerTabChange('code')}
+                                aria-label="View source"
+                              >
+                                <Code2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Source</TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                            {renderedArtifact.title}
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+                            <span className="uppercase">{renderedArtifact.artifact_type}</span>
+                            <span aria-hidden="true">·</span>
+                            <span>v{renderedArtifact.version_info.current}</span>
+                          </div>
+                        </div>
                         <Badge
                           variant="outline"
                           className={cn('text-xs', getStatusColor(renderedArtifact.status))}
                         >
                           {renderedArtifact.status}
                         </Badge>
-                        <Separator orientation="vertical" className="h-4" />
-                        <span className="text-xs text-zinc-500 flex items-center gap-1">
-                          <GitBranch className="h-3 w-3" />v{renderedArtifact.version_info.current}
-                        </span>
-                        <span className="text-xs text-zinc-500 flex items-center gap-1">
+                        <span className="hidden text-xs text-zinc-500 sm:flex items-center gap-1">
                           <Clock className="h-3 w-3" />
                           {formatDistanceToNow(new Date(renderedArtifact.version_info.updated_at), {
                             addSuffix: true,
@@ -494,6 +555,32 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
                           </TooltipTrigger>
                           <TooltipContent>Download</TooltipContent>
                         </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant={innerTab === 'versions' ? 'secondary' : 'ghost'}
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => handleInnerTabChange('versions')}
+                            >
+                              <History className="h-3.5 w-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Versions</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => void handleRefreshRenderedArtifact()}
+                            >
+                              <RefreshCw className="h-3.5 w-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Refresh</TooltipContent>
+                        </Tooltip>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-7 w-7">
@@ -537,41 +624,10 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
                     <Tabs
                       value={isEditing ? 'code' : innerTab}
                       onValueChange={(v) => {
-                        if (isEditing) {
-                          setIsEditing(false);
-                          setEditingArtifact(null);
-                        }
-                        setInnerTab(v as InnerTab);
+                        handleInnerTabChange(v as InnerTab);
                       }}
                       className="flex-1 flex flex-col min-h-0"
                     >
-                      <TabsList className="rounded-none border-b border-zinc-200 dark:border-zinc-800 bg-transparent h-9 px-3 shrink-0 justify-start gap-0">
-                        <TabsTrigger
-                          value="preview"
-                          className="text-xs px-3 h-9 rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent"
-                        >
-                          Preview
-                        </TabsTrigger>
-                        <TabsTrigger
-                          value="code"
-                          className="text-xs px-3 h-9 rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent"
-                        >
-                          Code
-                        </TabsTrigger>
-                        <TabsTrigger
-                          value="versions"
-                          className="text-xs px-3 h-9 rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent flex items-center gap-1"
-                        >
-                          <History className="h-3 w-3" />
-                          Versions
-                          {renderedArtifact.version_info.total > 1 && (
-                            <Badge variant="secondary" className="text-xs px-1 py-0 h-4 ml-0.5">
-                              {renderedArtifact.version_info.total}
-                            </Badge>
-                          )}
-                        </TabsTrigger>
-                      </TabsList>
-
                       {/* Preview tab */}
                       <TabsContent value="preview" className="flex-1 min-h-0 mt-0">
                         {isEditing ? (
