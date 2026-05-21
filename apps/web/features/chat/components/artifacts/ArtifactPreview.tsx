@@ -20,6 +20,7 @@ import {
   type ComputeSession,
   type GeneratedFile,
 } from '@agiworkforce/types';
+import { GeneratedFileCard } from '@agiworkforce/unified-chat';
 import { cn } from '@shared/lib/utils';
 import { ScrollArea } from '@shared/ui/scroll-area';
 import {
@@ -521,25 +522,20 @@ export function ArtifactPreview({
       )}
 
       {hasGeneratedFileManifest && (
-        <div className="flex flex-wrap gap-x-4 gap-y-1 border-b border-border bg-muted/20 px-4 py-2 text-xs text-muted-foreground">
-          <span>{generatedFileSummary.kindLabel}</span>
-          {generatedFileSummary.byteCountLabel && (
-            <span>{generatedFileSummary.byteCountLabel}</span>
-          )}
-          {generatedFileSummary.providerLabel && (
-            <span>Provider: {generatedFileSummary.providerLabel}</span>
-          )}
-          {generatedFileSummary.sourceSurfaceLabel && (
-            <span>Source: {generatedFileSummary.sourceSurfaceLabel}</span>
-          )}
-          {generatedFileSummary.sourceSessionLabel && (
-            <span>{generatedFileSummary.sourceSessionLabel}</span>
-          )}
-          {generatedFileSummary.checksumShort && (
-            <span>SHA-256: {generatedFileSummary.checksumShort}</span>
-          )}
+        <div className="border-b border-border bg-muted/10 px-4 py-3">
+          <GeneratedFileCard
+            presentation={generatedFileSummary}
+            onDownload={
+              generatedFileSummary.primaryUri ? () => void handleDownloadGeneratedFile() : undefined
+            }
+            onShare={
+              generatedFileSummary.canShare ? () => void handleShareGeneratedFile() : undefined
+            }
+          />
           {generatedFileSummary.localOnly && (
-            <span>Local file. Web shares a reference only; it is not uploaded.</span>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Local file. Web shares a reference only; it is not uploaded.
+            </p>
           )}
         </div>
       )}
