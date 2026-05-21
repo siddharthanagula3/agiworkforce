@@ -38,7 +38,7 @@ for (const scanRoot of scanRoots) {
     const body = fs.readFileSync(readmePath, 'utf8');
     for (const marker of requiredReadmeMarkers) {
       if (!body.includes(marker)) {
-        warnings.push(`${dir}/README.md missing recommended marker: ${marker}`);
+        errors.push(`${dir}/README.md missing required marker: ${marker}`);
       }
     }
   }
