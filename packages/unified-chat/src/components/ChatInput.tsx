@@ -19,7 +19,12 @@ import { ModelSelector } from './ModelSelector';
 import { AgentControl } from './AgentControl';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { useAgentControlStore } from '../stores/agentControlStore';
-import { PROVIDER_DISPLAY, type ProviderId } from '@agiworkforce/types';
+import {
+  ALLOWED_ATTACHMENT_ACCEPT,
+  PROVIDER_DISPLAY,
+  validateAttachmentFile,
+  type ProviderId,
+} from '@agiworkforce/types';
 
 export interface ChatInputProps {
   onSend: (content: string, agentMode?: string, effort?: string) => void;
@@ -67,6 +72,7 @@ export function ChatInput({
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [webSearchEnabled, setWebSearchEnabled] = useState(true);
   const [researchEnabled, setResearchEnabled] = useState(false);
   const [activeStyle, setActiveStyle] = useState<
@@ -128,6 +134,28 @@ export function ChatInput({
     [adjustHeight],
   );
 
+  // Validate + append candidate files through the shared @agiworkforce/types
+  // contract (MIME prefix + extension allowlist + MAX_ATTACHMENT_BYTES). Any
+  // rejection surfaces the first failure message under the textarea so the
+  // user knows why nothing attached. Round-2 audit P0 #4 (2026-05-21).
+  const appendFiles = useCallback((candidates: File[]) => {
+    if (candidates.length === 0) return;
+    const accepted: File[] = [];
+    const rejections: string[] = [];
+    for (const file of candidates) {
+      const result = validateAttachmentFile(file);
+      if (result.ok) {
+        accepted.push(file);
+      } else {
+        rejections.push(result.message);
+      }
+    }
+    if (accepted.length > 0) {
+      setAttachedFiles((prev) => [...prev, ...accepted]);
+    }
+    setAttachmentError(rejections.length > 0 ? rejections[0] : null);
+  }, []);
+
   // Drag-drop + paste-image — parity-gap round-2 P0 #3 (2026-05-21). Mirrors
   // Claude / ChatGPT: dropping files anywhere on the composer or pasting an
   // image from the clipboard attaches them to the message, with a visual
@@ -154,11 +182,9 @@ export function ChatInput({
       setIsDragOver(false);
       if (disabled || isStreaming) return;
       const files = Array.from(e.dataTransfer?.files ?? []);
-      if (files.length > 0) {
-        setAttachedFiles((prev) => [...prev, ...files]);
-      }
+      appendFiles(files);
     },
-    [disabled, isStreaming],
+    [disabled, isStreaming, appendFiles],
   );
 
   const handlePaste = useCallback(
@@ -178,10 +204,10 @@ export function ChatInput({
         // Prevent the binary blob from being inserted into the textarea as
         // garbage text — but only when we actually captured a file paste.
         e.preventDefault();
-        setAttachedFiles((prev) => [...prev, ...pasted]);
+        appendFiles(pasted);
       }
     },
-    [disabled, isStreaming],
+    [disabled, isStreaming, appendFiles],
   );
 
   // Object URLs for image thumbnails. Re-built whenever the attached file
@@ -276,6 +302,17 @@ export function ChatInput({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
+        {/* Inline attachment validation error — dismissed on next valid add. */}
+        {attachmentError && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="px-3 pt-2 text-[11px] text-[var(--chat-destructive)]"
+          >
+            {attachmentError}
+          </div>
+        )}
+
         {/* Attached files preview — image thumbnails for image/*, text chip otherwise */}
         {attachedFiles.length > 0 && (
           <div className="flex flex-wrap gap-1.5 px-3 pt-2">
@@ -334,11 +371,11 @@ export function ChatInput({
             type="file"
             multiple
             className="hidden"
-            accept="image/*,.pdf,.txt,.md,.csv,.json,.js,.ts,.py,.rs,.go,.java,.html,.css"
+            accept={ALLOWED_ATTACHMENT_ACCEPT}
             onChange={(e) => {
               const files = e.target.files;
               if (files && files.length > 0) {
-                setAttachedFiles(Array.from(files));
+                appendFiles(Array.from(files));
               }
               e.target.value = '';
             }}
