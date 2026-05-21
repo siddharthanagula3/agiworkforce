@@ -59,6 +59,7 @@ const requiredFiles = [
   'docs/engineering/README.md',
   'docs/engineering/naming-conventions.md',
   'docs/engineering/agent-native-development.md',
+  'docs/engineering/agent-harness-rollout.md',
   'docs/engineering/parallel-agent-playbook.md',
   'docs/engineering/autonomous-software-company-roadmap.md',
   'docs/research/agentic-company-research-prompts.md',
@@ -94,6 +95,7 @@ requireIncludes('CLAUDE.md', 'Claude-specific notes');
 requireIncludes('CLAUDE.md', 'docs/engineering/naming-conventions.md');
 requireIncludes('AGENTS.md', 'docs/engineering/agent-native-development.md');
 requireIncludes('AGENTS.md', 'docs/engineering/naming-conventions.md');
+requireIncludes('AGENTS.md', 'docs/engineering/agent-harness-rollout.md');
 requireIncludes('AGENTS.md', 'Hooks And Local Gates');
 requireIncludes('AGENTS.md', 'docs/agent-context/lanes.json');
 requireIncludes('docs/current/README.md', 'Archived Source Material');
@@ -106,6 +108,8 @@ requireIncludes('docs/engineering/naming-conventions.md', 'Primary CLI command: 
 requireIncludes('docs/engineering/naming-conventions.md', '## Hooks');
 requireIncludes('docs/engineering/agent-native-development.md', 'Worktree And Session Isolation');
 requireIncludes('docs/engineering/agent-native-development.md', 'High-Risk Merge Gates');
+requireIncludes('docs/engineering/agent-harness-rollout.md', 'Layer Order');
+requireIncludes('docs/engineering/agent-harness-rollout.md', 'LSP');
 requireIncludes('docs/agent-context/shared-files.md', 'Collision Protocol');
 requireIncludes('docs/engineering/parallel-agent-playbook.md', '15+ Parallel Agents');
 requireIncludes(

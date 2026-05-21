@@ -17,8 +17,9 @@ This folder is the tool-neutral map for coding agents. Codex, Claude Code, Curso
 7. `known-flaws.md` - open issues and stale claims agents should not rediscover as new.
 8. `doc-status.json` - which docs are current, historical, or working notes.
 9. `../engineering/naming-conventions.md` - product, CLI, files, folders, packages, branches, commits, versions, and hook policy.
-10. `bug-finding-guide.md` - workflow for finding bugs without getting lost in stale docs.
-11. `agent-task-templates.md` - standard prompts for exploration, implementation, review, and verification agents.
+10. `../engineering/agent-harness-rollout.md` - context, hooks, skills, plugins, LSP/MCP, and subagent rollout order.
+11. `bug-finding-guide.md` - workflow for finding bugs without getting lost in stale docs.
+12. `agent-task-templates.md` - standard prompts for exploration, implementation, review, and verification agents.
 
 ## Rules
 
@@ -28,5 +29,6 @@ This folder is the tool-neutral map for coding agents. Codex, Claude Code, Curso
 - Keep JSON files parseable without comments.
 - Split parallel agent work by disjoint write paths from `lanes.json` and record verification evidence before committing.
 - Do not edit shared files from feature lanes; route them through the integrator or a lane that owns shared files.
+- Keep root context lean; put local conventions in path-scoped `AGENTS.md` files and owner READMEs.
 - Run `pnpm check:hooks` after editing Husky hooks, commit rules, package scripts, or repo-operability checks.
 - Run `pnpm check:llm-operability` after editing report retention, CI, CODEOWNERS, structure, ownership, or agent-context rules.

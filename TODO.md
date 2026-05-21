@@ -146,6 +146,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Add `pnpm check:lane-ownership` and include it in `pnpm check:llm-operability`.
 - [x] Add parallel-agent PR template and playbook.
 - [x] Add autonomous feedback-to-patch software-company roadmap.
+- [x] Add Claude Code at-scale harness rollout rules for context, hooks, skills, plugins, LSP/MCP, and subagents.
 - [x] Add 100 delegated research prompts for the agentic company operating model.
 
 ## Autonomous Company Tasks

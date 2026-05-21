@@ -100,7 +100,8 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
   - `services/api-gateway/src/routes/enterprise.ts` mounted at `/api/v1/enterprise` for organization listing, policy reads, audit-event reads, usage-ledger reads, and support-case creation behind authenticated organization membership checks.
   - `apps/web/app/admin` and `apps/web/features/admin/` as the first operational admin readiness surface.
   - `docs/enterprise/` for profit-first enterprise readiness and control-plane ownership.
-  - `docs/agent-context/lanes.json`, `repo-map.json`, and `risk-map.json` entries for enterprise admin/control-plane parallel-agent work.
+- `docs/agent-context/lanes.json`, `repo-map.json`, and `risk-map.json` entries for enterprise admin/control-plane parallel-agent work.
+- `docs/engineering/agent-harness-rollout.md` locking Claude Code at-scale harness lessons into AGI's agent-native repo rules: lean context files, deterministic hooks, on-demand skills, distributable plugins, LSP/MCP integrations, subagents, rollout phases, and harness ownership.
 - `docs/current/` as the compact current docs layer:
   - `README.md` for read order and archive rule.
   - `product-suite.md` for product thesis, surfaces, trust modes, and sync boundary.

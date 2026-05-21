@@ -11,6 +11,7 @@ Claude-specific notes for Claude Code.
 ## Claude-Specific Notes
 
 - Follow `AGENTS.md`, `docs/agent-context/README.md`, `docs/engineering/agent-native-development.md`, and `docs/agent-context/known-flaws.md` before using older launch plans.
+- Follow `docs/engineering/agent-harness-rollout.md` for Claude Code-style context, hooks, skills, plugins, LSP/MCP, and subagent rollout order.
 - Follow `docs/engineering/naming-conventions.md` for product names, CLI command examples, file/folder names, commits, and hooks.
 - Keep Claude memory and `.claude/` project files as tool-specific context, not the repo source of truth.
 - Do not duplicate repo maps or command lists here. Update `AGENTS.md` and `docs/agent-context/*` instead.

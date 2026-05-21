@@ -23,7 +23,8 @@ Path-scoped `AGENTS.md` files under high-risk surfaces add local rules; read the
 9. `PLAN.md` and `TODO.md` - active strategy and work queue.
 10. `docs/engineering/agent-native-development.md` - parallel agent/worktree and verification workflow.
 11. `docs/engineering/naming-conventions.md` - naming, root docs, CLI command, package, branch, commit, version, and hook policy.
-12. `docs/engineering/parallel-agent-playbook.md` - concrete 15+ agent operating procedure.
+12. `docs/engineering/agent-harness-rollout.md` - context, hooks, skills, plugins, LSP/MCP, and subagent rollout order.
+13. `docs/engineering/parallel-agent-playbook.md` - concrete 15+ agent operating procedure.
 
 When these files conflict with older plans, prefer the list above.
 
@@ -75,6 +76,7 @@ Machine-readable version: `docs/agent-context/repo-map.json`.
 - Do not move `.claude`, `.codex`, `.cursor`, `.opencode`, `.agents`, or `.mcp.json` until their tool contracts are classified.
 - Check `docs/agent-context/known-flaws.md` before reporting a bug as new.
 - Do not add new root control docs. Use `PLAN.md`, `TODO.md`, `CHANGELOG.md`, `docs/current`, `docs/plans`, `audit`, `reports`, and `docs/archive` as defined in `docs/engineering/naming-conventions.md`.
+- Keep root context lean. Put durable local rules in path-scoped `AGENTS.md` files, surface READMEs, and `docs/agent-context` maps instead of expanding this file.
 
 ## Commands
 
@@ -105,6 +107,10 @@ Hook policy is part of repo organization and is enforced by `pnpm check:hooks`.
 - `pre-commit` runs lint-staged, then fast structure and agent-context checks.
 - `pre-push` runs `pnpm check:llm-operability`, `git diff --check`, and `git diff --cached --check`.
 - Use `SKIP_PRE_PUSH=1` only for emergency pushes; record skipped checks in the PR or handoff.
+
+## Agent Harness
+
+Harness order is locked in `docs/engineering/agent-harness-rollout.md`: lean context files, deterministic hooks, on-demand skills, distributable plugins, LSP/MCP integrations, then subagents for separated exploration and editing.
 
 ## Bug-Finding Workflow
 

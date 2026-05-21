@@ -25,6 +25,7 @@
     "docs/engineering/README.md",
     "docs/engineering/naming-conventions.md",
     "docs/engineering/agent-native-development.md",
+    "docs/engineering/agent-harness-rollout.md",
     "docs/engineering/parallel-agent-playbook.md",
     "docs/engineering/autonomous-software-company-roadmap.md",
     "docs/enterprise/README.md",
