@@ -169,6 +169,31 @@ export function isDeveloperSessionSurface(
   return (DEVELOPER_SESSION_SURFACES as readonly SourceSurface[]).includes(surface);
 }
 
+/**
+ * Runtime guard for the cross-surface chat-sync rule. Throws when a caller
+ * tries to enrol a `DeveloperSessionSurface` (cli / vscode / chrome) into
+ * the synced-app chat pipeline. The goal contract for AGI Workforce is
+ * explicit: normal consumer chat sync is Web / Desktop / Mobile only; the
+ * developer surfaces keep separate workspace-scoped histories. Round-2
+ * audit (2026-05-21).
+ *
+ * Use at any service boundary that touches synced chat — Supabase
+ * realtime channel subscription, conversationSync.startBackgroundSync,
+ * the API gateway chat-history endpoints — so a future caller cannot
+ * accidentally cross the boundary.
+ */
+export function assertSurfaceCanSyncChats(
+  surface: SourceSurface,
+): asserts surface is SyncedAppSurface {
+  if (!isSyncedAppSurface(surface)) {
+    throw new Error(
+      `AGI sync-rule violation: surface "${surface}" cannot participate in app chat sync. ` +
+        `Only Web, Desktop, and Mobile are synced surfaces; CLI, VS Code, and Chrome ` +
+        `keep separate workspace-scoped histories.`,
+    );
+  }
+}
+
 export function providerModeToPrivacyMode(mode: ProviderMode): PrivacyMode {
   switch (mode) {
     case 'Local':
