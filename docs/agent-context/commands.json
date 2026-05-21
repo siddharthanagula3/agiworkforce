@@ -14,6 +14,7 @@
     "structureConventions": "pnpm check:structure-conventions",
     "laneOwnership": "pnpm check:lane-ownership",
     "generatedArtifacts": "pnpm check:generated-artifacts",
+    "supabaseMigrations": "pnpm check:supabase-migrations",
     "readmeOwnership": "pnpm check:readme-ownership",
     "docStatus": "pnpm check:doc-status",
     "hooks": "pnpm check:hooks",

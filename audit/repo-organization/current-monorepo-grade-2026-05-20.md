@@ -11,7 +11,7 @@ Overall grade: **A after the docs consolidation and A+ push, with docs/LLM-opera
 
 The core monorepo spine is strong: `apps/`, `packages/`, `crates/`, `services/`, `supabase/`, `docs/`, `audit/`, `tasks/`, `reports/`, `examples/`, and `scripts/` are the right large buckets for an OpenAI/Anthropic-style application suite.
 
-The repo no longer has the most damaging founder-plus-LLM symptoms at root: scratch captures, historical campaign docs, reference catalogs, raw reference-index catalogs, local-only artifacts, stale Web feature shims, split Web feature roots, ambiguous Web workspace filters, duplicate Expo app configs, oversized current docs, Mobile waitlist pilot barrels, Mobile schedule layer-sprawl, workspace package deep imports, duplicate CLI release workflows, and CLI release artifact-name drift have been moved, archived, ignored, untracked, summarized, removed, or guarded. The remaining repo-wide A+ work is deeper: CODEOWNERS with real teams, the remaining Mobile/Desktop domain-first cleanup, Supabase migration consolidation, CI blind-spot baselines, and report-retention review.
+The repo no longer has the most damaging founder-plus-LLM symptoms at root: scratch captures, historical campaign docs, reference catalogs, raw reference-index catalogs, local-only artifacts, stale Web feature shims, split Web feature roots, ambiguous Web workspace filters, duplicate Expo app configs, oversized current docs, Mobile waitlist pilot barrels, Mobile schedule layer-sprawl, workspace package deep imports, duplicate CLI release workflows, CLI release artifact-name drift, and new legacy Supabase migration drift have been moved, archived, ignored, untracked, summarized, removed, or guarded. The remaining repo-wide A+ work is deeper: CODEOWNERS with real teams, the remaining Mobile/Desktop domain-first cleanup, full Supabase migration consolidation after production diff, CI blind-spot baselines, and report-retention review.
 
 ## Evidence Snapshot
 
@@ -35,7 +35,7 @@ The repo no longer has the most damaging founder-plus-LLM symptoms at root: scra
 - Mobile Expo config is now single-source: root `app.json` and duplicate `apps/mobile/app.json` are removed, and repo-organization checks enforce `apps/mobile/app.config.js`.
 - Web deployment and helper scripts now use `@agiworkforce/web` as the canonical workspace filter; `pnpm check:structure-conventions` rejects active-file regressions to ambiguous `--filter web`.
 - README ownership markers are no longer advisory. Missing `Status:`, `Owner`, or `Purpose` markers now fail `pnpm check:readme-ownership`.
-- The 2026-05-21 A+ push moved Mobile schedules under `apps/mobile/src/features/schedules`, added feature ownership READMEs for all current Web/Mobile/Desktop feature folders, hardened package public-export boundaries, removed duplicate CLI release workflow drift, restored linux-arm64 CLI release coverage, and aligned CI/Web release filters with canonical workspace names.
+- The 2026-05-21 A+ push moved Mobile schedules under `apps/mobile/src/features/schedules`, added feature ownership READMEs for all current Web/Mobile/Desktop feature folders, hardened package public-export boundaries, removed duplicate CLI release workflow drift, restored linux-arm64 CLI release coverage, froze legacy Supabase migrations, and aligned CI/Web release filters with canonical workspace names.
 
 ## Scorecard
 
@@ -49,7 +49,7 @@ The repo no longer has the most damaging founder-plus-LLM symptoms at root: scra
 | Root hygiene                 | A     | Root is short and intentional; backslash-named root entries, stale Expo app configs, and unclassified root files now fail checks.                |
 | Generated artifact hygiene   | A-    | Tracked local/generated debt is removed or archived; remaining work is retention policy for existing reports and app-local outputs.              |
 | Package boundaries           | A     | Boundary and README ownership checks pass; workspace package deep imports now fail unless the package explicitly exports the subpath.            |
-| CI/repo guardrails           | A     | Repo-operability CI exists; strict structure, hook, README, doc-status, artifact, release, and package-boundary checks pass.                     |
+| CI/repo guardrails           | A     | Repo-operability CI exists; strict structure, hook, README, doc-status, artifact, release, Supabase, and package-boundary checks pass.           |
 | Hiring readiness             | A     | A new engineer or coding agent can navigate ownership and commands; real GitHub teams and remaining Mobile/Desktop moves remain before A+.       |
 
 ## Main Findings
@@ -277,7 +277,8 @@ Acceptance:
 15. Move Mobile schedules into the canonical feature root. Done; old schedule component/service/store paths are forbidden.
 16. Add feature ownership READMEs. Done; Web/Mobile/Desktop feature folders are checked by `pnpm check:readme-ownership`.
 17. Remove duplicate CLI release workflow and align release assets. Done; `release-cli.yml` is canonical and guarded.
-18. Continue remaining Mobile and Desktop domain-first cleanup one domain at a time.
+18. Freeze legacy Supabase migration drift. Done; new SQL under `apps/web/supabase/migrations` fails `pnpm check:supabase-migrations`.
+19. Continue remaining Mobile and Desktop domain-first cleanup one domain at a time.
 
 ## Target State
 

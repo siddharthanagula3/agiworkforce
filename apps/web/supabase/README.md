@@ -8,6 +8,10 @@ New migrations should be authored at `supabase/migrations/` (repo root), not her
 
 While the consolidation is in flight, `supabase/migrations/` (root) has the newer cross-surface migrations and `apps/web/supabase/migrations/` (this dir) has older migrations that are also applied in production. Both dirs together form the complete production history.
 
+## Frozen legacy migrations
+
+This directory is frozen. Do not add new SQL files here. New migrations go only to root `supabase/migrations/`, and `pnpm check:supabase-migrations` fails if this legacy allowlist changes outside the explicit consolidation PR.
+
 ## Why not just delete this directory now?
 
 Production already has every migration applied. Deleting this directory locally would:

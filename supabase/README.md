@@ -12,14 +12,18 @@ Production has BOTH dirs' migrations applied — verified via `mcp__supabase__li
 
 **Always put new migrations here**: `supabase/migrations/<YYYYMMDDHHMMSS>_<name>.sql`.
 
-When the Supabase CLI runs (typically from `apps/web/`), it reads `apps/web/supabase/config.toml` for project linkage but each dev should also `cp` new migrations they author from `supabase/migrations/` to `apps/web/supabase/migrations/` until the consolidation completes (Step 1 below).
+When the Supabase CLI runs (typically from `apps/web/`), it reads `apps/web/supabase/config.toml` for project linkage. New schema work still goes only in root `supabase/migrations/`; do not mirror or copy new migrations into the legacy Web directory.
+
+## Frozen legacy directory
+
+`apps/web/supabase/migrations/` is a frozen historical directory. Do not add new SQL files under `apps/web/supabase/migrations/`. `pnpm check:supabase-migrations` enforces the current legacy allowlist so paid-tier/schema work cannot accidentally revive the split source of truth.
 
 ## Consolidation roadmap (low-risk path)
 
 Status: **Step 0 done** (this README + `apps/web/supabase/README.md` document the split). Future steps:
 
 1. **Step 1** — move `apps/web/supabase/config.toml` → `supabase/config.toml`. Update any `apps/web/package.json` script that runs `supabase` from `apps/web/`. Verify `supabase status` and `supabase db push` still target the same project.
-2. **Step 2** — copy the 50 unique-to-legacy migrations from `apps/web/supabase/migrations/` into `supabase/migrations/` so `supabase/migrations/` has the full history. Production rows already match — the file move is purely a local-CLI alignment.
+2. **Step 2** — reconcile the 50 frozen legacy migrations from `apps/web/supabase/migrations/` into the root canonical history after a production diff. Production rows already match; the file move is a local-CLI alignment, but timestamp-collision notes in `20260509000005_canonical_dir_history_marker.sql` must be respected.
 3. **Step 3** — remove `apps/web/supabase/` (delete or archive). Update CI / Vercel build hooks if any reference the old path.
 4. **Step 4** — verify with `supabase db diff` against production — must show empty diff.
 

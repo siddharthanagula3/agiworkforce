@@ -104,6 +104,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Move the Mobile schedules domain into `apps/mobile/src/features/schedules` and remove old schedule component/service/store paths.
 - [x] Require ownership READMEs for every top-level Web, Mobile, and Desktop feature folder.
 - [x] Remove the duplicate CLI release workflow and enforce the canonical `release-cli.yml` / stable `v-cli-*` artifact contract.
+- [x] Freeze legacy `apps/web/supabase/migrations` with `pnpm check:supabase-migrations` so new migrations can only land in root `supabase/migrations`.
 - [ ] Execute Mobile domain-first moves into `apps/mobile/src/features` from `docs/plans/domain-first-reorg.md` after root/docs/package contracts are stable.
 - [ ] Execute Desktop domain-first moves into `apps/desktop/src/features` from `docs/plans/domain-first-reorg.md` after root/docs/package contracts are stable.
 

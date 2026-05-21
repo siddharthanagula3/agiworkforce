@@ -178,6 +178,7 @@ if (commands) {
     'structureConventions',
     'laneOwnership',
     'generatedArtifacts',
+    'supabaseMigrations',
     'readmeOwnership',
     'docStatus',
     'hooks',
