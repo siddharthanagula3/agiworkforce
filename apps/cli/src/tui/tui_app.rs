@@ -220,6 +220,37 @@ impl TuiApp {
             registry_command.argument_hint = command.argument_hint;
             command_registry.push(registry_command);
         }
+        if let Some(prompts) = session.mcp_prompt_info() {
+            for prompt in prompts {
+                if command_registry.find(&prompt.command_name).is_some() {
+                    continue;
+                }
+                let loaded_from = format!("mcp:{}", prompt.server_name);
+                let mut registry_command = RegistryCommand::prompt(
+                    prompt.command_name.clone(),
+                    format!("[MCP:{}] {}", prompt.server_name, prompt.description),
+                    CommandSource::Mcp,
+                    Some(&loaded_from),
+                );
+                if !prompt.arguments.is_empty() {
+                    registry_command.argument_hint = Some(
+                        prompt
+                            .arguments
+                            .iter()
+                            .map(|arg| {
+                                if arg.required {
+                                    format!("{}=<value>", arg.name)
+                                } else {
+                                    format!("[{}=<value>]", arg.name)
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join(" "),
+                    );
+                }
+                command_registry.push(registry_command);
+            }
+        }
 
         Self {
             session,
@@ -1344,6 +1375,7 @@ enum SlashResult {
     Quit,
     SendAsPrompt,
     SendPrompt(String),
+    SendMcpPrompt(String),
     RunLogin,
     RunLogout,
 }
@@ -2015,6 +2047,9 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             if let Some(prompt) = crate::custom_commands::expand_custom_slash_invocation(input) {
                 return SlashResult::SendPrompt(prompt);
             }
+            if input.trim_start().starts_with("/mcp:") {
+                return SlashResult::SendMcpPrompt(input.to_string());
+            }
 
             let shared =
                 crate::claude_parity::handle_shared_command(cmd.as_str(), arg, &mut app.session);
@@ -2320,6 +2355,21 @@ async fn run_event_loop(
                             }
                             SlashResult::SendPrompt(prompt) => {
                                 send_message(terminal, app, &prompt).await?;
+                            }
+                            SlashResult::SendMcpPrompt(invocation) => {
+                                match app.session.expand_mcp_prompt_invocation(&invocation).await {
+                                    Ok(Some(prompt)) => {
+                                        send_message(terminal, app, &prompt).await?;
+                                    }
+                                    Ok(None) => app.chat_messages.push(ChatMessage {
+                                        role: ChatRole::System,
+                                        text: "Unknown MCP prompt command.".to_string(),
+                                    }),
+                                    Err(e) => app.chat_messages.push(ChatMessage {
+                                        role: ChatRole::System,
+                                        text: format!("MCP prompt failed: {e:#}"),
+                                    }),
+                                }
                             }
                         }
                     }

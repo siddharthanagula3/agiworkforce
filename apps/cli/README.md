@@ -167,6 +167,10 @@ Command bodies support `$ARGUMENTS` and `$1` through `$9`; imported Claude
 commands under `~/.agiworkforce/prompts/claude` and compatibility
 `.claude/commands` roots are also recognized.
 
+Connected MCP servers that support prompts expose them as
+`/mcp:<server>:<prompt>`. Arguments can be passed as `name=value` pairs; if a
+prompt has one required argument, plain trailing text is assigned to it.
+
 ## Demo flow (90 seconds)
 
 ```

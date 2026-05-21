@@ -23,6 +23,8 @@ pub(super) enum SlashResult {
     Batch(String, String),
     /// Turn the slash command into a first-class prompt.
     Prompt(String),
+    /// Resolve and send an MCP prompt command.
+    McpPrompt(String),
     /// Run ecosystem scan.
     Ecosystem(String),
     /// Run marketplace search.
@@ -386,6 +388,9 @@ pub(super) fn handle_slash_command(
         _ => {
             if let Some(prompt) = crate::custom_commands::expand_custom_slash_invocation(input) {
                 return SlashResult::Prompt(prompt);
+            }
+            if input.trim_start().starts_with("/mcp:") {
+                return SlashResult::McpPrompt(input.to_string());
             }
             output::print_warn(&format!(
                 "Unknown command: {}. Type /help for available commands.",

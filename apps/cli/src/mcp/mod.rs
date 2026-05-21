@@ -206,6 +206,28 @@ pub struct McpTool {
     pub input_schema: serde_json::Value,
 }
 
+/// MCP prompt discovered from a server.
+#[derive(Debug, Clone)]
+pub struct McpPrompt {
+    /// Slash command name without the leading slash: `mcp:<server>:<prompt>`.
+    pub command_name: String,
+    /// Original prompt name from server.
+    pub original_name: String,
+    /// Server this prompt belongs to.
+    pub server_name: String,
+    /// Prompt description.
+    pub description: String,
+    /// Argument metadata returned by `prompts/list`.
+    pub arguments: Vec<McpPromptArgument>,
+}
+
+#[derive(Debug, Clone)]
+pub struct McpPromptArgument {
+    pub name: String,
+    pub description: String,
+    pub required: bool,
+}
+
 // ---------------------------------------------------------------------------
 // Timeout configuration
 // ---------------------------------------------------------------------------
@@ -660,6 +682,32 @@ impl McpConnection {
         }
 
         Ok(tools)
+    }
+
+    /// Discover prompts from the MCP server.
+    pub async fn list_prompts(&mut self) -> Result<Vec<McpPrompt>> {
+        let timeout = self.timeouts.list_tools;
+        let response = self.send_request("prompts/list", None, timeout).await?;
+        Ok(parse_prompts_response(&self.server_name, response.as_ref()))
+    }
+
+    pub async fn get_prompt(
+        &mut self,
+        prompt_name: &str,
+        arguments: serde_json::Map<String, serde_json::Value>,
+    ) -> Result<String> {
+        let timeout = self.timeouts.call_tool;
+        let response = self
+            .send_request(
+                "prompts/get",
+                Some(serde_json::json!({
+                    "name": prompt_name,
+                    "arguments": arguments,
+                })),
+                timeout,
+            )
+            .await?;
+        extract_prompt_text(response.as_ref())
     }
 
     /// Execute a tool on the MCP server.
@@ -1400,6 +1448,7 @@ pub(super) fn find_subsequence(haystack: &[u8], needle: &[u8]) -> Option<usize> 
 pub struct McpManager {
     connections: HashMap<String, McpConnection>,
     tools: Vec<McpTool>,
+    prompts: Vec<McpPrompt>,
 }
 
 impl std::fmt::Debug for McpManager {
@@ -1459,6 +1508,7 @@ impl McpManager {
         Self {
             connections: HashMap::new(),
             tools: Vec::new(),
+            prompts: Vec::new(),
         }
     }
 
@@ -1494,6 +1544,21 @@ impl McpManager {
                     Ok(tools) => {
                         let count = tools.len();
                         self.tools.extend(tools);
+                        match conn.list_prompts().await {
+                            Ok(prompts) => {
+                                if !prompts.is_empty() {
+                                    eprintln!(
+                                        "  MCP server '{}': {} prompts discovered",
+                                        name,
+                                        prompts.len()
+                                    );
+                                }
+                                self.prompts.extend(prompts);
+                            }
+                            Err(e) => {
+                                eprintln!("  MCP server '{}': prompts unavailable: {}", name, e);
+                            }
+                        }
                         eprintln!("  MCP server '{}': {} tools discovered", name, count);
                         self.connections.insert(name.clone(), conn);
                     }
@@ -1516,6 +1581,10 @@ impl McpManager {
     #[allow(dead_code)]
     pub fn tools(&self) -> &[McpTool] {
         &self.tools
+    }
+
+    pub fn prompts(&self) -> &[McpPrompt] {
+        &self.prompts
     }
 
     /// Convert MCP tools to ToolDefinitions for the LLM.
@@ -1563,6 +1632,26 @@ impl McpManager {
         conn.call_tool(&tool.original_name, arguments).await
     }
 
+    pub async fn expand_prompt_invocation(&mut self, input: &str) -> Result<Option<String>> {
+        let Some((command_name, arg_text)) = parse_mcp_prompt_invocation(input) else {
+            return Ok(None);
+        };
+        let prompt = match self
+            .prompts
+            .iter()
+            .find(|prompt| prompt.command_name.eq_ignore_ascii_case(command_name))
+        {
+            Some(prompt) => prompt.clone(),
+            None => return Ok(None),
+        };
+        let args = mcp_prompt_arguments_from_text(&prompt, arg_text);
+        let conn = self
+            .connections
+            .get_mut(&prompt.server_name)
+            .context(format!("[{}] MCP server not connected", prompt.server_name))?;
+        conn.get_prompt(&prompt.original_name, args).await.map(Some)
+    }
+
     /// Shut down all MCP server connections.
     pub async fn shutdown_all(&mut self) {
         for (name, mut conn) in self.connections.drain() {
@@ -1608,6 +1697,189 @@ impl McpManager {
             "id": request_id,
             "result": result,
         }))
+    }
+}
+
+fn parse_prompts_response(
+    server_name: &str,
+    response: Option<&serde_json::Value>,
+) -> Vec<McpPrompt> {
+    let prompts_json = response
+        .and_then(|r| r.get("prompts"))
+        .and_then(|p| p.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    prompts_json
+        .into_iter()
+        .filter_map(|prompt| {
+            let name = prompt.get("name").and_then(|n| n.as_str())?;
+            let description = prompt
+                .get("description")
+                .and_then(|d| d.as_str())
+                .unwrap_or("MCP prompt");
+            let arguments = prompt
+                .get("arguments")
+                .and_then(|args| args.as_array())
+                .map(|args| {
+                    args.iter()
+                        .filter_map(|arg| {
+                            let name = arg.get("name").and_then(|n| n.as_str())?;
+                            Some(McpPromptArgument {
+                                name: name.to_string(),
+                                description: arg
+                                    .get("description")
+                                    .and_then(|d| d.as_str())
+                                    .unwrap_or_default()
+                                    .to_string(),
+                                required: arg
+                                    .get("required")
+                                    .and_then(|required| required.as_bool())
+                                    .unwrap_or(false),
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            Some(McpPrompt {
+                command_name: format!(
+                    "mcp:{}:{}",
+                    normalize_mcp_prompt_part(server_name),
+                    normalize_mcp_prompt_part(name)
+                ),
+                original_name: name.to_string(),
+                server_name: server_name.to_string(),
+                description: description.to_string(),
+                arguments,
+            })
+        })
+        .collect()
+}
+
+fn parse_mcp_prompt_invocation(input: &str) -> Option<(&str, &str)> {
+    let trimmed = input.trim();
+    let without_slash = trimmed.strip_prefix('/')?;
+    let (command, args) = without_slash
+        .split_once(char::is_whitespace)
+        .unwrap_or((without_slash, ""));
+    command
+        .starts_with("mcp:")
+        .then_some((command, args.trim()))
+}
+
+fn mcp_prompt_arguments_from_text(
+    prompt: &McpPrompt,
+    arg_text: &str,
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut out = serde_json::Map::new();
+    let trimmed = arg_text.trim();
+    if trimmed.is_empty() {
+        return out;
+    }
+
+    let mut all_key_values = true;
+    for token in trimmed.split_whitespace() {
+        let Some((key, value)) = token.split_once('=') else {
+            all_key_values = false;
+            break;
+        };
+        if key.trim().is_empty() {
+            all_key_values = false;
+            break;
+        }
+        out.insert(
+            key.trim().to_string(),
+            serde_json::Value::String(value.trim().to_string()),
+        );
+    }
+    if all_key_values && !out.is_empty() {
+        return out;
+    }
+
+    out.clear();
+    if let Some(arg) = prompt
+        .arguments
+        .iter()
+        .find(|arg| arg.required)
+        .or_else(|| prompt.arguments.first())
+    {
+        out.insert(
+            arg.name.clone(),
+            serde_json::Value::String(trimmed.to_string()),
+        );
+    } else {
+        out.insert(
+            "input".to_string(),
+            serde_json::Value::String(trimmed.to_string()),
+        );
+    }
+    out
+}
+
+fn extract_prompt_text(response: Option<&serde_json::Value>) -> Result<String> {
+    let Some(response) = response else {
+        return Ok(String::new());
+    };
+    let Some(messages) = response.get("messages").and_then(|m| m.as_array()) else {
+        return Ok(response
+            .get("description")
+            .and_then(|d| d.as_str())
+            .unwrap_or_default()
+            .to_string());
+    };
+
+    let mut parts = Vec::new();
+    for message in messages {
+        if let Some(text) = prompt_content_text(message.get("content")) {
+            if !text.trim().is_empty() {
+                parts.push(text);
+            }
+        }
+    }
+    Ok(parts.join("\n\n"))
+}
+
+fn prompt_content_text(content: Option<&serde_json::Value>) -> Option<String> {
+    let content = content?;
+    if let Some(text) = content.get("text").and_then(|t| t.as_str()) {
+        return Some(text.to_string());
+    }
+    if let Some(text) = content.as_str() {
+        return Some(text.to_string());
+    }
+    if let Some(items) = content.as_array() {
+        let parts: Vec<String> = items
+            .iter()
+            .filter_map(|item| item.get("text").and_then(|t| t.as_str()))
+            .map(str::to_string)
+            .collect();
+        if !parts.is_empty() {
+            return Some(parts.join("\n"));
+        }
+    }
+    None
+}
+
+fn normalize_mcp_prompt_part(value: &str) -> String {
+    let mut out = String::new();
+    let mut last_dash = false;
+    for ch in value.trim().chars() {
+        if ch.is_ascii_alphanumeric() || ch == '.' {
+            out.push(ch.to_ascii_lowercase());
+            last_dash = false;
+        } else if matches!(ch, '-' | '_' | ' ' | '/' | ':') && !last_dash && !out.is_empty() {
+            out.push('-');
+            last_dash = true;
+        }
+    }
+    while out.ends_with('-') {
+        out.pop();
+    }
+    if out.is_empty() {
+        "prompt".to_string()
+    } else {
+        out
     }
 }
 
@@ -1662,7 +1934,71 @@ mod tests {
     fn test_mcp_manager_new() {
         let manager = McpManager::new();
         assert!(manager.tools().is_empty());
+        assert!(manager.prompts().is_empty());
         assert!(manager.tool_definitions().is_empty());
+    }
+
+    #[test]
+    fn test_parse_prompts_response_builds_slash_names() {
+        let response = serde_json::json!({
+            "prompts": [
+                {
+                    "name": "Review PR",
+                    "description": "Review a pull request",
+                    "arguments": [
+                        {"name": "base", "description": "Base branch", "required": true}
+                    ]
+                }
+            ]
+        });
+
+        let prompts = parse_prompts_response("GitHub Server", Some(&response));
+
+        assert_eq!(prompts.len(), 1);
+        assert_eq!(prompts[0].command_name, "mcp:github-server:review-pr");
+        assert_eq!(prompts[0].original_name, "Review PR");
+        assert_eq!(prompts[0].arguments[0].name, "base");
+        assert!(prompts[0].arguments[0].required);
+    }
+
+    #[test]
+    fn test_mcp_prompt_arguments_parse_key_values_or_single_required_arg() {
+        let prompt = McpPrompt {
+            command_name: "mcp:github:review".to_string(),
+            original_name: "review".to_string(),
+            server_name: "github".to_string(),
+            description: "Review".to_string(),
+            arguments: vec![McpPromptArgument {
+                name: "base".to_string(),
+                description: String::new(),
+                required: true,
+            }],
+        };
+
+        let keyed = mcp_prompt_arguments_from_text(&prompt, "base=main depth=high");
+        assert_eq!(keyed.get("base").and_then(|v| v.as_str()), Some("main"));
+        assert_eq!(keyed.get("depth").and_then(|v| v.as_str()), Some("high"));
+
+        let positional = mcp_prompt_arguments_from_text(&prompt, "release branch");
+        assert_eq!(
+            positional.get("base").and_then(|v| v.as_str()),
+            Some("release branch")
+        );
+    }
+
+    #[test]
+    fn test_extract_prompt_text_from_messages() {
+        let response = serde_json::json!({
+            "messages": [
+                {"role": "user", "content": {"type": "text", "text": "First"}},
+                {"role": "assistant", "content": [{"type": "text", "text": "Second"}]}
+            ]
+        });
+
+        assert_eq!(
+            extract_prompt_text(Some(&response)).unwrap(),
+            "First\n\nSecond"
+        );
     }
 
     #[test]

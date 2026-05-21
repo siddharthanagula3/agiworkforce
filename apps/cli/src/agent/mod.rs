@@ -700,6 +700,20 @@ impl AgentSession {
             .filter(|t| !t.is_empty())
     }
 
+    pub fn mcp_prompt_info(&self) -> Option<&[mcp::McpPrompt]> {
+        self.mcp_manager
+            .as_ref()
+            .map(|m| m.prompts())
+            .filter(|p| !p.is_empty())
+    }
+
+    pub async fn expand_mcp_prompt_invocation(&mut self, input: &str) -> Result<Option<String>> {
+        let Some(manager) = self.mcp_manager.as_mut() else {
+            return Ok(None);
+        };
+        manager.expand_prompt_invocation(input).await
+    }
+
     /// Get the hooks configuration.
     pub fn hooks_config(&self) -> &hooks::HooksConfig {
         &self.hooks_config

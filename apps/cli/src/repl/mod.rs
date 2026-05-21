@@ -360,6 +360,15 @@ pub async fn run_repl(
                         SlashResult::Prompt(prompt) => {
                             run_prompt_turn(&mut session, config, prompt).await;
                         }
+                        SlashResult::McpPrompt(invocation) => {
+                            match session.expand_mcp_prompt_invocation(&invocation).await {
+                                Ok(Some(prompt)) => {
+                                    run_prompt_turn(&mut session, config, prompt).await
+                                }
+                                Ok(None) => output::print_warn("Unknown MCP prompt command."),
+                                Err(e) => output::print_error(&format!("MCP prompt failed: {e:#}")),
+                            }
+                        }
                         SlashResult::Handled => {}
                     }
                     continue;
