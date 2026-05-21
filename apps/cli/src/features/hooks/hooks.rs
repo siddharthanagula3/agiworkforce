@@ -289,8 +289,8 @@ fn matches_permission_rule(
     let rule_tool = rule[..open].trim();
     let arg_glob = &rule[open + 1..rule.len() - 1];
 
-    // Tool name must match exactly (case-sensitive, like Claude Code).
-    if rule_tool != tool_name {
+    // Tool names accept AGI's canonical identifiers and Claude-style aliases.
+    if !tool_name_matches(rule_tool, tool_name) {
         return false;
     }
 
@@ -341,6 +341,65 @@ fn glob_match(pattern: &str, input: &str) -> bool {
         pi += 1;
     }
     pi == p.len()
+}
+
+fn tool_name_matches(expected: &str, actual: &str) -> bool {
+    expected == actual
+        || crate::tools::canonical_tool_name(expected) == crate::tools::canonical_tool_name(actual)
+}
+
+fn hook_tool_name_candidates(tool_name: &str) -> Vec<&str> {
+    let canonical = crate::tools::canonical_tool_name(tool_name);
+    let mut candidates = vec![tool_name];
+    if canonical != tool_name {
+        candidates.push(canonical);
+    }
+    for alias in claude_tool_aliases(canonical) {
+        if !candidates.contains(alias) {
+            candidates.push(alias);
+        }
+    }
+    candidates
+}
+
+fn claude_tool_aliases(canonical_name: &str) -> &'static [&'static str] {
+    match canonical_name {
+        "read_file" => &["Read", "read", "ReadFile"],
+        "write_file" => &["Write", "write", "WriteFile"],
+        "edit_file" => &["Edit", "edit", "EditFile"],
+        "multiedit" => &["MultiEdit", "multi_edit", "Multi_Edit"],
+        "run_command" => &["Bash", "bash", "Shell", "shell", "RunCommand"],
+        "powershell" => &["PowerShell"],
+        "glob" => &["Glob", "glob_search", "GlobSearch"],
+        "grep_files" => &["Grep", "grep", "GrepFiles", "grep_search", "GrepSearch"],
+        "list_directory" => &["LS", "Ls", "ls", "List", "ListDirectory"],
+        "web_fetch" => &["WebFetch"],
+        "web_search" => &["WebSearch"],
+        "tool_search" => &["ToolSearch"],
+        "apply_patch" => &["ApplyPatch"],
+        "batch" => &["Batch"],
+        "notebook_edit" => &["NotebookEdit"],
+        "todo_read" => &["TodoRead"],
+        "todo_write" => &["TodoWrite"],
+        "ask_user" => &["AskUser", "AskUserQuestion"],
+        "read_many_files" => &["ReadManyFiles"],
+        "task_create" => &["TaskCreate"],
+        "task_get" => &["TaskGet"],
+        "task_list" => &["TaskList"],
+        "task_update" => &["TaskUpdate"],
+        "task_stop" => &["TaskStop"],
+        "task_output" => &["TaskOutput"],
+        "team_create" => &["TeamCreate"],
+        "team_delete" => &["TeamDelete"],
+        "cron_create" => &["CronCreate"],
+        "cron_delete" => &["CronDelete"],
+        "cron_list" => &["CronList"],
+        "advisor" => &["Advisor"],
+        "enter_worktree" => &["EnterWorktree"],
+        "exit_worktree" => &["ExitWorktree"],
+        "list_worktrees" => &["ListWorktrees"],
+        _ => &[],
+    }
 }
 
 /// Hooks configuration loaded from hooks.json.
@@ -730,7 +789,11 @@ fn hook_matches(hook: &Hook, event_name: &str, input: &HookInput) -> bool {
                     || input
                         .tool_name
                         .as_deref()
-                        .map(|t| re.is_match(t))
+                        .map(|t| {
+                            hook_tool_name_candidates(t)
+                                .iter()
+                                .any(|candidate| re.is_match(candidate))
+                        })
                         .unwrap_or(false)
             }
         },
@@ -1312,6 +1375,49 @@ mod tests {
         };
         assert!(hook_matches(&hook, "AfterToolUse", &input_bash));
         assert!(!hook_matches(&hook, "AfterToolUse", &input_read));
+    }
+
+    #[test]
+    fn test_matcher_matches_claude_alias_for_canonical_tool_name() {
+        let hook = Hook {
+            command: "echo ok".to_string(),
+            args: Vec::new(),
+            timeout: 10,
+            blocking: true,
+            matcher: Some("^Bash$".to_string()),
+            if_condition: None,
+        };
+        let input = HookInput {
+            event: "PostToolUse".to_string(),
+            session_id: None,
+            model: None,
+            tool_name: Some("run_command".to_string()),
+            tool_args: None,
+            tool_output: None,
+            message: None,
+            tool_execution: None,
+        };
+        assert!(hook_matches(&hook, "PostToolUse", &input));
+    }
+
+    #[test]
+    fn test_if_condition_matches_claude_alias_for_canonical_tool_name() {
+        let args = serde_json::json!({ "command": "git status --short" });
+        assert!(matches_permission_rule(
+            "Bash(git *)",
+            "run_command",
+            Some(&args)
+        ));
+        assert!(matches_permission_rule(
+            "run_command(git *)",
+            "Bash",
+            Some(&args)
+        ));
+        assert!(!matches_permission_rule(
+            "Read(git *)",
+            "run_command",
+            Some(&args)
+        ));
     }
 
     #[test]

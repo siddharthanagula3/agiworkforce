@@ -141,7 +141,7 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
     result
 }
 
-fn canonical_tool_name(tool_name: &str) -> &str {
+pub(crate) fn canonical_tool_name(tool_name: &str) -> &str {
     match tool_name {
         // Claude Code / claw-code compatibility aliases.
         "Read" | "read" | "ReadFile" => "read_file",

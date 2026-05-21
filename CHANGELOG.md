@@ -19,6 +19,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - Focused CLI slash-resolution tests so the TUI preserves exact `/sessions` behavior while normal aliases still resolve through the registry.
 - `agi doctor --json` as a real CLI subcommand with machine-readable checks for runtime dependencies, auth, sandbox, MCP config, plugins, model access, writable state directories, git stale branches, and transport configuration.
 - CLI custom slash commands from project/user `.agiworkforce/commands`, imported `~/.agiworkforce/prompts/claude`, and compatibility `.claude/commands` roots, with `$ARGUMENTS` and `$1`-`$9` expansion in REPL and the simple TUI.
+- CLI hook matcher and `if:` filters now recognize Claude-style tool names such as `Bash`, `Read`, `Edit`, and `TodoWrite` alongside AGI canonical tool names.
 - `docs/engineering/service-layer-architecture.md` and `pnpm check:service-layer` to lock action/route orchestration vs reusable operational mechanics, and to prevent new local duplicate definitions of canonical shared contracts.
 - `scripts/check-mobile-hygiene.mjs` and `pnpm check:mobile-hygiene` to keep Mobile feature folders self-describing, freeze root hook/lib growth, block retired theme/voice imports, and catch new direct I/O in UI files.
 - Lane-contract sections in scoped `AGENTS.md` files for CLI, Web, Mobile, Desktop, Chrome, VS Code, services, and provider adapters, enforced by `pnpm check:agent-context`.
