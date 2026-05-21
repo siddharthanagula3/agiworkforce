@@ -5,7 +5,7 @@ import { cn } from '../../lib/utils';
 import { useToolStore, type ToolStreamStateEntry } from '../../stores/chat/toolStore';
 import { useChatStore } from '../../stores/chat/chatStore';
 import { useExecutionSidecarStore } from '../../stores/executionSidecarStore';
-import type { ToolLabelEntry } from '../UnifiedAgenticChat/ToolLabel';
+import type { ToolLabelEntry } from '@/features/chat/ToolLabel';
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;

@@ -41,11 +41,11 @@ subscription, pricing, planning, reminders, messaging, mobile companion, teams,
 terminal, tools, vision, and workflows out of `src/components` into
 `apps/desktop/src/features`, with call sites and structure checks updated.
 
-Desktop Settings and MCP have also moved out of `src/components` into
-`apps/desktop/src/features/settings` and `apps/desktop/src/features/mcp`.
-The largest remaining Desktop migration is `UnifiedAgenticChat`, followed by
-the remaining artifact, memory, execution, connector, and research/tooling
-component domains.
+Desktop Settings, MCP, and Unified Agentic Chat have also moved out of
+`src/components` into `apps/desktop/src/features/settings`,
+`apps/desktop/src/features/mcp`, and `apps/desktop/src/features/chat`.
+The remaining Desktop migrations are artifact, memory, execution, connector,
+research, and tooling component domains.
 
 Every current Web, Mobile, and Desktop top-level feature folder now has a local
 ownership README, and `pnpm check:readme-ownership` enforces feature README

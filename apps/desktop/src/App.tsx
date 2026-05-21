@@ -23,7 +23,7 @@ import {
 import { useChatStore as useDesktopChatStore } from './stores/chat/chatStore';
 import { TauriRuntime } from './runtime/TauriRuntime';
 import { WebRuntime } from './runtime/WebRuntime';
-import type { CommandOption } from './components/UnifiedAgenticChat/CommandPalette';
+import type { CommandOption } from './features/chat/CommandPalette';
 import { useSearchModal } from './hooks/useSearchModal';
 import { useThemeContext } from './providers/ThemeProvider';
 import { useWindowManager } from './hooks/useWindowManager';
@@ -94,12 +94,12 @@ const DesktopShellV3 = lazy(() =>
   })),
 );
 const SearchModal = lazy(() =>
-  import('./components/UnifiedAgenticChat/SearchModal').then((m) => ({
+  import('./features/chat/SearchModal').then((m) => ({
     default: m.SearchModal,
   })),
 );
 const CommandPalette = lazy(() =>
-  import('./components/UnifiedAgenticChat/CommandPalette').then((m) => ({
+  import('./features/chat/CommandPalette').then((m) => ({
     default: m.CommandPalette,
   })),
 );

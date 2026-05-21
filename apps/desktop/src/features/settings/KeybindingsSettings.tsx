@@ -25,7 +25,7 @@ import {
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useShortcutStore } from '../../stores/shortcutStore';
 import { Button } from '@/components/ui/Button';
-import { KeyboardShortcutsOverlay } from '@/components/UnifiedAgenticChat/KeyboardShortcutsOverlay';
+import { KeyboardShortcutsOverlay } from '@/features/chat/KeyboardShortcutsOverlay';
 
 // ---------------------------------------------------------------------------
 // Helpers
