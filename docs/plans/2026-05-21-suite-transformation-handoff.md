@@ -2,15 +2,15 @@
 
 Status: Current
 Owner: Next session lead
-Last updated: 2026-05-21
+Last updated: 2026-05-21 (extended round 2)
 Branch: `fix/extension-typecheck-and-c02-sync-2026-05-20`
-Head pushed: `58938d12d`
+Head pushed: `51b20c865`
 
 ## Mission (from the active goal)
 
 Transform AGI Workforce into a production-grade Claude/OpenAI-style application suite across Web, Desktop, Mobile, CLI, VS Code, and Chrome. Preserve the AGI differentiators: Local Mode with local LLMs, Local Mode with BYOK, Cloud Managed waitlist, privacy-controlled handoff, multi-provider routing, local-first Desktop/Mobile behavior. Chat sync stays Web/Desktop/Mobile only; CLI, VS Code, Chrome keep separate developer-session histories.
 
-The total remaining parity budget per `audit/anthropic-apps-parity/team-2026-05-21/EXEC-SUMMARY-r2.md` is **~3,778 engineering hours**; this session shipped roughly **~50 hours of those across all six surfaces** to unblock the next slice.
+The total remaining parity budget per `audit/anthropic-apps-parity/team-2026-05-21/EXEC-SUMMARY-r2.md` is **~3,778 engineering hours**; this session shipped roughly **~110 hours of those across all six surfaces** (the original ~50h slice plus an extended slice covering Web Settings depth, two architecture decision docs, and the shared Projects gallery primitive).
 
 ## What shipped this session (9 commits, all on the branch and pushed)
 
@@ -71,7 +71,14 @@ Not yet run (deferred to next session — see Known blockers):
 | 9   | Artifacts versioning + live preview + publish + edit-in-place                                     | shared + web + desktop         | 186                                   | open — biggest single shared gap                                                                                                                                                                                                                |
 | 10  | CLI slash-command palette (~63 unique core)                                                       | cli                            | ~406                                  | open — existing `/memory` left untouched; the rest of `/init`, `/permissions`, `/mcp`, `/agents`, `/skills`, `/plugin`, `/plan`, `/tasks`, `/context`, `/rewind`, `/branch`, `/clear`, `/compact`, `/recap` still need v1-relevant subset wires |
 
-Hours shipped this session: roughly **~50h** out of **3,778h** total (~1.3%). The 11 biggest remaining hours are still in CLI palette (#10), Artifacts overhaul (#9), Web settings depth (#7), and Mobile StoreKit (#1).
+Hours shipped this session: roughly **~110h** out of **3,778h** total (~2.9%). The biggest remaining hours sit in CLI palette (~280h), Artifacts overhaul (186h), Mobile StoreKit (24h), composer drag-drop wires for chrome-ext + vscode-ext (~31h), and the in-flight Web Settings depth (Profile theme-persistence still uses localStorage — wire `next-themes` when a major theme refactor lands).
+
+## Extended round 2 additions (after the first handoff at b49192bbe)
+
+- **Web settings depth — 4 new pages.** `/settings/profile` (display name + avatar gradient placeholder, localStorage-persisted), `/settings/connections` (OAuth connector list in waitlist state per Cloud Managed contract), `/settings/privacy` (3 toggles: rememberChats, telemetry, managed-only training opt-in), `/settings/notifications` (4 prefs with managed-only flags). Layout nav extended from 5 → 9 entries. Cloud-Managed-only items render `disabled` + waitlist callout.
+- **`packages/unified-chat` Projects primitives.** `ProjectCard` (star toggle, conversation count, relative-updated timestamp) + `ProjectGallery` (searchable list/grid with starred-first sort, inline "+ New project" form, empty state, host-overridable `onCreate`). Backed by the existing `useProjectStore`.
+- **2 architecture decisions locked.** `docs/decisions/2026-05-21-unified-chat-as-suite-spine.md` (rationale for `packages/unified-chat` being the cross-surface spine) and `docs/decisions/2026-05-21-signed-upload-contract-pre-managed.md` (rationale for landing `SignedUploadRequest` / `SignedUploadResponse` before Cloud Managed ships).
+- **8 strict-mode (noUncheckedIndexedAccess) regressions fixed** in earlier commits — the incremental tsbuildinfo cache had hidden them until ProjectGallery's new exports invalidated it. ChatInput attachment loops + thumbnail loop + SettingsShell activeId memo all now guard `undefined` array reads.
 
 ## Recommended next-session priorities (in order)
 
