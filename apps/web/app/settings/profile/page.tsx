@@ -1,33 +1,58 @@
 'use client';
 
 import { useBillingStore } from '@/stores/unified/auth';
+import { getSupabaseClient } from '@/services/supabase';
 import { useState } from 'react';
 
 /**
- * /settings/profile — display name + avatar surface. In v1 LOCAL-ONLY the
- * profile is device-local (no server write); the field shape mirrors what
- * Cloud Managed will need so the wire-up is a delta, not a rewrite. Round-2
- * audit P0 #7 (web settings depth).
+ * /settings/profile — display name + avatar surface. When the user is signed
+ * in, the display name persists to Supabase `auth.users.user_metadata.full_name`
+ * via `supabase.auth.updateUser`. When the user is unauthenticated (Local
+ * Mode without sign-in), the value persists to localStorage as a device-local
+ * fallback. Round-2 audit P0 #7 (web settings depth).
  */
 export default function ProfileSettingsPage() {
   const user = useBillingStore((s) => s.user);
   const initialName =
     (user?.user_metadata?.['full_name'] as string | undefined) ??
     (user?.user_metadata?.['name'] as string | undefined) ??
+    (typeof window !== 'undefined'
+      ? (window.localStorage.getItem('agi.profile.displayName') ?? '')
+      : '') ??
     user?.email?.split('@')[0] ??
     '';
 
   const [displayName, setDisplayName] = useState(initialName);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  function handleSave() {
-    // v1: persist to localStorage so subsequent visits surface the value.
-    // Cloud Managed: replace this with a Supabase user_metadata PATCH.
+  async function handleSave() {
+    const trimmed = displayName.trim();
+    if (!trimmed) return;
+    setSaving(true);
+    setSaveError(null);
     try {
-      window.localStorage.setItem('agi.profile.displayName', displayName.trim());
+      // Always update the local fallback so anonymous sessions still persist.
+      window.localStorage.setItem('agi.profile.displayName', trimmed);
+
+      if (user) {
+        // Round-2 audit P0 #7 wire (2026-05-21): when authenticated, sync to
+        // Supabase user_metadata so the value follows the account across
+        // devices and is available to Cloud Managed downstream consumers.
+        const supabase = getSupabaseClient();
+        const { error } = await supabase.auth.updateUser({
+          data: { full_name: trimmed },
+        });
+        if (error) {
+          throw new Error(error.message);
+        }
+      }
       setSavedAt(Date.now());
-    } catch {
-      // Storage may be unavailable in private windows — fail silently.
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save profile.');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -117,7 +142,7 @@ export default function ProfileSettingsPage() {
           <button
             type="button"
             onClick={handleSave}
-            disabled={displayName.trim().length === 0}
+            disabled={displayName.trim().length === 0 || saving}
             style={{
               padding: '8px 16px',
               fontSize: 13,
@@ -126,14 +151,19 @@ export default function ProfileSettingsPage() {
               background: 'var(--chat-accent-primary, #da7756)',
               border: 'none',
               borderRadius: 'var(--radius-md)',
-              cursor: displayName.trim().length === 0 ? 'not-allowed' : 'pointer',
-              opacity: displayName.trim().length === 0 ? 0.5 : 1,
+              cursor: displayName.trim().length === 0 || saving ? 'not-allowed' : 'pointer',
+              opacity: displayName.trim().length === 0 || saving ? 0.5 : 1,
             }}
           >
-            Save
+            {saving ? 'Saving…' : 'Save'}
           </button>
-          {savedAt !== null && (
-            <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Saved locally.</span>
+          {savedAt !== null && saveError === null && (
+            <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+              {user ? 'Synced to your account.' : 'Saved locally.'}
+            </span>
+          )}
+          {saveError !== null && (
+            <span style={{ fontSize: 12, color: 'var(--terracotta, #da7756)' }}>{saveError}</span>
           )}
         </div>
       </section>
