@@ -82,7 +82,6 @@ const allowedRootDirs = new Set([
   'ios',
   'node_modules',
   'packages',
-  'reference-index',
   'reports',
   'scripts',
   'services',

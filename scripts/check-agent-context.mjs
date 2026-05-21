@@ -46,10 +46,21 @@ const requiredFiles = [
   'docs/agent-context/known-flaws.md',
   'docs/agent-context/repo-map.json',
   'docs/agent-context/risk-map.json',
+  'docs/agent-context/lanes.json',
+  'docs/agent-context/shared-files.md',
+  'docs/agent-context/task-manifest.schema.json',
   'docs/agent-context/commands.json',
   'docs/agent-context/doc-status.json',
   'docs/engineering/README.md',
   'docs/engineering/agent-native-development.md',
+  'docs/engineering/parallel-agent-playbook.md',
+  'docs/engineering/autonomous-software-company-roadmap.md',
+  'docs/research/agentic-company-research-prompts.md',
+  '.github/PULL_REQUEST_TEMPLATE/parallel-agent-change.md',
+  'docs/marketing/README.md',
+  'docs/support/README.md',
+  'docs/legal/README.md',
+  'ios/README.md',
   '.github/pull_request_template.md',
   '.github/PULL_REQUEST_TEMPLATE/product-surface.md',
   '.github/PULL_REQUEST_TEMPLATE/refactor-move.md',
@@ -75,8 +86,17 @@ requireIncludes('AGENTS.md', 'known-flaws.md');
 requireIncludes('CLAUDE.md', 'AGENTS.md');
 requireIncludes('CLAUDE.md', 'Claude-specific notes');
 requireIncludes('AGENTS.md', 'docs/engineering/agent-native-development.md');
+requireIncludes('AGENTS.md', 'docs/agent-context/lanes.json');
 requireIncludes('docs/engineering/agent-native-development.md', 'Worktree And Session Isolation');
 requireIncludes('docs/engineering/agent-native-development.md', 'High-Risk Merge Gates');
+requireIncludes('docs/agent-context/shared-files.md', 'Collision Protocol');
+requireIncludes('docs/engineering/parallel-agent-playbook.md', '15+ Parallel Agents');
+requireIncludes(
+  'docs/engineering/autonomous-software-company-roadmap.md',
+  'Feedback To Patch Pipeline',
+);
+requireIncludes('docs/research/agentic-company-research-prompts.md', '100 Research Prompts');
+requireIncludes('.github/PULL_REQUEST_TEMPLATE/parallel-agent-change.md', 'Lane ID');
 requireIncludes('.github/pull_request_template.md', 'Risk Classification');
 requireIncludes('.github/PULL_REQUEST_TEMPLATE/security-privacy.md', 'Affected Trust Boundary');
 
@@ -138,6 +158,7 @@ if (commands) {
     'agentContext',
     'repoOrganization',
     'boundaries',
+    'laneOwnership',
     'generatedArtifacts',
     'readmeOwnership',
     'docStatus',
@@ -145,6 +166,27 @@ if (commands) {
   ]) {
     if (!commands.repoWide?.[commandKey]) {
       errors.push(`commands.json repoWide missing ${commandKey}`);
+    }
+  }
+}
+
+const lanes = readJson('docs/agent-context/lanes.json');
+if (lanes) {
+  if (!lanes.recommendedParallelism?.writerLanes || lanes.recommendedParallelism.writerLanes < 15) {
+    errors.push('lanes.json must document at least 15 writer lanes');
+  }
+  for (const lane of lanes.lanes ?? []) {
+    for (const key of [
+      'id',
+      'name',
+      'ownerRole',
+      'ownedWritePaths',
+      'blockedPaths',
+      'requiredChecks',
+    ]) {
+      if (!lane[key] || (Array.isArray(lane[key]) && lane[key].length === 0)) {
+        errors.push(`lanes.json lane ${lane.id ?? '<unknown>'} missing ${key}`);
+      }
     }
   }
 }

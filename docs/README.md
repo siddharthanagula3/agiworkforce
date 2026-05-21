@@ -38,19 +38,21 @@ This directory is for durable repo documentation. Generated files, build artifac
 
 ## Current Engineering References
 
-| File                                                                                       | Purpose                                                                            |
-| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| [`ARCHITECTURE.md`](./ARCHITECTURE.md)                                                     | Cross-surface system map.                                                          |
-| [`architecture/foundation-2026.md`](./architecture/foundation-2026.md)                     | Accepted Foundation Sprint architecture.                                           |
-| [`architecture/worker-protocol.md`](./architecture/worker-protocol.md)                     | Worker direction-inversion protocol.                                               |
-| [`engineering/agent-native-development.md`](./engineering/agent-native-development.md)     | Human/agent task splitting, worktree/session isolation, and verification workflow. |
-| [`HOSTING.md`](./HOSTING.md)                                                               | Web/service hosting, domains, and deployment options.                              |
-| [`SCALING.md`](./SCALING.md)                                                               | Supabase-to-Neon and provider-swap playbooks.                                      |
-| [`PERFORMANCE.md`](./PERFORMANCE.md)                                                       | Performance, caching, provider failover, and traffic notes.                        |
-| [`OWNERSHIP.md`](./OWNERSHIP.md)                                                           | High-risk ownership boundaries.                                                    |
-| [`cli/COMMAND_SURFACE.md`](./cli/COMMAND_SURFACE.md)                                       | CLI process, slash command, and TUI command inventory.                             |
-| [`api/openapi.yaml`](./api/openapi.yaml)                                                   | OpenAPI reference.                                                                 |
-| [`api/AGI_Workforce.postman_collection.json`](./api/AGI_Workforce.postman_collection.json) | Postman collection.                                                                |
+| File                                                                                                         | Purpose                                                                            |
+| ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| [`ARCHITECTURE.md`](./ARCHITECTURE.md)                                                                       | Cross-surface system map.                                                          |
+| [`architecture/foundation-2026.md`](./architecture/foundation-2026.md)                                       | Accepted Foundation Sprint architecture.                                           |
+| [`architecture/worker-protocol.md`](./architecture/worker-protocol.md)                                       | Worker direction-inversion protocol.                                               |
+| [`engineering/agent-native-development.md`](./engineering/agent-native-development.md)                       | Human/agent task splitting, worktree/session isolation, and verification workflow. |
+| [`engineering/parallel-agent-playbook.md`](./engineering/parallel-agent-playbook.md)                         | Lane-based workflow for running 15+ coding agents without overlapping writes.      |
+| [`engineering/autonomous-software-company-roadmap.md`](./engineering/autonomous-software-company-roadmap.md) | Feedback-to-patch, support automation, and release automation roadmap.             |
+| [`HOSTING.md`](./HOSTING.md)                                                                                 | Web/service hosting, domains, and deployment options.                              |
+| [`SCALING.md`](./SCALING.md)                                                                                 | Supabase-to-Neon and provider-swap playbooks.                                      |
+| [`PERFORMANCE.md`](./PERFORMANCE.md)                                                                         | Performance, caching, provider failover, and traffic notes.                        |
+| [`OWNERSHIP.md`](./OWNERSHIP.md)                                                                             | High-risk ownership boundaries.                                                    |
+| [`cli/COMMAND_SURFACE.md`](./cli/COMMAND_SURFACE.md)                                                         | CLI process, slash command, and TUI command inventory.                             |
+| [`api/openapi.yaml`](./api/openapi.yaml)                                                                     | OpenAPI reference.                                                                 |
+| [`api/AGI_Workforce.postman_collection.json`](./api/AGI_Workforce.postman_collection.json)                   | Postman collection.                                                                |
 
 ## Surface Guides
 
@@ -80,14 +82,16 @@ This directory is for durable repo documentation. Generated files, build artifac
 
 ## Launch, Research, And Plans
 
-| Folder                           | Purpose                                                               |
-| -------------------------------- | --------------------------------------------------------------------- |
-| [`launch/`](./launch/)           | Launch copy, channel drafts, store listings, and operator checklists. |
-| [`research/`](./research/)       | Repo-level product validation research.                               |
-| [`planning/`](./planning/)       | Older planning specs retained for historical context.                 |
-| [`plans/`](./plans/)             | Active or recent plans.                                               |
-| [`decisions/`](./decisions/)     | ADRs and current decision index.                                      |
-| [`superpowers/`](./superpowers/) | Historical superpowers plans/specs and UI audit corpus.               |
+| Folder                           | Purpose                                                                |
+| -------------------------------- | ---------------------------------------------------------------------- |
+| [`launch/`](./launch/)           | Launch copy, channel drafts, store listings, and operator checklists.  |
+| [`research/`](./research/)       | Repo-level product validation research and delegated research prompts. |
+| [`marketing/`](./marketing/)     | Marketing, positioning, launch, GTM, and growth operator workspace.    |
+| [`support/`](./support/)         | Support operations, customer feedback intake, and support automation.  |
+| [`legal/`](./legal/)             | Legal/compliance operating docs and review queues.                     |
+| [`plans/`](./plans/)             | Active or recent plans.                                                |
+| [`decisions/`](./decisions/)     | ADRs and current decision index.                                       |
+| [`superpowers/`](./superpowers/) | Historical superpowers plans/specs and UI audit corpus.                |
 
 ## Archive
 

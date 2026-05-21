@@ -2,7 +2,7 @@
 
 Status: Current assessment
 Owner: Platform lead
-Last updated: 2026-05-20
+Last updated: 2026-05-21
 Baseline commit: `b7d6debf0` (`chore: snapshot workspace before repo organization`)
 
 ## Executive Grade
@@ -11,7 +11,7 @@ Overall grade: **B+ after the first organization implementation pass, with a cre
 
 The core monorepo spine is strong: `apps/`, `packages/`, `crates/`, `services/`, `supabase/`, `docs/`, `audit/`, `tasks/`, `reports/`, `examples/`, and `scripts/` are the right large buckets for an OpenAI/Anthropic-style application suite.
 
-The repo no longer has the most damaging founder-plus-LLM symptoms at root: scratch captures, historical campaign docs, reference catalogs, and local-only artifacts have been moved, archived, ignored, or untracked. The remaining A+ work is deeper: CODEOWNERS with real teams, domain-first cleanup inside large apps, raw `reference-index/` relocation, Supabase migration consolidation, CI blind-spot baselines, and report-retention review.
+The repo no longer has the most damaging founder-plus-LLM symptoms at root: scratch captures, historical campaign docs, reference catalogs, raw reference-index catalogs, and local-only artifacts have been moved, archived, ignored, or untracked. The remaining A+ work is deeper: CODEOWNERS with real teams, domain-first cleanup inside large apps, Supabase migration consolidation, CI blind-spot baselines, and report-retention review.
 
 ## Evidence Snapshot
 
@@ -34,7 +34,7 @@ The repo no longer has the most damaging founder-plus-LLM symptoms at root: scra
 | ---------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | Top-level architecture       | B     | Correct monorepo spine and clear six-surface/product-platform buckets.                                                              |
 | Product-code discoverability | B     | Main app/package/crate folders are obvious; large apps still need domain-first cleanup.                                             |
-| LLM operability              | A-    | Agent docs, task templates, known flaws, command maps, and strict checks are in place.                                              |
+| LLM operability              | A     | Agent docs, lane maps, shared-file policy, task templates, known flaws, command maps, and strict checks are in place.               |
 | Human onboarding             | B+    | Root docs, app/package/crate/service READMEs, and current metadata are in place; CONTRIBUTING still needs deeper workflow detail.   |
 | Source-of-truth discipline   | B+    | Current docs are metadata-checked and historical docs moved; older historical canonical claims still need broader cleanup.          |
 | Root hygiene                 | A-    | Root is short and intentional; remaining decisions are accepted root configs such as `app.json`, manifests, and `ios/`.             |
@@ -120,12 +120,12 @@ Acceptance:
 
 Goal: make root boring and predictable.
 
-Status: next.
+Status: mostly done.
 
 Tasks:
 
 - Move scratch root markdown/images into dated folders under `reports/` or `_archive/`.
-- Move reference catalogs into `docs/reference/` or `audit/reference-index/`.
+- Move reference catalogs into `docs/reference/` and raw generated ownership catalogs into `audit/repo-organization/reference-index/`.
 - `MASTER_PLAN.md` and `AGIWORKFORCE_IMPLEMENTATION_LOG.md` moved under `docs/archive/2026-05-14-reverse-engineering-campaign/`.
 - `REFERENCE_INDEX.md` and `REFERENCE_STRUCTURE.md` moved under `docs/reference/`.
 - Keep only source-of-truth docs and required config at root.

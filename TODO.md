@@ -57,8 +57,8 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Create package/service/crate README coverage ledger.
 - [x] Create generated artifact policy.
 - [x] Create full package/service/crate ownership ledger and CODEOWNERS map.
-- [ ] Decide whether root `ios/` belongs at root or under `apps/mobile/ios`.
-- [ ] Decide whether raw `reference-index/` belongs under `audit/`, `docs/reference/`, or `_archive/`.
+- [x] Decide root `ios/` belongs at root for tracked Xcode-consumed output, with `apps/mobile/native/ios` for custom native modules.
+- [x] Move raw `reference-index/` under `audit/repo-organization/reference-index/` as historical evidence.
 - [x] Move root scratch markdown files to a dated archive/report folder.
 - [x] Move root scratch image files to a dated report folder.
 - [x] Move root `downloads/` scratch artifact to the dated archive/report folder.
@@ -79,10 +79,10 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [ ] Add `.github/CODEOWNERS` with real GitHub teams/handles after org ownership names are available.
 - [x] Expand `CONTRIBUTING.md` into a real engineering workflow guide.
 - [x] Add PR templates by change type.
-- [ ] Normalize `docs/plans` vs `docs/planning` and archive superseded plans.
-- [ ] Create `docs/marketing/`.
-- [ ] Create `docs/support/`.
-- [ ] Create `docs/legal/`.
+- [x] Normalize `docs/plans` vs `docs/planning` and archive superseded plans.
+- [x] Create `docs/marketing/`.
+- [x] Create `docs/support/`.
+- [x] Create `docs/legal/`.
 - [ ] Execute Web/Mobile/Desktop domain-first moves from `docs/plans/domain-first-reorg.md` after root/docs/package contracts are stable.
 
 ## Agent-Native Development Tasks
@@ -98,6 +98,24 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Tighten README ownership check after README coverage is created.
 - [x] Tighten generated artifact check after root scratch and `.playwright-mcp` debt are moved.
 - [x] Tighten current-doc metadata check after adding required status headers.
+- [x] Add machine-readable parallel-agent lane map for 15+ writer agents.
+- [x] Add shared-file collision policy for manifests, locks, root docs, CI, schemas, migrations, and native projects.
+- [x] Add `pnpm check:lane-ownership` and include it in `pnpm check:llm-operability`.
+- [x] Add parallel-agent PR template and playbook.
+- [x] Add autonomous feedback-to-patch software-company roadmap.
+- [x] Add 100 delegated research prompts for the agentic company operating model.
+
+## Autonomous Company Tasks
+
+- [x] Document the long-term feedback -> triage -> issue -> agent patch -> PR -> release -> customer update loop.
+- [ ] Define canonical customer feedback schema and persistence tables.
+- [ ] Add support intake API shared by Web/Desktop/Mobile.
+- [ ] Add message-level feedback persistence for app chat surfaces.
+- [ ] Build feedback-to-GitHub issue bridge with dedupe, severity, owner lane, and privacy scrub.
+- [ ] Add agent patch queue with lane selection, worktree isolation, evidence bundles, and human approval gates.
+- [ ] Add verification artifact store for screenshots, logs, test output, and reproduction metadata.
+- [ ] Add release-fix links so customer feedback can be closed by release notes and in-app notifications.
+- [ ] Evaluate Fin/Zendesk-style support agents, Vapi-style voice intake, and internal runbooks before managed support launch.
 
 ## CLI Engine Tasks
 

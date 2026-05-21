@@ -2,7 +2,7 @@
 
 Status: Active planning
 Owner: Founder + platform lead
-Last updated: 2026-05-20
+Last updated: 2026-05-21
 
 ## Goal
 
@@ -25,7 +25,7 @@ The problems are mostly pre-release entropy:
 
 - Root has scratch markdown and image artifacts such as `app-after-fill.md`, `claude-design-*.md`, `final-*.png`, `r6-*.md`, and similar files.
 - Multiple AI/tool folders exist at root: `.agent`, `.agents`, `.claude`, `.codex`, `.cursor`, `.minimax`, `.opencode`, `.superpowers`, `.remember`, and `.playwright-mcp`.
-- Planning and research are split across root docs, `docs/plans`, `docs/planning`, `tasks/research`, `audit`, `reference-index`, and `reports`.
+- Planning and research are split across root docs, `docs/plans`, archived planning docs, `tasks/research`, `audit`, and `reports`.
 - There are multiple historical "source of truth" candidates: archived `MASTER_PLAN.md`, `PLAN.md`, `TODO.md`, archived `AGIWORKFORCE_IMPLEMENTATION_LOG.md`, `AUDIT_LOG.md`, docs PRDs, and memory-derived docs.
 - The repo has both layer-first and domain-first application layouts. The existing `docs/plans/domain-first-reorg.md` correctly scopes the Web/Desktop/Mobile feature-folder cleanup, but it does not cover the full repository operating model.
 - Marketing/GTM/release materials are mixed into engineering-facing docs. A future non-engineering team should not need to understand Rust crates or CI to find launch copy.
@@ -112,15 +112,15 @@ Superseded by:
 
 ### Docs Folder Targets
 
-| Folder            | Keep                                         | Move out                      |
-| ----------------- | -------------------------------------------- | ----------------------------- |
-| `docs/decisions/` | ADRs and current decision index.             | Long research notes.          |
-| `docs/plans/`     | Active/recent plans with owners and status.  | Scratch execution logs.       |
-| `docs/planning/`  | Historical planning specs only.              | Current plans.                |
-| `docs/research/`  | Durable research summaries.                  | Raw notes and prompt dumps.   |
-| `docs/launch/`    | Launch copy, store listings, GTM checklists. | Engineering specs.            |
-| `docs/surfaces/`  | One current guide per surface.               | Old duplicated surface notes. |
-| `docs/archive/`   | Superseded docs.                             | Anything current.             |
+| Folder                              | Keep                                         | Move out                      |
+| ----------------------------------- | -------------------------------------------- | ----------------------------- |
+| `docs/decisions/`                   | ADRs and current decision index.             | Long research notes.          |
+| `docs/plans/`                       | Active/recent plans with owners and status.  | Scratch execution logs.       |
+| `docs/archive/2026-05-20-planning/` | Historical planning specs only.              | Current plans.                |
+| `docs/research/`                    | Durable research summaries.                  | Raw notes and prompt dumps.   |
+| `docs/launch/`                      | Launch copy, store listings, GTM checklists. | Engineering specs.            |
+| `docs/surfaces/`                    | One current guide per surface.               | Old duplicated surface notes. |
+| `docs/archive/`                     | Superseded docs.                             | Anything current.             |
 
 ## Root Cleanup Plan
 
@@ -360,29 +360,29 @@ Rules:
 
 ## First 20 Tasks
 
-- [ ] Create root file classification ledger.
-- [ ] Create hidden AI/tool folder ledger.
-- [ ] Create docs status ledger.
-- [ ] Create package/service/crate owner ledger.
-- [ ] Decide whether `ios/` belongs at root or under `apps/mobile/ios`.
-- [ ] Decide whether `reference-index/` belongs under `audit/`, `docs/reference/`, or `_archive/`.
-- [ ] Move root scratch markdown files to a dated archive/report folder.
-- [ ] Move root scratch image files to a dated report folder.
-- [ ] Add root clutter allowlist check.
-- [ ] Add docs status header check.
-- [ ] Add import-boundary lint.
+- [x] Create root file classification ledger.
+- [x] Create hidden AI/tool folder ledger.
+- [x] Create docs status ledger.
+- [x] Create package/service/crate owner ledger.
+- [x] Decide `ios/` stays at root as the canonical tracked Xcode-consumed output.
+- [x] Decide raw `reference-index/` belongs under `audit/repo-organization/reference-index/`.
+- [x] Move root scratch markdown files to a dated archive/report folder.
+- [x] Move root scratch image files to a dated report folder.
+- [x] Add root clutter allowlist check.
+- [x] Add docs status header check.
+- [x] Add import-boundary lint.
 - [x] Add canonical `docs/agent-context/` folder.
 - [x] Add root `AGENTS.md` as the canonical tool-neutral agent entry point.
 - [x] Convert `CLAUDE.md` into a Claude-specific mirror.
 - [x] Add agent-context, repo-organization, boundary, and combined LLM-operability checks.
-- [ ] Add or update package READMEs.
+- [x] Add or update package READMEs.
 - [ ] Add `CODEOWNERS`.
-- [ ] Expand `CONTRIBUTING.md`.
-- [ ] Add PR templates.
-- [ ] Normalize docs plans and planning folders.
-- [ ] Create `docs/marketing/`.
-- [ ] Create `docs/support/`.
-- [ ] Create `docs/legal/`.
+- [x] Expand `CONTRIBUTING.md`.
+- [x] Add PR templates.
+- [x] Normalize docs plans and planning folders.
+- [x] Create `docs/marketing/`.
+- [x] Create `docs/support/`.
+- [x] Create `docs/legal/`.
 - [ ] Start Web domain-first move from the existing sub-plan.
 
 ## Definition Of Done

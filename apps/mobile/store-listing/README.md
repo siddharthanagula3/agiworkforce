@@ -22,7 +22,7 @@ apps/mobile/store-listing/
 ├── ios/
 │   ├── metadata.md                    ← app name, subtitle, keywords, description, promotional text
 │   ├── review-notes.md                ← Apple App Review notes (5.1.2(i), 2.5.2, 5.1.1, demo flows)
-│   └── PrivacyInfo.xcprivacy          ← mirror of apps/mobile/ios/AGI/PrivacyInfo.xcprivacy
+│   └── PrivacyInfo.xcprivacy          ← store-review copy mirrored from root ios/agiworkforce/PrivacyInfo.xcprivacy
 ├── android/
 │   ├── metadata.md                    ← Play Store listing (name, descriptions, content rating)
 │   └── data-safety.md                 ← Play Console Data Safety form, locked answers
@@ -35,9 +35,8 @@ apps/mobile/store-listing/
 Supporting files outside this directory:
 
 ```
-apps/mobile/ios/AGI/PrivacyInfo.xcprivacy         ← canonical Apple Privacy Manifest (locked)
 apps/mobile/scripts/screenshots/                  ← Detox capture pipeline + per-screenshot specs
-ios/agiworkforce/PrivacyInfo.xcprivacy            ← Xcode-consumed copy (kept in sync via Expo plugin)
+ios/agiworkforce/PrivacyInfo.xcprivacy            ← canonical Xcode-consumed Apple Privacy Manifest
 apps/mobile/app.config.js                         ← Expo dynamic config (re-generates the Xcode copy)
 ```
 

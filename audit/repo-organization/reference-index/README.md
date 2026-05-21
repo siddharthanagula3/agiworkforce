@@ -1,4 +1,10 @@
-# reference-index/
+# Historical reference-index/
+
+Status: Historical evidence
+Owner: Platform lead
+Last updated: 2026-05-21
+
+This directory was moved from root `reference-index/` to `audit/repo-organization/reference-index/` during the repo-organization pass. It is a generated evidence snapshot, not a current source of truth.
 
 Generated, branch-local index of the codebase used by the One-Source Reorg supervisor and its delegated subagents.
 This directory is **not** the single source of truth — it is a derived view produced from a scan of the working tree.
@@ -71,7 +77,7 @@ Cross-team status lives at `tasks/team-status/reorg-mobile-pilot.md`. Any subage
 
 ```bash
 # from repo root
-pnpm tsx reference-index/scripts/generate-mobile-index.ts
+pnpm tsx audit/repo-organization/reference-index/scripts/generate-mobile-index.ts
 ```
 
 (Script ships as a placeholder in Step 2 and is materialized by `mobile-indexer-agent`.)

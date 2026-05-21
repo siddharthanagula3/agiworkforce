@@ -63,7 +63,7 @@ agiworkforce/
 │   ├── audit/                             # AUDIT_2026-05-03 + FIX_QUEUE
 │   ├── architecture/                      # foundation-2026 + worker-protocol
 │   ├── launch/                            # hobby-checklist + r-localllama + show-hn + twitter + wave-3-* + store-listings/
-│   ├── planning/                          # cli-modernization-spec
+│   ├── archive/2026-05-20-planning/       # archived cli-modernization-spec
 │   ├── plans/                             # domain-first-reorg (proposed)
 │   ├── research/                          # v1-product-validation
 │   ├── security/                          # REVIEW + red-team + findings-* per surface
@@ -188,7 +188,7 @@ agiworkforce/
 │   ├── scan_tool_escape.txt
 │   ├── scan_xss.txt
 │   └── reports/
-├── reference-index/                       # generated shards
+├── audit/repo-organization/reference-index/ # historical generated reference shards
 │   └── shard-{00..09}.md                  # shard-08-recovery.md DELETED in W6
 ├── scripts/                               # repo-wide scripts (18 files)
 ├── dev-scripts/                           # dev-time helpers

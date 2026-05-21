@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-05-20",
+  "lastUpdated": "2026-05-21",
   "repoWide": {
     "install": "pnpm install",
     "lint": "pnpm lint",
@@ -11,6 +11,7 @@
     "agentContext": "pnpm check:agent-context",
     "repoOrganization": "pnpm check:repo-organization",
     "boundaries": "pnpm check:boundaries",
+    "laneOwnership": "pnpm check:lane-ownership",
     "generatedArtifacts": "pnpm check:generated-artifacts",
     "readmeOwnership": "pnpm check:readme-ownership",
     "docStatus": "pnpm check:doc-status",

@@ -14,12 +14,15 @@ Path-scoped `AGENTS.md` files under high-risk surfaces add local rules; read the
 
 1. `docs/agent-context/README.md` - agent read order and rules.
 2. `docs/agent-context/repo-map.json` - surfaces, owner roles, and checks.
-3. `docs/agent-context/risk-map.json` - high-risk paths and required review focus.
-4. `docs/agent-context/known-flaws.md` - open bugs, stale claims, and cleanup debt.
-5. `docs/agent-context/commands.json` - canonical commands by surface.
-6. `docs/decisions/CURRENT_DECISIONS.md` - latest locked product decisions.
-7. `PLAN.md` and `TODO.md` - active strategy and work queue.
-8. `docs/engineering/agent-native-development.md` - parallel agent/worktree and verification workflow.
+3. `docs/agent-context/lanes.json` - write lanes for 15+ parallel agents.
+4. `docs/agent-context/shared-files.md` - shared-file and collision policy.
+5. `docs/agent-context/risk-map.json` - high-risk paths and required review focus.
+6. `docs/agent-context/known-flaws.md` - open bugs, stale claims, and cleanup debt.
+7. `docs/agent-context/commands.json` - canonical commands by surface.
+8. `docs/decisions/CURRENT_DECISIONS.md` - latest locked product decisions.
+9. `PLAN.md` and `TODO.md` - active strategy and work queue.
+10. `docs/engineering/agent-native-development.md` - parallel agent/worktree and verification workflow.
+11. `docs/engineering/parallel-agent-playbook.md` - concrete 15+ agent operating procedure.
 
 When these files conflict with older plans, prefer the list above.
 

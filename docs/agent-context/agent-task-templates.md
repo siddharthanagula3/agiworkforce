@@ -34,6 +34,7 @@ Use when the agent owns a bounded code/docs change.
 Required prompt fields:
 
 - Goal.
+- Lane ID from `docs/agent-context/lanes.json`.
 - Owned write paths.
 - Paths that must not be edited.
 - Existing plan/doc to follow.
@@ -103,6 +104,7 @@ Required prompt fields:
 - Goal.
 - Branch name.
 - Worktree path.
+- Lane ID from `docs/agent-context/lanes.json`.
 - Owned write paths.
 - Integration target.
 - Required checks before handoff.

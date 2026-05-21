@@ -19,13 +19,13 @@ Per App Store Connect (May 2026), screenshots are required for
 **three iPhone classes** and **two iPad classes**. The 5.5" class is
 optional but recommended for older-device users.
 
-| Device class       | Apple ref device                            | Portrait resolution | Required?                                                                                                                           |
-| ------------------ | ------------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| **6.7" iPhone**    | iPhone 17 Pro Max / 16 Pro Max / 15 Pro Max | 1290 × 2796         | **Yes** — required by App Store Connect                                                                                             |
-| **6.5" iPhone**    | iPhone 14 Plus / 11 Pro Max / XS Max        | 1242 × 2688         | **Yes**                                                                                                                             |
-| **5.5" iPhone**    | iPhone 8 Plus                               | 1242 × 2208         | Recommended; required if app still supports iPhone 8 Plus class. AGI's `LSMinimumSystemVersion` is iOS 12.0+, so we keep this slot. |
-| **12.9" iPad Pro** | iPad Pro 12.9" (6th gen)                    | 2048 × 2732         | **Yes** (iPadOS is supported)                                                                                                       |
-| **11" iPad Pro**   | iPad Pro 11" (4th gen)                      | 1668 × 2388         | **Yes**                                                                                                                             |
+| Device class       | Apple ref device                            | Portrait resolution | Required?                                                                                                                            |
+| ------------------ | ------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **6.7" iPhone**    | iPhone 17 Pro Max / 16 Pro Max / 15 Pro Max | 1290 × 2796         | **Yes** — required by App Store Connect                                                                                              |
+| **6.5" iPhone**    | iPhone 14 Plus / 11 Pro Max / XS Max        | 1242 × 2688         | **Yes**                                                                                                                              |
+| **5.5" iPhone**    | iPhone 8 Plus                               | 1242 × 2208         | Optional compatibility capture. AGI's tracked iOS support floor is 15.1, so this slot is kept only if App Store Connect requests it. |
+| **12.9" iPad Pro** | iPad Pro 12.9" (6th gen)                    | 2048 × 2732         | **Yes** (iPadOS is supported)                                                                                                        |
+| **11" iPad Pro**   | iPad Pro 11" (4th gen)                      | 1668 × 2388         | **Yes**                                                                                                                              |
 
 **Six screenshots per class × five classes = 30 total iOS captures.**
 

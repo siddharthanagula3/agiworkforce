@@ -2,24 +2,26 @@
 
 Status: Current assessment
 Owner: Docs/platform
-Last updated: 2026-05-20
+Last updated: 2026-05-21
 
 Purpose: prevent old docs from becoming accidental source of truth.
 
 ## Current Control Plane
 
-| Path                                                     | Status                          |
-| -------------------------------------------------------- | ------------------------------- |
-| `AGENTS.md`                                              | Current agent entry.            |
-| `AGI_WORKFORCE.md`                                       | Current platform entry.         |
-| `PLAN.md`                                                | Current transition plan.        |
-| `TODO.md`                                                | Current task queue.             |
-| `CHANGELOG.md`                                           | Current change log.             |
-| `BUILD.md`                                               | Current build/test guide.       |
-| `docs/README.md`                                         | Current docs index.             |
-| `docs/decisions/CURRENT_DECISIONS.md`                    | Current decision index.         |
-| `docs/agent-context/`                                    | Current coding-agent maps.      |
-| `docs/plans/pre-release-repo-organization-2026-05-20.md` | Current repo organization plan. |
+| Path                                                      | Status                                        |
+| --------------------------------------------------------- | --------------------------------------------- |
+| `AGENTS.md`                                               | Current agent entry.                          |
+| `AGI_WORKFORCE.md`                                        | Current platform entry.                       |
+| `PLAN.md`                                                 | Current transition plan.                      |
+| `TODO.md`                                                 | Current task queue.                           |
+| `CHANGELOG.md`                                            | Current change log.                           |
+| `BUILD.md`                                                | Current build/test guide.                     |
+| `docs/README.md`                                          | Current docs index.                           |
+| `docs/decisions/CURRENT_DECISIONS.md`                     | Current decision index.                       |
+| `docs/agent-context/`                                     | Current coding-agent maps.                    |
+| `docs/engineering/parallel-agent-playbook.md`             | Current parallel-agent workflow.              |
+| `docs/engineering/autonomous-software-company-roadmap.md` | Current autonomous feedback-to-patch roadmap. |
+| `docs/plans/pre-release-repo-organization-2026-05-20.md`  | Current repo organization plan.               |
 
 ## Current Product And Architecture Docs
 
@@ -34,28 +36,29 @@ Purpose: prevent old docs from becoming accidental source of truth.
 
 ## Evidence And Audit Docs
 
-| Path                           | Status                                                                 |
-| ------------------------------ | ---------------------------------------------------------------------- |
-| `audit/anthropic-apps-parity/` | Current parity evidence.                                               |
-| `audit/repo-organization/`     | Current repo organization evidence.                                    |
-| `docs/reference/`              | Reference catalogs and structural patterns; evidence only.             |
-| `docs/security/`               | Current and historical security findings; verify status before citing. |
-| `docs/audit/`                  | Audit evidence; verify age/status before citing.                       |
+| Path                                       | Status                                                                 |
+| ------------------------------------------ | ---------------------------------------------------------------------- |
+| `audit/anthropic-apps-parity/`             | Current parity evidence.                                               |
+| `audit/repo-organization/`                 | Current repo organization evidence.                                    |
+| `docs/reference/`                          | Reference catalogs and structural patterns; evidence only.             |
+| `audit/repo-organization/reference-index/` | Historical generated ownership/reference-index evidence.               |
+| `docs/security/`                           | Current and historical security findings; verify status before citing. |
+| `docs/audit/`                              | Audit evidence; verify age/status before citing.                       |
 
 ## Historical Or Working Areas
 
-| Path                 | Status                         | Rule                                                       |
-| -------------------- | ------------------------------ | ---------------------------------------------------------- |
-| `docs/archive/`      | Historical                     | Do not cite as current unless a current doc references it. |
-| `docs/planning/`     | Historical planning            | Move current plans to `docs/plans/`.                       |
-| `docs/superpowers/`  | Historical/working             | Promote durable decisions into current docs before citing. |
-| `tasks/research/`    | Working research               | Promote durable conclusions into docs/audit.               |
-| `tasks/team-status/` | Working status                 | Not source of truth.                                       |
-| `reports/`           | Generated/inspection artifacts | Evidence only, not strategy.                               |
+| Path                                | Status                         | Rule                                                       |
+| ----------------------------------- | ------------------------------ | ---------------------------------------------------------- |
+| `docs/archive/`                     | Historical                     | Do not cite as current unless a current doc references it. |
+| `docs/archive/2026-05-20-planning/` | Historical planning            | Move current plans to `docs/plans/`.                       |
+| `docs/superpowers/`                 | Historical/working             | Promote durable decisions into current docs before citing. |
+| `tasks/research/`                   | Working research               | Promote durable conclusions into docs/audit.               |
+| `tasks/team-status/`                | Working status                 | Not source of truth.                                       |
+| `reports/`                          | Generated/inspection artifacts | Evidence only, not strategy.                               |
 
 ## Required Cleanup
 
 - Add status headers to active docs that do not have them.
 - Remove or annotate stale "canonical" claims in historical docs.
-- Expand `docs/agent-context/doc-status.json` after this ledger is accepted.
+- Keep `docs/agent-context/doc-status.json` in sync with every new current source.
 - Keep archived `MASTER_PLAN.md` and implementation logs out of root navigation except as historical evidence.

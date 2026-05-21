@@ -167,6 +167,11 @@ Deliverables:
 - `audit/anthropic-apps-parity/sdk-strategy-2026-05-20.md`
 - `audit/anthropic-apps-parity/compute-artifacts-2026-05-20.md`
 - Agentic development outlook: `audit/repo-organization/agentic-development-outlook-2026-05-20.md`
+- Parallel-agent lane map: `docs/agent-context/lanes.json`
+- Shared-file collision policy: `docs/agent-context/shared-files.md`
+- Parallel-agent workflow: `docs/engineering/parallel-agent-playbook.md`
+- Autonomous software-company roadmap: `docs/engineering/autonomous-software-company-roadmap.md`
+- Delegated research prompt bank: `docs/research/agentic-company-research-prompts.md`
 - Updates to this `PLAN.md` and root `TODO.md`.
 
 ### 1A. Root Document Contract
@@ -228,6 +233,56 @@ Deliverable:
 
 - `audit/repo-organization/agentic-development-outlook-2026-05-20.md`
 - `docs/engineering/agent-native-development.md`
+
+### 1D. Parallel Agent Operating Model
+
+Goal: make AGI Workforce easy to split across 15+ parallel coding agents, Claude Code TeamCreate-style teammates, Codex subagents, Cursor agents, opencode tasks, and future internal agents.
+
+Rules:
+
+- Every implementation task gets one `laneId` from `docs/agent-context/lanes.json`.
+- Lane-owned paths are the only write paths for feature agents.
+- Shared files such as lockfiles, root docs, CI, shared schemas, migrations, and native projects go through a named integrator lane.
+- Each lane states required checks and escalation owners before work begins.
+- Exploration agents can read broadly, but implementation agents write narrowly.
+- The integrator owns `PLAN.md`, `TODO.md`, `CHANGELOG.md`, `docs/agent-context/**`, shared manifests, and final commits.
+- Parallel work should prefer 18 writer lanes plus 4 review/verification lanes when the task pool is large enough.
+
+Deliverables:
+
+- `docs/agent-context/lanes.json`
+- `docs/agent-context/shared-files.md`
+- `docs/agent-context/task-manifest.schema.json`
+- `docs/engineering/parallel-agent-playbook.md`
+- `.github/PULL_REQUEST_TEMPLATE/parallel-agent-change.md`
+- `scripts/check-lane-ownership.mjs`
+
+### 1E. Autonomous Software Company Loop
+
+Goal: design AGI Workforce so customer feedback, bug reports, support cases, telemetry, and release outcomes can eventually create a reviewed patch flow without depending on a large manual team.
+
+Target loop:
+
+1. User feedback enters through Web, Desktop, Mobile, CLI, support email, voice intake, or app-store review.
+2. Intake scrubs secrets and classifies privacy risk.
+3. Triage groups duplicates, maps issue to a repo lane, estimates severity, and opens an internal case.
+4. The case creates a GitHub issue or queue item with reproduction evidence.
+5. A patch agent works in an isolated branch/worktree inside the assigned lane.
+6. Verification agents run tests, screenshots, static checks, and regression probes.
+7. A human or trusted release gate reviews high-risk changes.
+8. Merge links to release notes, app update channels, and customer follow-up.
+
+Rules:
+
+- This automation is future product infrastructure, not a reason to remove human review from privacy, billing, security, release, or data-retention changes.
+- Managed cloud compute for users remains waitlisted/private beta until abuse, refunds, disputes, quota, provider costs, and retention are solved.
+- Support automation should assist humans first: classify, route, draft, reproduce, and close loops; it should not promise refunds, credits, or legal answers without policy gates.
+
+Deliverables:
+
+- `docs/engineering/autonomous-software-company-roadmap.md`
+- `docs/research/agentic-company-research-prompts.md`
+- Future schemas under `packages/types` for feedback, support, release-fix links, and agent-patch tasks.
 
 ### 2. CLI As Engine
 

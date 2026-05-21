@@ -38,6 +38,16 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
   - `audit/repo-organization/docs-status-2026-05-20.md`
   - `audit/repo-organization/generated-artifact-policy-2026-05-20.md`
 - `docs/agent-context/agent-task-templates.md` with standard exploration, implementation, review, and verification task templates for parallel coding agents.
+- `docs/agent-context/lanes.json` with 18 writer lanes, 4 review/verification lanes, owned write paths, blocked paths, checks, and escalation owners for 15+ parallel agents.
+- `docs/agent-context/shared-files.md` with a collision policy for manifests, lockfiles, root docs, CI, shared schemas, migrations, and native project files.
+- `docs/agent-context/task-manifest.schema.json` for structured agent task assignments.
+- `docs/engineering/parallel-agent-playbook.md` for Claude Code TeamCreate-style, Codex subagent, Cursor, opencode, and future internal-agent work splitting.
+- `docs/engineering/autonomous-software-company-roadmap.md` for the feedback-to-triage-to-patch-to-PR-to-release operating model.
+- `docs/research/agentic-company-research-prompts.md` with 100 delegated research prompts covering agentic product development, support automation, fraud, cloud compute, release automation, and one-person company operations.
+- `scripts/check-lane-ownership.mjs` and `pnpm check:lane-ownership`.
+- `.github/PULL_REQUEST_TEMPLATE/parallel-agent-change.md` for lane-scoped parallel-agent PRs.
+- `docs/marketing/`, `docs/support/`, and `docs/legal/` operator folders with ownership READMEs.
+- Root `ios/README.md` documenting the native iOS project ownership decision.
 - Debt-aware repo-operability checks:
   - `scripts/check-generated-artifacts.mjs`
   - `scripts/check-readme-ownership.mjs`
@@ -87,6 +97,8 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - `scripts/check-node-version.sh` now prints the actionable too-old-Node error instead of exiting early under `set -e`.
 - Root scratch markdown, design image files, and the root `downloads/` scratch artifact have been moved out of the repo root with `git mv`, and the root organization/generated-artifact checks now treat the archive path as classified evidence.
 - Historical reverse-engineering campaign docs and reference catalogs have been moved out of the repo root, and active references now point to their archived/reference paths.
+- Raw `reference-index/` generated ownership catalogs have moved to `audit/repo-organization/reference-index/` as historical evidence.
+- `docs/planning/cli-modernization-spec.md` has moved to `docs/archive/2026-05-20-planning/`.
 - `pnpm check:readme-ownership` now runs strict coverage for apps, packages, provider leaf packages, crates, and services instead of allowing known README debt.
 - `pnpm check:generated-artifacts` now runs strict for tracked local/generated artifact debt after untracking local-only files and ignoring future `.playwright-mcp/` captures.
 - Current source-of-truth docs now carry `Status`, `Owner`, and `Last updated` metadata, and `pnpm check:doc-status` is strict instead of debt-warning mode.
@@ -98,6 +110,9 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - `PLAN.md` and `TODO.md` now record that OpenAI, Anthropic, and Vercel SDKs are adapter/UI-edge dependencies only. AGI owns runtime schemas, event streams, privacy modes, provider routing, and usage accounting.
 - `PLAN.md`, `TODO.md`, and `feature-ledger.md` now include compute sessions, computer use, generated-file manifests, and artifact-preview/download flows as first-class parity workstreams.
 - Mobile generated-file strategy now matches the Claude/ChatGPT evidence: mobile must support request, status, preview, download, and share, while local on-device heavy compute remains deferred behind Desktop/local-host or future Managed compute.
+- `AGENTS.md`, `docs/agent-context/README.md`, `docs/engineering/agent-native-development.md`, `PLAN.md`, and `TODO.md` now treat lane ownership and shared-file routing as required for large parallel-agent work.
+- `pnpm check:llm-operability` now includes lane ownership validation.
+- Mobile/iOS docs now treat root `ios/` as the canonical tracked Xcode-consumed project and `apps/mobile/native/ios` as custom native module source.
 
 ### Documented Gaps
 

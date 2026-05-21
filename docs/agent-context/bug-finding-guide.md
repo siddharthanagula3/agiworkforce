@@ -28,6 +28,6 @@ Last updated: 2026-05-20
 ## Do Not Trust Blindly
 
 - Older launch plans under `docs/archive/`.
-- Historical `docs/planning/` files unless a current doc cites them.
+- Historical archived planning files unless a current doc cites them.
 - Stale claims inside `AGENTS.md` or `CLAUDE.md` if they conflict with this folder.
 - Archived root scratch files under `reports/root-scratch-archive/`; those are evidence only, not current source.

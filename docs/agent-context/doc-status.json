@@ -18,8 +18,16 @@
     "docs/plans/pre-release-repo-organization-2026-05-20.md",
     "docs/engineering/README.md",
     "docs/engineering/agent-native-development.md",
+    "docs/engineering/parallel-agent-playbook.md",
+    "docs/engineering/autonomous-software-company-roadmap.md",
     "docs/agent-context/README.md",
     "docs/agent-context/agent-task-templates.md",
+    "docs/agent-context/shared-files.md",
+    "docs/research/agentic-company-research-prompts.md",
+    "docs/marketing/README.md",
+    "docs/support/README.md",
+    "docs/legal/README.md",
+    "ios/README.md",
     "apps/cli/AGENTS.md",
     "apps/web/AGENTS.md",
     "apps/mobile/AGENTS.md",
@@ -43,6 +51,7 @@
     "audit/repo-organization/package-readme-coverage-2026-05-20.md",
     "audit/repo-organization/root-classification-2026-05-20.md",
     "audit/repo-organization/tool-folder-classification-2026-05-20.md",
+    "audit/repo-organization/reference-index/README.md",
     "docs/reference/REFERENCE_INDEX.md",
     "docs/reference/REFERENCE_STRUCTURE.md"
   ],
@@ -53,9 +62,9 @@
       "rule": "Do not cite as current unless a current doc explicitly references it."
     },
     {
-      "path": "docs/planning",
+      "path": "docs/archive/2026-05-20-planning",
       "status": "historical",
-      "rule": "Older planning specs; current plans belong in docs/plans."
+      "rule": "Archived planning specs; current plans belong in docs/plans."
     },
     {
       "path": "tasks/research",
@@ -63,9 +72,9 @@
       "rule": "Promote durable conclusions to docs or audit before using as source of truth."
     },
     {
-      "path": "reference-index",
-      "status": "classification-debt",
-      "rule": "Raw ownership catalog still needs relocation decision before release; docs reference catalogs moved to docs/reference."
+      "path": "audit/repo-organization/reference-index",
+      "status": "historical-evidence",
+      "rule": "Raw ownership/catalog output from earlier reorg work; evidence only, not current architecture."
     },
     {
       "path": "reports/root-scratch-archive",

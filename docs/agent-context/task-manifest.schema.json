@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agiworkforce.com/schemas/agent-task-manifest.schema.json",
+  "title": "AGI Workforce Agent Task Manifest",
+  "type": "object",
+  "required": [
+    "taskId",
+    "laneId",
+    "goal",
+    "ownedWritePaths",
+    "readOnlyContextPaths",
+    "blockedPaths",
+    "requiredChecks",
+    "riskLevel",
+    "handoff"
+  ],
+  "properties": {
+    "taskId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]+$"
+    },
+    "laneId": {
+      "type": "string"
+    },
+    "goal": {
+      "type": "string",
+      "minLength": 12
+    },
+    "ownedWritePaths": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "readOnlyContextPaths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "blockedPaths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "requiredChecks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "riskLevel": {
+      "type": "string",
+      "enum": ["low", "medium", "high"]
+    },
+    "mayEditSharedFiles": {
+      "type": "boolean",
+      "default": false
+    },
+    "handoff": {
+      "type": "object",
+      "required": ["expectedSummary", "integrationOwner"],
+      "properties": {
+        "expectedSummary": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "integrationOwner": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

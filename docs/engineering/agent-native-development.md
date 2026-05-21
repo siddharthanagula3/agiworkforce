@@ -32,23 +32,34 @@ This repo therefore needs to be easy for agents to search, split, edit, test, an
 Every substantial task should be expressible as:
 
 1. Goal.
-2. Owned write paths.
-3. Read-only context paths.
-4. Explicit non-goals.
-5. Required checks.
-6. Risk focus from `docs/agent-context/risk-map.json`.
-7. Expected final summary.
+2. Lane ID from `docs/agent-context/lanes.json`.
+3. Owned write paths.
+4. Read-only context paths.
+5. Explicit non-goals.
+6. Required checks.
+7. Risk focus from `docs/agent-context/risk-map.json`.
+8. Expected final summary.
 
 Use `docs/agent-context/agent-task-templates.md` when assigning work to Codex, Claude Code, Cursor, opencode, VS Code agents, or future internal agents.
+
+## Parallel Operating Documents
+
+- `docs/agent-context/lanes.json` is the machine-readable lane map for 15+ parallel agents.
+- `docs/agent-context/shared-files.md` defines collision rules for manifests, locks, root docs, CI, shared schemas, migrations, and native projects.
+- `docs/engineering/parallel-agent-playbook.md` defines the human/integrator workflow for running many agents without overlapping writes.
+- `.github/PULL_REQUEST_TEMPLATE/parallel-agent-change.md` is the PR template for lane-scoped parallel work.
+- `docs/engineering/autonomous-software-company-roadmap.md` defines the later feedback-to-patch automation loop.
 
 ## Parallel Work Rules
 
 - Split by owner path first: app, package, crate, service, docs, audit.
+- Assign exactly one `laneId` to every implementation agent.
 - Do not assign two implementation agents to the same unresolved files.
 - Keep immediate blockers local to the lead agent or human.
 - Delegate sidecar exploration, tests, or disjoint implementation.
 - Ask every implementation agent to state the files it changed.
 - Integrate subagent work through review, not blind merge.
+- Route shared-file edits through `repo-operability`, `release-ci`, or a final integrator task.
 
 ## Worktree And Session Isolation
 

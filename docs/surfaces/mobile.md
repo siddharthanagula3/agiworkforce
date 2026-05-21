@@ -1,6 +1,6 @@
 # Mobile surface (lead launch surface)
 
-> **Path:** `apps/mobile/` · **Stack:** Expo SDK 55 + React Native 0.84.0 + native modules · **Owner:** founder · **Status:** M0 spike running this week (May 17-23); M3 public launch target **Aug 6-16, 2026**. **Updated:** 2026-05-18.
+> **Path:** `apps/mobile/` · **Stack:** Expo SDK 55 + React Native 0.84.0 + native modules · **Owner:** founder · **Status:** M0 spike running this week (May 17-23); M3 public launch target **Aug 6-16, 2026**. **Updated:** 2026-05-21.
 
 ## Mission
 
@@ -133,7 +133,7 @@ apps/mobile/
 | `apps/mobile/api/llm-client.ts`                          | Three-tier router + CacheIntent/CacheObservation + R-023 Chinese-HQ gate (default-off).                          |
 | `apps/mobile/native/ios/AGIFoundationModels.swift`       | Tier 1 iOS — requires `com.apple.developer.foundation-models` entitlement (provisioning profile update).         |
 | `apps/mobile/native/android/AGIAICoreModule.kt`          | Tier 1 Android — requires `play-services-aicore` gradle dep.                                                     |
-| `apps/mobile/ios/AGI/PrivacyInfo.xcprivacy`              | Apple Privacy Manifest with 4 required-reason API categories.                                                    |
+| `ios/agiworkforce/PrivacyInfo.xcprivacy`                 | Apple Privacy Manifest with 4 required-reason API categories, tracked in the root Xcode-consumed project.        |
 | `apps/mobile/store-listing/ios/review-notes.md`          | App Review notes — cites Nov 13 2025 5.1.2(i) update + 2.5.2 self-containment argument.                          |
 | `apps/mobile/scripts/release/README.md`                  | Founder runbook for App Store / Play submission.                                                                 |
 | `packages/local-llm/`                                    | Shared package — tier selection + capability detection + catalog.                                                |
@@ -199,8 +199,8 @@ Cache-discount magnitude locked at 90% per V5 §10 lock #23.
 2. **`pnpm install` blocked** — a `react-native-executorch-expo-resource-fetcher@^1.0.0` reference doesn't exist on npm (latest is 0.8.0). Pin to actual stable.
 3. **`app.json` vs `app.config.js` drift** — Expo prefers `app.config.js`; delete `app.json`
 4. **Brand rename in `app.config.js:5`** — still reads "AGI Workforce", should be "AGI" (public brand 2026-05-15)
-5. **`LSMinimumSystemVersion`** stale at 12.0 in `ios/agiworkforce/Info.plist`; bump to 15.1 or remove the key
-6. **Apple Privacy Manifest reconciliation** — canonical at `apps/mobile/ios/AGI/PrivacyInfo.xcprivacy` (per app-store-prep teammate); also at `ios/agiworkforce/PrivacyInfo.xcprivacy` (pre-existing). Reconcile before EAS Build runs
+5. **`LSMinimumSystemVersion`** is now 15.1 in `ios/agiworkforce/Info.plist`; keep screenshots/store metadata aligned with that support floor
+6. **Apple Privacy Manifest sync** — canonical Xcode-consumed copy is `ios/agiworkforce/PrivacyInfo.xcprivacy`; store-review copy is `apps/mobile/store-listing/ios/PrivacyInfo.xcprivacy`. Keep them synchronized before EAS Build runs
 7. **Detox testIDs** — already wired by onboarding/byok teammates; wire chat-UI testIDs to enable specs
 
 ## Gotchas

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: Mobile lead
-Last updated: 2026-05-20
+Last updated: 2026-05-21
 Kind: app
 Criticality: high
 
@@ -39,9 +39,10 @@ apps/mobile/
 ├── scripts/                      Release + screenshot tooling (scripts/release/ has EAS_SIGNING_RUNBOOK.md)
 ├── secrets/                      Gitignored — ASC API key, signing creds
 ├── store-listing/                App Store + Play Store metadata
-├── ios/                          Expo prebuild output (regenerated — don't hand-edit Xcode project files)
 └── android/                      Generated on first `pnpm android` (not in tree yet)
 ```
+
+Tracked iOS project output lives at root `ios/`. Do not create or hand-maintain a second tracked `apps/mobile/ios/` tree. Custom native module source belongs in `apps/mobile/native/ios/`; Xcode-consumed generated/project files belong in root `ios/`.
 
 ## Decision tree — where does new code go?
 
@@ -127,7 +128,7 @@ EAS signing runbook: `scripts/release/EAS_SIGNING_RUNBOOK.md`.
 
 - **`app.config.js` is the single Expo config.** The duplicate `app.json` was removed 2026-05-18.
 - **Tier 1/2/3 mobile runtime** is wired in `native/` (custom Swift/Kotlin modules) — do NOT add a new on-device model path outside the tier router.
-- **Permissions** (camera/mic/photos/calendar/HealthKit) are declared in `app.config.js` → `ios.infoPlist` and `android.permissions`. Edit there, not in `ios/AGIWorkforce/Info.plist` (regenerated on `expo prebuild`).
+- **Permissions** (camera/mic/photos/calendar/HealthKit) are declared in `app.config.js` -> `ios.infoPlist` and `android.permissions`. Edit Expo config first; root `ios/agiworkforce/Info.plist` is the tracked Xcode-consumed copy.
 - **NativeWind v4** is the styling layer; `global.css` + `tailwind.config.js` are its inputs. Don't import the React Native `StyleSheet` API for new components — use Tailwind classes.
 
 ## Known caveats (2026-05-18)

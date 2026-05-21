@@ -4,7 +4,7 @@ Status: Reference evidence
 Owner: Product/platform
 Last updated: 2026-05-20
 
-> Generated from 11 shard files. 640 valid entries (files still present on disk after 2026-05-14 cleanup). See `reference-index/` for raw per-shard data.
+> Generated from 11 shard files. 640 valid entries (files still present on disk after 2026-05-14 cleanup). Raw per-shard data now lives at `audit/repo-organization/reference-index/` as historical evidence.
 
 ## Per-shard stats
 
