@@ -42,6 +42,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Lock the long-term agent-native development thesis for AGI Workforce.
 - [x] Implement first enterprise control-plane wave: shared contracts, canonical migrations, API gateway routes, Web admin readiness page, docs, and provisional CODEOWNERS.
 - [x] Promote Desktop chat artifact cards into the persistent artifact workbench, with legacy preview fallback only when a panel-backed artifact cannot be resolved.
+- [x] Convert Desktop tool activity from bulky tool cards to the Claude-style compact event rail with action-specific icons and completed-run summaries.
 
 ## Exploration Tasks
 

@@ -57,14 +57,14 @@ describe('ToolTimeline', () => {
   });
 
   describe('completed state header', () => {
-    it('shows correct singular "tool" label for a single entry', () => {
+    it('summarizes a single completed tool by action', () => {
       render(<ToolTimeline entries={[completedEntries[0]!]} />);
-      expect(screen.getByText(/Used 1 tool(?!s)/)).toBeInTheDocument();
+      expect(screen.getByText(/Read a file/)).toBeInTheDocument();
     });
 
-    it('shows correct plural "tools" label for multiple entries', () => {
+    it('summarizes multiple completed tools by action', () => {
       render(<ToolTimeline entries={completedEntries} />);
-      expect(screen.getByText(/Used 3 tools/)).toBeInTheDocument();
+      expect(screen.getByText(/Ran a command, changed a file, read a file/)).toBeInTheDocument();
     });
 
     it('shows the total cumulative duration when all tools have finished', () => {
