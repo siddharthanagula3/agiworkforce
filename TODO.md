@@ -2,9 +2,32 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-21.
+Last updated: 2026-05-21 (post round-6 suite-transformation session).
 
 This is the active checklist for the transition described in `PLAN.md`. Keep it short enough to operate from daily; move evidence and long analysis to `audit/anthropic-apps-parity/`.
+
+## 2026-05-21 Suite Transformation Session — Shipped (~165h, 25 commits)
+
+Branch `fix/extension-typecheck-and-c02-sync-2026-05-20`, HEAD `5ff6b26d4`. Full per-commit trace + remaining ~3,613h inventory in `docs/plans/2026-05-21-suite-transformation-handoff.md`.
+
+- [x] Mobile v1 local-only blank-screen launch fix (auth-guard + login redirect + handleUnrecoverableAuth) — `f6d6eeac8`
+- [x] `packages/unified-chat` shadcn token aliases for 6 consumers — `a84fae8a3`
+- [x] `packages/unified-chat` composer drag-drop + paste-image + thumbnail strip — `669f342e5`
+- [x] Chrome ext site allowlist popup section (P0 #5) — `aa3edc0e2`
+- [x] `packages/types` attachment validation + SignedUploadRequest/Response contract (P0 #4) — `84a7cb417`
+- [x] `packages/unified-chat` SettingsShell + MemoryEditor + useMemoryStore (P0 #6 + #8) — `385623d6b`
+- [x] Web `/settings/memory` page mounting shared MemoryEditor — `9ca923385`
+- [x] Desktop settings dialog Memory tab — `a6d4fe04d`
+- [x] VS Code `agi-workforce.memory` QuickPick — `58938d12d`
+- [x] Web `/settings/profile` + `/connections` + `/privacy` + `/notifications` + 2 docs/decisions — `b81cc377d`
+- [x] `packages/unified-chat` ProjectCard + ProjectGallery + strict-mode fixes — `51b20c865`
+- [x] Chrome ext pendingAttachments wire fix (P0 #3 chrome-side) — `38034fedb`
+- [x] `packages/unified-chat` ArtifactPanel version-stepper toolbar (P0 #9 first slice) — `7d0f9ecd2`
+- [x] Web theme persistence via next-themes — `eb375f84b`
+- [x] Web profile sync to Supabase user_metadata — `5630924d7`
+- [x] Web `/projects` route mounting shared ProjectGallery — `34f33169e`
+- [x] `packages/types` `assertSurfaceCanSyncChats` runtime guard + test — `3c9f57d48` + `1b8617b13`
+- [x] `packages/unified-chat` ArtifactPanel handlePublish portable snapshot — `b1c2bb428`
 
 ## Active Now
 
