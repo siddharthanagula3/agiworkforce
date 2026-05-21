@@ -25,4 +25,5 @@ Legend: `Yes` means AGI may expose the capability when provider credentials and 
 - OpenAI-compatible providers must use Chat Completions-style payloads unless their metadata explicitly says otherwise.
 - Native provider tools must be modeled separately from AGI tools so UI copy can say which system executes the action.
 - File upload, generated-file, and Code Interpreter-style features must attach `ComputeSession`, `GeneratedFile`, and `ArtifactManifest` metadata before surfacing in Web/Desktop/Mobile.
+- OpenAI Code Interpreter container-file citations are adapted in `@agiworkforce/providers-openai` only after caller-supplied file materialization provides URI, byte count, checksum, privacy mode, provider mode, storage scope, owner, and source context.
 - Surfaces show capability labels from shared metadata; they do not infer capabilities from model-name substrings.
