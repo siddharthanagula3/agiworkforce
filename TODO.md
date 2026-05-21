@@ -44,6 +44,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Promote Desktop chat artifact cards into the persistent artifact workbench, with legacy preview fallback only when a panel-backed artifact cannot be resolved.
 - [x] Tighten the Desktop artifact workbench toolbar around Claude-style preview/source switching, artifact title/type context, refresh, and primary actions.
 - [x] Convert Desktop tool activity from bulky tool cards to the Claude-style compact event rail with action-specific icons and completed-run summaries.
+- [x] Convert Desktop inline web search output to compact Claude-style favicon/title/domain result rows while preserving citations.
 
 ## Exploration Tasks
 

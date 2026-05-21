@@ -80,7 +80,7 @@ const CollapsibleSearchHeader: React.FC<CollapsibleSearchHeaderProps> = ({
 };
 
 export const InlineSearchResults: React.FC<ToolResultProps> = ({ result, status }) => {
-  const [isCollapsed, setIsCollapsed] = useState(true);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const data = result?.data as SearchResultData | undefined;
   const query = data?.query || '';
@@ -195,7 +195,7 @@ export const InlineSearchResults: React.FC<ToolResultProps> = ({ result, status 
           >
             <div className="space-y-2 pt-1">
               {/* Provider + query meta row */}
-              <div className="flex items-center gap-3 text-xs text-muted-foreground px-1">
+              <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground px-1">
                 <div className="flex items-center gap-1.5 text-muted-foreground">
                   <Zap className="h-3 w-3" />
                   <span>{provider}</span>
@@ -206,12 +206,19 @@ export const InlineSearchResults: React.FC<ToolResultProps> = ({ result, status 
                     <span className="font-mono">{query}</span>
                   </div>
                 )}
+                <span className="shrink-0">{processedResults.length} results</span>
               </div>
 
               {/* Search result cards */}
-              {processedResults.map((searchResult, index) => (
-                <SearchResultCard key={index} result={searchResult} />
-              ))}
+              <div className="overflow-hidden rounded-lg border border-border/40 bg-surface-elevated">
+                {processedResults.map((searchResult, index) => (
+                  <SearchResultCard
+                    key={`${searchResult.url}-${index}`}
+                    result={searchResult}
+                    isLast={index === processedResults.length - 1}
+                  />
+                ))}
+              </div>
             </div>
           </motion.div>
         )}
@@ -222,9 +229,10 @@ export const InlineSearchResults: React.FC<ToolResultProps> = ({ result, status 
 
 interface SearchResultCardProps {
   result: SearchResult;
+  isLast: boolean;
 }
 
-const SearchResultCard: React.FC<SearchResultCardProps> = ({ result }) => {
+const SearchResultCard: React.FC<SearchResultCardProps> = ({ result, isLast }) => {
   const [imageError, setImageError] = useState(false);
 
   return (
@@ -232,53 +240,49 @@ const SearchResultCard: React.FC<SearchResultCardProps> = ({ result }) => {
       href={/^https?:\/\//i.test(result.url || '') ? result.url : '#'}
       target="_blank"
       rel="noopener noreferrer"
-      className="group flex items-start gap-3 p-3 rounded-lg bg-surface-elevated hover:bg-surface-hover border border-border/30 hover:border-blue-500/30 transition-all duration-200"
+      className={cn(
+        'group flex items-center gap-3 px-3 py-2 transition-colors duration-150 hover:bg-surface-hover',
+        !isLast && 'border-b border-border/30',
+      )}
     >
       {/* Favicon */}
-      <div className="shrink-0 mt-0.5">
+      <div className="shrink-0">
         {result.favicon && !imageError ? (
           <img
             src={result.favicon}
             alt=""
-            className="w-5 h-5 rounded"
+            className="h-4 w-4 rounded"
             onError={() => setImageError(true)}
           />
         ) : (
-          <div className="w-5 h-5 rounded bg-surface-base flex items-center justify-center">
+          <div className="flex h-4 w-4 items-center justify-center rounded bg-surface-base">
             <Globe2 className="h-3 w-3 text-muted-foreground" />
           </div>
         )}
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-w-0 space-y-1">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
         {/* Title Row */}
-        <div className="flex items-start justify-between gap-2">
-          <h4 className="font-medium text-sm text-foreground line-clamp-2 group-hover:text-blue-300 transition">
-            {result.title || 'Untitled'}
-          </h4>
-          <ExternalLink className="h-3.5 w-3.5 shrink-0 mt-0.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition" />
-        </div>
+        <h4 className="min-w-0 flex-1 truncate text-sm font-medium text-foreground transition group-hover:text-blue-300">
+          {result.title || 'Untitled'}
+        </h4>
 
         {/* Domain */}
         {result.domain && (
-          <div className="text-xs text-emerald-400/80 font-medium">{result.domain}</div>
-        )}
-
-        {/* Snippet */}
-        {result.snippet && (
-          <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-            {result.snippet}
-          </p>
+          <div className="hidden max-w-[11rem] shrink-0 truncate text-xs font-medium text-muted-foreground sm:block">
+            {result.domain}
+          </div>
         )}
       </div>
 
       {/* Position badge */}
       {result.position && (
-        <div className="shrink-0 text-xs font-mono text-muted-foreground bg-surface-base px-2 py-1 rounded opacity-60 group-hover:opacity-100 transition">
+        <div className="shrink-0 rounded bg-surface-base px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground opacity-70 transition group-hover:opacity-100">
           [{result.position}]
         </div>
       )}
+      <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
     </a>
   );
 };

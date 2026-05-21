@@ -88,6 +88,8 @@ The Desktop artifact workbench keeps artifact selection scoped to the side panel
 
 Desktop tool activity uses the same compact event-rail direction as the verified Claude artifact/tool-call references. `ToolTimeline` keeps the existing live tool-event store and expand/collapse behavior, but presents completed runs as short action summaries and expanded runs as icon-specific steps with result/error pills instead of large generic cards.
 
+Desktop inline search results follow the same compact trace pattern. `InlineSearchResults` keeps registering citations for assistant responses, but renders completed searches as visible favicon/title/domain rows with a result count instead of expanding into large cards by default.
+
 Desktop connector customization now follows the same modal-first rule. The connector gallery owns the browse/connect surface, while `CustomRemoteMcpConnectorDialog` creates remote HTTP MCP server configs through the existing MCP config API instead of sending users into a broad settings detour. The default view exposes only name and URL, with bearer token, headers, timeout, and SSL controls behind collapsed advanced settings. Bearer tokens are stored through the encrypted API-key path and referenced from MCP config placeholders. Connector gallery ownership is single-sourced under `apps/desktop/src/features/connectors/ConnectorGallery.tsx`.
 
 Desktop project editing separates common detail edits from deep configuration. `ProjectEditDetailsDialog` owns the focused name/description modal, while `ProjectSettingsDialog` stays available for files, instructions, knowledge, memory, and conversation settings.
