@@ -5,6 +5,7 @@ export * from './lib/runtime';
 export * from './lib/hostBridge';
 export * from './lib/utils';
 export * from './lib/greetings';
+export { buildSandboxedHtml, ARTIFACT_SANDBOX_ATTR } from './lib/artifact-sandbox';
 export { getConnectorPermissionStore } from './lib/connectorPermissionStore';
 export type { ConnectorPermissionStore } from './lib/connectorPermissionStore';
 export { classifyPrompt, buildRoutingDecision, TASK_LABEL } from './lib/promptClassifier';

@@ -8,12 +8,16 @@ import {
   Download,
   Eye,
   Globe,
+  Pause,
+  Play,
   RotateCcw,
   X,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { ARTIFACT_SANDBOX_ATTR, buildSandboxedHtml } from '../lib/artifact-sandbox';
 import { Button } from './ui/Button';
 import type { Artifact } from '../lib/types';
+import { ReactPreview } from './artifact-components/ReactPreview';
 
 export interface ArtifactPanelProps {
   artifact: Artifact | null;
@@ -208,6 +212,12 @@ export function ArtifactPanel({
   onSelectVersion,
 }: ArtifactPanelProps) {
   const [headerCopied, setHeaderCopied] = useState(false);
+  // Run/Stop control for HTML preview. Defaults to running; pausing strips
+  // the iframe and re-mounts on resume. The toggle only appears when the
+  // current artifact is HTML — React previews own their own reload UX, and
+  // layout-only artifact types (markdown, document, svg, image) never run
+  // scripts so a pause control would be misleading.
+  const [htmlPreviewRunning, setHtmlPreviewRunning] = useState(true);
 
   // The host supplies versions ordered oldest-first; the stepper trusts
   // that ordering and maps array indices to "v1 / v2 / ..." labels. When
@@ -308,6 +318,17 @@ export function ArtifactPanel({
     artifact?.type === 'markdown' ||
     artifact?.type === 'document' ||
     artifact?.type === 'image';
+
+  // Pre-build the sandboxed HTML once per artifact swap. Empty when paused.
+  const sandboxedHtmlSrcDoc = useMemo<string>(() => {
+    if (!artifact || artifact.type !== 'html') return '';
+    if (!htmlPreviewRunning) return '';
+    try {
+      return buildSandboxedHtml(artifact.content);
+    } catch {
+      return '';
+    }
+  }, [artifact, htmlPreviewRunning]);
 
   return (
     <div className="flex h-full flex-col bg-[var(--chat-surface-base)]">
@@ -478,11 +499,56 @@ export function ArtifactPanel({
               {artifact.content}
             </article>
           </div>
+        ) : viewMode === 'preview' && artifact.type === 'react' ? (
+          // React: delegate to the in-package ReactPreview, which spins up a
+          // sandboxed iframe with Babel + React from CDN and posts back ready/
+          // error events. Round-2 audit P0 #9 live React preview.
+          <ReactPreview code={artifact.content} className="h-full" />
+        ) : viewMode === 'preview' && artifact.type === 'html' ? (
+          // HTML: sandboxed iframe with CSP meta injection + Run/Stop control.
+          // Uses the shared `buildSandboxedHtml` so the security envelope cannot
+          // drift between ArtifactPanel and ArtifactRenderer.HtmlArtifact.
+          <div className="flex h-full flex-col" data-testid="artifact-panel-html-preview">
+            <div className="flex items-center gap-2 border-b border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-3 py-1.5">
+              <Globe size={12} className="text-[var(--chat-text-muted)]" />
+              <span className="text-[11px] text-[var(--chat-text-muted)]">HTML preview</span>
+              <div className="flex-1" />
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={htmlPreviewRunning ? 'Stop preview' : 'Run preview'}
+                onClick={() => setHtmlPreviewRunning((prev) => !prev)}
+                className="h-6 w-6 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
+              >
+                {htmlPreviewRunning ? <Pause size={12} /> : <Play size={12} />}
+              </Button>
+            </div>
+            {htmlPreviewRunning && sandboxedHtmlSrcDoc ? (
+              <iframe
+                srcDoc={sandboxedHtmlSrcDoc}
+                sandbox={ARTIFACT_SANDBOX_ATTR}
+                referrerPolicy="no-referrer"
+                className="flex-1 w-full border-0 bg-white"
+                title={artifact.title ?? 'Artifact preview'}
+              />
+            ) : (
+              <div className="flex flex-1 items-center justify-center text-sm text-[var(--chat-text-muted)]">
+                <button
+                  type="button"
+                  onClick={() => setHtmlPreviewRunning(true)}
+                  className="rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-3 py-1.5 text-xs text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] transition-colors"
+                >
+                  Run preview
+                </button>
+              </div>
+            )}
+          </div>
         ) : viewMode === 'preview' && canPreview ? (
-          // HTML/React: sandboxed iframe without allow-scripts is safe for layout-only preview
+          // Fallback for any future preview-able artifact types not handled
+          // above. Layout-only sandbox: no scripts, no modals, no forms.
           <iframe
             srcDoc={artifact.content}
-            sandbox="allow-forms"
+            sandbox=""
             className="h-full w-full border-0 bg-white"
             title={artifact.title ?? 'Artifact preview'}
           />
