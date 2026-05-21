@@ -10,6 +10,7 @@ const NAV_LINKS = [
   { href: '/settings/billing', label: 'Billing' },
   { href: '/settings/voice', label: 'Voice' },
   { href: '/settings/capabilities', label: 'Capabilities' },
+  { href: '/settings/memory', label: 'Memory' },
 ];
 
 export default async function SettingsLayout({ children }: { children: ReactNode }) {
