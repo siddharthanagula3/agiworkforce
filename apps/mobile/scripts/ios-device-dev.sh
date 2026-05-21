@@ -14,10 +14,44 @@ if [[ -n "$device_udid" ]]; then
 fi
 
 export APP_ENV="${APP_ENV:-development}"
+export AGI_IOS_DEVELOPMENT_TEAM="${AGI_IOS_DEVELOPMENT_TEAM:-D2PR62RLT4}"
+export EXPO_IOS_DEVELOPMENT_TEAM="${EXPO_IOS_DEVELOPMENT_TEAM:-$AGI_IOS_DEVELOPMENT_TEAM}"
 export EXPO_DISABLE_PRODUCTION_IOS_ENTITLEMENTS="${EXPO_DISABLE_PRODUCTION_IOS_ENTITLEMENTS:-1}"
+
+if [[ "${AGI_SKIP_IOS_SIGNING_IDENTITY_CHECK:-0}" != "1" ]] &&
+  ! security find-identity -v -p codesigning |
+    grep -Eq "Apple Development: .+\\(${AGI_IOS_DEVELOPMENT_TEAM}\\)"; then
+  cat >&2 <<EOF
+No Apple Development signing identity for iOS team ${AGI_IOS_DEVELOPMENT_TEAM} was found.
+
+AGI physical iPhone debug builds default to the company Apple team and will not
+silently fall back to a personal Apple ID.
+
+Fix:
+  1. Open Xcode -> Settings -> Accounts.
+  2. Add/sign in with the company Apple Developer account.
+  3. Select the AGI AUTOMATION LLC team (${AGI_IOS_DEVELOPMENT_TEAM}).
+  4. Create or download an Apple Development certificate for that team.
+  5. Rerun this command.
+
+Temporary escape hatch, only if you intentionally want Xcode to create signing
+assets automatically:
+  AGI_SKIP_IOS_SIGNING_IDENTITY_CHECK=1 pnpm --filter @agiworkforce/mobile run ios:device:dev -- <device>
+
+EOF
+  exit 1
+fi
 
 if [[ "${SKIP_IOS_PREBUILD:-0}" != "1" ]]; then
   pnpm exec expo prebuild --platform ios --clean
+fi
+
+project_file="ios/AGIWorkforce.xcodeproj/project.pbxproj"
+if [[ -f "$project_file" ]]; then
+  AGI_IOS_DEVELOPMENT_TEAM="$AGI_IOS_DEVELOPMENT_TEAM" perl -0pi -e '
+    s/DEVELOPMENT_TEAM = "?[A-Z0-9]+"?;/DEVELOPMENT_TEAM = "$ENV{AGI_IOS_DEVELOPMENT_TEAM}";/g;
+    s/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Automatic;/g;
+  ' "$project_file"
 fi
 
 log_file="$(mktemp -t agi-ios-device-dev.XXXXXX.log)"

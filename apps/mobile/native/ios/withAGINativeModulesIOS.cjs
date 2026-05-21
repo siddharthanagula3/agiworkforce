@@ -20,6 +20,7 @@ const path = require('path');
 
 const PLUGIN_NAME = 'agi-native-modules-ios-plugin';
 const PLUGIN_VERSION = '1.0.0';
+const DEFAULT_IOS_DEVELOPMENT_TEAM = 'D2PR62RLT4';
 const IOS_DEPLOYMENT_TARGET = '17.0';
 
 const NATIVE_IOS_SRC = __dirname;
@@ -50,6 +51,14 @@ const APP_INTENTS_FILES = [
 
 // Localization resources relative to native/ios/
 const RESOURCE_FILES = ['AGIAppIntents/AppShortcuts.xcstrings'];
+
+function getIosDevelopmentTeam() {
+  return (
+    process.env.AGI_IOS_DEVELOPMENT_TEAM ||
+    process.env.EXPO_IOS_DEVELOPMENT_TEAM ||
+    DEFAULT_IOS_DEVELOPMENT_TEAM
+  ).trim();
+}
 
 /** Step 1 — copy source files into the generated ios/<AppName>/ directory */
 function withCopyIOSSources(config) {
@@ -121,6 +130,7 @@ function withXcodeSourceFiles(config) {
     }
 
     const toProjectPath = (relPath) => `${appName}/${relPath}`;
+    const iosDevelopmentTeam = getIosDevelopmentTeam();
 
     // AppShortcuts.xcstrings requires iOS 17+. The mobile app's local-LLM
     // native stack also ships binaries that target modern iOS, so keep the
@@ -129,6 +139,10 @@ function withXcodeSourceFiles(config) {
     for (const value of Object.values(buildConfigs)) {
       if (value && typeof value === 'object' && value.buildSettings) {
         value.buildSettings.IPHONEOS_DEPLOYMENT_TARGET = IOS_DEPLOYMENT_TARGET;
+        if (iosDevelopmentTeam) {
+          value.buildSettings.CODE_SIGN_STYLE = 'Automatic';
+          value.buildSettings.DEVELOPMENT_TEAM = iosDevelopmentTeam;
+        }
       }
     }
 
