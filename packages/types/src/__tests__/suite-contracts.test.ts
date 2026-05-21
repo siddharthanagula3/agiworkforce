@@ -18,6 +18,7 @@ import {
   PROVIDER_MODES,
   summarizeGeneratedFileBundle,
   SYNCED_APP_SURFACES,
+  validateGeneratedFileTrustBoundary,
   type ArtifactManifest,
   type ComputeSession,
   type DeveloperSessionCheckpoint,
@@ -484,6 +485,211 @@ describe('suite contracts — records', () => {
     expect(view.statusLabel).toBe('Generating');
     expect(view.canDownload).toBe(false);
     expect(view.canShare).toBe(false);
+  });
+
+  it('proves Local generated files stay on local-device storage', () => {
+    const computeSession: ComputeSession = {
+      id: 'compute-local',
+      ownerUserId: 'user-1',
+      sourceSurface: 'desktop',
+      privacyMode: 'local',
+      providerMode: 'Local',
+      status: 'completed',
+      workdirUri: 'file:///Users/user/Library/Application Support/AGI/compute-local',
+      createdAt: '2026-05-21T00:00:00.000Z',
+      updatedAt: '2026-05-21T00:01:00.000Z',
+      completedAt: '2026-05-21T00:01:00.000Z',
+    };
+    const generatedFile: GeneratedFile = {
+      id: 'file-local',
+      computeSessionId: computeSession.id,
+      ownerUserId: computeSession.ownerUserId,
+      sourceSurface: 'desktop',
+      privacyMode: 'local',
+      providerMode: 'Local',
+      kind: 'pdf',
+      fileName: 'local-report.pdf',
+      mimeType: 'application/pdf',
+      uri: 'file:///Users/user/Documents/local-report.pdf',
+      byteCount: 2048,
+      checksumSha256: 'e'.repeat(64),
+      previewDerivatives: [],
+      createdAt: '2026-05-21T00:01:00.000Z',
+    };
+    const artifactManifest: ArtifactManifest = {
+      id: 'manifest-local',
+      artifactId: 'artifact-local',
+      type: 'generated_file_bundle',
+      title: 'Local Report',
+      computeSessionId: computeSession.id,
+      generatedFileIds: [generatedFile.id],
+      privacyMode: 'local',
+      providerMode: 'Local',
+      storageScope: 'local_device',
+      checksumSha256: generatedFile.checksumSha256,
+      createdAt: '2026-05-21T00:01:00.000Z',
+      updatedAt: '2026-05-21T00:01:00.000Z',
+    };
+
+    expect(
+      validateGeneratedFileTrustBoundary({ computeSession, generatedFile, artifactManifest }),
+    ).toEqual([]);
+
+    expect(
+      validateGeneratedFileTrustBoundary({
+        computeSession,
+        generatedFile: { ...generatedFile, uri: 'https://files.example.com/local-report.pdf' },
+        artifactManifest,
+      }).map((violation) => violation.code),
+    ).toContain('local-file-uploaded');
+  });
+
+  it('requires BYOK generated-file transfers to include preview and approval evidence', () => {
+    const computeSession: ComputeSession = {
+      id: 'compute-byok',
+      ownerUserId: 'user-1',
+      sourceSurface: 'web',
+      privacyMode: 'byok',
+      providerMode: 'DirectByok',
+      provider: 'openai',
+      status: 'completed',
+      workdirUri: 'openai://containers/cntr_1',
+      createdAt: '2026-05-21T00:00:00.000Z',
+      updatedAt: '2026-05-21T00:01:00.000Z',
+      completedAt: '2026-05-21T00:01:00.000Z',
+    };
+    const generatedFile: GeneratedFile = {
+      id: 'file-byok',
+      computeSessionId: computeSession.id,
+      ownerUserId: computeSession.ownerUserId,
+      sourceSurface: 'web',
+      privacyMode: 'byok',
+      providerMode: 'DirectByok',
+      kind: 'csv',
+      fileName: 'analysis.csv',
+      mimeType: 'text/csv',
+      uri: 'openai://containers/cntr_1/files/file-byok',
+      byteCount: 4096,
+      checksumSha256: 'f'.repeat(64),
+      previewDerivatives: [],
+      createdAt: '2026-05-21T00:01:00.000Z',
+    };
+    const artifactManifest: ArtifactManifest = {
+      id: 'manifest-byok',
+      artifactId: 'artifact-byok',
+      type: 'generated_file_bundle',
+      title: 'Analysis',
+      computeSessionId: computeSession.id,
+      generatedFileIds: [generatedFile.id],
+      privacyMode: 'byok',
+      providerMode: 'DirectByok',
+      storageScope: 'direct_byok_provider',
+      checksumSha256: generatedFile.checksumSha256,
+      createdAt: '2026-05-21T00:01:00.000Z',
+      updatedAt: '2026-05-21T00:01:00.000Z',
+    };
+
+    expect(
+      validateGeneratedFileTrustBoundary({
+        computeSession,
+        generatedFile,
+        artifactManifest,
+        transfer: {
+          targetPrivacyMode: 'byok',
+          previewAccepted: false,
+          approved: false,
+        },
+      }).map((violation) => violation.code),
+    ).toEqual(['byok-transfer-preview-required', 'byok-transfer-approval-required']);
+
+    expect(
+      validateGeneratedFileTrustBoundary({
+        computeSession,
+        generatedFile,
+        artifactManifest,
+        transfer: {
+          targetPrivacyMode: 'byok',
+          previewAccepted: true,
+          previewHashSha256: '1'.repeat(64),
+          approved: true,
+          approvedAt: '2026-05-21T00:02:00.000Z',
+        },
+      }),
+    ).toEqual([]);
+  });
+
+  it('requires managed generated files to carry quota, owner, checksum, retention, and deletion metadata', () => {
+    const computeSession: ComputeSession = {
+      id: 'compute-managed',
+      ownerUserId: 'user-1',
+      sourceSurface: 'web',
+      privacyMode: 'managed',
+      providerMode: 'ManagedGateway',
+      provider: 'openai',
+      status: 'deleted',
+      workdirUri: 'agi-managed://compute/compute-managed',
+      retentionExpiresAt: '2026-05-22T00:00:00.000Z',
+      ttlSeconds: 86_400,
+      createdAt: '2026-05-21T00:00:00.000Z',
+      updatedAt: '2026-05-21T00:01:00.000Z',
+      completedAt: '2026-05-21T00:01:00.000Z',
+      deletedAt: '2026-05-21T00:10:00.000Z',
+    };
+    const generatedFile: GeneratedFile = {
+      id: 'file-managed',
+      computeSessionId: computeSession.id,
+      ownerUserId: computeSession.ownerUserId,
+      sourceSurface: 'web',
+      privacyMode: 'managed',
+      providerMode: 'ManagedGateway',
+      kind: 'xlsx',
+      fileName: 'managed-analysis.xlsx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      uri: 'agi-managed://files/file-managed',
+      byteCount: 8192,
+      checksumSha256: '2'.repeat(64),
+      previewDerivatives: [],
+      retentionExpiresAt: '2026-05-22T00:00:00.000Z',
+      createdAt: '2026-05-21T00:01:00.000Z',
+      deletedAt: '2026-05-21T00:10:00.000Z',
+    };
+    const artifactManifest: ArtifactManifest = {
+      id: 'manifest-managed',
+      artifactId: 'artifact-managed',
+      type: 'generated_file_bundle',
+      title: 'Managed Analysis',
+      computeSessionId: computeSession.id,
+      generatedFileIds: [generatedFile.id],
+      privacyMode: 'managed',
+      providerMode: 'ManagedGateway',
+      storageScope: 'managed_compute',
+      checksumSha256: generatedFile.checksumSha256,
+      createdAt: '2026-05-21T00:01:00.000Z',
+      updatedAt: '2026-05-21T00:01:00.000Z',
+    };
+
+    expect(
+      validateGeneratedFileTrustBoundary({
+        computeSession,
+        generatedFile,
+        artifactManifest,
+        managed: { quotaReservationId: 'quota-reservation-1' },
+      }),
+    ).toEqual([]);
+
+    expect(
+      validateGeneratedFileTrustBoundary({
+        computeSession: { ...computeSession, deletedAt: null, ttlSeconds: undefined },
+        generatedFile,
+        artifactManifest: { ...artifactManifest, checksumSha256: undefined },
+        managed: {},
+      }).map((violation) => violation.code),
+    ).toEqual([
+      'managed-quota-reservation-required',
+      'managed-checksum-required',
+      'managed-retention-required',
+      'managed-deletion-metadata-required',
+    ]);
   });
 
   it('models remote dispatch payloads without freeform unknown payloads', () => {

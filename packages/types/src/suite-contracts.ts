@@ -459,6 +459,47 @@ export interface GeneratedFilePresentation {
   localOnly: boolean;
 }
 
+export type GeneratedFileTrustBoundaryViolationCode =
+  | 'compute-session-mismatch'
+  | 'privacy-mode-mismatch'
+  | 'provider-mode-mismatch'
+  | 'local-file-uploaded'
+  | 'local-storage-scope-mismatch'
+  | 'byok-storage-scope-mismatch'
+  | 'byok-transfer-preview-required'
+  | 'byok-transfer-approval-required'
+  | 'managed-storage-scope-mismatch'
+  | 'managed-quota-reservation-required'
+  | 'managed-owner-required'
+  | 'managed-checksum-required'
+  | 'managed-retention-required'
+  | 'managed-deletion-metadata-required';
+
+export interface GeneratedFileTransferEvidence {
+  targetPrivacyMode: PrivacyMode;
+  previewAccepted: boolean;
+  approved: boolean;
+  approvedAt?: string;
+  previewHashSha256?: string;
+}
+
+export interface GeneratedFileManagedEvidence {
+  quotaReservationId?: string | null;
+}
+
+export interface GeneratedFileTrustBoundaryInput {
+  computeSession: ComputeSession;
+  generatedFile: GeneratedFile;
+  artifactManifest: ArtifactManifest;
+  transfer?: GeneratedFileTransferEvidence;
+  managed?: GeneratedFileManagedEvidence;
+}
+
+export interface GeneratedFileTrustBoundaryViolation {
+  code: GeneratedFileTrustBoundaryViolationCode;
+  message: string;
+}
+
 const GENERATED_FILE_KIND_LABELS: Readonly<Record<GeneratedFileKind, string>> = {
   pdf: 'PDF',
   docx: 'Word',
@@ -586,6 +627,129 @@ export function summarizeGeneratedFileBundle(
     canShare: Boolean(primaryUri) && status === 'completed',
     localOnly: privacyMode === 'local' || providerMode === 'Local',
   };
+}
+
+export function validateGeneratedFileTrustBoundary(
+  input: GeneratedFileTrustBoundaryInput,
+): GeneratedFileTrustBoundaryViolation[] {
+  const { computeSession, generatedFile, artifactManifest } = input;
+  const violations: GeneratedFileTrustBoundaryViolation[] = [];
+
+  const addViolation = (code: GeneratedFileTrustBoundaryViolationCode, message: string) => {
+    violations.push({ code, message });
+  };
+
+  if (
+    generatedFile.computeSessionId !== computeSession.id ||
+    artifactManifest.computeSessionId !== computeSession.id ||
+    !artifactManifest.generatedFileIds.includes(generatedFile.id)
+  ) {
+    addViolation(
+      'compute-session-mismatch',
+      'Generated files, artifact manifests, and compute sessions must reference the same session.',
+    );
+  }
+
+  const expectedPrivacyMode = providerModeToPrivacyMode(computeSession.providerMode);
+  if (
+    computeSession.privacyMode !== expectedPrivacyMode ||
+    generatedFile.privacyMode !== expectedPrivacyMode ||
+    artifactManifest.privacyMode !== expectedPrivacyMode
+  ) {
+    addViolation(
+      'privacy-mode-mismatch',
+      'Generated-file records must use the privacy mode implied by their provider mode.',
+    );
+  }
+
+  if (
+    generatedFile.providerMode !== computeSession.providerMode ||
+    artifactManifest.providerMode !== computeSession.providerMode
+  ) {
+    addViolation(
+      'provider-mode-mismatch',
+      'Generated-file records must keep provider mode consistent across session, file, and manifest.',
+    );
+  }
+
+  if (expectedPrivacyMode === 'local') {
+    if (computeSession.providerMode !== 'Local' || !generatedFile.uri.startsWith('file://')) {
+      addViolation(
+        'local-file-uploaded',
+        'Local generated files must stay on file:// storage and must not be uploaded to a provider or managed service.',
+      );
+    }
+    if (artifactManifest.storageScope !== 'local_device') {
+      addViolation(
+        'local-storage-scope-mismatch',
+        'Local generated files must use local_device storage scope.',
+      );
+    }
+  }
+
+  if (expectedPrivacyMode === 'byok') {
+    if (artifactManifest.storageScope !== 'direct_byok_provider') {
+      addViolation(
+        'byok-storage-scope-mismatch',
+        'BYOK generated files must use direct_byok_provider storage scope.',
+      );
+    }
+    if (input.transfer?.targetPrivacyMode === 'byok') {
+      if (!input.transfer.previewAccepted || !input.transfer.previewHashSha256) {
+        addViolation(
+          'byok-transfer-preview-required',
+          'Transferring generated files into BYOK requires an accepted preview with hash evidence.',
+        );
+      }
+      if (!input.transfer.approved || !input.transfer.approvedAt) {
+        addViolation(
+          'byok-transfer-approval-required',
+          'Transferring generated files into BYOK requires explicit approval evidence.',
+        );
+      }
+    }
+  }
+
+  if (expectedPrivacyMode === 'managed') {
+    if (artifactManifest.storageScope !== 'managed_compute') {
+      addViolation(
+        'managed-storage-scope-mismatch',
+        'Managed generated files must use managed_compute storage scope.',
+      );
+    }
+    if (!input.managed?.quotaReservationId) {
+      addViolation(
+        'managed-quota-reservation-required',
+        'Managed generated files require quota reservation evidence before the file is surfaced.',
+      );
+    }
+    if (!computeSession.ownerUserId || !generatedFile.ownerUserId) {
+      addViolation(
+        'managed-owner-required',
+        'Managed generated files require owner metadata on the compute session and generated file.',
+      );
+    }
+    if (!generatedFile.checksumSha256 || !artifactManifest.checksumSha256) {
+      addViolation(
+        'managed-checksum-required',
+        'Managed generated files require checksum metadata on the file and manifest.',
+      );
+    }
+    if (!computeSession.ttlSeconds || !computeSession.retentionExpiresAt) {
+      addViolation(
+        'managed-retention-required',
+        'Managed generated files require TTL and retention-expiry metadata.',
+      );
+    }
+    if (computeSession.status === 'deleted' && !computeSession.deletedAt) {
+      addViolation(
+        'managed-deletion-metadata-required',
+        'Deleted managed compute sessions require deletedAt metadata.',
+      );
+    }
+  }
+
+  return violations;
 }
 
 // ============================================================================

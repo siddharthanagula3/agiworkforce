@@ -257,9 +257,9 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [ ] Add Web/Mobile/Desktop generated-file request, status, preview, download, share, source session, and privacy-label UI.
 - [ ] Add Mobile generated-file delegation path to Desktop/local host or future Managed compute instead of requiring local on-device heavy generation.
 - [x] Add provider-container adapter for OpenAI Code Interpreter-style generated file annotations.
-- [ ] Add Local-mode tests proving generated files are not uploaded.
-- [ ] Add BYOK-mode tests proving file transfer requires explicit preview and approval.
-- [ ] Add Managed-mode tests for TTL, quota, owner, checksum, retention, and deletion metadata.
+- [x] Add Local-mode tests proving generated files are not uploaded.
+- [x] Add BYOK-mode tests proving file transfer requires explicit preview and approval.
+- [x] Add Managed-mode tests for TTL, quota, owner, checksum, retention, and deletion metadata.
 
 ## Provider SDK Tasks
 
