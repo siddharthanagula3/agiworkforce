@@ -4,6 +4,10 @@
   "currentSourcesOfTruth": [
     "AGENTS.md",
     "AGI_WORKFORCE.md",
+    "CLAUDE.md",
+    "README.md",
+    "ONBOARDING.md",
+    "CONTRIBUTING.md",
     "PLAN.md",
     "TODO.md",
     "CHANGELOG.md",

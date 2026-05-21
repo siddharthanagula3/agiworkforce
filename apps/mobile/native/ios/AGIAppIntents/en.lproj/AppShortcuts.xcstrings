@@ -1,0 +1,273 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Ask \${applicationName}" : {
+      "comment" : "AskAGIIntent — no prompt supplied",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ask ${applicationName}"
+          }
+        }
+      }
+    },
+    "Ask \${applicationName} \${prompt}" : {
+      "comment" : "AskAGIIntent — with prompt parameter",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ask ${applicationName} ${prompt}"
+          }
+        }
+      }
+    },
+    "\${applicationName} answer \${prompt}" : {
+      "comment" : "AskAGIIntent — alternate phrasing",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName} answer ${prompt}"
+          }
+        }
+      }
+    },
+    "Start chat with \${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start chat with ${applicationName}"
+          }
+        }
+      }
+    },
+    "Open \${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open ${applicationName}"
+          }
+        }
+      }
+    },
+    "New conversation in \${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New conversation in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Summarize this with \${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Summarize this with ${applicationName}"
+          }
+        }
+      }
+    },
+    "Summarize with \${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Summarize with ${applicationName}"
+          }
+        }
+      }
+    },
+    "\${applicationName} summarize \${text}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName} summarize ${text}"
+          }
+        }
+      }
+    },
+    "Analyze this image with \${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Analyze this image with ${applicationName}"
+          }
+        }
+      }
+    },
+    "Analyze image with \${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Analyze image with ${applicationName}"
+          }
+        }
+      }
+    },
+    "\${applicationName} analyze this photo" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName} analyze this photo"
+          }
+        }
+      }
+    },
+    "Transcribe with \${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transcribe with ${applicationName}"
+          }
+        }
+      }
+    },
+    "Transcribe audio with \${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transcribe audio with ${applicationName}"
+          }
+        }
+      }
+    },
+    "\${applicationName} transcribe this" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName} transcribe this"
+          }
+        }
+      }
+    },
+    "Translate with \${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translate with ${applicationName}"
+          }
+        }
+      }
+    },
+    "Translate this with \${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translate this with ${applicationName}"
+          }
+        }
+      }
+    },
+    "\${applicationName} translate \${text}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName} translate ${text}"
+          }
+        }
+      }
+    },
+    "Scan with \${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan with ${applicationName}"
+          }
+        }
+      }
+    },
+    "Scan document with \${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan document with ${applicationName}"
+          }
+        }
+      }
+    },
+    "\${applicationName} scan this" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName} scan this"
+          }
+        }
+      }
+    },
+    "Set reminder via \${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set reminder via ${applicationName}"
+          }
+        }
+      }
+    },
+    "Remind me via \${applicationName}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remind me via ${applicationName}"
+          }
+        }
+      }
+    },
+    "\${applicationName} remind me to \${reminderText}" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName} remind me to ${reminderText}"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

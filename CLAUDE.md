@@ -1,5 +1,9 @@
 # CLAUDE.md
 
+Status: Current
+Owner: Platform lead
+Last updated: 2026-05-20
+
 Claude-specific notes for Claude Code.
 
 `AGENTS.md` is the canonical tool-neutral agent entry point. Read it first, then use this file only for Claude-specific behavior.

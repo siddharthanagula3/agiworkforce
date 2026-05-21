@@ -1,5 +1,9 @@
 # AGI — Single Source of Truth
 
+Status: Current
+Owner: Founder + platform lead
+Last updated: 2026-05-20
+
 > Last updated: 2026-05-16. This file is the entry point for any agent (human or AI) working on this repo. Read this first; everything else links from here.
 >
 > **Docs audit note, 2026-05-20:** the newer Claude memory locks about local-first/cloud-waitlist scope apply to the mobile-v1 focus. Before editing mobile launch, pricing, or onboarding docs, read [`docs/decisions/CURRENT_DECISIONS.md`](docs/decisions/CURRENT_DECISIONS.md).

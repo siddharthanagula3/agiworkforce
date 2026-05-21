@@ -7,46 +7,46 @@ Baseline commit: `b7d6debf0` (`chore: snapshot workspace before repo organizatio
 
 ## Executive Grade
 
-Overall grade: **C+ today, with a credible path to A+ before hiring a broad team.**
+Overall grade: **B+ after the first organization implementation pass, with a credible path to A+ before hiring a broad team.**
 
 The core monorepo spine is strong: `apps/`, `packages/`, `crates/`, `services/`, `supabase/`, `docs/`, `audit/`, `tasks/`, `reports/`, `examples/`, and `scripts/` are the right large buckets for an OpenAI/Anthropic-style application suite.
 
-The current problem is not that the repo is fundamentally wrong. The problem is that the repo still looks like a founder-plus-LLM build: product code, reference audits, screenshots, generated captures, root scratch files, stale docs, tool configs, and release artifacts are too close together. A future engineer can build, but they will lose time deciding what is current, what is historical, what is generated, and which owner boundary applies.
+The repo no longer has the most damaging founder-plus-LLM symptoms at root: scratch captures, historical campaign docs, reference catalogs, and local-only artifacts have been moved, archived, ignored, or untracked. The remaining A+ work is deeper: CODEOWNERS with real teams, domain-first cleanup inside large apps, raw `reference-index/` relocation, Supabase migration consolidation, CI blind-spot baselines, and report-retention review.
 
 ## Evidence Snapshot
 
-| Area                            | Finding                                                                                           |
-| ------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Scoped non-generated file count | `6156` files excluding common generated/build folders.                                            |
-| Largest top-level buckets       | `apps` 4752, `packages` 492, `crates` 178, `tasks` 163, `docs` 150, `services` 88.                |
-| Largest product surfaces        | `apps/desktop` 2178 tracked files, `apps/web` 1292, `apps/cli` 552, `apps/mobile` 507.            |
-| Shared package README coverage  | Top-level packages now have README ownership files. Provider leaf packages now have README files. |
-| App/service README coverage     | Apps missing README: `apps/desktop`, `apps/extension`, `apps/web`. Services missing README: both. |
-| Crate README coverage           | Top-level crates now have README ownership files.                                                 |
-| Root source files               | Root still contains scratch markdown/images and older source-of-truth candidates.                 |
-| Agent operability               | First-pass `docs/agent-context/` is implemented and checks pass.                                  |
-| Guardrails                      | `pnpm check:agent-context`, `pnpm check:repo-organization`, and `pnpm check:boundaries` pass.     |
-| Environment warning             | Current shell uses Node `v20.11.0`; repo expects Node `22`.                                       |
+| Area                            | Finding                                                                                                    |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Scoped non-generated file count | `6156` files excluding common generated/build folders.                                                     |
+| Largest top-level buckets       | `apps` 4752, `packages` 492, `crates` 178, `tasks` 163, `docs` 150, `services` 88.                         |
+| Largest product surfaces        | `apps/desktop` 2178 tracked files, `apps/web` 1292, `apps/cli` 552, `apps/mobile` 507.                     |
+| Shared package README coverage  | Top-level packages now have README ownership files. Provider leaf packages now have README files.          |
+| App/service README coverage     | Apps and services now have README ownership files.                                                         |
+| Crate README coverage           | Top-level crates now have README ownership files.                                                          |
+| Root source files               | Root is now short and intentional; scratch/historical/reference files were moved.                          |
+| Agent operability               | `docs/agent-context/` is implemented, metadata is strict, and checks pass.                                 |
+| Guardrails                      | `pnpm check:llm-operability` covers agent context, root hygiene, boundaries, artifacts, READMEs, and docs. |
+| Environment warning             | Current shell uses Node `v20.11.0`; repo expects Node `22`.                                                |
 
 ## Scorecard
 
-| Dimension                    | Grade | Why                                                                                                                                    |
-| ---------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Top-level architecture       | B     | Correct monorepo spine and clear six-surface/product-platform buckets.                                                                 |
-| Product-code discoverability | B-    | Main app/package/crate folders are obvious, but large surfaces still mix layer-first and domain-first layouts.                         |
-| LLM operability              | B-    | `AGENTS.md` and `docs/agent-context/` now give agents maps, risks, commands, and known flaws; this needs CI and more complete ledgers. |
-| Human onboarding             | C+    | `ONBOARDING.md`, `BUILD.md`, docs index, and surface docs exist, but package/service/crate READMEs are mostly missing.                 |
-| Source-of-truth discipline   | C     | New `PLAN.md`, `TODO.md`, decisions, and agent context help, but old docs still claim canonical status in places.                      |
-| Root hygiene                 | D+    | Root scratch files, screenshots, historical logs, and reference catalogs are still present.                                            |
-| Generated artifact hygiene   | D+    | Generated captures/reports are tracked or present in developer-visible locations; they need retention rules.                           |
-| Package boundaries           | C+    | Boundary check exists and passes, but package public-export policy and ownership docs are incomplete.                                  |
-| CI/repo guardrails           | B-    | First guardrail scripts exist; they need CI workflow integration and stricter mode after cleanup.                                      |
-| Hiring readiness             | C+    | A strong engineer can navigate it; a new team will need clearer ownership, READMEs, CODEOWNERS, and fewer stale docs.                  |
+| Dimension                    | Grade | Why                                                                                                                                 |
+| ---------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Top-level architecture       | B     | Correct monorepo spine and clear six-surface/product-platform buckets.                                                              |
+| Product-code discoverability | B     | Main app/package/crate folders are obvious; large apps still need domain-first cleanup.                                             |
+| LLM operability              | A-    | Agent docs, task templates, known flaws, command maps, and strict checks are in place.                                              |
+| Human onboarding             | B+    | Root docs, app/package/crate/service READMEs, and current metadata are in place; CONTRIBUTING still needs deeper workflow detail.   |
+| Source-of-truth discipline   | B+    | Current docs are metadata-checked and historical docs moved; older historical canonical claims still need broader cleanup.          |
+| Root hygiene                 | A-    | Root is short and intentional; remaining decisions are accepted root configs such as `app.json`, manifests, and `ios/`.             |
+| Generated artifact hygiene   | B+    | Tracked local/generated debt is removed or archived; remaining work is retention policy for existing reports and app-local outputs. |
+| Package boundaries           | B+    | Boundary and README ownership checks pass; public-export/deep-import enforcement can still improve.                                 |
+| CI/repo guardrails           | B+    | Repo-operability CI exists and strict checks pass; broader CI blind-spot baselines remain.                                          |
+| Hiring readiness             | B+    | A new engineer or coding agent can navigate top-level ownership; large app domain READMEs and CODEOWNERS remain before A+.          |
 
 ## Main Findings
 
-1. **Root is still too noisy.**
-   Current root has source-of-truth docs, configs, historical plans, scratch design markdown, screenshots, generated captures, reference catalogs, and local artifacts mixed together. Root must become boring.
+1. **Root is now mostly boring.**
+   Scratch design markdown, screenshots, historical campaign docs, reference catalogs, and root downloads were moved. Keep the allowlist strict.
 
 2. **Docs have too many historical source-of-truth claims.**
    New docs now point to `PLAN.md`, `TODO.md`, `docs/decisions/CURRENT_DECISIONS.md`, and `docs/agent-context/`, but older PRDs, archive docs, and launch docs still use words like canonical/source of truth. Agents and engineers need a doc-status ledger enforced by CI.

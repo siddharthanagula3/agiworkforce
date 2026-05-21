@@ -1,5 +1,7 @@
 # Anthropic Applications Parity Transition Plan
 
+Status: Current
+Owner: Founder + platform lead
 Last updated: 2026-05-20.
 
 ## Mission

@@ -17,21 +17,7 @@ const currentDocs = [
   ...(docStatus.currentEvidence ?? []),
 ].filter((docPath) => docPath.endsWith('.md'));
 
-const headerDebt = new Set([
-  'AGENTS.md',
-  'AGI_WORKFORCE.md',
-  'BUILD.md',
-  'CHANGELOG.md',
-  'CLAUDE.md',
-  'CONTRIBUTING.md',
-  'ONBOARDING.md',
-  'PLAN.md',
-  'README.md',
-  'TODO.md',
-  'docs/README.md',
-  'docs/decisions/CURRENT_DECISIONS.md',
-  'docs/decisions/2026-05-20-openai-anthropic-application-suite-thesis.md',
-]);
+const headerDebt = new Set([]);
 
 const requiredMarkers = ['Status:', 'Owner', 'Last updated:'];
 

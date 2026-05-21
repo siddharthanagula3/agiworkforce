@@ -1,5 +1,9 @@
 # Onboarding — start here
 
+Status: Current
+Owner: Platform lead
+Last updated: 2026-05-20
+
 > The single entry point for any new person on this project. Whoever you are — engineer, founder, investor, designer, lawyer, advisor — read this file first. It routes you to the right deeper doc for your role.
 >
 > **Date:** 2026-05-18. **Project:** AGI (public brand) / AGI Workforce (legal entity). **Status:** pre-launch, mobile-first, August 2026 target.

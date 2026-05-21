@@ -1,6 +1,9 @@
 # AGI Documentation Index
 
+Status: Current
+Owner: Docs/platform
 Last organized: 2026-05-20.
+Last updated: 2026-05-20
 
 This directory is for durable repo documentation. Generated files, build artifacts, personal memory, and one-off transcripts should not live here unless they are explicitly archived.
 

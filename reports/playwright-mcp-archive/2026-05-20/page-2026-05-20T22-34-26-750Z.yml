@@ -1,0 +1,1666 @@
+- generic [ref=e7]:
+    - generic [ref=e8]:
+        - generic [ref=e11]:
+            - link "Back to projects" [ref=e12]:
+                - /url: /design/
+                - img [ref=e13]
+            - generic "AGI Mobile" [ref=e16]
+            - button "" [ref=e18]:
+                - generic [ref=e19]: 
+        - generic [ref=e20]:
+            - generic [ref=e22]:
+                - generic [ref=e23]: 
+                - generic [ref=e24]: Design Files
+            - generic [ref=e26]:
+                - generic [ref=e28]: index.html
+                - generic [ref=e34]: screens-r5-canonical.jsx
+                - generic [ref=e36]: screens-r6-canonical.jsx
+            - generic [ref=e37]:
+                - button "Present " [ref=e40]:
+                    - generic [ref=e41]:
+                        - text: Present
+                        - generic [ref=e42]: 
+                - button "Share" [ref=e44]:
+                    - generic [ref=e45]: Share
+                - button "Profile and connectors" [ref=e46] [cursor=pointer]:
+                    - generic [ref=e47]: SN
+    - generic [ref=e49]:
+        - generic [ref=e56]:
+            - generic [ref=e59]:
+                - generic [ref=e62]: dont use codex
+                - generic [ref=e65]:
+                    - generic [ref=e68] [cursor=pointer]:
+                        - generic [ref=e69]: 
+                        - generic [ref=e70]: Editing, Done
+                        - generic [ref=e71]: 
+                    - paragraph [ref=e74]: R4 section title renamed to "Code task surface" — no Codex term anywhere user-facing.
+                - generic [ref=e77]: can you like brainstrom or ask me questions?
+                - generic [ref=e82]:
+                    - paragraph [ref=e83]: "Yes — let me ask. I've been pattern-matching to Claude/Perplexity/ChatGPT but AGI's real shape isn't fully decided yet. Critical fork-in-the-road decisions:"
+                    - paragraph [ref=e84]:
+                        - strong [ref=e85]: 1. The differentiator.
+                        - text: AGI's pitch is "all AIs in one place + BYOK + local LLM." Which of those is the
+                        - emphasis [ref=e86]: hero
+                        - text: on mobile?
+                    - list [ref=e87]:
+                        - listitem [ref=e88]:
+                            - strong [ref=e89]: a)
+                            - text: Multi-provider switcher (Perplexity model-picker style — first thing you see)
+                        - listitem [ref=e90]:
+                            - strong [ref=e91]: b)
+                            - text: On-device (Apple FM / Llama 3.2 / Qwen — privacy-first hero)
+                        - listitem [ref=e92]:
+                            - strong [ref=e93]: c)
+                            - text: BYOK (your keys, your bill — pro-user hero)
+                        - listitem [ref=e94]:
+                            - strong [ref=e95]: d)
+                            - text: All three subordinated to one chat surface (Claude-style restraint)
+                    - paragraph [ref=e96]:
+                        - strong [ref=e97]: 2. The greeting copy.
+                        - text: 'Right now I have "How can I help you, Siddhartha?" (Claude voice). Your design system says voice is "engineering-adjacent, direct." Possible alternatives:'
+                    - list [ref=e98]:
+                        - listitem [ref=e99]: '"Ask anything" (Perplexity neutral)'
+                        - listitem [ref=e100]: '"What do you want to build?" (Codex Desktop''s vibe)'
+                        - listitem [ref=e101]: No greeting — just composer (most engineering-tool)
+                    - paragraph [ref=e102]:
+                        - strong [ref=e103]: 3. Dispatch role on mobile.
+                        - text: 'Is Dispatch:'
+                    - list [ref=e104]:
+                        - listitem [ref=e105]:
+                            - strong [ref=e106]: a)
+                            - text: A nav destination (a top-level "Dispatch" tab — like the drawer item)
+                        - listitem [ref=e107]:
+                            - strong [ref=e108]: b)
+                            - text: An action
+                            - emphasis [ref=e109]: inside
+                            - text: a chat ("send this to my desktop" button on a message)
+                        - listitem [ref=e110]:
+                            - strong [ref=e111]: c)
+                            - text: Both (destination shows queue, message-level action queues)
+                    - paragraph [ref=e112]:
+                        - strong [ref=e113]: 4. Agents vs Skills vs Projects
+                        - text: — these all overlap conceptually. In your repo Agents is its own tab AND Skills is its own package. What's the user-facing distinction on mobile?
+                    - list [ref=e114]:
+                        - listitem [ref=e115]: Agent = a persona with system prompt + tool set?
+                        - listitem [ref=e116]: Skill = a markdown+frontmatter mini-prompt?
+                        - listitem [ref=e117]: Project = a folder of chats + files?
+                    - paragraph [ref=e118]:
+                        - strong [ref=e119]: 5. The waitlist visibility.
+                        - text: 'I''ve been showing "Cloud waitlist · #1,247" in many places. Is that the right number to surface or should mobile be silent about cloud entirely (since v1 is local-only and cloud paid is paused until Aug 1, 2026)?'
+                    - paragraph [ref=e120]:
+                        - strong [ref=e121]: 6. Model picker truth.
+                        - text: Right now my model picker shows on-device models + 6 cloud models as "waitlist". But the README says BYOK
+                        - emphasis [ref=e122]: is
+                        - text: available — should cloud models be unlocked when user supplies their own key, even now?
+                    - paragraph [ref=e123]:
+                        - strong [ref=e124]: 7. What screens are still missing
+                        - text: that you actually care about?
+                    - list [ref=e125]:
+                        - listitem [ref=e126]: Account creation / sign-in (you scrapped login earlier — confirm?)
+                        - listitem [ref=e127]: Onboarding (the device-tier detection screen — keep or kill?)
+                        - listitem [ref=e128]: Voice (have it, but it's Claude-shaped — does AGI even prioritize voice on mobile?)
+                        - listitem [ref=e129]: Memory import (Wave 6 has memory import/export — distinct screen?)
+                        - listitem [ref=e130]: BYOK provider key entry (you scrapped earlier — does it come back for the few who want it now?)
+                    - paragraph [ref=e131]:
+                        - strong [ref=e132]: 8. Look-and-feel ambivalence.
+                        - text: R4/R5 are dark-default with serif body. Your design system says light + dark both ship, with warm cream
+                        - code [ref=e133]: '#faf9f7'
+                        - text: as the canonical surface. Should the
+                        - emphasis [ref=e134]: canonical
+                        - text: mobile direction be light-first or dark-first?
+                    - paragraph [ref=e135]: Pick any subset — the answers to 1, 4, and 8 would unblock the most.
+                - generic [ref=e138]:
+                    - text: '<pasted_text name="Pasted text (70 lines)"> 1. Mobile hero Use on-device / privacy-first as the mobile hero. The mobile app should feel like: “AGI runs on your phone, works offline, and only leaves the device when you explicitly choose BYOK.” Do not make the first screen a cloud model picker. Multi-provider and BYOK are still core, but on mobile they sit inside one restrained chat surface. 2. Greeting copy Use “Ask anything”. Avoid “How can I help you, Siddhartha?” because it is too Claude-shaped. Avoid “What do you want to build?” because mobile is broader than coding. The on-device badge should carry the product truth: On- device · Private · Works offline. 3. Dispatch For mobile v1: hide Dispatch as a top-level nav item. Post-v1: use both, but message-level action is primary: - “Send to desktop” / “Continue on desktop” on a chat/message. - A Dispatch destination only shows queue/history when desktop companion is paired. 4. Agents vs Skills vs Projects User-facing distinction: - Project = a local workspace/context container: chats, files, memory, and custom instructions. - Skill = an installable reusable capability/prompt recipe. Markdown/frontmatter under the hood; user sees “saved workflow” or “skill.” - Agent = a running delegated worker/job with status, tools, approvals, artifacts. Not a persona tab on mobile v1. So: show Projects. Show Skills as drawer/plus-menu utility, not a dominant tab. Hide Agents unless desktop companion has active runs. 5. Waitlist visibility Do not show Cloud waitlist · #1,247 everywhere. Show cloud only at natural gates: - Mode toggle: Cloud · Waitlist - Locked managed-cloud model rows - Settings → Mode / Cloud Only show rank after the user joins and only if it is real server data. Before join, use Join waitlist, not fake social proof. 6. Model picker truth Yes: cloud provider models should unlock when the user supplies their own key. Separate the picker into three buckets: - On-device: installed / downloadable local models. - BYOK: Anthropic/OpenAI/Google/etc. Locked until user adds that provider key; then selectable. - AGI Cloud: managed credits/subscriptions; waitlist until launch/private beta. Important: Local → BYOK must create an explicit fork with context preview/redaction. Never silently switch an existing local chat to a provider. 7. Screens that matter Keep: - Device-tier onboarding. - Local model download/manage. - BYOK provider key entry. - Local → BYOK fork flow with context selection, secret scan, preview. - Memory import/export, but under Settings → Memory, not onboarding. - Voice as on-device push-to-talk/transcription, not a primary hero. Confirm: - No account required for Local. - Sign-in only for sync, managed cloud/private beta, or future account features. - BYOK should not require AGI account. 8. Look and feel Canonical direction: light-first, warm cream #faf9f7, with dark mode fully supported. Do not make dark + serif body the default mobile identity. Use system sans on mobile. Serif is only for rare display/editorial moments, not body UI. </pasted_text>'
+                    - 'generic "1. Mobile hero Use on-device / privacy-first as the mobile hero. The mobile app should feel like: “AGI runs on your phone, works offline, and only leaves the device when you explicitly choose BYOK.” Do not make the first screen a cloud model picker. Multi-provider and BYOK are still core, but on mobile they sit inside one restrained chat surface. 2. Greeting copy Use “Ask anything”. Avoid “How can I help you, Siddhartha?” because it is too Claude-shaped. Avoid “What do you want to build?” because mobile is broader than coding. The on-device badge should carry the product truth: On- device · Private · Works offline. 3. Dispatch For mobile v1: hide Dispatch as a top-level nav item. Post-v1: use both, but message-level action is primary: - “Send to desktop”…" [ref=e140]':
+                        - generic [ref=e141]: Pasted text (70 lines)
+                - generic [ref=e144]: 'Create a new R6 canonical set that keeps the visual polish of R5 but corrects the AGI Mobile product direction. Do not edit by making small copy tweaks only. Make a new light-first AGI Mobile v1 direction using these rules: 1. Product truth AGI Mobile v1 is on-device first. The hero is private AI that runs on the phone, works offline, and only leaves the device when the user explicitly chooses BYOK. Managed AGI Cloud is waitlist/private beta only. BYOK is available when the user adds their own provider key. 2. Visual direction Make canonical screens light-first with warm cream #faf9f7 as the base, white raised surfaces, teal #21808d for primary actions, terracotta #da7756 only as secondary accent. Include dark variants only as secondary examples. Use iOS/Android system sans. Do not use serif body text. Do not use negative letter spacing. Keep density professional and mobile-native. 3. Empty chat Replace "How can I help you, Siddhartha?" with "Ask anything". Add a compact trust badge near the header or above the composer: "On-device · Private · Works offline". Keep the composer-first layout. The screen should feel like a real tool, not a landing page. 4. Navigation Remove Agents, Dispatch, and Multi-model from primary mobile nav. Mobile v1 primary drawer should be: Chat, Projects, Skills, Memory, Models, Keys, Settings. Agents only appear later if desktop companion has active runs. Dispatch is not a v1 destination. Multi-model compare is not a primary nav item. 5. Onboarding No sign-in in first-run. Replace the current Android onboarding copy with: "AGI runs on your device." Supporting copy: "No account. No cloud. Free forever." Primary CTA: "Start chatting" or "Continue". Then show device-tier detection and model download/manage. BYOK is optional later in Keys. 6. Model picker Rebuild the model picker into three explicit sections: - On-device: installed and downloadable local/system models. - BYOK: Anthropic, OpenAI, Google, xAI, Perplexity, Mistral, Ollama/LM Studio, Custom. Rows say "Add key" until configured, then become selectable. These are not waitlist. - AGI Cloud: managed models and credits. These are waitlist/private beta only. Do not label every cloud provider model as waitlist. BYOK unlocks provider models now. 7. BYOK flow Add a Keys / BYOK screen and a Local to BYOK fork flow. The fork flow must show: choose provider/model, choose context to send, include attachments toggle, local secret scan, payload preview, confirm. Original local chat remains local. Labels should say "Claude via your Anthropic key" or equivalent. 8. Waitlist Remove fake or global waitlist rank from Settings and nav. Before join, show only "Join waitlist" at natural cloud gates. After join, rank may appear only in the waitlist confirmation and mode/cloud row, and only as server-provided data. 9. Settings and storage Remove account/email assumptions from local v1 settings. Storage export must be on-device export/share sheet, not "emailed within 24h". Settings sections: Mode, Keys, Memory, Voice, Storage, Performance, Privacy, Appearance, About. 10. Preserve what works Keep the high-fidelity phone frames, compact composer, inline tool-call bar, performance chip, plus menu structure, and model sheet interaction quality. Just make the IA, copy, trust boundaries, and palette correct for AGI. Output one new section titled "R6 · AGI Mobile v1 canonical" with these screens: onboarding hero, device tier/model download, empty chat, active chat, drawer, plus menu, model picker, Keys/BYOK setup, Local to BYOK fork preview, Settings/Storage/Privacy. Add Android light variants for drawer and onboarding.'
+                - generic [ref=e147]:
+                    - generic [ref=e150] [cursor=pointer]:
+                        - generic [ref=e151]: 
+                        - generic [ref=e152]: Writing, Editing ×2, Done
+                        - generic [ref=e153]: 
+                    - generic [ref=e154]:
+                        - generic [ref=e155]:
+                            - generic [ref=e156]: 
+                            - generic [ref=e157]: You've hit your Claude Design usage limit — try again in about 34 minutes. Claude Design uses its own usage limit for now — this is separate from your regular Claude usage.
+                        - generic [ref=e158]:
+                            - button " Retry" [ref=e159]:
+                                - generic [ref=e160]:
+                                    - generic [ref=e161]: 
+                                    - text: Retry
+                            - button " Report…" [ref=e162]:
+                                - generic [ref=e163]:
+                                    - generic [ref=e164]: 
+                                    - text: Report…
+            - generic [ref=e166]:
+                - textbox "Describe what you want to create..." [ref=e168]
+                - generic [ref=e169]:
+                    - generic [ref=e170]:
+                        - button "" [ref=e172]:
+                            - generic [ref=e173]: 
+                        - button "" [ref=e174]:
+                            - generic [ref=e176]: 
+                        - button "" [ref=e177]:
+                            - generic [ref=e178]: 
+                    - button " Send" [disabled] [ref=e180]:
+                        - generic [ref=e181]:
+                            - generic [ref=e182]: 
+                            - text: Send
+        - generic [ref=e185]:
+            - generic [ref=e186]:
+                - button "" [ref=e188]:
+                    - generic [ref=e189]: 
+                - button " Mark up" [ref=e190]:
+                    - generic [ref=e191]:
+                        - generic [ref=e192]: 
+                        - text: Mark up
+                - button " Edit" [ref=e193]:
+                    - generic [ref=e194]:
+                        - generic [ref=e195]: 
+                        - text: Edit
+                - button " Tweaks" [ref=e198]:
+                    - generic [ref=e199]:
+                        - generic [ref=e200]: 
+                        - text: Tweaks
+                - button " Comments" [ref=e201]:
+                    - generic [ref=e202]:
+                        - generic [ref=e203]: 
+                        - text: Comments
+                - button "100%" [ref=e206]:
+                    - generic [ref=e209]: 100%
+            - iframe [ref=e219]:
+                - generic [ref=f22e5]:
+                    - generic [ref=f22e7]:
+                        - generic [ref=f22e8]: R6 · AGI Mobile v1 canonical
+                        - generic [ref=f22e9]: On-device first · light-first · 3-bucket models · BYOK fork · Settings/Storage/Privacy
+                    - generic [ref=f22e10]:
+                        - generic [ref=f22e11]:
+                            - generic [ref=f22e12]:
+                                - generic [ref=f22e13]:
+                                    - generic "Drag to reorder" [ref=f22e14]:
+                                        - img [ref=f22e15]
+                                    - generic "Click to focus" [ref=f22e22] [cursor=pointer]:
+                                        - generic [ref=f22e23]: R6.1 · Onboarding hero · light
+                                - generic [ref=f22e24]:
+                                    - button "More" [ref=f22e26] [cursor=pointer]:
+                                        - img [ref=f22e27]
+                                    - button "Focus" [ref=f22e31] [cursor=pointer]:
+                                        - img [ref=f22e32]
+                            - generic [ref=f22e36]:
+                                - generic:
+                                    - generic: 9:41
+                                    - generic:
+                                        - img
+                                        - img
+                                        - img
+                                - generic [ref=f22e39]:
+                                    - generic [ref=f22e40]:
+                                        - img [ref=f22e41]
+                                        - generic [ref=f22e48]: AGI runs on your device.
+                                        - generic [ref=f22e49]: No account. No cloud. Free forever.
+                                        - generic [ref=f22e50]:
+                                            - generic [ref=f22e51]:
+                                                - img [ref=f22e52]
+                                                - generic [ref=f22e54]: Runs on your Neural Engine
+                                            - generic [ref=f22e55]:
+                                                - img [ref=f22e56]
+                                                - generic [ref=f22e58]: Works offline
+                                            - generic [ref=f22e59]:
+                                                - img [ref=f22e60]
+                                                - generic [ref=f22e62]: Nothing leaves your phone
+                                    - generic [ref=f22e63]:
+                                        - button "Start chatting" [ref=f22e64]
+                                        - generic [ref=f22e66]: AGI Automation LLC · Delaware, USA
+                        - generic [ref=f22e68]:
+                            - generic [ref=f22e69]:
+                                - generic [ref=f22e70]:
+                                    - generic "Drag to reorder" [ref=f22e71]:
+                                        - img [ref=f22e72]
+                                    - generic "Click to focus" [ref=f22e79] [cursor=pointer]:
+                                        - generic [ref=f22e80]: R6.1 · Onboarding hero · dark
+                                - generic [ref=f22e81]:
+                                    - button "More" [ref=f22e83] [cursor=pointer]:
+                                        - img [ref=f22e84]
+                                    - button "Focus" [ref=f22e88] [cursor=pointer]:
+                                        - img [ref=f22e89]
+                            - generic [ref=f22e93]:
+                                - generic:
+                                    - generic: 9:41
+                                    - generic:
+                                        - img
+                                        - img
+                                        - img
+                                - generic [ref=f22e96]:
+                                    - generic [ref=f22e97]:
+                                        - img [ref=f22e98]
+                                        - generic [ref=f22e105]: AGI runs on your device.
+                                        - generic [ref=f22e106]: No account. No cloud. Free forever.
+                                        - generic [ref=f22e107]:
+                                            - generic [ref=f22e108]:
+                                                - img [ref=f22e109]
+                                                - generic [ref=f22e111]: Runs on your Neural Engine
+                                            - generic [ref=f22e112]:
+                                                - img [ref=f22e113]
+                                                - generic [ref=f22e115]: Works offline
+                                            - generic [ref=f22e116]:
+                                                - img [ref=f22e117]
+                                                - generic [ref=f22e119]: Nothing leaves your phone
+                                    - generic [ref=f22e120]:
+                                        - button "Start chatting" [ref=f22e121]
+                                        - generic [ref=f22e123]: AGI Automation LLC · Delaware, USA
+                        - generic [ref=f22e125]:
+                            - generic [ref=f22e126]:
+                                - generic [ref=f22e127]:
+                                    - generic "Drag to reorder" [ref=f22e128]:
+                                        - img [ref=f22e129]
+                                    - generic "Click to focus" [ref=f22e136] [cursor=pointer]:
+                                        - generic [ref=f22e137]: R6.2 · Device tier · light
+                                - generic [ref=f22e138]:
+                                    - button "More" [ref=f22e140] [cursor=pointer]:
+                                        - img [ref=f22e141]
+                                    - button "Focus" [ref=f22e145] [cursor=pointer]:
+                                        - img [ref=f22e146]
+                            - generic [ref=f22e150]:
+                                - generic:
+                                    - generic: 9:41
+                                    - generic:
+                                        - img
+                                        - img
+                                        - img
+                                - generic [ref=f22e153]:
+                                    - generic [ref=f22e154]:
+                                        - img [ref=f22e156]
+                                        - generic [ref=f22e158]: Step 2 of 3
+                                    - generic [ref=f22e159]:
+                                        - img [ref=f22e161]
+                                        - generic [ref=f22e163]: Your iPhone is ready.
+                                        - generic [ref=f22e164]:
+                                            - text: iPhone 15 Pro Max · A17 Pro ·
+                                            - generic [ref=f22e165]: Tier 1 capable
+                                    - generic [ref=f22e166]:
+                                        - generic [ref=f22e167]:
+                                            - generic [ref=f22e168]: Recommended
+                                            - generic [ref=f22e170]: TIER 1
+                                        - generic [ref=f22e171]: Apple Foundation 3B
+                                        - generic [ref=f22e172]: Uses your Neural Engine directly. Fastest on this device.
+                                        - generic [ref=f22e173]:
+                                            - generic [ref=f22e174]:
+                                                - generic [ref=f22e175]: Size
+                                                - generic [ref=f22e176]: ~700 MB
+                                            - generic [ref=f22e177]:
+                                                - generic [ref=f22e178]: Speed
+                                                - generic [ref=f22e179]: 38 t/s
+                                            - generic [ref=f22e180]:
+                                                - generic [ref=f22e181]: Download
+                                                - generic [ref=f22e182]: < 1 min
+                                        - generic [ref=f22e183]:
+                                            - img [ref=f22e184]
+                                            - generic [ref=f22e186]:
+                                                - generic [ref=f22e187]: Download over cellular too
+                                                - generic [ref=f22e188]: Off · Wi-Fi only saves your data
+                                    - generic [ref=f22e192]: Or pick another
+                                    - generic [ref=f22e193]:
+                                        - img [ref=f22e195]
+                                        - generic [ref=f22e197]:
+                                            - generic [ref=f22e198]: Llama 3.2 3B
+                                            - generic [ref=f22e199]: 2.1 GB · Tier 2 · 22 t/s · ExecuTorch
+                                        - img [ref=f22e200]
+                                    - generic [ref=f22e202]:
+                                        - img [ref=f22e204]
+                                        - generic [ref=f22e206]:
+                                            - generic [ref=f22e207]: Qwen 2.5 0.5B
+                                            - generic [ref=f22e208]: 400 MB · Tier 3 · 14 t/s · GGUF fallback
+                                        - img [ref=f22e209]
+                                    - button "Download Apple Foundation 3B" [ref=f22e213]:
+                                        - img [ref=f22e214]
+                                        - generic [ref=f22e216]: Download Apple Foundation 3B
+                        - generic [ref=f22e218]:
+                            - generic [ref=f22e219]:
+                                - generic [ref=f22e220]:
+                                    - generic "Drag to reorder" [ref=f22e221]:
+                                        - img [ref=f22e222]
+                                    - generic "Click to focus" [ref=f22e229] [cursor=pointer]:
+                                        - generic [ref=f22e230]: R6.2 · Device tier · dark
+                                - generic [ref=f22e231]:
+                                    - button "More" [ref=f22e233] [cursor=pointer]:
+                                        - img [ref=f22e234]
+                                    - button "Focus" [ref=f22e238] [cursor=pointer]:
+                                        - img [ref=f22e239]
+                            - generic [ref=f22e243]:
+                                - generic:
+                                    - generic: 9:41
+                                    - generic:
+                                        - img
+                                        - img
+                                        - img
+                                - generic [ref=f22e246]:
+                                    - generic [ref=f22e247]:
+                                        - img [ref=f22e249]
+                                        - generic [ref=f22e251]: Step 2 of 3
+                                    - generic [ref=f22e252]:
+                                        - img [ref=f22e254]
+                                        - generic [ref=f22e256]: Your iPhone is ready.
+                                        - generic [ref=f22e257]:
+                                            - text: iPhone 15 Pro Max · A17 Pro ·
+                                            - generic [ref=f22e258]: Tier 1 capable
+                                    - generic [ref=f22e259]:
+                                        - generic [ref=f22e260]:
+                                            - generic [ref=f22e261]: Recommended
+                                            - generic [ref=f22e263]: TIER 1
+                                        - generic [ref=f22e264]: Apple Foundation 3B
+                                        - generic [ref=f22e265]: Uses your Neural Engine directly. Fastest on this device.
+                                        - generic [ref=f22e266]:
+                                            - generic [ref=f22e267]:
+                                                - generic [ref=f22e268]: Size
+                                                - generic [ref=f22e269]: ~700 MB
+                                            - generic [ref=f22e270]:
+                                                - generic [ref=f22e271]: Speed
+                                                - generic [ref=f22e272]: 38 t/s
+                                            - generic [ref=f22e273]:
+                                                - generic [ref=f22e274]: Download
+                                                - generic [ref=f22e275]: < 1 min
+                                        - generic [ref=f22e276]:
+                                            - img [ref=f22e277]
+                                            - generic [ref=f22e279]:
+                                                - generic [ref=f22e280]: Download over cellular too
+                                                - generic [ref=f22e281]: Off · Wi-Fi only saves your data
+                                    - generic [ref=f22e285]: Or pick another
+                                    - generic [ref=f22e286]:
+                                        - img [ref=f22e288]
+                                        - generic [ref=f22e290]:
+                                            - generic [ref=f22e291]: Llama 3.2 3B
+                                            - generic [ref=f22e292]: 2.1 GB · Tier 2 · 22 t/s · ExecuTorch
+                                        - img [ref=f22e293]
+                                    - generic [ref=f22e295]:
+                                        - img [ref=f22e297]
+                                        - generic [ref=f22e299]:
+                                            - generic [ref=f22e300]: Qwen 2.5 0.5B
+                                            - generic [ref=f22e301]: 400 MB · Tier 3 · 14 t/s · GGUF fallback
+                                        - img [ref=f22e302]
+                                    - button "Download Apple Foundation 3B" [ref=f22e306]:
+                                        - img [ref=f22e307]
+                                        - generic [ref=f22e309]: Download Apple Foundation 3B
+                        - generic [ref=f22e311]:
+                            - generic [ref=f22e312]:
+                                - generic [ref=f22e313]:
+                                    - generic "Drag to reorder" [ref=f22e314]:
+                                        - img [ref=f22e315]
+                                    - generic "Click to focus" [ref=f22e322] [cursor=pointer]:
+                                        - generic [ref=f22e323]: R6.3 · Empty chat · light
+                                - generic [ref=f22e324]:
+                                    - button "More" [ref=f22e326] [cursor=pointer]:
+                                        - img [ref=f22e327]
+                                    - button "Focus" [ref=f22e331] [cursor=pointer]:
+                                        - img [ref=f22e332]
+                            - generic [ref=f22e336]:
+                                - generic:
+                                    - generic: 9:41
+                                    - generic:
+                                        - img
+                                        - img
+                                        - img
+                                - generic [ref=f22e339]:
+                                    - generic [ref=f22e340]:
+                                        - img [ref=f22e342]
+                                        - generic [ref=f22e345]:
+                                            - generic [ref=f22e346]:
+                                                - img [ref=f22e347]
+                                                - generic [ref=f22e349]: On-device
+                                            - generic [ref=f22e350]:
+                                                - img [ref=f22e351]
+                                                - generic [ref=f22e353]: Cloud
+                                        - img [ref=f22e355]
+                                    - generic [ref=f22e358]:
+                                        - img [ref=f22e359]
+                                        - generic [ref=f22e361]: On-device · Private · Works offline
+                                    - generic [ref=f22e362]:
+                                        - img [ref=f22e363]
+                                        - generic [ref=f22e370]: Ask anything.
+                                        - generic [ref=f22e371]: Llama 3.2 3B is loaded. No internet needed.
+                                    - generic [ref=f22e373]:
+                                        - button [ref=f22e374]:
+                                            - img [ref=f22e375]
+                                        - generic [ref=f22e377]:
+                                            - generic [ref=f22e378]: Ask AGI
+                                            - img [ref=f22e379]
+                                        - button [ref=f22e381]:
+                                            - img [ref=f22e382]
+                        - generic [ref=f22e389]:
+                            - generic [ref=f22e390]:
+                                - generic [ref=f22e391]:
+                                    - generic "Drag to reorder" [ref=f22e392]:
+                                        - img [ref=f22e393]
+                                    - generic "Click to focus" [ref=f22e400] [cursor=pointer]:
+                                        - generic [ref=f22e401]: R6.3 · Empty chat · dark
+                                - generic [ref=f22e402]:
+                                    - button "More" [ref=f22e404] [cursor=pointer]:
+                                        - img [ref=f22e405]
+                                    - button "Focus" [ref=f22e409] [cursor=pointer]:
+                                        - img [ref=f22e410]
+                            - generic [ref=f22e414]:
+                                - generic:
+                                    - generic: 9:41
+                                    - generic:
+                                        - img
+                                        - img
+                                        - img
+                                - generic [ref=f22e417]:
+                                    - generic [ref=f22e418]:
+                                        - img [ref=f22e420]
+                                        - generic [ref=f22e423]:
+                                            - generic [ref=f22e424]:
+                                                - img [ref=f22e425]
+                                                - generic [ref=f22e427]: On-device
+                                            - generic [ref=f22e428]:
+                                                - img [ref=f22e429]
+                                                - generic [ref=f22e431]: Cloud
+                                        - img [ref=f22e433]
+                                    - generic [ref=f22e436]:
+                                        - img [ref=f22e437]
+                                        - generic [ref=f22e439]: On-device · Private · Works offline
+                                    - generic [ref=f22e440]:
+                                        - img [ref=f22e441]
+                                        - generic [ref=f22e448]: Ask anything.
+                                        - generic [ref=f22e449]: Llama 3.2 3B is loaded. No internet needed.
+                                    - generic [ref=f22e451]:
+                                        - button [ref=f22e452]:
+                                            - img [ref=f22e453]
+                                        - generic [ref=f22e455]:
+                                            - generic [ref=f22e456]: Ask AGI
+                                            - img [ref=f22e457]
+                                        - button [ref=f22e459]:
+                                            - img [ref=f22e460]
+                        - generic [ref=f22e467]:
+                            - generic [ref=f22e468]:
+                                - generic [ref=f22e469]:
+                                    - generic "Drag to reorder" [ref=f22e470]:
+                                        - img [ref=f22e471]
+                                    - generic "Click to focus" [ref=f22e478] [cursor=pointer]:
+                                        - generic [ref=f22e479]: R6.4 · Active chat · light
+                                - generic [ref=f22e480]:
+                                    - button "More" [ref=f22e482] [cursor=pointer]:
+                                        - img [ref=f22e483]
+                                    - button "Focus" [ref=f22e487] [cursor=pointer]:
+                                        - img [ref=f22e488]
+                            - generic [ref=f22e492]:
+                                - generic:
+                                    - generic: 9:41
+                                    - generic:
+                                        - img
+                                        - img
+                                        - img
+                                - generic [ref=f22e495]:
+                                    - generic [ref=f22e496]:
+                                        - img [ref=f22e498]
+                                        - generic [ref=f22e501]:
+                                            - generic [ref=f22e502]:
+                                                - img [ref=f22e503]
+                                                - generic [ref=f22e505]: On-device
+                                            - generic [ref=f22e506]:
+                                                - img [ref=f22e507]
+                                                - generic [ref=f22e509]: Cloud
+                                        - img [ref=f22e511]
+                                    - generic [ref=f22e513]:
+                                        - generic [ref=f22e516]: What's a good 78% hydration bulk time at 22°C?
+                                        - generic [ref=f22e517]:
+                                            - paragraph [ref=f22e518]:
+                                                - text: At 78% hydration with room temp around 22°C, plan on
+                                                - generic [ref=f22e519]: 4 to 5 hours
+                                                - text: of bulk fermentation with stretch-and-folds every 30 minutes for the first two hours.
+                                            - paragraph [ref=f22e520]: Look for ~50% volume increase and a domed top before shaping. Cooler rooms (18°C) stretch this to 7–9 hours.
+                                            - generic [ref=f22e521]:
+                                                - img [ref=f22e522]
+                                                - generic [ref=f22e524]: vector_search
+                                                - generic [ref=f22e525]: · local memory · 4 matches
+                                                - img [ref=f22e526]
+                                            - generic [ref=f22e528]:
+                                                - generic [ref=f22e529]: ↳
+                                                - generic [ref=f22e530]: Llama 3.2 3B
+                                                - generic [ref=f22e532]: on-device · 22 t/s · ttft 180ms
+                                    - generic [ref=f22e534]:
+                                        - button [ref=f22e535]:
+                                            - img [ref=f22e536]
+                                        - generic [ref=f22e538]:
+                                            - generic [ref=f22e539]: Reply
+                                            - img [ref=f22e540]
+                                        - button [ref=f22e542]:
+                                            - img [ref=f22e543]
+                        - generic [ref=f22e550]:
+                            - generic [ref=f22e551]:
+                                - generic [ref=f22e552]:
+                                    - generic "Drag to reorder" [ref=f22e553]:
+                                        - img [ref=f22e554]
+                                    - generic "Click to focus" [ref=f22e561] [cursor=pointer]:
+                                        - generic [ref=f22e562]: R6.4 · Active chat · dark
+                                - generic [ref=f22e563]:
+                                    - button "More" [ref=f22e565] [cursor=pointer]:
+                                        - img [ref=f22e566]
+                                    - button "Focus" [ref=f22e570] [cursor=pointer]:
+                                        - img [ref=f22e571]
+                            - generic [ref=f22e575]:
+                                - generic:
+                                    - generic: 9:41
+                                    - generic:
+                                        - img
+                                        - img
+                                        - img
+                                - generic [ref=f22e578]:
+                                    - generic [ref=f22e579]:
+                                        - img [ref=f22e581]
+                                        - generic [ref=f22e584]:
+                                            - generic [ref=f22e585]:
+                                                - img [ref=f22e586]
+                                                - generic [ref=f22e588]: On-device
+                                            - generic [ref=f22e589]:
+                                                - img [ref=f22e590]
+                                                - generic [ref=f22e592]: Cloud
+                                        - img [ref=f22e594]
+                                    - generic [ref=f22e596]:
+                                        - generic [ref=f22e599]: What's a good 78% hydration bulk time at 22°C?
+                                        - generic [ref=f22e600]:
+                                            - paragraph [ref=f22e601]:
+                                                - text: At 78% hydration with room temp around 22°C, plan on
+                                                - generic [ref=f22e602]: 4 to 5 hours
+                                                - text: of bulk fermentation with stretch-and-folds every 30 minutes for the first two hours.
+                                            - paragraph [ref=f22e603]: Look for ~50% volume increase and a domed top before shaping. Cooler rooms (18°C) stretch this to 7–9 hours.
+                                            - generic [ref=f22e604]:
+                                                - img [ref=f22e605]
+                                                - generic [ref=f22e607]: vector_search
+                                                - generic [ref=f22e608]: · local memory · 4 matches
+                                                - img [ref=f22e609]
+                                            - generic [ref=f22e611]:
+                                                - generic [ref=f22e612]: ↳
+                                                - generic [ref=f22e613]: Llama 3.2 3B
+                                                - generic [ref=f22e615]: on-device · 22 t/s · ttft 180ms
+                                    - generic [ref=f22e617]:
+                                        - button [ref=f22e618]:
+                                            - img [ref=f22e619]
+                                        - generic [ref=f22e621]:
+                                            - generic [ref=f22e622]: Reply
+                                            - img [ref=f22e623]
+                                        - button [ref=f22e625]:
+                                            - img [ref=f22e626]
+                        - generic [ref=f22e633]:
+                            - generic [ref=f22e634]:
+                                - generic [ref=f22e635]:
+                                    - generic "Drag to reorder" [ref=f22e636]:
+                                        - img [ref=f22e637]
+                                    - generic "Click to focus" [ref=f22e644] [cursor=pointer]:
+                                        - generic [ref=f22e645]: R6.5 · Drawer · light
+                                - generic [ref=f22e646]:
+                                    - button "More" [ref=f22e648] [cursor=pointer]:
+                                        - img [ref=f22e649]
+                                    - button "Focus" [ref=f22e653] [cursor=pointer]:
+                                        - img [ref=f22e654]
+                            - generic [ref=f22e658]:
+                                - generic:
+                                    - generic: 9:41
+                                    - generic:
+                                        - img
+                                        - img
+                                        - img
+                                - generic [ref=f22e661]:
+                                    - generic [ref=f22e662]:
+                                        - generic [ref=f22e663]:
+                                            - img [ref=f22e664]
+                                            - generic [ref=f22e671]: AGI
+                                        - generic [ref=f22e672]:
+                                            - img [ref=f22e673]
+                                            - generic [ref=f22e675]: Chat
+                                        - generic [ref=f22e676]:
+                                            - img [ref=f22e677]
+                                            - generic [ref=f22e679]: Projects
+                                        - generic [ref=f22e680]:
+                                            - img [ref=f22e681]
+                                            - generic [ref=f22e683]: Skills
+                                        - generic [ref=f22e684]:
+                                            - img [ref=f22e685]
+                                            - generic [ref=f22e687]: Memory
+                                        - generic [ref=f22e688]:
+                                            - img [ref=f22e689]
+                                            - generic [ref=f22e691]: Models
+                                        - generic [ref=f22e692]:
+                                            - img [ref=f22e693]
+                                            - generic [ref=f22e695]: Keys
+                                        - generic [ref=f22e696]:
+                                            - img [ref=f22e697]
+                                            - generic [ref=f22e699]: Settings
+                                        - generic [ref=f22e701]: Recents
+                                        - generic [ref=f22e702]:
+                                            - generic [ref=f22e704]: Sourdough hydration timing
+                                            - generic [ref=f22e706]: EU AI Act Article 50 in 4 bullets
+                                            - generic [ref=f22e708]: Refactor zod validator nested unions
+                                            - generic [ref=f22e710]: A15 vs M2 inference benchmarks
+                                            - generic [ref=f22e712]: Local PDF Q&A · lease 2024
+                                            - generic [ref=f22e714]: OCR receipt totals
+                                            - generic [ref=f22e716]: Hindi → English on-device
+                                            - generic [ref=f22e718]: v1 launch checklist
+                                    - generic [ref=f22e719]:
+                                        - generic [ref=f22e720]:
+                                            - generic [ref=f22e722]: SN
+                                            - generic [ref=f22e723]: Siddhartha Nagula
+                                        - img [ref=f22e725]
+                        - generic [ref=f22e729]:
+                            - generic [ref=f22e730]:
+                                - generic [ref=f22e731]:
+                                    - generic "Drag to reorder" [ref=f22e732]:
+                                        - img [ref=f22e733]
+                                    - generic "Click to focus" [ref=f22e740] [cursor=pointer]:
+                                        - generic [ref=f22e741]: R6.5 · Drawer · dark
+                                - generic [ref=f22e742]:
+                                    - button "More" [ref=f22e744] [cursor=pointer]:
+                                        - img [ref=f22e745]
+                                    - button "Focus" [ref=f22e749] [cursor=pointer]:
+                                        - img [ref=f22e750]
+                            - generic [ref=f22e754]:
+                                - generic:
+                                    - generic: 9:41
+                                    - generic:
+                                        - img
+                                        - img
+                                        - img
+                                - generic [ref=f22e757]:
+                                    - generic [ref=f22e758]:
+                                        - generic [ref=f22e759]:
+                                            - img [ref=f22e760]
+                                            - generic [ref=f22e767]: AGI
+                                        - generic [ref=f22e768]:
+                                            - img [ref=f22e769]
+                                            - generic [ref=f22e771]: Chat
+                                        - generic [ref=f22e772]:
+                                            - img [ref=f22e773]
+                                            - generic [ref=f22e775]: Projects
+                                        - generic [ref=f22e776]:
+                                            - img [ref=f22e777]
+                                            - generic [ref=f22e779]: Skills
+                                        - generic [ref=f22e780]:
+                                            - img [ref=f22e781]
+                                            - generic [ref=f22e783]: Memory
+                                        - generic [ref=f22e784]:
+                                            - img [ref=f22e785]
+                                            - generic [ref=f22e787]: Models
+                                        - generic [ref=f22e788]:
+                                            - img [ref=f22e789]
+                                            - generic [ref=f22e791]: Keys
+                                        - generic [ref=f22e792]:
+                                            - img [ref=f22e793]
+                                            - generic [ref=f22e795]: Settings
+                                        - generic [ref=f22e797]: Recents
+                                        - generic [ref=f22e798]:
+                                            - generic [ref=f22e800]: Sourdough hydration timing
+                                            - generic [ref=f22e802]: EU AI Act Article 50 in 4 bullets
+                                            - generic [ref=f22e804]: Refactor zod validator nested unions
+                                            - generic [ref=f22e806]: A15 vs M2 inference benchmarks
+                                            - generic [ref=f22e808]: Local PDF Q&A · lease 2024
+                                            - generic [ref=f22e810]: OCR receipt totals
+                                            - generic [ref=f22e812]: Hindi → English on-device
+                                            - generic [ref=f22e814]: v1 launch checklist
+                                    - generic [ref=f22e815]:
+                                        - generic [ref=f22e816]:
+                                            - generic [ref=f22e818]: SN
+                                            - generic [ref=f22e819]: Siddhartha Nagula
+                                        - img [ref=f22e821]
+                        - generic [ref=f22e825]:
+                            - generic [ref=f22e826]:
+                                - generic [ref=f22e827]:
+                                    - generic "Drag to reorder" [ref=f22e828]:
+                                        - img [ref=f22e829]
+                                    - generic "Click to focus" [ref=f22e836] [cursor=pointer]:
+                                        - generic [ref=f22e837]: R6.6 · Plus menu · light
+                                - generic [ref=f22e838]:
+                                    - button "More" [ref=f22e840] [cursor=pointer]:
+                                        - img [ref=f22e841]
+                                    - button "Focus" [ref=f22e845] [cursor=pointer]:
+                                        - img [ref=f22e846]
+                            - generic [ref=f22e850]:
+                                - generic:
+                                    - generic: 9:41
+                                    - generic:
+                                        - img
+                                        - img
+                                        - img
+                                - generic [ref=f22e853]:
+                                    - img [ref=f22e855]
+                                    - generic [ref=f22e863]:
+                                        - generic [ref=f22e865]:
+                                            - generic [ref=f22e866]: Add to chat
+                                            - img [ref=f22e868]
+                                        - generic [ref=f22e870]:
+                                            - generic [ref=f22e871]:
+                                                - img [ref=f22e872]
+                                                - generic [ref=f22e874]: Camera
+                                            - generic [ref=f22e875]:
+                                                - img [ref=f22e876]
+                                                - generic [ref=f22e878]: Photos
+                                            - generic [ref=f22e879]:
+                                                - img [ref=f22e880]
+                                                - generic [ref=f22e882]: Files
+                                        - generic [ref=f22e884]:
+                                            - generic [ref=f22e885]:
+                                                - img [ref=f22e886]
+                                                - generic [ref=f22e888]:
+                                                    - generic [ref=f22e889]: Skills
+                                                    - generic [ref=f22e890]: Browse and run saved workflows
+                                            - generic [ref=f22e891]:
+                                                - img [ref=f22e892]
+                                                - generic [ref=f22e894]:
+                                                    - generic [ref=f22e895]: Image analysis
+                                                    - generic [ref=f22e896]: Identify, caption — on-device
+                                            - generic [ref=f22e897]:
+                                                - img [ref=f22e898]
+                                                - generic [ref=f22e900]:
+                                                    - generic [ref=f22e901]: Scan to text
+                                                    - generic [ref=f22e902]: OCR · Apple Vision · instant
+                                            - generic [ref=f22e903]:
+                                                - img [ref=f22e904]
+                                                - generic [ref=f22e906]:
+                                                    - generic [ref=f22e907]: Translate
+                                                    - generic [ref=f22e908]: Hindi · Tamil · English · on-device
+                                            - generic [ref=f22e909]:
+                                                - img [ref=f22e910]
+                                                - generic [ref=f22e912]:
+                                                    - generic [ref=f22e913]: Web search
+                                                    - generic [ref=f22e914]: Requires cloud · join waitlist
+                                                - img [ref=f22e915]
+                        - generic [ref=f22e918]:
+                            - generic [ref=f22e919]:
+                                - generic [ref=f22e920]:
+                                    - generic "Drag to reorder" [ref=f22e921]:
+                                        - img [ref=f22e922]
+                                    - generic "Click to focus" [ref=f22e929] [cursor=pointer]:
+                                        - generic [ref=f22e930]: R6.6 · Plus menu · dark
+                                - generic [ref=f22e931]:
+                                    - button "More" [ref=f22e933] [cursor=pointer]:
+                                        - img [ref=f22e934]
+                                    - button "Focus" [ref=f22e938] [cursor=pointer]:
+                                        - img [ref=f22e939]
+                            - generic [ref=f22e943]:
+                                - generic:
+                                    - generic: 9:41
+                                    - generic:
+                                        - img
+                                        - img
+                                        - img
+                                - generic [ref=f22e946]:
+                                    - img [ref=f22e948]
+                                    - generic [ref=f22e956]:
+                                        - generic [ref=f22e958]:
+                                            - generic [ref=f22e959]: Add to chat
+                                            - img [ref=f22e961]
+                                        - generic [ref=f22e963]:
+                                            - generic [ref=f22e964]:
+                                                - img [ref=f22e965]
+                                                - generic [ref=f22e967]: Camera
+                                            - generic [ref=f22e968]:
+                                                - img [ref=f22e969]
+                                                - generic [ref=f22e971]: Photos
+                                            - generic [ref=f22e972]:
+                                                - img [ref=f22e973]
+                                                - generic [ref=f22e975]: Files
+                                        - generic [ref=f22e977]:
+                                            - generic [ref=f22e978]:
+                                                - img [ref=f22e979]
+                                                - generic [ref=f22e981]:
+                                                    - generic [ref=f22e982]: Skills
+                                                    - generic [ref=f22e983]: Browse and run saved workflows
+                                            - generic [ref=f22e984]:
+                                                - img [ref=f22e985]
+                                                - generic [ref=f22e987]:
+                                                    - generic [ref=f22e988]: Image analysis
+                                                    - generic [ref=f22e989]: Identify, caption — on-device
+                                            - generic [ref=f22e990]:
+                                                - img [ref=f22e991]
+                                                - generic [ref=f22e993]:
+                                                    - generic [ref=f22e994]: Scan to text
+                                                    - generic [ref=f22e995]: OCR · Apple Vision · instant
+                                            - generic [ref=f22e996]:
+                                                - img [ref=f22e997]
+                                                - generic [ref=f22e999]:
+                                                    - generic [ref=f22e1000]: Translate
+                                                    - generic [ref=f22e1001]: Hindi · Tamil · English · on-device
+                                            - generic [ref=f22e1002]:
+                                                - img [ref=f22e1003]
+                                                - generic [ref=f22e1005]:
+                                                    - generic [ref=f22e1006]: Web search
+                                                    - generic [ref=f22e1007]: Requires cloud · join waitlist
+                                                - img [ref=f22e1008]
+                        - generic [ref=f22e1011]:
+                            - generic [ref=f22e1012]:
+                                - generic [ref=f22e1013]:
+                                    - generic "Drag to reorder" [ref=f22e1014]:
+                                        - img [ref=f22e1015]
+                                    - generic "Click to focus" [ref=f22e1022] [cursor=pointer]:
+                                        - generic [ref=f22e1023]: R6.7 · Model picker · light
+                                - generic [ref=f22e1024]:
+                                    - button "More" [ref=f22e1026] [cursor=pointer]:
+                                        - img [ref=f22e1027]
+                                    - button "Focus" [ref=f22e1031] [cursor=pointer]:
+                                        - img [ref=f22e1032]
+                            - generic [ref=f22e1036]:
+                                - generic:
+                                    - generic: 9:41
+                                    - generic:
+                                        - img
+                                        - img
+                                        - img
+                                - generic [ref=f22e1042]:
+                                    - generic [ref=f22e1044]:
+                                        - generic [ref=f22e1045]: Models
+                                        - img [ref=f22e1047]
+                                    - generic [ref=f22e1049]:
+                                        - generic [ref=f22e1050]:
+                                            - generic [ref=f22e1051]:
+                                                - text: On-device
+                                                - generic [ref=f22e1052]: Runs on your phone — no internet needed
+                                            - generic [ref=f22e1053]: Manage
+                                        - generic [ref=f22e1054]:
+                                            - img [ref=f22e1056]
+                                            - generic [ref=f22e1058]:
+                                                - generic [ref=f22e1059]: Apple Foundation 3B
+                                                - generic [ref=f22e1060]: Tier 1 · 38 t/s · Neural Engine
+                                            - generic [ref=f22e1061]: Tier 1
+                                        - generic [ref=f22e1062]:
+                                            - generic [ref=f22e1064]: 🦙
+                                            - generic [ref=f22e1065]:
+                                                - generic [ref=f22e1066]: Llama 3.2 3B
+                                                - generic [ref=f22e1067]: Tier 2 · 22 t/s · ExecuTorch
+                                            - img [ref=f22e1068]
+                                        - generic [ref=f22e1070]:
+                                            - img [ref=f22e1072]
+                                            - generic [ref=f22e1075]:
+                                                - generic [ref=f22e1076]: Qwen 2.5 0.5B
+                                                - generic [ref=f22e1077]: Tier 3 · 14 t/s · fallback
+                                        - generic [ref=f22e1079]:
+                                            - generic [ref=f22e1080]:
+                                                - text: BYOK
+                                                - generic [ref=f22e1081]: Your provider keys — pay providers directly
+                                            - generic [ref=f22e1082]: Manage keys
+                                        - generic [ref=f22e1083]:
+                                            - img [ref=f22e1085]
+                                            - generic [ref=f22e1090]:
+                                                - generic [ref=f22e1091]: Claude Opus 4.7
+                                                - generic [ref=f22e1092]: Anthropic · via your key
+                                            - button "Add key" [ref=f22e1093]
+                                        - generic [ref=f22e1094]:
+                                            - img [ref=f22e1096]
+                                            - generic [ref=f22e1098]:
+                                                - generic [ref=f22e1099]: GPT-5.4
+                                                - generic [ref=f22e1100]: OpenAI · via your key
+                                            - button "Add key" [ref=f22e1101]
+                                        - generic [ref=f22e1102]:
+                                            - img [ref=f22e1104]
+                                            - generic [ref=f22e1106]:
+                                                - generic [ref=f22e1107]: Gemini 3.1 Pro
+                                                - generic [ref=f22e1108]: Google · via your key
+                                            - button "Add key" [ref=f22e1109]
+                                        - generic [ref=f22e1110]:
+                                            - img [ref=f22e1112]
+                                            - generic [ref=f22e1114]:
+                                                - generic [ref=f22e1115]: Grok 3
+                                                - generic [ref=f22e1116]: xAI · via your key
+                                            - button "Add key" [ref=f22e1117]
+                                        - generic [ref=f22e1118]:
+                                            - img [ref=f22e1120]
+                                            - generic [ref=f22e1122]:
+                                                - generic [ref=f22e1123]: Sonar Pro
+                                                - generic [ref=f22e1124]: Perplexity · via your key
+                                            - button "Add key" [ref=f22e1125]
+                                        - generic [ref=f22e1126]:
+                                            - img [ref=f22e1128]
+                                            - generic [ref=f22e1132]:
+                                                - generic [ref=f22e1133]: Mistral Large
+                                                - generic [ref=f22e1134]: Mistral · via your key
+                                            - button "Add key" [ref=f22e1135]
+                                        - generic [ref=f22e1136]:
+                                            - img [ref=f22e1138]
+                                            - generic [ref=f22e1142]:
+                                                - generic [ref=f22e1143]: Ollama / LM Studio
+                                                - generic [ref=f22e1144]: Local server · localhost
+                                            - button "Connect" [ref=f22e1145]
+                                        - generic [ref=f22e1148]:
+                                            - text: AGI Cloud
+                                            - generic [ref=f22e1149]: Managed credits — private beta
+                                        - generic [ref=f22e1150]:
+                                            - img [ref=f22e1152]
+                                            - generic [ref=f22e1154]:
+                                                - generic [ref=f22e1155]: AGI Cloud · Pro
+                                                - generic [ref=f22e1156]: Subscription + top-up · private beta
+                                            - button "Join waitlist" [ref=f22e1157]
+                                        - generic [ref=f22e1159]:
+                                            - img [ref=f22e1160]
+                                            - generic [ref=f22e1162]: Switching to BYOK opens a new chat. We'll show what gets sent before it leaves your device.
+                        - generic [ref=f22e1164]:
+                            - generic [ref=f22e1165]:
+                                - generic [ref=f22e1166]:
+                                    - generic "Drag to reorder" [ref=f22e1167]:
+                                        - img [ref=f22e1168]
+                                    - generic "Click to focus" [ref=f22e1175] [cursor=pointer]:
+                                        - generic [ref=f22e1176]: R6.7 · Model picker · dark
+                                - generic [ref=f22e1177]:
+                                    - button "More" [ref=f22e1179] [cursor=pointer]:
+                                        - img [ref=f22e1180]
+                                    - button "Focus" [ref=f22e1184] [cursor=pointer]:
+                                        - img [ref=f22e1185]
+                            - generic [ref=f22e1189]:
+                                - generic:
+                                    - generic: 9:41
+                                    - generic:
+                                        - img
+                                        - img
+                                        - img
+                                - generic [ref=f22e1195]:
+                                    - generic [ref=f22e1197]:
+                                        - generic [ref=f22e1198]: Models
+                                        - img [ref=f22e1200]
+                                    - generic [ref=f22e1202]:
+                                        - generic [ref=f22e1203]:
+                                            - generic [ref=f22e1204]:
+                                                - text: On-device
+                                                - generic [ref=f22e1205]: Runs on your phone — no internet needed
+                                            - generic [ref=f22e1206]: Manage
+                                        - generic [ref=f22e1207]:
+                                            - img [ref=f22e1209]
+                                            - generic [ref=f22e1211]:
+                                                - generic [ref=f22e1212]: Apple Foundation 3B
+                                                - generic [ref=f22e1213]: Tier 1 · 38 t/s · Neural Engine
+                                            - generic [ref=f22e1214]: Tier 1
+                                        - generic [ref=f22e1215]:
+                                            - generic [ref=f22e1217]: 🦙
+                                            - generic [ref=f22e1218]:
+                                                - generic [ref=f22e1219]: Llama 3.2 3B
+                                                - generic [ref=f22e1220]: Tier 2 · 22 t/s · ExecuTorch
+                                            - img [ref=f22e1221]
+                                        - generic [ref=f22e1223]:
+                                            - img [ref=f22e1225]
+                                            - generic [ref=f22e1228]:
+                                                - generic [ref=f22e1229]: Qwen 2.5 0.5B
+                                                - generic [ref=f22e1230]: Tier 3 · 14 t/s · fallback
+                                        - generic [ref=f22e1232]:
+                                            - generic [ref=f22e1233]:
+                                                - text: BYOK
+                                                - generic [ref=f22e1234]: Your provider keys — pay providers directly
+                                            - generic [ref=f22e1235]: Manage keys
+                                        - generic [ref=f22e1236]:
+                                            - img [ref=f22e1238]
+                                            - generic [ref=f22e1243]:
+                                                - generic [ref=f22e1244]: Claude Opus 4.7
+                                                - generic [ref=f22e1245]: Anthropic · via your key
+                                            - button "Add key" [ref=f22e1246]
+                                        - generic [ref=f22e1247]:
+                                            - img [ref=f22e1249]
+                                            - generic [ref=f22e1251]:
+                                                - generic [ref=f22e1252]: GPT-5.4
+                                                - generic [ref=f22e1253]: OpenAI · via your key
+                                            - button "Add key" [ref=f22e1254]
+                                        - generic [ref=f22e1255]:
+                                            - img [ref=f22e1257]
+                                            - generic [ref=f22e1259]:
+                                                - generic [ref=f22e1260]: Gemini 3.1 Pro
+                                                - generic [ref=f22e1261]: Google · via your key
+                                            - button "Add key" [ref=f22e1262]
+                                        - generic [ref=f22e1263]:
+                                            - img [ref=f22e1265]
+                                            - generic [ref=f22e1267]:
+                                                - generic [ref=f22e1268]: Grok 3
+                                                - generic [ref=f22e1269]: xAI · via your key
+                                            - button "Add key" [ref=f22e1270]
+                                        - generic [ref=f22e1271]:
+                                            - img [ref=f22e1273]
+                                            - generic [ref=f22e1275]:
+                                                - generic [ref=f22e1276]: Sonar Pro
+                                                - generic [ref=f22e1277]: Perplexity · via your key
+                                            - button "Add key" [ref=f22e1278]
+                                        - generic [ref=f22e1279]:
+                                            - img [ref=f22e1281]
+                                            - generic [ref=f22e1285]:
+                                                - generic [ref=f22e1286]: Mistral Large
+                                                - generic [ref=f22e1287]: Mistral · via your key
+                                            - button "Add key" [ref=f22e1288]
+                                        - generic [ref=f22e1289]:
+                                            - img [ref=f22e1291]
+                                            - generic [ref=f22e1295]:
+                                                - generic [ref=f22e1296]: Ollama / LM Studio
+                                                - generic [ref=f22e1297]: Local server · localhost
+                                            - button "Connect" [ref=f22e1298]
+                                        - generic [ref=f22e1301]:
+                                            - text: AGI Cloud
+                                            - generic [ref=f22e1302]: Managed credits — private beta
+                                        - generic [ref=f22e1303]:
+                                            - img [ref=f22e1305]
+                                            - generic [ref=f22e1307]:
+                                                - generic [ref=f22e1308]: AGI Cloud · Pro
+                                                - generic [ref=f22e1309]: Subscription + top-up · private beta
+                                            - button "Join waitlist" [ref=f22e1310]
+                                        - generic [ref=f22e1312]:
+                                            - img [ref=f22e1313]
+                                            - generic [ref=f22e1315]: Switching to BYOK opens a new chat. We'll show what gets sent before it leaves your device.
+                        - generic [ref=f22e1317]:
+                            - generic [ref=f22e1318]:
+                                - generic [ref=f22e1319]:
+                                    - generic "Drag to reorder" [ref=f22e1320]:
+                                        - img [ref=f22e1321]
+                                    - generic "Click to focus" [ref=f22e1328] [cursor=pointer]:
+                                        - generic [ref=f22e1329]: R6.8 · Keys / BYOK setup · light
+                                - generic [ref=f22e1330]:
+                                    - button "More" [ref=f22e1332] [cursor=pointer]:
+                                        - img [ref=f22e1333]
+                                    - button "Focus" [ref=f22e1337] [cursor=pointer]:
+                                        - img [ref=f22e1338]
+                            - generic [ref=f22e1342]:
+                                - generic:
+                                    - generic: 9:41
+                                    - generic:
+                                        - img
+                                        - img
+                                        - img
+                                - generic [ref=f22e1345]:
+                                    - generic [ref=f22e1346]:
+                                        - img [ref=f22e1348]
+                                        - generic [ref=f22e1351]: Keys
+                                    - generic [ref=f22e1353]:
+                                        - img [ref=f22e1354]
+                                        - generic [ref=f22e1356]:
+                                            - generic [ref=f22e1357]: Keys stay on your device
+                                            - generic [ref=f22e1358]: Stored in iOS Keychain. AGI never sees your keys; we proxy nothing.
+                                    - generic [ref=f22e1359]:
+                                        - generic [ref=f22e1360]:
+                                            - img [ref=f22e1362]
+                                            - generic [ref=f22e1367]:
+                                                - generic [ref=f22e1368]: Anthropic
+                                                - generic [ref=f22e1369]: Claude · 2 keys
+                                            - generic [ref=f22e1370]:
+                                                - generic [ref=f22e1372]: Connected
+                                                - img [ref=f22e1373]
+                                        - generic [ref=f22e1375]:
+                                            - img [ref=f22e1377]
+                                            - generic [ref=f22e1379]:
+                                                - generic [ref=f22e1380]: OpenAI
+                                                - generic [ref=f22e1381]: GPT · adds 5 models
+                                            - button "Add key" [ref=f22e1382]
+                                        - generic [ref=f22e1383]:
+                                            - img [ref=f22e1385]
+                                            - generic [ref=f22e1387]:
+                                                - generic [ref=f22e1388]: Google
+                                                - generic [ref=f22e1389]: Gemini · adds 3 models
+                                            - button "Add key" [ref=f22e1390]
+                                        - generic [ref=f22e1391]:
+                                            - img [ref=f22e1393]
+                                            - generic [ref=f22e1395]:
+                                                - generic [ref=f22e1396]: xAI
+                                                - generic [ref=f22e1397]: Grok · adds 2 models
+                                            - button "Add key" [ref=f22e1398]
+                                        - generic [ref=f22e1399]:
+                                            - img [ref=f22e1401]
+                                            - generic [ref=f22e1403]:
+                                                - generic [ref=f22e1404]: Perplexity
+                                                - generic [ref=f22e1405]: Sonar · adds 3 models
+                                            - button "Add key" [ref=f22e1406]
+                                        - generic [ref=f22e1407]:
+                                            - img [ref=f22e1409]
+                                            - generic [ref=f22e1413]:
+                                                - generic [ref=f22e1414]: Mistral
+                                                - generic [ref=f22e1415]: Mistral · adds 4 models
+                                            - button "Add key" [ref=f22e1416]
+                                        - generic [ref=f22e1417]:
+                                            - img [ref=f22e1419]
+                                            - generic [ref=f22e1421]:
+                                                - generic [ref=f22e1422]: Ollama / LM Studio
+                                                - generic [ref=f22e1423]: Connect a local server
+                                            - button "Add key" [ref=f22e1424]
+                                        - generic [ref=f22e1425]:
+                                            - img [ref=f22e1427]
+                                            - generic [ref=f22e1429]:
+                                                - generic [ref=f22e1430]: Custom endpoint
+                                                - generic [ref=f22e1431]: OpenAI-compatible URL
+                                            - button "Add key" [ref=f22e1432]
+                        - generic [ref=f22e1434]:
+                            - generic [ref=f22e1435]:
+                                - generic [ref=f22e1436]:
+                                    - generic "Drag to reorder" [ref=f22e1437]:
+                                        - img [ref=f22e1438]
+                                    - generic "Click to focus" [ref=f22e1445] [cursor=pointer]:
+                                        - generic [ref=f22e1446]: R6.8 · Keys / BYOK setup · dark
+                                - generic [ref=f22e1447]:
+                                    - button "More" [ref=f22e1449] [cursor=pointer]:
+                                        - img [ref=f22e1450]
+                                    - button "Focus" [ref=f22e1454] [cursor=pointer]:
+                                        - img [ref=f22e1455]
+                            - generic [ref=f22e1459]:
+                                - generic:
+                                    - generic: 9:41
+                                    - generic:
+                                        - img
+                                        - img
+                                        - img
+                                - generic [ref=f22e1462]:
+                                    - generic [ref=f22e1463]:
+                                        - img [ref=f22e1465]
+                                        - generic [ref=f22e1468]: Keys
+                                    - generic [ref=f22e1470]:
+                                        - img [ref=f22e1471]
+                                        - generic [ref=f22e1473]:
+                                            - generic [ref=f22e1474]: Keys stay on your device
+                                            - generic [ref=f22e1475]: Stored in iOS Keychain. AGI never sees your keys; we proxy nothing.
+                                    - generic [ref=f22e1476]:
+                                        - generic [ref=f22e1477]:
+                                            - img [ref=f22e1479]
+                                            - generic [ref=f22e1484]:
+                                                - generic [ref=f22e1485]: Anthropic
+                                                - generic [ref=f22e1486]: Claude · 2 keys
+                                            - generic [ref=f22e1487]:
+                                                - generic [ref=f22e1489]: Connected
+                                                - img [ref=f22e1490]
+                                        - generic [ref=f22e1492]:
+                                            - img [ref=f22e1494]
+                                            - generic [ref=f22e1496]:
+                                                - generic [ref=f22e1497]: OpenAI
+                                                - generic [ref=f22e1498]: GPT · adds 5 models
+                                            - button "Add key" [ref=f22e1499]
+                                        - generic [ref=f22e1500]:
+                                            - img [ref=f22e1502]
+                                            - generic [ref=f22e1504]:
+                                                - generic [ref=f22e1505]: Google
+                                                - generic [ref=f22e1506]: Gemini · adds 3 models
+                                            - button "Add key" [ref=f22e1507]
+                                        - generic [ref=f22e1508]:
+                                            - img [ref=f22e1510]
+                                            - generic [ref=f22e1512]:
+                                                - generic [ref=f22e1513]: xAI
+                                                - generic [ref=f22e1514]: Grok · adds 2 models
+                                            - button "Add key" [ref=f22e1515]
+                                        - generic [ref=f22e1516]:
+                                            - img [ref=f22e1518]
+                                            - generic [ref=f22e1520]:
+                                                - generic [ref=f22e1521]: Perplexity
+                                                - generic [ref=f22e1522]: Sonar · adds 3 models
+                                            - button "Add key" [ref=f22e1523]
+                                        - generic [ref=f22e1524]:
+                                            - img [ref=f22e1526]
+                                            - generic [ref=f22e1530]:
+                                                - generic [ref=f22e1531]: Mistral
+                                                - generic [ref=f22e1532]: Mistral · adds 4 models
+                                            - button "Add key" [ref=f22e1533]
+                                        - generic [ref=f22e1534]:
+                                            - img [ref=f22e1536]
+                                            - generic [ref=f22e1538]:
+                                                - generic [ref=f22e1539]: Ollama / LM Studio
+                                                - generic [ref=f22e1540]: Connect a local server
+                                            - button "Add key" [ref=f22e1541]
+                                        - generic [ref=f22e1542]:
+                                            - img [ref=f22e1544]
+                                            - generic [ref=f22e1546]:
+                                                - generic [ref=f22e1547]: Custom endpoint
+                                                - generic [ref=f22e1548]: OpenAI-compatible URL
+                                            - button "Add key" [ref=f22e1549]
+                        - generic [ref=f22e1551]:
+                            - generic [ref=f22e1552]:
+                                - generic [ref=f22e1553]:
+                                    - generic "Drag to reorder" [ref=f22e1554]:
+                                        - img [ref=f22e1555]
+                                    - generic "Click to focus" [ref=f22e1562] [cursor=pointer]:
+                                        - generic [ref=f22e1563]: R6.9 · Local → BYOK fork · light
+                                - generic [ref=f22e1564]:
+                                    - button "More" [ref=f22e1566] [cursor=pointer]:
+                                        - img [ref=f22e1567]
+                                    - button "Focus" [ref=f22e1571] [cursor=pointer]:
+                                        - img [ref=f22e1572]
+                            - generic [ref=f22e1576]:
+                                - generic:
+                                    - generic: 9:41
+                                    - generic:
+                                        - img
+                                        - img
+                                        - img
+                                - generic [ref=f22e1579]:
+                                    - generic [ref=f22e1580]:
+                                        - img [ref=f22e1582]
+                                        - generic [ref=f22e1584]:
+                                            - generic [ref=f22e1585]: Continue on Claude
+                                            - generic [ref=f22e1586]: via your Anthropic key
+                                    - generic [ref=f22e1587]:
+                                        - generic [ref=f22e1588]:
+                                            - img [ref=f22e1589]
+                                            - generic [ref=f22e1591]:
+                                                - generic [ref=f22e1592]: Leaving your device
+                                                - generic [ref=f22e1593]: The selected messages and attachments will be sent to Anthropic via your key. Your original local chat stays on-device.
+                                        - generic [ref=f22e1594]:
+                                            - generic [ref=f22e1595]: Destination
+                                            - generic [ref=f22e1596]:
+                                                - img [ref=f22e1597]
+                                                - generic [ref=f22e1602]:
+                                                    - generic [ref=f22e1603]: Claude Sonnet 4.6 · via your Anthropic key
+                                                    - generic [ref=f22e1604]: ~$0.003 per turn estimated
+                                                - img [ref=f22e1605]
+                                        - generic [ref=f22e1607]:
+                                            - generic [ref=f22e1608]: Context · 4 of 6 selected
+                                            - generic [ref=f22e1609]: Edit
+                                        - generic [ref=f22e1610]:
+                                            - generic [ref=f22e1611]:
+                                                - img [ref=f22e1612]
+                                                - generic [ref=f22e1614]: You
+                                                - generic [ref=f22e1615]: What's a good 78% hydration bulk time at 22°C?
+                                            - generic [ref=f22e1616]:
+                                                - img [ref=f22e1617]
+                                                - generic [ref=f22e1619]: AGI
+                                                - generic [ref=f22e1620]: At 78% hydration with room temp around 22°C…
+                                            - generic [ref=f22e1621]:
+                                                - img [ref=f22e1622]
+                                                - generic [ref=f22e1624]: You
+                                                - generic [ref=f22e1625]: What about colder — like 18°C?
+                                            - generic [ref=f22e1626]:
+                                                - img [ref=f22e1627]
+                                                - generic [ref=f22e1629]: AGI
+                                                - generic [ref=f22e1630]: At 18°C the bulk stretches significantly longer…
+                                            - generic [ref=f22e1631]:
+                                                - img [ref=f22e1632]
+                                                - generic [ref=f22e1634]: You
+                                                - generic [ref=f22e1635]: Earlier message · excluded
+                                            - generic [ref=f22e1636]:
+                                                - img [ref=f22e1637]
+                                                - generic [ref=f22e1639]: AGI
+                                                - generic [ref=f22e1640]: Earlier response · excluded
+                                        - generic [ref=f22e1641]:
+                                            - img [ref=f22e1642]
+                                            - generic [ref=f22e1644]:
+                                                - generic [ref=f22e1645]: Include 1 attachment
+                                                - generic [ref=f22e1646]: bread-crumb.jpg · 412 KB · will be re-uploaded
+                                        - generic [ref=f22e1649]:
+                                            - img [ref=f22e1650]
+                                            - generic [ref=f22e1652]:
+                                                - generic [ref=f22e1653]: Local secret scan passed
+                                                - generic [ref=f22e1654]: No API keys, tokens, or PII detected in payload
+                                        - generic [ref=f22e1655]:
+                                            - generic [ref=f22e1656]: Payload preview
+                                            - generic [ref=f22e1657]:
+                                                - text: POST api.anthropic.com/v1/messages
+                                                - text: 'model: claude-sonnet-4-6'
+                                                - text: 'messages: 4 turns · ~820 tokens'
+                                                - text: 'attachments: 1 image (re-uploaded)'
+                                    - generic [ref=f22e1658]:
+                                        - button "Send to Claude · start new chat" [ref=f22e1659]
+                                        - generic [ref=f22e1661]:
+                                            - text: Or
+                                            - generic [ref=f22e1662]: stay on-device
+                        - generic [ref=f22e1664]:
+                            - generic [ref=f22e1665]:
+                                - generic [ref=f22e1666]:
+                                    - generic "Drag to reorder" [ref=f22e1667]:
+                                        - img [ref=f22e1668]
+                                    - generic "Click to focus" [ref=f22e1675] [cursor=pointer]:
+                                        - generic [ref=f22e1676]: R6.9 · Local → BYOK fork · dark
+                                - generic [ref=f22e1677]:
+                                    - button "More" [ref=f22e1679] [cursor=pointer]:
+                                        - img [ref=f22e1680]
+                                    - button "Focus" [ref=f22e1684] [cursor=pointer]:
+                                        - img [ref=f22e1685]
+                            - generic [ref=f22e1689]:
+                                - generic:
+                                    - generic: 9:41
+                                    - generic:
+                                        - img
+                                        - img
+                                        - img
+                                - generic [ref=f22e1692]:
+                                    - generic [ref=f22e1693]:
+                                        - img [ref=f22e1695]
+                                        - generic [ref=f22e1697]:
+                                            - generic [ref=f22e1698]: Continue on Claude
+                                            - generic [ref=f22e1699]: via your Anthropic key
+                                    - generic [ref=f22e1700]:
+                                        - generic [ref=f22e1701]:
+                                            - img [ref=f22e1702]
+                                            - generic [ref=f22e1704]:
+                                                - generic [ref=f22e1705]: Leaving your device
+                                                - generic [ref=f22e1706]: The selected messages and attachments will be sent to Anthropic via your key. Your original local chat stays on-device.
+                                        - generic [ref=f22e1707]:
+                                            - generic [ref=f22e1708]: Destination
+                                            - generic [ref=f22e1709]:
+                                                - img [ref=f22e1710]
+                                                - generic [ref=f22e1715]:
+                                                    - generic [ref=f22e1716]: Claude Sonnet 4.6 · via your Anthropic key
+                                                    - generic [ref=f22e1717]: ~$0.003 per turn estimated
+                                                - img [ref=f22e1718]
+                                        - generic [ref=f22e1720]:
+                                            - generic [ref=f22e1721]: Context · 4 of 6 selected
+                                            - generic [ref=f22e1722]: Edit
+                                        - generic [ref=f22e1723]:
+                                            - generic [ref=f22e1724]:
+                                                - img [ref=f22e1725]
+                                                - generic [ref=f22e1727]: You
+                                                - generic [ref=f22e1728]: What's a good 78% hydration bulk time at 22°C?
+                                            - generic [ref=f22e1729]:
+                                                - img [ref=f22e1730]
+                                                - generic [ref=f22e1732]: AGI
+                                                - generic [ref=f22e1733]: At 78% hydration with room temp around 22°C…
+                                            - generic [ref=f22e1734]:
+                                                - img [ref=f22e1735]
+                                                - generic [ref=f22e1737]: You
+                                                - generic [ref=f22e1738]: What about colder — like 18°C?
+                                            - generic [ref=f22e1739]:
+                                                - img [ref=f22e1740]
+                                                - generic [ref=f22e1742]: AGI
+                                                - generic [ref=f22e1743]: At 18°C the bulk stretches significantly longer…
+                                            - generic [ref=f22e1744]:
+                                                - img [ref=f22e1745]
+                                                - generic [ref=f22e1747]: You
+                                                - generic [ref=f22e1748]: Earlier message · excluded
+                                            - generic [ref=f22e1749]:
+                                                - img [ref=f22e1750]
+                                                - generic [ref=f22e1752]: AGI
+                                                - generic [ref=f22e1753]: Earlier response · excluded
+                                        - generic [ref=f22e1754]:
+                                            - img [ref=f22e1755]
+                                            - generic [ref=f22e1757]:
+                                                - generic [ref=f22e1758]: Include 1 attachment
+                                                - generic [ref=f22e1759]: bread-crumb.jpg · 412 KB · will be re-uploaded
+                                        - generic [ref=f22e1762]:
+                                            - img [ref=f22e1763]
+                                            - generic [ref=f22e1765]:
+                                                - generic [ref=f22e1766]: Local secret scan passed
+                                                - generic [ref=f22e1767]: No API keys, tokens, or PII detected in payload
+                                        - generic [ref=f22e1768]:
+                                            - generic [ref=f22e1769]: Payload preview
+                                            - generic [ref=f22e1770]:
+                                                - text: POST api.anthropic.com/v1/messages
+                                                - text: 'model: claude-sonnet-4-6'
+                                                - text: 'messages: 4 turns · ~820 tokens'
+                                                - text: 'attachments: 1 image (re-uploaded)'
+                                    - generic [ref=f22e1771]:
+                                        - button "Send to Claude · start new chat" [ref=f22e1772]
+                                        - generic [ref=f22e1774]:
+                                            - text: Or
+                                            - generic [ref=f22e1775]: stay on-device
+                        - generic [ref=f22e1777]:
+                            - generic [ref=f22e1778]:
+                                - generic [ref=f22e1779]:
+                                    - generic "Drag to reorder" [ref=f22e1780]:
+                                        - img [ref=f22e1781]
+                                    - generic "Click to focus" [ref=f22e1788] [cursor=pointer]:
+                                        - generic [ref=f22e1789]: R6.10 · Settings index · light
+                                - generic [ref=f22e1790]:
+                                    - button "More" [ref=f22e1792] [cursor=pointer]:
+                                        - img [ref=f22e1793]
+                                    - button "Focus" [ref=f22e1797] [cursor=pointer]:
+                                        - img [ref=f22e1798]
+                            - generic [ref=f22e1802]:
+                                - generic:
+                                    - generic: 9:41
+                                    - generic:
+                                        - img
+                                        - img
+                                        - img
+                                - generic [ref=f22e1805]:
+                                    - generic [ref=f22e1806]:
+                                        - generic [ref=f22e1807]: Settings
+                                        - img [ref=f22e1810]
+                                    - generic [ref=f22e1812]:
+                                        - generic [ref=f22e1813]:
+                                            - generic [ref=f22e1815]: SN
+                                            - generic [ref=f22e1816]: Siddhartha Nagula
+                                            - generic [ref=f22e1817]: Local profile · no account
+                                        - generic [ref=f22e1818]: Mode
+                                        - generic [ref=f22e1819]:
+                                            - generic [ref=f22e1820]:
+                                                - img [ref=f22e1821]
+                                                - generic [ref=f22e1823]: Mode
+                                                - generic [ref=f22e1824]: On-device
+                                                - img [ref=f22e1825]
+                                            - generic [ref=f22e1827]:
+                                                - img [ref=f22e1828]
+                                                - generic [ref=f22e1830]: Keys (BYOK)
+                                                - generic [ref=f22e1831]: 1 connected
+                                                - img [ref=f22e1832]
+                                            - generic [ref=f22e1834]:
+                                                - img [ref=f22e1835]
+                                                - generic [ref=f22e1837]: Cloud
+                                                - generic [ref=f22e1838]: Join waitlist
+                                                - img [ref=f22e1839]
+                                        - generic [ref=f22e1841]: Personalize
+                                        - generic [ref=f22e1842]:
+                                            - generic [ref=f22e1843]:
+                                                - img [ref=f22e1844]
+                                                - generic [ref=f22e1846]: Memory
+                                                - generic [ref=f22e1847]: 12 facts
+                                                - img [ref=f22e1848]
+                                            - generic [ref=f22e1850]:
+                                                - img [ref=f22e1851]
+                                                - generic [ref=f22e1853]: Voice
+                                                - generic [ref=f22e1854]: On-device
+                                                - img [ref=f22e1855]
+                                            - generic [ref=f22e1857]:
+                                                - img [ref=f22e1858]
+                                                - generic [ref=f22e1860]: Appearance
+                                                - generic [ref=f22e1861]: System
+                                        - generic [ref=f22e1862]: Device
+                                        - generic [ref=f22e1863]:
+                                            - generic [ref=f22e1864]:
+                                                - img [ref=f22e1865]
+                                                - generic [ref=f22e1867]: Performance
+                                                - generic [ref=f22e1868]: Tier 1 · 42 t/s
+                                                - img [ref=f22e1869]
+                                            - generic [ref=f22e1871]:
+                                                - img [ref=f22e1872]
+                                                - generic [ref=f22e1874]: Storage
+                                                - generic [ref=f22e1875]: 2.18 GB
+                                                - img [ref=f22e1876]
+                                            - generic [ref=f22e1878]:
+                                                - img [ref=f22e1879]
+                                                - generic [ref=f22e1881]: Privacy
+                                                - img [ref=f22e1882]
+                                        - generic [ref=f22e1884]: About
+                                        - generic [ref=f22e1885]:
+                                            - generic [ref=f22e1886]:
+                                                - img [ref=f22e1887]
+                                                - generic [ref=f22e1889]: About AGI
+                                                - img [ref=f22e1890]
+                                            - generic [ref=f22e1892]:
+                                                - img [ref=f22e1893]
+                                                - generic [ref=f22e1895]: Open-source acknowledgments
+                                                - img [ref=f22e1896]
+                        - generic [ref=f22e1899]:
+                            - generic [ref=f22e1900]:
+                                - generic [ref=f22e1901]:
+                                    - generic "Drag to reorder" [ref=f22e1902]:
+                                        - img [ref=f22e1903]
+                                    - generic "Click to focus" [ref=f22e1910] [cursor=pointer]:
+                                        - generic [ref=f22e1911]: R6.10 · Storage · light
+                                - generic [ref=f22e1912]:
+                                    - button "More" [ref=f22e1914] [cursor=pointer]:
+                                        - img [ref=f22e1915]
+                                    - button "Focus" [ref=f22e1919] [cursor=pointer]:
+                                        - img [ref=f22e1920]
+                            - generic [ref=f22e1924]:
+                                - generic:
+                                    - generic: 9:41
+                                    - generic:
+                                        - img
+                                        - img
+                                        - img
+                                - generic [ref=f22e1927]:
+                                    - generic [ref=f22e1928]:
+                                        - img [ref=f22e1930]
+                                        - generic [ref=f22e1933]: Storage
+                                    - generic [ref=f22e1935]:
+                                        - generic [ref=f22e1936]: USED
+                                        - generic [ref=f22e1937]: 2.18 GB
+                                        - generic [ref=f22e1942]:
+                                            - generic [ref=f22e1945]: On-device models · 2.1 GB
+                                            - generic [ref=f22e1948]: Cache · 84 MB
+                                            - generic [ref=f22e1951]: Conversations · 12 MB
+                                    - generic [ref=f22e1952]:
+                                        - generic [ref=f22e1953]:
+                                            - img [ref=f22e1954]
+                                            - generic [ref=f22e1956]: Manage on-device models
+                                            - generic [ref=f22e1957]: 3 loaded
+                                            - img [ref=f22e1958]
+                                        - generic [ref=f22e1960]:
+                                            - img [ref=f22e1961]
+                                            - generic [ref=f22e1963]: Conversations
+                                            - generic [ref=f22e1964]: 124 chats
+                                            - img [ref=f22e1965]
+                                        - generic [ref=f22e1967]:
+                                            - img [ref=f22e1968]
+                                            - generic [ref=f22e1970]: Clear cache
+                                            - generic [ref=f22e1971]: 84 MB
+                                        - generic [ref=f22e1972]:
+                                            - img [ref=f22e1973]
+                                            - generic [ref=f22e1975]: Export my data
+                                            - generic [ref=f22e1976]: Share sheet
+                                            - img [ref=f22e1977]
+                                    - generic [ref=f22e1980]: Export creates a .zip on your device and opens the iOS share sheet. Nothing is uploaded.
+                                    - generic [ref=f22e1981]: Danger zone
+                                    - generic [ref=f22e1983]:
+                                        - img [ref=f22e1984]
+                                        - generic [ref=f22e1986]: Reset on-device data
+                        - generic [ref=f22e1988]:
+                            - generic [ref=f22e1989]:
+                                - generic [ref=f22e1990]:
+                                    - generic "Drag to reorder" [ref=f22e1991]:
+                                        - img [ref=f22e1992]
+                                    - generic "Click to focus" [ref=f22e1999] [cursor=pointer]:
+                                        - generic [ref=f22e2000]: R6.10 · Privacy · light
+                                - generic [ref=f22e2001]:
+                                    - button "More" [ref=f22e2003] [cursor=pointer]:
+                                        - img [ref=f22e2004]
+                                    - button "Focus" [ref=f22e2008] [cursor=pointer]:
+                                        - img [ref=f22e2009]
+                            - generic [ref=f22e2013]:
+                                - generic:
+                                    - generic: 9:41
+                                    - generic:
+                                        - img
+                                        - img
+                                        - img
+                                - generic [ref=f22e2016]:
+                                    - generic [ref=f22e2017]:
+                                        - img [ref=f22e2019]
+                                        - generic [ref=f22e2022]: Privacy
+                                    - generic [ref=f22e2024]:
+                                        - img [ref=f22e2025]
+                                        - generic [ref=f22e2027]: On-device by default
+                                        - generic [ref=f22e2028]: Conversations never leave your phone unless you explicitly choose BYOK. AGI runs no servers for v1.
+                                    - generic [ref=f22e2029]: Trust signals
+                                    - generic [ref=f22e2030]:
+                                        - generic [ref=f22e2031]:
+                                            - img [ref=f22e2032]
+                                            - generic [ref=f22e2034]: Apple-verified developer
+                                        - generic [ref=f22e2035]:
+                                            - img [ref=f22e2036]
+                                            - generic [ref=f22e2038]: DPDP Act 2023 · compliant
+                                        - generic [ref=f22e2039]:
+                                            - img [ref=f22e2040]
+                                            - generic [ref=f22e2042]: No account required
+                                        - generic [ref=f22e2043]:
+                                            - img [ref=f22e2044]
+                                            - generic [ref=f22e2046]: Works in airplane mode
+                                    - generic [ref=f22e2047]: When you use BYOK
+                                    - generic [ref=f22e2048]:
+                                        - generic [ref=f22e2049]:
+                                            - img [ref=f22e2050]
+                                            - generic [ref=f22e2052]: Scan payload before send
+                                        - generic [ref=f22e2055]:
+                                            - img [ref=f22e2056]
+                                            - generic [ref=f22e2058]: Re-upload attachments warning
+                                        - generic [ref=f22e2061]:
+                                            - img [ref=f22e2062]
+                                            - generic [ref=f22e2064]: Always show payload preview
+                                    - generic [ref=f22e2067]: Documents
+                                    - generic [ref=f22e2068]:
+                                        - generic [ref=f22e2069]:
+                                            - img [ref=f22e2070]
+                                            - generic [ref=f22e2072]: Privacy policy
+                                            - img [ref=f22e2073]
+                                        - generic [ref=f22e2075]:
+                                            - img [ref=f22e2076]
+                                            - generic [ref=f22e2078]: Terms
+                                            - img [ref=f22e2079]
+                                        - generic [ref=f22e2081]:
+                                            - img [ref=f22e2082]
+                                            - generic [ref=f22e2084]: DPDP disclosures (India)
+                                            - img [ref=f22e2085]
+                                        - generic [ref=f22e2087]:
+                                            - img [ref=f22e2088]
+                                            - generic [ref=f22e2090]: Article 50 (EU AI Act)
+                                            - img [ref=f22e2091]
+                        - generic [ref=f22e2094]:
+                            - generic [ref=f22e2095]:
+                                - generic [ref=f22e2096]:
+                                    - generic "Drag to reorder" [ref=f22e2097]:
+                                        - img [ref=f22e2098]
+                                    - generic "Click to focus" [ref=f22e2105] [cursor=pointer]:
+                                        - generic [ref=f22e2106]: R6.A1 · Android onboarding · light
+                                - generic [ref=f22e2107]:
+                                    - button "More" [ref=f22e2109] [cursor=pointer]:
+                                        - img [ref=f22e2110]
+                                    - button "Focus" [ref=f22e2114] [cursor=pointer]:
+                                        - img [ref=f22e2115]
+                            - generic [ref=f22e2119]:
+                                - generic [ref=f22e2121]:
+                                    - generic [ref=f22e2122]: 9:41
+                                    - generic [ref=f22e2123]: ▴ ⌬ ▮
+                                - generic [ref=f22e2124]:
+                                    - generic [ref=f22e2125]:
+                                        - img [ref=f22e2126]
+                                        - generic [ref=f22e2133]: AGI runs on your device.
+                                        - generic [ref=f22e2134]: No account. No cloud. Free forever.
+                                        - generic [ref=f22e2135]:
+                                            - generic [ref=f22e2136]:
+                                                - img [ref=f22e2137]
+                                                - generic [ref=f22e2139]: Runs on your phone
+                                            - generic [ref=f22e2140]:
+                                                - img [ref=f22e2141]
+                                                - generic [ref=f22e2143]: Works offline
+                                            - generic [ref=f22e2144]:
+                                                - img [ref=f22e2145]
+                                                - generic [ref=f22e2147]: Nothing leaves your device
+                                    - generic [ref=f22e2148]:
+                                        - button "Start chatting" [ref=f22e2149]
+                                        - generic [ref=f22e2151]: AGI Automation LLC · Delaware, USA
+                        - generic [ref=f22e2153]:
+                            - generic [ref=f22e2154]:
+                                - generic [ref=f22e2155]:
+                                    - generic "Drag to reorder" [ref=f22e2156]:
+                                        - img [ref=f22e2157]
+                                    - generic "Click to focus" [ref=f22e2164] [cursor=pointer]:
+                                        - generic [ref=f22e2165]: R6.A2 · Android drawer · light
+                                - generic [ref=f22e2166]:
+                                    - button "More" [ref=f22e2168] [cursor=pointer]:
+                                        - img [ref=f22e2169]
+                                    - button "Focus" [ref=f22e2173] [cursor=pointer]:
+                                        - img [ref=f22e2174]
+                            - generic [ref=f22e2178]:
+                                - generic [ref=f22e2180]:
+                                    - generic [ref=f22e2181]: 9:41
+                                    - generic [ref=f22e2182]: ▴ ⌬ ▮
+                                - generic [ref=f22e2183]:
+                                    - generic [ref=f22e2184]:
+                                        - img [ref=f22e2185]
+                                        - generic [ref=f22e2187]: AGI
+                                    - generic [ref=f22e2188]:
+                                        - generic [ref=f22e2189]:
+                                            - generic [ref=f22e2191]: SN
+                                            - generic [ref=f22e2192]:
+                                                - generic [ref=f22e2193]: Siddhartha Nagula
+                                                - generic [ref=f22e2194]: Local profile
+                                        - generic [ref=f22e2196]:
+                                            - generic [ref=f22e2197]:
+                                                - img [ref=f22e2198]
+                                                - generic [ref=f22e2200]: Chat
+                                            - generic [ref=f22e2201]:
+                                                - img [ref=f22e2202]
+                                                - generic [ref=f22e2204]: Projects
+                                            - generic [ref=f22e2205]:
+                                                - img [ref=f22e2206]
+                                                - generic [ref=f22e2208]: Skills
+                                            - generic [ref=f22e2209]:
+                                                - img [ref=f22e2210]
+                                                - generic [ref=f22e2212]: Memory
+                                            - generic [ref=f22e2213]:
+                                                - img [ref=f22e2214]
+                                                - generic [ref=f22e2216]: Models
+                                            - generic [ref=f22e2217]:
+                                                - img [ref=f22e2218]
+                                                - generic [ref=f22e2220]: Keys
+                                            - generic [ref=f22e2221]:
+                                                - img [ref=f22e2222]
+                                                - generic [ref=f22e2224]: Settings

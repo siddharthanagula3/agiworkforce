@@ -81,6 +81,7 @@ Cargo.lock
 
 # --- Testing ---
 .vitest/
+.playwright-mcp/
 playwright-report/
 test-results/
 playwright/.cache/
@@ -144,7 +145,7 @@ package-lock.json
 yarn.lock
 
 # --- Debug files ---
-debug/
+/debug/
 *.pdb
 
 # --- Certificates and keys ---

@@ -6,7 +6,7 @@ Last updated: 2026-05-20
 
 Purpose: stop generated captures, reports, build outputs, and local tool artifacts from hiding real source code.
 
-Current enforcement: `pnpm check:generated-artifacts` is debt-aware. It fails new unclassified generated artifacts and warns on known tracked local/generated debt until root scratch files and transient captures are moved or untracked.
+Current enforcement: `pnpm check:generated-artifacts` is strict for tracked local/generated artifact debt. Prior root scratch files are archived under `reports/root-scratch-archive/2026-05-20/`; prior tracked Playwright MCP captures are archived under `reports/playwright-mcp-archive/2026-05-20/`; local-only files were untracked and remain ignored.
 
 ## Policy
 

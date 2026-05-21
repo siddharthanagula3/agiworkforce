@@ -1,6 +1,9 @@
 # Current Decisions
 
+Status: Current
+Owner: Founder + platform lead
 Last reviewed: 2026-05-20.
+Last updated: 2026-05-20
 
 This is the decision index for documentation cleanup. It is not a new product spec; it points to the latest evidence that was read during the docs audit.
 
@@ -53,7 +56,7 @@ Important cleanup note: repo links to `memory/*.md` are broken because there is 
 9. Current cleanup policy: update mobile-specific docs first. Avoid broad public/pricing rewrites unless the PRD is explicitly amended beyond mobile scope.
 
 10. Mobile local model architecture is Path C: system-native multimodal primitives plus downloaded text model, not one universal model.
-   Evidence: `memory/locks/v1-model-selection-final-2026-05-18.md`, `docs/archive/2026-05-18-wave-0-complete.md`, `tasks/research/V1-MODEL-SELECTION-REPORT.md`.
+    Evidence: `memory/locks/v1-model-selection-final-2026-05-18.md`, `docs/archive/2026-05-18-wave-0-complete.md`, `tasks/research/V1-MODEL-SELECTION-REPORT.md`.
 
 11. Current mobile default downloaded text model is Qwen3-4B-Instruct-2507. Apple Foundation Models and AICore are additive system layers, not the only chat model.
     Evidence: `memory/locks/v1-model-selection-final-2026-05-18.md`, `memory/locks/research-corrected-platform-facts-2026-05-18.md`.

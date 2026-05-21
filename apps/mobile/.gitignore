@@ -10,5 +10,5 @@ expo-env.d.ts
 
 # Expo prebuild artifacts — canonical iOS dir is at repo-root /ios, not apps/mobile/ios
 # Running `expo prebuild` regenerates these locally; do not commit (would diverge from top-level)
-android/
-ios/
+/android/
+/ios/

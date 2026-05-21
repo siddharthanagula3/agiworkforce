@@ -23,19 +23,9 @@ function gitLines(args) {
 const trackedFiles = gitLines(['ls-files']);
 const trackedIgnoredFiles = new Set(gitLines(['ls-files', '-ci', '--exclude-standard']));
 
-const knownGeneratedDebtPatterns = [
-  /^\.claude\/settings\.local\.json$/,
-  /^\.opencode\/package\.json$/,
-  /^\.playwright-mcp\//,
-  /^apps\/mobile\/\.expo\//,
-  /^apps\/web\/public\/downloads\/.*\.dmg$/,
-];
+const knownGeneratedDebtPatterns = [];
 
-const allowedTrackedIgnoredPatterns = [
-  /^apps\/mobile\/native\//,
-  /^apps\/web\/\.env\.example$/,
-  /^apps\/web\/app\/api\/debug\/llm-status\/route\.ts$/,
-];
+const allowedTrackedIgnoredPatterns = [];
 
 const allowedAssetPatterns = [
   /^apps\/desktop\/src-tauri\/app-icon\.png$/,
@@ -47,6 +37,7 @@ const allowedAssetPatterns = [
   /^apps\/web\/public\/(app-preview|apple-touch-icon|logo|logo-192|logo-512)\.png$/,
   /^ios\/.*\.png$/,
   /^reports\/frontend-reference-comparison\//,
+  /^reports\/playwright-mcp-archive\//,
   /^reports\/root-scratch-archive\//,
 ];
 

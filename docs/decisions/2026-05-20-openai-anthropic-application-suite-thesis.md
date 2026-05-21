@@ -1,7 +1,9 @@
 # OpenAI/Anthropic Application Suite Thesis
 
 Status: Accepted
+Owner: Founder + platform lead
 Date: 2026-05-20
+Last updated: 2026-05-20
 
 ## Decision
 
@@ -24,14 +26,14 @@ AGI Workforce should use those public product behaviors as the baseline feature-
 
 ## Locked Surface Roles
 
-| Surface | Locked role |
-| --- | --- |
-| Web | Account, projects, synced app chats, artifact library, sharing, billing/waitlist, team/admin controls, managed compute entry point. |
-| Desktop | Primary local-private compute host, connected folders, local MCP/extensions, local generated files, computer use, artifacts, and remote-control host. |
-| Mobile | Continuity, capture, voice/camera, approvals, notifications, generated-file preview/download/share, and remote control of Desktop/local host or future managed compute. Mobile is not the first heavy local compute surface. |
-| CLI | Developer engine, Claude Code muscle-memory parity, automation, local/BYOK workflows, session export/import, and engine protocol proving ground. |
-| VS Code | IDE-native developer surface using the same developer-session contract as CLI/Desktop Code. |
-| Chrome | Browser-context, research/action, capture, web app automation, and connector bridge surface. |
+| Surface | Locked role                                                                                                                                                                                                                  |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Web     | Account, projects, synced app chats, artifact library, sharing, billing/waitlist, team/admin controls, managed compute entry point.                                                                                          |
+| Desktop | Primary local-private compute host, connected folders, local MCP/extensions, local generated files, computer use, artifacts, and remote-control host.                                                                        |
+| Mobile  | Continuity, capture, voice/camera, approvals, notifications, generated-file preview/download/share, and remote control of Desktop/local host or future managed compute. Mobile is not the first heavy local compute surface. |
+| CLI     | Developer engine, Claude Code muscle-memory parity, automation, local/BYOK workflows, session export/import, and engine protocol proving ground.                                                                             |
+| VS Code | IDE-native developer surface using the same developer-session contract as CLI/Desktop Code.                                                                                                                                  |
+| Chrome  | Browser-context, research/action, capture, web app automation, and connector bridge surface.                                                                                                                                 |
 
 ## Non-Negotiables
 

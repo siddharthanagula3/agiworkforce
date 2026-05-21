@@ -1,5 +1,9 @@
 # AGI
 
+Status: Current
+Owner: Founder + platform lead
+Last updated: 2026-05-20
+
 > **All the AIs you already pay for, in one place. Beyond one model. Beyond one surface.**
 >
 > _(Public brand: **AGI** — repo path + internal packages remain `agiworkforce`. Brand simplified 2026-05-15.)_

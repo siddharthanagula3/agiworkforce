@@ -1,5 +1,7 @@
 # Anthropic Applications Parity TODO
 
+Status: Current
+Owner: Platform lead
 Last updated: 2026-05-20.
 
 This is the active checklist for the transition described in `PLAN.md`. Keep it short enough to operate from daily; move evidence and long analysis to `audit/anthropic-apps-parity/`.
@@ -62,6 +64,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Move root `downloads/` scratch artifact to the dated archive/report folder.
 - [x] Move root reference catalog markdown files to `docs/reference/`.
 - [x] Move historical root master plan and implementation log to `docs/archive/`.
+- [x] Untrack local-only generated files while leaving them on disk for the current machine.
 - [x] Add root clutter allowlist check.
 - [x] Add docs status header check for active plans.
 - [x] Add import-boundary lint so apps cannot import apps, services cannot import UI packages, and packages cannot import apps.
@@ -93,7 +96,8 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Add debt-aware README ownership coverage enforcement for apps, packages, crates, and services.
 - [x] Add debt-aware generated artifact drift check.
 - [x] Tighten README ownership check after README coverage is created.
-- [ ] Tighten generated artifact check after root scratch and `.playwright-mcp` debt are moved.
+- [x] Tighten generated artifact check after root scratch and `.playwright-mcp` debt are moved.
+- [x] Tighten current-doc metadata check after adding required status headers.
 
 ## CLI Engine Tasks
 

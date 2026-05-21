@@ -1,5 +1,9 @@
 # Building AGI
 
+Status: Current
+Owner: Platform lead
+Last updated: 2026-05-20
+
 > Public brand: **AGI** (simplified 2026-05-15). Repo path + internal packages remain `agiworkforce` — commands and paths in this doc match the unchanged internal name.
 
 This document covers the prerequisites and build commands for every shippable surface in the monorepo. If you're new to the codebase, start here — the goal is "junior engineer can clone, follow this doc, and produce a working desktop build in under 30 minutes" (FIX-038 / Sprint 5 acceptance criterion).
