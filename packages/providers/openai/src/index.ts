@@ -6,13 +6,11 @@
  * (Chat Completions API, streaming SSE) plus
  * `@agiworkforce/llm-normalize` for cross-vendor payload shaping.
  *
- * Default: Chat Completions API. Works for GPT-4.x, GPT-5.x, Codex variants,
- * and any OpenAI-compatible endpoint (Azure OpenAI, OpenRouter, local
- * vLLM/sglang, etc.) when configured with the right `baseUrl`.
- *
- * The Responses API is wired behind `useResponsesApi`. It remains opt-in so
- * OpenAI-compatible proxies keep the Chat Completions path, and server-side
- * `store` defaults off unless `responsesStore` is explicitly enabled.
+ * Default: Responses API for catalog-known, streamable text/chat models on
+ * the native OpenAI route. OpenAI-compatible proxies, unknown models, and
+ * non-chat media models stay on Chat Completions unless a future adapter adds
+ * first-class support for their native APIs. Server-side `store` still defaults
+ * off unless `responsesStore` is explicitly enabled.
  *
  * @packageDocumentation
  */
@@ -75,9 +73,9 @@ export interface OpenAIAdapterConfig extends ProviderAdapterConfig {
   serviceTier?: 'auto' | 'default' | 'flex';
   /**
    * Use the Responses API (`/v1/responses`) instead of Chat Completions.
-   * Required for o-series and GPT-5.x server-side reasoning state. Default
-   * `false` — Chat Completions covers the broad chat use case and is the
-   * lower-friction path for proxies / Azure / OpenRouter.
+   * Required for o-series and GPT-5.x server-side reasoning state. Default is
+   * automatic for native OpenAI catalog-known chat/text models. Set `false`
+   * to force Chat Completions for legacy callers and diagnostics.
    */
   useResponsesApi?: boolean;
   /**
@@ -87,6 +85,54 @@ export interface OpenAIAdapterConfig extends ProviderAdapterConfig {
    * (Hobby/Pro tier) can flip this on for a server-side conversation cache.
    */
   responsesStore?: boolean;
+}
+
+function findCatalogModel(id: string): ModelInfo | undefined {
+  return OPENAI_MODEL_CATALOG.find((model) => model.id === id);
+}
+
+function isNativeOpenAIResponsesRoute(
+  detected: ReturnType<typeof detectOpenAICompletionsCompat>,
+): boolean {
+  const endpointClass = detected.capabilities.endpointClass;
+  return endpointClass === 'default' || endpointClass === 'openai-public';
+}
+
+function modelMetadataSupportsResponses(req: ChatRequest): boolean {
+  const model = findCatalogModel(req.model);
+  if (!model) return false;
+
+  const capabilities = model.capabilities;
+  if (capabilities?.streaming === false) return false;
+  if (capabilities?.imageGen || capabilities?.videoGen) return false;
+
+  return (
+    capabilities?.agentic === true ||
+    capabilities?.codeExecution === true ||
+    capabilities?.computerUse === true ||
+    capabilities?.json === true ||
+    capabilities?.research === true ||
+    capabilities?.search === true ||
+    capabilities?.thinking === true ||
+    capabilities?.tools === true ||
+    capabilities?.vision === true
+  );
+}
+
+export function shouldUseOpenAIResponsesApi(
+  req: ChatRequest,
+  config: OpenAIAdapterConfig,
+  detected: ReturnType<typeof detectOpenAICompletionsCompat>,
+): boolean {
+  if (!isNativeOpenAIResponsesRoute(detected)) {
+    return false;
+  }
+
+  if (!modelMetadataSupportsResponses(req)) {
+    return false;
+  }
+
+  return config.useResponsesApi !== false;
 }
 
 export function createOpenAIAdapter(config: OpenAIAdapterConfig = {}): ProviderAdapter {
@@ -138,8 +184,10 @@ export function createOpenAIAdapter(config: OpenAIAdapterConfig = {}): ProviderA
         id: req.model,
       });
 
-      // 1a. Branch: Responses API path (`/v1/responses`).
-      if (config.useResponsesApi) {
+      // 1a. Branch: Responses API path (`/v1/responses`) for native OpenAI
+      // text/chat models. OpenAI-compatible endpoints stay on Chat
+      // Completions because many reject Responses-only fields or semantics.
+      if (shouldUseOpenAIResponsesApi(req, config, detected)) {
         try {
           const responsesParams = translateChatRequestToResponses(req, {
             compat: detected.defaults,

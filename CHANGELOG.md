@@ -98,6 +98,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - Web v2 AI SDK requests now fail closed unless `providerMode` is explicitly `ManagedGateway` or `ManagedNative`, preventing Local/BYOK requests from reaching the managed Vercel AI SDK/Gateway path.
 - Web AI SDK stream handling now has an adapter that maps AI SDK text, reasoning, tool, usage, error, and stop events into AGI's canonical `StreamChunk` event union.
 - Provider SDK versions are consolidated on OpenAI SDK `6.38.0`, Anthropic SDK `0.91.1`, Vercel AI SDK `6.0.141`, and the current `@ai-sdk/*` package line across Web and provider adapters.
+- OpenAI provider routing now prefers Responses API for native OpenAI catalog-known chat/text models, while preserving Chat Completions for OpenAI-compatible proxies, legacy base URLs, unknown models, and media/audio models.
 - Desktop `hooks_get_stats` now returns live per-hook execution totals, success/failure counts, average duration, and last execution time instead of the previous placeholder `None`.
 - OpenAI Responses translation now has regression coverage proving server-side `store` is omitted by default and only set when explicitly requested.
 - Current docs now define suite-level requirements for all six surfaces, cross-surface ownership for projects/chats/sessions/artifacts/memory/teams/billing, and a provider capability matrix for routing/privacy claims.
