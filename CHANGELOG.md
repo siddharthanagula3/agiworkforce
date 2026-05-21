@@ -114,6 +114,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - CLI `allowed_tools` schema filtering now accepts Claude-style aliases and pattern-qualified rules such as `Read`, `Bash`, and `Bash(cargo *)` instead of requiring internal tool names.
 - CLI hook matcher alias expansion now reads Claude-style tool aliases from the central tool catalog instead of maintaining a duplicate alias table.
 - CLI `PreToolUse` hook control-flow is now shared by task subagents, parallel read-only tool batches, and sequential tools; hook block/stop decisions and `updated_input` rewrites are honored before any tool execution path runs.
+- CLI `/permissions` now supports adding/removing allow, deny, and session command-prefix rules; command approvals match the full command before program fallbacks, reject shell-metachar suffixes on cached prefixes, and keep session approvals in process memory.
 - CLI `allowed_tools` and `disallowed_tools` are now applied to normal one-shot, REPL, and TUI agent sessions; whole-tool deny rules hide schemas and pattern rules reject matching calls before execution.
 - CLI plan-mode mutation gates now read tool permission metadata from the central tool catalog, including team/MCP-facing tools, and approved plans restore the normal mutable tool surface.
 - CLI slash-command composition now reuses the shared `agiworkforce-command-registry` built-in catalog instead of maintaining a second app-local copy; the CLI layer only adds skills, prompts, and plugin commands.

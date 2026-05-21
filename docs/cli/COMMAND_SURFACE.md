@@ -69,6 +69,8 @@ The classic line REPL (`--no-tui`) has a direct match-based handler. It supports
 - Ecosystem: `/a2a`, `/ecosystem`, `/eco`, `/plugin`, `/plugins`, `/marketplace`, `/market`, `/sync`, `/onboarding`.
 - Control/help: `/clear`, `/login`, `/logout`, `/help`, `/h`, `/?`, `/exit`, `/quit`, `/q`.
 
+`/permissions` accepts tab names for display and command-prefix management operations: `/permissions allow <command-prefix>`, `/permissions deny <command-prefix>`, `/permissions session <command-prefix>`, `/permissions remove <allow|deny|session> <command-prefix>`, and `/permissions reset`.
+
 REPL help is currently hand-written in `print_help()`. Any registry-driven help migration should preserve the REPL-only entries or explicitly demote them.
 
 ## TUI Slash Commands

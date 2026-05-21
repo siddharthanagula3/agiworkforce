@@ -225,7 +225,12 @@ pub(super) fn handle_providers(config: &CliConfig) {
 // ---------------------------------------------------------------------------
 
 pub fn handle_permissions(arg: &str) {
-    match arg {
+    let arg = arg.trim();
+    let (subcommand, rest) = split_first_word(arg);
+
+    match subcommand {
+        "" => show_permissions_tab("allow"),
+        "help" | "-h" | "--help" => print_permissions_help(),
         "reset" => match crate::permissions::PermissionStore::load() {
             Ok(mut store) => {
                 store.reset();
@@ -236,21 +241,140 @@ pub fn handle_permissions(arg: &str) {
             }
             Err(e) => output::print_error(&format!("Failed to load: {:#}", e)),
         },
-        tab if matches!(
-            tab,
-            "allow" | "deny" | "session" | "workspace" | "recently-denied" | "recent"
-        ) =>
-        {
-            match crate::permissions::PermissionStore::load() {
-                Ok(store) => eprintln!("{}", store.display_tab(tab)),
-                Err(e) => output::print_error(&format!("Failed to load permissions: {:#}", e)),
+        "allow" => {
+            if rest.is_empty() {
+                show_permissions_tab("allow");
+            } else {
+                mutate_permission_rule("allow", rest);
             }
         }
-        _ => match crate::permissions::PermissionStore::load() {
-            Ok(store) => eprintln!("{}", store.display_tab("allow")),
-            Err(e) => output::print_error(&format!("Failed to load permissions: {:#}", e)),
-        },
+        "deny" => {
+            if rest.is_empty() {
+                show_permissions_tab("deny");
+            } else {
+                mutate_permission_rule("deny", rest);
+            }
+        }
+        "session" => {
+            if rest.is_empty() {
+                show_permissions_tab("session");
+            } else {
+                mutate_permission_rule("session", rest);
+            }
+        }
+        "remove" | "rm" | "delete" => {
+            let (scope, rule) = split_first_word(rest);
+            remove_permission_rule(scope, rule);
+        }
+        tab if is_permissions_tab(tab) => show_permissions_tab(tab),
+        _ => show_permissions_tab("allow"),
     }
+}
+
+fn split_first_word(input: &str) -> (&str, &str) {
+    let input = input.trim();
+    match input.find(char::is_whitespace) {
+        Some(index) => (&input[..index], input[index..].trim()),
+        None => (input, ""),
+    }
+}
+
+fn is_permissions_tab(tab: &str) -> bool {
+    matches!(
+        tab,
+        "allow" | "deny" | "session" | "workspace" | "recently-denied" | "recent"
+    )
+}
+
+fn show_permissions_tab(tab: &str) {
+    match crate::permissions::PermissionStore::load() {
+        Ok(store) => eprintln!("{}", store.display_tab(tab)),
+        Err(e) => output::print_error(&format!("Failed to load permissions: {:#}", e)),
+    }
+}
+
+fn mutate_permission_rule(scope: &str, rule: &str) {
+    if rule.trim().is_empty() {
+        output::print_warn("Usage: /permissions <allow|deny|session> <command-prefix>");
+        return;
+    }
+
+    let mut store = match crate::permissions::PermissionStore::load() {
+        Ok(store) => store,
+        Err(e) => {
+            output::print_error(&format!("Failed to load permissions: {:#}", e));
+            return;
+        }
+    };
+
+    match scope {
+        "allow" => {
+            store.allow_always(rule);
+            match store.save() {
+                Ok(()) => output::print_info(&format!("Always allow: {}", rule.trim())),
+                Err(e) => output::print_error(&format!("Failed to save: {:#}", e)),
+            }
+        }
+        "deny" => {
+            store.deny_always(rule);
+            match store.save() {
+                Ok(()) => output::print_info(&format!("Always deny: {}", rule.trim())),
+                Err(e) => output::print_error(&format!("Failed to save: {:#}", e)),
+            }
+        }
+        "session" => {
+            store.allow_session_for_process(rule);
+            output::print_info(&format!("Allow this session: {}", rule.trim()));
+        }
+        _ => output::print_warn("Usage: /permissions <allow|deny|session> <command-prefix>"),
+    }
+}
+
+fn remove_permission_rule(scope: &str, rule: &str) {
+    if rule.trim().is_empty() || !matches!(scope, "allow" | "deny" | "session") {
+        output::print_warn("Usage: /permissions remove <allow|deny|session> <command-prefix>");
+        return;
+    }
+
+    let mut store = match crate::permissions::PermissionStore::load() {
+        Ok(store) => store,
+        Err(e) => {
+            output::print_error(&format!("Failed to load permissions: {:#}", e));
+            return;
+        }
+    };
+
+    let removed = match scope {
+        "allow" => store.remove_always_allow(rule),
+        "deny" => store.remove_always_deny(rule),
+        "session" => store.remove_session(rule),
+        _ => false,
+    };
+
+    if !removed {
+        output::print_warn(&format!(
+            "No {scope} permission rule matched: {}",
+            rule.trim()
+        ));
+        return;
+    }
+
+    if scope == "session" {
+        output::print_info(&format!("Removed session permission: {}", rule.trim()));
+        return;
+    }
+
+    match store.save() {
+        Ok(()) => output::print_info(&format!("Removed {scope} permission: {}", rule.trim())),
+        Err(e) => output::print_error(&format!("Failed to save: {:#}", e)),
+    }
+}
+
+fn print_permissions_help() {
+    eprintln!(
+        "{}\n  /permissions\n  /permissions allow <command-prefix>\n  /permissions deny <command-prefix>\n  /permissions session <command-prefix>\n  /permissions remove <allow|deny|session> <command-prefix>\n  /permissions reset",
+        "Permissions:".cyan().bold()
+    );
 }
 
 // ---------------------------------------------------------------------------

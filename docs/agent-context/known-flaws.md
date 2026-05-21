@@ -24,6 +24,7 @@ Use this file to prevent duplicate bug discovery. If an agent finds one of these
 | CODEOWNERS-01       | Medium   | Guarded      | Platform          | `.github/CODEOWNERS`                                                     | CODEOWNERS is provisional pre-hiring but must cover high-risk paths and state the real-team replacement requirement.                                       | `pnpm check:codeowners`                                         |
 | WORKSPACE-SCRIPT-01 | Medium   | Guarded      | Platform          | `package.json`, workspace `package.json` files                           | Package scripts must not advertise concrete `pnpm --filter` targets that do not exist in the workspace.                                                    | `pnpm check:workspace-scripts`                                  |
 | CLI-HOOK-01         | High     | Guarded      | CLI lead          | `apps/cli/src/agent/chat.rs`, `apps/cli/src/features/hooks/`             | `PreToolUse` block/stop decisions and argument rewrites must be honored by every tool execution path, including task and parallel batches.                 | `cargo test -p agiworkforce-cli agent::chat::tests --lib`       |
+| CLI-PERM-01         | High     | Guarded      | CLI lead          | `apps/cli/src/permissions.rs`, `apps/cli/src/features/exec/tools/`       | Cached command permissions must evaluate the whole command before program fallbacks, reject unsafe suffixes, and keep session approvals alive in-process.  | `cargo test -p agiworkforce-cli permissions::tests --lib`       |
 
 ## Update Rules
 

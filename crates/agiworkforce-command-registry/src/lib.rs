@@ -251,7 +251,7 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             "permissions",
             "Manage tool permissions",
             false,
-            false,
+            true,
             vec!["perms", "approvals"],
         ),
         RegistryCommand::builtin_slash("hooks", "Manage hooks configuration", true, false, vec![]),
