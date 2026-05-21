@@ -1,6 +1,6 @@
 # Desktop surface
 
-> **Path:** `apps/desktop/` · **Stack:** Tauri v2.11.1 + React (Vite) · **Owner:** founder · **Status:** v1.2.0 shipped Linux; macOS + Windows release pipeline unblocked 2026-05-16 (PLA renewed). **Updated:** 2026-05-18.
+> **Path:** `apps/desktop/` · **Stack:** Tauri v2.11.1 + React (Vite) · **Owner:** founder · **Status:** v1.2.0 shipped Linux; macOS + Windows release pipeline unblocked 2026-05-16 (PLA renewed). **Updated:** 2026-05-21.
 
 ## Mission
 
@@ -41,8 +41,8 @@ Native Mac / Windows / Linux app for the same chat layer that runs on web and mo
 apps/desktop/
 ├── src/                            React frontend
 │   ├── App.tsx                     entry; imports CommandPalette + SearchModal + KeyboardShortcutsOverlay + ToolLabel
-│   ├── components/                 74 subdirs — Onboarding, Sidebar, Chat, etc.
-│   │   └── Onboarding/
+│   ├── features/
+│   │   └── onboarding/
 │   │       └── OnboardingWizard.tsx   ⚠ canonical mode picker (Local vs Cloud); ModeSelectionDialog was deleted, do NOT reintroduce
 │   ├── stores/                     118 Zustand stores
 │   ├── hooks/                      40+ custom hooks
@@ -64,13 +64,13 @@ apps/desktop/
 
 ## Key files to know
 
-| File                                                          | What                                                                                                                                                                                                                                                            |
-| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/desktop/src/App.tsx`                                    | Entry. Notable: lines 26, 96-105 import `CommandPalette`, `SearchModal`, `KeyboardShortcutsOverlay`, `ToolLabel` from `UnifiedAgenticChat/`. Lines 153-155 have a commented dead lazy-import. W6 fix: relocate the 4 live components and delete the legacy dir. |
-| `apps/desktop/src/components/Onboarding/OnboardingWizard.tsx` | Mode picker. **`ModeSelectionDialog` was removed and must not be reintroduced** (PRD V5 §10 lock #2).                                                                                                                                                           |
-| `apps/desktop/src-tauri/Cargo.toml`                           | Workspace lint rules: `unsafe_code = "deny"`, `await_holding_lock = "warn"`.                                                                                                                                                                                    |
-| `apps/desktop/src/constants/models.json`                      | Mirror file — DO NOT edit; SSOT is `packages/types/src/models.json`.                                                                                                                                                                                            |
-| `.github/workflows/release-desktop.yml`                       | Tag-triggered build + sign + notarize. Needs `APPLE_*` + `WINDOWS_CERTIFICATE*` GitHub secrets.                                                                                                                                                                 |
+| File                                                        | What                                                                                                                                                                                                                                                            |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/desktop/src/App.tsx`                                  | Entry. Notable: lines 26, 96-105 import `CommandPalette`, `SearchModal`, `KeyboardShortcutsOverlay`, `ToolLabel` from `UnifiedAgenticChat/`. Lines 153-155 have a commented dead lazy-import. W6 fix: relocate the 4 live components and delete the legacy dir. |
+| `apps/desktop/src/features/onboarding/OnboardingWizard.tsx` | Mode picker. **`ModeSelectionDialog` was removed and must not be reintroduced** (PRD V5 §10 lock #2).                                                                                                                                                           |
+| `apps/desktop/src-tauri/Cargo.toml`                         | Workspace lint rules: `unsafe_code = "deny"`, `await_holding_lock = "warn"`.                                                                                                                                                                                    |
+| `apps/desktop/src/constants/models.json`                    | Mirror file — DO NOT edit; SSOT is `packages/types/src/models.json`.                                                                                                                                                                                            |
+| `.github/workflows/release-desktop.yml`                     | Tag-triggered build + sign + notarize. Needs `APPLE_*` + `WINDOWS_CERTIFICATE*` GitHub secrets.                                                                                                                                                                 |
 
 ## Build + test commands
 

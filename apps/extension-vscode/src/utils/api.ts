@@ -735,14 +735,10 @@ export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<Tier
             resolve(undefined);
             return;
           }
-          // PR-4B (F-23): cross-surface stub. When `apps/web/app/api/auth/me/route.ts`
-          // begins HMAC-signing tier responses, validate the `signature`
-          // field here against a session-bound secret stored in SecretStorage.
-          // Until the server ships signatures, we accept unsigned responses
-          // (one-release backward-compat window) but log presence/absence
-          // for telemetry.
-          // const hasSig = typeof parsed.data.signature === 'string';
-          // TODO: once server-side HMAC ships, verify hasSig && hmac matches.
+          // Tier signatures are not enforced yet. The optional `signature`
+          // field is schema-preserved for forward compatibility, but this
+          // client must not treat a response as cryptographically verified
+          // until a signed-tier-response contract and key source are shipped.
           const tierInfo: TierInfo = { tier: parsed.data.tier };
           if (typeof parsed.data.tokens_used === 'number') {
             tierInfo.tokensUsed = parsed.data.tokens_used;

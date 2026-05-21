@@ -1,6 +1,6 @@
 # CLI surface
 
-> **Path:** `apps/cli/` · **Stack:** Rust monolith + Ratatui TUI · **Owner:** founder · **Status:** v1.1.6 shipped (latest), v1.0 shipped 2026-05-03. **Updated:** 2026-05-18.
+> **Path:** `apps/cli/` · **Stack:** Rust monolith + Ratatui TUI · **Owner:** founder · **Status:** v1.1.6 shipped (latest), v1.0 shipped 2026-05-03. **Updated:** 2026-05-21.
 
 ## Mission
 
@@ -30,16 +30,16 @@ The Rust CLI is the **engine** — every other surface wraps it conceptually. It
 
 ## Stack
 
-| Item          | Choice                                                                                       |
-| ------------- | -------------------------------------------------------------------------------------------- |
-| Language      | Rust 1.94.0 (pinned in `apps/desktop/src-tauri/rust-toolchain.toml`, applies workspace-wide) |
-| TUI framework | Ratatui (125 files / ~155K LOC of TUI)                                                       |
-| Async runtime | Tokio                                                                                        |
-| HTTP client   | reqwest                                                                                      |
-| Provider SDKs | Custom OpenAI-compatible HTTP client; no vendor SDKs in CLI (TS packages wrap vendor SDKs)   |
-| MCP           | stdio transport only (HTTP transport via api-gateway)                                        |
-| Sandbox       | macOS Seatbelt + Linux bwrap (Windows + Landlock are stubs — V5 §17 risk #10)                |
-| Distribution  | Homebrew + npm + curl install.sh + GitHub Releases (6 platforms) + Cargo                     |
+| Item          | Choice                                                                                         |
+| ------------- | ---------------------------------------------------------------------------------------------- |
+| Language      | Rust 1.94.0 (pinned in `apps/desktop/src-tauri/rust-toolchain.toml`, applies workspace-wide)   |
+| TUI framework | Ratatui (125 files / ~155K LOC of TUI)                                                         |
+| Async runtime | Tokio                                                                                          |
+| HTTP client   | reqwest                                                                                        |
+| Provider SDKs | Custom OpenAI-compatible HTTP client; no vendor SDKs in CLI (TS packages wrap vendor SDKs)     |
+| MCP           | Client supports stdio, SSE, and Streamable HTTP with optional OAuth; `agi mcp-server` is stdio |
+| Sandbox       | macOS Seatbelt + Linux bwrap (Windows + Landlock are stubs — V5 §17 risk #10)                  |
+| Distribution  | Homebrew + npm + curl install.sh + GitHub Releases (6 platforms) + Cargo                       |
 
 ## File layout
 
@@ -205,7 +205,7 @@ gh release download v-cli-1.1.6 --repo siddharthanagula3/agiworkforce
 - **`provider_from_name` is the SSOT for CLI provider list** at `apps/cli/src/models.rs:287-310`. Comments inside this match block win over `models.json` for CLI behavior.
 - **`subagent_v2.rs` was archived 2026-05-17.** The live implementation is `subagent.rs`. Don't reintroduce v2 without explicit decision.
 - **Plan mode**: legacy `plan_mode` was DELETED at `tools.rs:193`. Only `update_plan` remains. Don't reintroduce.
-- **MCP transport**: stdio only in CLI. HTTP MCP via `services/api-gateway`.
+- **MCP transports**: CLI client supports stdio, SSE, and Streamable HTTP with optional OAuth via `apps/cli/src/mcp/{mod.rs,sse.rs,http.rs,oauth_flow.rs}`. `agi mcp-server` exposes AGI itself as a stdio MCP server.
 - **Sandbox silent fallthrough** is a P0 to fix per V5 §17 risk #10.
 - **Latest test count**: 1,320 (verified 2026-05-17). Older docs say 999 — outdated.
 - **`FAST_STATUS_MODEL` hardcoded** at `tui/chatwidget.rs:344` violates V5 §10 lock #1 (no hardcoded model IDs). W6 fix.

@@ -215,7 +215,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Replace desktop hook stats placeholder with real stats or visible unsupported state.
 - [x] Replace VS Code managed-plan usage stub with real usage-source reporting.
 - [ ] Finish Chrome native host installer automation, including Windows.
-- [ ] Fix docs drift found by surface audit: CLI MCP transports, desktop onboarding paths, outdated HMAC comments.
+- [x] Fix docs drift found by surface audit: CLI MCP transports, desktop onboarding paths, outdated HMAC comments.
 
 ## Compute And Generated Artifact Tasks
 

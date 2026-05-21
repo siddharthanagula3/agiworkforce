@@ -18,8 +18,8 @@ export const TierInfoSchema = z
     token_cap: z.number().int().nonnegative().optional(),
     resets_at: z.string().min(1).optional(),
     quota_resets_at: z.string().min(1).optional(),
-    // Future: HMAC signature field added by PR-4B once server signs tier
-    // responses. Until then, signature is optional.
+    // Reserved for future signed tier responses. This schema only preserves the
+    // field; verification must happen in the API client before it is trusted.
     signature: z.string().min(1).optional(),
   })
   .passthrough(); // tolerate unknown fields for forward-compat
