@@ -1,7 +1,7 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Ask \${applicationName}" : {
+    "Ask ${applicationName}" : {
       "comment" : "AskAGIIntent — no prompt supplied",
       "extractionState" : "manual",
       "localizations" : {
@@ -13,7 +13,7 @@
         }
       }
     },
-    "Ask \${applicationName} \${prompt}" : {
+    "Ask ${applicationName} ${prompt}" : {
       "comment" : "AskAGIIntent — with prompt parameter",
       "extractionState" : "manual",
       "localizations" : {
@@ -25,7 +25,7 @@
         }
       }
     },
-    "\${applicationName} answer \${prompt}" : {
+    "${applicationName} answer ${prompt}" : {
       "comment" : "AskAGIIntent — alternate phrasing",
       "extractionState" : "manual",
       "localizations" : {
@@ -37,7 +37,7 @@
         }
       }
     },
-    "Start chat with \${applicationName}" : {
+    "Start chat with ${applicationName}" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -48,7 +48,7 @@
         }
       }
     },
-    "Open \${applicationName}" : {
+    "Open ${applicationName}" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -59,7 +59,7 @@
         }
       }
     },
-    "New conversation in \${applicationName}" : {
+    "New conversation in ${applicationName}" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -70,7 +70,7 @@
         }
       }
     },
-    "Summarize this with \${applicationName}" : {
+    "Summarize this with ${applicationName}" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -81,7 +81,7 @@
         }
       }
     },
-    "Summarize with \${applicationName}" : {
+    "Summarize with ${applicationName}" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -92,7 +92,7 @@
         }
       }
     },
-    "\${applicationName} summarize \${text}" : {
+    "${applicationName} summarize ${text}" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -103,7 +103,7 @@
         }
       }
     },
-    "Analyze this image with \${applicationName}" : {
+    "Analyze this image with ${applicationName}" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -114,7 +114,7 @@
         }
       }
     },
-    "Analyze image with \${applicationName}" : {
+    "Analyze image with ${applicationName}" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -125,7 +125,7 @@
         }
       }
     },
-    "\${applicationName} analyze this photo" : {
+    "${applicationName} analyze this photo" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -136,7 +136,7 @@
         }
       }
     },
-    "Transcribe with \${applicationName}" : {
+    "Transcribe with ${applicationName}" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -147,7 +147,7 @@
         }
       }
     },
-    "Transcribe audio with \${applicationName}" : {
+    "Transcribe audio with ${applicationName}" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -158,7 +158,7 @@
         }
       }
     },
-    "\${applicationName} transcribe this" : {
+    "${applicationName} transcribe this" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -169,7 +169,7 @@
         }
       }
     },
-    "Translate with \${applicationName}" : {
+    "Translate with ${applicationName}" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -180,7 +180,7 @@
         }
       }
     },
-    "Translate this with \${applicationName}" : {
+    "Translate this with ${applicationName}" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -191,7 +191,7 @@
         }
       }
     },
-    "\${applicationName} translate \${text}" : {
+    "${applicationName} translate ${text}" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -202,7 +202,7 @@
         }
       }
     },
-    "Scan with \${applicationName}" : {
+    "Scan with ${applicationName}" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -213,7 +213,7 @@
         }
       }
     },
-    "Scan document with \${applicationName}" : {
+    "Scan document with ${applicationName}" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -224,7 +224,7 @@
         }
       }
     },
-    "\${applicationName} scan this" : {
+    "${applicationName} scan this" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -235,7 +235,7 @@
         }
       }
     },
-    "Set reminder via \${applicationName}" : {
+    "Set reminder via ${applicationName}" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -246,7 +246,7 @@
         }
       }
     },
-    "Remind me via \${applicationName}" : {
+    "Remind me via ${applicationName}" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -257,7 +257,7 @@
         }
       }
     },
-    "\${applicationName} remind me to \${reminderText}" : {
+    "${applicationName} remind me to ${reminderText}" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {

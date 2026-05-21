@@ -178,8 +178,8 @@ export default function NotificationCenterScreen() {
         case 'emergency_stop_triggered':
           if (agentId) {
             router.push({
-              pathname: '/(app)/companion/agent/[agentId]' as const,
-              params: { agentId },
+              pathname: '/(app)/companion/agent/[id]' as const,
+              params: { id: agentId },
             });
           } else {
             router.push({ pathname: '/(app)/companion' as const });
@@ -192,8 +192,8 @@ export default function NotificationCenterScreen() {
         case 'agent_paused':
           if (agentId) {
             router.push({
-              pathname: '/(app)/companion/agent/[agentId]' as const,
-              params: { agentId },
+              pathname: '/(app)/companion/agent/[id]' as const,
+              params: { id: agentId },
             });
           } else {
             router.push({ pathname: '/(app)/companion' as const });

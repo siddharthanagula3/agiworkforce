@@ -15,6 +15,7 @@ Last updated: 2026-05-21
 | `supabase/` | Data/backend      | Canonical database migrations and Supabase config.                                 |
 | `docs/`     | Docs/platform     | Current docs, decisions, plans, support/legal/marketing docs, and archive.         |
 | `audit/`    | Platform/security | Evidence ledgers, scan output, parity research, and source-backed claims.          |
+| `patches/`  | Platform          | pnpm dependency patches with upstream/version-specific rationale.                  |
 
 ## Surface Feature Roots
 
@@ -33,6 +34,7 @@ Last updated: 2026-05-21
 - Packages must not import from apps.
 - Services must not import UI packages.
 - Root `supabase/migrations` is canonical for database schema changes.
+- Root `patches/` is reserved for pnpm dependency patches; remove entries when upstream/dependency changes make them unnecessary.
 
 ## Cross-Surface Data Ownership
 

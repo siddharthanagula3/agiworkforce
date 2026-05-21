@@ -57,6 +57,9 @@
       "typescript": "5.9.3",
       "@types/node": "^22.19.15",
       "@supabase/supabase-js": "2.105.4"
+    },
+    "patchedDependencies": {
+      "expo@55.0.24": "patches/expo@55.0.24.patch"
     }
   },
   "scripts": {

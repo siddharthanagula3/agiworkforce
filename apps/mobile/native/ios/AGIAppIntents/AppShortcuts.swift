@@ -3,7 +3,7 @@ import AppIntents
 // AppShortcutsProvider registers phrase triggers for Siri, Spotlight, and the
 // Shortcuts app. Phrase strings use ${applicationName} so they stay correct if
 // the bundle display name ever changes, and are localizable via
-// AppShortcuts.xcstrings (see en.lproj/ below for English defaults).
+// AGIAppIntents/AppShortcuts.xcstrings.
 //
 // Visual Intelligence (iOS 18+): AnalyzeImageIntent and ScanIntent are
 // discoverable on-screen via the Intent's `@available(iOS 16.0, *)` guard;

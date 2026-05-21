@@ -5,7 +5,7 @@
 //   - AGITranslate (.m + .swift) — Apple Translate framework (iOS 17.4+)
 //   - AGIVisionOCR (.m + .swift) — Apple Vision text recognition (iOS 13+)
 //   - AGIAppIntents/*.swift — App Intents + Siri phrases (iOS 16+)
-//   - AGIAppIntents/en.lproj/AppShortcuts.xcstrings — localization for Siri phrases
+//   - AGIAppIntents/AppShortcuts.xcstrings — localization for Siri phrases
 //
 // All Swift modules use RCT_EXTERN_MODULE ObjC bridges so React Native's bridge
 // scanner registers them automatically — no manual registration list needed.
@@ -20,6 +20,7 @@ const path = require('path');
 
 const PLUGIN_NAME = 'agi-native-modules-ios-plugin';
 const PLUGIN_VERSION = '1.0.0';
+const IOS_DEPLOYMENT_TARGET = '17.0';
 
 const NATIVE_IOS_SRC = __dirname;
 
@@ -47,8 +48,8 @@ const APP_INTENTS_FILES = [
   'TranslateIntent.swift',
 ];
 
-// Localization resources relative to native/ios/AGIAppIntents/en.lproj/
-const LPROJ_FILES = ['AppShortcuts.xcstrings'];
+// Localization resources relative to native/ios/
+const RESOURCE_FILES = ['AGIAppIntents/AppShortcuts.xcstrings'];
 
 /** Step 1 — copy source files into the generated ios/<AppName>/ directory */
 function withCopyIOSSources(config) {
@@ -61,8 +62,7 @@ function withCopyIOSSources(config) {
 
       // Ensure AGIAppIntents subdir exists
       const appIntentsDir = path.join(iosAppDir, 'AGIAppIntents');
-      const lprojDir = path.join(appIntentsDir, 'en.lproj');
-      [iosAppDir, appIntentsDir, lprojDir].forEach((d) => {
+      [iosAppDir, appIntentsDir].forEach((d) => {
         if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
       });
 
@@ -85,9 +85,9 @@ function withCopyIOSSources(config) {
       }
 
       // Copy localization resources
-      for (const fileName of LPROJ_FILES) {
-        const src = path.join(NATIVE_IOS_SRC, 'AGIAppIntents', 'en.lproj', fileName);
-        const dest = path.join(lprojDir, fileName);
+      for (const relPath of RESOURCE_FILES) {
+        const src = path.join(NATIVE_IOS_SRC, relPath);
+        const dest = path.join(iosAppDir, relPath);
         if (fs.existsSync(src) && !fs.existsSync(dest)) {
           fs.copyFileSync(src, dest);
         }
@@ -108,34 +108,82 @@ function withCopyIOSSources(config) {
 function withXcodeSourceFiles(config) {
   return withXcodeProject(config, (c) => {
     const xcodeProject = c.modResults;
+    const targetUuid = xcodeProject.getFirstTarget()?.uuid;
+    const appName = c.modRequest.projectName ?? 'AGIWorkforce';
+    const appGroupKey =
+      xcodeProject.findPBXGroupKey({ name: appName }) ||
+      xcodeProject.findPBXGroupKey({ path: appName });
+
+    if (!targetUuid || !appGroupKey) {
+      throw new Error(
+        `${PLUGIN_NAME}: could not locate the generated ${appName} target/group in the Xcode project`,
+      );
+    }
+
+    const toProjectPath = (relPath) => `${appName}/${relPath}`;
+
+    // AppShortcuts.xcstrings requires iOS 17+. The mobile app's local-LLM
+    // native stack also ships binaries that target modern iOS, so keep the
+    // generated app target aligned with the real runtime floor.
+    const buildConfigs = xcodeProject.pbxXCBuildConfigurationSection();
+    for (const value of Object.values(buildConfigs)) {
+      if (value && typeof value === 'object' && value.buildSettings) {
+        value.buildSettings.IPHONEOS_DEPLOYMENT_TARGET = IOS_DEPLOYMENT_TARGET;
+      }
+    }
 
     // Helper: safe add source file (skips if already present)
     function safeAddSource(relPath) {
       const existingRefs = xcodeProject.pbxFileReferenceSection();
       const baseName = path.basename(relPath);
+      const projectPath = toProjectPath(relPath);
       const alreadyPresent = Object.values(existingRefs).some(
         (f) =>
           f &&
           typeof f === 'object' &&
           f.path &&
-          (f.path === baseName || f.path === `"${baseName}"`),
+          [
+            baseName,
+            `"${baseName}"`,
+            relPath,
+            `"${relPath}"`,
+            projectPath,
+            `"${projectPath}"`,
+          ].includes(f.path),
       );
       if (alreadyPresent) return;
-      xcodeProject.addSourceFile(relPath, { target: xcodeProject.getFirstTarget().uuid });
+      xcodeProject.addSourceFile(projectPath, { target: targetUuid }, appGroupKey);
     }
 
     function safeAddResource(relPath) {
       const existingRefs = xcodeProject.pbxFileReferenceSection();
       const baseName = path.basename(relPath);
+      const projectPath = toProjectPath(relPath);
       const alreadyPresent = Object.values(existingRefs).some(
         (f) =>
           f &&
           typeof f === 'object' &&
           f.path &&
-          (f.path === baseName || f.path === `"${baseName}"`),
+          [
+            baseName,
+            `"${baseName}"`,
+            relPath,
+            `"${relPath}"`,
+            projectPath,
+            `"${projectPath}"`,
+          ].includes(f.path),
       );
       if (alreadyPresent) return;
-      xcodeProject.addResourceFile(relPath, { target: xcodeProject.getFirstTarget().uuid });
+
+      // xcode.addResourceFile assumes a PBXGroup named "Resources", which Expo
+      // SDK 55 projects no longer create by default. Add the file to the app
+      // group directly, then wire it into PBXResourcesBuildPhase.
+      const file = xcodeProject.addFile(projectPath, appGroupKey);
+      if (!file) return;
+      file.target = targetUuid;
+      file.uuid = xcodeProject.generateUuid();
+      xcodeProject.addToPbxBuildFileSection(file);
+      xcodeProject.addToPbxResourcesBuildPhase(file);
     }
 
     // Top-level Swift + ObjC files — paths relative to ios/<AppName>/
@@ -149,8 +197,8 @@ function withXcodeSourceFiles(config) {
     }
 
     // Localization xcstrings resource
-    for (const fileName of LPROJ_FILES) {
-      safeAddResource(`AGIAppIntents/en.lproj/${fileName}`);
+    for (const relPath of RESOURCE_FILES) {
+      safeAddResource(relPath);
     }
 
     return c;

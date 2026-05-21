@@ -45,6 +45,7 @@ This file is now a compact entry point. The former long historical version is ar
 - `crates/` owns reusable Rust runtime/protocol/command/sandbox pieces.
 - `services/` owns deployable backend services.
 - `supabase/migrations/` is the canonical database migration root.
+- `patches/` owns pnpm dependency patches only.
 - App code must not import another app.
 - Packages must not import app code.
 - Services must not import UI packages.

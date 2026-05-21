@@ -8,6 +8,8 @@
     "dev": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "ios:device:dev": "bash scripts/ios-device-dev.sh",
+    "ios:device:dev:no-prebuild": "SKIP_IOS_PREBUILD=1 bash scripts/ios-device-dev.sh",
     "build:dev": "eas build --profile development",
     "build:preview": "eas build --profile preview",
     "build:prod": "eas build --profile production",
@@ -51,7 +53,6 @@
     "expo": "~55.0.23",
     "expo-apple-authentication": "~55.0.13",
     "expo-asset": "~55.0.17",
-    "expo-av": "~15.1.7",
     "expo-background-fetch": "~55.0.15",
     "expo-calendar": "~55.0.14",
     "expo-camera": "~55.0.18",
@@ -84,7 +85,7 @@
     "lucide-react-native": "^0.577.0",
     "nativewind": "^4.2.3",
     "react": "19.2.0",
-    "react-native": "0.84.0",
+    "react-native": "0.83.6",
     "react-native-executorch": "^0.8.4",
     "react-native-executorch-expo-resource-fetcher": "^0.8.0",
     "react-native-gesture-handler": "~2.30.0",
@@ -114,7 +115,6 @@
       "reactNativeDirectoryCheck": {
         "exclude": [
           "react-native-webrtc",
-          "expo-av",
           "react-native-executorch",
           "react-native-executorch-expo-resource-fetcher",
           "llama.rn"

@@ -8,8 +8,8 @@ Criticality: high
 
 ## Purpose
 
-Expo 55 + React Native 0.84 + React 19 mobile app for **AGI** (iOS + Android).
-Target launch: **2026-08-06**. Bundle id `com.agiworkforce.app`. Apple Developer ID `D2PR62RLT4`.
+Expo 55 + React Native 0.83.6 + React 19 mobile app for **AGI** (iOS + Android).
+Target launch: **2026-08-06**. Bundle id `com.agiworkforce.app`. Apple Developer ID `D2PR62RLT4` for EAS/release signing.
 
 Authoritative specs (read these before non-trivial changes):
 
@@ -103,14 +103,14 @@ BYOK providers via `@agiworkforce/llm-normalize`: Anthropic, OpenAI, Google, xAI
 | Pkg                     | Version |
 | ----------------------- | ------- |
 | Expo SDK                | 55.0.23 |
-| React Native            | 0.84.0  |
+| React Native            | 0.83.6  |
 | React                   | 19.2.0  |
 | NativeWind              | 4.2.3   |
 | react-native-mmkv       | 4.3.1   |
 | react-native-reanimated | 4.3.1   |
 | Expo Router             | 5.x     |
 
-iOS min: **15.1** (SDK-derived from Expo SDK 55). Bundle id: `com.agiworkforce.app`.
+iOS min: **17.0** (AppShortcuts.xcstrings + local-LLM native runtime floor). Bundle id: `com.agiworkforce.app`.
 
 ## Build & test
 
@@ -135,6 +135,8 @@ EAS signing runbook: `scripts/release/EAS_SIGNING_RUNBOOK.md`.
 ## Config notes
 
 - **`app.config.js` is the single Expo config.** The stale root/mobile `app.json` files were removed 2026-05-21.
+- **iOS entitlement profile:** default `APP_ENV=development` builds use a reduced entitlement set for basic development provisioning profiles. To force full production entitlements locally (Push / SIWA / Siri / Translate), set `APP_ENV=preview|production` or `EXPO_ENABLE_PRODUCTION_IOS_ENTITLEMENTS=1`.
+- **Physical iPhone debug:** run `pnpm --filter @agiworkforce/mobile run ios:device:dev -- <device-udid-or-name>` to clean-regenerate ignored iOS prebuild artifacts with the reduced development entitlement set before installing. Use `ios:device:dev:no-prebuild` only after the generated `apps/mobile/ios/` project is already in the right entitlement state. If iOS reports that the profile is not explicitly trusted, open iPhone Settings -> General -> VPN & Device Management -> Developer App, trust the local developer profile, then rerun the `no-prebuild` command.
 - **Tier 1/2/3 mobile runtime** is wired in `native/` (custom Swift/Kotlin modules) — do NOT add a new on-device model path outside the tier router.
 - **Permissions** (camera/mic/photos/calendar/HealthKit) are declared in `app.config.js` -> `ios.infoPlist` and `android.permissions`. Edit Expo config first; root `ios/agiworkforce/Info.plist` is the tracked Xcode-consumed copy.
 - **NativeWind v4** is the styling layer; `global.css` + `tailwind.config.js` are its inputs. Don't import the React Native `StyleSheet` API for new components — use Tailwind classes.

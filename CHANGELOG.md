@@ -111,9 +111,13 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
   - `PrivacyMode` on `AgentSession`: `Local`, `Byok`, `Managed`.
   - Send-time block when a Local session would route to a non-local provider.
   - `/privacy-mode` and `/continue-with-byok` slash commands.
+- `audit/anthropic-apps-parity/team-2026-05-21/` as the current parallel-agent evidence bundle for Claude/OpenAI-style surface parity, with image-side, source-side, reconciliation, synthesis, and executive-summary reports.
 
 ### Changed
 
+- Mobile physical-iPhone development builds now use an explicit `ios:device:dev` script that clean-prebuilds with development-safe entitlements, and `ios:device:dev:no-prebuild` for retrying after generated iOS artifacts are already correct.
+- Mobile iOS native-module prebuild wiring now handles Expo SDK 55 Xcode project groups, registers `AppShortcuts.xcstrings` as an app resource, and raises generated iOS deployment targets to 17.0 for AppShortcuts/local-runtime compatibility.
+- Mobile README and architecture docs now document the local iPhone trust step, RN 0.83.6 runtime pin, iOS 17.0 floor, and root `patches/` ownership rule.
 - VS Code sidebar model switching now uses a real inline model popover backed by `modelPickerData` from the extension host, with webview regression coverage for the previously undefined popover variables.
 - Mobile streaming now fails closed through the remote chat gate and Article 50 provider gate before outbound provider/API requests. Local Mode + Local LLM attachments are kept as local references instead of being uploaded first.
 - Mobile Local Mode chat now uses the selected local model when remote chat is disabled, streams local tokens into the assistant message, records installed-model last-use metadata, and shows a setup message instead of silently falling back to cloud when no on-device model is ready.
@@ -141,6 +145,9 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 
 ### Fixed
 
+- Mobile physical iPhone Debug builds now compile under the installed Xcode/iOS SDK by aligning React Native to Expo SDK 55, removing unused `expo-av`, patching the Expo root-view optional dev-menu mismatch, and updating `AGITranslate` for the current Translation framework API.
+- Mobile notification deep links now target `/(app)/companion/agent/[id]` with the correct `id` route param, restoring Expo typed-route typecheck.
+- Mobile AppShortcuts localization now compiles from the supported root `AppShortcuts.xcstrings` resource path instead of the invalid nested `en.lproj` placement.
 - Mobile local LLM turns no longer include the latest user prompt twice in both `messages` history and `prompt`, preserving prompt budget and response quality for on-device runtimes.
 - Mobile local runtime resolution now rejects stale or non-selectable cloud model ids instead of silently downgrading to the default local model.
 - Mobile OCR fallback now routes through the `AGIVisionOCR` service instead of the Foundation Models/AICore modules, restoring native on-device OCR for vision fallback prompts.
