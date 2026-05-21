@@ -28,6 +28,7 @@ export interface BuildLocalToByokHandoffDraftParams {
   createdAt?: string;
   expiresAt: string;
   blockOnFindings?: boolean;
+  hash?: (value: string) => Promise<string>;
 }
 
 export interface LocalToByokHandoffPreview {
@@ -52,6 +53,7 @@ export async function buildLocalToByokHandoffDraft(
   params: BuildLocalToByokHandoffDraftParams,
 ): Promise<LocalToByokHandoffPreview> {
   const createdAt = params.createdAt ?? new Date().toISOString();
+  const hash = params.hash ?? sha256;
   const redactionResults = params.selectedContext.map((item) =>
     redactSecretsWithReport(item.content, { location: item.sourceUri ?? item.label }),
   );
@@ -66,7 +68,7 @@ export async function buildLocalToByokHandoffDraft(
         label: item.label,
         sourceUri: item.sourceUri,
         byteCount: byteCount(redactedContent),
-        checksumSha256: await sha256(redactedContent),
+        checksumSha256: await hash(redactedContent),
         redactedContent,
       };
     }),
@@ -92,7 +94,7 @@ export async function buildLocalToByokHandoffDraft(
     null,
     2,
   );
-  const previewHashSha256 = await sha256(redactedPayload);
+  const previewHashSha256 = await hash(redactedPayload);
   const redactionReport: RedactionReport = {
     scannerVersion: SCANNER_VERSION,
     findings,

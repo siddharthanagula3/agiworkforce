@@ -219,6 +219,8 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Define explicit developer-session handoff schema into synced app chats.
 - [ ] Add Local -> BYOK fork flow on Desktop.
 - [ ] Add Local -> BYOK fork flow on Mobile.
+  - [x] Replace placeholder Mobile mode-switch modal with shared secret-scan and payload-preview gate.
+  - [ ] Persist the confirmed Mobile handoff as a new forked conversation instead of only changing the active model.
 - [ ] Add Local -> BYOK fork flow on Web.
 - [ ] Add payload preview and secret scan UI before BYOK handoff.
   - [x] Add shared Local -> BYOK draft builder with redacted payload preview, findings, checksums, and preview hash evidence.

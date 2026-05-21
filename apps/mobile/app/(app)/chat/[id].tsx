@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef, useState } from 'react';
+import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import {
   View,
   Pressable,
@@ -74,6 +74,16 @@ export default function ChatScreen() {
   const { isOnline, queueSize } = useNetworkStatus();
 
   const conversationMessages = useChatStore((s) => (id ? (s.messages[id] ?? []) : []));
+  const handoffContextItems = useMemo(
+    () =>
+      conversationMessages.slice(-20).map((message, index) => ({
+        id: message.id,
+        kind: 'message' as const,
+        label: `${message.role} message ${index + 1}`,
+        content: message.content,
+      })),
+    [conversationMessages],
+  );
   const isStreaming = useChatStore((s) => s.isStreaming);
   const isLoadingMessages = useChatStore((s) => s.isLoadingMessages);
   const conversations = useChatStore((s) => s.conversations);
@@ -754,6 +764,8 @@ export default function ChatScreen() {
           visible={modeSwitchState.visible}
           fromMode={modeSwitchState.fromMode}
           toMode={modeSwitchState.toMode}
+          sourceSessionId={id}
+          contextItems={handoffContextItems}
           onConfirm={handleModeSwitchConfirm}
           onCancel={handleModeSwitchCancel}
         />
