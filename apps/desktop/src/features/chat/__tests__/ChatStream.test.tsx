@@ -1,15 +1,23 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useArtifactStore } from '@/stores/artifactStore';
+import type { EnhancedMessage } from '@/stores/chat/types';
+
+function assistantMessage(overrides: Partial<EnhancedMessage> = {}): EnhancedMessage {
+  return {
+    id: 'assistant-1',
+    role: 'assistant',
+    content: 'I am preparing the operation.',
+    timestamp: new Date('2026-05-21T12:00:00.000Z'),
+    metadata: {},
+    ...overrides,
+  };
+}
 
 const mockUnifiedState = {
-  messages: [
-    {
-      id: 'assistant-1',
-      role: 'assistant',
-      content: 'I am preparing the operation.',
-      metadata: {},
-    },
-  ],
+  activeConversationId: null as string | null,
+  messages: [assistantMessage()] as EnhancedMessage[],
   pendingApprovals: [
     {
       id: 'approval-1',
@@ -28,6 +36,8 @@ const mockUnifiedState = {
   startEditingMessage: vi.fn(),
   showMessageTimestamps: false,
   editAndRegenerateFromMessage: vi.fn(),
+  updateMessage: vi.fn(),
+  closeSidecar: vi.fn(),
 };
 
 const mockChatState = {
@@ -50,8 +60,11 @@ vi.mock('framer-motion', () => ({
 }));
 
 vi.mock('../../../stores/unifiedChatStore', () => ({
-  useUnifiedChatStore: (selector?: (state: typeof mockUnifiedState) => unknown) =>
-    selector ? selector(mockUnifiedState) : mockUnifiedState,
+  useUnifiedChatStore: Object.assign(
+    (selector?: (state: typeof mockUnifiedState) => unknown) =>
+      selector ? selector(mockUnifiedState) : mockUnifiedState,
+    { getState: () => mockUnifiedState },
+  ),
 }));
 
 vi.mock('../../../stores/chat/chatStore', () => ({
@@ -112,6 +125,23 @@ vi.mock('../Cards/ApprovalRequestCard', () => ({
 import { ChatStream } from '../ChatStream';
 
 describe('ChatStream', () => {
+  beforeEach(() => {
+    Element.prototype.scrollTo = vi.fn();
+    mockUnifiedState.activeConversationId = null;
+    mockUnifiedState.messages = [assistantMessage()];
+    mockUnifiedState.updateMessage = vi.fn();
+    mockUnifiedState.closeSidecar = vi.fn();
+    useArtifactStore.setState({
+      artifacts: new Map(),
+      summaries: [],
+      activeArtifactId: null,
+      selectedVersion: null,
+      panelOpen: false,
+      isLoading: false,
+      isStreaming: null,
+    });
+  });
+
   it('renders pending approvals inline in the transcript', () => {
     render(<ChatStream />);
 
@@ -120,5 +150,37 @@ describe('ChatStream', () => {
     expect(screen.getByTestId('approval-card')).toHaveTextContent(
       'Run npm install in the project workspace',
     );
+  });
+
+  it('opens message artifact cards in the persistent artifact panel', async () => {
+    const user = userEvent.setup();
+    const onOpenSidecar = vi.fn();
+    mockUnifiedState.messages = [
+      assistantMessage({
+        id: 'assistant-artifact',
+        content: 'Created the specification.',
+        metadata: {},
+        artifacts: [
+          {
+            id: 'artifact-1',
+            type: 'markdown',
+            title: 'Launch specification',
+            content: '# Launch specification',
+            language: 'markdown',
+          },
+        ],
+      }),
+    ];
+
+    render(<ChatStream onOpenSidecar={onOpenSidecar} />);
+
+    await user.click(screen.getByRole('button', { name: /launch specification/i }));
+
+    await waitFor(() => {
+      expect(useArtifactStore.getState().panelOpen).toBe(true);
+    });
+    expect(useArtifactStore.getState().activeArtifactId).toBe('artifact-1');
+    expect(mockUnifiedState.closeSidecar).toHaveBeenCalled();
+    expect(onOpenSidecar).not.toHaveBeenCalled();
   });
 });

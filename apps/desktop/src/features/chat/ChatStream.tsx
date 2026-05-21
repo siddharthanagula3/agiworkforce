@@ -26,6 +26,8 @@ import React, {
 } from 'react';
 
 import { SidecarMode, useUnifiedChatStore } from '../../stores/unifiedChatStore';
+import { uuidToDbId } from '../../stores/chat/chatStore';
+import { useArtifactStore } from '../../stores/artifactStore';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { getToolRenderer, hasInlineRenderer } from './InlineToolResults';
 import { Button } from '@/components/ui/Button';
@@ -39,6 +41,13 @@ import { ToolRationaleDisplay } from './ToolRationaleDisplay';
 import { ApprovalRequestCard } from './Cards/ApprovalRequestCard';
 import { MessageRuntimeDecorators } from './MessageRuntimeActivity';
 import { useUnassignedApprovals } from './useMessageRuntimeActivity';
+import {
+  attachPersistedArtifactId,
+  buildPanelArtifactCreateInput,
+  getArtifactPanelCandidateIds,
+} from '@/lib/messageArtifactPanel';
+import { buildMessageArtifactUpdate, getMergedMessageArtifacts } from '@/lib/messageArtifacts';
+import type { ArtifactMetadata } from '@/api/artifacts';
 
 interface ChatStreamProps {
   onOpenSidecar?: (panel: SidecarMode, payload?: Record<string, unknown>) => void;
@@ -68,6 +77,7 @@ interface ChatMessageItemProps {
   isKeyboardFocused: boolean;
   isLastMessage: boolean;
   showMessageTimestamps: boolean;
+  activeConversationDbId?: number;
   onOpenSidecar?: (panel: SidecarMode, payload?: Record<string, unknown>) => void;
   onRetry: (id: string, content: string) => void;
   onEditSave: (messageId: string, newContent: string) => void;
@@ -83,11 +93,78 @@ const ChatMessageItem = React.memo<ChatMessageItemProps>(
     isKeyboardFocused,
     isLastMessage,
     showMessageTimestamps,
+    activeConversationDbId,
     onOpenSidecar,
     onRetry,
     onEditSave,
     onSuggestionClick,
   }) => {
+    const updateMessage = useUnifiedChatStore((state) => state.updateMessage);
+
+    const handleOpenArtifact = useCallback(
+      async (artifact: MessageArtifact, artifactIndex: number) => {
+        const normalizedArtifact: Artifact = {
+          id: artifact.id ?? `${message.id}-artifact-${artifactIndex}`,
+          type: artifact.type ?? 'code',
+          title: artifact.title,
+          content: typeof artifact.content === 'string' ? artifact.content : '',
+          language: artifact.language,
+          metadata: artifact.metadata,
+        };
+        const artifactStore = useArtifactStore.getState();
+
+        for (const candidateId of getArtifactPanelCandidateIds(normalizedArtifact)) {
+          const existingArtifact = await artifactStore.getArtifact(candidateId);
+          if (existingArtifact) {
+            artifactStore.setActiveArtifact(existingArtifact.id);
+            artifactStore.openPanel();
+            useUnifiedChatStore.getState().closeSidecar();
+            return;
+          }
+        }
+
+        if (normalizedArtifact.content.trim().length > 0) {
+          const createInput = buildPanelArtifactCreateInput(normalizedArtifact);
+          const createdArtifact = await artifactStore.createArtifact(
+            createInput.title,
+            createInput.artifactType,
+            createInput.content,
+            createInput.metadata as unknown as ArtifactMetadata,
+            activeConversationDbId,
+            uuidToDbId(message.id),
+            createInput.tags,
+          );
+
+          if (createdArtifact) {
+            const nextArtifacts = getMergedMessageArtifacts(message).map((candidate, index) => {
+              const candidateMatches =
+                candidate.id === normalizedArtifact.id || (!artifact.id && index === artifactIndex);
+              return candidateMatches
+                ? attachPersistedArtifactId(candidate, createdArtifact.id)
+                : candidate;
+            });
+
+            updateMessage(
+              message.id,
+              buildMessageArtifactUpdate(message, nextArtifacts, {
+                artifactPanelLastOpenedId: createdArtifact.id,
+              }),
+            );
+            artifactStore.setActiveArtifact(createdArtifact.id);
+            artifactStore.openPanel();
+            useUnifiedChatStore.getState().closeSidecar();
+            return;
+          }
+        }
+
+        onOpenSidecar?.('preview', {
+          artifactId: normalizedArtifact.id,
+          messageId: message.id,
+        });
+      },
+      [activeConversationDbId, message, onOpenSidecar, updateMessage],
+    );
+
     const renderInlineToolResult = (
       toolName: string,
       result: unknown,
@@ -163,7 +240,7 @@ const ChatMessageItem = React.memo<ChatMessageItemProps>(
             <div className="grid grid-cols-1 gap-2">
               {artifactList.map((artifact, idx) => {
                 const art = artifact as MessageArtifact;
-                const toolName = art.toolName ?? art.type;
+                const toolName = art.toolName;
                 const inlineRenderer =
                   toolName && hasInlineRenderer(toolName)
                     ? renderInlineToolResult(toolName, { data: art }, art.status ?? 'completed')
@@ -178,15 +255,14 @@ const ChatMessageItem = React.memo<ChatMessageItemProps>(
                 }
 
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={art.id ?? idx}
-                    onClick={() =>
-                      onOpenSidecar?.('preview', { artifactId: art.id, messageId: message.id })
-                    }
-                    className="cursor-pointer group flex items-center justify-between p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+                    onClick={() => void handleOpenArtifact(art, idx)}
+                    className="group flex w-full cursor-pointer items-center justify-between rounded-xl border border-white/10 bg-white/5 p-3 text-left transition-colors hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-primary/50"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-teal-500/10 text-teal-400 group-hover:text-teal-300 transition-colors">
+                      <div className="flex h-12 w-12 shrink-0 rotate-[-4deg] items-center justify-center rounded-lg border border-white/10 bg-black/20 text-muted-foreground transition-colors group-hover:text-foreground">
                         {art.type === 'image' ? (
                           <FileText className="w-4 h-4" />
                         ) : (
@@ -204,14 +280,10 @@ const ChatMessageItem = React.memo<ChatMessageItemProps>(
                         </div>
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-muted-foreground group-hover:text-white"
-                    >
-                      View <PanelTopOpen className="ml-2 w-3 h-3" />
-                    </Button>
-                  </div>
+                    <span className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-sm text-muted-foreground transition-colors group-hover:text-foreground">
+                      Open <PanelTopOpen className="h-3.5 w-3.5" />
+                    </span>
+                  </button>
                 );
               })}
             </div>
@@ -227,6 +299,7 @@ const ChatMessageItem = React.memo<ChatMessageItemProps>(
     prev.isKeyboardFocused === next.isKeyboardFocused &&
     prev.isLastMessage === next.isLastMessage &&
     prev.showMessageTimestamps === next.showMessageTimestamps &&
+    prev.activeConversationDbId === next.activeConversationDbId &&
     prev.onOpenSidecar === next.onOpenSidecar &&
     prev.onRetry === next.onRetry &&
     prev.onEditSave === next.onEditSave &&
@@ -253,6 +326,11 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
   const showMessageTimestamps = useUnifiedChatStore((state) => state.showMessageTimestamps);
   const editAndRegenerateFromMessage = useUnifiedChatStore(
     (state) => state.editAndRegenerateFromMessage,
+  );
+  const activeConversationId = useUnifiedChatStore((state) => state.activeConversationId);
+  const activeConversationDbId = useMemo(
+    () => (activeConversationId ? uuidToDbId(activeConversationId) : undefined),
+    [activeConversationId],
   );
 
   const items = useMemo(() => messages ?? [], [messages]);
@@ -769,6 +847,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
                   isKeyboardFocused={Boolean(isKeyboardFocused)}
                   isLastMessage={messageIndex === items.length - 1}
                   showMessageTimestamps={showMessageTimestamps}
+                  activeConversationDbId={activeConversationDbId}
                   onOpenSidecar={onOpenSidecar}
                   onRetry={handleRetry}
                   onEditSave={handleEditSave}

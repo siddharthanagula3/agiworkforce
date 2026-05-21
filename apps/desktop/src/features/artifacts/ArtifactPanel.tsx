@@ -51,6 +51,7 @@ import {
   type RenderedArtifact,
 } from '@/stores/artifactStore';
 import { ArtifactTypeIcon, getArtifactFileExtension } from '@/lib/artifactUtils';
+import { artifactToSummary } from '@/lib/messageArtifactPanel';
 import { ArtifactRendererView } from './ArtifactRendererView';
 import { InlineArtifactEditor } from './InlineArtifactEditor';
 import { ShareArtifactDialog } from './ShareArtifactDialog';
@@ -123,6 +124,31 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
         });
     }
   }, [conversationId, getArtifactsByConversation]);
+
+  useEffect(() => {
+    if (!activeArtifactId || artifacts.some((artifact) => artifact.id === activeArtifactId)) {
+      return;
+    }
+
+    let cancelled = false;
+    getArtifact(activeArtifactId)
+      .then((artifact) => {
+        if (!artifact || cancelled) return;
+        setArtifacts((currentArtifacts) => {
+          if (currentArtifacts.some((current) => current.id === artifact.id)) {
+            return currentArtifacts;
+          }
+          return [artifactToSummary(artifact), ...currentArtifacts];
+        });
+      })
+      .catch((err: unknown) => {
+        console.error('Failed to load active artifact summary:', err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeArtifactId, artifacts, getArtifact]);
 
   // Load rendered artifact when active artifact changes
   useEffect(() => {

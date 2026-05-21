@@ -82,6 +82,8 @@ The Desktop settings surface now implements the first pass of that baseline: set
 
 Desktop file previews also use the shared focused dialog shell, keeping generated/local file inspection in a modal unless the user explicitly opens a deeper artifact workspace.
 
+Desktop chat artifact cards now use the persistent artifact workbench as their primary click target. `ChatStream` checks for already persisted artifact ids, promotes legacy message artifacts into the Tauri artifact store when needed, records the persisted id back onto message artifact metadata, and opens `ArtifactPanel`; the preview sidecar remains only as a fallback for artifacts without panel-backed content.
+
 Desktop connector customization now follows the same modal-first rule. The connector gallery owns the browse/connect surface, while `CustomRemoteMcpConnectorDialog` creates remote HTTP MCP server configs through the existing MCP config API instead of sending users into a broad settings detour. The default view exposes only name and URL, with bearer token, headers, timeout, and SSL controls behind collapsed advanced settings. Bearer tokens are stored through the encrypted API-key path and referenced from MCP config placeholders. Connector gallery ownership is single-sourced under `apps/desktop/src/features/connectors/ConnectorGallery.tsx`.
 
 Desktop project editing separates common detail edits from deep configuration. `ProjectEditDetailsDialog` owns the focused name/description modal, while `ProjectSettingsDialog` stays available for files, instructions, knowledge, memory, and conversation settings.

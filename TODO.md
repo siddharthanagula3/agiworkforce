@@ -41,6 +41,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Begin per-file AGI audit ledger by surface, starting with CLI and shared engine files.
 - [x] Lock the long-term agent-native development thesis for AGI Workforce.
 - [x] Implement first enterprise control-plane wave: shared contracts, canonical migrations, API gateway routes, Web admin readiness page, docs, and provisional CODEOWNERS.
+- [x] Promote Desktop chat artifact cards into the persistent artifact workbench, with legacy preview fallback only when a panel-backed artifact cannot be resolved.
 
 ## Exploration Tasks
 
