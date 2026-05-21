@@ -56,9 +56,12 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Create generated artifact policy.
 - [x] Create full package/service/crate ownership ledger and CODEOWNERS map.
 - [ ] Decide whether root `ios/` belongs at root or under `apps/mobile/ios`.
-- [ ] Decide whether `reference-index/` belongs under `audit/`, `docs/reference/`, or `_archive/`.
-- [ ] Move root scratch markdown files to a dated archive/report folder.
-- [ ] Move root scratch image files to a dated report folder.
+- [ ] Decide whether raw `reference-index/` belongs under `audit/`, `docs/reference/`, or `_archive/`.
+- [x] Move root scratch markdown files to a dated archive/report folder.
+- [x] Move root scratch image files to a dated report folder.
+- [x] Move root `downloads/` scratch artifact to the dated archive/report folder.
+- [x] Move root reference catalog markdown files to `docs/reference/`.
+- [x] Move historical root master plan and implementation log to `docs/archive/`.
 - [x] Add root clutter allowlist check.
 - [x] Add docs status header check for active plans.
 - [x] Add import-boundary lint so apps cannot import apps, services cannot import UI packages, and packages cannot import apps.

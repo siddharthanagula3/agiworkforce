@@ -126,7 +126,8 @@ Tasks:
 
 - Move scratch root markdown/images into dated folders under `reports/` or `_archive/`.
 - Move reference catalogs into `docs/reference/` or `audit/reference-index/`.
-- Decide whether `MASTER_PLAN.md` and `AGIWORKFORCE_IMPLEMENTATION_LOG.md` stay root or move under docs/archive.
+- `MASTER_PLAN.md` and `AGIWORKFORCE_IMPLEMENTATION_LOG.md` moved under `docs/archive/2026-05-14-reverse-engineering-campaign/`.
+- `REFERENCE_INDEX.md` and `REFERENCE_STRUCTURE.md` moved under `docs/reference/`.
 - Keep only source-of-truth docs and required config at root.
 - Tighten `scripts/check-repo-organization.mjs` from warning mode to failure mode after moves.
 
@@ -252,7 +253,7 @@ Acceptance:
 4. Add package README coverage ledger. Done.
 5. Add docs status ledger. Done.
 6. Add generated artifact policy. Done.
-7. Move root scratch files into a dated archive/report folder.
+7. Move root scratch files into a dated archive/report folder. Done in `reports/root-scratch-archive/2026-05-20/`.
 8. Add missing READMEs for `apps/web`, `apps/desktop`, `apps/extension`, and both services.
 9. Add CI job for `pnpm check:llm-operability`. Done in `.github/workflows/repo-operability.yml`.
 10. Start Web domain-first cleanup only after tasks 1-9 are green.

@@ -28,7 +28,9 @@
     "audit/repo-organization/ownership-model-2026-05-20.md",
     "audit/repo-organization/package-readme-coverage-2026-05-20.md",
     "audit/repo-organization/root-classification-2026-05-20.md",
-    "audit/repo-organization/tool-folder-classification-2026-05-20.md"
+    "audit/repo-organization/tool-folder-classification-2026-05-20.md",
+    "docs/reference/REFERENCE_INDEX.md",
+    "docs/reference/REFERENCE_STRUCTURE.md"
   ],
   "historicalOrCaution": [
     {
@@ -49,12 +51,12 @@
     {
       "path": "reference-index",
       "status": "classification-debt",
-      "rule": "Needs relocation decision before release."
+      "rule": "Raw ownership catalog still needs relocation decision before release; docs reference catalogs moved to docs/reference."
     },
     {
-      "path": "root scratch markdown/images",
-      "status": "classification-debt",
-      "rule": "Use docs/agent-context/known-flaws.md ORG-ROOT-01 until moved."
+      "path": "reports/root-scratch-archive",
+      "status": "historical-evidence",
+      "rule": "Archived root scratch markdown/images/downloads are evidence only, not current source."
     }
   ]
 }

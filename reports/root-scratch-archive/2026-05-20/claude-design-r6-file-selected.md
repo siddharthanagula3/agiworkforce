@@ -185,8 +185,13 @@
             - generic "ios-frame.jsx · Modified 2 days ago" [ref=e1685] [box=400,1528,739,44]
             - generic "design-canvas.jsx · Modified 2 days ago" [ref=e1697] [box=400,1572,739,44]
             - generic [ref=e1709] [box=400,1616,739,29]: Images
-            - generic "_check.jpg · Modified 2 days ago" [ref=e1710] [box=400,1645,739,44]
-          - generic [ref=e1721] [box=1323,99,128,718]: Select a file to preview
+            - generic "\_check.jpg · Modified 2 days ago" [ref=e1710] [box=400,1645,739,44]
+          - generic [ref=e1720] [box=1140,79,493,758]:
+            - generic "Click to open" [ref=e1730] [cursor=pointer] [box=1160,99,453,302]
+            - button " Open" [ref=e1739] [box=1356,413,61,22]
+            - generic [ref=e1742] [box=1302,447,169,16]: screens-r6-canonical.jsx
+            - generic [ref=e1743] [box=1356,467,61,15]: Component
+            - generic [ref=e1744] [box=1302,496,169,13]: Modified 3m ago · 62.3 KB · JSX
         - generic [ref=e1723] [box=420,851,1193,61]:
           - generic [ref=e1724] [box=420,851,1193,12]:
             - generic [ref=e1725] [box=420,852,10,10]: 

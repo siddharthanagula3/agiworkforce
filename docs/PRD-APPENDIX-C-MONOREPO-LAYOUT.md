@@ -11,18 +11,14 @@ This appendix specifies the monorepo tree, ownership boundaries, build commands 
 ```
 agiworkforce/
 ├── AGI_WORKFORCE.md                       # platform SSOT
-├── MASTER_PLAN.md                         # per-surface decision trail
-├── AGIWORKFORCE_IMPLEMENTATION_LOG.md     # milestone log
 ├── AUDIT_LOG.md                           # per-fire audit ledger
-├── AGENTS.md                              # Codex agent rules (twin of CLAUDE.md)
-├── CLAUDE.md                              # Claude Code agent rules
+├── AGENTS.md                              # canonical tool-neutral coding-agent rules
+├── CLAUDE.md                              # Claude-specific mirror of AGENTS.md
 ├── BUILD.md                               # prereqs + per-surface build commands
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md                        # 7-line proprietary stub
 ├── LICENSE
 ├── README.md                              # user-facing
-├── REFERENCE_INDEX.md                     # UI reference image catalog
-├── REFERENCE_STRUCTURE.md
 ├── THIRD_PARTY_LICENSES.md                # OpenClaw MIT attribution
 ├── Cargo.toml                             # workspace: { members: [apps/desktop/src-tauri, apps/cli, crates/*] }
 ├── Cargo.lock
@@ -33,6 +29,11 @@ agiworkforce/
 ├── commitlint.config.cjs
 ├── eslint.config.mjs                      # flat v9; AGI custom rules
 ├── vercel.json
+├── docs/reference/REFERENCE_INDEX.md      # UI reference image catalog
+├── docs/reference/REFERENCE_STRUCTURE.md  # reference structural patterns
+├── docs/archive/2026-05-14-reverse-engineering-campaign/
+│   ├── MASTER_PLAN.md
+│   └── AGIWORKFORCE_IMPLEMENTATION_LOG.md
 ├── docker-compose.yml                     # local dev (Postgres + pgAdmin)
 ├── docs/                                  # PRD owner: founder + platform engineering
 │   ├── PRD.md                             # CANONICAL (this PRD V3)

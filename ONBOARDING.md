@@ -91,19 +91,20 @@ Mobile is the **lead surface** — first to ship publicly (target Aug 6, 2026), 
 
 **Top-level files you'll touch:**
 
-| File                      | What                                                           |
-| ------------------------- | -------------------------------------------------------------- |
-| `README.md`               | 1-page pitch + install paths                                   |
-| `ONBOARDING.md`           | this file — entry point                                        |
-| `BUILD.md`                | per-surface build prerequisites + commands                     |
-| `CLAUDE.md`               | AI-agent operating manual + locked workflow rules              |
-| `CONTRIBUTING.md`         | PR conventions + commit format                                 |
-| `AGI_WORKFORCE.md`        | platform SSOT — verified state, sprint history, decision trail |
-| `MASTER_PLAN.md`          | per-surface decision trail                                     |
-| `CHANGELOG.md`            | every shipping wave                                            |
-| `AUDIT_LOG.md`            | audit findings + closure trail                                 |
-| `LICENSE`                 | proprietary                                                    |
-| `THIRD_PARTY_LICENSES.md` | OpenClaw + other lifted-from-open-source attribution           |
+| File                                                                  | What                                                           |
+| --------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `README.md`                                                           | 1-page pitch + install paths                                   |
+| `ONBOARDING.md`                                                       | this file — entry point                                        |
+| `BUILD.md`                                                            | per-surface build prerequisites + commands                     |
+| `AGENTS.md`                                                           | canonical coding-agent operating manual                        |
+| `CLAUDE.md`                                                           | Claude-specific mirror of `AGENTS.md`                          |
+| `CONTRIBUTING.md`                                                     | PR conventions + commit format                                 |
+| `AGI_WORKFORCE.md`                                                    | platform SSOT — verified state, sprint history, decision trail |
+| `docs/archive/2026-05-14-reverse-engineering-campaign/MASTER_PLAN.md` | historical per-surface reverse-engineering decision trail      |
+| `CHANGELOG.md`                                                        | every shipping wave                                            |
+| `AUDIT_LOG.md`                                                        | audit findings + closure trail                                 |
+| `LICENSE`                                                             | proprietary                                                    |
+| `THIRD_PARTY_LICENSES.md`                                             | OpenClaw + other lifted-from-open-source attribution           |
 
 ## Your first day, explicit steps
 

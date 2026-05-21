@@ -26,7 +26,7 @@ The problems are mostly pre-release entropy:
 - Root has scratch markdown and image artifacts such as `app-after-fill.md`, `claude-design-*.md`, `final-*.png`, `r6-*.md`, and similar files.
 - Multiple AI/tool folders exist at root: `.agent`, `.agents`, `.claude`, `.codex`, `.cursor`, `.minimax`, `.opencode`, `.superpowers`, `.remember`, and `.playwright-mcp`.
 - Planning and research are split across root docs, `docs/plans`, `docs/planning`, `tasks/research`, `audit`, `reference-index`, and `reports`.
-- There are multiple historical "source of truth" candidates: `MASTER_PLAN.md`, `PLAN.md`, `TODO.md`, `AGIWORKFORCE_IMPLEMENTATION_LOG.md`, `AUDIT_LOG.md`, docs PRDs, and memory-derived docs.
+- There are multiple historical "source of truth" candidates: archived `MASTER_PLAN.md`, `PLAN.md`, `TODO.md`, archived `AGIWORKFORCE_IMPLEMENTATION_LOG.md`, `AUDIT_LOG.md`, docs PRDs, and memory-derived docs.
 - The repo has both layer-first and domain-first application layouts. The existing `docs/plans/domain-first-reorg.md` correctly scopes the Web/Desktop/Mobile feature-folder cleanup, but it does not cover the full repository operating model.
 - Marketing/GTM/release materials are mixed into engineering-facing docs. A future non-engineering team should not need to understand Rust crates or CI to find launch copy.
 
@@ -44,22 +44,22 @@ The problems are mostly pre-release entropy:
 
 This is the target meaning of each top-level path.
 
-| Path | Purpose | Owner role | Rule |
-| --- | --- | --- | --- |
-| `apps/` | User-facing surfaces: Web, Desktop, Mobile, CLI, VS Code, Chrome, sandbox. | Surface leads | One folder per shippable surface. No shared business logic unless surface-specific. |
-| `packages/` | Shared TypeScript libraries used by apps/services. | Platform | Must be independently typed, tested, and documented. |
-| `crates/` | Shared Rust crates used by CLI/Desktop/services. | Rust platform | Crate names stay `agiworkforce-*`; modules use Rust snake_case. |
-| `services/` | Server processes and future managed-compute services. | Backend/platform | One deployable service per folder. |
-| `supabase/` | Canonical database migrations and Supabase config. | Data/backend | No duplicate app-local migration sources. |
-| `docs/` | Durable product, engineering, launch, security, and ADR docs. | Docs owner + relevant domain | Current docs only, with archives clearly marked historical. |
-| `audit/` | Evidence ledgers, scan outputs, parity research, and source-backed claims. | Security/platform | Evidence, not strategy. |
-| `tasks/` | Active execution notes and temporary research work products. | Task owner | Working area, not source of truth. Promote durable output to `docs/` or `audit/`. |
-| `reports/` | Generated visual/test/research reports intended for inspection. | QA/design/platform | Generated or review artifacts, with dates and owners. |
-| `examples/` | Sample apps, demos, and reference integrations. | Developer experience | Examples must build or be clearly marked archived. |
-| `scripts/` | Repo automation used by CI or developers. | Platform/release | Scripts need help text and safe defaults. |
-| `dev-scripts/` | One-off local developer helpers. | Platform | Promote to `scripts/` only when supported. |
-| `.github/` | CI, issue templates, PR templates, code owners. | Release/platform | CI is the enforcement layer for repo conventions. |
-| `_archive/` | Historical snapshots and removed root clutter. | Docs owner | Not cited as current unless a current doc explicitly says so. |
+| Path           | Purpose                                                                    | Owner role                   | Rule                                                                                |
+| -------------- | -------------------------------------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------- |
+| `apps/`        | User-facing surfaces: Web, Desktop, Mobile, CLI, VS Code, Chrome, sandbox. | Surface leads                | One folder per shippable surface. No shared business logic unless surface-specific. |
+| `packages/`    | Shared TypeScript libraries used by apps/services.                         | Platform                     | Must be independently typed, tested, and documented.                                |
+| `crates/`      | Shared Rust crates used by CLI/Desktop/services.                           | Rust platform                | Crate names stay `agiworkforce-*`; modules use Rust snake_case.                     |
+| `services/`    | Server processes and future managed-compute services.                      | Backend/platform             | One deployable service per folder.                                                  |
+| `supabase/`    | Canonical database migrations and Supabase config.                         | Data/backend                 | No duplicate app-local migration sources.                                           |
+| `docs/`        | Durable product, engineering, launch, security, and ADR docs.              | Docs owner + relevant domain | Current docs only, with archives clearly marked historical.                         |
+| `audit/`       | Evidence ledgers, scan outputs, parity research, and source-backed claims. | Security/platform            | Evidence, not strategy.                                                             |
+| `tasks/`       | Active execution notes and temporary research work products.               | Task owner                   | Working area, not source of truth. Promote durable output to `docs/` or `audit/`.   |
+| `reports/`     | Generated visual/test/research reports intended for inspection.            | QA/design/platform           | Generated or review artifacts, with dates and owners.                               |
+| `examples/`    | Sample apps, demos, and reference integrations.                            | Developer experience         | Examples must build or be clearly marked archived.                                  |
+| `scripts/`     | Repo automation used by CI or developers.                                  | Platform/release             | Scripts need help text and safe defaults.                                           |
+| `dev-scripts/` | One-off local developer helpers.                                           | Platform                     | Promote to `scripts/` only when supported.                                          |
+| `.github/`     | CI, issue templates, PR templates, code owners.                            | Release/platform             | CI is the enforcement layer for repo conventions.                                   |
+| `_archive/`    | Historical snapshots and removed root clutter.                             | Docs owner                   | Not cited as current unless a current doc explicitly says so.                       |
 
 ## Naming Conventions
 
@@ -74,17 +74,17 @@ This is the target meaning of each top-level path.
 
 ### Files And Folders
 
-| Area | Convention |
-| --- | --- |
-| App/package folders | lowercase kebab-case: `extension-vscode`, `unified-chat`, `browser-tool`. |
-| Feature folders | lowercase kebab-case: `computer-use`, `generated-files`, `provider-routing`. |
-| React components | PascalCase file and export names. |
-| Hooks | `useThing.ts` or `useThing.tsx`. |
-| Tests | `*.test.ts`, `*.test.tsx`, or Rust module tests near code. |
-| Docs | lowercase kebab-case with date prefix when time-sensitive: `2026-05-20-topic.md`. |
-| ADRs | `YYYY-MM-DD-short-decision-name.md`. |
-| Rust modules | snake_case. |
-| Generated reports | dated folder under `reports/` or `audit/`, never loose root files. |
+| Area                | Convention                                                                        |
+| ------------------- | --------------------------------------------------------------------------------- |
+| App/package folders | lowercase kebab-case: `extension-vscode`, `unified-chat`, `browser-tool`.         |
+| Feature folders     | lowercase kebab-case: `computer-use`, `generated-files`, `provider-routing`.      |
+| React components    | PascalCase file and export names.                                                 |
+| Hooks               | `useThing.ts` or `useThing.tsx`.                                                  |
+| Tests               | `*.test.ts`, `*.test.tsx`, or Rust module tests near code.                        |
+| Docs                | lowercase kebab-case with date prefix when time-sensitive: `2026-05-20-topic.md`. |
+| ADRs                | `YYYY-MM-DD-short-decision-name.md`.                                              |
+| Rust modules        | snake_case.                                                                       |
+| Generated reports   | dated folder under `reports/` or `audit/`, never loose root files.                |
 
 ## Documentation Model
 
@@ -112,28 +112,28 @@ Superseded by:
 
 ### Docs Folder Targets
 
-| Folder | Keep | Move out |
-| --- | --- | --- |
-| `docs/decisions/` | ADRs and current decision index. | Long research notes. |
-| `docs/plans/` | Active/recent plans with owners and status. | Scratch execution logs. |
-| `docs/planning/` | Historical planning specs only. | Current plans. |
-| `docs/research/` | Durable research summaries. | Raw notes and prompt dumps. |
-| `docs/launch/` | Launch copy, store listings, GTM checklists. | Engineering specs. |
-| `docs/surfaces/` | One current guide per surface. | Old duplicated surface notes. |
-| `docs/archive/` | Superseded docs. | Anything current. |
+| Folder            | Keep                                         | Move out                      |
+| ----------------- | -------------------------------------------- | ----------------------------- |
+| `docs/decisions/` | ADRs and current decision index.             | Long research notes.          |
+| `docs/plans/`     | Active/recent plans with owners and status.  | Scratch execution logs.       |
+| `docs/planning/`  | Historical planning specs only.              | Current plans.                |
+| `docs/research/`  | Durable research summaries.                  | Raw notes and prompt dumps.   |
+| `docs/launch/`    | Launch copy, store listings, GTM checklists. | Engineering specs.            |
+| `docs/surfaces/`  | One current guide per surface.               | Old duplicated surface notes. |
+| `docs/archive/`   | Superseded docs.                             | Anything current.             |
 
 ## Root Cleanup Plan
 
 ### Classify Root Files
 
-| Type | Examples | Target |
-| --- | --- | --- |
-| Current control docs | `AGI_WORKFORCE.md`, `PLAN.md`, `TODO.md`, `CHANGELOG.md`, `BUILD.md`, `README.md` | Stay root. |
-| Historical plans/logs | `MASTER_PLAN.md`, `AGIWORKFORCE_IMPLEMENTATION_LOG.md`, old handoff-like files | Move or mark as historical after citation audit. |
-| Reference catalogs | `REFERENCE_INDEX.md`, `REFERENCE_STRUCTURE.md` | Move under `docs/reference/` or `audit/reference-index/` after link audit. |
-| Scratch artifacts | `app-*.md`, `claude-design-*.md`, `final-*.png`, `r6-*.md` | Move to `reports/root-scratch-archive/2026-05-20/` or `_archive/2026-05-20-root-scratch/`. |
-| Generated/cache files | `.DS_Store`, `.gitignore.tmp`, `libnull.rlib`, screenshots | Ignore/delete only after confirming they are not intentionally tracked. |
-| Tool configs | `.claude`, `.codex`, `.cursor`, `.opencode`, `.agents`, `.mcp.json` | Keep until tool-by-tool contract is documented. |
+| Type                  | Examples                                                                                                                                                                                 | Target                                                                                     |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Current control docs  | `AGI_WORKFORCE.md`, `PLAN.md`, `TODO.md`, `CHANGELOG.md`, `BUILD.md`, `README.md`                                                                                                        | Stay root.                                                                                 |
+| Historical plans/logs | `docs/archive/2026-05-14-reverse-engineering-campaign/MASTER_PLAN.md`, `docs/archive/2026-05-14-reverse-engineering-campaign/AGIWORKFORCE_IMPLEMENTATION_LOG.md`, old handoff-like files | Moved out of root; keep historical.                                                        |
+| Reference catalogs    | `docs/reference/REFERENCE_INDEX.md`, `docs/reference/REFERENCE_STRUCTURE.md`                                                                                                             | Moved out of root; keep as reference evidence, not current plan.                           |
+| Scratch artifacts     | `app-*.md`, `claude-design-*.md`, `final-*.png`, `r6-*.md`                                                                                                                               | Move to `reports/root-scratch-archive/2026-05-20/` or `_archive/2026-05-20-root-scratch/`. |
+| Generated/cache files | `.DS_Store`, `.gitignore.tmp`, `libnull.rlib`, screenshots                                                                                                                               | Ignore/delete only after confirming they are not intentionally tracked.                    |
+| Tool configs          | `.claude`, `.codex`, `.cursor`, `.opencode`, `.agents`, `.mcp.json`                                                                                                                      | Keep until tool-by-tool contract is documented.                                            |
 
 ### Root Keep List
 
@@ -176,14 +176,14 @@ Reason: root/docs/package boundaries affect every future engineer. Surface-inter
 
 Target package categories:
 
-| Category | Current/future packages | Rule |
-| --- | --- | --- |
-| Contracts | `packages/types`, future `packages/contracts` if split | Schemas and types only. No runtime network clients. |
-| Provider/runtime | `packages/providers`, `packages/llm-normalize`, `packages/llm-runtime`, `packages/routing` | Provider-specific code behind AGI-owned adapters. |
-| UI/product | `packages/unified-chat`, `packages/design-tokens`, future shared surface UI | No direct provider calls. |
-| Local tools | `packages/browser-tool`, `packages/apply-patch`, `packages/local-llm`, `packages/mcp` | Must expose privacy and permission metadata. |
-| Data/compliance | `packages/data-layer`, `packages/compliance`, `packages/stores` | Data ownership and audit behavior documented. |
-| Utilities | `packages/utils`, `packages/runtime` | Small, dependency-light, non-product-specific. |
+| Category         | Current/future packages                                                                    | Rule                                                |
+| ---------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| Contracts        | `packages/types`, future `packages/contracts` if split                                     | Schemas and types only. No runtime network clients. |
+| Provider/runtime | `packages/providers`, `packages/llm-normalize`, `packages/llm-runtime`, `packages/routing` | Provider-specific code behind AGI-owned adapters.   |
+| UI/product       | `packages/unified-chat`, `packages/design-tokens`, future shared surface UI                | No direct provider calls.                           |
+| Local tools      | `packages/browser-tool`, `packages/apply-patch`, `packages/local-llm`, `packages/mcp`      | Must expose privacy and permission metadata.        |
+| Data/compliance  | `packages/data-layer`, `packages/compliance`, `packages/stores`                            | Data ownership and audit behavior documented.       |
+| Utilities        | `packages/utils`, `packages/runtime`                                                       | Small, dependency-light, non-product-specific.      |
 
 Rules:
 

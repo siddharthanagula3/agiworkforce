@@ -38,6 +38,7 @@ Purpose: prevent old docs from becoming accidental source of truth.
 | ------------------------------ | ---------------------------------------------------------------------- |
 | `audit/anthropic-apps-parity/` | Current parity evidence.                                               |
 | `audit/repo-organization/`     | Current repo organization evidence.                                    |
+| `docs/reference/`              | Reference catalogs and structural patterns; evidence only.             |
 | `docs/security/`               | Current and historical security findings; verify status before citing. |
 | `docs/audit/`                  | Audit evidence; verify age/status before citing.                       |
 
@@ -57,3 +58,4 @@ Purpose: prevent old docs from becoming accidental source of truth.
 - Add status headers to active docs that do not have them.
 - Remove or annotate stale "canonical" claims in historical docs.
 - Expand `docs/agent-context/doc-status.json` after this ledger is accepted.
+- Keep archived `MASTER_PLAN.md` and implementation logs out of root navigation except as historical evidence.

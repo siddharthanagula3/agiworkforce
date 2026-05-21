@@ -39,6 +39,9 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
   - `scripts/check-readme-ownership.mjs`
   - `scripts/check-doc-status.mjs`
 - `.github/workflows/repo-operability.yml` so docs-only and agent-context changes run `pnpm check:llm-operability`.
+- `reports/root-scratch-archive/2026-05-20/` as the dated home for prior root scratch markdown and design images.
+- `docs/reference/` as the durable home for the prior root `REFERENCE_INDEX.md` and `REFERENCE_STRUCTURE.md` catalogs.
+- `docs/archive/2026-05-14-reverse-engineering-campaign/` as the historical home for the prior root `MASTER_PLAN.md` and `AGIWORKFORCE_IMPLEMENTATION_LOG.md`.
 - `audit/anthropic-apps-parity/` evidence ledger with:
   - `README.md` - evidence folder contract.
   - `application-suite-thesis-2026-05-20.md` - official OpenAI/Anthropic suite research and AGI's locked local-first/BYOK/multi-provider/privacy-controlled managed-compute thesis.
@@ -70,6 +73,8 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - `docs/agent-context/commands.json` and `package.json` now include generated-artifact, README ownership, doc-status, and full LLM-operability checks.
 - `scripts/check-agent-context.mjs` now validates the known-flaws table shape and the expanded repo-wide command map.
 - `scripts/check-node-version.sh` now prints the actionable too-old-Node error instead of exiting early under `set -e`.
+- Root scratch markdown, design image files, and the root `downloads/` scratch artifact have been moved out of the repo root with `git mv`, and the root organization/generated-artifact checks now treat the archive path as classified evidence.
+- Historical reverse-engineering campaign docs and reference catalogs have been moved out of the repo root, and active references now point to their archived/reference paths.
 - `audit/anthropic-apps-parity/reference-notes.md` now records a full 1902-file read pass over `/Users/siddhartha/Desktop/reference/src`, including scope counts, architecture lessons, AGI implementation targets, study-first files, and copying cautions.
 - `PLAN.md` now locks normal chat sync to Web, Mobile, and Desktop only. CLI, VS Code, and Chrome stay local/workspace/task scoped unless an explicit preview/redaction handoff is implemented.
 - `PLAN.md` and `TODO.md` now record that OpenAI, Anthropic, and Vercel SDKs are adapter/UI-edge dependencies only. AGI owns runtime schemas, event streams, privacy modes, provider routing, and usage accounting.

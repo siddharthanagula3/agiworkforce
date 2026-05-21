@@ -1,5 +1,9 @@
 # Reference Image Index
 
+Status: Reference evidence
+Owner: Product/platform
+Last updated: 2026-05-20
+
 > Generated from 11 shard files. 640 valid entries (files still present on disk after 2026-05-14 cleanup). See `reference-index/` for raw per-shard data.
 
 ## Per-shard stats

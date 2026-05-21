@@ -29,14 +29,6 @@ const knownGeneratedDebtPatterns = [
   /^\.playwright-mcp\//,
   /^apps\/mobile\/\.expo\//,
   /^apps\/web\/public\/downloads\/.*\.dmg$/,
-  /^downloads\//,
-  /^app-after-fill\.md$/,
-  /^app-file-editor\.md$/,
-  /^claude-design-.*\.md$/,
-  /^final-model-picker.*\.png$/,
-  /^final-r6-.*\.(md|png)$/,
-  /^index-after-app-save\.md$/,
-  /^r6-.*\.(md|png)$/,
 ];
 
 const allowedTrackedIgnoredPatterns = [
@@ -55,6 +47,7 @@ const allowedAssetPatterns = [
   /^apps\/web\/public\/(app-preview|apple-touch-icon|logo|logo-192|logo-512)\.png$/,
   /^ios\/.*\.png$/,
   /^reports\/frontend-reference-comparison\//,
+  /^reports\/root-scratch-archive\//,
 ];
 
 function matchesAny(path, patterns) {

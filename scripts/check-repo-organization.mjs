@@ -48,32 +48,7 @@ const allowedRootFiles = new Set([
   'vercel.json',
 ]);
 
-const knownRootDebt = new Set([
-  '.DS_Store',
-  '.gitignore.tmp',
-  '.mcp.json',
-  'AGIWORKFORCE_IMPLEMENTATION_LOG.md',
-  'MASTER_PLAN.md',
-  'REFERENCE_INDEX.md',
-  'REFERENCE_STRUCTURE.md',
-  'app-after-fill.md',
-  'app-file-editor.md',
-  'claude-design-after-limit-close.md',
-  'claude-design-files-click.md',
-  'claude-design-iframe-depth7.md',
-  'claude-design-r6-file-selected.md',
-  'downloads',
-  'final-model-picker-artboard.png',
-  'final-model-picker.png',
-  'final-r6-canonical-section.png',
-  'final-r6-section-depth6.md',
-  'final-r6-snapshot.md',
-  'index-after-app-save.md',
-  'libnull.rlib',
-  'r6-after-provider-trim-attempt.md',
-  'r6-canonical-section.png',
-  'r6-file-open.md',
-]);
+const knownRootDebt = new Set(['.DS_Store', '.gitignore.tmp', '.mcp.json', 'libnull.rlib']);
 
 const allowedRootDirs = new Set([
   '.agent',

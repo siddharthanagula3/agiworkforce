@@ -1,5 +1,9 @@
 # Reference Structural Patterns — How Shipping Products Organize Code
 
+Status: Reference evidence
+Owner: Platform lead
+Last updated: 2026-05-20
+
 > Synthesized 2026-05-14 from deep audits of:
 >
 > - **Anthropic Claude Code** (TS) at `~/Desktop/reference/src/`
