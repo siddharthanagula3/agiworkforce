@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -9,6 +10,7 @@ import {
   Eye,
   Globe,
   Pause,
+  Pencil,
   Play,
   RotateCcw,
   X,
@@ -34,6 +36,14 @@ export interface ArtifactPanelProps {
   versions?: Artifact[];
   /** Called when the user picks a different version from the stepper. */
   onSelectVersion?: (artifact: Artifact) => void;
+  /**
+   * Optional edit-in-place callback. When supplied, the toolbar shows an
+   * Edit button alongside the existing Code/Preview toggles. The host is
+   * responsible for either mutating the existing artifact in-place or
+   * persisting a new version — the panel only forwards the edited content.
+   * Round-2 audit P0 #9 (Artifacts edit-in-place, 2026-05-21 final quadrant).
+   */
+  onSaveEdit?: (artifactId: string, content: string) => void | Promise<void>;
 }
 
 function getTypeLabel(artifact: Artifact): string {
@@ -210,6 +220,7 @@ export function ArtifactPanel({
   onClose,
   versions,
   onSelectVersion,
+  onSaveEdit,
 }: ArtifactPanelProps) {
   const [headerCopied, setHeaderCopied] = useState(false);
   // Run/Stop control for HTML preview. Defaults to running; pausing strips
@@ -218,6 +229,20 @@ export function ArtifactPanel({
   // layout-only artifact types (markdown, document, svg, image) never run
   // scripts so a pause control would be misleading.
   const [htmlPreviewRunning, setHtmlPreviewRunning] = useState(true);
+  // Edit-in-place state. `isEditing` toggles between CodeView and an
+  // editable textarea. `editDraft` holds the working copy; the source of
+  // truth remains the supplied artifact until Save fires onSaveEdit. We
+  // also auto-exit edit mode when the active artifact changes so the user
+  // doesn't accidentally save text from another artifact's body.
+  const [isEditing, setIsEditing] = useState(false);
+  const [editDraft, setEditDraft] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  useEffect(() => {
+    setIsEditing(false);
+    setEditDraft('');
+    setIsSavingEdit(false);
+  }, [artifact?.id]);
 
   // The host supplies versions ordered oldest-first; the stepper trusts
   // that ordering and maps array indices to "v1 / v2 / ..." labels. When
@@ -250,6 +275,29 @@ export function ArtifactPanel({
       setTimeout(() => setHeaderCopied(false), 1500);
     } catch {
       // clipboard write failed silently
+    }
+  }
+
+  function enterEditMode() {
+    if (!artifact) return;
+    setEditDraft(artifact.content);
+    setIsEditing(true);
+  }
+
+  function discardEdit() {
+    setIsEditing(false);
+    setEditDraft('');
+  }
+
+  async function saveEdit() {
+    if (!artifact || !onSaveEdit) return;
+    setIsSavingEdit(true);
+    try {
+      await onSaveEdit(artifact.id, editDraft);
+      setIsEditing(false);
+      setEditDraft('');
+    } finally {
+      setIsSavingEdit(false);
     }
   }
 
@@ -447,6 +495,43 @@ export function ArtifactPanel({
 
           <DropdownMenu onDownload={handleDownload} onPublish={handlePublish} />
 
+          {onSaveEdit && !isEditing ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Edit artifact"
+              disabled={!artifact}
+              onClick={enterEditMode}
+              className="h-7 w-7 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
+            >
+              <Pencil size={13} />
+            </Button>
+          ) : null}
+          {onSaveEdit && isEditing ? (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Save edit"
+                disabled={!artifact || isSavingEdit}
+                onClick={saveEdit}
+                className="h-7 w-7 text-[var(--chat-accent-secondary)] hover:bg-[var(--chat-surface-hover)]"
+              >
+                <Check size={14} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Discard edit"
+                disabled={!artifact || isSavingEdit}
+                onClick={discardEdit}
+                className="h-7 w-7 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
+              >
+                <X size={14} />
+              </Button>
+            </>
+          ) : null}
+
           <Button
             variant="ghost"
             size="icon"
@@ -474,6 +559,20 @@ export function ArtifactPanel({
         {!artifact ? (
           <div className="flex h-full items-center justify-center text-sm text-[var(--chat-text-muted)]">
             No artifact selected
+          </div>
+        ) : isEditing ? (
+          // Edit-in-place: show a plain textarea bound to the draft buffer.
+          // We deliberately keep the editor minimal — host apps that want a
+          // real code editor (Monaco, CodeMirror) can swap onSaveEdit for
+          // their own modal flow. Round-2 audit P0 #9 final quadrant.
+          <div className="flex h-full flex-col" data-testid="artifact-panel-edit-mode">
+            <textarea
+              value={editDraft}
+              onChange={(e) => setEditDraft(e.target.value)}
+              spellCheck={false}
+              className="h-full w-full resize-none bg-[var(--chat-surface-overlay)] px-4 py-3 font-mono text-[13px] leading-relaxed text-[var(--chat-text-primary)] outline-none"
+              aria-label="Edit artifact content"
+            />
           </div>
         ) : viewMode === 'preview' && artifact.type === 'svg' ? (
           // SVG: render as <img> to prevent script execution — no allow-scripts

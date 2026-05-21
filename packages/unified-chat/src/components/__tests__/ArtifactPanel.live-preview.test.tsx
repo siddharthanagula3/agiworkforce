@@ -153,6 +153,88 @@ describe('ArtifactPanel live preview', () => {
   });
 });
 
+describe('ArtifactPanel edit-in-place', () => {
+  it('hides the Edit button when no onSaveEdit callback is provided', () => {
+    const artifact = makeArtifact({ type: 'code', content: 'const x = 1;' });
+    render(
+      <ArtifactPanel
+        artifact={artifact}
+        viewMode="code"
+        onViewModeChange={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.queryByLabelText('Edit artifact')).toBeNull();
+  });
+
+  it('shows Save and Discard once Edit is clicked', () => {
+    const artifact = makeArtifact({ type: 'code', content: 'const x = 1;' });
+    render(
+      <ArtifactPanel
+        artifact={artifact}
+        viewMode="code"
+        onViewModeChange={() => {}}
+        onClose={() => {}}
+        onSaveEdit={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText('Edit artifact'));
+    expect(screen.getByTestId('artifact-panel-edit-mode')).toBeDefined();
+    expect(screen.getByLabelText('Save edit')).toBeDefined();
+    expect(screen.getByLabelText('Discard edit')).toBeDefined();
+  });
+
+  it('fires onSaveEdit with the edited content when Save is clicked', () => {
+    const artifact = makeArtifact({ id: 'art-1', type: 'code', content: 'const x = 1;' });
+    let captured: { id?: string; content?: string } = {};
+    render(
+      <ArtifactPanel
+        artifact={artifact}
+        viewMode="code"
+        onViewModeChange={() => {}}
+        onClose={() => {}}
+        onSaveEdit={(id, content) => {
+          captured = { id, content };
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText('Edit artifact'));
+    const textarea = screen.getByLabelText('Edit artifact content') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'const x = 2;' } });
+    fireEvent.click(screen.getByLabelText('Save edit'));
+
+    expect(captured.id).toBe('art-1');
+    expect(captured.content).toBe('const x = 2;');
+  });
+
+  it('discards the draft when Discard is clicked', () => {
+    const artifact = makeArtifact({ type: 'code', content: 'const x = 1;' });
+    let saved = false;
+    render(
+      <ArtifactPanel
+        artifact={artifact}
+        viewMode="code"
+        onViewModeChange={() => {}}
+        onClose={() => {}}
+        onSaveEdit={() => {
+          saved = true;
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText('Edit artifact'));
+    const textarea = screen.getByLabelText('Edit artifact content') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'mutated' } });
+    fireEvent.click(screen.getByLabelText('Discard edit'));
+
+    expect(saved).toBe(false);
+    // Edit textarea is unmounted; the code view re-appears.
+    expect(screen.queryByTestId('artifact-panel-edit-mode')).toBeNull();
+  });
+});
+
 describe('buildSandboxedHtml', () => {
   it('wraps a fragment in a full document with the CSP meta tag', () => {
     const doc = buildSandboxedHtml('<p>x</p>');
