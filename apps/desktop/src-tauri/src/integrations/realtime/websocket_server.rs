@@ -1,7 +1,9 @@
 use super::{PresenceManager, RealtimeEvent};
 use crate::automation::browser::advanced::Cookie;
 use crate::automation::browser::{AccessibilityAnalyzer, AdvancedBrowserOps, CdpClient};
-use crate::integrations::native_messaging::manifest::install_manifests;
+use crate::integrations::native_messaging::manifest::{
+    install_manifests, is_valid_chrome_extension_id,
+};
 use crate::integrations::native_messaging::{ConnectionState, NativeMessage};
 use crate::sys::commands::BrowserStateWrapper;
 use crate::ui::events::tool_stream::{emit_tool_completed, emit_tool_error, emit_tool_started};
@@ -61,6 +63,52 @@ struct AuthFailureRecord {
     /// Lockout end-time. While `Some(t)` and `t > now`, all upgrades from
     /// this IP are rejected at the handshake.
     lockout_until: Option<Instant>,
+}
+
+#[derive(serde::Deserialize)]
+struct PairRequestBody {
+    #[serde(rename = "extensionId")]
+    extension_id: Option<String>,
+}
+
+fn parse_pair_extension_id(raw_request: &str) -> Result<Option<String>, String> {
+    let Some((headers, body)) = raw_request.split_once("\r\n\r\n") else {
+        return Ok(None);
+    };
+
+    let content_length = headers
+        .lines()
+        .find_map(|line| {
+            let (name, value) = line.split_once(':')?;
+            if name.eq_ignore_ascii_case("content-length") {
+                value.trim().parse::<usize>().ok()
+            } else {
+                None
+            }
+        })
+        .unwrap_or(0);
+
+    if content_length == 0 || body.trim().is_empty() {
+        return Ok(None);
+    }
+
+    if body.len() < content_length {
+        return Err("Pairing request body was truncated".to_string());
+    }
+
+    let body = &body[..content_length];
+    let parsed: PairRequestBody =
+        serde_json::from_str(body).map_err(|e| format!("Invalid pairing JSON: {}", e))?;
+
+    let Some(extension_id) = parsed.extension_id.map(|value| value.trim().to_string()) else {
+        return Ok(None);
+    };
+
+    if !is_valid_chrome_extension_id(&extension_id) {
+        return Err("Invalid Chrome extension ID".to_string());
+    }
+
+    Ok(Some(extension_id))
 }
 
 // ── RT-04: WebSocket Origin allow-list ───────────────────────────────────────
@@ -183,7 +231,10 @@ impl RealtimeServer {
     /// SEV-DESK-01: returns true if `ip` is currently in the lockout window.
     /// Also opportunistically clears expired lockouts so the map does not
     /// grow without bound for transient offenders.
-    async fn is_locked_out(map: &Arc<TokioMutex<HashMap<IpAddr, AuthFailureRecord>>>, ip: IpAddr) -> bool {
+    async fn is_locked_out(
+        map: &Arc<TokioMutex<HashMap<IpAddr, AuthFailureRecord>>>,
+        ip: IpAddr,
+    ) -> bool {
         let mut failures = map.lock().await;
         let Some(rec) = failures.get_mut(&ip) else {
             return false;
@@ -421,6 +472,43 @@ impl RealtimeServer {
             return;
         }
 
+        let extension_id = match parse_pair_extension_id(header_section) {
+            Ok(extension_id) => extension_id,
+            Err(error) => {
+                let response = format!(
+                    "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    error.len(),
+                    error
+                );
+                let _ = stream.write_all(response.as_bytes()).await;
+                let _ = stream.shutdown().await;
+                return;
+            }
+        };
+
+        let native_host_manifest_installed = if let Some(extension_id) = extension_id.as_deref() {
+            match install_manifests(Some(extension_id)) {
+                Ok(paths) => {
+                    tracing::info!(
+                        "E2: /pair refreshed native messaging manifest for extension {} at {} location(s)",
+                        extension_id,
+                        paths.len()
+                    );
+                    true
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        "E2: /pair could not refresh native messaging manifest for extension {}: {}",
+                        extension_id,
+                        error
+                    );
+                    false
+                }
+            }
+        } else {
+            false
+        };
+
         // Generate a 32-byte (64 hex chars) cryptographically random token.
         let new_token = {
             use rand::RngCore;
@@ -433,11 +521,15 @@ impl RealtimeServer {
         // Store (rotate) the pair token.
         *pair_token.write().await = new_token.clone();
 
-        tracing::info!("E2: /pair issued new token with fingerprint {}", fingerprint);
+        tracing::info!(
+            "E2: /pair issued new token with fingerprint {}",
+            fingerprint
+        );
 
         let body = serde_json::json!({
             "token": new_token,
             "fingerprint": fingerprint,
+            "nativeHostManifestInstalled": native_host_manifest_installed,
         })
         .to_string();
 
@@ -464,9 +556,7 @@ impl RealtimeServer {
         // RT-04 fix: validate Origin header during the WebSocket handshake.
         // `accept_hdr_async_with_config` lets us inspect the HTTP upgrade request
         // before the connection is established AND cap per-frame size.
-        let callback = |request: &Request,
-                        response: Response|
-         -> Result<Response, ErrorResponse> {
+        let callback = |request: &Request, response: Response| -> Result<Response, ErrorResponse> {
             let origin = request
                 .headers()
                 .get("origin")
@@ -481,9 +571,7 @@ impl RealtimeServer {
                 // We can't capture `rejected_origin` here due to borrow rules,
                 // so we embed the rejection in the error response reason phrase.
                 let _ = rejected; // used via tracing above
-                let err_response = ErrorResponse::new(Some(
-                    "Origin not allowed".to_string(),
-                ));
+                let err_response = ErrorResponse::new(Some("Origin not allowed".to_string()));
                 return Err(err_response);
             }
             Ok(response)
@@ -503,7 +591,10 @@ impl RealtimeServer {
         {
             Ok(ws) => ws,
             Err(e) => {
-                tracing::warn!("RT-04: WebSocket handshake failed (origin check or protocol error): {}", e);
+                tracing::warn!(
+                    "RT-04: WebSocket handshake failed (origin check or protocol error): {}",
+                    e
+                );
                 return Ok(()); // connection is already closed; not an error we need to propagate
             }
         };
@@ -1818,9 +1909,16 @@ mod tests {
     #[tokio::test]
     async fn pair_returns_200_with_token_and_fingerprint() {
         let (addr, pair_token) = spawn_pair_handler().await;
-        let resp_bytes = send_http(addr, "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n").await;
+        let resp_bytes = send_http(
+            addr,
+            "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n",
+        )
+        .await;
         let resp = String::from_utf8_lossy(&resp_bytes);
-        assert!(resp.starts_with("HTTP/1.1 200"), "expected 200, got: {resp}");
+        assert!(
+            resp.starts_with("HTTP/1.1 200"),
+            "expected 200, got: {resp}"
+        );
         let body_start = resp.find("\r\n\r\n").unwrap() + 4;
         let body: serde_json::Value = serde_json::from_str(&resp[body_start..]).unwrap();
         let token = body["token"].as_str().unwrap();
@@ -1837,7 +1935,11 @@ mod tests {
     #[tokio::test]
     async fn pair_token_has_correct_length() {
         let (addr, pair_token) = spawn_pair_handler().await;
-        send_http(addr, "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n").await;
+        send_http(
+            addr,
+            "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n",
+        )
+        .await;
         let stored = pair_token.read().await.clone();
         // 32 bytes = 64 hex chars
         assert_eq!(stored.len(), 64);
@@ -1846,7 +1948,11 @@ mod tests {
     #[tokio::test]
     async fn pair_fingerprint_is_first_8_chars_of_token() {
         let (addr, _pair_token) = spawn_pair_handler().await;
-        let resp_bytes = send_http(addr, "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n").await;
+        let resp_bytes = send_http(
+            addr,
+            "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n",
+        )
+        .await;
         let resp = String::from_utf8_lossy(&resp_bytes);
         let body_start = resp.find("\r\n\r\n").unwrap() + 4;
         let body: serde_json::Value = serde_json::from_str(&resp[body_start..]).unwrap();
@@ -1860,9 +1966,14 @@ mod tests {
     async fn pair_idempotent_second_call_rotates_token() {
         // First call
         let (addr1, pair_token1) = spawn_pair_handler().await;
-        let resp1 = send_http(addr1, "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n").await;
+        let resp1 = send_http(
+            addr1,
+            "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n",
+        )
+        .await;
         let r1 = String::from_utf8_lossy(&resp1);
-        let b1: serde_json::Value = serde_json::from_str(&r1[r1.find("\r\n\r\n").unwrap() + 4..]).unwrap();
+        let b1: serde_json::Value =
+            serde_json::from_str(&r1[r1.find("\r\n\r\n").unwrap() + 4..]).unwrap();
         let token1 = b1["token"].as_str().unwrap().to_string();
 
         // Second call on a new handler sharing the same pair_token arc
@@ -1873,9 +1984,14 @@ mod tests {
             let (stream, peer) = listener2.accept().await.unwrap();
             RealtimeServer::handle_http_pair(stream, peer, pair_token2).await;
         });
-        let resp2 = send_http(addr2, "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n").await;
+        let resp2 = send_http(
+            addr2,
+            "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n",
+        )
+        .await;
         let r2 = String::from_utf8_lossy(&resp2);
-        let b2: serde_json::Value = serde_json::from_str(&r2[r2.find("\r\n\r\n").unwrap() + 4..]).unwrap();
+        let b2: serde_json::Value =
+            serde_json::from_str(&r2[r2.find("\r\n\r\n").unwrap() + 4..]).unwrap();
         let token2 = b2["token"].as_str().unwrap().to_string();
 
         // Both calls succeed (200) but tokens differ (rotation)
@@ -1888,9 +2004,16 @@ mod tests {
     #[tokio::test]
     async fn pair_wrong_path_returns_404() {
         let (addr, _pair_token) = spawn_pair_handler().await;
-        let resp_bytes = send_http(addr, "POST /wrong HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n").await;
+        let resp_bytes = send_http(
+            addr,
+            "POST /wrong HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n",
+        )
+        .await;
         let resp = String::from_utf8_lossy(&resp_bytes);
-        assert!(resp.starts_with("HTTP/1.1 404"), "expected 404, got: {resp}");
+        assert!(
+            resp.starts_with("HTTP/1.1 404"),
+            "expected 404, got: {resp}"
+        );
     }
 
     #[tokio::test]
@@ -1911,12 +2034,18 @@ mod tests {
         });
 
         let mut client = tokio::net::TcpStream::connect(addr).await.unwrap();
-        client.write_all(b"POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n").await.unwrap();
+        client
+            .write_all(b"POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n")
+            .await
+            .unwrap();
         client.shutdown().await.ok();
         let mut response = Vec::new();
         client.read_to_end(&mut response).await.unwrap();
         let resp = String::from_utf8_lossy(&response);
-        assert!(resp.starts_with("HTTP/1.1 403"), "expected 403, got: {resp}");
+        assert!(
+            resp.starts_with("HTTP/1.1 403"),
+            "expected 403, got: {resp}"
+        );
         // pair_token must remain empty — no token issued
         assert!(pair_token.read().await.is_empty());
     }
@@ -1924,10 +2053,17 @@ mod tests {
     #[tokio::test]
     async fn pair_token_all_hex_chars() {
         let (addr, pair_token) = spawn_pair_handler().await;
-        send_http(addr, "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n").await;
+        send_http(
+            addr,
+            "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n",
+        )
+        .await;
         let stored = pair_token.read().await.clone();
         assert!(!stored.is_empty());
-        assert!(stored.chars().all(|c| c.is_ascii_hexdigit()), "token must be all hex");
+        assert!(
+            stored.chars().all(|c| c.is_ascii_hexdigit()),
+            "token must be all hex"
+        );
     }
 
     #[tokio::test]

@@ -28,15 +28,15 @@ The Chrome extension is the BYOK control plane for the browser. It surfaces AGI'
 
 ## Stack
 
-| Item             | Choice                                                                                   |
-| ---------------- | ---------------------------------------------------------------------------------------- |
-| Manifest version | MV3                                                                                      |
-| Language         | TypeScript (TS-only — older `.js` files deleted 2026-05-05)                              |
-| Bundler          | Vite / esbuild (per workspace setup)                                                     |
-| Test runner      | Vitest                                                                                   |
-| Lint             | ESLint (separate config: `pnpm lint:extension`)                                          |
-| Site detectors   | LinkedIn + Lever autofill modules in `src/sites/`                                        |
-| Native messaging | Port 8787 desktop bridge (manifest absent — must ship `install.sh` for native-host JSON) |
+| Item             | Choice                                                                                  |
+| ---------------- | --------------------------------------------------------------------------------------- |
+| Manifest version | MV3                                                                                     |
+| Language         | TypeScript (TS-only — older `.js` files deleted 2026-05-05)                             |
+| Bundler          | Vite / esbuild (per workspace setup)                                                    |
+| Test runner      | Vitest                                                                                  |
+| Lint             | ESLint (separate config: `pnpm lint:extension`)                                         |
+| Site detectors   | LinkedIn + Lever autofill modules in `src/sites/`                                       |
+| Native messaging | Port 8787 desktop bridge plus bundled `native_messaging_host` manifests for Chrome/Edge |
 
 ## File layout
 
@@ -53,8 +53,11 @@ apps/extension/
 │   ├── platforms/                  Slack / Gmail / Calendar / Docs / GitHub assistant prompts
 │   └── ...
 ├── native-host/
-│   ├── com.agiworkforce.browser.json.template   ⚠ template only — needs install.sh to materialize
-│   └── (install.sh)                 PENDING per V5 §10 lock #12
+│   ├── com.agiworkforce.browser.json.template
+│   └── install.sh                   macOS/Linux manual installer shim
+├── scripts/
+│   ├── install-native-host.sh       macOS/Linux Chrome+Edge manifest installer
+│   └── install-native-host.ps1      Windows HKCU Chrome+Edge manifest installer
 ├── __tests__/                      22 test suites
 ├── dist/                           5-file CWS-ready build (sourcemaps stripped)
 └── extension.zip                   136 KB CWS-submittable
@@ -103,12 +106,10 @@ Same 10+ providers as other surfaces. Cloud requests route through `services/api
 
 ## Current open work
 
-1. **Native messaging host install script** — `apps/extension/native-host/install.sh` to materialize `com.agiworkforce.browser.json` to OS path (macOS `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/`, Linux `~/.config/google-chrome/NativeMessagingHosts/`, Windows registry). V5 §10 lock #12.
-2. **OR drop `nativeMessaging` permission** until the host binary exists. (Two paths; either resolves the lock.)
-3. **CSP `'unsafe-inline'` removal** — deferred (UI refactor)
-4. **Plaintext-localhost transport** — deferred (desktop-side TLS)
-5. **`autoSubmit: true` payload-controllable without confirmation** — current behavior; user-confirm gate to add
-6. **Keep-alive alarm at 0.5 minutes** — Chrome silently bumps to 1 min. Adjust to 1.0 explicitly to avoid silent override.
+1. **CSP `'unsafe-inline'` removal** — deferred (UI refactor)
+2. **Plaintext-localhost transport** — deferred (desktop-side TLS)
+3. **`autoSubmit: true` payload-controllable without confirmation** — current behavior; user-confirm gate to add
+4. **Keep-alive alarm at 0.5 minutes** — Chrome silently bumps to 1 min. Adjust to 1.0 explicitly to avoid silent override.
 
 ## Gotchas
 

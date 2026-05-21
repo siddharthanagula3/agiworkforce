@@ -139,6 +139,9 @@ jobs:
       - name: Verify Rust toolchain
         run: rustup show active-toolchain && rustc --version && cargo --version
 
+      - name: Build native messaging host sidecar
+        run: pnpm --filter @agiworkforce/desktop run build:native-host -- --profile debug
+
       - name: Dependency audit (Rust) — critical (blocking)
         run: cargo install cargo-audit --version 0.22.1 --locked --quiet && cargo audit --deny warnings
         env:
@@ -360,6 +363,13 @@ jobs:
           cache-on-failure: true
           key: macos-smoke
 
+      - name: Prepare native messaging sidecar placeholder
+        run: |
+          triple="$(rustc -vV | awk '/^host: / {print $2}')"
+          mkdir -p apps/desktop/src-tauri/binaries
+          printf '#!/usr/bin/env sh\nexit 1\n' > "apps/desktop/src-tauri/binaries/native_messaging_host-${triple}"
+          chmod +x "apps/desktop/src-tauri/binaries/native_messaging_host-${triple}"
+
       - name: cargo check (default features, macOS)
         working-directory: apps/desktop/src-tauri
         run: cargo check --workspace
@@ -392,6 +402,13 @@ jobs:
           workspaces: 'apps/desktop/src-tauri -> target'
           cache-on-failure: true
           key: windows-smoke
+
+      - name: Prepare native messaging sidecar placeholder
+        shell: pwsh
+        run: |
+          $triple = ((rustc -vV) | Select-String '^host: ').ToString().Split(' ')[1]
+          New-Item -ItemType Directory -Force -Path apps/desktop/src-tauri/binaries | Out-Null
+          New-Item -ItemType File -Force -Path "apps/desktop/src-tauri/binaries/native_messaging_host-$triple.exe" | Out-Null
 
       - name: cargo check (default features, Windows)
         working-directory: apps/desktop/src-tauri

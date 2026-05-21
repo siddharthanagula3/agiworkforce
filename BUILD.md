@@ -78,6 +78,8 @@ pnpm build:desktop
 # Bundles land in apps/desktop/src-tauri/target/release/bundle/
 ```
 
+Desktop production builds run `pnpm --filter @agiworkforce/desktop run build:native-host` first, which compiles `native_messaging_host` and writes the target-triple sidecar under `apps/desktop/src-tauri/binaries/` for Tauri packaging.
+
 Signed/notarized release builds run through `.github/workflows/release-desktop.yml` on tag push. macOS signing needs `APPLE_CERTIFICATE` + `APPLE_CERTIFICATE_PASSWORD` + `APPLE_SIGNING_IDENTITY` + `APPLE_ID` + `APPLE_PASSWORD` + `APPLE_TEAM_ID` GitHub secrets. Windows signing needs `WINDOWS_CERTIFICATE` + `WINDOWS_CERTIFICATE_PASSWORD` (FIX-010 in the remediation plan — currently in-progress, builds ship unsigned until the EV cert lands).
 
 ### Web app (Next.js + Vite)
@@ -159,8 +161,9 @@ pnpm --filter desktop exec playwright test
 2. Type check (tsc --noEmit across all TS workspaces)
 3. Tests (vitest)
 4. Build (web, packages, extension)
-5. Dependency audit (pnpm audit + cargo audit, both blocking on high+ severity per FIX-043)
-6. Rust clippy (-D warnings -D unsafe-code)
-7. Rust workspace test build
+5. Native messaging host sidecar build check
+6. Dependency audit (pnpm audit + cargo audit, both blocking on high+ severity per FIX-043)
+7. Rust clippy (-D warnings -D unsafe-code)
+8. Rust workspace test build
 
 `.github/workflows/release-desktop.yml` runs on tag push and produces signed bundles for macOS (universal/aarch64/x86_64), Windows x64, and Linux x64.

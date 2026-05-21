@@ -230,8 +230,10 @@ pub fn run() {
                 data_dir: app_data_dir.clone(),
             });
 
-            // Install native messaging manifest
-            if let Err(e) = crate::integrations::native_messaging::manifest::install_manifests(Some("bblfoadbknbnmbchfjpgcefpkccpdnfc")) {
+            // Install native messaging manifest for packaged production IDs.
+            // Dev/unpacked extension IDs are added during the HTTP /pair handshake.
+            if let Err(e) = crate::integrations::native_messaging::manifest::install_manifests(None)
+            {
                 tracing::warn!("Failed to install native messaging manifest: {}", e);
             } else {
                 tracing::info!("Native messaging manifest installed/updated");
