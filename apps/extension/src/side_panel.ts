@@ -979,6 +979,10 @@ function injectStyles(): void {
       border-color: rgba(33,128,141,0.5);
       box-shadow: 0 0 0 2px rgba(33,128,141,0.18);
     }
+    #sp-composer-shell.dragover {
+      border-color: rgba(33,128,141,0.8);
+      box-shadow: 0 0 0 2px rgba(33,128,141,0.35);
+    }
     #sp-input-row {
       display: flex;
       gap: 6px;
@@ -2297,6 +2301,55 @@ function updateSendButton(): void {
     clearChildren(btn);
     btn.appendChild(renderIcon(ArrowUp, 16));
   }
+}
+
+/**
+ * Read a File as a data URL with a single Promise wrapper around FileReader.
+ * Keeps the drop/paste path readable without sprinkling reader.onload chains
+ * through the call sites. Resolves to null on read error so callers can
+ * filter and move on instead of throwing through Promise.all.
+ */
+function readFileAsDataUrl(file: File): Promise<string | null> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      resolve(typeof result === 'string' ? result : null);
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Accept files from a drag-drop or paste event and append their data URLs to
+ * `pendingAttachments`. Enforces the same caps as the VS Code webview: max
+ * 8 files per call total (including any already pending) and 10 MB per file.
+ * Image-only filter matches the existing +menu accept="image/*" behavior.
+ *
+ * Round-2 audit P0 #3 — chrome-ext composer drag-drop + paste-image wire,
+ * 2026-05-21. Reuses the existing attachment preview UI; no schema work
+ * needed because the wire path through CHAT_MESSAGE already snapshots
+ * pendingAttachments per the round-3 fix in commit `38034fedb`.
+ */
+function acceptIncomingComposerFiles(files: File[] | FileList): void {
+  const MAX_BYTES = 10 * 1024 * 1024;
+  const MAX_TOTAL_ATTACHMENTS = 8;
+  const incoming: File[] = Array.from(files).filter(
+    (file) => file.type.startsWith('image/') && file.size <= MAX_BYTES,
+  );
+  if (incoming.length === 0) return;
+
+  const remainingSlots = Math.max(0, MAX_TOTAL_ATTACHMENTS - pendingAttachments.length);
+  if (remainingSlots === 0) return;
+  const accepted = incoming.slice(0, remainingSlots);
+
+  void Promise.all(accepted.map(readFileAsDataUrl)).then((results) => {
+    for (const dataUrl of results) {
+      if (dataUrl) pendingAttachments.push(dataUrl);
+    }
+    updateAttachmentPreview();
+  });
 }
 
 function updateAttachmentPreview(): void {
@@ -3671,6 +3724,29 @@ function buildUI(): void {
     }
   });
 
+  // 2026-05-21 — paste-image support on the textarea. Captures clipboard image
+  // items (screenshots, copied images) so users don't have to round-trip
+  // through the +menu. Mirrors `packages/unified-chat/ChatInput.tsx` and the
+  // VS Code webview composer wire. Image-only kind, single readAsDataURL per
+  // file, the existing 8-attachment cap below applies on append.
+  inputEl.addEventListener('paste', (e: ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const pasted: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (!item) continue;
+      if (item.kind === 'file') {
+        const file = item.getAsFile();
+        if (file && file.type.startsWith('image/')) pasted.push(file);
+      }
+    }
+    if (pasted.length > 0) {
+      e.preventDefault();
+      acceptIncomingComposerFiles(pasted);
+    }
+  });
+
   const sendBtn = el('button', {
     id: 'sp-send-btn',
     title: 'Send (Cmd+Enter)',
@@ -3816,6 +3892,37 @@ function buildUI(): void {
   inputArea.appendChild(composerShell);
   inputArea.appendChild(promptChipsRow);
   document.body.appendChild(inputArea);
+
+  // 2026-05-21 — drag-drop image attachments onto the composer. Highlights
+  // the shell while a Files drag is in flight; on drop we route through
+  // acceptIncomingComposerFiles which handles size cap, image-only filter,
+  // and the 8-attachment ceiling. Matches the VS Code webview behaviour
+  // shipped in this same session.
+  composerShell.addEventListener('dragover', (event: DragEvent) => {
+    const types = event.dataTransfer?.types;
+    if (!types) return;
+    let hasFile = false;
+    for (let i = 0; i < types.length; i++) {
+      if (types[i] === 'Files') {
+        hasFile = true;
+        break;
+      }
+    }
+    if (!hasFile) return;
+    event.preventDefault();
+    composerShell.classList.add('dragover');
+  });
+  composerShell.addEventListener('dragleave', (event: DragEvent) => {
+    const relatedNode = event.relatedTarget as Node | null;
+    if (relatedNode && composerShell.contains(relatedNode)) return;
+    composerShell.classList.remove('dragover');
+  });
+  composerShell.addEventListener('drop', (event: DragEvent) => {
+    if (!event.dataTransfer) return;
+    event.preventDefault();
+    composerShell.classList.remove('dragover');
+    acceptIncomingComposerFiles(event.dataTransfer.files);
+  });
 
   setupVoiceInput(micBtn, inputEl, autoResizeInput);
   renderMessages();
