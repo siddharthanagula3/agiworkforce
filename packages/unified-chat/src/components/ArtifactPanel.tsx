@@ -268,8 +268,37 @@ export function ArtifactPanel({
     URL.revokeObjectURL(url);
   }
 
-  function handlePublish() {
-    // Publish is a future feature — no-op for now
+  async function handlePublish() {
+    // Round-2 audit P0 #9 (2026-05-21). Cloud-side artifact publishing
+    // arrives with Cloud Managed; until then "Publish" copies a portable
+    // self-contained snapshot to the clipboard so the user can paste it
+    // into a doc, chat thread, or GitHub gist as a fallback.
+    if (!artifact) return;
+    const snapshot = [
+      `# ${artifact.title ?? 'Untitled artifact'}`,
+      `Type: ${getTypeLabel(artifact)}${artifact.language ? ` (${artifact.language})` : ''}`,
+      '',
+      '```' + (artifact.language ?? ''),
+      artifact.content,
+      '```',
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(snapshot);
+      // Reuse the existing copied-state feedback channel so the toolbar
+      // briefly shows the check.
+      setHeaderCopied(true);
+      setTimeout(() => setHeaderCopied(false), 1500);
+    } catch {
+      // Clipboard write may fail (insecure context, denied permission) —
+      // fall back to a data-URL download so the user still gets the bytes.
+      const blob = new Blob([snapshot], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(artifact.title ?? 'artifact').replace(/\s+/g, '-').toLowerCase()}-snapshot.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
   }
 
   const canPreview =
