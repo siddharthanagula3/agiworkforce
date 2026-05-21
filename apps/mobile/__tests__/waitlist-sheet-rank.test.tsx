@@ -69,6 +69,55 @@ async function renderConfirmed(rank: number) {
 // ---------------------------------------------------------------------------
 
 describe('CloudWaitlistSheet rank display', () => {
+  it('keeps submit disabled until the email is valid', () => {
+    const props = makeProps(0);
+    const { getByTestId, getByPlaceholderText } = render(<CloudWaitlistSheet {...props} />);
+
+    fireEvent.press(getByTestId('cloud-waitlist-submit-btn'));
+    expect(props.onSubmit).not.toHaveBeenCalled();
+
+    fireEvent.changeText(getByPlaceholderText('you@example.com'), 'not-an-email');
+    fireEvent.press(getByTestId('cloud-waitlist-submit-btn'));
+    expect(props.onSubmit).not.toHaveBeenCalled();
+
+    fireEvent.changeText(getByPlaceholderText('you@example.com'), 'test@example.com');
+    expect(getByTestId('cloud-waitlist-submit-btn')).toBeTruthy();
+  });
+
+  it('normalises the submitted email and includes the selected country', async () => {
+    const props = makeProps(0);
+    const { getByPlaceholderText, getByTestId } = render(<CloudWaitlistSheet {...props} />);
+
+    fireEvent.changeText(getByPlaceholderText('you@example.com'), '  Test@Example.COM  ');
+
+    await act(async () => {
+      fireEvent.press(getByTestId('cloud-waitlist-submit-btn'));
+    });
+
+    expect(props.onSubmit).toHaveBeenCalledWith({
+      email: 'test@example.com',
+      country: 'US',
+    });
+  });
+
+  it('notifies the caller when a confirmed user continues on-device', async () => {
+    const props = {
+      ...makeProps(3),
+      onJoined: jest.fn(),
+    };
+    const { getByPlaceholderText, getByTestId } = render(<CloudWaitlistSheet {...props} />);
+
+    fireEvent.changeText(getByPlaceholderText('you@example.com'), 'test@example.com');
+    await act(async () => {
+      fireEvent.press(getByTestId('cloud-waitlist-submit-btn'));
+    });
+
+    fireEvent.press(getByTestId('cloud-waitlist-continue-btn'));
+
+    expect(props.onJoined).toHaveBeenCalledWith({ rank: 3 });
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('renders #1 in line when server returns rank=0', async () => {
     const { getByTestId } = await renderConfirmed(0);
     const rankEl = getByTestId('cloud-waitlist-rank');

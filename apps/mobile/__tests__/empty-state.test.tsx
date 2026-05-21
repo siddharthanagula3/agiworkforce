@@ -203,7 +203,7 @@ describe('ChatEmptyState', () => {
       expect(getByLabelText('Research mode')).toBeTruthy();
       expect(getByLabelText('Image mode')).toBeTruthy();
       expect(getByLabelText('Video mode')).toBeTruthy();
-      expect(getByLabelText('Computer mode')).toBeTruthy();
+      expect(getByLabelText('Computer mode, desktop required')).toBeTruthy();
       expect(getByLabelText('Translate mode')).toBeTruthy();
     });
 

@@ -2,7 +2,7 @@ import { useCallback, useRef } from 'react';
 import { View, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Brain, ChevronRight } from 'lucide-react-native';
+import { ArrowLeft, ChevronRight, Cpu } from 'lucide-react-native';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useThemeColors } from '@/src/ui/theme';
-import { AUTO_MODES, MODEL_LIST } from '@/lib/models';
+import { AUTO_MODES, LOCAL_MODEL_LIST, getDisplayName } from '@/src/features/model-picker/service';
 
 export default function ModelsScreen() {
   const c = useThemeColors();
@@ -30,18 +30,17 @@ export default function ModelsScreen() {
     pickerRef.current?.snapToIndex(0);
   }, []);
 
-  const resolvedLabel = (() => {
-    const autoMode = AUTO_MODES.find((m) => m.id === selectedModel);
-    if (autoMode) return autoMode.name;
-    const model = MODEL_LIST.find((m) => m.id === selectedModel);
-    return model?.name ?? selectedModel;
-  })();
+  const resolvedLabel = getDisplayName(selectedModel);
+  const selectedAutoMode = AUTO_MODES.find((m) => m.id === selectedModel);
+  const selectedLocalModel = LOCAL_MODEL_LIST.find((m) => m.id === selectedModel);
+  const selectedDetail =
+    selectedAutoMode?.description ?? selectedLocalModel?.detailLabel ?? 'On-device local model';
 
-  const favoriteModels = MODEL_LIST.filter((m) => favorites.includes(m.id)).slice(0, 5);
+  const favoriteModels = LOCAL_MODEL_LIST.filter((m) => favorites.includes(m.id)).slice(0, 5);
   const recentModelDefs = recentModels
-    .map((id) => MODEL_LIST.find((m) => m.id === id))
+    .map((id) => LOCAL_MODEL_LIST.find((m) => m.id === id))
     .filter(Boolean)
-    .slice(0, 5) as (typeof MODEL_LIST)[number][];
+    .slice(0, 5) as (typeof LOCAL_MODEL_LIST)[number][];
 
   return (
     <SafeAreaView className="flex-1 bg-surface-base">
@@ -80,14 +79,14 @@ export default function ModelsScreen() {
               className="w-9 h-9 rounded-full items-center justify-center"
               style={{ backgroundColor: `${c.teal}22` }}
             >
-              <Brain size={18} color={c.teal} />
+              <Cpu size={18} color={c.teal} />
             </View>
             <View className="flex-1">
               <Text className="text-[15px] font-medium" style={{ color: c.textPrimary }}>
                 {resolvedLabel}
               </Text>
               <Text className="text-xs mt-0.5" style={{ color: c.textMuted }}>
-                Tap to change
+                {selectedDetail}
               </Text>
             </View>
             <ChevronRight size={16} color={c.textMuted} />
@@ -110,7 +109,7 @@ export default function ModelsScreen() {
                     {m.name}
                   </Text>
                   <Text className="text-xs" style={{ color: c.textMuted }}>
-                    {m.provider}
+                    {m.runtimeLabel}
                   </Text>
                 </View>
               </View>
@@ -134,7 +133,7 @@ export default function ModelsScreen() {
                     {m.name}
                   </Text>
                   <Text className="text-xs" style={{ color: c.textMuted }}>
-                    {m.provider}
+                    {m.runtimeLabel}
                   </Text>
                 </View>
               </View>
@@ -150,7 +149,7 @@ export default function ModelsScreen() {
           accessibilityRole="button"
         >
           <Text className="text-[14px] font-semibold" style={{ color: c.teal }}>
-            Browse All Models
+            Browse Local Models
           </Text>
         </Pressable>
       </View>

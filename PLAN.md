@@ -125,6 +125,9 @@ The CLI now has the first enforceable parity foundation:
 - Shared suite chat execution contracts now define `ChatExecutionMode`, `ChatIntent`, connector status snapshots, permission decisions, and compact tool events for all six surfaces.
 - VS Code sidebar model switching now has a host-backed inline popover instead of a broken pill click path.
 - Mobile remote chat now fails closed while v1 is Local Mode + Local LLMs, including attachment upload avoidance and a typed error path until secure Mobile BYOK key storage or Cloud Managed access is enabled.
+- Mobile chat, drawer, settings, onboarding, model picker, add-to-chat, and task-chip surfaces now express the locked three-mode product model: Local Mode + Local LLMs active, Mobile BYOK disabled until secure key storage ships, and Cloud Managed visible as waitlist.
+- Mobile model selection is local-first from `@agiworkforce/local-llm`; cloud provider rows are locked display rows and cannot become active model ids in v1.
+- Mobile Artifacts and Code Sessions now exist as Claude-inspired preview/control surfaces. Mobile previews and shares artifacts, and it controls Desktop/future Cloud Managed code environments instead of running heavy compute locally.
 
 This is not enough to claim Claude Code parity. It is the foundation.
 

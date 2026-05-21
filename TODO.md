@@ -49,6 +49,11 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Add shared `ChatExecutionMode`, `ChatIntent`, connector status, permission decision, and suite tool-event contracts.
 - [x] Fix the VS Code sidebar model picker so the pill opens a real inline model popover backed by extension-host model data.
 - [x] Add Mobile v1 remote-chat guard so Local Mode + Local LLMs cannot silently upload attachments or stream through remote BYOK/managed APIs.
+- [x] Implement Mobile v1 local-first Claude-style shell: composer-first chat, Local Mode toggle, locked Cloud Managed waitlist affordances, and drawer navigation for Chat, Artifacts, Code, Projects, Skills, and local utilities.
+- [x] Convert Mobile model selection to the local LLM catalog with local auto modes, locked Cloud Managed rows, and persisted cloud-selection cleanup.
+- [x] Add Mobile Artifacts gallery for received artifacts with loading skeleton, preview modal, copy, and native share.
+- [x] Add Mobile Code Sessions list/detail/archive surfaces that hand off execution to AGI Desktop or future Cloud Managed instead of running code locally.
+- [x] Add Mobile feature READMEs and regression coverage for local mode, model selection, drawer/settings IA, add-to-chat gating, Artifacts, Code Sessions, and waitlist behavior.
 
 ## Exploration Tasks
 

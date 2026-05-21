@@ -34,7 +34,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import * as VoiceInput from '@/src/features/voice/services/voiceInput';
 import * as VoiceOutput from '@/src/features/voice/services/voiceOutput';
 import { colors } from '@/src/ui/theme';
-import { getDisplayName } from '@/lib/models';
+import { getDisplayName } from '@/src/features/model-picker/service';
 
 // ---------------------------------------------------------------------------
 // Phase state

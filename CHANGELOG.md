@@ -14,6 +14,10 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 
 - Shared suite chat execution contracts in `@agiworkforce/types`: `ChatExecutionMode`, `ChatIntent`, connector status snapshots, permission decisions, and compact suite tool events. These make Local Mode + Local LLMs, Local Mode + BYOK, and Cloud Managed semantics explicit before more frontend parity work lands.
 - Mobile `remoteChatGate` with regression tests, so v1 Local Mode + Local LLMs has a single guard for blocking remote chat until secure Mobile BYOK key storage or Cloud Managed access is enabled.
+- Mobile v1 Claude-inspired app shell updates: composer-first chat start screen, visible Local Mode + Local LLMs state, Cloud Managed waitlist affordance, drawer-level Artifacts and Code navigation, and locked Mobile BYOK messaging.
+- Mobile local-first model picker backed by `@agiworkforce/local-llm`, with selectable on-device rows, local auto modes, persisted cloud-selection cleanup, and locked Cloud Managed provider rows.
+- Mobile Artifacts gallery and Code Sessions surfaces. Mobile can preview/share received artifacts and control Desktop or future Cloud Managed code environments, while explicitly avoiding mobile-local heavy compute.
+- Mobile feature ownership READMEs for `artifacts` and `code-sessions`, keeping the new domains visible to repo operability checks and parallel coding agents.
 - `packages/types/src/suite-contracts.ts` as the canonical cross-surface contract layer for `PrivacyMode`, `ProviderMode`, synced Web/Desktop/Mobile app conversations, CLI/VS Code/Chrome developer sessions, explicit handoff drafts, projects, compute sessions, generated files, artifact manifests, remote-control/computer actions, connector/MCP registry records, and agent/subagent event records.
 - Canonical `Local` / `BYOK` / `Managed` privacy-mode display copy and provider-mode label helpers in `@agiworkforce/types`, so surfaces can stop inventing trust-boundary wording independently.
 - Shared Local-to-BYOK handoff preview utilities in `@agiworkforce/utils` that build typed `HandoffDraft` records with redaction findings, redacted payload preview text, checksum evidence, and preview hashes.
@@ -110,6 +114,8 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 
 - VS Code sidebar model switching now uses a real inline model popover backed by `modelPickerData` from the extension host, with webview regression coverage for the previously undefined popover variables.
 - Mobile streaming now fails closed through the remote chat gate and Article 50 provider gate before outbound provider/API requests. Local Mode + Local LLM attachments are kept as local references instead of being uploaded first.
+- Mobile Local Mode chat now uses the local LLM runtime path when remote chat is disabled, and shows a setup message instead of silently falling back to cloud when no on-device model is ready.
+- Mobile onboarding, settings, capabilities, drawer, model picker, add-to-chat sheet, task chips, and tool-access copy now consistently separate Local Mode + Local LLMs, locked Mobile BYOK, and Cloud Managed waitlist behavior.
 - Desktop and API native computer-use action/session payloads now use `DesktopComputerAction` and `DesktopComputerUseSession`, reserving canonical `ComputerAction` and `ComputerUseSession` names for suite-level shared contracts.
 - Web v2 AI SDK requests now fail closed unless `providerMode` is explicitly `ManagedGateway` or `ManagedNative`, preventing Local/BYOK requests from reaching the managed Vercel AI SDK/Gateway path.
 - Web AI SDK stream handling now has an adapter that maps AI SDK text, reasoning, tool, usage, error, and stop events into AGI's canonical `StreamChunk` event union.

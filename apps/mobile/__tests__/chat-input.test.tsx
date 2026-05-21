@@ -149,6 +149,13 @@ jest.mock('../src/features/model-picker/store', () => ({
     }),
 }));
 
+jest.mock('../src/features/model-picker/service', () => ({
+  getDisplayName: (id: string) => {
+    if (id === 'claude-sonnet-4.6') return 'Claude 4.6 Sonnet';
+    return id;
+  },
+}));
+
 jest.mock('../stores/settingsStore', () => ({
   useSettingsStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({ hapticsEnabled: false, themeMode: 'dark' }),
@@ -172,16 +179,6 @@ jest.mock('../src/ui/theme', () => ({
     textPrimary: '#fff',
     surfaceElevated: '#1a1a1a',
   },
-}));
-
-jest.mock('../lib/models', () => ({
-  getDisplayName: (id: string) => {
-    if (id === 'claude-sonnet-4.6') return 'Claude 4.6 Sonnet';
-    return id;
-  },
-  isAutoMode: () => false,
-  getModelById: () => undefined,
-  PROVIDERS: [],
 }));
 
 jest.mock('../src/features/chat/components/AutoApproveToggle', () => ({

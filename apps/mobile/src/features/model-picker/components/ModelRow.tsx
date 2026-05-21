@@ -1,32 +1,14 @@
 import { View, Pressable, Switch } from 'react-native';
-import { Star, Brain } from 'lucide-react-native';
+import { Brain, Check, CloudOff, Cpu, Download, Lock, Star } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { type ModelDef } from '@/lib/models';
+import { type ModelDef } from '@/src/features/model-picker/service';
 import { colors } from '@/src/ui/theme';
-import {
-  PROVIDER_DISPLAY,
-  CAPABILITY_LABEL,
-  type ProviderId,
-  type CapabilityTier,
-} from '@agiworkforce/types';
+import { PROVIDER_DISPLAY, type ProviderId } from '@agiworkforce/types';
 import { ProviderLogo } from './ProviderLogo';
-
-// ---------------------------------------------------------------------------
-// Map mobile model tier (PickerModelTier) → CapabilityTier for sub-label.
-// economy  → fastest
-// balanced → balanced
-// premium  → most-capable
-// ---------------------------------------------------------------------------
-
-const TIER_TO_CAPABILITY: Record<string, CapabilityTier> = {
-  economy: 'fastest',
-  balanced: 'balanced',
-  premium: 'most-capable',
-};
 
 interface ModelRowProps {
   model: ModelDef;
@@ -55,12 +37,10 @@ export function ModelRow({
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
   const providerDisplay = PROVIDER_DISPLAY[model.provider as ProviderId];
-  // supportsEffort drives the thinking toggle (replaces the narrower supportsThinking).
-  // We still guard on model.supportsThinking so legacy local models remain safe.
-  const canToggleThinking = model.supportsThinking && (providerDisplay?.supportsEffort ?? false);
-
-  const capabilityTier = TIER_TO_CAPABILITY[model.tier] ?? 'balanced';
-  const capabilityLabel = CAPABILITY_LABEL[capabilityTier];
+  const isLocked = model.availability === 'locked';
+  const isLocal = model.surface === 'local';
+  const lockReason = model.lockReason ?? 'Cloud Managed is locked in Mobile v1';
+  const canToggleThinking = !isLocked && model.supportsThinking;
 
   const handlePress = () => {
     if (hapticsEnabled) {
@@ -70,6 +50,7 @@ export function ModelRow({
   };
 
   const handleLongPress = () => {
+    if (isLocked) return;
     if (hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
@@ -90,43 +71,68 @@ export function ModelRow({
         onLongPress={handleLongPress}
         delayLongPress={400}
         className={`flex-row items-center px-4 py-3 gap-3 ${
-          isSelected ? 'bg-teal-500/10' : 'active:bg-white/5'
+          isSelected ? 'bg-teal-500/10' : isLocked ? 'opacity-60' : 'active:bg-white/5'
         }`}
-        accessibilityLabel={`${model.name}${isSelected ? ', selected' : ''}${isFavorite ? ', favorite' : ''}`}
+        accessibilityLabel={`${model.name}${isSelected ? ', selected' : ''}${isFavorite ? ', favorite' : ''}${isLocked ? `, locked, ${lockReason}` : ''}`}
         accessibilityRole="button"
-        accessibilityHint="Tap to select, long press to favorite"
-        accessibilityState={{ selected: isSelected }}
+        accessibilityHint={isLocked ? lockReason : 'Tap to select, long press to favorite'}
+        accessibilityState={{ selected: isSelected, disabled: isLocked }}
       >
-        {/* Provider logo — 24×24 SVG or brand-color circle */}
         <View
           className="w-6 h-6 rounded-md items-center justify-center overflow-hidden"
-          style={{ backgroundColor: `${providerDisplay?.brandColor ?? colors.textMuted}18` }}
+          style={{
+            backgroundColor: isLocal
+              ? `${colors.teal}18`
+              : `${providerDisplay?.brandColor ?? colors.textMuted}14`,
+          }}
         >
-          <ProviderLogo providerId={model.provider} size={18} />
+          {isLocal ? (
+            <Cpu size={16} color={isSelected ? colors.teal : colors.textMuted} />
+          ) : (
+            <ProviderLogo providerId={model.provider} size={18} />
+          )}
         </View>
 
-        {/* Model name + capability sub-label */}
         <View className="flex-1">
           <Text
-            className={`text-sm font-medium ${isSelected ? 'text-teal-400' : 'text-white'}`}
+            className={`text-sm font-medium ${
+              isSelected ? 'text-teal-400' : isLocked ? 'text-white/70' : 'text-white'
+            }`}
             numberOfLines={1}
           >
             {model.name}
           </Text>
           <Text className="text-[11px] text-white/40 mt-0.5" numberOfLines={1}>
-            {capabilityLabel}
+            {model.detailLabel}
           </Text>
         </View>
 
-        {/* Right side: badges + favorite */}
         <View className="flex-row items-center gap-2">
-          {model.isNew && <Badge label="New" color="teal" />}
+          {isLocal && model.availability === 'ready' && <Badge label="Ready" color="green" />}
+          {isLocal && model.availability === 'download_required' && (
+            <Download size={14} color={colors.textMuted} />
+          )}
+          {isLocked && (
+            <>
+              <Badge label="Locked" color="gray" />
+              <Lock size={14} color={colors.textMuted} />
+            </>
+          )}
 
+          {isSelected && <Check size={16} color={colors.teal} />}
           {isFavorite && <Star size={14} color="#f59e0b" fill="#f59e0b" />}
         </View>
       </Pressable>
 
-      {/* Per-model thinking toggle — shown when model is selected + expanded */}
+      {isLocked && (
+        <View className="flex-row items-center gap-1.5 pl-[52px] pr-4 pb-3">
+          <CloudOff size={12} color={colors.textMuted} />
+          <Text className="text-[11px] text-white/35" numberOfLines={1}>
+            {lockReason}
+          </Text>
+        </View>
+      )}
+
       {isExpanded && canToggleThinking && (
         <Animated.View
           entering={reducedMotion ? undefined : FadeIn.duration(150)}

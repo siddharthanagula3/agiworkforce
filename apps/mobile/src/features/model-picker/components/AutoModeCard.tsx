@@ -1,10 +1,10 @@
 import { View, Pressable } from 'react-native';
-import { Check } from 'lucide-react-native';
+import { Check, Cpu } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/src/ui/theme';
-import type { AutoModeDef } from '@/lib/models';
+import type { AutoModeDef } from '@/src/features/model-picker/service';
 
 interface AutoModeCardProps {
   mode: AutoModeDef;
@@ -34,11 +34,21 @@ function SingleCard({ mode, isSelected, onSelect }: AutoModeCardProps) {
       accessibilityRole="button"
       accessibilityState={{ selected: isSelected }}
     >
-      <View className="gap-0.5">
-        <Text className={`text-sm font-semibold ${isSelected ? 'text-teal-400' : 'text-white'}`}>
-          {mode.name}
-        </Text>
-        <Text className="text-xs text-white/50">{mode.description}</Text>
+      <View className="flex-row items-center gap-3 flex-1">
+        <View
+          className="w-8 h-8 rounded-lg items-center justify-center"
+          style={{ backgroundColor: isSelected ? `${colors.teal}22` : 'rgba(255,255,255,0.06)' }}
+        >
+          <Cpu size={16} color={isSelected ? colors.teal : colors.textMuted} />
+        </View>
+        <View className="gap-0.5 flex-1">
+          <Text className={`text-sm font-semibold ${isSelected ? 'text-teal-400' : 'text-white'}`}>
+            {mode.name}
+          </Text>
+          <Text className="text-xs text-white/50" numberOfLines={1}>
+            {mode.description}
+          </Text>
+        </View>
       </View>
 
       {isSelected && <Check size={18} color={colors.teal} />}

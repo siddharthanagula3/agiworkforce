@@ -1,15 +1,18 @@
 import { Alert } from 'react-native';
 import { create } from 'zustand';
 import { QueueFullError } from '@agiworkforce/runtime';
+import { localGenerate } from '@agiworkforce/local-llm';
 import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
 import { streamChat, type StreamDelta } from '@/services/streaming';
 import { getRemoteChatDisabledReason, RemoteChatDisabledError } from '@/services/remoteChatGate';
+import { listInstalledModels } from '@/storage/installedModels';
 import { useProjectStore } from '@/src/features/projects/store';
 import { retrieveMemoryContext } from '@/src/features/memory/store';
 import type { ChatMessage, MessageAttachment } from '@/types/chat';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import type { UploadFileInput, UploadFileResult } from '@/services/api';
+import type { ChatMessage as LocalLlmMessage } from '@agiworkforce/local-llm';
 
 /** Paywall error state captured when the API returns a tier-cap paywall response. */
 export interface PaywallErrorState {
@@ -62,6 +65,40 @@ function createLocalAttachmentReferences(
     mimeType: attachment.mimeType,
     fileName: attachment.fileName,
   }));
+}
+
+function normalizeLocalMessageContent(
+  content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>,
+): string {
+  if (typeof content === 'string') return content;
+  return content
+    .map((part) => {
+      if (part.type === 'text') return part.text ?? '';
+      if (part.type === 'image_url') return '[image attachment]';
+      return `[${part.type}]`;
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
+async function resolveInstalledModelPath(): Promise<string | undefined> {
+  const installed = await listInstalledModels().catch(() => []);
+  return installed.find((model) => Boolean(model.local_path))?.local_path ?? undefined;
+}
+
+function localSetupMessage(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  if (
+    raw.includes('No model path') ||
+    raw.includes('No local runtime') ||
+    raw.includes('Download a model')
+  ) {
+    return 'Local Mode + Local LLMs is active, but no on-device model is ready yet. Download a local model from Models or join the Cloud Managed waitlist for hosted compute.';
+  }
+  return (
+    raw ||
+    'Local inference failed. Check device storage, thermal state, and installed model status.'
+  );
 }
 
 async function uploadWithRetry(
@@ -297,6 +334,71 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     streamingConversations.add(conversationId);
 
     try {
+      if (remoteDisabledReason) {
+        const localMessages: LocalLlmMessage[] = historyMessages.map((message) => ({
+          role:
+            message.role === 'assistant' || message.role === 'system' || message.role === 'user'
+              ? message.role
+              : 'user',
+          content: normalizeLocalMessageContent(message.content),
+        }));
+        const modelPath = await resolveInstalledModelPath();
+        const result = await localGenerate(modelPath, {
+          prompt: messageContent,
+          messages: localMessages,
+          requestId: assistantMessageId,
+        });
+        if (controller.signal.aborted) {
+          abortControllers.delete(conversationId);
+          streamingConversations.delete(conversationId);
+          return;
+        }
+        const finalContent =
+          result.text.trim() ||
+          'The local model returned an empty response. Try again with a shorter prompt.';
+
+        const currentMsgStore = getMsgStore();
+        const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
+        const updatedMsgs = msgs.map((m) =>
+          m.id === assistantMessageId
+            ? {
+                ...m,
+                content: finalContent,
+                isStreaming: false,
+                metadata: {
+                  ...m.metadata,
+                  localRuntime: result.runtime,
+                  localMode: true,
+                },
+              }
+            : m,
+        );
+
+        abortControllers.delete(conversationId);
+        streamingConversations.delete(conversationId);
+        currentMsgStore.setState((s) => ({
+          messages: { ...s.messages, [conversationId]: updatedMsgs },
+          conversations: s.conversations.map((c) =>
+            c.id === conversationId
+              ? {
+                  ...c,
+                  lastMessage: finalContent.slice(0, 100),
+                  messageCount: (c.messageCount ?? 0) + 2,
+                  updatedAt: new Date().toISOString(),
+                }
+              : c,
+          ),
+        }));
+        set({
+          isStreaming: streamingConversations.size > 0,
+          streamingContent: '',
+          streamingReasoning: '',
+          error: null,
+          paywallError: null,
+        });
+        return;
+      }
+
       await streamChat(
         { model, messages: historyMessages, stream: true, thinking: true },
         {
@@ -441,6 +543,24 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       const currentMsgStore = getMsgStore();
       const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
       const currentContent = get().streamingContent;
+
+      if (remoteDisabledReason) {
+        const message = localSetupMessage(caughtErr);
+        const updatedMsgs = msgs.map((m) =>
+          m.id === assistantMessageId ? { ...m, content: message, isStreaming: false } : m,
+        );
+        currentMsgStore.setState((s) => ({
+          messages: { ...s.messages, [conversationId]: updatedMsgs },
+        }));
+        set({
+          isStreaming: streamingConversations.size > 0,
+          streamingContent: '',
+          streamingReasoning: '',
+          error: message,
+          paywallError: null,
+        });
+        return;
+      }
 
       if (caughtErr instanceof ApiPaywallError) {
         const updatedMsgs = msgs.map((m) =>

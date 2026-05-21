@@ -1,22 +1,19 @@
 /**
  * Settings Screen — v3 layout
  *
- * Sections: Account / AI Configuration / Connections / Voice / Preferences / About
+ * Sections: Mode / Keys / Local AI / Connections / Voice / Preferences / Privacy / About
  * Voice section shows on-device default banner + locked "Never train" toggle.
  */
 import { useCallback, useRef } from 'react';
-import { View, SectionList, Pressable, Alert } from 'react-native';
+import { View, SectionList, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import {
-  User,
-  CreditCard,
   BarChart3,
   Brain,
   Zap,
   Shield,
-  Smartphone,
   Link2,
   Palette,
   Volume2,
@@ -26,24 +23,26 @@ import {
   HelpCircle,
   Lock,
   FileText,
-  LogOut,
   ChevronRight,
   Sun,
   Moon,
   Monitor,
   Mic,
+  HardDrive,
+  Globe,
+  Key,
   type LucideIcon,
 } from 'lucide-react-native';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
-import { useAuthStore } from '@/src/features/auth/store';
 import { useSettingsStore, type ThemeMode } from '@/stores/settingsStore';
-import { useConnectionStore } from '@/stores/connectionStore';
 import { useModelStore } from '@/src/features/model-picker/store';
+import { getDisplayName } from '@/src/features/model-picker/service';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useThemeColors } from '@/src/ui/theme';
 import { VoiceSelector } from '@/src/features/voice/components/VoiceSelector';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -53,21 +52,25 @@ type SettingItemType =
   | 'navigation'
   | 'toggle'
   | 'theme'
-  | 'signout'
   | 'version'
+  | 'status'
   | 'voice-header'
   | 'cloud-whisper-waitlist';
+
+type BadgeTone = 'active' | 'waitlist' | 'locked' | 'neutral';
 
 interface SettingItem {
   key: string;
   icon: LucideIcon;
   label: string;
   type: SettingItemType;
+  description?: string;
   value?: string;
+  badge?: string;
+  badgeTone?: BadgeTone;
   toggleValue?: boolean;
   onToggle?: (v: boolean) => void;
   onPress?: () => void;
-  destructive?: boolean;
 }
 
 interface SettingSection {
@@ -98,15 +101,15 @@ const THEME_ICONS: Record<ThemeMode, LucideIcon> = {
 function NavigationRow({
   icon: Icon,
   label,
+  description,
   value,
   onPress,
-  destructive,
 }: {
   icon: LucideIcon;
   label: string;
+  description?: string;
   value?: string;
   onPress?: () => void;
-  destructive?: boolean;
 }) {
   const c = useThemeColors();
   return (
@@ -116,21 +119,120 @@ function NavigationRow({
       accessibilityLabel={label}
       accessibilityRole="button"
     >
-      <View className="flex-row items-center gap-3">
-        <Icon size={18} color={destructive ? c.agentError : c.textSecondary} />
-        <Text className="text-[15px]" style={{ color: destructive ? c.agentError : c.textPrimary }}>
-          {label}
-        </Text>
+      <View className="flex-row items-center gap-3 flex-1 mr-3">
+        <Icon size={18} color={c.textSecondary} />
+        <View className="flex-1">
+          <Text className="text-[15px]" style={{ color: c.textPrimary }} numberOfLines={1}>
+            {label}
+          </Text>
+          {description ? (
+            <Text
+              className="text-[11px] mt-0.5"
+              style={{ color: c.textMuted, lineHeight: 15 }}
+              numberOfLines={2}
+            >
+              {description}
+            </Text>
+          ) : null}
+        </View>
       </View>
       <View className="flex-row items-center gap-1.5">
         {value ? (
-          <Text className="text-[13px]" style={{ color: c.textMuted }}>
+          <Text className="text-[13px]" style={{ color: c.textMuted }} numberOfLines={1}>
             {value}
           </Text>
         ) : null}
-        {!destructive && <ChevronRight size={16} color={c.textMuted} />}
+        <ChevronRight size={16} color={c.textMuted} />
       </View>
     </Pressable>
+  );
+}
+
+function badgeColors(tone: BadgeTone, c: ReturnType<typeof useThemeColors>) {
+  switch (tone) {
+    case 'active':
+      return {
+        text: c.teal,
+        background: `${c.teal}18`,
+        border: `${c.teal}30`,
+      };
+    case 'waitlist':
+      return {
+        text: c.agentWarning,
+        background: `${c.agentWarning}14`,
+        border: `${c.agentWarning}2E`,
+      };
+    case 'locked':
+      return {
+        text: c.textMuted,
+        background: c.surfaceBase,
+        border: c.border,
+      };
+    case 'neutral':
+      return {
+        text: c.textSecondary,
+        background: c.surfaceBase,
+        border: c.border,
+      };
+  }
+}
+
+function StatusRow({
+  icon: Icon,
+  label,
+  description,
+  badge,
+  badgeTone = 'neutral',
+}: {
+  icon: LucideIcon;
+  label: string;
+  description?: string;
+  badge?: string;
+  badgeTone?: BadgeTone;
+}) {
+  const c = useThemeColors();
+  const badgeStyle = badgeColors(badgeTone, c);
+
+  return (
+    <View
+      className="flex-row items-center justify-between py-3.5 px-4"
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel={[label, description, badge].filter(Boolean).join('. ')}
+      accessibilityState={{ disabled: badgeTone === 'locked' || badgeTone === 'waitlist' }}
+    >
+      <View className="flex-row items-start gap-3 flex-1 mr-3">
+        <Icon size={18} color={badgeTone === 'active' ? c.teal : c.textSecondary} />
+        <View className="flex-1">
+          <Text className="text-[15px]" style={{ color: c.textPrimary }} numberOfLines={1}>
+            {label}
+          </Text>
+          {description ? (
+            <Text
+              className="text-[11px] mt-0.5"
+              style={{ color: c.textMuted, lineHeight: 15 }}
+              numberOfLines={2}
+            >
+              {description}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+      {badge ? (
+        <View
+          style={{
+            paddingHorizontal: 8,
+            paddingVertical: 3,
+            borderRadius: 6,
+            backgroundColor: badgeStyle.background,
+            borderWidth: 1,
+            borderColor: badgeStyle.border,
+          }}
+        >
+          <Text style={{ fontSize: 10, color: badgeStyle.text, fontWeight: '600' }}>{badge}</Text>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -290,6 +392,7 @@ function VoiceHeaderRow() {
 
 function CloudWhisperWaitlistRow() {
   const c = useThemeColors();
+  const badgeStyle = badgeColors('waitlist', c);
   return (
     <View
       style={{
@@ -315,12 +418,12 @@ function CloudWhisperWaitlistRow() {
           paddingHorizontal: 8,
           paddingVertical: 3,
           borderRadius: 6,
-          backgroundColor: 'rgba(255,255,255,0.06)',
+          backgroundColor: badgeStyle.background,
           borderWidth: 1,
-          borderColor: 'rgba(255,255,255,0.1)',
+          borderColor: badgeStyle.border,
         }}
       >
-        <Text style={{ fontSize: 10, color: c.textMuted, fontWeight: '600' }}>WAITLIST</Text>
+        <Text style={{ fontSize: 10, color: badgeStyle.text, fontWeight: '600' }}>WAITLIST</Text>
       </View>
     </View>
   );
@@ -341,21 +444,12 @@ function RowSeparator() {
 
 export default function SettingsTabScreen() {
   const router = useRouter();
-  const { signOut } = useAuthStore();
-  const connectionStatus = useConnectionStore((s) => s.status);
   const selectedModel = useModelStore((s) => s.selectedModel);
   const voiceSelectorRef = useRef<BottomSheet>(null);
   const { hapticsEnabled, themeMode, setHapticsEnabled, setThemeMode } = useSettingsStore();
   const c = useThemeColors();
 
   // ---- Handlers ----
-
-  const handleSignOut = useCallback(() => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: signOut },
-    ]);
-  }, [signOut]);
 
   const push = useCallback(
     (path: string) => () => {
@@ -368,56 +462,92 @@ export default function SettingsTabScreen() {
 
   const sections: SettingSection[] = [
     {
-      title: 'Account',
+      title: 'Mode',
       data: [
         {
-          key: 'profile',
-          icon: User,
-          label: 'Profile',
-          type: 'navigation',
-          onPress: push('/(app)/profile'),
+          key: 'local-mode',
+          icon: Lock,
+          label: 'Local Mode',
+          type: 'status',
+          description: 'Active. No account or cloud required.',
+          badge: 'Active',
+          badgeTone: 'active',
         },
         {
-          key: 'subscription',
-          icon: CreditCard,
-          label: 'Subscription',
+          key: 'local-llms',
+          icon: Brain,
+          label: 'Local LLMs',
           type: 'navigation',
-          onPress: push('/(app)/billing'),
+          value: getDisplayName(selectedModel),
+          description: 'Runs on-device and works offline.',
+          onPress: push('/(app)/models'),
         },
         {
-          key: 'usage',
-          icon: BarChart3,
-          label: 'Usage',
-          type: 'navigation',
-          onPress: push('/(app)/usage'),
+          key: 'cloud-managed',
+          icon: Globe,
+          label: 'Cloud Managed',
+          type: 'status',
+          description: 'Waitlist only until billing, quota, and provider-cost controls ship.',
+          badge: 'Waitlist',
+          badgeTone: 'waitlist',
         },
       ],
     },
     {
-      title: 'AI Configuration',
+      title: 'Keys',
       data: [
         {
-          key: 'default-model',
-          icon: Brain,
-          label: 'Default Model',
-          type: 'navigation',
-          value: selectedModel,
-          onPress: () => {
-            router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
-          },
+          key: 'mobile-byok',
+          icon: Key,
+          label: 'Mobile BYOK',
+          type: 'status',
+          description: 'Disabled until secure device key storage ships.',
+          badge: 'Locked',
+          badgeTone: 'locked',
         },
+      ],
+    },
+    {
+      title: 'Local AI',
+      data: [
         {
           key: 'capabilities',
           icon: Zap,
           label: 'Capabilities',
           type: 'navigation',
+          description: 'Local tools are active. Cloud tools are locked or waitlisted.',
           onPress: push('/(app)/settings/capabilities'),
+        },
+        {
+          key: 'memory',
+          icon: Brain,
+          label: 'Memory',
+          type: 'navigation',
+          description: 'Local memory facts and import/export controls.',
+          onPress: push('/(app)/settings/memory'),
+        },
+        {
+          key: 'storage',
+          icon: HardDrive,
+          label: 'Storage',
+          type: 'navigation',
+          description: 'Downloaded models, local cache, and device data export.',
+          onPress: push('/(app)/settings/storage'),
+        },
+        {
+          key: 'performance',
+          icon: BarChart3,
+          label: 'Performance',
+          type: 'navigation',
+          description: 'Benchmark the active local model on this device.',
+          onPress: push('/(app)/settings/performance'),
         },
         {
           key: 'auto-approve',
           icon: Shield,
           label: 'Auto-Approve',
           type: 'navigation',
+          description: 'Approval defaults for local tools.',
           onPress: push('/(app)/settings/auto-approve'),
         },
       ],
@@ -425,20 +555,26 @@ export default function SettingsTabScreen() {
     {
       title: 'Connections',
       data: [
-        {
-          key: 'desktop-pairing',
-          icon: Smartphone,
-          label: 'Desktop Pairing',
-          type: 'navigation',
-          value: connectionStatus === 'connected' ? 'Connected' : undefined,
-          onPress: push('/(app)/companion'),
-        },
+        ...(FEATURES.companion
+          ? [
+              {
+                key: 'desktop-pairing',
+                icon: Monitor,
+                label: 'Desktop Pairing',
+                type: 'navigation' as const,
+                description: 'Pair a desktop companion for local handoff.',
+                onPress: push('/(app)/companion'),
+              },
+            ]
+          : []),
         {
           key: 'connectors',
           icon: Link2,
           label: 'Connectors',
-          type: 'navigation',
-          onPress: push('/(app)/connectors'),
+          type: 'status',
+          description: 'Cloud OAuth connectors open with Cloud Managed.',
+          badge: 'Waitlist',
+          badgeTone: 'waitlist',
         },
       ],
     },
@@ -480,6 +616,7 @@ export default function SettingsTabScreen() {
           icon: Bell,
           label: 'Notifications',
           type: 'navigation',
+          description: 'Local reminders and device notifications.',
           onPress: push('/(app)/settings/notifications'),
         },
         {
@@ -487,6 +624,7 @@ export default function SettingsTabScreen() {
           icon: UserCog,
           label: 'Personalization',
           type: 'navigation',
+          description: 'Greeting, tone, and response style preferences.',
           onPress: push('/(app)/settings/personalization'),
         },
         {
@@ -496,6 +634,31 @@ export default function SettingsTabScreen() {
           type: 'toggle',
           toggleValue: hapticsEnabled,
           onToggle: setHapticsEnabled,
+        },
+      ],
+    },
+    {
+      title: 'Privacy',
+      data: [
+        {
+          key: 'privacy-policy',
+          icon: Lock,
+          label: 'Privacy Policy',
+          type: 'navigation',
+          description: 'Local-first privacy terms for Mobile v1.',
+          onPress: () => {
+            void openExternalUrl('https://agiworkforce.com/privacy');
+          },
+        },
+        {
+          key: 'terms-of-service',
+          icon: FileText,
+          label: 'Terms of Service',
+          type: 'navigation',
+          description: 'Product terms and acceptable use.',
+          onPress: () => {
+            void openExternalUrl('https://agiworkforce.com/terms');
+          },
         },
       ],
     },
@@ -510,32 +673,6 @@ export default function SettingsTabScreen() {
           onPress: () => {
             void openExternalUrl('https://agiworkforce.com/help');
           },
-        },
-        {
-          key: 'privacy-policy',
-          icon: Lock,
-          label: 'Privacy Policy',
-          type: 'navigation',
-          onPress: () => {
-            void openExternalUrl('https://agiworkforce.com/privacy');
-          },
-        },
-        {
-          key: 'terms-of-service',
-          icon: FileText,
-          label: 'Terms of Service',
-          type: 'navigation',
-          onPress: () => {
-            void openExternalUrl('https://agiworkforce.com/terms');
-          },
-        },
-        {
-          key: 'sign-out',
-          icon: LogOut,
-          label: 'Sign Out',
-          type: 'signout',
-          destructive: true,
-          onPress: handleSignOut,
         },
         {
           key: 'version',
@@ -559,6 +696,20 @@ export default function SettingsTabScreen() {
         item.type !== 'cloud-whisper-waitlist';
 
       if (item.type === 'version') return <VersionRow />;
+      if (item.type === 'status') {
+        return (
+          <>
+            <StatusRow
+              icon={item.icon}
+              label={item.label}
+              description={item.description}
+              badge={item.badge}
+              badgeTone={item.badgeTone}
+            />
+            {showSeparator && <RowSeparator />}
+          </>
+        );
+      }
       if (item.type === 'voice-header') return <VoiceHeaderRow />;
       if (item.type === 'cloud-whisper-waitlist') return <CloudWhisperWaitlistRow />;
 
@@ -573,12 +724,11 @@ export default function SettingsTabScreen() {
             />
           ) : item.type === 'theme' ? (
             <ThemeRow currentMode={themeMode} onSelect={setThemeMode} />
-          ) : item.type === 'signout' ? (
-            <NavigationRow icon={item.icon} label={item.label} onPress={item.onPress} destructive />
           ) : (
             <NavigationRow
               icon={item.icon}
               label={item.label}
+              description={item.description}
               value={item.value}
               onPress={item.onPress}
             />

@@ -2,7 +2,7 @@
  * Tests for DrawerContent component.
  *
  * Covers:
- *  - Renders all 6 nav items (Chat, Skills, Projects, Dispatch, Connectors, Settings)
+ *  - Renders local-first nav items (Chat, Artifacts, Code, Skills, Projects)
  *  - Highlights active item with teal color
  *  - Shows recents section with conversations
  *  - Shows user profile card at bottom
@@ -69,6 +69,8 @@ jest.mock('react-native-safe-area-context', () => {
 });
 
 jest.mock('lucide-react-native', () => ({
+  Code2: jest.fn().mockReturnValue(null),
+  FileText: jest.fn().mockReturnValue(null),
   MessageSquare: jest.fn().mockReturnValue(null),
   Zap: jest.fn().mockReturnValue(null),
   FolderOpen: jest.fn().mockReturnValue(null),
@@ -79,7 +81,7 @@ jest.mock('lucide-react-native', () => ({
   Brain: jest.fn().mockReturnValue(null),
   Key: jest.fn().mockReturnValue(null),
   Info: jest.fn().mockReturnValue(null),
-  User: jest.fn().mockReturnValue(null),
+  Lock: jest.fn().mockReturnValue(null),
 }));
 
 jest.mock('@react-navigation/drawer', () => ({}));
@@ -105,6 +107,8 @@ import { FEATURES } from '../lib/v1FeatureFlags';
 // This list reflects what actually renders in the current feature config.
 const NAV_LABELS = [
   'Chat',
+  'Artifacts',
+  'Code',
   'Skills',
   ...(FEATURES.projects ? ['Projects'] : []),
   ...(FEATURES.dispatch ? ['Dispatch'] : []),
@@ -181,6 +185,39 @@ describe('DrawerContent', () => {
     }
   });
 
+  it('hides cloud/auth drawer routes that are disabled for v1 local-only', () => {
+    const { queryByLabelText } = renderDrawer();
+
+    if (!FEATURES.dispatch) expect(queryByLabelText('Dispatch')).toBeNull();
+    if (!FEATURES.connectorsCloudOnly) expect(queryByLabelText('Connectors')).toBeNull();
+    if (!FEATURES.auth) expect(queryByLabelText('Account')).toBeNull();
+  });
+
+  it('keeps local utility routes visible in the drawer', () => {
+    const { getByLabelText } = renderDrawer();
+
+    expect(getByLabelText('Models')).toBeTruthy();
+    expect(getByLabelText('Memory')).toBeTruthy();
+    expect(getByLabelText('About')).toBeTruthy();
+  });
+
+  it('shows BYOK keys as a locked local-only utility row', () => {
+    const { getByLabelText, getByText } = renderDrawer();
+
+    const keysRow = getByLabelText('Keys / BYOK. Disabled until secure key storage ships');
+    expect(keysRow.props.accessibilityState.disabled).toBe(true);
+    expect(getByText('Locked')).toBeTruthy();
+  });
+
+  it('shows the local mode status card', () => {
+    const { getByLabelText, getByText } = renderDrawer();
+
+    expect(
+      getByLabelText('Local Mode active. Local LLMs active. Cloud Managed is waitlist only.'),
+    ).toBeTruthy();
+    expect(getByText('Local LLMs active · Cloud Managed waitlist')).toBeTruthy();
+  });
+
   it('renders the AGI header', () => {
     const { getByText } = renderDrawer();
     expect(getByText('AGI')).toBeTruthy();
@@ -223,6 +260,30 @@ describe('DrawerContent', () => {
 
     const projectsItem = getByLabelText('Projects');
     expect(projectsItem.props.accessibilityState.selected).toBe(true);
+  });
+
+  it('highlights utility routes when pathname matches them', () => {
+    mockPathname = '/models';
+    const modelUtils = renderDrawer();
+    expect(modelUtils.getByLabelText('Models').props.accessibilityState.selected).toBe(true);
+    modelUtils.unmount();
+
+    mockPathname = '/settings/memory';
+    const memoryUtils = renderDrawer();
+    expect(memoryUtils.getByLabelText('Memory').props.accessibilityState.selected).toBe(true);
+    memoryUtils.unmount();
+  });
+
+  it('highlights Artifacts and Code when those routes are active', () => {
+    mockPathname = '/artifacts';
+    const artifactsUtils = renderDrawer();
+    expect(artifactsUtils.getByLabelText('Artifacts').props.accessibilityState.selected).toBe(true);
+    artifactsUtils.unmount();
+
+    mockPathname = '/code/recent-commits-plan';
+    const codeUtils = renderDrawer();
+    expect(codeUtils.getByLabelText('Code').props.accessibilityState.selected).toBe(true);
+    codeUtils.unmount();
   });
 
   // ---- Recents section ----
@@ -329,6 +390,19 @@ describe('DrawerContent', () => {
     } else {
       expect(queryByLabelText('Connectors')).toBeNull();
     }
+  });
+
+  it('navigates to visible utility routes', () => {
+    const { getByLabelText } = renderDrawer();
+
+    fireEvent.press(getByLabelText('Models'));
+    expect(mockNavigate).toHaveBeenCalledWith('/(app)/models');
+
+    fireEvent.press(getByLabelText('Memory'));
+    expect(mockNavigate).toHaveBeenCalledWith('/(app)/settings/memory');
+
+    fireEvent.press(getByLabelText('About'));
+    expect(mockNavigate).toHaveBeenCalledWith('/(app)/about');
   });
 
   it('navigates to a conversation when a recent is tapped', () => {

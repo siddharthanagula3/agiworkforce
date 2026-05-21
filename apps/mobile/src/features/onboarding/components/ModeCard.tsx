@@ -29,15 +29,15 @@ const MODE_META: Record<
   },
   cloud: {
     title: `${formatChatExecutionModeLabel('cloud_managed')} waitlist`,
-    body: 'Hosted compute, cross-device sync, generated PDFs/docs/slides, code execution, and browser environments are waitlist-gated until billing, fraud, quota, and provider-cost controls are ready.',
+    body: 'Hosted compute, sync, generated files, code execution, and browser environments are waitlist-gated until billing, fraud, quota, and provider-cost controls are ready.',
     privacy:
       'Cloud Managed uses AGI-managed infrastructure only after explicit launch consent. Mobile BYOK keys stay disabled until secure device key storage ships.',
     testIdPrefix: 'mode-cloud',
   },
   decide_later: {
     title: 'Decide later',
-    body: "Jump straight into chat. You'll pick a mode the first time you send a message.",
-    privacy: 'Mode selection happens on your first message.',
+    body: 'Start in Local Mode now. Cloud Managed can be reviewed later from Settings when the waitlist opens.',
+    privacy: 'Local Mode remains active until you explicitly choose another available mode.',
     testIdPrefix: 'mode-decide-later',
   },
 };
@@ -46,21 +46,24 @@ export function ModeCard({ mode, selected, onSelect }: ModeCardProps) {
   const colors = useThemeColors();
   const meta = MODE_META[mode];
   const [privacyExpanded, setPrivacyExpanded] = useState(false);
+  const disabled = mode === 'cloud';
+  const isSelected = selected && !disabled;
 
   return (
     <Pressable
       testID={`${meta.testIdPrefix}-card`}
-      onPress={onSelect}
+      onPress={disabled ? undefined : onSelect}
       accessibilityRole="radio"
-      accessibilityState={{ selected }}
+      accessibilityState={{ selected: isSelected, disabled }}
       accessibilityLabel={meta.title}
       style={{
         borderRadius: 16,
-        borderWidth: selected ? 2 : 1,
-        borderColor: selected ? colors.teal : colors.border,
-        backgroundColor: selected ? 'rgba(33, 128, 141, 0.08)' : colors.surfaceBase,
+        borderWidth: isSelected ? 2 : 1,
+        borderColor: isSelected ? colors.teal : colors.border,
+        backgroundColor: isSelected ? 'rgba(33, 128, 141, 0.08)' : colors.surfaceBase,
         padding: 16,
         marginBottom: 10,
+        opacity: disabled ? 0.64 : 1,
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
@@ -70,16 +73,16 @@ export function ModeCard({ mode, selected, onSelect }: ModeCardProps) {
             width: 20,
             height: 20,
             borderRadius: 10,
-            borderWidth: selected ? 0 : 2,
+            borderWidth: isSelected ? 0 : 2,
             borderColor: colors.border,
-            backgroundColor: selected ? colors.teal : 'transparent',
+            backgroundColor: isSelected ? colors.teal : 'transparent',
             alignItems: 'center',
             justifyContent: 'center',
             marginRight: 10,
             flexShrink: 0,
           }}
         >
-          {selected && <Check size={12} color="#000" strokeWidth={3} />}
+          {isSelected && <Check size={12} color="#000" strokeWidth={3} />}
         </View>
         <Text
           testID={`${meta.testIdPrefix}-title`}
@@ -87,6 +90,21 @@ export function ModeCard({ mode, selected, onSelect }: ModeCardProps) {
         >
           {meta.title}
         </Text>
+        {disabled && (
+          <View
+            style={{
+              paddingHorizontal: 8,
+              paddingVertical: 3,
+              borderRadius: 6,
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>
+              WAITLIST
+            </Text>
+          </View>
+        )}
       </View>
 
       <Text

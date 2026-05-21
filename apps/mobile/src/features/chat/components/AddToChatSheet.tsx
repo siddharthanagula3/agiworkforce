@@ -1,4 +1,4 @@
-import { useCallback, useRef, forwardRef } from 'react';
+import { useCallback, useRef, forwardRef, useState } from 'react';
 import { View, Pressable, Switch, Alert, Platform } from 'react-native';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
@@ -21,6 +21,8 @@ import {
   Shield,
   ShieldCheck,
   ShieldAlert,
+  Lock,
+  Monitor,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
@@ -37,7 +39,9 @@ import {
   isHealthAvailable,
   requestHealthPermission,
 } from '@/src/features/integrations/services/healthData';
-import { getModelById } from '@/lib/models';
+import { CloudWaitlistSheet, joinWaitlist, useWaitlistStore } from '@/src/features/waitlist';
+import { getModelById } from '@/src/features/model-picker/service';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 import {
   AGENT_MODE_LABEL,
   AGENT_MODE_DESCRIPTION,
@@ -103,7 +107,7 @@ const AUTO_APPROVE_CONFIG: Record<
  * 3. Agent mode (Ask / Auto / Plan / Bypass)
  * 4. Effort (Low / Medium / High / Max — shown only when provider supports it)
  * 5. Session toggles (Auto-approve, Temporary chat)
- * 6. Feature toggles (Web search, Image generation, Health)
+ * 6. Tool availability (cloud-gated tools + local Health)
  * 7. Config links (Project, Style, Tool access, Connectors)
  */
 export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(function AddToChatSheet(
@@ -152,6 +156,10 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
 
   const styleSelectorRef = useRef<BottomSheet>(null);
   const toolAccessSelectorRef = useRef<BottomSheet>(null);
+  const [waitlistSheetVisible, setWaitlistSheetVisible] = useState(false);
+  const waitlistJoined = useWaitlistStore((s) => s.joined);
+  const waitlistRank = useWaitlistStore((s) => s.rank);
+  const markWaitlistJoined = useWaitlistStore((s) => s.markJoined);
 
   const haptic = useCallback(() => {
     if (hapticsEnabled) {
@@ -257,11 +265,77 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     [setFeature, haptic],
   );
 
+  const handleWebSearchToggle = useCallback(
+    (enabled: boolean) => {
+      if (!FEATURES.webSearch) return;
+      haptic();
+      setFeature('webSearch', enabled);
+    },
+    [haptic, setFeature],
+  );
+
+  const handleImageGenerationToggle = useCallback(
+    (enabled: boolean) => {
+      if (!FEATURES.imageGen) return;
+      haptic();
+      setFeature('imageGen', enabled);
+    },
+    [haptic, setFeature],
+  );
+
+  const handleOpenCloudWaitlist = useCallback(() => {
+    haptic();
+    if (waitlistJoined) {
+      const position =
+        typeof waitlistRank === 'number' ? ` You're #${(waitlistRank + 1).toLocaleString()}.` : '';
+      Alert.alert('Already on the waitlist', `Cloud tools are not enabled yet.${position}`);
+      return;
+    }
+    closeSheet();
+    setWaitlistSheetVisible(true);
+  }, [haptic, waitlistJoined, waitlistRank, closeSheet]);
+
+  const handleCloseCloudWaitlist = useCallback(() => {
+    setWaitlistSheetVisible(false);
+  }, []);
+
+  const handleWaitlistSubmit = useCallback(
+    async (submission: { email: string; country: string | null }) => {
+      const result = await joinWaitlist({
+        email: submission.email,
+        country: submission.country ?? undefined,
+      });
+      markWaitlistJoined(
+        { email: submission.email, country: submission.country ?? undefined },
+        result,
+      );
+      return result;
+    },
+    [markWaitlistJoined],
+  );
+
+  const handleComputerUseInfo = useCallback(() => {
+    haptic();
+    Alert.alert(
+      'Desktop required',
+      'Computer use runs through AGI Workforce Desktop and is not available from mobile v1.',
+    );
+  }, [haptic]);
+
   const handleConnectors = useCallback(() => {
     haptic();
+    if (!FEATURES.connectorsCloudOnly) {
+      if (waitlistJoined) {
+        Alert.alert('Already on the waitlist', 'Cloud connectors are not enabled yet.');
+        return;
+      }
+      closeSheet();
+      setWaitlistSheetVisible(true);
+      return;
+    }
     closeSheet();
     router.push('/(app)/connectors' as Parameters<typeof router.push>[0]);
-  }, [haptic, closeSheet, router]);
+  }, [haptic, waitlistJoined, closeSheet, router]);
 
   const renderBackdrop = useCallback(
     (props: React.ComponentProps<typeof BottomSheetBackdrop>) => (
@@ -272,6 +346,12 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
 
   const cardBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
   const dividerColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const waitlistLabel =
+    waitlistJoined && typeof waitlistRank === 'number'
+      ? `#${(waitlistRank + 1).toLocaleString()}`
+      : waitlistJoined
+        ? 'Joined'
+        : 'Waitlist';
 
   return (
     <>
@@ -650,29 +730,67 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
           {/* Divider */}
           <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
 
-          {/* Section 7: Feature Toggles */}
+          {/* Section 7: Tool availability */}
           <View style={{ paddingHorizontal: 20, paddingVertical: 16, gap: 4 }}>
-            <FeatureToggle
-              icon={<Globe size={18} color={colors.teal} />}
+            <CapabilityRow
+              icon={
+                <Globe size={18} color={FEATURES.webSearch ? colors.teal : themeColors.textMuted} />
+              }
               label="Web search"
-              enabled={features.webSearch}
-              onToggle={(v) => setFeature('webSearch', v)}
+              description={
+                FEATURES.webSearch
+                  ? 'Search current web results when needed'
+                  : 'Cloud search opens after waitlist'
+              }
+              enabled={FEATURES.webSearch ? features.webSearch : false}
+              onToggle={handleWebSearchToggle}
+              status={FEATURES.webSearch ? undefined : waitlistLabel}
+              statusTone="waitlist"
+              onStatusPress={FEATURES.webSearch ? undefined : handleOpenCloudWaitlist}
               textColor={themeColors.textPrimary}
+              mutedColor={themeColors.textMuted}
             />
-            <FeatureToggle
-              icon={<Paintbrush size={18} color={colors.teal} />}
+            <CapabilityRow
+              icon={
+                <Paintbrush
+                  size={18}
+                  color={FEATURES.imageGen ? colors.teal : themeColors.textMuted}
+                />
+              }
               label="Image generation"
-              enabled={features.imageGen}
-              onToggle={(v) => setFeature('imageGen', v)}
+              description={
+                FEATURES.imageGen
+                  ? 'Create generated images in chat'
+                  : 'Cloud image generation opens after waitlist'
+              }
+              enabled={FEATURES.imageGen ? features.imageGen : false}
+              onToggle={handleImageGenerationToggle}
+              status={FEATURES.imageGen ? undefined : waitlistLabel}
+              statusTone="waitlist"
+              onStatusPress={FEATURES.imageGen ? undefined : handleOpenCloudWaitlist}
               textColor={themeColors.textPrimary}
+              mutedColor={themeColors.textMuted}
             />
-            <FeatureToggle
+            <CapabilityRow
+              icon={<Monitor size={18} color={themeColors.textMuted} />}
+              label="Computer use"
+              description="Requires paired AGI Workforce Desktop"
+              enabled={false}
+              status="Desktop required"
+              statusTone="desktop"
+              onStatusPress={handleComputerUseInfo}
+              textColor={themeColors.textPrimary}
+              mutedColor={themeColors.textMuted}
+            />
+            <CapabilityRow
               icon={<Heart size={18} color="#ef4444" />}
               label="Health"
+              description="Use local HealthKit context when available"
               badge="Beta"
               enabled={features.health}
               onToggle={handleHealthToggle}
               textColor={themeColors.textPrimary}
+              mutedColor={themeColors.textMuted}
             />
           </View>
 
@@ -710,7 +828,9 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             />
             <ConfigLink
               icon={<Link size={18} color={themeColors.textMuted} />}
-              label="Manage Connectors"
+              label="Connectors"
+              value={FEATURES.connectorsCloudOnly ? undefined : waitlistLabel}
+              statusTone="waitlist"
               textColor={themeColors.textPrimary}
               mutedColor={themeColors.textMuted}
               onPress={handleConnectors}
@@ -722,6 +842,11 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
       {/* Sub-sheets for style and tool access selection */}
       <StyleSelector ref={styleSelectorRef} />
       <ToolAccessSelector ref={toolAccessSelectorRef} />
+      <CloudWaitlistSheet
+        visible={waitlistSheetVisible}
+        onClose={handleCloseCloudWaitlist}
+        onSubmit={handleWaitlistSubmit}
+      />
     </>
   );
 });
@@ -764,55 +889,118 @@ function AttachmentCard({
   );
 }
 
-function FeatureToggle({
+function CapabilityRow({
   icon,
   label,
+  description,
   badge,
   enabled,
   onToggle,
+  status,
+  statusTone = 'neutral',
+  onStatusPress,
   textColor,
+  mutedColor,
 }: {
   icon: React.ReactNode;
   label: string;
+  description: string;
   badge?: string;
   enabled: boolean;
-  onToggle: (value: boolean) => void | Promise<void>;
+  onToggle?: (value: boolean) => void | Promise<void>;
+  status?: string;
+  statusTone?: 'waitlist' | 'desktop' | 'neutral';
+  onStatusPress?: () => void;
   textColor: string;
+  mutedColor: string;
 }) {
+  const rowContent = (
+    <>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+        {icon}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <Text style={{ fontSize: 15, color: textColor }}>{label}</Text>
+            {badge && <StatusPill label={badge} tone="danger" />}
+          </View>
+          <Text style={{ fontSize: 12, color: mutedColor, marginTop: 1 }} numberOfLines={2}>
+            {description}
+          </Text>
+        </View>
+      </View>
+      {status ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 10 }}>
+          <StatusPill label={status} tone={statusTone} />
+          {onStatusPress ? (
+            <ChevronRight size={16} color={mutedColor} />
+          ) : (
+            <Lock size={14} color={mutedColor} />
+          )}
+        </View>
+      ) : (
+        <Switch
+          value={enabled}
+          onValueChange={onToggle}
+          trackColor={{ false: 'rgba(255,255,255,0.1)', true: colors.teal }}
+          thumbColor="#ffffff"
+          ios_backgroundColor="rgba(255,255,255,0.1)"
+          accessibilityLabel={`${label} ${enabled ? 'on' : 'off'}`}
+        />
+      )}
+    </>
+  );
+
+  const rowStyle = {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    minHeight: 52,
+  };
+
+  if (status) {
+    return (
+      <Pressable
+        onPress={onStatusPress}
+        disabled={!onStatusPress}
+        style={rowStyle}
+        accessibilityLabel={`${label}, ${status}`}
+        accessibilityRole={onStatusPress ? 'button' : 'text'}
+        accessibilityHint={onStatusPress ? 'Opens availability details' : undefined}
+      >
+        {rowContent}
+      </Pressable>
+    );
+  }
+
+  return <View style={rowStyle}>{rowContent}</View>;
+}
+
+function StatusPill({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: 'waitlist' | 'desktop' | 'neutral' | 'danger';
+}) {
+  const palette = {
+    waitlist: { bg: 'rgba(245,158,11,0.14)', fg: '#f59e0b' },
+    desktop: { bg: 'rgba(148,163,184,0.14)', fg: '#94a3b8' },
+    neutral: { bg: 'rgba(148,163,184,0.14)', fg: '#94a3b8' },
+    danger: { bg: 'rgba(239,68,68,0.15)', fg: '#ef4444' },
+  }[tone];
+
   return (
     <View
       style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: 10,
-        paddingHorizontal: 4,
+        backgroundColor: palette.bg,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 5,
       }}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        {icon}
-        <Text style={{ fontSize: 15, color: textColor }}>{label}</Text>
-        {badge && (
-          <View
-            style={{
-              backgroundColor: 'rgba(239,68,68,0.15)',
-              paddingHorizontal: 6,
-              paddingVertical: 2,
-              borderRadius: 4,
-            }}
-          >
-            <Text style={{ fontSize: 10, fontWeight: '600', color: '#ef4444' }}>{badge}</Text>
-          </View>
-        )}
-      </View>
-      <Switch
-        value={enabled}
-        onValueChange={onToggle}
-        trackColor={{ false: 'rgba(255,255,255,0.1)', true: colors.teal }}
-        thumbColor="#ffffff"
-        ios_backgroundColor="rgba(255,255,255,0.1)"
-        accessibilityLabel={`${label} ${enabled ? 'on' : 'off'}`}
-      />
+      <Text style={{ fontSize: 10, fontWeight: '600', color: palette.fg }}>{label}</Text>
     </View>
   );
 }
@@ -821,6 +1009,7 @@ function ConfigLink({
   icon,
   label,
   value,
+  statusTone = 'neutral',
   textColor,
   mutedColor,
   onPress,
@@ -828,6 +1017,7 @@ function ConfigLink({
   icon: React.ReactNode;
   label: string;
   value?: string;
+  statusTone?: 'waitlist' | 'desktop' | 'neutral';
   textColor: string;
   mutedColor: string;
   onPress: () => void;
@@ -850,7 +1040,12 @@ function ConfigLink({
         <Text style={{ fontSize: 15, color: textColor }}>{label}</Text>
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-        {value && <Text style={{ fontSize: 13, color: mutedColor }}>{value}</Text>}
+        {value &&
+          (statusTone === 'neutral' ? (
+            <Text style={{ fontSize: 13, color: mutedColor }}>{value}</Text>
+          ) : (
+            <StatusPill label={value} tone={statusTone} />
+          ))}
         <ChevronRight size={16} color={mutedColor} />
       </View>
     </Pressable>

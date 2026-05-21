@@ -16,13 +16,13 @@ const TOOL_ACCESS_OPTIONS: Array<{
   label: string;
   description: string;
 }> = [
-  { id: 'auto', label: 'Auto', description: 'AI chooses for you' },
+  { id: 'auto', label: 'Auto', description: 'AI chooses from available local tools' },
   {
     id: 'on-demand',
     label: 'On demand',
-    description: 'Load when needed. More messages, lower accuracy',
+    description: 'Load local tools when needed',
   },
-  { id: 'always', label: 'Always available', description: 'All tools loaded' },
+  { id: 'always', label: 'Always available', description: 'Keep available local tools loaded' },
 ];
 
 export const ToolAccessSelector = forwardRef<BottomSheet>(function ToolAccessSelector(_props, ref) {
@@ -104,6 +104,16 @@ export const ToolAccessSelector = forwardRef<BottomSheet>(function ToolAccessSel
 
       {/* Options */}
       <View style={{ paddingHorizontal: 20, gap: 4 }}>
+        <Text
+          style={{
+            fontSize: 12,
+            color: themeColors.textMuted,
+            lineHeight: 17,
+            marginBottom: 8,
+          }}
+        >
+          Cloud tools stay locked until their feature flags are enabled.
+        </Text>
         {TOOL_ACCESS_OPTIONS.map((option) => {
           const isSelected = toolAccess === option.id;
           return (

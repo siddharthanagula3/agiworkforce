@@ -36,9 +36,10 @@ import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useAgentStore } from '@/stores/agentStore';
 import { CloudWaitlistSheet, joinWaitlist, useWaitlistStore } from '@/src/features/waitlist';
-import { getModelById, isAutoMode } from '@/lib/models';
+import { getModelById, isAutoMode } from '@/src/features/model-picker/service';
 import { useVoicePlayback } from '@/src/features/voice/hooks/useVoicePlayback';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 import { offlineQueue } from '@/services/offlineQueue';
 import { generateImage } from '@/src/features/image/services/imagegen';
 import { useThemeColors } from '@/src/ui/theme';
@@ -198,6 +199,13 @@ export default function ChatScreen() {
 
       // Handle /image command — generate an image and add result to conversation
       if (finalText.startsWith('/image ')) {
+        if (!FEATURES.imageGen) {
+          Alert.alert(
+            'Image generation requires Cloud Managed',
+            'Mobile v1 can attach and inspect local images, but generation uses hosted compute and is waitlist-gated.',
+          );
+          return;
+        }
         const prompt = finalText.slice(7).trim();
         if (prompt) {
           // Add user message immediately, then kick off generation
@@ -222,18 +230,12 @@ export default function ChatScreen() {
     modelPickerRef.current?.snapToIndex(0);
   }, []);
 
-  const LOCAL_PROVIDERS = new Set(['ollama', 'lmstudio']);
-
-  const resolveAppMode = useCallback(
-    (modelId: string): AppMode => {
-      if (isAutoMode(modelId)) return 'cloud';
-      const def = getModelById(modelId);
-      if (!def) return 'cloud';
-      return LOCAL_PROVIDERS.has(def.provider) ? 'local' : 'cloud';
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
+  const resolveAppMode = useCallback((modelId: string): AppMode => {
+    if (isAutoMode(modelId)) return 'local';
+    const def = getModelById(modelId);
+    if (!def) return 'local';
+    return def.surface === 'local' ? 'local' : 'cloud';
+  }, []);
 
   const handleModelSelect = useCallback(
     (newModelId: string) => {
@@ -315,6 +317,13 @@ export default function ChatScreen() {
   }, []);
 
   const handleOpenConnectors = useCallback(() => {
+    if (!FEATURES.connectorsCloudOnly) {
+      Alert.alert(
+        'Connectors require Cloud Managed',
+        'Mobile v1 keeps chat local. Connector OAuth and remote tools open through Desktop handoff or the Cloud Managed waitlist.',
+      );
+      return;
+    }
     router.push('/(app)/connectors' as Parameters<typeof router.push>[0]);
   }, [router]);
 
@@ -640,6 +649,7 @@ export default function ChatScreen() {
           {/* ModeToggle — flex:1 ensures true center regardless of left/right widths */}
           <View style={{ flex: 1, alignItems: 'center' }}>
             <ModeToggle
+              mode="local"
               cloudJoined={waitlistJoined}
               waitlistRank={waitlistRank}
               onTapCloud={handleOpenWaitlist}

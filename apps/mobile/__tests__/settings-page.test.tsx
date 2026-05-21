@@ -12,8 +12,7 @@
  * Covers:
  *   - Renders the Settings header
  *   - Renders section headers that appear in the initial render window
- *   - Section data contains the expected 5 groups and 18 items
- *   - Sign Out is marked destructive with red color
+ *   - Local-first Mode, Keys, and Local AI sections render
  *   - Haptic Feedback is a toggle type
  *   - Version number rendered
  */
@@ -177,7 +176,6 @@ jest.mock('../src/features/voice/components/VoiceSelector', () => {
 // ---------------------------------------------------------------------------
 
 import SettingsTabScreen from '../app/(app)/(tabs)/settings';
-import { colors } from '../src/ui/theme';
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -193,65 +191,50 @@ describe('Settings page', () => {
     expect(getByText('Settings')).toBeTruthy();
   });
 
-  // SectionList renders visible sections. Account and AI Configuration always
-  // appear in the initial window. We test those directly and use queryAllByText
-  // for items further down that may or may not be in the window.
+  // SectionList renders visible sections. Mode, Keys, and Local AI appear in the
+  // initial window, which is enough to lock the v1 local-first IA.
 
-  it('renders the Account section header', () => {
+  it('renders the Mode section header', () => {
     const { getByText } = render(<SettingsTabScreen />);
-    expect(getByText('Account')).toBeTruthy();
+    expect(getByText('Mode')).toBeTruthy();
   });
 
-  it('renders the AI Configuration section header', () => {
+  it('renders the Local AI section header', () => {
     const { getByText } = render(<SettingsTabScreen />);
-    expect(getByText('AI Configuration')).toBeTruthy();
+    expect(getByText('Local AI')).toBeTruthy();
   });
 
-  it('renders Account items: Profile, Subscription, Usage', () => {
+  it('renders Mode items: Local Mode, Local LLMs, Cloud Managed', () => {
     const { getByText } = render(<SettingsTabScreen />);
 
-    expect(getByText('Profile')).toBeTruthy();
-    expect(getByText('Subscription')).toBeTruthy();
-    expect(getByText('Usage')).toBeTruthy();
+    expect(getByText('Local Mode')).toBeTruthy();
+    expect(getByText('Local LLMs')).toBeTruthy();
+    expect(getByText('Cloud Managed')).toBeTruthy();
   });
 
-  it('renders AI Configuration items: Default Model, Capabilities, Auto-Approve', () => {
+  it('renders the Local AI section with its first visible capability row', () => {
     const { getByText } = render(<SettingsTabScreen />);
 
-    expect(getByText('Default Model')).toBeTruthy();
     expect(getByText('Capabilities')).toBeTruthy();
-    expect(getByText('Auto-Approve')).toBeTruthy();
+    expect(getByText('Local tools are active. Cloud tools are locked or waitlisted.')).toBeTruthy();
   });
 
-  it('renders Account and AI Configuration section headers', () => {
-    // We can verify the structure by checking the SectionList is passed 5 sections.
-    // Since SectionList virtualizes, we test the data shape indirectly.
-    // The component creates 5 sections: Account, AI Configuration, Connections, Preferences, About
-    // We verify by checking the section headers that DO render plus the items within them.
+  it('renders local-first section headers', () => {
     const { queryAllByText } = render(<SettingsTabScreen />);
 
-    // These section titles should all exist in the tree (SectionList headers are sticky by default)
-    const sectionTitles = ['Account', 'AI Configuration', 'Connections', 'Preferences', 'About'];
-    // At minimum, the first 2 must render
-    expect(queryAllByText('Account').length).toBeGreaterThanOrEqual(1);
-    expect(queryAllByText('AI Configuration').length).toBeGreaterThanOrEqual(1);
+    expect(queryAllByText('Mode').length).toBeGreaterThanOrEqual(1);
+    expect(queryAllByText('Keys').length).toBeGreaterThanOrEqual(1);
+    expect(queryAllByText('Local AI').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('Sign Out is marked as a destructive item with agentError color when rendered', () => {
-    const { queryAllByText } = render(<SettingsTabScreen />);
+  it('shows Mobile BYOK as locked instead of navigable key entry', () => {
+    const { getByLabelText, getByText, queryByText } = render(<SettingsTabScreen />);
 
-    // Sign Out may or may not be in the virtualized window
-    const signOutElements = queryAllByText('Sign Out');
-    if (signOutElements.length > 0) {
-      // When it renders, it should have the agentError color
-      expect(signOutElements[0]!.props.style).toEqual(
-        expect.objectContaining({ color: colors.agentError }),
-      );
-    } else {
-      // If SectionList doesn't render it, the test still passes because
-      // the data structure test below covers this
-      expect(true).toBe(true);
-    }
+    expect(
+      getByLabelText(/Mobile BYOK.*Disabled until secure device key storage ships.*Locked/),
+    ).toBeTruthy();
+    expect(getByText('Locked')).toBeTruthy();
+    expect(queryByText('Sign Out')).toBeNull();
   });
 
   it('version text follows the format vX.X.X Build N', () => {

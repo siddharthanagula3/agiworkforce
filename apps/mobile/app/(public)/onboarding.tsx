@@ -40,17 +40,8 @@ import {
 } from '@agiworkforce/local-llm';
 import type { OnDeviceModel } from '@agiworkforce/types';
 
-// Apple 5.1.2(i) requires enumerating every named third-party AI provider the
-// surface may route to. Omit Custom and Chinese-HQ providers (they get their
-// own chineseHqProviderRows section). Keep updated when providers change.
-const DISCLOSURE_PROVIDERS = [
-  'Anthropic',
-  'OpenAI',
-  'Google',
-  'xAI',
-  'Perplexity',
-  'Mistral',
-] as const;
+// Mobile v1 first-run has no cloud branch and no BYOK provider routing.
+const DISCLOSURE_PROVIDERS: string[] = [];
 
 // ---------------------------------------------------------------------------
 // Device tier derived from DeviceCapabilities
@@ -352,11 +343,15 @@ function HeroScreen({
         AGI runs on your device.
       </Text>
 
-      {/* 3 trust chips — exact labels per lock */}
+      <Text style={[styles.heroSubcopy, { color: colors.textMuted }]}>
+        No account. No cloud. Free forever.
+      </Text>
+
+      {/* Local-only trust chips */}
       <View style={styles.trustRow}>
         <TrustChip
           icon={<Cpu size={14} color={colors.teal} />}
-          label="On-device only"
+          label="Local LLMs active"
           colors={colors}
         />
         <TrustChip
@@ -722,13 +717,19 @@ const styles = StyleSheet.create({
   wordmark: {
     fontSize: 96,
     fontWeight: '700',
-    letterSpacing: -1,
+    letterSpacing: 0,
     lineHeight: 96,
     marginBottom: 12,
   },
   tagline: {
     fontSize: 16,
     fontWeight: '400',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  heroSubcopy: {
+    fontSize: 14,
+    fontWeight: '500',
     textAlign: 'center',
     marginBottom: 32,
   },
@@ -778,7 +779,7 @@ const styles = StyleSheet.create({
   tierHeadline: {
     fontSize: 28,
     fontWeight: '700',
-    letterSpacing: -0.5,
+    letterSpacing: 0,
     marginBottom: 8,
   },
   tierSubhead: {
@@ -863,7 +864,7 @@ const styles = StyleSheet.create({
     fontSize: 64,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
-    letterSpacing: -2,
+    letterSpacing: 0,
     marginTop: 8,
   },
   downloadModelName: {

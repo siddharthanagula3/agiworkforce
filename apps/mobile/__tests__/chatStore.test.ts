@@ -52,6 +52,17 @@ jest.mock('../services/streaming', () => ({
   streamChat: jest.fn(),
 }));
 
+jest.mock('../services/remoteChatGate', () => {
+  class MockRemoteChatDisabledError extends Error {
+    readonly code = 'MOBILE_REMOTE_CHAT_DISABLED';
+  }
+
+  return {
+    getRemoteChatDisabledReason: jest.fn(() => null),
+    RemoteChatDisabledError: MockRemoteChatDisabledError,
+  };
+});
+
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store, _name) => {

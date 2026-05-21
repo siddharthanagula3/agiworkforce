@@ -12,7 +12,7 @@ import * as Haptics from 'expo-haptics';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useTheme } from '@/src/ui/theme';
-import { getDisplayName } from '@/lib/models';
+import { getDisplayName } from '@/src/features/model-picker/service';
 import { colors } from '@/src/ui/theme';
 import { MAX_INPUT_LINES } from '@/lib/constants';
 import type { VoiceMeteringEvent } from '@/src/features/voice/services/voice';

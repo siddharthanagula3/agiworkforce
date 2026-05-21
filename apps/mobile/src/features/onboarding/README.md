@@ -3,10 +3,10 @@
 Status: Current
 Owner role: Mobile lead
 Last updated: 2026-05-21
-Purpose: Mobile first-run disclosures, local/BYOK mode choice UI, and onboarding consent surfaces.
+Purpose: Mobile first-run disclosures, Local Mode onboarding, and disabled BYOK notice surfaces.
 
 ## Rules
 
 - Import onboarding UI through `@/src/features/onboarding`.
-- Privacy-mode language must stay aligned with `docs/current/product-suite.md`.
+- Mobile v1 stays Local Mode first. Cloud Managed is waitlist-only, and Mobile BYOK stays disabled until secure key storage ships.
 - Onboarding state should stay in approved stores/services, not in modal-only components.

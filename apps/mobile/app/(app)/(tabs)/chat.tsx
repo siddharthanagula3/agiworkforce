@@ -3,7 +3,7 @@ import { View, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useNavigation } from 'expo-router';
 import { DrawerActions } from '@react-navigation/native';
-import { Plus, Menu } from 'lucide-react-native';
+import { Cpu, Plus, Menu } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
@@ -12,20 +12,15 @@ import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
 import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelectorBar';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import { VoiceConversationScreen } from '@/src/features/voice/components/VoiceConversationScreen';
-import { ConversationList } from '@/src/features/sidebar/components/ConversationList';
-import { SearchBar } from '@/src/features/sidebar/components/SearchBar';
-import { TagFilter } from '@/src/features/sidebar/components/TagFilter';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
-import { useProjectStore } from '@/src/features/projects/store';
 import { useThemeColors } from '@/src/ui/theme';
-import type { ConversationTag } from '@/services/autotag';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 /**
- * Chat tab -- shows conversation list with a new-chat input bar.
- * Tapping a conversation navigates to the full chat screen.
- * The input bar at bottom creates a new conversation on send.
+ * Chat tab -- Claude-style composer-first new chat surface.
+ * Recents live in the drawer; this screen stays focused on starting work.
  * The hamburger menu opens the app-level drawer navigator.
  */
 export default function ChatTabScreen() {
@@ -40,18 +35,12 @@ export default function ChatTabScreen() {
     ) => void;
   } | null>(null);
   const [voiceModeVisible, setVoiceModeVisible] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTag, setSelectedTag] = useState<ConversationTag | null>(null);
 
   const loadConversations = useChatStore((s) => s.loadConversations);
   const createConversation = useChatStore((s) => s.createConversation);
   const sendMessage = useChatStore((s) => s.sendMessage);
-  const searchConversations = useChatStore((s) => s.searchConversations);
-  const searchResults = useChatStore((s) => s.searchResults);
-  const storeSearchQuery = useChatStore((s) => s.searchQuery);
   const currentConversationId = useChatStore((s) => s.currentConversationId);
   const selectedModel = useModelStore((s) => s.selectedModel);
-  const activeProjectId = useProjectStore((s) => s.activeProjectId);
 
   useEffect(() => {
     loadConversations();
@@ -71,10 +60,14 @@ export default function ChatTabScreen() {
       attachments?: import('@/src/features/chat/components/AttachmentPreview').Attachment[],
     ) => {
       try {
-        const title = text.length > 40 ? text.slice(0, 40).trim() + '...' : text;
+        const trimmed = text.trim();
+        const fallbackTitle = attachments?.[0]?.fileName ?? 'New chat';
+        const titleSource = trimmed || fallbackTitle;
+        const title =
+          titleSource.length > 40 ? titleSource.slice(0, 40).trim() + '...' : titleSource;
         const conversationId = await createConversation(title);
         router.push(`/(app)/chat/${conversationId}` as Parameters<typeof router.push>[0]);
-        sendMessage(conversationId, text, selectedModel, attachments).catch(() => {
+        sendMessage(conversationId, trimmed, selectedModel, attachments).catch(() => {
           // Message send failed — conversation was created, user can retry from chat screen
         });
       } catch {
@@ -93,6 +86,13 @@ export default function ChatTabScreen() {
   }, []);
 
   const handleOpenConnectors = useCallback(() => {
+    if (!FEATURES.connectorsCloudOnly) {
+      Alert.alert(
+        'Connectors require Cloud Managed',
+        'Mobile v1 keeps chat local. Connector OAuth and remote tools open through Desktop handoff or the Cloud Managed waitlist.',
+      );
+      return;
+    }
     router.push('/(app)/connectors' as Parameters<typeof router.push>[0]);
   }, [router]);
 
@@ -160,7 +160,7 @@ export default function ChatTabScreen() {
 
   const handleSheetFile = useCallback(async () => {
     try {
-      await DocumentPicker.getDocumentAsync({
+      const result = await DocumentPicker.getDocumentAsync({
         type: [
           'application/pdf',
           'application/msword',
@@ -170,6 +170,17 @@ export default function ChatTabScreen() {
         ],
         copyToCacheDirectory: true,
       });
+      if (!result.canceled && result.assets.length > 0) {
+        const attachments: import('@/src/features/chat/components/AttachmentPreview').Attachment[] =
+          result.assets.map((asset) => ({
+            id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            uri: asset.uri,
+            mimeType: asset.mimeType ?? 'application/octet-stream',
+            fileName: asset.name ?? 'document',
+            fileSize: asset.size,
+          }));
+        chatInputAttachRef.current?.addAttachments(attachments);
+      }
     } catch {
       Alert.alert('Error', 'Failed to pick document. Please try again.');
     }
@@ -206,14 +217,6 @@ export default function ChatTabScreen() {
     }
   }, [createConversation, router]);
 
-  const handleSearchChange = useCallback(
-    (text: string) => {
-      setSearchQuery(text);
-      searchConversations(text);
-    },
-    [searchConversations],
-  );
-
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
       {/* Header */}
@@ -228,7 +231,7 @@ export default function ChatTabScreen() {
             <Menu size={18} color={c.textSecondary} />
           </Pressable>
           <Text variant="subheading" style={{ color: c.textPrimary }}>
-            Chats
+            AGI
           </Text>
         </View>
         <Pressable
@@ -241,27 +244,54 @@ export default function ChatTabScreen() {
         </Pressable>
       </View>
 
-      {/* Search bar */}
-      <SearchBar value={searchQuery} onChangeText={handleSearchChange} />
+      <View className="flex-1 items-center justify-center px-6" accessibilityLabel="New local chat">
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            paddingHorizontal: 11,
+            paddingVertical: 6,
+            borderRadius: 999,
+            backgroundColor: `${c.teal}18`,
+            borderWidth: 1,
+            borderColor: `${c.teal}30`,
+            marginBottom: 18,
+          }}
+        >
+          <Cpu size={13} color={c.teal} />
+          <Text style={{ fontSize: 12, fontWeight: '600', color: c.teal }}>
+            Local Mode + Local LLMs
+          </Text>
+        </View>
+        <Text
+          style={{
+            fontSize: 30,
+            lineHeight: 36,
+            fontWeight: '500',
+            color: c.textPrimary,
+            textAlign: 'center',
+          }}
+        >
+          What can I help with?
+        </Text>
+        <Text
+          style={{
+            fontSize: 14,
+            lineHeight: 20,
+            color: c.textMuted,
+            textAlign: 'center',
+            marginTop: 10,
+            maxWidth: 300,
+          }}
+        >
+          Start privately on this device. Use the sidebar for recents, projects, artifacts, and code
+          sessions.
+        </Text>
+      </View>
 
-      {/* Project selector */}
       <ProjectSelectorBar />
 
-      {/* Tag filter chips */}
-      <View style={{ paddingVertical: 8 }}>
-        <TagFilter selectedTag={selectedTag} onSelectTag={setSelectedTag} />
-      </View>
-
-      {/* Conversation list — filtered by active project when one is set */}
-      <View className="flex-1">
-        <ConversationList
-          searchQuery={searchQuery}
-          searchResults={storeSearchQuery ? searchResults : undefined}
-          filterProjectId={activeProjectId}
-        />
-      </View>
-
-      {/* Chat input at bottom */}
       <ChatInput
         onSend={handleSend}
         onOpenModelPicker={handleOpenModelPicker}

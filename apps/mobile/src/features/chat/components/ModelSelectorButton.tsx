@@ -4,7 +4,12 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { getDisplayName, isAutoMode, getModelById, PROVIDERS } from '@/lib/models';
+import {
+  getDisplayName,
+  isAutoMode,
+  getModelById,
+  PROVIDERS,
+} from '@/src/features/model-picker/service';
 import { colors } from '@/src/ui/theme';
 
 interface ModelSelectorButtonProps {

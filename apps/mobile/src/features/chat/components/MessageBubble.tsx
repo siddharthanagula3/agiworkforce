@@ -36,34 +36,31 @@ import { ReportFlagButton } from './ReportFlagButton';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/src/ui/theme';
-import { getModelById, isAutoMode, PROVIDERS } from '@/lib/models';
-import { formatPrivacyModeLabel, providerLabels } from '@agiworkforce/types';
+import { getModelById, isAutoMode, PROVIDERS } from '@/src/features/model-picker/service';
+import { formatChatExecutionModeLabel } from '@agiworkforce/types';
 import type { ChatMessage, Artifact } from '@/types/chat';
 
 /** Reaction state: cycles thumbsUp -> thumbsDown -> null */
 type ReactionType = 'thumbsUp' | 'thumbsDown' | null;
 
-const LOCAL_PROVIDERS = new Set(['ollama', 'lmstudio']);
-
 /** Returns provenance strings for an assistant message's model field. */
 function getProvenance(model?: string): { provider?: string; model?: string } | null {
   if (!model) return null;
-  if (isAutoMode(model)) return { provider: formatPrivacyModeLabel('byok'), model: 'Auto' };
+  if (isAutoMode(model)) {
+    return { provider: formatChatExecutionModeLabel('local_only'), model: 'Auto' };
+  }
 
   const def = getModelById(model);
   if (!def) return null;
 
-  if (LOCAL_PROVIDERS.has(def.provider)) {
+  if (def.surface === 'local') {
     return { provider: 'On device' };
   }
 
   const providerDef = PROVIDERS.find((p) => p.id === def.provider);
-  const providerLabel =
-    providerDef?.name ??
-    providerLabels[def.provider as keyof typeof providerLabels] ??
-    def.provider;
+  const providerLabel = providerDef?.name ?? def.providerLabel ?? def.provider;
 
-  return { provider: `${formatPrivacyModeLabel('byok')} · ${providerLabel}` };
+  return { provider: `${formatChatExecutionModeLabel('cloud_managed')} · ${providerLabel}` };
 }
 
 interface MessageBubbleProps {

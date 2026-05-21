@@ -5,12 +5,13 @@
  * Validates the four sections of the "Add to Chat" bottom sheet:
  * 1. Attachment row (Camera, Photos, File, Skills)
  * 2. Mode selector radio buttons (Chat, Research, Create)
- * 3. Feature toggles (Web search, Image generation, Health)
- * 4. Config links (Add to project, Choose style, Tool access, Manage Connectors)
+ * 3. Tool availability rows (cloud-gated + local Health)
+ * 4. Config links (Add to project, Choose style, Tool access, Connectors)
  */
 
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { Alert } from 'react-native';
+import { render, fireEvent, act } from '@testing-library/react-native';
 
 // ---------------------------------------------------------------------------
 // Mocks — declared before imports
@@ -97,6 +98,25 @@ jest.mock('../src/features/integrations/services/healthData', () => ({
   requestHealthPermission: jest.fn().mockResolvedValue(false),
 }));
 
+const mockJoinWaitlist = jest.fn().mockResolvedValue({ rank: 0 });
+const mockMarkWaitlistJoined = jest.fn();
+const mockWaitlistStoreState = {
+  joined: false,
+  rank: undefined as number | undefined,
+  markJoined: mockMarkWaitlistJoined,
+};
+
+jest.mock('../src/features/waitlist', () => {
+  const { View } = require('react-native');
+  return {
+    CloudWaitlistSheet: ({ visible }: { visible: boolean }) =>
+      visible ? <View testID="cloud-waitlist-sheet" /> : null,
+    joinWaitlist: mockJoinWaitlist,
+    useWaitlistStore: (selector: (state: typeof mockWaitlistStoreState) => unknown) =>
+      selector(mockWaitlistStoreState),
+  };
+});
+
 // Mock the sub-sheet components imported by AddToChatSheet via relative paths.
 // The component uses `import { StyleSelector } from './StyleSelector'` which
 // resolves to `components/chat/StyleSelector` — we mock that path.
@@ -162,6 +182,8 @@ function renderSheet(overrides = {}) {
 describe('AddToChatSheet', () => {
   beforeEach(() => {
     resetStores();
+    mockWaitlistStoreState.joined = false;
+    mockWaitlistStoreState.rank = undefined;
     jest.clearAllMocks();
   });
 
@@ -217,11 +239,13 @@ describe('AddToChatSheet', () => {
   // ---- Section 3: Feature Toggles ----
 
   describe('feature toggles', () => {
-    it('renders all 3 feature toggles', () => {
+    it('renders local and cloud-gated tool rows', () => {
       const { getByText } = renderSheet();
 
       expect(getByText('Web search')).toBeTruthy();
       expect(getByText('Image generation')).toBeTruthy();
+      expect(getByText('Computer use')).toBeTruthy();
+      expect(getByText('Desktop required')).toBeTruthy();
       expect(getByText('Health')).toBeTruthy();
     });
 
@@ -231,12 +255,44 @@ describe('AddToChatSheet', () => {
       expect(getByText('Beta')).toBeTruthy();
     });
 
-    it('Web search and Image gen default to ON, Health defaults to OFF', () => {
-      const features = useChatStore.getState().features;
+    it('shows cloud rows as waitlist-gated instead of live switches', () => {
+      const { getByLabelText, queryByLabelText } = renderSheet();
 
-      expect(features.webSearch).toBe(true);
-      expect(features.imageGen).toBe(true);
-      expect(features.health).toBe(false);
+      expect(getByLabelText('Web search, Waitlist')).toBeTruthy();
+      expect(getByLabelText('Image generation, Waitlist')).toBeTruthy();
+      expect(queryByLabelText('Web search on')).toBeNull();
+      expect(queryByLabelText('Image generation on')).toBeNull();
+      expect(getByLabelText('Health off').props.value).toBe(false);
+    });
+
+    it('opens the waitlist instead of enabling cloud web search', () => {
+      useChatStore.setState({
+        features: { webSearch: false, imageGen: false, health: false },
+      });
+
+      const { getByLabelText, getByTestId } = renderSheet();
+
+      fireEvent.press(getByLabelText('Web search, Waitlist'));
+
+      expect(useChatStore.getState().features.webSearch).toBe(false);
+      expect(getByTestId('cloud-waitlist-sheet')).toBeTruthy();
+    });
+
+    it('keeps health disabled and alerts when Health data is unavailable', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+      const { getByLabelText } = renderSheet();
+
+      await act(async () => {
+        fireEvent(getByLabelText('Health off'), 'valueChange', true);
+      });
+
+      expect(useChatStore.getState().features.health).toBe(false);
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Health Not Available',
+        expect.stringContaining('available on iOS only'),
+        [{ text: 'OK' }],
+      );
+      alertSpy.mockRestore();
     });
   });
 
@@ -249,7 +305,7 @@ describe('AddToChatSheet', () => {
       expect(getByText('Add to project')).toBeTruthy();
       expect(getByText('Choose style')).toBeTruthy();
       expect(getByText('Tool access')).toBeTruthy();
-      expect(getByText('Manage Connectors')).toBeTruthy();
+      expect(getByText('Connectors')).toBeTruthy();
     });
 
     it('shows current values on config links', () => {

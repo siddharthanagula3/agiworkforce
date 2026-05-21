@@ -12,6 +12,7 @@ import {
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 export type TaskChipType =
   | 'code'
@@ -27,6 +28,7 @@ interface ChipDef {
   type: TaskChipType;
   label: string;
   Icon: React.ComponentType<{ size: number; color: string; strokeWidth?: number }>;
+  disabledReason?: 'desktop';
 }
 
 const CHIPS: ChipDef[] = [
@@ -36,7 +38,7 @@ const CHIPS: ChipDef[] = [
   { type: 'research', label: 'Research', Icon: Search },
   { type: 'image', label: 'Image', Icon: ImageIcon },
   { type: 'video', label: 'Video', Icon: Film },
-  { type: 'computer', label: 'Computer', Icon: Monitor },
+  { type: 'computer', label: 'Computer', Icon: Monitor, disabledReason: 'desktop' },
   { type: 'translate', label: 'Translate', Icon: Languages },
 ];
 
@@ -62,11 +64,18 @@ export function TaskChips({ activeChip, onChipPress }: TaskChipsProps) {
       contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}
     >
       {CHIPS.map((chip) => {
-        const active = activeChip === chip.type;
+        const disabled = chip.type === 'computer' && !FEATURES.computerUse;
+        const active = !disabled && activeChip === chip.type;
+        const contentColor = active
+          ? colors.teal
+          : disabled
+            ? colors.textMuted
+            : colors.textSecondary;
         return (
           <Pressable
             key={chip.type}
             onPress={() => handlePress(chip.type)}
+            disabled={disabled}
             style={({ pressed }) => ({
               flexDirection: 'row',
               alignItems: 'center',
@@ -75,6 +84,7 @@ export function TaskChips({ activeChip, onChipPress }: TaskChipsProps) {
               paddingHorizontal: 12,
               borderWidth: 1,
               borderRadius: 999,
+              opacity: disabled ? 0.62 : 1,
               borderColor: active
                 ? `${colors.teal}66`
                 : pressed
@@ -86,24 +96,31 @@ export function TaskChips({ activeChip, onChipPress }: TaskChipsProps) {
                   ? colors.surfaceHover
                   : 'transparent',
             })}
-            accessibilityLabel={`${chip.label} mode`}
+            accessibilityLabel={`${chip.label} mode${disabled ? ', desktop required' : ''}`}
             accessibilityRole="button"
-            accessibilityState={{ selected: active }}
+            accessibilityState={{ selected: active, disabled }}
           >
-            <chip.Icon
-              size={14}
-              color={active ? colors.teal : colors.textSecondary}
-              strokeWidth={1.75}
-            />
+            <chip.Icon size={14} color={contentColor} strokeWidth={1.75} />
             <Text
               style={{
                 fontSize: 13,
-                color: active ? colors.teal : colors.textSecondary,
+                color: contentColor,
                 fontWeight: active ? '500' : '400',
               }}
             >
               {chip.label}
             </Text>
+            {disabled && chip.disabledReason === 'desktop' ? (
+              <Text
+                style={{
+                  fontSize: 10,
+                  color: colors.textMuted,
+                  fontWeight: '600',
+                }}
+              >
+                Desktop
+              </Text>
+            ) : null}
           </Pressable>
         );
       })}
