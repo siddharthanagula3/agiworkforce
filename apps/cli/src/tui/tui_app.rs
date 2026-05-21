@@ -1751,6 +1751,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             )
         }
 
+        "/agents" => {
+            SlashResult::SystemMessage(crate::agents::render_agents_command(arg))
+        }
+
         "/init" => {
             crate::repl::handle_init_project();
             SlashResult::SystemMessage("Project initialized.".to_string())
@@ -1785,7 +1789,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             SlashResult::SystemMessage(msg)
         }
 
-        "/plugins" => {
+        "/plugin" | "/plugins" | "/marketplace" | "/market" => {
             SlashResult::SystemMessage(
                 "Plugin management:\n  Use `agi plugin list` to see installed plugins.\n  Use `agi plugin install <name>` to install.".to_string()
             )
@@ -2597,6 +2601,97 @@ mod tests {
         registry
     }
 
+    fn tui_runtime_command_names() -> std::collections::BTreeSet<&'static str> {
+        let mut names = std::collections::BTreeSet::new();
+        names.extend(
+            crate::claude_parity::shared_runtime_command_names()
+                .iter()
+                .copied(),
+        );
+        names.extend([
+            "exit",
+            "quit",
+            "q",
+            "clear",
+            "model",
+            "m",
+            "plan",
+            "cost",
+            "output-style",
+            "fallback",
+            "replay",
+            "insights",
+            "status",
+            "context",
+            "fast",
+            "new",
+            "models",
+            "providers",
+            "config",
+            "diff",
+            "copy",
+            "login",
+            "logout",
+            "feedback",
+            "bug",
+            "help",
+            "h",
+            "?",
+            "compact",
+            "history",
+            "sessions",
+            "resume",
+            "fork",
+            "branch",
+            "save",
+            "rename",
+            "export",
+            "rewind",
+            "mcp",
+            "permissions",
+            "perms",
+            "approvals",
+            "agents",
+            "init",
+            "skills",
+            "hooks",
+            "plugin",
+            "plugins",
+            "marketplace",
+            "market",
+            "memory",
+            "mem",
+            "voice",
+            "v",
+            "theme",
+            "btw",
+            "ctx",
+            "review",
+            "effort",
+            "e",
+            "usage",
+            "tasks",
+            "memories",
+            "skills-toggle",
+            "statusline",
+            "title",
+            "diff-review",
+            "focus",
+            "background",
+            "bg",
+            "advisor",
+            "team-onboarding",
+            "onboarding",
+            "terminal-setup",
+            "shell-setup",
+            "reload-plugins",
+            "extra-usage",
+            "pricing",
+            "remote-env",
+        ]);
+        names
+    }
+
     #[test]
     fn slash_resolution_keeps_exact_sessions_runtime_command() {
         let registry = builtin_registry();
@@ -2613,5 +2708,26 @@ mod tests {
 
         assert_eq!(resolve_tui_slash_command("/branch", &registry), "/fork");
         assert_eq!(resolve_tui_slash_command("/diagnose", &registry), "/doctor");
+    }
+
+    #[test]
+    fn registered_builtin_commands_have_tui_runtime_coverage() {
+        let runtime = tui_runtime_command_names();
+
+        for command in builtin_slash_registry_commands() {
+            assert!(
+                runtime.contains(command.name.as_str()),
+                "/{} is registered but has no TUI runtime coverage",
+                command.name
+            );
+            for alias in command.aliases {
+                assert!(
+                    runtime.contains(alias.as_str()),
+                    "/{} alias for /{} has no TUI runtime coverage",
+                    alias,
+                    command.name
+                );
+            }
+        }
     }
 }

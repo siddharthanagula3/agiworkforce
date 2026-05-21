@@ -103,7 +103,7 @@ pub(super) fn handle_slash_command(
         "/save" => {
             registry::handle_save(session);
         }
-        "/load" => {
+        "/load" | "/resume" => {
             registry::handle_load(arg, session);
         }
         "/history" => {
@@ -402,6 +402,79 @@ pub(super) fn handle_slash_command(
     SlashResult::Handled
 }
 
+#[cfg(test)]
+fn repl_runtime_command_names() -> std::collections::BTreeSet<&'static str> {
+    let mut names = std::collections::BTreeSet::new();
+    names.extend(
+        crate::claude_parity::shared_runtime_command_names()
+            .iter()
+            .copied(),
+    );
+    names.extend([
+        "exit",
+        "quit",
+        "q",
+        "model",
+        "m",
+        "clear",
+        "cost",
+        "save",
+        "load",
+        "resume",
+        "history",
+        "delete",
+        "export",
+        "providers",
+        "setup",
+        "permissions",
+        "perms",
+        "approvals",
+        "models",
+        "skills",
+        "hooks",
+        "context",
+        "ctx",
+        "status",
+        "usage",
+        "sessions",
+        "rename",
+        "import",
+        "migrate",
+        "compact",
+        "btw",
+        "plan",
+        "fast",
+        "rewind",
+        "branch",
+        "fork",
+        "diff",
+        "batch",
+        "memory",
+        "mem",
+        "init",
+        "config",
+        "voice",
+        "v",
+        "theme",
+        "login",
+        "logout",
+        "a2a",
+        "ecosystem",
+        "eco",
+        "marketplace",
+        "market",
+        "plugin",
+        "plugins",
+        "sync",
+        "onboarding",
+        "auth",
+        "help",
+        "h",
+        "?",
+    ]);
+    names
+}
+
 fn persist_shared_ui_config(cmd: &str, arg: &str, session: &AgentSession, config: &mut CliConfig) {
     match cmd {
         "/output-style" if !arg.trim().is_empty() => {
@@ -417,6 +490,30 @@ fn persist_shared_ui_config(cmd: &str, arg: &str, session: &AgentSession, config
             }
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn registered_builtin_commands_have_repl_runtime_coverage() {
+        let runtime = super::repl_runtime_command_names();
+
+        for command in crate::command_registry::builtin_slash_registry_commands() {
+            assert!(
+                runtime.contains(command.name.as_str()),
+                "/{} is registered but has no REPL runtime coverage",
+                command.name
+            );
+            for alias in command.aliases {
+                assert!(
+                    runtime.contains(alias.as_str()),
+                    "/{} alias for /{} has no REPL runtime coverage",
+                    alias,
+                    command.name
+                );
+            }
+        }
     }
 }
 

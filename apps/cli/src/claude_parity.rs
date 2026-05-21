@@ -13,6 +13,77 @@ pub enum ParityCommandResult {
     DraftPrompt(String),
 }
 
+#[cfg(test)]
+pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
+    &[
+        "review",
+        "copy",
+        "new",
+        "mcp",
+        "tasks",
+        "output-style",
+        "fallback",
+        "replay",
+        "insights",
+        "feedback",
+        "bug",
+        "focus",
+        "background",
+        "bg",
+        "advisor",
+        "team-onboarding",
+        "terminal-setup",
+        "shell-setup",
+        "reload-plugins",
+        "extra-usage",
+        "pricing",
+        "remote-env",
+        "add-dir",
+        "files",
+        "privacy-settings",
+        "privacy-mode",
+        "trust-boundary",
+        "continue-with-byok",
+        "fork-byok",
+        "byok",
+        "rate-limit-options",
+        "stats",
+        "passes",
+        "sandbox",
+        "agents",
+        "chrome",
+        "ide",
+        "doctor",
+        "diagnose",
+        "health",
+        "release-notes",
+        "changelog",
+        "keybindings",
+        "keys",
+        "effort",
+        "statusline",
+        "desktop",
+        "app",
+        "mobile",
+        "ios",
+        "android",
+        "install-github-app",
+        "install-slack-app",
+        "tag",
+        "upgrade",
+        "vim",
+        "color",
+        "heapdump",
+        "stickers",
+        "thinkback-play",
+        "recap",
+        "security-review",
+        "pr-comments",
+        "ultrareview",
+        "think-back",
+    ]
+}
+
 pub fn handle_shared_command(
     cmd: &str,
     arg: &str,
@@ -980,6 +1051,29 @@ mod tests {
         let result = handle_shared_command("/not-real", "", &mut session);
 
         assert_eq!(result, ParityCommandResult::NotHandled);
+    }
+
+    #[test]
+    fn shared_runtime_command_names_are_handled() {
+        for command in shared_runtime_command_names() {
+            let mut session = test_session();
+            let arg = match *command {
+                "privacy-mode" | "trust-boundary" => "byok",
+                "tag" => "test-tag",
+                "add-dir" => ".",
+                "files" => "",
+                "output-style" => "",
+                _ => "test",
+            };
+
+            let result = handle_shared_command(command, arg, &mut session);
+
+            assert_ne!(
+                result,
+                ParityCommandResult::NotHandled,
+                "/{command} is listed as shared runtime command but is not handled"
+            );
+        }
     }
 
     #[test]
