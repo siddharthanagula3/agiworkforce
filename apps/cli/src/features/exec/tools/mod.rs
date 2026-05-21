@@ -539,6 +539,58 @@ async fn execute_notebook_edit(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeSet;
+
+    fn dispatched_tool_names_from_source() -> BTreeSet<String> {
+        let source = include_str!("mod.rs");
+        let start = source
+            .find("let result = match canonical_name {")
+            .expect("execute_tool_with_opts dispatch match should exist");
+        let body = &source[start..];
+        let end = body
+            .find("_ => Ok(ToolResult")
+            .expect("execute_tool_with_opts dispatch fallback should exist");
+
+        body[..end]
+            .lines()
+            .filter_map(|line| {
+                let trimmed = line.trim_start();
+                let rest = trimmed.strip_prefix('"')?;
+                let (name, after_name) = rest.split_once('"')?;
+                if after_name.trim_start().starts_with("=>") {
+                    Some(name.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn catalog_builtin_tools_have_runtime_dispatch() {
+        let catalog_names: BTreeSet<String> =
+            crate::runtime::tool_catalog::all_builtin_tool_definitions()
+                .into_iter()
+                .map(|tool| tool.name)
+                .collect();
+        let dispatched_names = dispatched_tool_names_from_source();
+        let agent_runtime_tools = BTreeSet::from(["task".to_string(), "update_plan".to_string()]);
+
+        for dispatched_name in &dispatched_names {
+            assert!(
+                catalog_names.contains(dispatched_name),
+                "{dispatched_name} has a runtime dispatcher but no tool catalog entry"
+            );
+        }
+
+        for catalog_name in &catalog_names {
+            assert!(
+                dispatched_names.contains(catalog_name)
+                    || agent_runtime_tools.contains(catalog_name),
+                "{catalog_name} has a tool catalog entry but no runtime dispatcher"
+            );
+        }
+    }
 
     #[test]
     fn test_tool_size_cap_per_tool() {

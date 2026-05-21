@@ -73,3 +73,23 @@ pub(super) async fn execute_mcp_tool(
         }),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn team_tool_catalog_matches_team_dispatchers() {
+        let catalog_names: BTreeSet<String> = crate::runtime::tool_catalog::team_tool_definitions()
+            .into_iter()
+            .map(|tool| tool.name)
+            .collect();
+        let dispatcher_names: BTreeSet<String> = TEAM_TOOL_NAMES
+            .iter()
+            .map(|name| name.to_string())
+            .collect();
+
+        assert_eq!(catalog_names, dispatcher_names);
+    }
+}
