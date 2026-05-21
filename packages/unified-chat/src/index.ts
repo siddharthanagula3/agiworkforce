@@ -52,7 +52,7 @@ export { ScrollArea } from './components/ui/ScrollArea';
 // rather than this top-level component. The export is preserved for
 // downstream consumers that haven't migrated yet — once they have, this
 // re-export and the underlying `components/ChatInterface.tsx` should be
-// removed in lockstep. See `docs/SCALING.md` for the migration plan.
+// removed in lockstep. See `docs/current/technical-architecture.md` for the migration plan.
 export { ChatInterface, useRuntime } from './components/ChatInterface';
 export type { ChatInterfaceProps } from './components/ChatInterface';
 

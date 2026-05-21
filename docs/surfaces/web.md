@@ -144,14 +144,13 @@ Same 10+ providers as desktop. Provider catalog read from `packages/types/src/mo
 - **Build is two-step.** `pnpm --filter web build` first builds the desktop SPA via Vite, then copies into `apps/web/public/chat/`, then runs `next build`. If you skip the desktop build, `/chat` 404s.
 - **Marketing copy is locked.** Per V5 §10 lock #19: no "reseller of [provider]" or "unlimited [provider]" phrases. ESLint custom rule scans `apps/web/marketing/`.
 
-## Where to look in PRD
+## Current References
 
-- [docs/PRD.md](../PRD.md) §6 — surface coverage matrix (web column)
-- [docs/PRD.md](../PRD.md) §10 locks #1 (models.json), #3 (no UnifiedAgenticChat dir), #5 (Stripe Dahlia), #9 (webhook runtime), #10 (webhook proxy carve-out), #11 (service-role migration), #19 (no resale framing)
-- [docs/PRD.md](../PRD.md) §12 — security & privacy model, service-role-key migration table
-- [docs/PRD.md](../PRD.md) §17 risk #11 — XCUT-02 multi-tenant time-bomb (web service-role with manual filters)
-- [docs/PRD-APPENDIX-A-DATA-MODELS.md](../PRD-APPENDIX-A-DATA-MODELS.md) §A.9 — legacy migration deletion runbook
-- [docs/PRD-APPENDIX-B-API-CONTRACTS.md](../PRD-APPENDIX-B-API-CONTRACTS.md) — every API endpoint with verb, path, auth class, rate-limit bucket
+- [docs/current/product-suite.md](../current/product-suite.md) - Web role in synced app chat and account flows.
+- [docs/current/technical-architecture.md](../current/technical-architecture.md) - data ownership, API gateway, provider, and generated-file strategy.
+- [docs/current/commercial-and-launch.md](../current/commercial-and-launch.md) - waitlist, billing, managed-compute, and no-resale-framing posture.
+- [docs/decisions/CURRENT_DECISIONS.md](../decisions/CURRENT_DECISIONS.md) - current trust-boundary and managed-cloud decisions.
+- Historical API and data-model details live in `docs/archive/2026-05-21-docs-consolidation/`.
 
 ## Memory references
 

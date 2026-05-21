@@ -30,8 +30,16 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Add Anthropic/OpenAI application baseline ledger.
 - [x] Add OpenAI/Anthropic/Vercel SDK strategy ledger.
 - [x] Add Claude/ChatGPT compute, computer-use, and generated-file architecture ledger.
+- [x] Consolidate current docs into compact `docs/current/` source-of-truth layer.
+- [x] Archive former top-level PRD, roadmap, pricing, architecture, scaling, handoff, and strategy docs under `docs/archive/2026-05-21-docs-consolidation/`.
+- [x] Replace the oversized root `AGI_WORKFORCE.md` with an LLM-readable current entry point and archive the legacy long version.
+- [x] Lock naming conventions for product names, CLI command names, root control docs, file/folder names, package/crate names, branches, commits, versions, and release artifacts.
+- [x] Make `agi` the primary CLI command while keeping `agiworkforce` as the compatibility alias.
+- [x] Add Husky hook policy and `pnpm check:hooks` so commit, pre-commit, and pre-push gates stay wired.
+- [x] Move the living audit fire log from root `AUDIT_LOG.md` to `audit/audit-log.md`.
 - [ ] Begin per-file AGI audit ledger by surface, starting with CLI and shared engine files.
 - [x] Lock the long-term agent-native development thesis for AGI Workforce.
+- [x] Implement first enterprise control-plane wave: shared contracts, canonical migrations, API gateway routes, Web admin readiness page, docs, and provisional CODEOWNERS.
 
 ## Exploration Tasks
 
@@ -68,6 +76,8 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Add root clutter allowlist check.
 - [x] Add docs status header check for active plans.
 - [x] Add import-boundary lint so apps cannot import apps, services cannot import UI packages, and packages cannot import apps.
+- [x] Add locked naming convention doc and enforce the primary `agi` CLI command in structure checks.
+- [x] Add hook wiring guardrail to `pnpm check:llm-operability`.
 - [x] Add canonical `docs/agent-context/` with repo map, risk map, command map, doc-status map, bug-finding guide, and known-flaws ledger.
 - [x] Make root `AGENTS.md` the canonical tool-neutral coding-agent entry point.
 - [x] Convert `CLAUDE.md` into a Claude-specific mirror of `AGENTS.md`.
@@ -76,14 +86,22 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Commit repo-organization script fix and monorepo grade report.
 - [x] Add or update README files for each shared package.
 - [x] Add P0/P1 README ownership files for Web, Desktop, Chrome extension, API gateway, signaling server, types, runtime, providers, and unified-chat.
-- [ ] Add `.github/CODEOWNERS` with real GitHub teams/handles after org ownership names are available.
+- [x] Add provisional `.github/CODEOWNERS` routed to founder/platform ownership.
+- [ ] Replace provisional `.github/CODEOWNERS` owner with real GitHub teams/handles after org ownership names are available.
+- [x] Make `apps/web/features` the canonical Web product-domain root and remove the remaining `apps/web/src/features` split.
+- [x] Add `pnpm check:structure-conventions` for Web feature-root, retired docs folder, and backslash-path naming drift.
 - [x] Expand `CONTRIBUTING.md` into a real engineering workflow guide.
 - [x] Add PR templates by change type.
 - [x] Normalize `docs/plans` vs `docs/planning` and archive superseded plans.
 - [x] Create `docs/marketing/`.
 - [x] Create `docs/support/`.
 - [x] Create `docs/legal/`.
-- [ ] Execute Web/Mobile/Desktop domain-first moves from `docs/plans/domain-first-reorg.md` after root/docs/package contracts are stable.
+- [x] Execute the Web `src/features` -> `features` consolidation from `docs/plans/domain-first-reorg.md`.
+- [x] Complete the Mobile waitlist pilot cleanup by migrating callers to `apps/mobile/src/features/waitlist` and removing old waitlist barrels.
+- [x] Start the Mobile projects domain by moving `ProjectCard` into `apps/mobile/src/features/projects`.
+- [x] Start the Mobile billing domain by moving `UpsellCard` into `apps/mobile/src/features/billing`.
+- [ ] Execute Mobile domain-first moves into `apps/mobile/src/features` from `docs/plans/domain-first-reorg.md` after root/docs/package contracts are stable.
+- [ ] Execute Desktop domain-first moves into `apps/desktop/src/features` from `docs/plans/domain-first-reorg.md` after root/docs/package contracts are stable.
 
 ## Agent-Native Development Tasks
 
@@ -108,13 +126,13 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 ## Autonomous Company Tasks
 
 - [x] Document the long-term feedback -> triage -> issue -> agent patch -> PR -> release -> customer update loop.
-- [ ] Define canonical customer feedback schema and persistence tables.
+- [x] Define canonical customer feedback schema and persistence tables.
 - [ ] Add support intake API shared by Web/Desktop/Mobile.
 - [ ] Add message-level feedback persistence for app chat surfaces.
 - [ ] Build feedback-to-GitHub issue bridge with dedupe, severity, owner lane, and privacy scrub.
 - [ ] Add agent patch queue with lane selection, worktree isolation, evidence bundles, and human approval gates.
 - [ ] Add verification artifact store for screenshots, logs, test output, and reproduction metadata.
-- [ ] Add release-fix links so customer feedback can be closed by release notes and in-app notifications.
+- [x] Add release-fix links so customer feedback can be closed by release notes and in-app notifications.
 - [ ] Evaluate Fin/Zendesk-style support agents, Vapi-style voice intake, and internal runbooks before managed support launch.
 
 ## CLI Engine Tasks
@@ -193,10 +211,10 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 ## Cloud Later
 
 - [ ] Keep managed cloud waitlisted/private beta.
-- [ ] Design usage ledger and provider-price table.
+- [x] Design usage ledger and provider-price table.
 - [ ] Design quota reservation/settlement.
 - [ ] Design chargeback/refund/dispute handling.
-- [ ] Prefer invoice/ACH for enterprise managed credits.
+- [x] Prefer invoice/ACH for enterprise managed credits.
 - [ ] Revisit Stripe/card top-ups only after fraud and margin model is finished.
 
 ## Documentation Rules
@@ -207,4 +225,5 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] `docs/` stores durable specs and surface guides.
 - [x] `tasks/` stores execution logs and historical working notes.
 - [x] `audit/` stores evidence ledgers and generated inventories.
-- [ ] Archive superseded plans instead of adding new competing plans.
+- [x] Archive superseded top-level docs instead of adding new competing docs.
+- [ ] Continue moving any newly discovered stale historical docs to archive or updating them to point at `docs/current/`.

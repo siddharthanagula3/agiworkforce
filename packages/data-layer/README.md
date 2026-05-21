@@ -18,7 +18,7 @@ The codebase couples tightly to Supabase today. As traffic + cost + compliance c
 - The factory reads `AGI_*_PROVIDER` env vars and returns the right adapter.
 - Adapters wrap each vendor SDK behind the same minimal interface.
 
-See [`docs/SCALING.md`](../../docs/SCALING.md) for migration playbooks and [`docs/BILLION_DOLLAR_PLAYBOOK.md`](../../docs/BILLION_DOLLAR_PLAYBOOK.md) for the strategic context.
+See [`docs/current/technical-architecture.md`](../../docs/current/technical-architecture.md) for the current architecture. Legacy migration playbooks are archived under [`docs/archive/2026-05-21-docs-consolidation/SCALING.md`](../../docs/archive/2026-05-21-docs-consolidation/SCALING.md).
 
 ## Adapter status
 
@@ -69,7 +69,8 @@ AGI_AUTH_PROVIDER=supabase      # supabase | auth0 | clerk | cognito
 AGI_STORAGE_PROVIDER=supabase   # supabase | s3 | r2 | b2
 AGI_REALTIME_PROVIDER=supabase  # supabase | pusher | ably | self-hosted
 
-# Plus the provider-specific connection vars (see SCALING.md)
+# Plus the provider-specific connection vars (see current technical architecture
+# and the archived scaling playbook when migrating providers)
 SUPABASE_URL=...
 SUPABASE_SERVICE_ROLE_KEY=...
 # OR
@@ -87,12 +88,12 @@ The interfaces are intentionally minimal: add a method only when at least one co
 
 ## Migration patterns
 
-For each kind of move, see the linked playbook:
+For each kind of move, use the current architecture plus the archived migration playbook:
 
-- **Supabase → Neon**: [SCALING.md § Database migration](../../docs/SCALING.md)
-- **Supabase Auth → Clerk / Auth0 / Cognito**: [SCALING.md § Auth migration](../../docs/SCALING.md)
-- **Supabase Storage → S3 / R2 / B2**: [SCALING.md § Storage migration](../../docs/SCALING.md)
-- **Supabase Realtime → Pusher / Ably / self-hosted**: [SCALING.md § Realtime migration](../../docs/SCALING.md)
+- **Supabase → Neon**: [`technical-architecture.md`](../../docs/current/technical-architecture.md) and archived [`SCALING.md`](../../docs/archive/2026-05-21-docs-consolidation/SCALING.md)
+- **Supabase Auth → Clerk / Auth0 / Cognito**: [`technical-architecture.md`](../../docs/current/technical-architecture.md) and archived [`SCALING.md`](../../docs/archive/2026-05-21-docs-consolidation/SCALING.md)
+- **Supabase Storage → S3 / R2 / B2**: [`technical-architecture.md`](../../docs/current/technical-architecture.md) and archived [`SCALING.md`](../../docs/archive/2026-05-21-docs-consolidation/SCALING.md)
+- **Supabase Realtime → Pusher / Ably / self-hosted**: [`technical-architecture.md`](../../docs/current/technical-architecture.md) and archived [`SCALING.md`](../../docs/archive/2026-05-21-docs-consolidation/SCALING.md)
 
 ## Vertical slice
 

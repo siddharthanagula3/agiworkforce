@@ -3,7 +3,7 @@
   "lastUpdated": "2026-05-21",
   "purpose": "Machine-readable write-lane map for safe 15+ parallel human/agent implementation work.",
   "recommendedParallelism": {
-    "writerLanes": 18,
+    "writerLanes": 19,
     "reviewAndVerificationLanes": 4,
     "rule": "Run many agents only when each owns a lane with disjoint write paths. Shared files go through the integrator lane."
   },
@@ -103,7 +103,8 @@
       "blockedPaths": ["apps/web/app/api/**", "supabase/**", "packages/**"],
       "requiredChecks": [
         "pnpm --filter @agiworkforce/web typecheck",
-        "pnpm --filter @agiworkforce/web test"
+        "pnpm --filter @agiworkforce/web test",
+        "pnpm check:structure-conventions"
       ],
       "escalationOwners": ["Backend/data owner", "Security/privacy lead"]
     },
@@ -124,6 +125,37 @@
         "pnpm --filter @agiworkforce/web typecheck"
       ],
       "escalationOwners": ["Security/privacy lead", "Backend/data owner"]
+    },
+    {
+      "id": "enterprise-admin-surface",
+      "name": "Enterprise admin UI, gateway routes, and docs",
+      "ownerRole": "Enterprise/platform lead",
+      "ownedWritePaths": [
+        "apps/web/app/admin/**",
+        "apps/web/features/admin/**",
+        "services/api-gateway/src/routes/enterprise.ts",
+        "services/api-gateway/__tests__/routes/enterprise.test.ts",
+        "docs/enterprise/**"
+      ],
+      "readOnlyContextPaths": [
+        "packages/types/src/enterprise/**",
+        "supabase/migrations/**",
+        "apps/web/app/api/admin/**",
+        "docs/current/commercial-and-launch.md",
+        "docs/current/technical-architecture.md"
+      ],
+      "blockedPaths": [
+        "packages/types/**",
+        "supabase/migrations/**",
+        "services/api-gateway/src/middleware/**",
+        "pnpm-lock.yaml"
+      ],
+      "requiredChecks": [
+        "pnpm --filter @agiworkforce/web typecheck",
+        "pnpm --filter @agiworkforce/api-gateway test -- enterprise",
+        "pnpm check:llm-operability"
+      ],
+      "escalationOwners": ["Backend/data owner", "Billing owner", "Security/privacy lead"]
     },
     {
       "id": "mobile-app",
@@ -258,7 +290,11 @@
       "name": "Database, compliance, and data layer",
       "ownerRole": "Backend/data owner",
       "ownedWritePaths": ["supabase/**", "packages/data-layer/**", "packages/compliance/**"],
-      "readOnlyContextPaths": ["apps/web/**", "services/**", "docs/PRD-APPENDIX-A-DATA-MODELS.md"],
+      "readOnlyContextPaths": [
+        "apps/web/**",
+        "services/**",
+        "docs/current/technical-architecture.md"
+      ],
       "blockedPaths": ["apps/**", "services/**"],
       "requiredChecks": ["pnpm check:boundaries"],
       "escalationOwners": ["Security/privacy lead", "Legal/compliance"]

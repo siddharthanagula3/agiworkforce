@@ -132,15 +132,13 @@ All 10+ providers route through `@agiworkforce/llm-normalize` via `packages/api`
 - **macOS code-signing identity:** `D2PR62RLT4`. Don't change without owner approval.
 - **Bundle identifier:** `com.agiworkforce.desktop`. Don't change — would break update channel.
 
-## Where to look in PRD
+## Current References
 
-- [docs/PRD.md](../PRD.md) §6 — Surface coverage matrix (desktop column)
-- [docs/PRD.md](../PRD.md) §8 — Architecture & data flow (sequence trace 4: computer-use approval → execute → audit)
-- [docs/PRD.md](../PRD.md) §10 lock #2 — No `ModeSelectionDialog` reintroduction
-- [docs/PRD.md](../PRD.md) §10 lock #4 — `UnifiedAgenticChat/` partially-dead cleanup
-- [docs/PRD.md](../PRD.md) §10 locks #7, #8 — `unsafe_code = deny` + `await_holding_lock = warn`
-- [docs/PRD-APPENDIX-B-API-CONTRACTS.md](../PRD-APPENDIX-B-API-CONTRACTS.md) — full Tauri command surface (1,488 commands grouped)
-- [docs/PRD-APPENDIX-C-MONOREPO-LAYOUT.md](../PRD-APPENDIX-C-MONOREPO-LAYOUT.md) — desktop layout
+- [docs/current/product-suite.md](../current/product-suite.md) - Desktop role in Web/Mobile/Desktop chat sync and local compute.
+- [docs/current/technical-architecture.md](../current/technical-architecture.md) - runtime, generated-file, and provider boundaries.
+- [docs/current/agent-and-repo-operability.md](../current/agent-and-repo-operability.md) - current docs and agent workflow rules.
+- [docs/decisions/CURRENT_DECISIONS.md](../decisions/CURRENT_DECISIONS.md) - current trust-boundary and application-suite decisions.
+- Historical Tauri command and layout details live in `docs/archive/2026-05-21-docs-consolidation/`.
 
 ## Memory references
 

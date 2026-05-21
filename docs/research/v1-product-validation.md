@@ -2,7 +2,7 @@
 
 > Use this as a master research prompt. Run it in chunks per audience (see "How to run" at the end). Self-contained — respondents don't need prior knowledge.
 >
-> Grounded in actual code state as of 2026-05-16: `packages/types/src/billing-catalog.ts` (pricing), `packages/types/src/model-catalog.ts` (TIER_POLICIES + SLOT_REGISTRY), `docs/PRICING.md` (canonical pricing doc), 16 shared packages, 6 shipping surfaces.
+> Grounded in actual code state as of 2026-05-16: `packages/types/src/billing-catalog.ts` (pricing), `packages/types/src/model-catalog.ts` (TIER_POLICIES + SLOT_REGISTRY), archived pricing source material under `docs/archive/2026-05-21-docs-consolidation/PRICING.md`, 16 shared packages, 6 shipping surfaces. Current commercial posture lives in `docs/current/commercial-and-launch.md`.
 
 ---
 

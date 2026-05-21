@@ -2,97 +2,85 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last reviewed: 2026-05-20.
-Last updated: 2026-05-20
+Last reviewed: 2026-05-21
+Last updated: 2026-05-21
 
-This is the decision index for documentation cleanup. It is not a new product spec; it points to the latest evidence that was read during the docs audit.
+This is the conflict-resolution index for current product and architecture decisions. It is intentionally shorter than the archived PRD corpus.
 
 ## Decision Sources
 
-Current repo source of truth:
+Current sources of truth:
 
-- `docs/PRD.md` - canonical product spec in the repo, marked V5 / last refreshed 2026-05-18.
-- `docs/PRD-MOBILE.md` - canonical mobile PRD in the repo, dated 2026-05-17.
-- `docs/archive/2026-05-18-wave-0-complete.md` - verified Wave 0 mobile local-first completion record.
-- `docs/PRD-RESOLUTIONS-AND-AUDIT.md` - prior PRD audit with explicit Delete / Update / Retain classifications.
-- `AGI_WORKFORCE.md` - root source-of-truth entry point for platform posture; mobile launch posture is narrowed below.
+- `docs/current/product-suite.md` - product thesis, surfaces, trust modes, and sync boundary.
+- `docs/current/technical-architecture.md` - monorepo shape, runtime boundaries, provider strategy, generated files, and enterprise control plane.
+- `docs/current/commercial-and-launch.md` - Local/BYOK/Managed launch posture, waitlist, payment, and enterprise gates.
+- `docs/current/agent-and-repo-operability.md` - repo/docs/agent workflow rules.
+- `PLAN.md` - active transition plan.
+- `TODO.md` - active execution queue.
+- `AGI_WORKFORCE.md` - broad platform snapshot and entry point.
 
-Claude Code memory source:
+Archived source material:
 
-- Main memory index: `/Users/siddhartha/.claude/projects/-Users-siddhartha-Desktop-agiworkforce/memory/MEMORY.md`
-- Locked decisions: `/Users/siddhartha/.claude/projects/-Users-siddhartha-Desktop-agiworkforce/memory/locks/`
-- Repo-local memory stub: `.claude/projects/-Users-siddhartha-Desktop-agiworkforce/memory/audit-2026-05-06.md`
-- MCP memory graph: available, but currently contains older desktop/runtime observations, not the latest mobile/product locks.
+- `docs/archive/2026-05-21-docs-consolidation/` contains the former top-level PRD, mobile PRD, appendices, vision, roadmap, pricing, architecture, hosting, scaling, performance, ownership, handoff, and strategy docs.
+- Archived docs can be mined for detail, but they do not override `docs/current/`, `PLAN.md`, `TODO.md`, or this file.
 
-Important cleanup note: repo links to `memory/*.md` are broken because there is no repo-root `memory/` directory.
+## Locked Decisions
 
-## Latest Locked Decisions
+1. AGI Workforce is an OpenAI/Anthropic-style application suite, not just a chat app or CLI. The differentiation is local-first privacy, explicit BYOK, multi-provider routing, and privacy-controlled managed compute across Web, Desktop, Mobile, CLI, VS Code, and Chrome.
+   Evidence: `docs/current/product-suite.md`, `docs/decisions/2026-05-20-openai-anthropic-application-suite-thesis.md`, `audit/anthropic-apps-parity/application-suite-thesis-2026-05-20.md`.
 
-1. AGI Workforce is locked as an **OpenAI/Anthropic-style application suite**, not just a chat app or CLI. The differentiation is local-first privacy, explicit BYOK, multi-provider routing, and privacy-controlled managed compute across Web, Desktop, Mobile, CLI, VS Code, and Chrome.
-   Evidence: `docs/decisions/2026-05-20-openai-anthropic-application-suite-thesis.md`, `PLAN.md`, `audit/anthropic-apps-parity/application-suite-thesis-2026-05-20.md`.
+2. Public brand is AGI. The formal platform name is AGI Workforce. Repo paths, package names, crates, database identifiers, and internal identifiers stay `agiworkforce`.
+   Evidence: `AGI_WORKFORCE.md`, `README.md`, `docs/engineering/naming-conventions.md`, `memory/locks/brand-agi-2026-05-15.md`.
 
-2. Public brand is **AGI**. Repo paths, package names, crates, and internal identifiers stay `agiworkforce`.
-   Evidence: `memory/locks/brand-agi-2026-05-15.md`, `docs/PRD.md`, `README.md`.
+3. The six-surface product boundary is Web, Desktop, Mobile, CLI, VS Code, and Chrome.
+   Evidence: `docs/current/product-suite.md`, `docs/surfaces/*.md`, `PLAN.md`.
 
-3. Mobile is the lead launch surface.
-   Evidence: `docs/PRD.md`, `docs/PRD-MOBILE.md`, `memory/locks/mobile-first-strategy-2026-05-16.md`, `memory/locks/mobile-first-amendments-2026-05-17.md`.
+4. Normal synced app chat is only for Web, Mobile, and Desktop. CLI, VS Code, and Chrome stay local/workspace/task scoped unless the user explicitly hands off selected, redacted context into a synced app chat.
+   Evidence: `docs/current/product-suite.md`, `PLAN.md`, `TODO.md`.
 
-4. Mobile is the first implementation focus. Founder clarified on 2026-05-20 that the 2026-05-18 local-first/cloud-waitlist locks apply to the mobile application first, not as a repo-wide reversal of the platform Local + BYOK posture.
-   Evidence: founder clarification in current Codex session, `memory/locks/v1-local-only-cloud-waitlist-2026-05-18.md`, `docs/archive/2026-05-18-wave-0-complete.md`, `docs/design/mobile-screen-design-prompt-2026-05-18.md`.
+5. Mobile v1 should ship as Local + explicit BYOK, not broad AGI-managed cloud. Managed Cloud / AGI Compute Credits / subscriptions remain waitlist or private beta until ledgering, payment rails, fraud, refund, chargeback, and provider-term risk are designed and verified.
+   Evidence: `docs/current/commercial-and-launch.md`, `docs/current/product-suite.md`, `docs/enterprise/profit-first-enterprise-readiness.md`.
 
-5. Mobile v1 should ship as **Local + explicit BYOK**, not AGI-managed cloud. Local is the default trust boundary; BYOK is a separate provider trust boundary with explicit consent.
-   Evidence: founder clarification in current Codex session, `docs/PRD-MOBILE.md`, `docs/archive/2026-05-18-wave-0-complete.md`.
+6. Local to BYOK is a fork, not a silent transfer or mode flip. The original Local thread remains local forever. The required flow is context selection, secret redaction, payload preview, provider label, and explicit consent.
+   Evidence: `docs/current/product-suite.md`, `PLAN.md`, `TODO.md`.
 
-6. Managed Cloud / AGI Compute Credits / subscriptions remain waitlist or private beta only. Do not sell public managed credits in mobile v1. The future credit model must be closed-loop, non-transferable, payment-rail-aware, reserve for processor fees/tax/refunds/chargebacks, and settle usage from actual provider cost.
-   Evidence: founder clarification in current Codex session; existing billing backlog in `tasks/todo.md` and `supabase/migrations/`.
+7. SDKs are adapters, not architecture. AGI owns runtime schemas, event streams, privacy modes, provider routing, tool contracts, usage accounting, artifact manifests, and generated-file metadata.
+   Evidence: `docs/current/technical-architecture.md`, `audit/anthropic-apps-parity/sdk-strategy-2026-05-20.md`.
 
-7. Local to BYOK is a **fork**, not a silent transfer or mode flip. The original Local thread remains local forever.
-   Required flow: user taps Continue with BYOK, sees a disclosure, chooses full chat / last N messages / selected messages, chooses attachment/tool-output inclusion, runs local secret redaction, previews the payload, then creates a new BYOK fork with a visible provider label.
-   Hard rules: never auto-route a Local chat to BYOK; never silently send Local attachments to BYOK; every message stores `privacy_mode: local | byok | managed`; BYOK labels must name the provider, e.g. "Claude via your Anthropic key".
+8. Vercel AI Gateway and other managed proxy paths are never default for Local or strict BYOK. They can only be used behind explicit Managed labeling and consent.
+   Evidence: `docs/current/technical-architecture.md`, `docs/current/commercial-and-launch.md`.
 
-8. The repo PRD and public docs still say Local + BYOK are live/free and paid tiers graduate on 2026-08-01. Keep that as the platform posture unless a formal PRD amendment changes it; do not use platform pricing docs to override the mobile-v1 managed-cloud waitlist.
-   Evidence: `docs/PRD.md`, `docs/PRD-MOBILE.md`, `AGI_WORKFORCE.md`, `README.md`, `docs/PRICING.md`, `docs/ROADMAP.md`.
+9. Do not hardcode model IDs or provider capabilities. Use the shared model catalogs and provider metadata.
+   Evidence: `packages/types/src/models.json`, `AGI_WORKFORCE.md`, `memory/locks/rule-models-json-canonical.md`.
 
-9. Current cleanup policy: update mobile-specific docs first. Avoid broad public/pricing rewrites unless the PRD is explicitly amended beyond mobile scope.
+10. Auto-routing must be explicit and explainable; silent model substitution is a rejected anti-pattern.
+    Evidence: `docs/current/product-suite.md`, `memory/locks/auto-routing-decision-2026-05-16.md`.
 
-10. Mobile local model architecture is Path C: system-native multimodal primitives plus downloaded text model, not one universal model.
-    Evidence: `memory/locks/v1-model-selection-final-2026-05-18.md`, `docs/archive/2026-05-18-wave-0-complete.md`, `tasks/research/V1-MODEL-SELECTION-REPORT.md`.
+11. One chat layout across six surfaces remains a non-regression rule.
+    Evidence: `docs/current/product-suite.md`, `docs/design/design-spec-2026-05-15.md`, `docs/surfaces/*.md`.
 
-11. Current mobile default downloaded text model is Qwen3-4B-Instruct-2507. Apple Foundation Models and AICore are additive system layers, not the only chat model.
-    Evidence: `memory/locks/v1-model-selection-final-2026-05-18.md`, `memory/locks/research-corrected-platform-facts-2026-05-18.md`.
+12. `@agiworkforce/llm-normalize` is the canonical app-level cross-provider contract.
+    Evidence: `AGI_WORKFORCE.md`, `packages/llm-normalize/`, `docs/current/technical-architecture.md`.
 
-12. Do not hardcode model IDs or provider capabilities. Use the model catalogs.
-    Evidence: `memory/locks/rule-models-json-canonical.md`, `docs/PRD.md`, `AGI_WORKFORCE.md`.
+13. Enterprise managed compute requires organization policy, audit logs, support workflow, usage ledger, provider cost snapshots, managed-credit controls, and release-fix traceability before public claims.
+    Evidence: `docs/current/commercial-and-launch.md`, `docs/enterprise/control-plane.md`, `packages/types/src/enterprise/`, `supabase/migrations/20260521100000_enterprise_control_plane_foundation.sql`.
 
-13. Auto-routing must be explicit and explainable; silent model substitution is a rejected anti-pattern.
-    Evidence: newer `memory/locks/auto-routing-decision-2026-05-16.md`.
-    Supersedes conflicting silent-routing language in older `memory/locks/auto-routing-spec-2026-05-07.md`.
+14. Current docs live in `docs/current/`; historical docs live in `docs/archive`. If they conflict, current docs win.
+    Evidence: `docs/current/README.md`, `docs/current/agent-and-repo-operability.md`.
 
-14. One chat layout across six surfaces remains a non-regression rule.
-    Evidence: `docs/PRD.md`, `docs/VISION.md`, `docs/surfaces/*.md`, `memory/MEMORY.md`.
+15. The primary CLI command is `agi`. `agiworkforce` remains a compatibility alias, not the preferred user-facing command. User docs and command examples should prefer `agi`; packages, crates, release archives, repo URLs, and existing `~/.agiworkforce` state paths keep `agiworkforce` unless a separate migration plan is approved.
+    Evidence: `docs/engineering/naming-conventions.md`, `apps/cli/Cargo.toml`, `apps/cli/npm/package.json`, `scripts/install.sh`.
 
-15. `@agiworkforce/llm-normalize` is the canonical app-level cross-provider contract.
-    Evidence: `docs/PRD.md`, `AGI_WORKFORCE.md`, `packages/llm-normalize/`.
-
-16. Design tokens are locked: teal `#21808d` and terracotta `#da7756`; brand mark A/B/C is still a founder decision.
-    Evidence: `memory/locks/brand-agi-2026-05-15.md`, `memory/locks/design-prompt-v1-2026-05-16.md`, `docs/design/design-spec-2026-05-15.md`.
+16. Repo naming follows the locked engineering convention: root `PLAN.md` for strategy, `TODO.md` for active work, `CHANGELOG.md` for completed work, current docs in `docs/current`, plans in `docs/plans`, evidence in `audit`, generated reports in `reports`, and historical material in `docs/archive`.
+    Evidence: `docs/engineering/naming-conventions.md`, `docs/current/agent-and-repo-operability.md`, `scripts/check-structure-conventions.mjs`.
 
 ## Outdated Or Historical
 
-- `docs/HANDOFF.md` is a Wave 1 CLI handoff from 2026-05-03, despite newer docs calling it current.
-- `docs/BILLION_DOLLAR_PLAYBOOK.md` is a 2026-05-08 strategy snapshot and should not override PRD V5 or the 2026-05-18 mobile locks.
+- Former top-level PRD, mobile PRD, appendices, vision, roadmap, pricing, architecture, hosting, scaling, performance, ownership, handoff, and strategy docs are archived under `docs/archive/2026-05-21-docs-consolidation/`.
 - `memory/locks/byok-first-launch-2026-05-16.md`, `subscription-tiers-2026-05-15.md`, and `pricing-billing-decisions-2026-05-16.md` remain platform-pricing evidence, but they do not make AGI-managed cloud or credits part of mobile v1.
-- `memory/locks/auto-routing-spec-2026-05-07.md` is superseded on silent routing by `auto-routing-decision-2026-05-16.md`.
-- `docs/archive/**` is historical unless a current doc explicitly cites it as evidence.
+- `memory/locks/auto-routing-spec-2026-05-07.md` is superseded on silent routing by `memory/locks/auto-routing-decision-2026-05-16.md`.
+- `docs/archive/**`, `tasks/**`, and generated audit reports are evidence unless a current doc explicitly promotes a conclusion.
 
-## Mobile Scope Clarification
+## Conflict Rule
 
-Founder clarified on 2026-05-20 that the local-first/cloud-waitlist decision is about concentrating on the mobile application first and avoiding AGI-managed cloud risk at launch.
-
-Current interpretation:
-
-- **Mobile v1**: Local + explicit BYOK; Local is default and BYOK requires consent.
-- **Local -> BYOK**: creates a new fork after context selection, secret scan, and preview; the original Local thread remains unchanged.
-- **Managed Cloud / Credits**: waitlist or private beta only until ledgering, payment rails, fraud, refund, chargeback, and provider-term risk are designed and verified.
-- **Platform docs**: Local + BYOK posture remains valid for repo-level/non-mobile launch copy unless amended by PR.
-- **Next docs work**: rewrite mobile-specific docs and launch copy so they stop presenting BYOK as a silent mode switch or AGI-managed cloud path.
+If a current doc conflicts with code, verify code behavior first, then update the doc and decision index in the same change. If archived material conflicts with current docs, do not patch the archive; update current docs only when the current decision itself changes.

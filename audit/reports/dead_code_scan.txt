@@ -11,8 +11,8 @@
 ./eslint.config.mjs:705:      // FIXME: P1-MODEL-CATALOG-MIGRATION (Wave 1 P0-J/K/L)
 ./eslint.config.mjs:712:      // FIXME: P1-MODEL-CATALOG-MIGRATION (Wave 1 P0-G/I)
 ./eslint.config.mjs:727:      // FIXME: P1-RLS-CLIENT-MIGRATION (Wave 1 P0-C web RLS sweep)
-./AUDIT_LOG.md:117:- Fix: Returns HTTP 501 with `{"error":"handoff not yet implemented","status":"not-implemented","messages_received":<n>}`. Added `501 => "Not Implemented"` to `http_response` status map at line 1007.
-./AUDIT_LOG.md:438:- **Dead code** — net −1,879 LOC. Web removed 10 unused deps + `chart.tsx` (`af5ec69be`); web `InlineCodeExecutor.tsx` + `code-execution-service.ts` deleted; desktop placeholder onboarding code removed; CLI lib.rs phase2 comments corrected (no false "no call sites" claims); chrome ext `model-id` eslint-disable wrappers replaced with real catalog lookups (42 sites).
+./audit/audit-log.md:117:- Fix: Returns HTTP 501 with `{"error":"handoff not yet implemented","status":"not-implemented","messages_received":<n>}`. Added `501 => "Not Implemented"` to `http_response` status map at line 1007.
+./audit/audit-log.md:438:- **Dead code** — net −1,879 LOC. Web removed 10 unused deps + `chart.tsx` (`af5ec69be`); web `InlineCodeExecutor.tsx` + `code-execution-service.ts` deleted; desktop placeholder onboarding code removed; CLI lib.rs phase2 comments corrected (no false "no call sites" claims); chrome ext `model-id` eslint-disable wrappers replaced with real catalog lookups (42 sites).
 ./reference-index/shard-00.md:209:- Shows: Connectors panel placeholder. Body text "Connectors have moved to Customize. Head there to browse, connect, and manage them."
 ./reference-index/shard-00.md:356:- Shows: Flat icon glyph. Blue circle with sun and mountain on yellow background — image-gallery placeholder icon.
 ./reference-index/shard-01.md:615:- Shows: macOS DMG installer background — blue gradient with red curved arrow over circuit-board lines; two icon placeholder slots.

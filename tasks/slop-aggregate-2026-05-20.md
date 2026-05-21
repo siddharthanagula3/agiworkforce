@@ -49,7 +49,7 @@
 
 ### B1. 80+ inline `// FIX (audit 2026-05-20, §N)` comments reference a §-numbered document that does not exist in the branch
 
-- Reported by: **cross-cut-hunter** (confirmed via `git diff main...HEAD -- AUDIT_LOG.md` is empty, `grep "2026-05-20" AUDIT_LOG.md` is empty)
+- Reported by: **cross-cut-hunter** (confirmed via `git diff main...HEAD -- audit/audit-log.md` is empty, `grep "2026-05-20" audit/audit-log.md` is empty)
 - Hot files (by audit-prose count): `tool_confirmation.rs` (7), `background.ts` (6), `mcp/connect.ts` (3), `powershell_tool.rs` (3), `download-beta/route.ts` (3), api-gateway routes (4)
 - Specific sites flagged across all hunters:
   - **apps/cli**: `powershell_tool.rs:54-62, 127-135`; `apply_patch.rs:17-25`

@@ -14,6 +14,6 @@ Purpose: durable marketing strategy, positioning, launch copy, customer messagin
 
 ## What Does Not Belong Here
 
-- Product requirements; use `PLAN.md`, `TODO.md`, and `docs/PRD.md`.
+- Product requirements; use `PLAN.md`, `TODO.md`, and `docs/current/product-suite.md`.
 - Store submission metadata; use `apps/mobile/store-listing/` and `docs/launch/store-listings/`.
 - Generated screenshots or design exports; use `reports/` or approved launch asset paths.

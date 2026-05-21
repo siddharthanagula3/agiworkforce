@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-05-20",
+  "lastUpdated": "2026-05-21",
   "risks": [
     {
       "id": "privacy-boundary",
@@ -14,7 +14,12 @@
       "id": "provider-routing",
       "severity": "high",
       "owner": "Platform lead",
-      "paths": ["packages/providers", "packages/llm-normalize", "packages/types/src/models.json", "apps/cli/src/models"],
+      "paths": [
+        "packages/providers",
+        "packages/llm-normalize",
+        "packages/types/src/models.json",
+        "apps/cli/src/models"
+      ],
       "reviewFocus": "No hardcoded model IDs; provider capability metadata owns routing decisions",
       "checks": ["scripts/check-no-hardcoded-models.sh", "pnpm check:boundaries"]
     },
@@ -22,9 +27,17 @@
       "id": "tool-execution",
       "severity": "high",
       "owner": "CLI + Desktop",
-      "paths": ["apps/cli/src/features/exec/tools", "apps/desktop/src-tauri", "packages/apply-patch", "packages/browser-tool"],
+      "paths": [
+        "apps/cli/src/features/exec/tools",
+        "apps/desktop/src-tauri",
+        "packages/apply-patch",
+        "packages/browser-tool"
+      ],
       "reviewFocus": "Path traversal, shell execution, approvals, provenance, workspace roots",
-      "checks": ["cargo test -p agiworkforce-cli --lib", "pnpm --filter @agiworkforce/apply-patch test"]
+      "checks": [
+        "cargo test -p agiworkforce-cli --lib",
+        "pnpm --filter @agiworkforce/apply-patch test"
+      ]
     },
     {
       "id": "native-messaging",
@@ -38,31 +51,78 @@
       "id": "billing-managed-cloud",
       "severity": "high",
       "owner": "Backend + Web",
-      "paths": ["apps/web/app/api/stripe-webhook", "services", "supabase/migrations", "packages/types/src/billing-catalog.ts"],
+      "paths": [
+        "apps/web/app/api/stripe-webhook",
+        "services",
+        "supabase/migrations",
+        "packages/types/src/billing-catalog.ts"
+      ],
       "reviewFocus": "Idempotency, ledgering, fraud/refund/chargeback handling, managed compute gating",
-      "checks": ["pnpm --filter @agiworkforce/web test", "pnpm --filter @agiworkforce/api-gateway test"]
+      "checks": [
+        "pnpm --filter @agiworkforce/web test",
+        "pnpm --filter @agiworkforce/api-gateway test"
+      ]
+    },
+    {
+      "id": "enterprise-control-plane",
+      "severity": "high",
+      "owner": "Enterprise/platform lead",
+      "paths": [
+        "packages/types/src/enterprise",
+        "services/api-gateway/src/routes/enterprise.ts",
+        "supabase/migrations",
+        "apps/web/app/admin",
+        "apps/web/features/admin",
+        "docs/enterprise"
+      ],
+      "reviewFocus": "Tenant isolation, admin policy defaults, SSO/SCIM data ownership, audit immutability, support privacy labels, managed-credit public launch gates",
+      "checks": [
+        "pnpm --filter @agiworkforce/types test -- enterprise",
+        "pnpm --filter @agiworkforce/api-gateway test -- enterprise",
+        "pnpm --filter @agiworkforce/web typecheck"
+      ]
     },
     {
       "id": "mobile-local-data",
       "severity": "high",
       "owner": "Mobile lead",
-      "paths": ["apps/mobile/storage", "apps/mobile/services/complianceLedger.ts", "apps/mobile/services/modelDownload.ts"],
+      "paths": [
+        "apps/mobile/storage",
+        "apps/mobile/services/complianceLedger.ts",
+        "apps/mobile/services/modelDownload.ts"
+      ],
       "reviewFocus": "Encryption, consent persistence, privacy labels, large-file failure modes",
-      "checks": ["pnpm --filter @agiworkforce/mobile test", "pnpm --filter @agiworkforce/mobile typecheck"]
+      "checks": [
+        "pnpm --filter @agiworkforce/mobile test",
+        "pnpm --filter @agiworkforce/mobile typecheck"
+      ]
     },
     {
       "id": "artifact-rendering",
       "severity": "medium",
       "owner": "Web + Desktop",
-      "paths": ["apps/sandbox", "apps/web/features/chat", "apps/desktop/src", "packages/unified-chat"],
+      "paths": [
+        "apps/sandbox",
+        "apps/web/features/chat",
+        "apps/desktop/src",
+        "packages/unified-chat"
+      ],
       "reviewFocus": "Iframe sandboxing, srcDoc fallback, generated file previews, download safety",
-      "checks": ["pnpm --filter @agiworkforce/web test", "pnpm --filter @agiworkforce/sandbox build"]
+      "checks": [
+        "pnpm --filter @agiworkforce/web test",
+        "pnpm --filter @agiworkforce/sandbox build"
+      ]
     },
     {
       "id": "repo-organization",
       "severity": "medium",
       "owner": "Platform lead",
-      "paths": ["AGENTS.md", "CLAUDE.md", "docs/agent-context", "docs/plans/pre-release-repo-organization-2026-05-20.md"],
+      "paths": [
+        "AGENTS.md",
+        "CLAUDE.md",
+        "docs/agent-context",
+        "docs/plans/pre-release-repo-organization-2026-05-20.md"
+      ],
       "reviewFocus": "Agent docs match JSON maps; no root clutter regressions; known flaws are indexed",
       "checks": ["pnpm check:agent-context", "pnpm check:repo-organization"]
     }

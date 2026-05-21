@@ -1,4 +1,8 @@
-# AGI Workforce — Audit Log
+# AGI Workforce Audit Log
+
+Status: Current
+Owner: Platform lead
+Last updated: 2026-05-21
 
 > Durable record of no-mercy audits across all 6 surfaces. Each fire = one module audit with structured findings, fixes applied (or deferred), and a verification result. The auditor LLM is treated as untrusted too — every finding must cite `file:line`, every fix must pass static check + targeted tests + full surface verification before commit.
 
@@ -21,7 +25,7 @@ Rotation order: `apps/cli → apps/desktop → apps/web → apps/mobile → apps
 - #367 — primitives: `lib/secure-random.ts`, `lib/auth-guards.ts`, `lib/validations/tool-calls.ts`, 48 new tests
 - #368 — call-site adoption + pentest SEV-WEB-01/03 + ESLint Rule A (Math.random in security paths) at error
 - #369 — sandbox.agiworkforce.com cross-origin artifact isolation (closes WEB-13 + WEB-20)
-- #370 (PR-4) — SEV-WEB-08 + SEV-WEB-09 + ESLint Rule B (page/layout getSession ban) + AUDIT_LOG / CHANGELOG
+- #370 (PR-4) — SEV-WEB-08 + SEV-WEB-09 + ESLint Rule B (page/layout getSession ban) + audit log / CHANGELOG
 
 ### Fresh findings (WEB-14 through WEB-27)
 
@@ -436,7 +440,7 @@ This entry consolidates eight Phase B waves (5 through 12) into one audit record
 
 ### Wave 12 — E1 + E3 escalation closures (3 commits)
 
-- **E1 closed (`9066869de`)** — `apps/desktop/src/hooks/useAgenticEvents.ts` `SharedListenerContext` refactor. The 7 module-level mutable singletons (runtimeActivityListenersActive, extensionPreflightChecked, runtimeActivityUnlistenFns, toolStreamCleanupTimeouts, …) were consolidated into a single context object passed to setup functions. ~300 LOC net structural change matched the AUDIT_LOG.md fire #4 estimate.
+- **E1 closed (`9066869de`)** — `apps/desktop/src/hooks/useAgenticEvents.ts` `SharedListenerContext` refactor. The 7 module-level mutable singletons (runtimeActivityListenersActive, extensionPreflightChecked, runtimeActivityUnlistenFns, toolStreamCleanupTimeouts, …) were consolidated into a single context object passed to setup functions. ~300 LOC net structural change matched the audit fire #4 estimate.
 - **E3 closed (`4a7b96b63`)** — `apps/desktop/src/components/UnifiedAgenticChat/index.tsx` partial decomposition via `useChatSidebar + useChatMessages` extraction. Reduces the index.tsx surface by ~400 LOC.
 - **Extension SharedContext (`6741ee045`)** — `SharedSidePanelContext + SharedBackgroundContext` in `apps/extension/src/` mirrors the desktop E1 pattern.
 

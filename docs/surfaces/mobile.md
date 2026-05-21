@@ -38,7 +38,7 @@ The lead launch surface. A single iOS + Android app where someone gets free priv
 
 ## Canonical spec
 
-⚠ **`docs/PRD-MOBILE.md` is the canonical mobile PRD.** It supersedes the mobile column of `docs/PRD.md` §6. Anything mobile-specific lives there.
+⚠ **Current mobile decisions live in `docs/current/` and this surface doc.** The former mobile PRD is archived under `docs/archive/2026-05-21-docs-consolidation/` as source material only.
 
 ## Three runtime tiers (locked PRD V5 §10 lock #22)
 
@@ -206,20 +206,20 @@ Cache-discount magnitude locked at 90% per V5 §10 lock #23.
 ## Gotchas
 
 - **Mobile is NOT the only-in-scope launch.** Web parity must ship same week. Desktop must be W6-stable before mobile launches. Per V5 §20 lock #17.
-- **Apple 5.1.2(i) is the rejection-risk single point.** Verbatim consent modal copy lives in `docs/PRD-APPENDIX-B-API-CONTRACTS.md` §B.7. Do not paraphrase. No pre-checked toggles. No bundled consent.
+- **Apple 5.1.2(i) is the rejection-risk single point.** Legacy consent modal copy is archived under `docs/archive/2026-05-21-docs-consolidation/PRD-APPENDIX-B-API-CONTRACTS.md` §B.7. Promote reviewed final legal copy into a current legal doc before shipment. No pre-checked toggles. No bundled consent.
 - **No in-app code execution UI on iOS.** Apple's 2.5.2 enforcement against Replit / Vibecode / Anything (Mar-Apr 2026) is the precedent. Mobile v1 = controller + chat surface only. Code execution lives on desktop / CLI / web. V5 §10 lock #25.
 - **Chinese-HQ providers default-OFF.** DeepSeek, Moonshot/Kimi, Qwen, Zhipu require user opt-in per provider. V5 §17 R-023.
 - **Kimi K2 family discontinues 2026-05-25 (7 days from V5 lock).** `packages/types/src/models.json` already pins `kimi-k2.6`.
 - **DeepSeek V4-Pro promo expires 2026-05-31 15:59 UTC.** Auto-reroute logic already wired in `packages/routing/`.
 - **Article 50 disclosure must ship pre-2026-08-02.** EU AI Act enforcement starts 4 days before mobile launch target. €15M / 3% global turnover penalty exposure.
 
-## Where to look in PRD
+## Current References
 
-- [docs/PRD-MOBILE.md](../PRD-MOBILE.md) — canonical mobile PRD (21 sections)
-- [docs/PRD.md](../PRD.md) §10 locks #18 (Apple 5.1.2(i)), #21 (StoreKit IAP), #22 (three-tier router), #23 (90% cache discount), #24 (deprecation calendar), #25 (no in-app code execution), #26 (Article 50)
-- [docs/PRD.md](../PRD.md) §11 — mobile on-device runtime lane (Tier 1/2/3)
-- [docs/PRD.md](../PRD.md) §17 risks #1 (5.1.2(i)), #14 (TLS pinning), #20 (Apple payment-steering), #22 (Apple 2.5.2 enforcement), #23 (Chinese-HQ routing)
-- [docs/PRD-APPENDIX-B-API-CONTRACTS.md](../PRD-APPENDIX-B-API-CONTRACTS.md) §B.7 — verbatim 5.1.2(i) consent modal copy
+- [docs/current/product-suite.md](../current/product-suite.md) - Mobile role, trust modes, and sync boundary.
+- [docs/current/technical-architecture.md](../current/technical-architecture.md) - generated-file and compute strategy.
+- [docs/current/commercial-and-launch.md](../current/commercial-and-launch.md) - Local/BYOK/Managed launch posture and waitlist gates.
+- [docs/decisions/CURRENT_DECISIONS.md](../decisions/CURRENT_DECISIONS.md) - mobile v1, Local to BYOK fork, and managed-cloud decisions.
+- Historical mobile PRD and API-contract details live in `docs/archive/2026-05-21-docs-consolidation/`.
 
 ## Memory references
 

@@ -8,7 +8,7 @@
 
 Build a 12-slide seed pitch deck for AGI, targeting a16z Speedrun application + 2-minute Progress Day pitch. The deck doubles as a standalone written submission for non-Speedrun seed VCs.
 
-Preserve the existing file's HTML+React+Babel implementation pattern (`slides.jsx` + `deck-stage.js` + `tweaks-panel.jsx`). Rewrite every slide's content from scratch against `docs/PRD.md` V4 (HEAD, 2026-05-17) as ground truth.
+Preserve the existing file's HTML+React+Babel implementation pattern (`slides.jsx` + `deck-stage.js` + `tweaks-panel.jsx`). This historical prompt used the former PRD V4 as ground truth; current pitch work should start from `docs/current/product-suite.md` and `docs/current/commercial-and-launch.md`.
 
 ---
 
@@ -29,8 +29,10 @@ Preserve the existing file's HTML+React+Babel implementation pattern (`slides.js
 
 ## Ground-truth sources (read before writing slide copy)
 
-- `docs/PRD.md` V4 (22 sections, ~22K words) — canonical product spec
-- `docs/PRD-MOBILE.md` (21 sections) — mobile launch plan + personas
+- `docs/current/product-suite.md` — current product thesis, surfaces, trust modes, and sync boundary
+- `docs/current/commercial-and-launch.md` — current commercial, waitlist, and managed-compute posture
+- `docs/archive/2026-05-21-docs-consolidation/PRD.md` — archived historical PRD source material
+- `docs/archive/2026-05-21-docs-consolidation/PRD-MOBILE.md` — archived historical mobile PRD source material
 - `tasks/research/00-MASTER-SYNTHESIS.md` + V6 sweep deltas (Kimi K2.6, DeepSeek V4-Flash, Apple Foundation Models, Apple 5.1.2(i), EU AI Act Aug 2 2026)
 - `packages/types/src/billing-catalog.ts` — pricing SSOT
 - Brand palette LOCKED: teal `#21808d` + terracotta `#da7756`

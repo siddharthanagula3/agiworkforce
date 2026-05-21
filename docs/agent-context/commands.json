@@ -11,10 +11,12 @@
     "agentContext": "pnpm check:agent-context",
     "repoOrganization": "pnpm check:repo-organization",
     "boundaries": "pnpm check:boundaries",
+    "structureConventions": "pnpm check:structure-conventions",
     "laneOwnership": "pnpm check:lane-ownership",
     "generatedArtifacts": "pnpm check:generated-artifacts",
     "readmeOwnership": "pnpm check:readme-ownership",
     "docStatus": "pnpm check:doc-status",
+    "hooks": "pnpm check:hooks",
     "llmOperability": "pnpm check:llm-operability"
   },
   "surfaces": {

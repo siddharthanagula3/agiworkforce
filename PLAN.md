@@ -34,6 +34,8 @@ The baseline is feature parity. The reason users should stay is:
 - Managed cloud remains waitlist/private beta until usage metering, fraud controls, refunds, chargebacks, and provider terms are settled.
 - Every parity claim needs a source, an AGI file path, and verification evidence.
 - Do not claim full file-by-file completion unless the file path, owner area, parity relevance, and verification result are recorded in an evidence ledger.
+- Naming is locked by `docs/engineering/naming-conventions.md`: public brand `AGI`, formal platform `AGI Workforce`, primary CLI command `agi`, compatibility CLI alias `agiworkforce`, and internal repo/package/crate identifiers `agiworkforce`.
+- Local hooks are part of repo operability: commit messages, pre-commit checks, and pre-push checks must stay wired and enforced by `pnpm check:hooks`.
 
 ## Source Corpus
 
@@ -183,11 +185,13 @@ Rules:
 - `PLAN.md` is the live strategy and execution plan.
 - `TODO.md` is the live actionable queue.
 - `CHANGELOG.md` records completed implementation and exploration slices only.
-- `AGI_WORKFORCE.md` remains the broad repo truth/agent entry point.
+- `AGI_WORKFORCE.md` is a compact repo entry point; its former long wave-history version is archived.
 - `docs/README.md` is the durable documentation index.
+- `docs/current/` is the compact current source-of-truth layer for product, architecture, commercial posture, and repo operability.
 - `audit/anthropic-apps-parity/` stores evidence, inventories, ledgers, and source-backed claims.
 - `tasks/` stores execution logs and historical working notes.
 - Superseded plans should be archived or clearly marked historical rather than competing with this plan.
+- Former top-level long-form PRD, roadmap, pricing, architecture, hosting, scaling, ownership, handoff, and strategy docs stay in `docs/archive/2026-05-21-docs-consolidation/`.
 
 ### 1B. Pre-Release Repo Organization
 
@@ -201,12 +205,14 @@ Rules:
 - Keep tool-required folders such as `.claude`, `.codex`, `.cursor`, `.opencode`, and `.agents` until each tool contract is documented.
 - Use the existing domain-first app reorganization plan as a sub-plan, not the whole repo strategy.
 - Add ownership, naming, import-boundary, docs-status, and root-clutter guardrails before hiring engineers.
+- Keep `apps/web/features` as the canonical Web product-domain root; `apps/web/src` is reserved for layer primitives, and `apps/web/src/features` is forbidden.
 - Make the repo LLM-operable through canonical `AGENTS.md`, `docs/agent-context/`, machine-readable repo/risk/command/doc-status maps, and known-flaws tracking.
 
 Deliverable:
 
 - `docs/plans/pre-release-repo-organization-2026-05-20.md`
 - `docs/agent-context/`
+- `scripts/check-structure-conventions.mjs`
 
 ### 1C. Agent-Native Development
 
@@ -421,15 +427,16 @@ Tasks:
 
 ### 8. Teams, Admin, And Compliance
 
-Goal: enterprise-grade trust later, not v1 blocking.
+Goal: enterprise-grade trust without creating uncapped bootstrapped burn.
 
 Tasks:
 
-- Admin policy model for Local/BYOK/Managed availability.
-- Audit log schema.
-- Team key vault / BYOK policy.
-- SSO/SAML/OIDC later.
-- Billing waitlist and invoice-first enterprise option.
+- Admin policy model for Local/BYOK/Managed availability. First shared contract and database foundation exists in `packages/types/src/enterprise` and `supabase/migrations/20260521100000_enterprise_control_plane_foundation.sql`.
+- Audit log schema. Enterprise audit events and audit export request tables now exist in the canonical migration path.
+- Team key vault / BYOK policy. Provider policy tables exist; key vault implementation remains open.
+- SSO/SAML/OIDC. Existing Web SSO/SCIM tables are now backfilled into root migrations so fresh environments no longer depend on legacy `apps/web/supabase` migrations.
+- Billing waitlist and invoice-first enterprise option. Managed credit accounts default to `public_launch_blocked = true` and `billing_mode = invoice_ach`.
+- Support and feedback loops. Support cases, feedback cases, and release-fix links now have shared schema foundations.
 
 ## Execution Phases
 
@@ -486,11 +493,11 @@ Tasks:
 
 ### Phase 6: Managed Cloud Readiness
 
-- Usage ledger.
-- Provider price table.
+- Usage ledger. First canonical table: `organization_usage_ledger`.
+- Provider price table. First canonical table: `provider_cost_snapshots`.
 - Quota and balance reservation.
 - Fraud/risk controls.
-- Invoice/ACH-first enterprise private beta.
+- Invoice/ACH-first enterprise private beta. First canonical table: `managed_credit_accounts`.
 
 ## Definition Of Done
 

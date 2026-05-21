@@ -117,11 +117,13 @@ Same 10+ providers as other surfaces. Cloud requests route through `services/api
 - **Lint separated**: `pnpm lint` excludes apps/extension; use `pnpm lint:extension` to lint this surface.
 - **`nativeMessaging` permission declared but host manifest absent**: extension declares the permission but `com.agiworkforce.browser.json` host file isn't installed without a script. Native bridge silently fails until install.sh ships.
 
-## Where to look in PRD
+## Current References
 
-- [docs/PRD.md](../PRD.md) §6 — surface coverage matrix (Chrome ext column)
-- [docs/PRD.md](../PRD.md) §10 lock #12 — native messaging manifest must be installable
-- [docs/PRD.md](../PRD.md) §17 risks #6 (Chain 1: cross-surface zero-click prompt-injection), #15 (native messaging host manifest absent)
+- [docs/current/product-suite.md](../current/product-suite.md) - six-surface product role and sync boundary.
+- [docs/current/technical-architecture.md](../current/technical-architecture.md) - provider, connector, and runtime ownership.
+- [docs/current/agent-and-repo-operability.md](../current/agent-and-repo-operability.md) - current docs and agent workflow rules.
+- [docs/decisions/CURRENT_DECISIONS.md](../decisions/CURRENT_DECISIONS.md) - current trust-boundary and managed-cloud decisions.
+- Historical PRD details live in `docs/archive/2026-05-21-docs-consolidation/`.
 
 ## Memory references
 

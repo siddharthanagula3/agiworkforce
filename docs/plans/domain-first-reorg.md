@@ -1,11 +1,33 @@
 ---
-status: PROPOSED — documentation-only commit, no code moves yet
+status: ACTIVE - Web feature-root consolidation started
 owner: team-lead
-last-updated: 2026-05-15
+last-updated: 2026-05-21
 phase: D (Architecture cleanup, post-launch backlog)
 ---
 
 # Domain-first reorganization plan
+
+Status: Active
+Owner: Team lead
+Last updated: 2026-05-21
+
+## 2026-05-21 Update
+
+Web now treats `apps/web/features` as the canonical product-domain root.
+The stale `apps/web/src/features` split has been removed, and
+`pnpm check:structure-conventions` prevents new Web product-domain files from
+being added under `apps/web/src/features`.
+
+Mobile and Desktop domain-first moves remain pending and should be handled one
+domain at a time with surface typecheck coverage. Mobile and Desktop use
+`src/features`; Web uses root `features`.
+
+The Mobile waitlist pilot is complete: app/tests import from
+`apps/mobile/src/features/waitlist`, and the old temporary waitlist barrels have
+been removed.
+
+The Mobile projects and billing domains have started: `ProjectCard` and
+`UpsellCard` now live under `apps/mobile/src/features`.
 
 ## Why
 
@@ -186,20 +208,22 @@ Target:
 ```
 apps/mobile/
 ├── app/           # Expo Router stays (file-based routing is the bind point)
-├── core/          # MMKV, secure store, biometric, deepgram client — platform
-├── features/
-│   ├── chat/{components,hooks,services}/
-│   ├── dispatch/{...}
-│   ├── settings/{...}
-│   ├── auth/{...}
-│   ├── voice/{...}
-│   └── …
-└── shared/        # generic UI atoms, theme tokens
+├── src/
+│   ├── core/      # MMKV, secure store, biometric, deepgram client - platform
+│   ├── features/
+│   │   ├── chat/{components,hooks,services}/
+│   │   ├── dispatch/{...}
+│   │   ├── settings/{...}
+│   │   ├── auth/{...}
+│   │   ├── voice/{...}
+│   │   └── ...
+│   └── ui/        # generic UI atoms, theme tokens
+└── components/    # legacy barrels/shared atoms during migration
 ```
 
 `app/` stays put — file-based router is the public contract Expo enforces.
-Screen _implementations_ under `app/` should import from `features/<domain>/`
-rather than from sibling `components/` paths.
+Screen _implementations_ under `app/` should import from
+`@/src/features/<domain>/` rather than from sibling `components/` paths.
 
 ## Recommended order (start small, validate, expand)
 
@@ -250,7 +274,7 @@ Per-PR checklist for every domain move:
   `apps/web/lib/<domain>/` directories are empty of domain-scoped code.
 - **Mobile (Wave B) done when:** `apps/mobile/components/` only contains
   shared atoms; every screen under `apps/mobile/app/` imports its
-  domain-scoped components from `apps/mobile/features/<domain>/`.
+  domain-scoped components from `apps/mobile/src/features/<domain>/`.
 - **Desktop (Wave C) done when:** `apps/desktop/src/components/` is reduced
   from 76 subdirs to ≤10 (shared UI atoms only); every other former
   component subdir lives under `apps/desktop/src/features/<domain>/`.

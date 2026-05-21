@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-05-20",
+  "lastUpdated": "2026-05-21",
   "canonicalAgentDoc": "AGENTS.md",
   "surfaces": [
     {
@@ -10,7 +10,10 @@
       "stack": "Rust, Ratatui TUI",
       "purpose": "Developer engine, Claude Code-compatible terminal workflow, local/BYOK session foundation",
       "primaryChecks": ["cargo check -p agiworkforce-cli", "cargo test -p agiworkforce-cli --lib"],
-      "allowedImports": ["crates/*", "packages only through generated/protocol boundaries when explicit"]
+      "allowedImports": [
+        "crates/*",
+        "packages only through generated/protocol boundaries when explicit"
+      ]
     },
     {
       "name": "Desktop",
@@ -18,7 +21,10 @@
       "owner": "Desktop lead",
       "stack": "Tauri v2, React, Vite, Rust backend",
       "purpose": "Local-first private compute host, artifacts, MCP/connectors, computer use, local files",
-      "primaryChecks": ["pnpm --filter @agiworkforce/desktop typecheck", "pnpm --filter @agiworkforce/desktop test"],
+      "primaryChecks": [
+        "pnpm --filter @agiworkforce/desktop typecheck",
+        "pnpm --filter @agiworkforce/desktop test"
+      ],
       "allowedImports": ["packages/*", "apps/desktop/src-tauri through Tauri IPC only"]
     },
     {
@@ -27,7 +33,11 @@
       "owner": "Web lead",
       "stack": "Next.js app router",
       "purpose": "Account, projects, synced app chats, artifacts, billing/waitlist, admin",
-      "primaryChecks": ["pnpm --filter @agiworkforce/web typecheck", "pnpm --filter @agiworkforce/web test"],
+      "primaryChecks": [
+        "pnpm --filter @agiworkforce/web typecheck",
+        "pnpm --filter @agiworkforce/web test",
+        "pnpm check:structure-conventions"
+      ],
       "allowedImports": ["packages/*"]
     },
     {
@@ -36,7 +46,10 @@
       "owner": "Mobile lead",
       "stack": "Expo, React Native",
       "purpose": "Local/BYOK onboarding, continuity, capture, approvals, preview/download/share",
-      "primaryChecks": ["pnpm --filter @agiworkforce/mobile typecheck", "pnpm --filter @agiworkforce/mobile test"],
+      "primaryChecks": [
+        "pnpm --filter @agiworkforce/mobile typecheck",
+        "pnpm --filter @agiworkforce/mobile test"
+      ],
       "allowedImports": ["packages/*"]
     },
     {
@@ -54,7 +67,10 @@
       "owner": "Extension lead",
       "stack": "VS Code extension",
       "purpose": "IDE-native developer surface and agent session UI",
-      "primaryChecks": ["pnpm --filter agi-workforce typecheck", "pnpm --filter agi-workforce test"],
+      "primaryChecks": [
+        "pnpm --filter agi-workforce typecheck",
+        "pnpm --filter agi-workforce test"
+      ],
       "allowedImports": ["packages/*"]
     }
   ],
@@ -80,7 +96,10 @@
       "path": "services",
       "owner": "Backend/data lead",
       "purpose": "API gateway, signaling server, future managed compute services",
-      "primaryChecks": ["pnpm --filter @agiworkforce/api-gateway test", "pnpm --filter @agiworkforce/signaling-server test"],
+      "primaryChecks": [
+        "pnpm --filter @agiworkforce/api-gateway test",
+        "pnpm --filter @agiworkforce/signaling-server test"
+      ],
       "rule": "Services must not import UI packages."
     },
     {
@@ -90,6 +109,18 @@
       "purpose": "Canonical Supabase migrations and database docs",
       "primaryChecks": ["review migrations manually before billing/security changes"],
       "rule": "Root supabase/migrations is canonical."
+    },
+    {
+      "name": "Enterprise Control Plane",
+      "path": "docs/enterprise",
+      "owner": "Enterprise/platform lead",
+      "purpose": "Admin policy, identity, audit, support, usage ledger, managed-credit launch gates, and enterprise docs",
+      "primaryChecks": [
+        "pnpm --filter @agiworkforce/types build",
+        "pnpm --filter @agiworkforce/api-gateway test -- enterprise",
+        "pnpm --filter @agiworkforce/web typecheck"
+      ],
+      "rule": "Managed compute remains private beta until ledger, caps, fraud, refund, dispute, and provider-term gates are proven."
     }
   ]
 }

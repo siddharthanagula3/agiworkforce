@@ -140,11 +140,13 @@ Same 10+ providers. Per audit, the extension knows about **13 providers** (match
 - **`subsystemHealth.ts:38` registers a command** (`agi-workforce.showSubsystemHealth`) — but older `commandParity.test.ts` gave false GREEN due to module-level state pollution. Closed 2026-05-05.
 - **No `GPT-5.4` hardcoded strings in production source** — only in test fixtures (`src/__tests__/extension.test.ts:182-184`). Confirmed clean.
 
-## Where to look in PRD
+## Current References
 
-- [docs/PRD.md](../PRD.md) §6 — surface coverage matrix (VS Code ext column)
-- [docs/PRD.md](../PRD.md) §10 lock #1 (no hardcoded model IDs) — VS Code ext is clean
-- [docs/PRD-APPENDIX-C-MONOREPO-LAYOUT.md](../PRD-APPENDIX-C-MONOREPO-LAYOUT.md) — extension layout
+- [docs/current/product-suite.md](../current/product-suite.md) - six-surface product role and developer-surface sync boundary.
+- [docs/current/technical-architecture.md](../current/technical-architecture.md) - provider, runtime, and contract ownership.
+- [docs/current/agent-and-repo-operability.md](../current/agent-and-repo-operability.md) - current docs and agent workflow rules.
+- [docs/decisions/CURRENT_DECISIONS.md](../decisions/CURRENT_DECISIONS.md) - no hardcoded model IDs and current trust-boundary rules.
+- Historical extension layout details live in `docs/archive/2026-05-21-docs-consolidation/`.
 
 ## Memory references
 

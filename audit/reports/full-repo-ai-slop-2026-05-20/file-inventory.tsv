@@ -144,7 +144,7 @@ path	state	category	tracked	lines	notes
 AGENTS.md	review-pending	human	tracked	178	
 AGIWORKFORCE_IMPLEMENTATION_LOG.md	review-pending	human	tracked	849	
 AGI_WORKFORCE.md	review-pending	human	tracked	1010	
-AUDIT_LOG.md	review-pending	human	tracked	763	
+audit/audit-log.md	review-pending	human	tracked	763
 BUILD.md	review-pending	human	tracked	162	
 CHANGELOG.md	review-pending	human	tracked	777	
 CLAUDE.md	review-pending	human	tracked	178	

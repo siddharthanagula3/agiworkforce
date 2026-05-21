@@ -26,7 +26,7 @@ The problems are mostly pre-release entropy:
 - Root has scratch markdown and image artifacts such as `app-after-fill.md`, `claude-design-*.md`, `final-*.png`, `r6-*.md`, and similar files.
 - Multiple AI/tool folders exist at root: `.agent`, `.agents`, `.claude`, `.codex`, `.cursor`, `.minimax`, `.opencode`, `.superpowers`, `.remember`, and `.playwright-mcp`.
 - Planning and research are split across root docs, `docs/plans`, archived planning docs, `tasks/research`, `audit`, and `reports`.
-- There are multiple historical "source of truth" candidates: archived `MASTER_PLAN.md`, `PLAN.md`, `TODO.md`, archived `AGIWORKFORCE_IMPLEMENTATION_LOG.md`, `AUDIT_LOG.md`, docs PRDs, and memory-derived docs.
+- There are multiple historical "source of truth" candidates: archived `MASTER_PLAN.md`, `PLAN.md`, `TODO.md`, archived `AGIWORKFORCE_IMPLEMENTATION_LOG.md`, `audit/audit-log.md`, docs PRDs, and memory-derived docs.
 - The repo has both layer-first and domain-first application layouts. The existing `docs/plans/domain-first-reorg.md` correctly scopes the Web/Desktop/Mobile feature-folder cleanup, but it does not cover the full repository operating model.
 - Marketing/GTM/release materials are mixed into engineering-facing docs. A future non-engineering team should not need to understand Rust crates or CI to find launch copy.
 

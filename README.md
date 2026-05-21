@@ -55,7 +55,7 @@ The unique slice: **multi-provider + BYOK + local LLM all in one app, on every s
 | Max (highest caps, computer use, voice unlimited)                                    | $299.99       | 📝 Waitlist — graduates Aug 1, 2026 |
 | Enterprise (SSO, SCIM, custom retention)                                             | Contact sales | Contact sales                       |
 
-**Why waitlist?** We're collecting 60-90 days of real BYOK telemetry before committing to per-tier caps. No subscription is sold during the waitlist period — pay your AI providers directly with your own keys. See [docs/PRICING.md](docs/PRICING.md) for the full capability matrix.
+**Why waitlist?** We're collecting 60-90 days of real BYOK telemetry before committing to per-tier caps. No subscription is sold during the waitlist period — pay your AI providers directly with your own keys. See [docs/current/commercial-and-launch.md](docs/current/commercial-and-launch.md) for the current commercial posture.
 
 ## Quick start
 
@@ -66,7 +66,7 @@ The unique slice: **multi-provider + BYOK + local LLM all in one app, on every s
 brew install siddharthanagula3/tap/agiworkforce
 
 # cargo (any platform)
-cargo install agiworkforce-cli
+cargo install agiworkforce-cli --bin agi
 
 # Universal installer (macOS, Linux, WSL)
 curl -fsSL https://agiworkforce.com/install.sh | bash
@@ -78,10 +78,12 @@ curl -fsSL https://agiworkforce.com/install.sh | bash
 Then:
 
 ```bash
-agiworkforce login            # OAuth via Anthropic / OpenAI / Google, or BYOK
-agiworkforce exec "hello"     # one-shot
-agiworkforce                  # interactive TUI
+agi login            # OAuth via Anthropic / OpenAI / Google, or BYOK
+agi exec "hello"     # one-shot
+agi                  # interactive TUI
 ```
+
+`agi` is the primary command. `agiworkforce` remains installed as a backward-compatible alias.
 
 ### Use the desktop app
 
@@ -113,19 +115,20 @@ cd agiworkforce
 nvm use && corepack enable && pnpm install
 pnpm dev:desktop                  # Tauri dev mode
 # Or:
-cargo run -p agiworkforce-cli -- exec "hello"
+cargo run -p agiworkforce-cli --bin agi -- exec "hello"
 ```
 
 ## Documentation
 
-- [docs/decisions/CURRENT_DECISIONS.md](docs/decisions/CURRENT_DECISIONS.md) records the mobile-v1 launch clarification: focus mobile first, ship Local + explicit BYOK, and keep AGI-managed cloud credits waitlisted.
+- [docs/current/](docs/current/) — compact current product, architecture, commercial, and repo-operability docs
+- [docs/current/product-suite.md](docs/current/product-suite.md) — product thesis, surfaces, trust modes, and sync boundary
+- [docs/current/technical-architecture.md](docs/current/technical-architecture.md) — monorepo shape, runtime boundaries, providers, generated files, and enterprise control plane
+- [docs/current/commercial-and-launch.md](docs/current/commercial-and-launch.md) — waitlist, BYOK, managed-compute, payments, and enterprise launch rules
+- [docs/current/agent-and-repo-operability.md](docs/current/agent-and-repo-operability.md) — repo organization, agent workflow, and A+ docs rules
+- [docs/decisions/CURRENT_DECISIONS.md](docs/decisions/CURRENT_DECISIONS.md) — locked decision index and conflict rules
 - [AGI_WORKFORCE.md](AGI_WORKFORCE.md) — single source of truth (start here)
 - [docs/README.md](docs/README.md) — organized documentation map
-- [docs/VISION.md](docs/VISION.md) — product vision (ONE chat layout, multi-provider)
-- [docs/ROADMAP.md](docs/ROADMAP.md) — live wave/sprint status
 - [docs/design/design-spec-2026-05-15.md](docs/design/design-spec-2026-05-15.md) — canonical 2026-05-15 design spec (composer, sidebar, inline tool-call, icons) shipped across all 6 surfaces
-- [docs/PRICING.md](docs/PRICING.md) — tier model
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — cross-surface architecture
 - [apps/cli/ARCHITECTURE.md](apps/cli/ARCHITECTURE.md) — CLI deep-dive
 - [docs/audit/](docs/audit/) — security audits (P0/P1 status)
 - [docs/plans/](docs/plans/) — active sprint plans

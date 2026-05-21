@@ -17,7 +17,8 @@ This guide is for internal contributors and coding agents working under human re
 3. Check `docs/agent-context/repo-map.json` for owner paths and commands.
 4. Check `docs/agent-context/risk-map.json` for review focus.
 5. Check `docs/agent-context/known-flaws.md` before treating a bug as new.
-6. Read the nearest owner README before editing an app, package, crate, or service.
+6. Read `docs/engineering/naming-conventions.md` before adding files, folders, packages, commands, or release artifacts.
+7. Read the nearest owner README before editing an app, package, crate, or service.
 
 ## Work Rules
 
@@ -25,6 +26,7 @@ This guide is for internal contributors and coding agents working under human re
 - Do not silently route Local mode to BYOK or managed cloud.
 - Do not hardcode model IDs; use provider/model capability metadata.
 - Do not commit local state, generated caches, build outputs, downloaded binaries, or secrets.
+- Follow `docs/engineering/naming-conventions.md`; user-facing CLI examples use `agi`, not `agiworkforce`, unless documenting the compatibility alias.
 - Update the owner README, `PLAN.md`, `TODO.md`, or decision docs when behavior or ownership changes.
 - Record completed work in `CHANGELOG.md`.
 

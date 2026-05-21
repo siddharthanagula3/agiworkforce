@@ -13,13 +13,23 @@
     "CHANGELOG.md",
     "BUILD.md",
     "docs/README.md",
+    "docs/current/README.md",
+    "docs/current/product-suite.md",
+    "docs/current/technical-architecture.md",
+    "docs/current/commercial-and-launch.md",
+    "docs/current/agent-and-repo-operability.md",
     "docs/decisions/CURRENT_DECISIONS.md",
     "docs/decisions/2026-05-20-openai-anthropic-application-suite-thesis.md",
     "docs/plans/pre-release-repo-organization-2026-05-20.md",
+    "docs/plans/domain-first-reorg.md",
     "docs/engineering/README.md",
+    "docs/engineering/naming-conventions.md",
     "docs/engineering/agent-native-development.md",
     "docs/engineering/parallel-agent-playbook.md",
     "docs/engineering/autonomous-software-company-roadmap.md",
+    "docs/enterprise/README.md",
+    "docs/enterprise/profit-first-enterprise-readiness.md",
+    "docs/enterprise/control-plane.md",
     "docs/agent-context/README.md",
     "docs/agent-context/agent-task-templates.md",
     "docs/agent-context/shared-files.md",
@@ -38,6 +48,7 @@
     "packages/providers/AGENTS.md"
   ],
   "currentEvidence": [
+    "audit/audit-log.md",
     "audit/anthropic-apps-parity/application-suite-thesis-2026-05-20.md",
     "audit/anthropic-apps-parity/competitive-baseline-2026-05-20.md",
     "audit/anthropic-apps-parity/compute-artifacts-2026-05-20.md",
@@ -60,6 +71,11 @@
       "path": "docs/archive",
       "status": "historical",
       "rule": "Do not cite as current unless a current doc explicitly references it."
+    },
+    {
+      "path": "docs/archive/2026-05-21-docs-consolidation",
+      "status": "historical-source-material",
+      "rule": "Former top-level PRD/roadmap/pricing/architecture corpus; use docs/current for present decisions."
     },
     {
       "path": "docs/archive/2026-05-20-planning",

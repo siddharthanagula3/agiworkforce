@@ -27,7 +27,7 @@ Each step is independently revertible. **Do NOT skip Step 1 to Step 3** — that
 
 ## Cloud-provider portability
 
-Per `docs/SCALING.md` and `packages/data-layer/`, the platform is being refactored so the database adapter (Supabase, Neon, raw Postgres, RDS, etc.) is swappable at config-time. The migrations themselves stay in this directory regardless of which provider runs the database — they are pure SQL DDL valid against any modern Postgres.
+Per `docs/current/technical-architecture.md` and `packages/data-layer/`, the platform is being refactored so the database adapter (Supabase, Neon, raw Postgres, RDS, etc.) is swappable at config-time. The migrations themselves stay in this directory regardless of which provider runs the database — they are pure SQL DDL valid against any modern Postgres.
 
 When migrating from Supabase to e.g. Neon:
 

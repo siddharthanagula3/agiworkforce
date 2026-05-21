@@ -7,7 +7,7 @@ Purpose: define the system shape AGI should converge on across CLI, Desktop, Web
 Primary inputs:
 
 - `AGI_WORKFORCE.md`, `BUILD.md`, `README.md`
-- `docs/ARCHITECTURE.md`, `docs/VISION.md`, `docs/ROADMAP.md`
+- `docs/current/product-suite.md`, `docs/current/technical-architecture.md`, `PLAN.md`, `TODO.md`
 - `docs/design/design-spec-2026-05-15.md`
 - `~/Desktop/reference/ui`
 - `~/Desktop/reference/src`

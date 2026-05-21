@@ -14,6 +14,8 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 
 - Root `PLAN.md` as the active transition control plane for Anthropic Applications parity. It defines the mission, non-negotiables, source corpus, parity matrix, transition workstreams, phases, and definition of done.
 - Root `TODO.md` as the active transition checklist. It separates exploration, CLI engine work, cross-surface product tasks, cloud-later tasks, and documentation rules.
+- `docs/engineering/naming-conventions.md` as the locked naming policy for product names, CLI commands, root control files, work logs, folders, files, package/module names, branches, commits, versions, release tags, and enforcement.
+- `scripts/check-hooks.mjs` and `pnpm check:hooks` to enforce Husky hook wiring, commitlint policy, and hook documentation.
 - `docs/decisions/2026-05-20-openai-anthropic-application-suite-thesis.md` locking AGI Workforce as an OpenAI/Anthropic-style application suite, not just a chat app or CLI.
 - `docs/plans/pre-release-repo-organization-2026-05-20.md` defining the pre-release repo organization plan for root cleanup, naming, ownership, docs, package boundaries, CI guardrails, and team onboarding.
 - `docs/agent-context/` as the canonical LLM-operability layer for coding agents:
@@ -28,7 +30,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
   - `scripts/check-agent-context.mjs`
   - `scripts/check-repo-organization.mjs`
   - `scripts/check-boundaries.mjs`
-- `audit/repo-organization/current-monorepo-grade-2026-05-20.md` grading the current monorepo as C+ with a concrete path to A- hiring readiness.
+- `audit/repo-organization/current-monorepo-grade-2026-05-20.md` grading the current monorepo and tracking the concrete path from early cleanup to A+ hiring readiness.
 - Repo organization classification ledgers:
   - `audit/repo-organization/agentic-development-outlook-2026-05-20.md`
   - `audit/repo-organization/root-classification-2026-05-20.md`
@@ -48,10 +50,14 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - `.github/PULL_REQUEST_TEMPLATE/parallel-agent-change.md` for lane-scoped parallel-agent PRs.
 - `docs/marketing/`, `docs/support/`, and `docs/legal/` operator folders with ownership READMEs.
 - Root `ios/README.md` documenting the native iOS project ownership decision.
+- Provisional `.github/CODEOWNERS` so high-risk app, service, contract, migration, and enterprise paths route to founder/platform review until GitHub teams exist.
 - Debt-aware repo-operability checks:
   - `scripts/check-generated-artifacts.mjs`
   - `scripts/check-readme-ownership.mjs`
   - `scripts/check-doc-status.mjs`
+- `scripts/check-structure-conventions.mjs` and `pnpm check:structure-conventions` to enforce Web feature-root ownership, retired docs folders, and invalid backslash-named root entries.
+- Structure-convention enforcement for the primary `agi` CLI command, the `agiworkforce` compatibility alias, and the required npm/Cargo binary mappings.
+- Hook enforcement added to `pnpm check:llm-operability`.
 - `.github/workflows/repo-operability.yml` so docs-only and agent-context changes run `pnpm check:llm-operability`.
 - `reports/root-scratch-archive/2026-05-20/` as the dated home for prior root scratch markdown and design images.
 - `reports/playwright-mcp-archive/2026-05-20/` as the dated home for prior tracked Playwright MCP captures.
@@ -76,8 +82,27 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
   - `PrivacyMode` on `AgentSession`: `Local`, `Byok`, `Managed`.
   - Send-time block when a Local session would route to a non-local provider.
   - `/privacy-mode` and `/continue-with-byok` slash commands.
+
+### Changed
+
+- CLI distribution now treats `agi` as the primary user-facing command and keeps `agiworkforce` as a backward-compatible alias across Cargo, npm, Homebrew, release archives, install script behavior, docs, and user-facing CLI hints.
+- Root audit fire log moved from `AUDIT_LOG.md` to `audit/audit-log.md`; active references now point at the audit folder.
+- `AGENTS.md`, `CLAUDE.md`, `docs/agent-context/README.md`, and current repo-operability docs now surface naming conventions and hook policy as required agent context.
   - BYOK continuation draft that redacts obvious sensitive lines and does not send automatically.
 - Slash palette expanded to 83 built-in commands with `privacy-mode` and `continue-with-byok`.
+- Enterprise control-plane foundation:
+  - `packages/types/src/enterprise/` with shared organization, member, admin policy, provider policy, connector policy, retention, identity, SCIM, audit, support, feedback, release-fix, usage-ledger, managed-credit, and provider-cost contracts.
+  - `supabase/migrations/20260521100000_enterprise_control_plane_foundation.sql` with canonical root tables for organizations, SSO, SCIM, admin/provider/connector/retention policies, enterprise audit events, audit exports, usage ledger, provider cost snapshots, managed credit accounts/events, support cases, feedback cases, and release-fix links.
+  - `services/api-gateway/src/routes/enterprise.ts` mounted at `/api/v1/enterprise` for organization listing, policy reads, audit-event reads, usage-ledger reads, and support-case creation behind authenticated organization membership checks.
+  - `apps/web/app/admin` and `apps/web/features/admin/` as the first operational admin readiness surface.
+  - `docs/enterprise/` for profit-first enterprise readiness and control-plane ownership.
+  - `docs/agent-context/lanes.json`, `repo-map.json`, and `risk-map.json` entries for enterprise admin/control-plane parallel-agent work.
+- `docs/current/` as the compact current docs layer:
+  - `README.md` for read order and archive rule.
+  - `product-suite.md` for product thesis, surfaces, trust modes, and sync boundary.
+  - `technical-architecture.md` for monorepo shape, contracts, provider strategy, generated files, and enterprise control plane.
+  - `commercial-and-launch.md` for Local/BYOK/Managed posture, waitlist, payment, and enterprise gates.
+  - `agent-and-repo-operability.md` for A+ docs, repo organization, and parallel-agent workflow.
 
 ### Changed
 
@@ -89,8 +114,10 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - `docs/README.md` now points maintainers to root `PLAN.md` and `TODO.md` immediately after `AGI_WORKFORCE.md`.
 - CLI parity commands continue moving into shared `apps/cli/src/claude_parity.rs` so TUI and REPL behavior does not drift.
 - `PLAN.md`, `TODO.md`, and the evidence ledgers now include the first parallel-explorer findings for AGI surfaces and local reference architecture.
+- `PLAN.md`, `TODO.md`, and `docs/README.md` now treat enterprise control-plane readiness and managed-compute commercial gates as first-class launch blockers before public managed credits.
 - `PLAN.md` now treats agent-native development as a first-class repo design requirement: human-directed, agent-executed, evidence-backed, review-gated work.
 - `docs/agent-context/commands.json` and `package.json` now include generated-artifact, README ownership, doc-status, and full LLM-operability checks.
+- `docs/agent-context/commands.json` and `package.json` now include the structure-conventions check in `pnpm check:llm-operability`.
 - `scripts/check-agent-context.mjs` now validates the known-flaws table shape and the expanded repo-wide command map.
 - `scripts/check-agent-context.mjs` now enforces the agent-native engineering workflow and PR template set.
 - `scripts/check-agent-context.mjs` now enforces the path-scoped high-risk agent rule files.
@@ -113,6 +140,14 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - `AGENTS.md`, `docs/agent-context/README.md`, `docs/engineering/agent-native-development.md`, `PLAN.md`, and `TODO.md` now treat lane ownership and shared-file routing as required for large parallel-agent work.
 - `pnpm check:llm-operability` now includes lane ownership validation.
 - Mobile/iOS docs now treat root `ios/` as the canonical tracked Xcode-consumed project and `apps/mobile/native/ios` as custom native module source.
+- Web product-domain implementations for analytics, media, projects, schedules, support, and teams have been consolidated under canonical `apps/web/features`; the stale `apps/web/src/features` split and deprecated re-export shims were removed.
+- Mobile waitlist callers now import from canonical `apps/mobile/src/features/waitlist`; the old temporary waitlist barrels under `components/`, `services/`, and `stores/` were removed and guarded by `pnpm check:structure-conventions`.
+- Mobile projects now has a canonical `apps/mobile/src/features/projects` barrel, with `ProjectCard` moved out of legacy `components/projects`.
+- Mobile billing now has a canonical `apps/mobile/src/features/billing` barrel, with `UpsellCard` moved out of legacy `components/billing`.
+- Former top-level PRD, mobile PRD, appendices, vision, roadmap, pricing, architecture, hosting, scaling, performance, ownership, handoff, strategy, and CLI binary-size docs have moved to `docs/archive/2026-05-21-docs-consolidation/`.
+- The oversized root `AGI_WORKFORCE.md` has been reduced to an LLM-readable current entry point, with the legacy long version archived in the same docs-consolidation folder.
+- `README.md`, `ONBOARDING.md`, surface docs, enterprise/engineering/marketing docs, data-layer docs, and active design/launch/research docs now point at `docs/current` or the dated archive instead of retired top-level docs.
+- `scripts/check-agent-context.mjs`, `docs/agent-context/doc-status.json`, and `scripts/check-structure-conventions.mjs` now enforce the compact current-doc layer and prevent retired top-level docs or links from reappearing in active docs.
 
 ### Documented Gaps
 
@@ -124,6 +159,16 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 
 ### Verified
 
+- `pnpm --filter @agiworkforce/types test -- enterprise`
+- `pnpm --filter @agiworkforce/types build`
+- `pnpm --filter @agiworkforce/api-gateway test -- enterprise`
+- `pnpm --filter @agiworkforce/api-gateway build`
+- `pnpm --filter @agiworkforce/web typecheck`
+- `pnpm check:structure-conventions`
+- `pnpm --filter @agiworkforce/mobile typecheck`
+- `pnpm --filter @agiworkforce/mobile test -- waitlist`
+- `pnpm check:llm-operability`
+- Browser smoke: temporary Next dev server on `localhost:3100`; `/admin` loads and redirects unauthenticated users to `/login?next=/admin`. Existing dev-console warnings remain for CSP `eval()` and `AgiMark` hydration precision.
 - `cargo fmt -p agiworkforce-cli -p agiworkforce-command-registry`
 - `cargo test -p agiworkforce-cli claude_parity --lib`
 - `cargo test -p agiworkforce-cli privacy --lib`
@@ -133,7 +178,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 
 ## [Unreleased — apps/web security audit batch] — 2026-05-19
 
-Four-PR batch closing WEB-13 through WEB-32 on `apps/web`: 15 fresh audit findings + verification of 14 pre-existing SEV-WEB-\* pentest items (5 confirmed already-closed, 2 still-present and now closed, 4 deferred operational). Audit fire at `AUDIT_LOG.md` 2026-05-19T05:00Z. PRs #367 → #368 → #369 → #370.
+Four-PR batch closing WEB-13 through WEB-32 on `apps/web`: 15 fresh audit findings + verification of 14 pre-existing SEV-WEB-\* pentest items (5 confirmed already-closed, 2 still-present and now closed, 4 deferred operational). Audit fire at `audit/audit-log.md` 2026-05-19T05:00Z. PRs #367 → #368 → #369 → #370.
 
 ### Security
 
@@ -162,7 +207,7 @@ Four-PR batch closing WEB-13 through WEB-32 on `apps/web`: 15 fresh audit findin
 
 ## [Unreleased — wave 5 v1 complete] — 2026-05-16
 
-**16 commits** (`b96197ecd..d914b26f8` on `claude/refine-local-plan-yhjFU`). Wave 5 closes v1 across all 6 surfaces: flips `DESKTOP_CHAT_V3` default-on (`b90d26003`), replaces all v3 seed data with real-store wiring across 26 components, ships the v3 UI in full on every surface (web / mobile / Chrome ext / VS Code ext — not just colors), wires Stripe checkout + Pause / Downgrade / Cancel flows, adds MCP install/uninstall + `useGlobalSearch`, and lands i18n + a11y + Playwright `@smoke` + `@reachability` suites. Plan SSOT: `~/.claude/plans/v1-complete-wave5.md`. Audit fire at `AUDIT_LOG.md` 2026-05-16T18:18Z.
+**16 commits** (`b96197ecd..d914b26f8` on `claude/refine-local-plan-yhjFU`). Wave 5 closes v1 across all 6 surfaces: flips `DESKTOP_CHAT_V3` default-on (`b90d26003`), replaces all v3 seed data with real-store wiring across 26 components, ships the v3 UI in full on every surface (web / mobile / Chrome ext / VS Code ext — not just colors), wires Stripe checkout + Pause / Downgrade / Cancel flows, adds MCP install/uninstall + `useGlobalSearch`, and lands i18n + a11y + Playwright `@smoke` + `@reachability` suites. Plan SSOT: `~/.claude/plans/v1-complete-wave5.md`. Audit fire at `audit/audit-log.md` 2026-05-16T18:18Z.
 
 ### Commit map (Wave 5)
 
@@ -242,14 +287,14 @@ Documented as out-of-scope for v1 per `~/.claude/plans/v1-complete-wave5.md:103-
 
 - Plan: `~/.claude/plans/v1-complete-wave5.md`
 - Branch: `claude/refine-local-plan-yhjFU`
-- Audit fire: `AUDIT_LOG.md` 2026-05-16T18:18Z
+- Audit fire: `audit/audit-log.md` 2026-05-16T18:18Z
 - Predecessor: Wave 4 frontend rebuild entry below
 
 ---
 
 ## [Unreleased — wave 4 frontend rebuild] — 2026-05-16
 
-**20 commits** (`ea104d1b3..6af5e3004` on `claude/refine-local-plan-yhjFU`, landing as PR #366) shipping the v3 desktop chat shell, cross-surface design-token parity, the v3 Pricing UI, and a brand-locked design system. Plan SSOT: `~/.claude/plans/robust-whistling-crane.md` (replaces the 9 pre-v3 plans archived under `docs/archive/2026-05-16-pre-v3/`). Audit fire at `AUDIT_LOG.md` 2026-05-16T08:49Z.
+**20 commits** (`ea104d1b3..6af5e3004` on `claude/refine-local-plan-yhjFU`, landing as PR #366) shipping the v3 desktop chat shell, cross-surface design-token parity, the v3 Pricing UI, and a brand-locked design system. Plan SSOT: `~/.claude/plans/robust-whistling-crane.md` (replaces the 9 pre-v3 plans archived under `docs/archive/2026-05-16-pre-v3/`). Audit fire at `audit/audit-log.md` 2026-05-16T08:49Z.
 
 ### Added
 
@@ -317,7 +362,7 @@ Documented as out-of-scope for v1 per `~/.claude/plans/v1-complete-wave5.md:103-
 
 ## [Unreleased — launch-readiness wave 3 + strategy lock] — 2026-05-15
 
-**27 commits** (`98ed9ef1c..01e56f2a3`) covering wave 3 (8 parallel agents) + self-audit fixes + voice slot reopening + doc reconciliation + brand mark proposals. Audit fire at `AUDIT_LOG.md` 2026-05-15T22:00Z.
+**27 commits** (`98ed9ef1c..01e56f2a3`) covering wave 3 (8 parallel agents) + self-audit fixes + voice slot reopening + doc reconciliation + brand mark proposals. Audit fire at `audit/audit-log.md` 2026-05-15T22:00Z.
 
 ### Added
 
@@ -377,7 +422,7 @@ Documented as out-of-scope for v1 per `~/.claude/plans/v1-complete-wave5.md:103-
 
 ## [Unreleased — launch-readiness wave 2] — 2026-05-15
 
-**25 commits** in a single parallel wave (`0fa1c7190..74b7f0255`) implementing `docs/design/design-spec-2026-05-15.md` across all 6 surfaces. Plan at `tasks/launch-readiness-wave2-plan.md`. Audit fire at `AUDIT_LOG.md` 2026-05-15T15:08Z.
+**25 commits** in a single parallel wave (`0fa1c7190..74b7f0255`) implementing `docs/design/design-spec-2026-05-15.md` across all 6 surfaces. Plan at `tasks/launch-readiness-wave2-plan.md`. Audit fire at `audit/audit-log.md` 2026-05-15T15:08Z.
 
 ### Added
 
@@ -430,7 +475,7 @@ Documented as out-of-scope for v1 per `~/.claude/plans/v1-complete-wave5.md:103-
 
 ## [Unreleased — launch-readiness wave 1] — 2026-05-15
 
-**31 commits** in a single parallel wave (`079ae721f..759f6a977`) addressing user's launch-readiness mandate: zero dead code, zero half-done features, no onboarding friction, design parity with `~/Desktop/reference/`. Net **−1,879 LOC** across 86 files / all 6 surfaces. Plan at `tasks/launch-readiness-2026-05-15.md`. Audit fire entry at `AUDIT_LOG.md` 2026-05-15T14:50Z.
+**31 commits** in a single parallel wave (`079ae721f..759f6a977`) addressing user's launch-readiness mandate: zero dead code, zero half-done features, no onboarding friction, design parity with `~/Desktop/reference/`. Net **−1,879 LOC** across 86 files / all 6 surfaces. Plan at `tasks/launch-readiness-2026-05-15.md`. Audit fire entry at `audit/audit-log.md` 2026-05-15T14:50Z.
 
 ### Added
 
@@ -507,7 +552,7 @@ Cross-surface campaign fire #1 through fire #12+ per `MASTER_PLAN.md` §10. **11
 - **CLI** `apps/cli/src/main.rs` 2,385 LOC → 7-LOC entry + `lib.rs` (89 KB) (`8cd6f740f`). Canonical codex-rs `exec/src/main.rs:1-46` 42-LOC pattern.
 - **CLI** `apps/cli/src/a2a.rs` 1,856 LOC → `a2a/{mod,protocol,registry,security,server,client,jsonrpc}.rs` 7 files (`dd34923db`). Pure move refactor, 1326/1326 tests preserved.
 - **VS Code** `apps/extension-vscode/src/extension.ts` 1,629 LOC → 255 LOC + `lifecycle/{chatSetup,commandSetup,providerSetup}.ts` (`e11dc7ea1`, commit subject mislabeled by lint-staged race). 512/512 tests preserved.
-- **Desktop** `apps/desktop/src/hooks/useAgenticEvents.ts` -86 LOC dedup against `agenticEventUtils.ts` (`1bc2be696`). Full per-event-hook split blocked by shared singletons (E1 documented in `AUDIT_LOG.md`).
+- **Desktop** `apps/desktop/src/hooks/useAgenticEvents.ts` -86 LOC dedup against `agenticEventUtils.ts` (`1bc2be696`). Full per-event-hook split blocked by shared singletons (E1 documented in `audit/audit-log.md`).
 
 ### Removed
 
@@ -527,13 +572,13 @@ Cross-surface campaign fire #1 through fire #12+ per `MASTER_PLAN.md` §10. **11
 
 - New `MASTER_PLAN.md` §10 live status tracker + §10.1 surface health snapshot + §10.2 escalation closure log.
 - New `AGENTS.md` + `.codex/agents/*.toml` — Codex CLI agent definitions mirroring `.claude/agents/` (`76a4d8e88`).
-- `AUDIT_LOG.md` entries for fires #1 through #6 with full structured findings + 2 escalation points (E1 + E2; E2 now closed).
+- `audit/audit-log.md` entries for fires #1 through #6 with full structured findings + 2 escalation points (E1 + E2; E2 now closed).
 - `apps/web/docs/light-theme.md` — light-mode strategy note.
 
 ### Escalations
 
 - **E2 closed** — Desktop bridge `POST /pair` endpoint shipped; chrome ext pairing is now end-to-end functional.
-- **E1 open** — Desktop `useAgenticEvents.ts` full per-event-hook split blocked by 7 module-level mutable singletons. Requires `SharedListenerContext` refactor (~300 LOC structural change). Documented in `AUDIT_LOG.md` for next-fire pickup.
+- **E1 open** — Desktop `useAgenticEvents.ts` full per-event-hook split blocked by 7 module-level mutable singletons. Requires `SharedListenerContext` refactor (~300 LOC structural change). Documented in `audit/audit-log.md` for next-fire pickup.
 
 ### Refactored (Phase B marathon — god-file decomposition, waves 5-12)
 

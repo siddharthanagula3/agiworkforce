@@ -9,7 +9,8 @@ Authoritative refs:
 - Tokens: `packages/design-tokens/src/index.ts`
 - Reference screenshots: `~/Desktop/reference/ui/` (Claude iOS, ChatGPT iOS, Perplexity iOS, Gemini iOS, Apple Intelligence)
 - Surface deep-dive: `docs/surfaces/mobile.md`
-- PRD V5: `docs/PRD.md`
+- Current product source: `docs/current/product-suite.md`
+- Archived PRD V5 source material: `docs/archive/2026-05-21-docs-consolidation/PRD.md`
 
 ---
 

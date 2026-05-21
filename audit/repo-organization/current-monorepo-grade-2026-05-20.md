@@ -7,55 +7,55 @@ Baseline commit: `b7d6debf0` (`chore: snapshot workspace before repo organizatio
 
 ## Executive Grade
 
-Overall grade: **B+ after the first organization implementation pass, with a credible path to A+ before hiring a broad team.**
+Overall grade: **A after the docs consolidation pass, with docs/LLM-operability now at A+ shape and remaining repo-wide A+ blockers narrow and explicit.**
 
 The core monorepo spine is strong: `apps/`, `packages/`, `crates/`, `services/`, `supabase/`, `docs/`, `audit/`, `tasks/`, `reports/`, `examples/`, and `scripts/` are the right large buckets for an OpenAI/Anthropic-style application suite.
 
-The repo no longer has the most damaging founder-plus-LLM symptoms at root: scratch captures, historical campaign docs, reference catalogs, raw reference-index catalogs, and local-only artifacts have been moved, archived, ignored, or untracked. The remaining A+ work is deeper: CODEOWNERS with real teams, domain-first cleanup inside large apps, Supabase migration consolidation, CI blind-spot baselines, and report-retention review.
+The repo no longer has the most damaging founder-plus-LLM symptoms at root: scratch captures, historical campaign docs, reference catalogs, raw reference-index catalogs, local-only artifacts, stale Web feature shims, split Web feature roots, oversized current docs, and the Mobile waitlist pilot barrels have been moved, archived, ignored, untracked, summarized, or removed. The remaining repo-wide A+ work is deeper: CODEOWNERS with real teams, the remaining Mobile/Desktop domain-first cleanup, Supabase migration consolidation, CI blind-spot baselines, and report-retention review.
 
 ## Evidence Snapshot
 
-| Area                            | Finding                                                                                                    |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Scoped non-generated file count | `6156` files excluding common generated/build folders.                                                     |
-| Largest top-level buckets       | `apps` 4752, `packages` 492, `crates` 178, `tasks` 163, `docs` 150, `services` 88.                         |
-| Largest product surfaces        | `apps/desktop` 2178 tracked files, `apps/web` 1292, `apps/cli` 552, `apps/mobile` 507.                     |
-| Shared package README coverage  | Top-level packages now have README ownership files. Provider leaf packages now have README files.          |
-| App/service README coverage     | Apps and services now have README ownership files.                                                         |
-| Crate README coverage           | Top-level crates now have README ownership files.                                                          |
-| Root source files               | Root is now short and intentional; scratch/historical/reference files were moved.                          |
-| Agent operability               | `docs/agent-context/` is implemented, metadata is strict, and checks pass.                                 |
-| Guardrails                      | `pnpm check:llm-operability` covers agent context, root hygiene, boundaries, artifacts, READMEs, and docs. |
-| Environment warning             | Current shell uses Node `v20.11.0`; repo expects Node `22`.                                                |
+| Area                            | Finding                                                                                                                           |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Scoped non-generated file count | `6156` files excluding common generated/build folders.                                                                            |
+| Largest top-level buckets       | `apps` 4752, `packages` 492, `crates` 178, `tasks` 163, `docs` 150, `services` 88.                                                |
+| Largest product surfaces        | `apps/desktop` 2178 tracked files, `apps/web` 1292, `apps/cli` 552, `apps/mobile` 507.                                            |
+| Shared package README coverage  | Top-level packages now have README ownership files. Provider leaf packages now have README files.                                 |
+| App/service README coverage     | Apps and services now have README ownership files.                                                                                |
+| Crate README coverage           | Top-level crates now have README ownership files.                                                                                 |
+| Root source files               | Root is now short and intentional; scratch/historical/reference files were moved.                                                 |
+| Agent operability               | `docs/agent-context/` is implemented, metadata is strict, and checks pass.                                                        |
+| Guardrails                      | `pnpm check:llm-operability` covers agent context, root hygiene, boundaries, structure conventions, artifacts, READMEs, and docs. |
+| Environment baseline            | Current shell uses Node `v22.21.1` and pnpm `9.15.3`, matching the repo engine contract.                                          |
 
 ## Scorecard
 
-| Dimension                    | Grade | Why                                                                                                                                 |
-| ---------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Top-level architecture       | B     | Correct monorepo spine and clear six-surface/product-platform buckets.                                                              |
-| Product-code discoverability | B     | Main app/package/crate folders are obvious; large apps still need domain-first cleanup.                                             |
-| LLM operability              | A     | Agent docs, lane maps, shared-file policy, task templates, known flaws, command maps, and strict checks are in place.               |
-| Human onboarding             | B+    | Root docs, app/package/crate/service READMEs, and current metadata are in place; CONTRIBUTING still needs deeper workflow detail.   |
-| Source-of-truth discipline   | B+    | Current docs are metadata-checked and historical docs moved; older historical canonical claims still need broader cleanup.          |
-| Root hygiene                 | A-    | Root is short and intentional; remaining decisions are accepted root configs such as `app.json`, manifests, and `ios/`.             |
-| Generated artifact hygiene   | B+    | Tracked local/generated debt is removed or archived; remaining work is retention policy for existing reports and app-local outputs. |
-| Package boundaries           | B+    | Boundary and README ownership checks pass; public-export/deep-import enforcement can still improve.                                 |
-| CI/repo guardrails           | B+    | Repo-operability CI exists and strict checks pass; broader CI blind-spot baselines remain.                                          |
-| Hiring readiness             | B+    | A new engineer or coding agent can navigate top-level ownership; large app domain READMEs and CODEOWNERS remain before A+.          |
+| Dimension                    | Grade | Why                                                                                                                                             |
+| ---------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Top-level architecture       | A-    | Correct monorepo spine, clear six-surface/product-platform buckets, and root clutter is classified and enforced.                                |
+| Product-code discoverability | B+    | Web feature-root split is fixed; Mobile and Desktop still need domain-first cleanup by domain.                                                  |
+| LLM operability              | A     | Agent docs, lane maps, shared-file policy, task templates, known flaws, command maps, and strict checks are in place.                           |
+| Human onboarding             | A-    | Root docs, CONTRIBUTING, app/package/crate/service READMEs, and current metadata are in place.                                                  |
+| Source-of-truth discipline   | A+    | Current docs are compact, metadata-checked, archived historical docs are isolated, and retired top-level doc paths are guarded.                 |
+| Root hygiene                 | A     | Root is short and intentional; backslash-named root entries and unclassified root files now fail checks.                                        |
+| Generated artifact hygiene   | A-    | Tracked local/generated debt is removed or archived; remaining work is retention policy for existing reports and app-local outputs.             |
+| Package boundaries           | A-    | Boundary and README ownership checks pass; public-export/deep-import enforcement can still improve.                                             |
+| CI/repo guardrails           | A-    | Repo-operability CI exists and strict checks pass; broader CI blind-spot baselines remain.                                                      |
+| Hiring readiness             | A-    | A new engineer or coding agent can navigate ownership and commands; real GitHub teams and Mobile/Desktop feature-domain moves remain before A+. |
 
 ## Main Findings
 
 1. **Root is now mostly boring.**
    Scratch design markdown, screenshots, historical campaign docs, reference catalogs, and root downloads were moved. Keep the allowlist strict.
 
-2. **Docs have too many historical source-of-truth claims.**
-   New docs now point to `PLAN.md`, `TODO.md`, `docs/decisions/CURRENT_DECISIONS.md`, and `docs/agent-context/`, but older PRDs, archive docs, and launch docs still use words like canonical/source of truth. Agents and engineers need a doc-status ledger enforced by CI.
+2. **Docs now have a compact current layer.**
+   `docs/current/` summarizes the current product, architecture, commercial posture, and repo-operability rules. Former top-level PRD/roadmap/pricing/architecture/scaling/handoff docs are archived under `docs/archive/2026-05-21-docs-consolidation/`, and active references are guarded by CI.
 
 3. **Package and crate ownership context is now covered at the README level.**
    The remaining ownership work is CODEOWNERS mapping to real GitHub teams and deeper feature/domain READMEs inside large apps.
 
-4. **Large app surfaces need domain-first cleanup.**
-   `apps/desktop` and `apps/web` are large enough that layer-first folders become expensive. Existing `docs/plans/domain-first-reorg.md` is the right sub-plan, but it should start only after root/docs/package contracts are stable.
+4. **Web feature-root drift is closed; Mobile and Desktop are next.**
+   `apps/web/features` is now canonical and `apps/web/src/features` is forbidden by `pnpm check:structure-conventions`. The Mobile waitlist pilot is cleaned up under `apps/mobile/src/features/waitlist`, and Mobile projects/billing have started under `apps/mobile/src/features`. The rest of `apps/mobile` and `apps/desktop` still need one-domain-at-a-time moves from the existing `docs/plans/domain-first-reorg.md`.
 
 5. **Generated/build directories are present across many subtrees.**
    Many are ignored and not tracked, but their presence makes local exploration noisy. The repo needs stricter ignore and cleanup guidance, plus a check that fails only tracked or unclassified source-tree clutter.
@@ -63,8 +63,8 @@ The repo no longer has the most damaging founder-plus-LLM symptoms at root: scra
 6. **Agent-tool folders need explicit contracts.**
    `.claude`, `.codex`, `.cursor`, `.opencode`, `.agents`, `.agent`, `.minimax`, `.superpowers`, `.remember`, and `.playwright-mcp` all need classification before any move/delete. Some may be source-controlled team context; others are local caches or generated captures.
 
-7. **Node version mismatch is already visible.**
-   `pnpm` warns because the current shell is Node 20 while the repo expects Node 22. This is a developer-experience issue; new engineers will hit it immediately.
+7. **Node version mismatch is resolved in the current shell.**
+   The active environment is Node `v22.21.1` with pnpm `9.15.3`, matching the root engine and package-manager contract.
 
 8. **The first LLM-operability layer is working.**
    `AGENTS.md` is now canonical, `CLAUDE.md` is a mirror, and `docs/agent-context/` gives agents repo maps, risk maps, known flaws, and commands. This should be expanded, not replaced.
@@ -100,7 +100,7 @@ Status: mostly done.
 
 Goal: make every file class obvious before moving anything.
 
-Status: in progress.
+Status: mostly done.
 
 Tasks:
 
@@ -147,13 +147,17 @@ Tasks:
 - Add status headers to active strategy docs.
 - Update stale references to `UNIFIED_LAUNCH_PLAN`, old Claude memory, and older canonical claims.
 - Expand `docs/agent-context/doc-status.json` to cover all current durable docs.
+- Add compact current docs under `docs/current/`.
+- Archive former top-level long-form docs under `docs/archive/2026-05-21-docs-consolidation/`.
+- Replace oversized root `AGI_WORKFORCE.md` with a compact entry point.
 - Promote repeated audit/security findings into `docs/agent-context/known-flaws.md`.
-- Add a docs link checker after moves.
+- Guard retired top-level docs and active references in `pnpm check:structure-conventions`.
 
 Acceptance:
 
 - New engineer starts from `README.md`, `AGENTS.md`, or `docs/README.md` and reaches the same current sources.
 - Coding agents no longer rely on stale launch docs to decide current state.
+- Core current docs stay short enough for LLM context and cite archives only as source material.
 
 ### Phase 4: Package, Crate, And Service Ownership
 
@@ -198,7 +202,7 @@ Goal: make large surfaces easy to modify by feature.
 
 Order:
 
-1. Web.
+1. Web - `apps/web/src/features` consolidation done.
 2. Mobile.
 3. Desktop.
 

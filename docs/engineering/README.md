@@ -9,18 +9,20 @@ Purpose: collect durable engineering workflow, review, and agent-native developm
 
 1. [`../agent-context/`](../agent-context/) - machine-readable maps, risk areas, commands, known flaws, and task templates.
 2. [`agent-native-development.md`](./agent-native-development.md) - how humans and coding agents split work, use worktrees, and verify changes.
-3. [`../../CONTRIBUTING.md`](../../CONTRIBUTING.md) - internal contribution workflow and PR expectations.
-4. [`../../AGENTS.md`](../../AGENTS.md) - root tool-neutral agent instructions.
+3. [`naming-conventions.md`](./naming-conventions.md) - locked names for product, CLI, files, folders, packages, branches, commits, docs, and releases.
+4. [`../../CONTRIBUTING.md`](../../CONTRIBUTING.md) - internal contribution workflow and PR expectations.
+5. [`../../AGENTS.md`](../../AGENTS.md) - root tool-neutral agent instructions.
 
 ## What Belongs Here
 
 - Engineering workflow rules.
 - Review routing and risk classification.
 - Agent/session/worktree conventions.
+- Naming conventions for files, packages, docs, branches, commits, and releases.
 - Repo-operability guidance that cuts across surfaces.
 
 ## What Does Not Belong Here
 
-- Product requirements; use `PLAN.md`, `TODO.md`, and `docs/PRD.md`.
+- Product requirements; use `PLAN.md`, `TODO.md`, and `docs/current/product-suite.md`.
 - Surface-specific runbooks; use `docs/surfaces/` or the owner README near the code.
 - Historical research; use `audit/`, `reports/`, or `docs/archive/`.
