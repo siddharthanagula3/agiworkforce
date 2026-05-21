@@ -7,7 +7,9 @@ import {
   FileText,
   BarChart3,
   ExternalLink,
+  Shield,
 } from 'lucide-react-native';
+import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { colors } from '@/src/ui/theme';
@@ -117,6 +119,19 @@ export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardPro
   const config = TYPE_CONFIG[artifact.type] ?? FALLBACK_CONFIG;
   const Icon = config.icon;
   const preview = getPreview(artifact);
+  const generatedFileSummary = summarizeGeneratedFileBundle({
+    computeSession: artifact.computeSession,
+    generatedFile: artifact.generatedFile,
+    artifactManifest: artifact.artifactManifest,
+    fallbackFileName: artifact.title,
+    fallbackKind: artifact.generatedFile?.kind ?? artifact.language ?? artifact.type,
+    fallbackMimeType: artifact.generatedFile?.mimeType,
+    fallbackUri: artifact.generatedFile?.uri,
+    fallbackStatus: artifact.computeSession?.status,
+  });
+  const hasGeneratedFileManifest = Boolean(
+    artifact.computeSession || artifact.generatedFile || artifact.artifactManifest,
+  );
 
   return (
     <Pressable
@@ -157,6 +172,24 @@ export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardPro
           {artifact.title}
         </Text>
         <Badge label={artifact.language ?? config.label} color={config.badgeColor} />
+        {hasGeneratedFileManifest && generatedFileSummary.privacyShortLabel ? (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 3,
+              borderRadius: 6,
+              paddingHorizontal: 6,
+              paddingVertical: 3,
+              backgroundColor: 'rgba(255, 255, 255, 0.06)',
+            }}
+          >
+            <Shield size={10} color={colors.textMuted} />
+            <Text style={{ fontSize: 10, fontWeight: '600', color: colors.textMuted }}>
+              {generatedFileSummary.privacyShortLabel}
+            </Text>
+          </View>
+        ) : null}
         <ExternalLink size={12} color={colors.textMuted} />
       </View>
 
@@ -181,6 +214,26 @@ export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardPro
         >
           {preview}
         </Text>
+        {hasGeneratedFileManifest ? (
+          <View style={{ marginTop: 8, flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            <Text style={{ fontSize: 10, color: colors.textMuted }}>
+              {generatedFileSummary.statusLabel}
+            </Text>
+            <Text style={{ fontSize: 10, color: colors.textMuted }}>
+              {generatedFileSummary.kindLabel}
+            </Text>
+            {generatedFileSummary.byteCountLabel ? (
+              <Text style={{ fontSize: 10, color: colors.textMuted }}>
+                {generatedFileSummary.byteCountLabel}
+              </Text>
+            ) : null}
+            {generatedFileSummary.sourceSurfaceLabel ? (
+              <Text style={{ fontSize: 10, color: colors.textMuted }}>
+                Source: {generatedFileSummary.sourceSurfaceLabel}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
       </View>
     </Pressable>
   );

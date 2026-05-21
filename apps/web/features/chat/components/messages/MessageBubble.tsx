@@ -43,12 +43,13 @@ import {
 } from '@shared/ui/dropdown-menu';
 import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';
+import type { ArtifactManifest, ComputeSession, GeneratedFile } from '@agiworkforce/types';
 
 const MarkdownContent = dynamic(() => import('./MarkdownContent'), {
   loading: () => <div className="h-4 w-32 animate-pulse rounded bg-muted" />,
 });
 
-import { ArtifactPreview } from '../artifacts/ArtifactPreview';
+import { ArtifactPreview, type ArtifactData } from '../artifacts/ArtifactPreview';
 import { InlineArtifactCards } from '../artifacts/InlineArtifactCards';
 import { extractArtifacts, removeArtifactBlocks } from '../../utils/artifact-detector';
 import { useArtifactStore } from '@shared/stores/artifact-store';
@@ -151,6 +152,9 @@ interface Message {
     thumbnailUrl?: string;
     videoData?: MediaGenerationResult;
     documentData?: GeneratedDocument;
+    computeSession?: ComputeSession;
+    generatedFile?: GeneratedFile;
+    artifactManifest?: ArtifactManifest;
     collaborationMessages?: Array<{
       employeeName: string;
       employeeAvatar: string;
@@ -229,7 +233,41 @@ const MessageBubbleComponent = function MessageBubble({
     return extractArtifacts(message.content);
   }, [message.content, isUser]);
 
-  const artifacts = existingArtifacts.length > 0 ? existingArtifacts : extractedArtifacts;
+  const generatedFileArtifacts = useMemo<ArtifactData[]>(() => {
+    if (isUser) return [];
+    const { computeSession, generatedFile, artifactManifest, documentData } =
+      message.metadata ?? {};
+    if (!computeSession && !generatedFile && !artifactManifest) return [];
+
+    return [
+      {
+        id: artifactManifest?.artifactId ?? generatedFile?.id ?? `generated-file-${message.id}`,
+        type: 'document',
+        language: generatedFile?.kind ?? 'document',
+        title:
+          artifactManifest?.title ??
+          generatedFile?.fileName ??
+          documentData?.title ??
+          'Generated file',
+        content: documentData?.content ?? message.content,
+        computeSession,
+        generatedFile,
+        artifactManifest,
+        versions: [
+          {
+            id: `v1-${message.id}`,
+            content: documentData?.content ?? message.content,
+            timestamp: message.timestamp,
+            description: 'Generated file manifest',
+          },
+        ],
+        currentVersion: 0,
+      },
+    ];
+  }, [isUser, message.content, message.id, message.metadata, message.timestamp]);
+
+  const baseArtifacts = existingArtifacts.length > 0 ? existingArtifacts : extractedArtifacts;
+  const artifacts = [...baseArtifacts, ...generatedFileArtifacts];
 
   useEffect(() => {
     if (isUser || existingArtifacts.length > 0 || extractedArtifacts.length === 0) return;

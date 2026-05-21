@@ -5,7 +5,12 @@
  * Mobile-specific fields are added via `MobileChatMessage`.
  */
 
-import type { ChatMessage as CanonicalChatMessage } from '@agiworkforce/types';
+import type {
+  ArtifactManifest,
+  ChatMessage as CanonicalChatMessage,
+  ComputeSession,
+  GeneratedFile,
+} from '@agiworkforce/types';
 
 export type { CanonicalChatMessage };
 
@@ -28,6 +33,9 @@ export interface Artifact {
   title: string;
   content: string;
   language?: string;
+  computeSession?: ComputeSession;
+  generatedFile?: GeneratedFile;
+  artifactManifest?: ArtifactManifest;
   metadata?: Record<string, unknown>;
 }
 

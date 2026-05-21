@@ -1,9 +1,10 @@
-import { View, ScrollView, Pressable, Modal } from 'react-native';
+import { View, ScrollView, Pressable, Modal, Share, Alert } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import {
   X,
   Copy,
   Check,
+  Share2,
   Code2,
   Mail,
   BookOpen,
@@ -11,12 +12,14 @@ import {
   FileText,
   BarChart3,
 } from 'lucide-react-native';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
+import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { colors } from '@/src/ui/theme';
 import { copyToClipboard } from '@/lib/clipboard';
+import { shareFile } from '@/services/fileCreation';
 import type { Artifact } from '@/types/chat';
 
 interface ArtifactFullScreenProps {
@@ -41,6 +44,23 @@ const TYPE_ICONS: Record<Artifact['type'], typeof Code2> = {
 export function ArtifactFullScreen({ artifact, visible, onClose }: ArtifactFullScreenProps) {
   const insets = useSafeAreaInsets();
   const [copied, setCopied] = useState(false);
+  const generatedFileSummary = useMemo(
+    () =>
+      summarizeGeneratedFileBundle({
+        computeSession: artifact?.computeSession,
+        generatedFile: artifact?.generatedFile,
+        artifactManifest: artifact?.artifactManifest,
+        fallbackFileName: artifact?.title,
+        fallbackKind: artifact?.generatedFile?.kind ?? artifact?.language ?? artifact?.type,
+        fallbackMimeType: artifact?.generatedFile?.mimeType,
+        fallbackUri: artifact?.generatedFile?.uri,
+        fallbackStatus: artifact?.computeSession?.status,
+      }),
+    [artifact],
+  );
+  const hasGeneratedFileManifest = Boolean(
+    artifact?.computeSession || artifact?.generatedFile || artifact?.artifactManifest,
+  );
 
   const handleCopy = useCallback(async () => {
     if (!artifact) return;
@@ -51,6 +71,40 @@ export function ArtifactFullScreen({ artifact, visible, onClose }: ArtifactFullS
       setTimeout(() => setCopied(false), 2000);
     }
   }, [artifact]);
+
+  const handleShare = useCallback(async () => {
+    if (!artifact) return;
+
+    try {
+      const uri = generatedFileSummary.primaryUri;
+      if (uri?.startsWith('file://')) {
+        await shareFile(uri);
+      } else {
+        await Share.share({
+          title: generatedFileSummary.title,
+          message: [
+            `${generatedFileSummary.kindLabel}: ${generatedFileSummary.fileName}`,
+            generatedFileSummary.privacyLabel
+              ? `Privacy: ${generatedFileSummary.privacyLabel}`
+              : undefined,
+            generatedFileSummary.providerLabel
+              ? `Provider: ${generatedFileSummary.providerLabel}`
+              : undefined,
+            generatedFileSummary.sourceSurfaceLabel
+              ? `Source: ${generatedFileSummary.sourceSurfaceLabel}`
+              : undefined,
+            generatedFileSummary.sourceSessionLabel,
+            uri,
+          ]
+            .filter(Boolean)
+            .join('\n'),
+        });
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      Alert.alert('Share failed', 'This generated file is not available to share right now.');
+    }
+  }, [artifact, generatedFileSummary]);
 
   if (!artifact) return null;
 
@@ -101,6 +155,24 @@ export function ArtifactFullScreen({ artifact, visible, onClose }: ArtifactFullS
           </Text>
 
           {artifact.language && <Badge label={artifact.language} color="teal" />}
+          {hasGeneratedFileManifest && generatedFileSummary.privacyShortLabel ? (
+            <Badge label={generatedFileSummary.privacyShortLabel} color="gray" />
+          ) : null}
+
+          {hasGeneratedFileManifest ? (
+            <Pressable
+              onPress={handleShare}
+              style={{
+                padding: 8,
+                borderRadius: 8,
+                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+              }}
+              accessibilityLabel="Share generated file"
+              accessibilityRole="button"
+            >
+              <Share2 size={18} color={colors.textSecondary} />
+            </Pressable>
+          ) : null}
 
           {/* Copy button (shown for code and text content) */}
           <Pressable
@@ -144,6 +216,53 @@ export function ArtifactFullScreen({ artifact, visible, onClose }: ArtifactFullS
           }}
           showsVerticalScrollIndicator
         >
+          {/* Generated-file provenance header */}
+          {hasGeneratedFileManifest ? (
+            <View
+              style={{
+                marginBottom: 16,
+                padding: 12,
+                borderRadius: 8,
+                backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                borderWidth: 1,
+                borderColor: colors.border,
+                gap: 4,
+              }}
+            >
+              <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                {generatedFileSummary.statusLabel} · {generatedFileSummary.kindLabel}
+                {generatedFileSummary.byteCountLabel
+                  ? ` · ${generatedFileSummary.byteCountLabel}`
+                  : ''}
+              </Text>
+              {generatedFileSummary.providerLabel ? (
+                <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                  Provider: {generatedFileSummary.providerLabel}
+                </Text>
+              ) : null}
+              {generatedFileSummary.sourceSurfaceLabel ? (
+                <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                  Source: {generatedFileSummary.sourceSurfaceLabel}
+                </Text>
+              ) : null}
+              {generatedFileSummary.sourceSessionLabel ? (
+                <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                  {generatedFileSummary.sourceSessionLabel}
+                </Text>
+              ) : null}
+              {generatedFileSummary.checksumShort ? (
+                <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                  SHA-256: {generatedFileSummary.checksumShort}
+                </Text>
+              ) : null}
+              {generatedFileSummary.localOnly ? (
+                <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                  Local file. Sharing uses the native sheet and does not upload it to AGI cloud.
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+
           {/* Email metadata header */}
           {artifact.type === 'email' && artifact.metadata != null && (
             <View

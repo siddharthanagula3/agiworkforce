@@ -1,7 +1,23 @@
-import { Copy, Download, File, FileSpreadsheet, FileText, FolderOpen, Loader2 } from 'lucide-react';
+import {
+  Copy,
+  Download,
+  File,
+  FileSpreadsheet,
+  FileText,
+  FolderOpen,
+  Loader2,
+  Share2,
+  Shield,
+} from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { save } from '@tauri-apps/plugin-dialog';
+import {
+  summarizeGeneratedFileBundle,
+  type ArtifactManifest,
+  type ComputeSession,
+  type GeneratedFile,
+} from '@agiworkforce/types';
 import { invoke, isTauri } from '../../../lib/tauri-mock';
 import type { ToolResultProps } from './index';
 import { Button } from '@/components/ui/Button';
@@ -18,6 +34,9 @@ interface DocumentGenerationData {
   status?: string;
   success?: boolean;
   error?: string;
+  computeSession?: ComputeSession;
+  generatedFile?: GeneratedFile;
+  artifactManifest?: ArtifactManifest;
 }
 
 interface FileMetadata {
@@ -55,6 +74,18 @@ function inferFilename(path?: string, extension = 'txt'): string {
   return name;
 }
 
+function fileUriToPath(uri?: string): string | undefined {
+  if (!uri?.startsWith('file://')) return undefined;
+  try {
+    const url = new URL(uri);
+    const decoded = decodeURIComponent(url.pathname);
+    if (/^\/[A-Za-z]:/.test(decoded)) return decoded.slice(1);
+    return decoded;
+  } catch {
+    return undefined;
+  }
+}
+
 function getDocTypeInfo(ext: string): { icon: React.ReactNode; color: string; label: string } {
   switch (ext) {
     case 'pdf':
@@ -78,15 +109,48 @@ function getDocTypeInfo(ext: string): { icon: React.ReactNode; color: string; la
 export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, status }) => {
   const data = result?.data as DocumentGenerationData | undefined;
 
-  const resolvedPath = data?.filePath || data?.file_path || data?.output_path;
+  const generatedFilePath = fileUriToPath(data?.generatedFile?.uri);
+  const resolvedPath = data?.filePath || data?.file_path || data?.output_path || generatedFilePath;
   const downloadUrl = data?.downloadUrl || data?.download_url;
-  const extension = useMemo(
-    () => inferExtension(resolvedPath, data?.format),
-    [resolvedPath, data?.format],
-  );
-  const fileName = useMemo(() => inferFilename(resolvedPath, extension), [resolvedPath, extension]);
+  const primaryUri = data?.generatedFile?.uri || downloadUrl || resolvedPath;
   const success = data?.success ?? true;
   const failed = status === 'failed' || status === 'error' || !success || Boolean(data?.error);
+  const extension = useMemo(
+    () =>
+      inferExtension(
+        data?.generatedFile?.fileName ?? resolvedPath,
+        data?.generatedFile?.kind ?? data?.format,
+      ),
+    [data?.generatedFile?.fileName, data?.generatedFile?.kind, resolvedPath, data?.format],
+  );
+  const fileName = useMemo(
+    () => data?.generatedFile?.fileName ?? inferFilename(resolvedPath, extension),
+    [data?.generatedFile?.fileName, resolvedPath, extension],
+  );
+  const fallbackComputeStatus = failed ? 'failed' : status === 'running' ? 'running' : 'completed';
+  const generatedFileSummary = useMemo(
+    () =>
+      summarizeGeneratedFileBundle({
+        computeSession: data?.computeSession,
+        generatedFile: data?.generatedFile,
+        artifactManifest: data?.artifactManifest,
+        fallbackFileName: fileName,
+        fallbackKind: extension,
+        fallbackMimeType: data?.generatedFile?.mimeType,
+        fallbackUri: primaryUri,
+        fallbackStatus: fallbackComputeStatus,
+      }),
+    [
+      data?.computeSession,
+      data?.generatedFile,
+      data?.artifactManifest,
+      data?.generatedFile?.mimeType,
+      fileName,
+      extension,
+      primaryUri,
+      fallbackComputeStatus,
+    ],
+  );
 
   // Load file metadata (size + creation time) once the file path is available
   const [fileMeta, setFileMeta] = useState<FileMetadata | null>(null);
@@ -214,6 +278,41 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
     }
   };
 
+  const handleShare = async () => {
+    const shareTarget = primaryUri || resolvedPath;
+    if (!shareTarget) return;
+    const shareText = [
+      `${generatedFileSummary.kindLabel}: ${generatedFileSummary.fileName}`,
+      generatedFileSummary.privacyLabel
+        ? `Privacy: ${generatedFileSummary.privacyLabel}`
+        : undefined,
+      generatedFileSummary.sourceSessionLabel,
+      shareTarget,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    try {
+      if (!isTauri && navigator.share) {
+        await navigator.share({
+          title: generatedFileSummary.title,
+          text: shareText,
+          url: shareTarget.startsWith('http') ? shareTarget : undefined,
+        });
+        return;
+      }
+
+      await navigator.clipboard.writeText(shareText);
+      toast.success(
+        generatedFileSummary.localOnly
+          ? 'Local file reference copied. The file was not uploaded.'
+          : 'Share reference copied',
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Share failed');
+    }
+  };
+
   const handleOpenInFinder = async () => {
     if (!resolvedPath) return;
     try {
@@ -224,6 +323,8 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
   };
 
   const docType = getDocTypeInfo(extension);
+  const fileSizeDisplay =
+    generatedFileSummary.byteCountLabel ?? (fileMeta ? formatFileSize(fileMeta.sizeBytes) : null);
 
   return (
     <div className="mt-3 rounded-lg bg-surface-elevated border border-border/50 overflow-hidden">
@@ -233,15 +334,45 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
           <span className="text-xs font-medium text-muted-foreground">
             Generated {docType.label}
           </span>
-          {fileMeta && (
+          <span className="rounded-full border border-border/50 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+            {generatedFileSummary.statusLabel}
+          </span>
+          {generatedFileSummary.privacyShortLabel && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border/50 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              <Shield className="h-3 w-3" />
+              {generatedFileSummary.privacyShortLabel}
+            </span>
+          )}
+          {fileSizeDisplay && (
             <span className="ml-auto text-[10px] text-muted-foreground shrink-0">
-              {formatFileSize(fileMeta.sizeBytes)}
+              {fileSizeDisplay}
             </span>
           )}
         </div>
         <p className="text-xs text-muted-foreground truncate">{fileName}</p>
         {createdAtDisplay && (
           <p className="text-[10px] text-muted-foreground mt-0.5">Created {createdAtDisplay}</p>
+        )}
+        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+          {generatedFileSummary.providerLabel && (
+            <span>Provider: {generatedFileSummary.providerLabel}</span>
+          )}
+          {generatedFileSummary.sourceSurfaceLabel && (
+            <span>Source: {generatedFileSummary.sourceSurfaceLabel}</span>
+          )}
+          {generatedFileSummary.sourceSessionLabel && (
+            <span>{generatedFileSummary.sourceSessionLabel}</span>
+          )}
+          {generatedFileSummary.checksumShort && (
+            <span title={data?.generatedFile?.checksumSha256}>
+              SHA-256: {generatedFileSummary.checksumShort}
+            </span>
+          )}
+        </div>
+        {generatedFileSummary.localOnly && (
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Local file. Share copies a reference only; AGI does not upload it.
+          </p>
         )}
       </div>
 
@@ -259,8 +390,8 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
               className="gap-2"
               onClick={() => void handleOpen()}
             >
-              <FolderOpen className="h-4 w-4" />
-              Open
+              <FileText className="h-4 w-4" />
+              Preview
             </Button>
           )}
           {resolvedPath && (
@@ -280,10 +411,23 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
             variant="secondary"
             className="gap-2"
             onClick={() => void handleSaveAs()}
+            disabled={!generatedFileSummary.canDownload && !downloadUrl && !resolvedPath}
           >
             <Download className="h-4 w-4" />
             Download
           </Button>
+          {primaryUri && (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="gap-2"
+              onClick={() => void handleShare()}
+              disabled={!generatedFileSummary.canShare}
+            >
+              <Share2 className="h-4 w-4" />
+              Share
+            </Button>
+          )}
           {resolvedPath && (
             <Button
               size="sm"

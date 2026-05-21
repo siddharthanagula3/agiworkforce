@@ -8,9 +8,11 @@ import {
   FolderOpen,
   Download,
   Check,
+  Shield,
 } from 'lucide-react';
 import { save } from '@tauri-apps/plugin-dialog';
 import { toast } from 'sonner';
+import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
 import { invoke, isTauri } from '../../lib/tauri-mock';
 import { useDocumentStore } from '../../stores/documentStore';
 import { Button } from '@/components/ui/Button';
@@ -75,14 +77,16 @@ export function DocumentGenerator({
   const [includeCover, setIncludeCover] = useState(false);
   const [resultPath, setResultPath] = useState<string | null>(null);
 
-  const { isGenerating, generatePdf, generateWord, generateExcel } = useDocumentStore(
-    useShallow((s) => ({
-      isGenerating: s.isGenerating,
-      generatePdf: s.generatePdf,
-      generateWord: s.generateWord,
-      generateExcel: s.generateExcel,
-    })),
-  );
+  const { isGenerating, lastGenerated, generatePdf, generateWord, generateExcel } =
+    useDocumentStore(
+      useShallow((s) => ({
+        isGenerating: s.isGenerating,
+        lastGenerated: s.lastGenerated,
+        generatePdf: s.generatePdf,
+        generateWord: s.generateWord,
+        generateExcel: s.generateExcel,
+      })),
+    );
 
   const getExtension = useCallback(() => {
     return FORMAT_TABS.find((t) => t.id === format)?.extension ?? 'pdf';
@@ -141,6 +145,17 @@ export function DocumentGenerator({
   };
 
   const activeTab = FORMAT_TABS.find((t) => t.id === format)!;
+  const generatedFileSummary = lastGenerated
+    ? summarizeGeneratedFileBundle({
+        computeSession: lastGenerated.computeSession,
+        generatedFile: lastGenerated.generatedFile,
+        artifactManifest: lastGenerated.artifactManifest,
+        fallbackFileName: resultPath ?? title,
+        fallbackKind: getExtension(),
+        fallbackUri: resultPath,
+        fallbackStatus: isGenerating ? 'running' : resultPath ? 'completed' : undefined,
+      })
+    : null;
 
   return (
     <div className="rounded-xl bg-surface-elevated border border-border/50 overflow-hidden">
@@ -276,7 +291,28 @@ export function DocumentGenerator({
             <div className="flex items-center gap-2 mb-2">
               <Check className="h-4 w-4 text-green-400" />
               <span className="text-sm text-foreground font-medium">Document created</span>
+              {generatedFileSummary?.privacyShortLabel && (
+                <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-border/50 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  <Shield className="h-3 w-3" />
+                  {generatedFileSummary.privacyShortLabel}
+                </span>
+              )}
             </div>
+            {generatedFileSummary && (
+              <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+                <span>{generatedFileSummary.statusLabel}</span>
+                <span>{generatedFileSummary.kindLabel}</span>
+                {generatedFileSummary.byteCountLabel && (
+                  <span>{generatedFileSummary.byteCountLabel}</span>
+                )}
+                {generatedFileSummary.sourceSurfaceLabel && (
+                  <span>Source: {generatedFileSummary.sourceSurfaceLabel}</span>
+                )}
+                {generatedFileSummary.checksumShort && (
+                  <span>SHA-256: {generatedFileSummary.checksumShort}</span>
+                )}
+              </div>
+            )}
             <p className="text-xs text-muted-foreground break-all mb-3">{resultPath}</p>
             <div className="flex gap-2">
               <Button

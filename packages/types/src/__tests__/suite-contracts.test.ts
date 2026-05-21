@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   DEVELOPER_SESSION_EVENT_KINDS,
   DEVELOPER_SESSION_SURFACES,
+  formatGeneratedFileByteCount,
+  formatGeneratedFileKindLabel,
   formatPrivacyModeLabel,
   formatProviderModeLabel,
   getPrivacyModeDisplay,
@@ -14,6 +16,7 @@ import {
   PROVIDER_MODE_DISPLAY,
   providerSurfaceToProviderMode,
   PROVIDER_MODES,
+  summarizeGeneratedFileBundle,
   SYNCED_APP_SURFACES,
   type ArtifactManifest,
   type ComputeSession,
@@ -394,6 +397,93 @@ describe('suite contracts — records', () => {
 
     expect(manifest.generatedFileIds).toContain(file.id);
     expect(file.computeSessionId).toBe(computeSession.id);
+  });
+
+  it('builds generated-file UI metadata from the shared manifest contract', () => {
+    const computeSession: ComputeSession = {
+      id: 'compute-1',
+      ownerUserId: 'user-1',
+      sourceSurface: 'desktop',
+      privacyMode: 'local',
+      providerMode: 'Local',
+      status: 'completed',
+      workdirUri: 'file:///tmp/agi/compute-1',
+      retentionExpiresAt: '2026-06-20T00:00:00.000Z',
+      ttlSeconds: 2592000,
+      createdAt: '2026-05-21T00:00:00.000Z',
+      updatedAt: '2026-05-21T00:01:00.000Z',
+      completedAt: '2026-05-21T00:01:00.000Z',
+    };
+
+    const file: GeneratedFile = {
+      id: 'file-1',
+      computeSessionId: computeSession.id,
+      ownerUserId: 'user-1',
+      sourceSurface: 'desktop',
+      privacyMode: 'local',
+      providerMode: 'Local',
+      kind: 'pptx',
+      fileName: 'board-update.pptx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      uri: 'file:///tmp/agi/compute-1/board-update.pptx',
+      byteCount: 1_536,
+      checksumSha256: 'd'.repeat(64),
+      previewDerivatives: [{ kind: 'thumbnail', uri: 'file:///tmp/agi/compute-1/preview.png' }],
+      createdAt: '2026-05-21T00:01:00.000Z',
+    };
+
+    const manifest: ArtifactManifest = {
+      id: 'manifest-1',
+      artifactId: 'artifact-1',
+      type: 'generated_file_bundle',
+      title: 'Board Update',
+      sourceSessionId: 'session-1',
+      computeSessionId: computeSession.id,
+      generatedFileIds: [file.id],
+      privacyMode: 'local',
+      providerMode: 'Local',
+      storageScope: 'local_device',
+      checksumSha256: file.checksumSha256,
+      createdAt: '2026-05-21T00:01:00.000Z',
+      updatedAt: '2026-05-21T00:01:00.000Z',
+    };
+
+    const view = summarizeGeneratedFileBundle({
+      computeSession,
+      generatedFile: file,
+      artifactManifest: manifest,
+    });
+
+    expect(view.title).toBe('Board Update');
+    expect(view.kindLabel).toBe('PowerPoint');
+    expect(view.statusLabel).toBe('Ready');
+    expect(view.privacyLabel).toBe('Local');
+    expect(view.providerLabel).toBe('Local');
+    expect(view.sourceSurfaceLabel).toBe('Desktop');
+    expect(view.sourceSessionLabel).toBe('Session session-1');
+    expect(view.byteCountLabel).toBe('1.5 KB');
+    expect(view.checksumShort).toHaveLength(12);
+    expect(view.canPreview).toBe(true);
+    expect(view.canDownload).toBe(true);
+    expect(view.canShare).toBe(true);
+    expect(view.localOnly).toBe(true);
+    expect(view.storageScope).toBe('local_device');
+  });
+
+  it('formats generated-file fallback labels for in-progress requests', () => {
+    const view = summarizeGeneratedFileBundle({
+      fallbackFileName: 'queued-report.pdf',
+      fallbackKind: 'pdf',
+      fallbackStatus: 'running',
+    });
+
+    expect(formatGeneratedFileKindLabel('pptx')).toBe('PowerPoint');
+    expect(formatGeneratedFileByteCount(1024)).toBe('1.0 KB');
+    expect(view.fileName).toBe('queued-report.pdf');
+    expect(view.kindLabel).toBe('PDF');
+    expect(view.statusLabel).toBe('Generating');
+    expect(view.canDownload).toBe(false);
+    expect(view.canShare).toBe(false);
   });
 
   it('models remote dispatch payloads without freeform unknown payloads', () => {

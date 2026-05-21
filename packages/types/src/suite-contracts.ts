@@ -414,6 +414,180 @@ export interface ArtifactManifest {
   updatedAt: string;
 }
 
+export interface GeneratedFilePresentationInput {
+  computeSession?: ComputeSession | null;
+  generatedFile?: GeneratedFile | null;
+  artifactManifest?: ArtifactManifest | null;
+  fallbackFileName?: string | null;
+  fallbackKind?: GeneratedFileKind | string | null;
+  fallbackMimeType?: string | null;
+  fallbackUri?: string | null;
+  fallbackStatus?: ComputeSessionStatus | string | null;
+}
+
+export interface GeneratedFilePresentation {
+  title: string;
+  fileName: string;
+  kindLabel: string;
+  mimeType?: string;
+  status: ComputeSessionStatus | 'unknown';
+  statusLabel: string;
+  isRunning: boolean;
+  isComplete: boolean;
+  isFailed: boolean;
+  privacyMode?: PrivacyMode;
+  privacyLabel?: string;
+  privacyShortLabel?: string;
+  providerMode?: ProviderMode;
+  providerLabel?: string;
+  sourceSurface?: SourceSurface;
+  sourceSurfaceLabel?: string;
+  sourceSessionId?: string;
+  sourceSessionLabel?: string;
+  computeSessionId?: string;
+  generatedFileId?: string;
+  artifactManifestId?: string;
+  primaryUri?: string;
+  previewUri?: string;
+  byteCountLabel?: string;
+  checksumShort?: string;
+  retentionLabel?: string;
+  storageScope?: StorageScope;
+  canPreview: boolean;
+  canDownload: boolean;
+  canShare: boolean;
+  localOnly: boolean;
+}
+
+const GENERATED_FILE_KIND_LABELS: Readonly<Record<GeneratedFileKind, string>> = {
+  pdf: 'PDF',
+  docx: 'Word',
+  xlsx: 'Excel',
+  pptx: 'PowerPoint',
+  csv: 'CSV',
+  json: 'JSON',
+  markdown: 'Markdown',
+  html: 'HTML',
+  image: 'Image',
+  archive: 'Archive',
+  other: 'File',
+};
+
+const COMPUTE_SESSION_STATUS_LABELS: Readonly<Record<ComputeSessionStatus, string>> = {
+  queued: 'Queued',
+  running: 'Generating',
+  completed: 'Ready',
+  failed: 'Failed',
+  expired: 'Expired',
+  deleted: 'Deleted',
+};
+
+const SOURCE_SURFACE_LABELS: Readonly<Record<SourceSurface, string>> = {
+  web: 'Web',
+  desktop: 'Desktop',
+  mobile: 'Mobile',
+  cli: 'CLI',
+  vscode: 'VS Code',
+  chrome: 'Chrome',
+};
+
+export function formatGeneratedFileKindLabel(kind?: GeneratedFileKind | string | null): string {
+  if (!kind) return 'File';
+  return (
+    GENERATED_FILE_KIND_LABELS[kind as GeneratedFileKind] ??
+    kind.replace(/[_-]+/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
+  );
+}
+
+export function formatComputeSessionStatusLabel(
+  status?: ComputeSessionStatus | string | null,
+): string {
+  if (!status) return 'Unknown';
+  return (
+    COMPUTE_SESSION_STATUS_LABELS[status as ComputeSessionStatus] ??
+    status.replace(/[_-]+/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
+  );
+}
+
+export function formatSourceSurfaceLabel(surface?: SourceSurface | string | null): string {
+  if (!surface) return 'Unknown surface';
+  return (
+    SOURCE_SURFACE_LABELS[surface as SourceSurface] ??
+    surface.replace(/[_-]+/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
+  );
+}
+
+export function formatGeneratedFileByteCount(byteCount?: number | null): string | undefined {
+  if (typeof byteCount !== 'number' || !Number.isFinite(byteCount) || byteCount < 0) {
+    return undefined;
+  }
+  if (byteCount < 1024) return `${byteCount} B`;
+  if (byteCount < 1024 * 1024) return `${(byteCount / 1024).toFixed(1)} KB`;
+  if (byteCount < 1024 * 1024 * 1024) {
+    return `${(byteCount / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  return `${(byteCount / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+export function summarizeGeneratedFileBundle(
+  input: GeneratedFilePresentationInput,
+): GeneratedFilePresentation {
+  const { computeSession, generatedFile, artifactManifest } = input;
+  const privacyMode =
+    generatedFile?.privacyMode ?? artifactManifest?.privacyMode ?? computeSession?.privacyMode;
+  const providerMode =
+    generatedFile?.providerMode ?? artifactManifest?.providerMode ?? computeSession?.providerMode;
+  const status = (computeSession?.status ?? input.fallbackStatus ?? 'unknown') as
+    | ComputeSessionStatus
+    | 'unknown';
+  const sourceSurface = generatedFile?.sourceSurface ?? computeSession?.sourceSurface;
+  const primaryUri = generatedFile?.uri ?? input.fallbackUri ?? undefined;
+  const previewUri = generatedFile?.previewDerivatives[0]?.uri;
+  const fileName = generatedFile?.fileName ?? input.fallbackFileName ?? 'generated-file';
+  const kind = generatedFile?.kind ?? input.fallbackKind;
+  const retentionExpiresAt =
+    generatedFile?.retentionExpiresAt ?? computeSession?.retentionExpiresAt ?? undefined;
+  const sourceSessionId = artifactManifest?.sourceSessionId ?? undefined;
+
+  return {
+    title: artifactManifest?.title ?? fileName,
+    fileName,
+    kindLabel: formatGeneratedFileKindLabel(kind),
+    mimeType: generatedFile?.mimeType ?? input.fallbackMimeType ?? undefined,
+    status,
+    statusLabel: formatComputeSessionStatusLabel(status),
+    isRunning: status === 'queued' || status === 'running',
+    isComplete: status === 'completed',
+    isFailed: status === 'failed' || status === 'expired' || status === 'deleted',
+    privacyMode,
+    privacyLabel: privacyMode ? formatPrivacyModeLabel(privacyMode) : undefined,
+    privacyShortLabel: privacyMode ? getPrivacyModeDisplay(privacyMode).shortLabel : undefined,
+    providerMode,
+    providerLabel: providerMode ? formatProviderModeLabel(providerMode) : undefined,
+    sourceSurface,
+    sourceSurfaceLabel: sourceSurface ? formatSourceSurfaceLabel(sourceSurface) : undefined,
+    sourceSessionId,
+    sourceSessionLabel: sourceSessionId ? `Session ${sourceSessionId}` : undefined,
+    computeSessionId: computeSession?.id ?? generatedFile?.computeSessionId,
+    generatedFileId: generatedFile?.id,
+    artifactManifestId: artifactManifest?.id,
+    primaryUri,
+    previewUri,
+    byteCountLabel: formatGeneratedFileByteCount(generatedFile?.byteCount),
+    checksumShort: generatedFile?.checksumSha256
+      ? generatedFile.checksumSha256.slice(0, 12)
+      : artifactManifest?.checksumSha256
+        ? artifactManifest.checksumSha256.slice(0, 12)
+        : undefined,
+    retentionLabel: retentionExpiresAt ? `Retains until ${retentionExpiresAt}` : undefined,
+    storageScope: artifactManifest?.storageScope,
+    canPreview: Boolean(previewUri || primaryUri),
+    canDownload: Boolean(primaryUri) && status === 'completed',
+    canShare: Boolean(primaryUri) && status === 'completed',
+    localOnly: privacyMode === 'local' || providerMode === 'Local',
+  };
+}
+
 // ============================================================================
 // Remote Control, Computer Use, And Dispatch Payloads
 // ============================================================================
