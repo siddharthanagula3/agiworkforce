@@ -10,6 +10,7 @@
     "rustCheck": "cargo check --workspace",
     "agentContext": "pnpm check:agent-context",
     "repoOrganization": "pnpm check:repo-organization",
+    "workspaceScripts": "pnpm check:workspace-scripts",
     "boundaries": "pnpm check:boundaries",
     "structureConventions": "pnpm check:structure-conventions",
     "mobileHygiene": "pnpm check:mobile-hygiene",
@@ -25,7 +26,8 @@
     "readmeOwnership": "pnpm check:readme-ownership",
     "docStatus": "pnpm check:doc-status",
     "hooks": "pnpm check:hooks",
-    "llmOperability": "pnpm check:llm-operability"
+    "llmOperability": "pnpm check:llm-operability",
+    "docsCheck": "pnpm docs:check"
   },
   "surfaces": {
     "desktop": {

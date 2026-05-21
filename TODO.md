@@ -85,6 +85,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Align Claude, Codex, and opencode tool-specific agent entrypoints around root `AGENTS.md` and `docs/agent-context/`.
 - [x] Retire stale root `opencode.json` and validate `.opencode/opencode.json` instruction and command file references.
 - [x] Add `pnpm check:agent-context`, `pnpm check:repo-organization`, `pnpm check:boundaries`, and `pnpm check:llm-operability`.
+- [x] Add `pnpm check:workspace-scripts` so root/package scripts cannot reference missing concrete workspace filters.
 - [x] Grade current monorepo developer-friendliness and record path to A+.
 - [x] Commit repo-organization script fix and monorepo grade report.
 - [x] Add or update README files for each shared package.

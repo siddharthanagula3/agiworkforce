@@ -267,6 +267,7 @@ if (commands) {
     'rustCheck',
     'agentContext',
     'repoOrganization',
+    'workspaceScripts',
     'boundaries',
     'structureConventions',
     'mobileHygiene',
@@ -281,6 +282,7 @@ if (commands) {
     'docStatus',
     'hooks',
     'llmOperability',
+    'docsCheck',
   ]) {
     if (!commands.repoWide?.[commandKey]) {
       errors.push(`commands.json repoWide missing ${commandKey}`);

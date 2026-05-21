@@ -34,6 +34,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - Root `TODO.md` as the active transition checklist. It separates exploration, CLI engine work, cross-surface product tasks, cloud-later tasks, and documentation rules.
 - `docs/engineering/naming-conventions.md` as the locked naming policy for product names, CLI commands, root control files, work logs, folders, files, package/module names, branches, commits, versions, release tags, and enforcement.
 - `scripts/check-hooks.mjs` and `pnpm check:hooks` to enforce Husky hook wiring, commitlint policy, and hook documentation.
+- `scripts/check-workspace-scripts.mjs` and `pnpm check:workspace-scripts` to reject package scripts that reference missing concrete pnpm workspace filters.
 - `docs/decisions/2026-05-20-openai-anthropic-application-suite-thesis.md` locking AGI Workforce as an OpenAI/Anthropic-style application suite, not just a chat app or CLI.
 - `docs/plans/pre-release-repo-organization-2026-05-20.md` defining the pre-release repo organization plan for root cleanup, naming, ownership, docs, package boundaries, CI guardrails, and team onboarding.
 - `docs/agent-context/` as the canonical LLM-operability layer for coding agents:
@@ -165,6 +166,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - README, Claude agent profiles, Codex agent profiles, and opencode config now separate human/product context from coding-agent context: humans start at `AGI_WORKFORCE.md`, coding agents start at `AGENTS.md` plus scoped agent context.
 - Root `opencode.json` is retired in favor of `.opencode/opencode.json`, and `pnpm check:agent-context` now validates opencode instruction paths, `{file:...}` command/prompt references, and stale tool-agent phrases.
 - `pnpm check:lane-ownership` now enforces lane `blockedPaths`, supports wildcard path patterns such as `scripts/check-*.mjs` and `.env.*`, and accepts `--changed-file` for lane preflight without staging files.
+- Root docs scripts no longer reference the nonexistent `@agiworkforce/docs` workspace; `build:docs` now runs the canonical docs validation gate.
 - Root `package.json` now exposes `check:agent-context`, `check:repo-organization`, `check:boundaries`, and `check:llm-operability`.
 - `scripts/check-repo-organization.mjs` now ignores git-ignored local/build output while warning on known root cleanup debt.
 - `docs/README.md` now points maintainers to root `PLAN.md` and `TODO.md` immediately after `AGI_WORKFORCE.md`.
