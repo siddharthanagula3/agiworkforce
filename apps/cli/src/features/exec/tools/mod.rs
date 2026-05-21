@@ -142,44 +142,7 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
 }
 
 pub(crate) fn canonical_tool_name(tool_name: &str) -> &str {
-    match tool_name {
-        // Claude Code / claw-code compatibility aliases.
-        "Read" | "read" | "ReadFile" => "read_file",
-        "Write" | "write" | "WriteFile" => "write_file",
-        "Edit" | "edit" | "EditFile" => "edit_file",
-        "MultiEdit" | "multi_edit" | "Multi_Edit" => "multiedit",
-        "Bash" | "bash" | "Shell" | "shell" | "RunCommand" => "run_command",
-        "PowerShell" => "powershell",
-        "Glob" | "glob_search" | "GlobSearch" => "glob",
-        "Grep" | "grep" | "GrepFiles" | "grep_search" | "GrepSearch" => "grep_files",
-        "LS" | "Ls" | "ls" | "List" | "ListDirectory" => "list_directory",
-        "WebFetch" => "web_fetch",
-        "WebSearch" => "web_search",
-        "ToolSearch" => "tool_search",
-        "ApplyPatch" => "apply_patch",
-        "Batch" => "batch",
-        "NotebookEdit" => "notebook_edit",
-        "TodoRead" => "todo_read",
-        "TodoWrite" => "todo_write",
-        "AskUser" | "AskUserQuestion" => "ask_user",
-        "ReadManyFiles" => "read_many_files",
-        "TaskCreate" => "task_create",
-        "TaskGet" => "task_get",
-        "TaskList" => "task_list",
-        "TaskUpdate" => "task_update",
-        "TaskStop" => "task_stop",
-        "TaskOutput" => "task_output",
-        "TeamCreate" => "team_create",
-        "TeamDelete" => "team_delete",
-        "CronCreate" => "cron_create",
-        "CronDelete" => "cron_delete",
-        "CronList" => "cron_list",
-        "Advisor" => "advisor",
-        "EnterWorktree" => "enter_worktree",
-        "ExitWorktree" => "exit_worktree",
-        "ListWorktrees" => "list_worktrees",
-        _ => tool_name,
-    }
+    crate::runtime::tool_catalog::canonical_tool_name(tool_name)
 }
 
 fn is_catalog_read_only_tool(tool_name: &str) -> bool {
@@ -612,6 +575,25 @@ mod tests {
         assert_eq!(canonical_tool_name("TodoWrite"), "todo_write");
         assert_eq!(canonical_tool_name("TaskOutput"), "task_output");
         assert_eq!(canonical_tool_name("unknown_tool"), "unknown_tool");
+    }
+
+    #[test]
+    fn executor_canonicalization_matches_catalog_aliases() {
+        let mut definitions = crate::runtime::tool_catalog::all_builtin_tool_definitions();
+        definitions.extend(crate::runtime::tool_catalog::team_tool_definitions());
+
+        for tool in definitions {
+            assert_eq!(canonical_tool_name(&tool.name), tool.name);
+
+            for alias in crate::runtime::tool_catalog::tool_aliases(&tool.name) {
+                assert_eq!(
+                    canonical_tool_name(alias),
+                    tool.name,
+                    "{alias} should execute through {}",
+                    tool.name
+                );
+            }
+        }
     }
 
     #[tokio::test]

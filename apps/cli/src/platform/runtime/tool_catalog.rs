@@ -14,6 +14,13 @@ fn def(name: &str, description: &str, input_schema: serde_json::Value) -> ToolDe
         is_concurrency_safe: false,
         max_result_size_chars: None,
         should_defer: false,
+        aliases: tool_aliases(name)
+            .iter()
+            .map(|alias| alias.to_string())
+            .collect(),
+        owner: tool_owner(name).to_string(),
+        permission_class: "mutating".to_string(),
+        diagnostic_tags: diagnostic_tags(name, "mutating"),
     }
 }
 
@@ -23,6 +30,24 @@ impl ToolDefinition {
     fn read_only(mut self) -> Self {
         self.is_read_only = true;
         self.is_concurrency_safe = true;
+        self.permission_class = "read_only".to_string();
+        self.diagnostic_tags = diagnostic_tags(&self.name, "read_only");
+        self
+    }
+
+    /// Mark a tool as a control-plane tool. These tools change agent/session
+    /// state but do not directly mutate user files or external systems.
+    fn control(mut self) -> Self {
+        self.permission_class = "control".to_string();
+        self.diagnostic_tags = diagnostic_tags(&self.name, "control");
+        self
+    }
+
+    /// Mark a tool that requires live user interaction instead of file/network
+    /// mutation.
+    fn interactive(mut self) -> Self {
+        self.permission_class = "interactive".to_string();
+        self.diagnostic_tags = diagnostic_tags(&self.name, "interactive");
         self
     }
 
@@ -41,6 +66,126 @@ impl ToolDefinition {
         self.should_defer = true;
         self
     }
+}
+
+/// Canonicalize Claude-style and AGI compatibility aliases to executor names.
+pub fn canonical_tool_name(tool_name: &str) -> &str {
+    match tool_name {
+        "Read" | "read" | "ReadFile" => "read_file",
+        "Write" | "write" | "WriteFile" => "write_file",
+        "Edit" | "edit" | "EditFile" => "edit_file",
+        "MultiEdit" | "multi_edit" | "Multi_Edit" => "multiedit",
+        "Bash" | "bash" | "Shell" | "shell" | "RunCommand" => "run_command",
+        "PowerShell" => "powershell",
+        "Glob" | "glob_search" | "GlobSearch" => "glob",
+        "Grep" | "grep" | "GrepFiles" | "grep_search" | "GrepSearch" => "grep_files",
+        "LS" | "Ls" | "ls" | "List" | "ListDirectory" => "list_directory",
+        "WebFetch" => "web_fetch",
+        "WebSearch" => "web_search",
+        "ToolSearch" => "tool_search",
+        "ApplyPatch" => "apply_patch",
+        "Batch" => "batch",
+        "NotebookEdit" => "notebook_edit",
+        "TodoRead" => "todo_read",
+        "TodoWrite" => "todo_write",
+        "AskUser" | "AskUserQuestion" => "ask_user",
+        "ReadManyFiles" => "read_many_files",
+        "TaskCreate" => "task_create",
+        "TaskGet" => "task_get",
+        "TaskList" => "task_list",
+        "TaskUpdate" => "task_update",
+        "TaskStop" => "task_stop",
+        "TaskOutput" => "task_output",
+        "TeamCreate" => "team_create",
+        "TeamDelete" => "team_delete",
+        "CronCreate" => "cron_create",
+        "CronDelete" => "cron_delete",
+        "CronList" => "cron_list",
+        "Advisor" => "advisor",
+        "EnterWorktree" => "enter_worktree",
+        "ExitWorktree" => "exit_worktree",
+        "ListWorktrees" => "list_worktrees",
+        _ => tool_name,
+    }
+}
+
+pub fn tool_aliases(tool_name: &str) -> &'static [&'static str] {
+    match tool_name {
+        "read_file" => &["Read", "read", "ReadFile"],
+        "write_file" => &["Write", "write", "WriteFile"],
+        "edit_file" => &["Edit", "edit", "EditFile"],
+        "multiedit" => &["MultiEdit", "multi_edit", "Multi_Edit"],
+        "run_command" => &["Bash", "bash", "Shell", "shell", "RunCommand"],
+        "powershell" => &["PowerShell"],
+        "glob" => &["Glob", "glob_search", "GlobSearch"],
+        "grep_files" => &["Grep", "grep", "GrepFiles", "grep_search", "GrepSearch"],
+        "list_directory" => &["LS", "Ls", "ls", "List", "ListDirectory"],
+        "web_fetch" => &["WebFetch"],
+        "web_search" => &["WebSearch"],
+        "tool_search" => &["ToolSearch"],
+        "apply_patch" => &["ApplyPatch"],
+        "batch" => &["Batch"],
+        "notebook_edit" => &["NotebookEdit"],
+        "todo_read" => &["TodoRead"],
+        "todo_write" => &["TodoWrite"],
+        "ask_user" => &["AskUser", "AskUserQuestion"],
+        "read_many_files" => &["ReadManyFiles"],
+        "task_create" => &["TaskCreate"],
+        "task_get" => &["TaskGet"],
+        "task_list" => &["TaskList"],
+        "task_update" => &["TaskUpdate"],
+        "task_stop" => &["TaskStop"],
+        "task_output" => &["TaskOutput"],
+        "team_create" => &["TeamCreate"],
+        "team_delete" => &["TeamDelete"],
+        "cron_create" => &["CronCreate"],
+        "cron_delete" => &["CronDelete"],
+        "cron_list" => &["CronList"],
+        "advisor" => &["Advisor"],
+        "enter_worktree" => &["EnterWorktree"],
+        "exit_worktree" => &["ExitWorktree"],
+        "list_worktrees" => &["ListWorktrees"],
+        _ => &[],
+    }
+}
+
+fn tool_owner(name: &str) -> &'static str {
+    match name {
+        "read_file" | "write_file" | "edit_file" | "multiedit" | "read_many_files"
+        | "notebook_edit" => "cli-file-tools",
+        "run_command" | "powershell" | "batch" => "cli-exec-tools",
+        "search_files" | "grep_files" | "glob" | "list_directory" => "cli-navigation",
+        "web_search" | "web_fetch" | "tool_search" => "cli-research",
+        "task" => "cli-subagents",
+        "task_create" | "task_get" | "task_list" | "task_update" | "task_stop" | "task_output" => {
+            "cli-task-registry"
+        }
+        "team_create" | "team_delete" => "cli-team-registry",
+        "cron_create" | "cron_delete" | "cron_list" => "cli-scheduler",
+        "enter_worktree" | "exit_worktree" | "list_worktrees" => "cli-worktree",
+        "lsp_definition"
+        | "lsp_hover"
+        | "lsp_diagnostics"
+        | "lsp_completion"
+        | "lsp_document_symbols"
+        | "lsp_format" => "cli-lsp",
+        "todo_read" | "todo_write" | "update_plan" => "cli-planning",
+        "ask_user" => "cli-human-input",
+        "send_message" | "team_task" | "read_messages" | "list_teammates" => {
+            "cli-team-collaboration"
+        }
+        "advisor" => "cli-advisor",
+        "apply_patch" => "cli-patch-tools",
+        _ => "cli-runtime",
+    }
+}
+
+fn diagnostic_tags(name: &str, permission_class: &str) -> Vec<String> {
+    vec![
+        "builtin".to_string(),
+        tool_owner(name).to_string(),
+        permission_class.to_string(),
+    ]
 }
 
 /// Build native API tool definitions with JSON Schema for each built-in tool.
@@ -223,7 +368,7 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["steps"]
             }),
-        ).with_size_cap(2_000).deferred(),
+        ).control().with_size_cap(2_000).deferred(),
         def(
             "glob",
             "Find files by glob pattern (e.g. `**/*.rs`). Returns matching file paths.",
@@ -248,12 +393,12 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
             "todo_write",
             "Write or update the TODO list for this session.",
             serde_json::json!({"type":"object","properties":{"todos":{"type":"array","description":"Array of todo item strings","items":{"type":"string"}}},"required":["todos"]}),
-        ).with_size_cap(2_000).deferred(),
+        ).control().with_size_cap(2_000).deferred(),
         def(
             "ask_user",
             "Ask the user a clarifying question and wait for their response.",
             serde_json::json!({"type":"object","properties":{"question":{"type":"string","description":"The question to ask the user"}},"required":["question"]}),
-        ).with_size_cap(2_000).deferred(),
+        ).interactive().with_size_cap(2_000).deferred(),
         def(
             "read_many_files",
             "Read multiple files at once. Returns concatenated contents with file boundaries.",
@@ -712,6 +857,12 @@ mod tests {
             .collect()
     }
 
+    fn all_declared_tool_definitions() -> Vec<ToolDefinition> {
+        let mut definitions = built_in_tool_definitions();
+        definitions.extend(team_tool_definitions());
+        definitions
+    }
+
     fn test_tool_definition(name: &str) -> ToolDefinition {
         ToolDefinition {
             name: name.to_string(),
@@ -721,6 +872,10 @@ mod tests {
             is_concurrency_safe: false,
             max_result_size_chars: None,
             should_defer: false,
+            aliases: Vec::new(),
+            owner: "test".to_string(),
+            permission_class: "mutating".to_string(),
+            diagnostic_tags: vec!["test".to_string()],
         }
     }
 
@@ -795,6 +950,107 @@ mod tests {
         let tool_definitions = effective_tool_definitions(true, false, Some(&allowed_tools), None);
 
         assert_eq!(tool_names(&tool_definitions), vec!["read_file"]);
+    }
+
+    #[test]
+    fn declared_tools_include_diagnostic_metadata() {
+        for tool in all_declared_tool_definitions() {
+            assert!(!tool.owner.is_empty(), "{} owner is missing", tool.name);
+            assert_ne!(
+                tool.owner, "cli-runtime",
+                "{} should have an explicit owner",
+                tool.name
+            );
+            assert!(
+                !tool.permission_class.is_empty(),
+                "{} permission class is missing",
+                tool.name
+            );
+            assert!(
+                !tool.diagnostic_tags.is_empty(),
+                "{} diagnostic tags are missing",
+                tool.name
+            );
+            assert!(
+                tool.diagnostic_tags.iter().any(|tag| tag == "builtin"),
+                "{} diagnostic tags should mark the builtin source",
+                tool.name
+            );
+            assert!(
+                tool.diagnostic_tags.iter().any(|tag| tag == &tool.owner),
+                "{} diagnostic tags should include the owner",
+                tool.name
+            );
+            assert!(
+                tool.diagnostic_tags
+                    .iter()
+                    .any(|tag| tag == &tool.permission_class),
+                "{} diagnostic tags should include the permission class",
+                tool.name
+            );
+        }
+    }
+
+    #[test]
+    fn declared_tool_alias_metadata_matches_catalog_helpers() {
+        for tool in all_declared_tool_definitions() {
+            let expected_aliases = tool_aliases(&tool.name)
+                .iter()
+                .map(|alias| alias.to_string())
+                .collect::<Vec<_>>();
+
+            assert_eq!(
+                tool.aliases, expected_aliases,
+                "{} aliases should be declared by the catalog helper",
+                tool.name
+            );
+
+            for alias in tool_aliases(&tool.name) {
+                assert_eq!(
+                    canonical_tool_name(alias),
+                    tool.name,
+                    "{alias} should canonicalize to {}",
+                    tool.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn permission_classes_match_read_only_and_control_flags() {
+        for tool in all_declared_tool_definitions() {
+            match tool.name.as_str() {
+                "update_plan" | "todo_write" => assert_eq!(tool.permission_class, "control"),
+                "ask_user" => assert_eq!(tool.permission_class, "interactive"),
+                _ if tool.is_read_only => assert_eq!(tool.permission_class, "read_only"),
+                _ => assert_eq!(tool.permission_class, "mutating"),
+            }
+        }
+    }
+
+    #[test]
+    fn local_tool_metadata_is_not_serialized_to_provider_schema() {
+        let tool = built_in_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == "read_file")
+            .expect("read_file should be declared");
+
+        let serialized = serde_json::to_value(tool).expect("tool should serialize");
+        let object = serialized
+            .as_object()
+            .expect("tool should serialize as object");
+
+        assert!(object.contains_key("name"));
+        assert!(object.contains_key("description"));
+        assert!(object.contains_key("input_schema"));
+        assert!(!object.contains_key("aliases"));
+        assert!(!object.contains_key("owner"));
+        assert!(!object.contains_key("permission_class"));
+        assert!(!object.contains_key("diagnostic_tags"));
+        assert!(!object.contains_key("is_read_only"));
+        assert!(!object.contains_key("is_concurrency_safe"));
+        assert!(!object.contains_key("max_result_size_chars"));
+        assert!(!object.contains_key("should_defer"));
     }
 
     /// Phase 6: every read-only tool is also concurrency-safe (Phase 7

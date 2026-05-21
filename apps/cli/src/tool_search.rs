@@ -14,6 +14,7 @@
 
 use crate::models::ToolDefinition;
 use crate::plugins::DiscoverableTool;
+use crate::runtime::tool_catalog;
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
@@ -121,7 +122,7 @@ pub fn search_tool_schemas(
             .split(',')
             .map(str::trim)
             .filter(|s| !s.is_empty())
-            .map(canonical_schema_tool_name)
+            .map(tool_catalog::canonical_tool_name)
             .collect();
         catalog
             .iter()
@@ -152,7 +153,7 @@ pub fn search_tool_schemas(
                     } else if nl.contains(term) {
                         s += 5.0;
                     }
-                    for alias in schema_tool_aliases(&t.name) {
+                    for alias in tool_catalog::tool_aliases(&t.name) {
                         let alias = alias.to_lowercase();
                         if alias == *term {
                             s += 9.0;
@@ -182,86 +183,6 @@ pub fn search_tool_schemas(
                 was_deferred: t.should_defer,
             })
             .collect()
-    }
-}
-
-fn canonical_schema_tool_name(tool_name: &str) -> &str {
-    match tool_name {
-        "Read" | "read" | "ReadFile" => "read_file",
-        "Write" | "write" | "WriteFile" => "write_file",
-        "Edit" | "edit" | "EditFile" => "edit_file",
-        "MultiEdit" | "multi_edit" | "Multi_Edit" => "multiedit",
-        "Bash" | "bash" | "Shell" | "shell" | "RunCommand" => "run_command",
-        "PowerShell" => "powershell",
-        "Glob" | "glob_search" | "GlobSearch" => "glob",
-        "Grep" | "grep" | "GrepFiles" | "grep_search" | "GrepSearch" => "grep_files",
-        "LS" | "Ls" | "ls" | "List" | "ListDirectory" => "list_directory",
-        "WebFetch" => "web_fetch",
-        "WebSearch" => "web_search",
-        "ToolSearch" => "tool_search",
-        "ApplyPatch" => "apply_patch",
-        "Batch" => "batch",
-        "NotebookEdit" => "notebook_edit",
-        "TodoRead" => "todo_read",
-        "TodoWrite" => "todo_write",
-        "AskUser" | "AskUserQuestion" => "ask_user",
-        "ReadManyFiles" => "read_many_files",
-        "TaskCreate" => "task_create",
-        "TaskGet" => "task_get",
-        "TaskList" => "task_list",
-        "TaskUpdate" => "task_update",
-        "TaskStop" => "task_stop",
-        "TaskOutput" => "task_output",
-        "TeamCreate" => "team_create",
-        "TeamDelete" => "team_delete",
-        "CronCreate" => "cron_create",
-        "CronDelete" => "cron_delete",
-        "CronList" => "cron_list",
-        "Advisor" => "advisor",
-        "EnterWorktree" => "enter_worktree",
-        "ExitWorktree" => "exit_worktree",
-        "ListWorktrees" => "list_worktrees",
-        _ => tool_name,
-    }
-}
-
-fn schema_tool_aliases(tool_name: &str) -> &'static [&'static str] {
-    match tool_name {
-        "read_file" => &["Read", "read", "ReadFile"],
-        "write_file" => &["Write", "write", "WriteFile"],
-        "edit_file" => &["Edit", "edit", "EditFile"],
-        "multiedit" => &["MultiEdit", "multi_edit"],
-        "run_command" => &["Bash", "bash", "Shell", "shell", "RunCommand"],
-        "powershell" => &["PowerShell"],
-        "glob" => &["Glob", "glob_search", "GlobSearch"],
-        "grep_files" => &["Grep", "grep", "GrepFiles", "grep_search", "GrepSearch"],
-        "list_directory" => &["LS", "Ls", "ls", "List", "ListDirectory"],
-        "web_fetch" => &["WebFetch"],
-        "web_search" => &["WebSearch"],
-        "tool_search" => &["ToolSearch"],
-        "apply_patch" => &["ApplyPatch"],
-        "batch" => &["Batch"],
-        "notebook_edit" => &["NotebookEdit"],
-        "todo_read" => &["TodoRead"],
-        "todo_write" => &["TodoWrite"],
-        "ask_user" => &["AskUser", "AskUserQuestion"],
-        "read_many_files" => &["ReadManyFiles"],
-        "task_create" => &["TaskCreate"],
-        "task_get" => &["TaskGet"],
-        "task_list" => &["TaskList"],
-        "task_update" => &["TaskUpdate"],
-        "task_stop" => &["TaskStop"],
-        "task_output" => &["TaskOutput"],
-        "team_create" => &["TeamCreate"],
-        "team_delete" => &["TeamDelete"],
-        "cron_create" => &["CronCreate"],
-        "cron_delete" => &["CronDelete"],
-        "cron_list" => &["CronList"],
-        "advisor" => &["Advisor"],
-        "enter_worktree" => &["EnterWorktree"],
-        "exit_worktree" => &["ExitWorktree"],
-        "list_worktrees" => &["ListWorktrees"],
-        _ => &[],
     }
 }
 
@@ -338,6 +259,13 @@ mod tests {
             is_concurrency_safe: false,
             max_result_size_chars: None,
             should_defer: deferred,
+            aliases: tool_catalog::tool_aliases(name)
+                .iter()
+                .map(|alias| alias.to_string())
+                .collect(),
+            owner: "test".to_string(),
+            permission_class: "mutating".to_string(),
+            diagnostic_tags: vec!["test".to_string()],
         }
     }
 
@@ -413,6 +341,10 @@ mod tests {
             is_concurrency_safe: false,
             max_result_size_chars: None,
             should_defer: true,
+            aliases: vec!["ApplyPatch".to_string()],
+            owner: "test".to_string(),
+            permission_class: "mutating".to_string(),
+            diagnostic_tags: vec!["test".to_string()],
         };
         let results = search_tool_schemas("select:apply_patch", &[tool], 10);
         assert_eq!(results.len(), 1);

@@ -1606,6 +1606,10 @@ impl McpManager {
                 // MCP tools are never deferred — they come from external
                 // servers and are only registered when the server is connected.
                 should_defer: false,
+                aliases: Vec::new(),
+                owner: format!("mcp:{}", t.server_name),
+                permission_class: "external".to_string(),
+                diagnostic_tags: vec!["mcp".to_string(), t.server_name.clone()],
             })
             .collect()
     }
