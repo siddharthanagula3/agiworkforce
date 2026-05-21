@@ -1,5 +1,5 @@
 import { Check, Loader2, X } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/Dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
 
 export type OAuthFlowState =
   | { status: 'idle' }

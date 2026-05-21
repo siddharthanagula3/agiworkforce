@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { McpClient } from '@/api/mcp';
-import { CONNECTORS } from '@/components/Connectors/connectorDefinitions';
+import { CONNECTORS } from '@/features/connectors/connectorDefinitions';
 
 const OAUTH_TIMEOUT_MS = 5 * 60 * 1000;
 

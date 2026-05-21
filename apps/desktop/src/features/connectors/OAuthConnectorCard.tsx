@@ -3,7 +3,7 @@ import { Check, ExternalLink, Loader2, LogOut, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { McpClient } from '@/api/mcp';
 import { cn } from '@/lib/utils';
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/Tooltip';
 import type { ConnectorDef } from './connectorDefinitions';
 
 interface OAuthConnectorCardProps {

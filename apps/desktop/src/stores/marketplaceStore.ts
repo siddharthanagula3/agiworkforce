@@ -3,7 +3,7 @@
  * Workflow Marketplace Store (Global)
  *
  * Wires all 36 marketplace Tauri commands via the api/marketplace.ts layer.
- * Local component store lives at components/Marketplace/marketplaceStore.ts.
+ * Local feature store lives at features/marketplace/marketplaceStore.ts.
  *
  * Uses types from types/marketplace.ts (snake_case fields — matches Tauri serde output).
  * All invoke() params use camelCase per Tauri IPC rules.

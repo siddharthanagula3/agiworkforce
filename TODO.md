@@ -115,6 +115,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Move Desktop Settings and MCP domains into `apps/desktop/src/features/settings` and `apps/desktop/src/features/mcp`.
 - [x] Move Desktop Unified Agentic Chat into `apps/desktop/src/features/chat`.
 - [x] Move Desktop execution, execution sidecar, memory, memory panel, and tool-calling domains into `apps/desktop/src/features`.
+- [x] Move Desktop artifacts, browser, canvas, computer-use, connectors, marketplace, research, and skill-marketplace domains into `apps/desktop/src/features`.
 - [ ] Continue Mobile domain ownership by moving remaining feature-specific hooks/services/stores out of layer-first roots when a domain has a clear owner.
 - [ ] Execute Desktop domain-first moves into `apps/desktop/src/features` from `docs/plans/domain-first-reorg.md` after root/docs/package contracts are stable.
 

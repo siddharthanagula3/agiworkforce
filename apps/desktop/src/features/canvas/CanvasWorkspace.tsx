@@ -33,10 +33,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner';
 
 import { cn } from '../../lib/utils';
-import { Button } from '../ui/Button';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/Popover';
-import { Slider } from '../ui/Slider';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/Tooltip';
+import { Button } from '@/components/ui/Button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover';
+import { Slider } from '@/components/ui/Slider';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/Tooltip';
 
 // Types
 export type CanvasToolType = 'select' | 'rect' | 'circle' | 'line' | 'text' | 'freehand' | 'pan';

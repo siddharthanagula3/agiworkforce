@@ -12,8 +12,8 @@
 import { LayoutGrid, List, RefreshCw, Sparkles } from 'lucide-react';
 import { useEffect } from 'react';
 import { cn } from '../../lib/utils';
-import { Button } from '../ui/Button';
-import { Skeleton } from '../ui/Skeleton';
+import { Button } from '@/components/ui/Button';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { SkillCard } from './SkillCard';
 import { SkillCategoryFilter } from './SkillCategoryFilter';
 import { SkillSearchBar } from './SkillSearchBar';

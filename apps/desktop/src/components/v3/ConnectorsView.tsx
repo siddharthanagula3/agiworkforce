@@ -4,7 +4,7 @@ import type { TFunction } from 'i18next';
 import { Loader2, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useConnectorsStore, type ConnectorPermState } from '../../stores/connectorsStore';
-import { CONNECTORS, type ConnectorDef } from '../Connectors/connectorDefinitions';
+import { CONNECTORS, type ConnectorDef } from '@/features/connectors/connectorDefinitions';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 

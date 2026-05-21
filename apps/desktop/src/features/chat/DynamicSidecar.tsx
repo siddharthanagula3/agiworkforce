@@ -35,7 +35,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { cn } from '../../lib/utils';
 import type { Artifact } from '../../types/chat';
-import { BrowserVisualization } from '@/components/Browser/BrowserVisualization';
+import { BrowserVisualization } from '@/features/browser/BrowserVisualization';
 import { BrowserAutomationPanel } from '@/components/Agent/BrowserAutomationPanel';
 import { MonacoEditor } from '@/components/Editor/MonacoEditor';
 import { TerminalPanel } from '@/features/execution/TerminalPanel';
@@ -61,7 +61,7 @@ const LazyVisionWorkspace = lazy(() =>
   import('@/features/vision/VisionWorkspace').then((m) => ({ default: m.VisionWorkspace })),
 );
 const LazyComputerUseMonitor = lazy(() =>
-  import('@/components/ComputerUse/ComputerUseMonitor').then((m) => ({
+  import('@/features/computer-use/ComputerUseMonitor').then((m) => ({
     default: m.ComputerUseMonitor,
   })),
 );
@@ -77,7 +77,7 @@ const LazyActionRecorder = lazy(() =>
   import('@/components/Automation/ActionRecorder').then((m) => ({ default: m.ActionRecorder })),
 );
 const LazyMarketplacePage = lazy(() =>
-  import('@/components/Marketplace/MarketplacePage').then((m) => ({ default: m.MarketplacePage })),
+  import('@/features/marketplace/MarketplacePage').then((m) => ({ default: m.MarketplacePage })),
 );
 const LazyMessagingIntegrations = lazy(() =>
   import('@/features/messaging/MessagingIntegrations').then((m) => ({
@@ -98,7 +98,7 @@ const LazyGovernanceDashboard = lazy(() =>
   })),
 );
 const LazyCanvasWorkspace = lazy(() =>
-  import('@/components/Canvas/CanvasWorkspace').then((m) => ({ default: m.CanvasWorkspace })),
+  import('@/features/canvas/CanvasWorkspace').then((m) => ({ default: m.CanvasWorkspace })),
 );
 const LazyAgentCollaborationPanel = lazy(() =>
   import('@/components/AgentCollaboration/AgentCollaborationPanel').then((m) => ({

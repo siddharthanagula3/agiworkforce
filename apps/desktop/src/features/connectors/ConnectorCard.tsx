@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Check, Loader2, MoreHorizontal, Plus, Puzzle, Settings } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/Popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover';
 import type { ConnectorDef } from './connectorDefinitions';
 import { ConnectorDetailView } from './ConnectorDetailView';
 

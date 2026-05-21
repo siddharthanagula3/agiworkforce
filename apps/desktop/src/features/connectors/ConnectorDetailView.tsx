@@ -13,7 +13,13 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { AlertCircle, ChevronLeft, Loader2, Shield, Puzzle } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/Select';
 import {
   type ConnectorPermissionLevel,
   CONNECTOR_PERMISSION_LABEL,

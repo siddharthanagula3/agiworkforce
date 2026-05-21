@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useBrowserStore } from '../../stores/browserStore';
 import { cn } from '../../lib/utils';
-import { Button } from '../ui/Button';
+import { Button } from '@/components/ui/Button';
 import {
   Play,
   Pause,

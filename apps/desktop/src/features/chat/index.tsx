@@ -74,7 +74,7 @@ import {
 } from '../../lib/chatToolUtils';
 import { getSkillById } from '../../lib/skillLoader';
 // View components — kept for future modal/inline use, removed from full-page routing
-// import { CanvasWorkspace } from '@/components/Canvas';
+// import { CanvasWorkspace } from '@/features/canvas';
 // import { InteractiveHelp } from '../Help/InteractiveHelp';
 // import { CalendarWorkspace } from '@/components/Calendar/CalendarWorkspace';
 // import { DocumentWorkspace } from '@/components/Document';
@@ -84,14 +84,14 @@ import { getSkillById } from '../../lib/skillLoader';
 // import { GitPanel } from '@/components/Git';
 // import { TerminalWorkspace } from '@/features/terminal/TerminalWorkspace';
 // import { VisionWorkspace } from '@/features/vision/VisionWorkspace';
-// import { MarketplacePage } from '@/components/Marketplace/MarketplacePage';
+// import { MarketplacePage } from '@/features/marketplace/MarketplacePage';
 // import { WorkflowPanel } from '@/features/workflows';
 // import { ImagesGallery } from '@/components/Images/ImagesGallery';
-import { SkillMarketplace } from '@/components/SkillMarketplace/SkillMarketplace';
+import { SkillMarketplace } from '@/features/skill-marketplace/SkillMarketplace';
 // import { ScheduledTasksPage } from '@/components/Schedules/ScheduledTasksPage';
-// import { ArtifactsGallery } from '@/components/Artifacts/ArtifactsGallery';
-// import { DeepResearchPage } from '@/components/Research/DeepResearchPage';
-// import { ComputerUseMonitor } from '@/components/ComputerUse';
+// import { ArtifactsGallery } from '@/features/artifacts/ArtifactsGallery';
+// import { DeepResearchPage } from '@/features/research/DeepResearchPage';
+// import { ComputerUseMonitor } from '@/features/computer-use';
 // import { ActionRecorder } from '@/components/Automation/ActionRecorder';
 // import { GovernanceDashboard } from '@/components/Governance/GovernanceDashboard';
 // import { TeamDashboard } from '@/features/teams/TeamDashboard';

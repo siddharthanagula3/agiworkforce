@@ -3,10 +3,10 @@ import { Loader2, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
 const LazyConnectorGallery = lazy(() =>
-  import('@/components/Connectors/ConnectorGallery').then((m) => ({ default: m.ConnectorGallery })),
+  import('@/features/connectors/ConnectorGallery').then((m) => ({ default: m.ConnectorGallery })),
 );
 const LazyConnectorHealthDashboard = lazy(() =>
-  import('@/components/Connectors/ConnectorHealthDashboard').then((m) => ({
+  import('@/features/connectors/ConnectorHealthDashboard').then((m) => ({
     default: m.ConnectorHealthDashboard,
   })),
 );

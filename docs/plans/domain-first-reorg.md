@@ -42,10 +42,12 @@ terminal, tools, vision, and workflows out of `src/components` into
 `apps/desktop/src/features`, with call sites and structure checks updated.
 
 Desktop Settings, MCP, Unified Agentic Chat, execution, execution sidecar,
-memory, memory panel, and tool-calling domains have also moved out of
-`src/components` into `apps/desktop/src/features`.
-The remaining Desktop migrations are artifact, connector, research, browser,
-computer-use, canvas, marketplace, agent, and adjacent component domains.
+memory, memory panel, tool-calling, artifacts, browser, canvas, computer-use,
+connectors, marketplace, research, and skill-marketplace domains have also
+moved out of `src/components` into `apps/desktop/src/features`.
+The remaining Desktop migrations are agent, AGI, governance, scheduler,
+screen-capture, ROI dashboard, auth, file/upload, document/media/code,
+overlay, and adjacent component domains.
 
 Every current Web, Mobile, and Desktop top-level feature folder now has a local
 ownership README, and `pnpm check:readme-ownership` enforces feature README

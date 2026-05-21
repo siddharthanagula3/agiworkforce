@@ -7,7 +7,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '../ui/Dialog';
+} from '@/components/ui/Dialog';
 import type { ConnectorDef } from './connectorDefinitions';
 
 interface ConnectorApiKeyDialogProps {

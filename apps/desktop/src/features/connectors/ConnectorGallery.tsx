@@ -16,8 +16,14 @@ import { McpClient } from '@/api/mcp';
 import { OAuthConnectorCard } from './OAuthConnectorCard';
 import { ConnectorOAuthFlow, type OAuthFlowState } from './ConnectorOAuthFlow';
 import { ConnectorApiKeyDialog } from './ConnectorApiKeyDialog';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/Select';
 
 type ViewTab = 'featured' | 'all';
 type StatusFilter = 'all' | 'connected' | 'available';
