@@ -750,9 +750,21 @@ pub fn render_ide() -> String {
 }
 
 pub fn render_doctor(session: &AgentSession) -> String {
+    let (config, config_note) = match crate::config::CliConfig::load_merged() {
+        Ok(config) => (config, None),
+        Err(err) => (
+            crate::config::CliConfig::default(),
+            Some(format!(
+                "  config: failed to load merged config; using defaults ({err})"
+            )),
+        ),
+    };
+    let report = crate::doctor::collect_doctor_report(&config);
     let mut lines = vec![
         "Diagnostics".to_string(),
-        format!("  version: {}", env!("CARGO_PKG_VERSION")),
+        crate::doctor::format_text_report(&report),
+        String::new(),
+        "Session".to_string(),
         format!("  model: {}", session.model),
         format!("  provider: {:?}", session.provider),
         format!("  privacy mode: {}", session.privacy_mode.label()),
@@ -760,32 +772,12 @@ pub fn render_doctor(session: &AgentSession) -> String {
         format!("  skip permissions: {}", session.skip_permissions),
     ];
 
-    match std::env::current_dir() {
-        Ok(cwd) => lines.push(format!("  cwd: {}", cwd.display())),
-        Err(e) => lines.push(format!("  cwd: unavailable ({e})")),
+    if let Some(note) = config_note {
+        lines.push(note);
     }
 
-    match crate::auth::auth_status() {
-        Ok(statuses) => lines.push(format!("  auth providers: {}", statuses.len())),
-        Err(e) => lines.push(format!("  auth providers: unavailable ({e})")),
-    }
-
-    if let Some(tools) = session.mcp_info() {
-        let mut servers: Vec<&str> = tools.iter().map(|tool| tool.server_name.as_str()).collect();
-        servers.sort_unstable();
-        servers.dedup();
-        lines.push(format!("  mcp servers: {}", servers.len()));
-        lines.push(format!("  mcp tools: {}", tools.len()));
-    } else {
-        lines.push("  mcp servers: 0".to_string());
-        lines.push("  mcp tools: 0".to_string());
-    }
-
-    let mut plugin_manager = crate::plugins::PluginsManager::new();
-    match plugin_manager.load_all(None) {
-        Ok(plugins) => lines.push(format!("  plugins: {}", plugins.len())),
-        Err(e) => lines.push(format!("  plugins: unavailable ({e})")),
-    }
+    let mcp_tool_count = session.mcp_info().map(|tools| tools.len()).unwrap_or(0);
+    lines.push(format!("  live mcp tools: {mcp_tool_count}"));
 
     lines.push(format!(
         "  agents: {}",

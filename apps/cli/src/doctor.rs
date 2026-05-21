@@ -55,7 +55,7 @@ pub fn run_doctor(config: &CliConfig, json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
-        print_text_report(&report);
+        println!("{}", format_text_report(&report));
     }
     Ok(())
 }
@@ -132,19 +132,27 @@ fn summarize_checks(checks: &[DoctorCheck]) -> DoctorSummary {
     summary
 }
 
-fn print_text_report(report: &DoctorReport) {
-    println!("AGI doctor");
-    println!("  version: {}", report.version);
-    println!("  generated: {}", report.generated_at);
-    println!("  cwd: {}", report.cwd);
-    println!("  overall: {:?}\n", report.summary.overall);
+pub fn format_text_report(report: &DoctorReport) -> String {
+    let mut lines = vec![
+        "AGI doctor".to_string(),
+        format!("  version: {}", report.version),
+        format!("  generated: {}", report.generated_at),
+        format!("  cwd: {}", report.cwd),
+        format!("  overall: {:?}", report.summary.overall),
+        String::new(),
+    ];
 
     for item in &report.checks {
-        println!("[{:?}] {} - {}", item.status, item.title, item.message);
+        lines.push(format!(
+            "[{:?}] {} - {}",
+            item.status, item.title, item.message
+        ));
         for detail in &item.details {
-            println!("  - {}", detail);
+            lines.push(format!("  - {}", detail));
         }
     }
+
+    lines.join("\n")
 }
 
 fn runtime_dependency_checks() -> Vec<DoctorCheck> {
@@ -713,5 +721,35 @@ mod tests {
         assert!(is_http_url("http://localhost:11434"));
         assert!(!is_http_url("file:///tmp/model.sock"));
         assert!(!is_http_url("not a url"));
+    }
+
+    #[test]
+    fn text_report_formatter_is_reusable_by_slash_doctor() {
+        let report = DoctorReport {
+            version: "test".to_string(),
+            generated_at: "2026-05-21T00:00:00Z".to_string(),
+            cwd: "/tmp/project".to_string(),
+            summary: DoctorSummary {
+                overall: DoctorStatus::Warn,
+                pass: 0,
+                warn: 1,
+                fail: 0,
+                unknown: 0,
+            },
+            checks: vec![check(
+                "runtime.rg",
+                "runtime dependency: rg",
+                DoctorStatus::Warn,
+                "optional runtime `rg` is missing",
+                vec!["install ripgrep for faster code search".to_string()],
+            )],
+        };
+
+        let text = format_text_report(&report);
+
+        assert!(text.contains("AGI doctor"));
+        assert!(text.contains("overall: Warn"));
+        assert!(text.contains("[Warn] runtime dependency: rg"));
+        assert!(text.contains("install ripgrep"));
     }
 }

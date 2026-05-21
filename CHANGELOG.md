@@ -115,6 +115,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - CLI `allowed_tools` and `disallowed_tools` are now applied to normal one-shot, REPL, and TUI agent sessions; whole-tool deny rules hide schemas and pattern rules reject matching calls before execution.
 - CLI plan-mode mutation gates now read tool permission metadata from the central tool catalog, including team/MCP-facing tools, and approved plans restore the normal mutable tool surface.
 - CLI slash-command composition now reuses the shared `agiworkforce-command-registry` built-in catalog instead of maintaining a second app-local copy; the CLI layer only adds skills, prompts, and plugin commands.
+- CLI `/doctor`, `/diagnose`, and `/health` now reuse the same diagnostic report collector and text formatter as `agi doctor`, with a live-session appendix for model, privacy, permissions, MCP tools, agents, roots, and attached files.
 - Current docs now define suite-level requirements for all six surfaces, cross-surface ownership for projects/chats/sessions/artifacts/memory/teams/billing, and a provider capability matrix for routing/privacy claims.
 - Surface docs now reflect current CLI MCP client transports, Desktop onboarding feature paths, and the VS Code tier-response HMAC verification status.
 - VS Code and unified chat usage meters no longer invent managed-plan quota/reset values; they now use reported quota fields when available and show explicit unavailable/not-managed states otherwise.
