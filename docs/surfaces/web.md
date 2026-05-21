@@ -90,17 +90,17 @@ apps/web/
 
 ```bash
 # Dev (localhost:3000)
-pnpm --filter web dev
+pnpm --filter @agiworkforce/web dev
 
 # Production build (unusual: vite-builds desktop SPA first)
-pnpm --filter web build
+pnpm --filter @agiworkforce/web build
 # Output: apps/web/.next/
 
 # Typecheck just web
-pnpm --filter web typecheck
+pnpm --filter @agiworkforce/web typecheck
 
 # Vitest tests
-pnpm --filter web test
+pnpm --filter @agiworkforce/web test
 
 # Lint (excludes apps/extension)
 pnpm lint
@@ -141,7 +141,7 @@ Same 10+ providers as desktop. Provider catalog read from `packages/types/src/mo
 - **Stripe webhook is on `nodejs` runtime, NOT edge.** Pinned via `export const runtime = 'nodejs'`. CI integration test asserts this (V5 §10 lock #9).
 - **Stripe webhook is excluded from `proxy.ts` middleware.** Regex carve-out at `proxy.ts:71-83`. V5 §10 lock #10.
 - **Two Supabase migration directories.** Canonical: `supabase/migrations/` (43 files). Legacy: `apps/web/supabase/migrations/` (50 files). Pick canonical for prod; delete legacy W6 per Appendix A §A.9.
-- **Build is two-step.** `pnpm --filter web build` first builds the desktop SPA via Vite, then copies into `apps/web/public/chat/`, then runs `next build`. If you skip the desktop build, `/chat` 404s.
+- **Build is two-step.** `pnpm --filter @agiworkforce/web build` first builds the desktop SPA via Vite, then copies into `apps/web/public/chat/`, then runs `next build`. If you skip the desktop build, `/chat` 404s.
 - **Marketing copy is locked.** Per V5 §10 lock #19: no "reseller of [provider]" or "unlimited [provider]" phrases. ESLint custom rule scans `apps/web/marketing/`.
 
 ## Current References

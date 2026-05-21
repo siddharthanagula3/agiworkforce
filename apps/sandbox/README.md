@@ -33,7 +33,7 @@ pnpm --filter @agiworkforce/sandbox dev
 ```
 
 Then set `NEXT_PUBLIC_SANDBOX_ORIGIN=http://localhost:3001` in
-`apps/web/.env.local` and restart `pnpm --filter web dev`. Artifact iframes
+`apps/web/.env.local` and restart `pnpm --filter @agiworkforce/web dev`. Artifact iframes
 in chat will load from the local sandbox.
 
 ## Production deployment

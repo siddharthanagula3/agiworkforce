@@ -47,10 +47,10 @@ pids+=($!)
 (run_surface "cli-check"       "cargo check --workspace") &
 pids+=($!)
 
-(run_surface "desktop"         "pnpm --filter desktop typecheck && pnpm --filter desktop lint && pnpm --filter desktop test -- --run") &
+(run_surface "desktop"         "pnpm --filter @agiworkforce/desktop typecheck && pnpm --filter @agiworkforce/desktop lint && pnpm --filter @agiworkforce/desktop test -- --run") &
 pids+=($!)
 
-(run_surface "web"             "pnpm --filter web typecheck && pnpm --filter web lint && pnpm --filter web test -- --run") &
+(run_surface "web"             "pnpm --filter @agiworkforce/web typecheck && pnpm --filter @agiworkforce/web lint && pnpm --filter @agiworkforce/web test -- --run") &
 pids+=($!)
 
 (run_surface "mobile"          "pnpm --filter @agiworkforce/mobile typecheck && pnpm --filter @agiworkforce/mobile lint && pnpm --filter @agiworkforce/mobile test") &
@@ -74,7 +74,7 @@ if [[ $WITH_BUILDS -eq 1 ]]; then
   bpids=()
   (run_surface "build-cli"     "cargo build --release -p agiworkforce-cli") &
   bpids+=($!)
-  (run_surface "build-web"     "pnpm --filter web build") &
+  (run_surface "build-web"     "pnpm --filter @agiworkforce/web build") &
   bpids+=($!)
   (run_surface "build-chrome"  "pnpm --filter @agiworkforce/extension package") &
   bpids+=($!)

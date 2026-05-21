@@ -230,7 +230,7 @@ Screen _implementations_ under `app/` should import from
 1. **Web first** (Wave A — already 60% there).
    - Move `apps/web/components/billing/*` → `apps/web/features/billing/components/*`
    - Move `apps/web/hooks/use-billing-*` → `apps/web/features/billing/hooks/*`
-   - Verify: `pnpm --filter web build`, `pnpm --filter web test`, Playwright smoke.
+   - Verify: `pnpm --filter @agiworkforce/web build`, `pnpm --filter @agiworkforce/web test`, Playwright smoke.
    - Then chat, then one domain per PR — never two domains in one PR.
 2. **Mobile second** (Wave B — smaller blast radius than desktop).
    - Same per-domain pattern; verify with `pnpm --filter @agiworkforce/mobile test`

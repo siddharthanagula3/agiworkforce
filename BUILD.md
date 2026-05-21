@@ -83,8 +83,8 @@ Signed/notarized release builds run through `.github/workflows/release-desktop.y
 ### Web app (Next.js + Vite)
 
 ```bash
-pnpm --filter web dev      # localhost:3000
-pnpm --filter web build    # builds desktop SPA into public/chat then runs `next build`
+pnpm --filter @agiworkforce/web dev      # localhost:3000
+pnpm --filter @agiworkforce/web build    # builds desktop SPA into public/chat then runs `next build`
 ```
 
 The web build pipeline is unusual: it builds the **desktop** SPA via Vite, copies the output into `apps/web/public/chat/`, then runs `next build` so the chat surface ships from the same code. See `apps/web/package.json:scripts.build` for the chain.

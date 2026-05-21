@@ -206,6 +206,25 @@ for (const file of userFacingCliDocs) {
   }
 }
 
+const workspaceFilterFiles = [
+  'BUILD.md',
+  'vercel.json',
+  'apps/sandbox/README.md',
+  'apps/web/scripts/build-chat-spa.sh',
+  'apps/web/scripts/build-with-chat.sh',
+  'scripts/verify-surfaces.sh',
+  'scripts/launch-verify.sh',
+  'docs/plans/domain-first-reorg.md',
+  'docs/surfaces/web.md',
+].filter(exists);
+
+for (const file of workspaceFilterFiles) {
+  const body = readText(file);
+  if (body.includes('--filter web')) {
+    errors.push(`${file} uses ambiguous pnpm filter "--filter web"; use "@agiworkforce/web".`);
+  }
+}
+
 for (const file of walk('apps/mobile')) {
   if (!/\.(ts|tsx)$/.test(file)) continue;
   const body = readText(file);
@@ -236,6 +255,7 @@ requireIncludes('apps/cli/Cargo.toml', 'name = "agi"\npath = "src/main.rs"');
 requireIncludes('apps/cli/Cargo.toml', 'name = "agiworkforce"\npath = "src/bin/agiworkforce.rs"');
 requireIncludes('apps/cli/npm/package.json', '"agi": "bin/agi.js"');
 requireIncludes('apps/cli/npm/package.json', '"agiworkforce": "bin/agiworkforce.js"');
+requireIncludes('vercel.json', 'pnpm --filter @agiworkforce/web build');
 
 if (errors.length > 0) {
   console.error('Structure convention check failed:');
