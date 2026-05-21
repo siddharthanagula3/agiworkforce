@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use crate::models::ToolDefinition;
 
 /// Builder helper: only the API-visible fields are required; Phase 6 / Phase 8
@@ -186,6 +184,16 @@ fn diagnostic_tags(name: &str, permission_class: &str) -> Vec<String> {
         tool_owner(name).to_string(),
         permission_class.to_string(),
     ]
+}
+
+fn tool_spec_matches_schema(spec: &str, tool_name: &str) -> bool {
+    let alias = spec
+        .split_once('(')
+        .map(|(alias, _)| alias)
+        .unwrap_or(spec)
+        .trim();
+
+    alias.eq_ignore_ascii_case(tool_name) || canonical_tool_name(alias) == tool_name
 }
 
 pub fn tool_result_size_cap(tool_name: &str) -> Option<usize> {
@@ -805,7 +813,8 @@ pub fn all_builtin_tool_definitions() -> Vec<ToolDefinition> {
 ///   it is normally deferred.
 /// - team tools are appended when team mode is enabled
 /// - MCP tools are appended last when present
-/// - `allowed_tools`, when provided, filters the final tool list by name
+/// - `allowed_tools`, when provided, filters the final tool list by canonical
+///   name, Claude-style alias, or pattern-qualified rule like `Bash(cargo *)`
 ///
 /// Phase E: deferred tools are excluded from the initial schema list here.
 /// They remain executable; the model loads their schema via `tool_search`.
@@ -832,12 +841,11 @@ pub fn effective_tool_definitions(
     }
 
     if let Some(allowed_tools) = allowed_tools {
-        let allowed_tool_names = allowed_tools
-            .iter()
-            .map(String::as_str)
-            .collect::<HashSet<_>>();
-        tool_definitions
-            .retain(|tool_definition| allowed_tool_names.contains(tool_definition.name.as_str()));
+        tool_definitions.retain(|tool_definition| {
+            allowed_tools
+                .iter()
+                .any(|spec| tool_spec_matches_schema(spec, &tool_definition.name))
+        });
     }
 
     tool_definitions
@@ -949,6 +957,22 @@ mod tests {
         assert_eq!(
             tool_names(&tool_definitions),
             vec!["web_search", "team_task", "mcp_alpha"]
+        );
+    }
+
+    #[test]
+    fn allowed_tools_accept_claude_style_aliases_and_patterns() {
+        let allowed_tools = vec![
+            "Read".to_string(),
+            "Bash(cargo *)".to_string(),
+            "ToolSearch".to_string(),
+        ];
+
+        let tool_definitions = effective_tool_definitions(false, false, Some(&allowed_tools), None);
+
+        assert_eq!(
+            tool_names(&tool_definitions),
+            vec!["read_file", "run_command", "tool_search"]
         );
     }
 

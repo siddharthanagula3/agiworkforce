@@ -110,6 +110,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - OpenAI provider routing now prefers Responses API for native OpenAI catalog-known chat/text models, while preserving Chat Completions for OpenAI-compatible proxies, legacy base URLs, unknown models, and media/audio models.
 - Desktop `hooks_get_stats` now returns live per-hook execution totals, success/failure counts, average duration, and last execution time instead of the previous placeholder `None`.
 - OpenAI Responses translation now has regression coverage proving server-side `store` is omitted by default and only set when explicitly requested.
+- CLI `allowed_tools` schema filtering now accepts Claude-style aliases and pattern-qualified rules such as `Read`, `Bash`, and `Bash(cargo *)` instead of requiring internal tool names.
 - Current docs now define suite-level requirements for all six surfaces, cross-surface ownership for projects/chats/sessions/artifacts/memory/teams/billing, and a provider capability matrix for routing/privacy claims.
 - Surface docs now reflect current CLI MCP client transports, Desktop onboarding feature paths, and the VS Code tier-response HMAC verification status.
 - VS Code and unified chat usage meters no longer invent managed-plan quota/reset values; they now use reported quota fields when available and show explicit unavailable/not-managed states otherwise.
