@@ -6,6 +6,17 @@ Last updated: 2026-05-21 (post round-6 suite-transformation session).
 
 This is the active checklist for the transition described in `PLAN.md`. Keep it short enough to operate from daily; move evidence and long analysis to `audit/anthropic-apps-parity/`.
 
+## 2026-05-21 Suite Transformation Session — Round 7 add-on (~32h, 4 commits)
+
+After the round-6 handoff at `b1c2bb428`, an additional autonomous loop closed two top-10 P0 gaps end-to-end:
+
+- [x] ArtifactPanel live preview (HTML sandboxed iframe + React delegation + run/stop) — `fe22c59cb`
+- [x] VS Code extension composer drag-drop + paste-image wire — `b0578ce9f`
+- [x] Chrome extension side-panel composer drag-drop + paste-image — `8fec8a0b5`
+- [x] ArtifactPanel edit-in-place via onSaveEdit callback — `d1d8bbc2f`
+
+EXEC-SUMMARY-r2 P0 #3 (composer drag-drop, 39h) and P0 #9 (Artifacts: versioning + publish + live preview + edit-in-place, 186h) are now fully shipped at the shared-package level. Host consumer adoption for Web/Desktop/Mobile remains open.
+
 ## 2026-05-21 Suite Transformation Session — Shipped (~165h, 25 commits)
 
 Branch `fix/extension-typecheck-and-c02-sync-2026-05-20`, HEAD `5ff6b26d4`. Full per-commit trace + remaining ~3,613h inventory in `docs/plans/2026-05-21-suite-transformation-handoff.md`.

@@ -6,6 +6,19 @@ Last updated: 2026-05-21
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased — autonomous suite transformation, round 7] — 2026-05-21
+
+Continuation of the parity transition. This round closes round-2 audit P0 #3 entirely (composer drag-drop + paste-image across shared, vscode-ext, and chrome-ext consumers) and round-2 audit P0 #9 entirely (artifact versioning + publish + live preview + edit-in-place).
+
+### Added
+
+- `packages/unified-chat/src/lib/artifact-sandbox.ts` shared CSP + sandbox-attr envelope consumed by both `ArtifactPanel` and `ArtifactRenderer.HtmlArtifact`, eliminating duplication of security-relevant iframe attributes between the two surfaces.
+- `ArtifactPanel` live preview mode for HTML and React artifacts. HTML wraps content with `buildSandboxedHtml`, mounts a sandboxed iframe with `allow-scripts allow-modals` + `no-referrer`, and exposes a pause/run toolbar. React artifacts delegate to the existing `ReactPreview` component.
+- `ArtifactPanel` edit-in-place via the new optional `onSaveEdit` prop. When the host wires the callback, the toolbar gains an Edit button that swaps the code view for an editable textarea with save/discard chips; changing the active artifact id auto-clears the draft.
+- VS Code extension composer drag-drop and paste-image wire. New `attachFiles` zod-validated webview→host protocol entry with 10 MB / 8-file caps, path-separator rejection, and a `data:` URL-only filter. Webview renders attachment chips with uploading/failed states; host writes each file to `globalStorageUri/.attachments/<timestamp>` and calls `agi-workforce.addToContext`.
+- Chrome extension side panel composer drag-drop and paste-image. Image-only `Files` drag highlight on `#sp-composer-shell`; paste handler captures clipboard image kinds; both routes go through a single `acceptIncomingComposerFiles` helper enforcing 10 MB per file / 8 attachments total / image MIME filter.
+- 22 new regression tests across `ArtifactPanel.live-preview.test.tsx`, `webviewAttachFiles.test.ts`, and `sidePanelComposerDragDrop.test.ts` covering sandbox attributes, CSP injection, schema invariants, and the drag-drop filter rules.
+
 ## [Unreleased — Anthropic Applications parity transition] — 2026-05-20
 
 This entry starts the explicit transition from ad hoc Claude-like improvements to a repo-owned Anthropic Applications parity program across CLI, Desktop, Mobile, Web, VS Code, Chrome, shared packages, and future cloud services.
