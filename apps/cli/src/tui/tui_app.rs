@@ -1626,35 +1626,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/help" | "/h" | "/?" => {
-            let mut help = String::from("Commands:\n");
-            for cmd in app.command_registry.commands() {
-                let slash_aliases = cmd.slash_aliases();
-                let aliases = if slash_aliases.is_empty() {
-                    String::new()
-                } else {
-                    format!(" ({})", slash_aliases.join(", "))
-                };
-                help.push_str(&format!(
-                    "  {:<18} {}{}\n",
-                    cmd.slash_name(),
-                    cmd.description,
-                    aliases
-                ));
-            }
-            help.push_str("\nKeyboard shortcuts:\n");
-            help.push_str("  Shift+Tab    Cycle mode: Default → Plan → AcceptEdits → Bypass → FullAuto\n");
-            help.push_str("  /            Open command palette\n");
-            help.push_str("  Esc          Quit\n");
-            help.push_str("  Up/Down      Scroll chat history\n");
-            help.push_str("  Ctrl-L       Clear screen\n");
-            help.push_str("  Ctrl-C       Clear input\n");
-            help.push_str("\nModes (cycle with Shift+Tab):\n");
-            help.push_str("  Default        Normal conversation (grey)\n");
-            help.push_str("  Plan           Read-only planning, no edits (blue)\n");
-            help.push_str("  AcceptEdits    Auto-accept file edits (green)\n");
-            help.push_str("  Bypass         Skip all tool confirmation (yellow)\n");
-            help.push_str("  FullAuto       No prompts at all — extreme caution (red)\n");
-            SlashResult::SystemMessage(help)
+            SlashResult::SystemMessage(crate::command_registry::format_command_help(
+                &app.command_registry,
+                crate::command_registry::ShortcutHelp::Tui,
+            ))
         }
 
         // ── Session management ──

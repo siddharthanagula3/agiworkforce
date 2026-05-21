@@ -8,6 +8,12 @@ pub(crate) use agiworkforce_command_registry::{
     builtin_slash_registry_commands, CommandRegistry, CommandSource, RegistryCommand,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ShortcutHelp {
+    Repl,
+    Tui,
+}
+
 fn registry_command_from_skill(
     skill: &crate::skills::Skill,
     source: CommandSource,
@@ -141,6 +147,94 @@ fn push_plugin_command(
     ));
 }
 
+pub(crate) fn format_command_help(registry: &CommandRegistry, shortcuts: ShortcutHelp) -> String {
+    use std::fmt::Write as _;
+
+    let mut help = String::from("Commands:\n");
+    for cmd in registry.commands().iter().filter(|cmd| cmd.user_invocable) {
+        let aliases = cmd.slash_aliases();
+        let aliases = if aliases.is_empty() {
+            String::new()
+        } else {
+            format!(" ({})", aliases.join(", "))
+        };
+        let argument_hint = cmd
+            .argument_hint
+            .as_deref()
+            .filter(|hint| !hint.trim().is_empty())
+            .map(|hint| format!(" {hint}"))
+            .unwrap_or_default();
+        let _ = writeln!(
+            help,
+            "  {:<22} {}{}",
+            format!("{}{}", cmd.slash_name(), argument_hint),
+            cmd.description,
+            aliases
+        );
+    }
+
+    match shortcuts {
+        ShortcutHelp::Repl => append_repl_shortcuts(&mut help),
+        ShortcutHelp::Tui => append_tui_shortcuts(&mut help),
+    }
+
+    help
+}
+
+fn append_repl_shortcuts(help: &mut String) {
+    use std::fmt::Write as _;
+
+    help.push_str("\nShortcuts:\n");
+    let _ = writeln!(
+        help,
+        "  {:<22} Run shell command (output added to context)",
+        "! <command>"
+    );
+    let _ = writeln!(
+        help,
+        "  {:<22} Append text to project CLAUDE.md",
+        "# <text>"
+    );
+    let _ = writeln!(help, "  {:<22} Multi-line input", "\\");
+    let _ = writeln!(help, "  {:<22} Cancel input / Ctrl-D exits", "Ctrl-C");
+    let _ = writeln!(help, "  {:<22} Enable vim keybindings", "AGIWORKFORCE_VI=1");
+}
+
+fn append_tui_shortcuts(help: &mut String) {
+    use std::fmt::Write as _;
+
+    help.push_str("\nKeyboard shortcuts:\n");
+    let _ = writeln!(
+        help,
+        "  {:<14} Cycle mode: Default -> Plan -> AcceptEdits -> Bypass -> FullAuto",
+        "Shift+Tab"
+    );
+    let _ = writeln!(help, "  {:<14} Open command palette", "/");
+    let _ = writeln!(help, "  {:<14} Quit", "Esc");
+    let _ = writeln!(help, "  {:<14} Scroll chat history", "Up/Down");
+    let _ = writeln!(help, "  {:<14} Clear screen", "Ctrl-L");
+    let _ = writeln!(help, "  {:<14} Clear input", "Ctrl-C");
+
+    help.push_str("\nModes (cycle with Shift+Tab):\n");
+    let _ = writeln!(help, "  {:<14} Normal conversation (grey)", "Default");
+    let _ = writeln!(help, "  {:<14} Read-only planning, no edits (blue)", "Plan");
+    let _ = writeln!(
+        help,
+        "  {:<14} Auto-accept file edits (green)",
+        "AcceptEdits"
+    );
+    let _ = writeln!(
+        help,
+        "  {:<14} Skip all tool confirmation (yellow)",
+        "Bypass"
+    );
+    let _ = writeln!(
+        help,
+        "  {:<14} No prompts at all - extreme caution (red)",
+        "FullAuto"
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -208,6 +302,31 @@ mod tests {
             registry.find("/m").map(|command| command.name.as_str()),
             Some("model")
         );
+    }
+
+    #[test]
+    fn command_help_renders_from_registry_metadata() {
+        let mut registry = CommandRegistry::default();
+        registry.extend(builtin_slash_registry_commands());
+        registry.push(RegistryCommand::prompt(
+            "plugin:lint",
+            "Run plugin lint workflow",
+            CommandSource::Plugin,
+            Some("plugin"),
+        ));
+
+        let repl_help = format_command_help(&registry, ShortcutHelp::Repl);
+        assert!(repl_help.contains("/model"));
+        assert!(repl_help.contains("(/m)"));
+        assert!(repl_help.contains("/doctor"));
+        assert!(repl_help.contains("(/diagnose, /health)"));
+        assert!(repl_help.contains("/plugin:lint"));
+        assert!(repl_help.contains("Run plugin lint workflow"));
+        assert!(repl_help.contains("Shortcuts:"));
+
+        let tui_help = format_command_help(&registry, ShortcutHelp::Tui);
+        assert!(tui_help.contains("Keyboard shortcuts:"));
+        assert!(tui_help.contains("Modes (cycle with Shift+Tab):"));
     }
 
     #[test]

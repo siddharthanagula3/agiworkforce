@@ -187,6 +187,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Move CLI tool-filter policy aliases into the central tool catalog.
 - [x] De-duplicate provider tool schema serialization and test that local metadata stays client-side.
 - [x] De-duplicate the CLI slash-command built-in catalog so the shared registry crate is the single source of truth.
+- [x] Render REPL and TUI slash-command help from the shared command registry.
 - [x] Add `agi doctor --json` covering runtime deps, auth, sandbox, MCP, plugins, model access, writable state dirs, stale branches, and transport health.
 - [x] Make `/doctor` reuse the same diagnostic report core as `agi doctor`.
 - [x] Test that every registered slash command has runtime behavior in both TUI and REPL.
