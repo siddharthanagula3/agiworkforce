@@ -6,8 +6,9 @@
  * HTTP request. On Article50DisclosureRequiredError, route the user back to
  * the onboarding disclosure screen.
  *
- * Mobile always runs in BYOK mode (no managed-cloud routing in Wave 0), so
- * requireManagedCloud is false.
+ * Mobile has three product modes: Local Only, BYOK, and Cloud Managed. This
+ * wrapper is only for outbound provider/API requests after a mode-specific
+ * gate allows them. Local-only requests should never reach this path.
  */
 
 import {

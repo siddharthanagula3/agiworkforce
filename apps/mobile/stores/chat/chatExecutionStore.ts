@@ -4,6 +4,7 @@ import { QueueFullError } from '@agiworkforce/runtime';
 import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
 import { streamChat, type StreamDelta } from '@/services/streaming';
+import { getRemoteChatDisabledReason, RemoteChatDisabledError } from '@/services/remoteChatGate';
 import { useProjectStore } from '@/src/features/projects/store';
 import { retrieveMemoryContext } from '@/src/features/memory/store';
 import type { ChatMessage, MessageAttachment } from '@/types/chat';
@@ -50,6 +51,17 @@ const MAX_UPLOAD_RETRIES = 2;
 
 function generateId(): string {
   return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function createLocalAttachmentReferences(
+  attachments?: Attachment[],
+): MessageAttachment[] | undefined {
+  if (!attachments || attachments.length === 0) return undefined;
+  return attachments.map((attachment) => ({
+    url: attachment.uri,
+    mimeType: attachment.mimeType,
+    fileName: attachment.fileName,
+  }));
 }
 
 async function uploadWithRetry(
@@ -126,7 +138,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     cancelledBeforeStream.delete(conversationId);
 
     let uploadedAttachments: MessageAttachment[] | undefined;
-    if (attachments && attachments.length > 0) {
+    const remoteDisabledReason = getRemoteChatDisabledReason();
+    if (remoteDisabledReason && attachments && attachments.length > 0) {
+      uploadedAttachments = createLocalAttachmentReferences(attachments);
+    } else if (attachments && attachments.length > 0) {
       try {
         const uploadResults = await Promise.all(
           attachments.map((a) =>
@@ -445,6 +460,25 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             requiredTier: caughtErr.requiredTier,
             reason: caughtErr.reason,
           },
+        });
+        return;
+      }
+
+      if (caughtErr instanceof RemoteChatDisabledError) {
+        const updatedMsgs = msgs.map((m) =>
+          m.id === assistantMessageId
+            ? { ...m, content: caughtErr.message, isStreaming: false }
+            : m,
+        );
+        currentMsgStore.setState((s) => ({
+          messages: { ...s.messages, [conversationId]: updatedMsgs },
+        }));
+        set({
+          isStreaming: streamingConversations.size > 0,
+          streamingContent: '',
+          streamingReasoning: '',
+          error: caughtErr.message,
+          paywallError: null,
         });
         return;
       }

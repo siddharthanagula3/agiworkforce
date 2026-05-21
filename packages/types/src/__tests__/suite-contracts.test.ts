@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CHAT_EXECUTION_MODE_DISPLAY,
+  CHAT_EXECUTION_MODES,
   DEVELOPER_SESSION_EVENT_KINDS,
   DEVELOPER_SESSION_SURFACES,
+  chatExecutionModeToPrivacyMode,
+  chatExecutionModeToProviderMode,
+  formatChatExecutionModeLabel,
   formatGeneratedFileByteCount,
   formatGeneratedFileKindLabel,
   formatPrivacyModeLabel,
   formatProviderModeLabel,
+  getChatExecutionModeDisplay,
   getPrivacyModeDisplay,
   getProviderModeDisplay,
   isDeveloperSessionSurface,
@@ -20,7 +26,9 @@ import {
   SYNCED_APP_SURFACES,
   validateGeneratedFileTrustBoundary,
   type ArtifactManifest,
+  type ChatIntent,
   type ComputeSession,
+  type ConnectorStatusSnapshot,
   type DeveloperSessionCheckpoint,
   type DeveloperSessionEvent,
   type DeveloperSessionEventStreamFrame,
@@ -32,9 +40,11 @@ import {
   type HandoffDraft,
   type LegacyWebSyncedConversation,
   type LegacyWebSyncedMessage,
+  type PermissionDecision,
   type PrivacyMode,
   type ProviderMode,
   type RemoteDispatchPayload,
+  type SuiteToolEvent,
   type SyncedAppConversation,
 } from '../suite-contracts';
 import type { ConversationId } from '../conversation';
@@ -43,6 +53,7 @@ describe('suite contracts — trust boundaries', () => {
   it('locks the public privacy and provider mode vocabularies', () => {
     expect(PRIVACY_MODES).toEqual(['local', 'byok', 'managed']);
     expect(PROVIDER_MODES).toEqual(['Local', 'DirectByok', 'ManagedGateway', 'ManagedNative']);
+    expect(CHAT_EXECUTION_MODES).toEqual(['local_only', 'byok', 'cloud_managed']);
   });
 
   it('keeps legacy web sync table records shared while migration debt remains', () => {
@@ -171,9 +182,95 @@ describe('suite contracts — trust boundaries', () => {
 
     expect(PROVIDER_MODE_DISPLAY.ManagedGateway.shortLabel).toBe('Managed');
   });
+
+  it('locks chat execution modes to privacy and provider defaults', () => {
+    expect(formatChatExecutionModeLabel('local_only')).toBe('Local Only');
+    expect(formatChatExecutionModeLabel('byok')).toBe('BYOK');
+    expect(formatChatExecutionModeLabel('cloud_managed')).toBe('Cloud Managed');
+
+    expect(chatExecutionModeToPrivacyMode('local_only')).toBe('local');
+    expect(chatExecutionModeToProviderMode('local_only')).toBe('Local');
+    expect(chatExecutionModeToPrivacyMode('byok')).toBe('byok');
+    expect(chatExecutionModeToProviderMode('byok')).toBe('DirectByok');
+    expect(chatExecutionModeToPrivacyMode('cloud_managed')).toBe('managed');
+    expect(chatExecutionModeToProviderMode('cloud_managed')).toBe('ManagedGateway');
+
+    for (const mode of CHAT_EXECUTION_MODES) {
+      const display = getChatExecutionModeDisplay(mode);
+      expect(display).toBe(CHAT_EXECUTION_MODE_DISPLAY[mode]);
+      expect(display.privacyMode).toBe(chatExecutionModeToPrivacyMode(mode));
+      expect(providerModeToPrivacyMode(display.defaultProviderMode)).toBe(display.privacyMode);
+      expect(display.description.length).toBeGreaterThan(20);
+    }
+  });
 });
 
 describe('suite contracts — records', () => {
+  it('models a cross-surface chat intent without losing the trust boundary', () => {
+    const intent = {
+      id: 'intent-1',
+      sourceSurface: 'desktop',
+      conversationId: 'conversation-1' as ConversationId,
+      kind: 'generated_file',
+      executionMode: 'cloud_managed',
+      privacyMode: 'managed',
+      providerMode: 'ManagedGateway',
+      provider: 'openai',
+      model: 'gpt-5.1',
+      prompt: 'Create a board update deck',
+      projectId: 'project-1',
+      skillIds: ['presentations'],
+      connectorIds: ['drive'],
+      toolIds: ['code_interpreter'],
+      attachmentIds: ['file-1'],
+      reasoningEffort: 'high',
+      webSearch: true,
+      codeExecution: true,
+      computerUse: false,
+      temporary: false,
+      handoffRequired: false,
+      createdAt: '2026-05-21T00:00:00.000Z',
+    } satisfies ChatIntent;
+
+    expect(intent.privacyMode).toBe(chatExecutionModeToPrivacyMode(intent.executionMode));
+    expect(intent.providerMode).toBe(chatExecutionModeToProviderMode(intent.executionMode));
+    expect(intent.kind).toBe('generated_file');
+  });
+
+  it('models shared connector status, permission decisions, and tool events', () => {
+    const connector = {
+      connectorId: 'github',
+      sourceSurface: 'vscode',
+      status: 'needs_auth',
+      privacyMode: 'byok',
+      providerMode: 'DirectByok',
+      capabilityIds: ['pull_requests', 'issues'],
+      message: 'OAuth sign-in required',
+      lastCheckedAt: '2026-05-21T00:00:00.000Z',
+    } satisfies ConnectorStatusSnapshot;
+
+    const decision: PermissionDecision = 'allow_session';
+    const event = {
+      id: 'tool-event-1',
+      sourceSurface: 'cli',
+      toolCallId: 'tool-1',
+      toolName: 'Bash',
+      displayName: 'Run command',
+      status: 'approval_needed',
+      privacyMode: 'byok',
+      providerMode: 'DirectByok',
+      permissionRequestId: 'permission-1',
+      permissionDecision: decision,
+      input: { command: 'pnpm test' },
+      riskLevel: 'medium',
+      createdAt: '2026-05-21T00:00:01.000Z',
+    } satisfies SuiteToolEvent;
+
+    expect(connector.status).toBe('needs_auth');
+    expect(event.permissionDecision).toBe('allow_session');
+    expect(providerModeToPrivacyMode(event.providerMode)).toBe(event.privacyMode);
+  });
+
   it('models synced app conversations with explicit mode labels', () => {
     const conversation: SyncedAppConversation = {
       id: 'conversation-1' as ConversationId,

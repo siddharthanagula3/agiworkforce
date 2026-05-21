@@ -12,6 +12,8 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 
 ### Added
 
+- Shared suite chat execution contracts in `@agiworkforce/types`: `ChatExecutionMode`, `ChatIntent`, connector status snapshots, permission decisions, and compact suite tool events. These make Local Only, BYOK, and Cloud Managed mode semantics explicit before more frontend parity work lands.
+- Mobile `remoteChatGate` with regression tests, so v1 Local Only mode has a single guard for blocking remote chat before BYOK or Cloud Managed mode is enabled.
 - `packages/types/src/suite-contracts.ts` as the canonical cross-surface contract layer for `PrivacyMode`, `ProviderMode`, synced Web/Desktop/Mobile app conversations, CLI/VS Code/Chrome developer sessions, explicit handoff drafts, projects, compute sessions, generated files, artifact manifests, remote-control/computer actions, connector/MCP registry records, and agent/subagent event records.
 - Canonical `Local` / `BYOK` / `Managed` privacy-mode display copy and provider-mode label helpers in `@agiworkforce/types`, so surfaces can stop inventing trust-boundary wording independently.
 - Shared Local-to-BYOK handoff preview utilities in `@agiworkforce/utils` that build typed `HandoffDraft` records with redaction findings, redacted payload preview text, checksum evidence, and preview hashes.
@@ -106,6 +108,8 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 
 ### Changed
 
+- VS Code sidebar model switching now uses a real inline model popover backed by `modelPickerData` from the extension host, with webview regression coverage for the previously undefined popover variables.
+- Mobile streaming now fails closed through the remote chat gate and Article 50 provider gate before outbound provider/API requests. Local Only attachments are kept as local references instead of being uploaded first.
 - Desktop and API native computer-use action/session payloads now use `DesktopComputerAction` and `DesktopComputerUseSession`, reserving canonical `ComputerAction` and `ComputerUseSession` names for suite-level shared contracts.
 - Web v2 AI SDK requests now fail closed unless `providerMode` is explicitly `ManagedGateway` or `ManagedNative`, preventing Local/BYOK requests from reaching the managed Vercel AI SDK/Gateway path.
 - Web AI SDK stream handling now has an adapter that maps AI SDK text, reasoning, tool, usage, error, and stop events into AGI's canonical `StreamChunk` event union.

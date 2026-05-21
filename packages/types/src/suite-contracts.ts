@@ -33,6 +33,9 @@ export type ProviderMode = 'Local' | 'DirectByok' | 'ManagedGateway' | 'ManagedN
 
 export type SourceSurface = 'web' | 'desktop' | 'mobile' | 'cli' | 'vscode' | 'chrome';
 
+/** User-facing chat execution mode exposed by every app surface. */
+export type ChatExecutionMode = 'local_only' | 'byok' | 'cloud_managed';
+
 export type SyncedAppSurface = Extract<SourceSurface, 'web' | 'desktop' | 'mobile'>;
 
 export type DeveloperSessionSurface = Extract<SourceSurface, 'cli' | 'vscode' | 'chrome'>;
@@ -53,6 +56,12 @@ export const PROVIDER_MODES = [
   'ManagedNative',
 ] as const satisfies readonly ProviderMode[];
 
+export const CHAT_EXECUTION_MODES = [
+  'local_only',
+  'byok',
+  'cloud_managed',
+] as const satisfies readonly ChatExecutionMode[];
+
 export interface TrustBoundaryDisplayCopy {
   label: string;
   shortLabel: string;
@@ -61,6 +70,11 @@ export interface TrustBoundaryDisplayCopy {
 
 export interface ProviderModeDisplayCopy extends TrustBoundaryDisplayCopy {
   privacyMode: PrivacyMode;
+}
+
+export interface ChatExecutionModeDisplayCopy extends TrustBoundaryDisplayCopy {
+  privacyMode: PrivacyMode;
+  defaultProviderMode: ProviderMode;
 }
 
 export const PRIVACY_MODE_DISPLAY = {
@@ -108,6 +122,30 @@ export const PROVIDER_MODE_DISPLAY = {
   },
 } as const satisfies Readonly<Record<ProviderMode, ProviderModeDisplayCopy>>;
 
+export const CHAT_EXECUTION_MODE_DISPLAY = {
+  local_only: {
+    label: 'Local Only',
+    shortLabel: 'Local',
+    privacyMode: 'local',
+    defaultProviderMode: 'Local',
+    description: 'Runs locally and must not call AGI managed cloud or direct BYOK providers.',
+  },
+  byok: {
+    label: 'BYOK',
+    shortLabel: 'BYOK',
+    privacyMode: 'byok',
+    defaultProviderMode: 'DirectByok',
+    description: 'Uses user-owned provider keys and sends requests directly to that provider.',
+  },
+  cloud_managed: {
+    label: 'Cloud Managed',
+    shortLabel: 'Managed',
+    privacyMode: 'managed',
+    defaultProviderMode: 'ManagedGateway',
+    description: 'Uses AGI-managed routing, credits, or hosted compute behind explicit consent.',
+  },
+} as const satisfies Readonly<Record<ChatExecutionMode, ChatExecutionModeDisplayCopy>>;
+
 export const SYNCED_APP_SURFACES = [
   'web',
   'desktop',
@@ -142,6 +180,37 @@ export function providerModeToPrivacyMode(mode: ProviderMode): PrivacyMode {
   }
 }
 
+export function chatExecutionModeToPrivacyMode(mode: ChatExecutionMode): PrivacyMode {
+  return CHAT_EXECUTION_MODE_DISPLAY[mode].privacyMode;
+}
+
+export function chatExecutionModeToProviderMode(mode: ChatExecutionMode): ProviderMode {
+  return CHAT_EXECUTION_MODE_DISPLAY[mode].defaultProviderMode;
+}
+
+export function providerModeToChatExecutionMode(mode: ProviderMode): ChatExecutionMode {
+  switch (mode) {
+    case 'Local':
+      return 'local_only';
+    case 'DirectByok':
+      return 'byok';
+    case 'ManagedGateway':
+    case 'ManagedNative':
+      return 'cloud_managed';
+  }
+}
+
+export function privacyModeToChatExecutionMode(mode: PrivacyMode): ChatExecutionMode {
+  switch (mode) {
+    case 'local':
+      return 'local_only';
+    case 'byok':
+      return 'byok';
+    case 'managed':
+      return 'cloud_managed';
+  }
+}
+
 export function getPrivacyModeDisplay(mode: PrivacyMode): TrustBoundaryDisplayCopy {
   return PRIVACY_MODE_DISPLAY[mode];
 }
@@ -150,12 +219,20 @@ export function getProviderModeDisplay(mode: ProviderMode): ProviderModeDisplayC
   return PROVIDER_MODE_DISPLAY[mode];
 }
 
+export function getChatExecutionModeDisplay(mode: ChatExecutionMode): ChatExecutionModeDisplayCopy {
+  return CHAT_EXECUTION_MODE_DISPLAY[mode];
+}
+
 export function formatPrivacyModeLabel(mode: PrivacyMode): string {
   return getPrivacyModeDisplay(mode).label;
 }
 
 export function formatProviderModeLabel(mode: ProviderMode): string {
   return getProviderModeDisplay(mode).label;
+}
+
+export function formatChatExecutionModeLabel(mode: ChatExecutionMode): string {
+  return getChatExecutionModeDisplay(mode).label;
 }
 
 export function providerSurfaceToProviderMode(
@@ -171,6 +248,109 @@ export function providerSurfaceToProviderMode(
     case 'hidden':
       return null;
   }
+}
+
+export type ChatIntentKind =
+  | 'chat'
+  | 'code'
+  | 'research'
+  | 'artifact'
+  | 'generated_file'
+  | 'computer_use'
+  | 'connector'
+  | 'skill'
+  | 'voice'
+  | 'image'
+  | 'handoff';
+
+export type ChatReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'max';
+
+export interface ChatIntent {
+  id?: string;
+  sourceSurface: SourceSurface;
+  conversationId?: ConversationId | null;
+  messageId?: MessageId | null;
+  kind: ChatIntentKind;
+  executionMode: ChatExecutionMode;
+  privacyMode: PrivacyMode;
+  providerMode: ProviderMode;
+  provider?: Provider | string | null;
+  model?: string | null;
+  prompt?: string;
+  projectId?: string | null;
+  workspaceRoot?: string | null;
+  skillIds?: string[];
+  connectorIds?: string[];
+  toolIds?: string[];
+  attachmentIds?: string[];
+  artifactIds?: string[];
+  generatedFileIds?: string[];
+  reasoningEffort?: ChatReasoningEffort;
+  webSearch?: boolean;
+  codeExecution?: boolean;
+  computerUse?: boolean;
+  temporary?: boolean;
+  handoffRequired?: boolean;
+  handoffDraftId?: string | null;
+  createdAt?: string;
+}
+
+export type ConnectorConnectionStatus =
+  | 'unsupported'
+  | 'unavailable'
+  | 'available'
+  | 'needs_auth'
+  | 'connected'
+  | 'disabled'
+  | 'failed';
+
+export interface ConnectorStatusSnapshot {
+  connectorId: string;
+  sourceSurface: SourceSurface;
+  status: ConnectorConnectionStatus;
+  privacyMode?: PrivacyMode;
+  providerMode?: ProviderMode;
+  capabilityIds?: string[];
+  message?: string;
+  lastCheckedAt?: string;
+}
+
+export type PermissionDecision =
+  | 'pending'
+  | 'allow_once'
+  | 'allow_session'
+  | 'always_allow_workspace'
+  | 'always_allow_site'
+  | 'deny';
+
+export type SuiteToolEventStatus =
+  | 'queued'
+  | 'approval_needed'
+  | 'running'
+  | 'progress'
+  | 'result'
+  | 'error'
+  | 'cancelled';
+
+export interface SuiteToolEvent {
+  id: string;
+  sourceSurface: SourceSurface;
+  toolCallId: string;
+  toolName: string;
+  displayName?: string;
+  status: SuiteToolEventStatus;
+  privacyMode: PrivacyMode;
+  providerMode: ProviderMode;
+  connectorId?: string | null;
+  permissionRequestId?: string | null;
+  permissionDecision?: PermissionDecision;
+  input?: Record<string, unknown>;
+  output?: Record<string, unknown> | string;
+  summary?: string;
+  riskLevel?: RiskLevel;
+  error?: string;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 // ============================================================================
@@ -291,9 +471,9 @@ export interface HandoffContextItem {
   id: string;
   kind: 'message' | 'file' | 'artifact' | 'generated_file' | 'selection' | 'terminal_output';
   label: string;
-  sourceUri?: string;
-  byteCount?: number;
-  checksumSha256?: string;
+  sourceUri?: string | undefined;
+  byteCount?: number | undefined;
+  checksumSha256?: string | undefined;
 }
 
 export interface HandoffDraft {
@@ -429,30 +609,30 @@ export interface GeneratedFilePresentation {
   title: string;
   fileName: string;
   kindLabel: string;
-  mimeType?: string;
+  mimeType?: string | undefined;
   status: ComputeSessionStatus | 'unknown';
   statusLabel: string;
   isRunning: boolean;
   isComplete: boolean;
   isFailed: boolean;
-  privacyMode?: PrivacyMode;
-  privacyLabel?: string;
-  privacyShortLabel?: string;
-  providerMode?: ProviderMode;
-  providerLabel?: string;
-  sourceSurface?: SourceSurface;
-  sourceSurfaceLabel?: string;
-  sourceSessionId?: string;
-  sourceSessionLabel?: string;
-  computeSessionId?: string;
-  generatedFileId?: string;
-  artifactManifestId?: string;
-  primaryUri?: string;
-  previewUri?: string;
-  byteCountLabel?: string;
-  checksumShort?: string;
-  retentionLabel?: string;
-  storageScope?: StorageScope;
+  privacyMode?: PrivacyMode | undefined;
+  privacyLabel?: string | undefined;
+  privacyShortLabel?: string | undefined;
+  providerMode?: ProviderMode | undefined;
+  providerLabel?: string | undefined;
+  sourceSurface?: SourceSurface | undefined;
+  sourceSurfaceLabel?: string | undefined;
+  sourceSessionId?: string | undefined;
+  sourceSessionLabel?: string | undefined;
+  computeSessionId?: string | undefined;
+  generatedFileId?: string | undefined;
+  artifactManifestId?: string | undefined;
+  primaryUri?: string | undefined;
+  previewUri?: string | undefined;
+  byteCountLabel?: string | undefined;
+  checksumShort?: string | undefined;
+  retentionLabel?: string | undefined;
+  storageScope?: StorageScope | undefined;
   canPreview: boolean;
   canDownload: boolean;
   canShare: boolean;

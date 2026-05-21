@@ -46,6 +46,9 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Tighten the Desktop artifact workbench toolbar around Claude-style preview/source switching, artifact title/type context, refresh, and primary actions.
 - [x] Convert Desktop tool activity from bulky tool cards to the Claude-style compact event rail with action-specific icons and completed-run summaries.
 - [x] Convert Desktop inline web search output to compact Claude-style favicon/title/domain result rows while preserving citations.
+- [x] Add shared `ChatExecutionMode`, `ChatIntent`, connector status, permission decision, and suite tool-event contracts.
+- [x] Fix the VS Code sidebar model picker so the pill opens a real inline model popover backed by extension-host model data.
+- [x] Add Mobile v1 remote-chat guard so Local Only mode cannot silently upload attachments or stream through remote BYOK/managed APIs.
 
 ## Exploration Tasks
 
@@ -218,6 +221,8 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
   - [x] Consume the shared display-copy helpers in primary Web, Desktop, Mobile, VS Code, and Chrome tier/provider/onboarding/meter surfaces.
   - [x] Replace remaining narrative hardcoded mode copy where it represents an active UI label, not marketing prose.
 - [x] Define `ProviderMode`: `Local`, `DirectByok`, `ManagedGateway`, `ManagedNative`.
+- [x] Define `ChatExecutionMode`: `local_only`, `byok`, `cloud_managed`.
+- [x] Define shared `ChatIntent`, connector status, permission decision, and suite tool-event contracts.
 - [x] Add provider capability matrix for Responses, Chat Completions, reasoning, tools, native tools, vision, files, structured output, server state, and ZDR compatibility.
 - [x] Lock latest Claude desktop modal references as the UI baseline and apply the first Desktop settings modal pass with search and grouped navigation.
 - [x] Convert Desktop file preview to the shared focused modal shell matching the verified Claude project-file preview pattern.
@@ -252,6 +257,8 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Mount API gateway `agents` and `mcp` routes.
 - [x] Replace desktop hook stats placeholder with real stats or visible unsupported state.
 - [x] Replace VS Code managed-plan usage stub with real usage-source reporting.
+- [x] Fix VS Code sidebar inline model picker crash and add webview regression coverage.
+- [x] Fail Mobile remote chat closed while v1 Local Only flags are active.
 - [x] Finish Chrome native host installer automation, including Windows.
 - [x] Fix docs drift found by surface audit: CLI MCP transports, desktop onboarding paths, outdated HMAC comments.
 

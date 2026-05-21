@@ -469,6 +469,68 @@ export function getWebviewContent(
     .plus-menu-item:hover { background: var(--bg-overlay); color: var(--text-primary); }
     .plus-menu-item .pm-icon { font-size: 13px; flex-shrink: 0; }
 
+    /* ── Model popover ── */
+    .model-popover {
+      display: none;
+      position: absolute;
+      right: 10px;
+      bottom: calc(100% + 6px);
+      width: min(320px, calc(100vw - 20px));
+      max-height: 360px;
+      overflow-y: auto;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32);
+      z-index: 24;
+      padding: 6px;
+    }
+    .model-popover.open { display: block; }
+    .model-popover__group {
+      color: var(--text-secondary);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      padding: 7px 8px 4px;
+      text-transform: uppercase;
+    }
+    .model-popover__option {
+      width: 100%;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-primary);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 8px;
+      text-align: left;
+      transition: background 0.12s var(--transition);
+    }
+    .model-popover__option:hover,
+    .model-popover__option.is-active {
+      background: var(--bg-overlay);
+    }
+    .model-popover__option.is-active {
+      outline: 1px solid rgba(33, 128, 141, 0.45);
+    }
+    .model-popover__label {
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.25;
+    }
+    .model-popover__description {
+      color: var(--text-secondary);
+      font-size: 11px;
+      line-height: 1.25;
+    }
+    .model-popover__empty {
+      color: var(--text-secondary);
+      font-size: 12px;
+      padding: 10px;
+    }
+
     /* ── Code blocks ── */
     pre { background: #0d0d0d; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 12px; overflow-x: auto; margin: 8px 0; }
     code { font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 12px; }
@@ -869,6 +931,9 @@ export function getWebviewContent(
       </div>
     </div>
 
+    <!-- Model picker popover -->
+    <div class="model-popover" id="modelPopover" role="menu" aria-label="Select model"></div>
+
     <!-- Composer card -->
     <div class="composer-card">
       <div class="input-row">
@@ -885,7 +950,7 @@ export function getWebviewContent(
       </div>
       <div class="composer-bottom">
         <button class="plus-btn" id="plusBtn" title="Attach or use tools" aria-haspopup="true" aria-expanded="false">+</button>
-        <button class="model-pill" id="modelPill" title="Switch model">${escapeHtml(MODEL_PICKER_OPTIONS[0]?.label ?? 'Model')}</button>
+        <button class="model-pill" id="modelPill" title="Switch model" aria-haspopup="true" aria-expanded="false">${escapeHtml(MODEL_PICKER_OPTIONS[0]?.label ?? 'Model')}</button>
         <button class="mode-chip" id="modeChip" title="Agent mode">${modeLabel}</button>
         <button class="effort-chip" id="effortChip" title="Reasoning effort"${effortHidden}>${effortLabel}</button>
         <button id="sendBtn" title="Send (Cmd+Enter)" aria-label="Send"></button>
@@ -906,6 +971,7 @@ export function getWebviewContent(
     const sendBtn = document.getElementById('sendBtn');
     const modelSelect = document.getElementById('modelSelect');
     const modelPill = document.getElementById('modelPill');
+    const modelPopoverEl = document.getElementById('modelPopover');
     const plusBtn = document.getElementById('plusBtn');
     const plusMenu = document.getElementById('plusMenu');
     const apiKeyBanner = document.getElementById('apiKeyBanner');
@@ -1073,6 +1139,92 @@ export function getWebviewContent(
       userInput.style.height = Math.min(userInput.scrollHeight, 140) + 'px';
     }
 
+    function closeModelPopover() {
+      if (!modelPopoverEl) return;
+      modelPopoverEl.classList.remove('open');
+      if (modelPill) modelPill.setAttribute('aria-expanded', 'false');
+    }
+
+    function fallbackModelGroups() {
+      var models = [];
+      if (modelSelect) {
+        var options = modelSelect.querySelectorAll('option');
+        for (var i = 0; i < options.length; i++) {
+          models.push({
+            id: options[i].value,
+            label: options[i].textContent || options[i].value,
+            description: ''
+          });
+        }
+      }
+      return models.length > 0 ? [{ label: 'Models', models: models }] : [];
+    }
+
+    function openModelPopover(groups, currentModel) {
+      if (!modelPopoverEl) return;
+      var safeGroups = Array.isArray(groups) && groups.length > 0 ? groups : fallbackModelGroups();
+      modelPopoverEl.innerHTML = '';
+
+      if (safeGroups.length === 0) {
+        var empty = document.createElement('div');
+        empty.className = 'model-popover__empty';
+        empty.textContent = 'No models available';
+        modelPopoverEl.appendChild(empty);
+      }
+
+      for (var groupIndex = 0; groupIndex < safeGroups.length; groupIndex++) {
+        var group = safeGroups[groupIndex];
+        if (!group || !Array.isArray(group.models) || group.models.length === 0) continue;
+
+        var groupLabel = document.createElement('div');
+        groupLabel.className = 'model-popover__group';
+        groupLabel.textContent = group.label || 'Models';
+        modelPopoverEl.appendChild(groupLabel);
+
+        for (var modelIndex = 0; modelIndex < group.models.length; modelIndex++) {
+          var model = group.models[modelIndex];
+          if (!model || !model.id) continue;
+
+          var option = document.createElement('button');
+          option.type = 'button';
+          option.className = 'model-popover__option' + (model.id === currentModel ? ' is-active' : '');
+          option.setAttribute('role', 'menuitemradio');
+          option.setAttribute('aria-checked', String(model.id === currentModel));
+          option.dataset.modelId = model.id;
+
+          var label = document.createElement('span');
+          label.className = 'model-popover__label';
+          label.textContent = model.label || model.id;
+          option.appendChild(label);
+
+          if (model.description) {
+            var description = document.createElement('span');
+            description.className = 'model-popover__description';
+            description.textContent = model.description;
+            option.appendChild(description);
+          }
+
+          option.addEventListener('click', function(event) {
+            var target = event.currentTarget;
+            var modelId = target && target.dataset ? target.dataset.modelId : '';
+            if (!modelId) return;
+            if (modelSelect) modelSelect.value = modelId;
+            if (modelPill) {
+              var selectedLabel = target.querySelector('.model-popover__label');
+              modelPill.textContent = selectedLabel ? selectedLabel.textContent : modelId;
+            }
+            closeModelPopover();
+            vscode.postMessage({ type: 'selectModel', payload: { modelId: modelId } });
+          });
+
+          modelPopoverEl.appendChild(option);
+        }
+      }
+
+      modelPopoverEl.classList.add('open');
+      if (modelPill) modelPill.setAttribute('aria-expanded', 'true');
+    }
+
     // ── Markdown rendering — delegated to window.agiRender ────────────────
     // The bundled out/webview/render.js defines window.agiRender(text) via
     // markdown-it + DOMPurify. If for any reason it failed to load, fall
@@ -1197,6 +1349,7 @@ export function getWebviewContent(
     if (plusBtn && plusMenu) {
       plusBtn.addEventListener('click', (e) => {
         e.stopPropagation();
+        closeModelPopover();
         var isOpen = plusMenu.classList.contains('open');
         plusMenu.classList.toggle('open', !isOpen);
         plusBtn.setAttribute('aria-expanded', String(!isOpen));
@@ -1230,9 +1383,20 @@ export function getWebviewContent(
         if (modelPopoverEl && modelPopoverEl.classList.contains('open')) {
           closeModelPopover();
         } else {
+          if (plusMenu) {
+            plusMenu.classList.remove('open');
+            if (plusBtn) plusBtn.setAttribute('aria-expanded', 'false');
+          }
           vscode.postMessage({ type: 'openModelPopover' });
         }
       });
+    }
+
+    if (modelPopoverEl) {
+      modelPopoverEl.addEventListener('click', function(e) {
+        e.stopPropagation();
+      });
+      document.addEventListener('click', closeModelPopover);
     }
 
     modeChip.addEventListener('click', () => {
@@ -1326,6 +1490,11 @@ export function getWebviewContent(
           modelSelect.value = msg.payload.model;
           if (modelPill) modelPill.textContent = opt.text;
         }
+      }
+
+      else if (msg.type === 'modelPickerData') {
+        var payload = msg.payload || {};
+        openModelPopover(payload.groups || [], payload.currentModel || modelSelect.value);
       }
 
       else if (msg.type === 'providerBadge') {
