@@ -2,12 +2,15 @@
 
 import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
+import type { ArtifactManifest, ComputeSession, GeneratedFile } from '@agiworkforce/types';
 
 // Types
 export interface MessageMetadata {
   /** Explicit trust-boundary labels for cross-mode handoff and persisted evidence. */
   privacyMode?: 'local' | 'byok' | 'managed';
   providerMode?: 'Local' | 'DirectByok' | 'ManagedGateway' | 'ManagedNative';
+  /** Provider model label when persisted with metadata rather than the top-level message. */
+  model?: string;
   /** Local -> BYOK handoff evidence persisted on the fork system message. */
   handoffDraftId?: string;
   handoffPreviewHashSha256?: string;
@@ -33,6 +36,11 @@ export interface MessageMetadata {
     returnCode: number;
     images?: Array<{ mediaType: string; data: string }>;
   };
+  /** Generated-file provenance for artifact workbench rendering. */
+  computeSession?: ComputeSession;
+  generatedFile?: GeneratedFile;
+  artifactManifest?: ArtifactManifest;
+  documentData?: { title?: string; content?: string; [key: string]: unknown };
   /** Persisted user reaction (stored in Supabase messages.metadata) */
   reaction?: 'thumbsUp' | 'thumbsDown' | null;
 }

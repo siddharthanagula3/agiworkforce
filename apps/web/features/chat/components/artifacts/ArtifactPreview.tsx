@@ -276,7 +276,7 @@ export function ArtifactPreview({
 
     switch (format) {
       case 'html':
-        blob = new Blob([getPreviewHTML()], { type: 'text/html' });
+        blob = new Blob([getPreviewHTML()], { type: 'text/plain' });
         filename = `${artifact.title || 'artifact'}.html`;
         break;
       case 'md': {
@@ -350,7 +350,7 @@ export function ArtifactPreview({
     // WEB-25: noopener,noreferrer prevents reverse-tabnabbing; revoke the blob
     // URL after a minute so the GC can reclaim the HTML body.
     const html = getPreviewHTML();
-    const blob = new Blob([html], { type: 'text/html' });
+    const blob = new Blob([html], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank', 'noopener,noreferrer');
     setTimeout(() => URL.revokeObjectURL(url), 60_000);

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { persist } from 'zustand/middleware';
+import type { ArtifactManifest, ComputeSession, GeneratedFile } from '@agiworkforce/types';
 import { supabase } from '@shared/lib/supabase-client';
 import {
   ConversationSyncService,
@@ -81,6 +82,11 @@ export interface ChatMessage {
       returnCode: number;
       images?: Array<{ mediaType: string; data: string }>;
     };
+    /** Generated-file provenance for artifact workbench rendering. */
+    computeSession?: ComputeSession;
+    generatedFile?: GeneratedFile;
+    artifactManifest?: ArtifactManifest;
+    documentData?: { title?: string; content?: string; [key: string]: unknown };
     /** Persisted user reaction (loaded from Supabase messages.metadata on conversation load) */
     reaction?: 'thumbsUp' | 'thumbsDown' | null;
     /**

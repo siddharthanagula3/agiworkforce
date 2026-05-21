@@ -49,9 +49,10 @@ const MarkdownContent = dynamic(() => import('./MarkdownContent'), {
   loading: () => <div className="h-4 w-32 animate-pulse rounded bg-muted" />,
 });
 
-import { ArtifactPreview, type ArtifactData } from '../artifacts/ArtifactPreview';
+import type { ArtifactData } from '../artifacts/ArtifactPreview';
 import { InlineArtifactCards } from '../artifacts/InlineArtifactCards';
 import { extractArtifacts, removeArtifactBlocks } from '../../utils/artifact-detector';
+import { useArtifactsStore as useChatArtifactsStore } from '../../stores/artifacts-store';
 import { useArtifactStore } from '@shared/stores/artifact-store';
 import { SearchResults } from '../search/SearchResults';
 import type { SearchResponse } from '@core/integrations/web-search-handler';
@@ -225,6 +226,7 @@ const MessageBubbleComponent = function MessageBubble({
   const isUser = message.role === 'user';
 
   const { addArtifact, getMessageArtifacts } = useArtifactStore();
+  const upsertPanelArtifact = useChatArtifactsStore((state) => state.upsertArtifact);
 
   // Artifact handling
   const existingArtifacts = getMessageArtifacts(message.id);
@@ -266,13 +268,27 @@ const MessageBubbleComponent = function MessageBubble({
     ];
   }, [isUser, message.content, message.id, message.metadata, message.timestamp]);
 
-  const baseArtifacts = existingArtifacts.length > 0 ? existingArtifacts : extractedArtifacts;
-  const artifacts = [...baseArtifacts, ...generatedFileArtifacts];
+  const artifacts = useMemo(() => {
+    const baseArtifacts = existingArtifacts.length > 0 ? existingArtifacts : extractedArtifacts;
+    return [...baseArtifacts, ...generatedFileArtifacts];
+  }, [existingArtifacts, extractedArtifacts, generatedFileArtifacts]);
 
   useEffect(() => {
     if (isUser || existingArtifacts.length > 0 || extractedArtifacts.length === 0) return;
     extractedArtifacts.forEach((artifact) => addArtifact(message.id, artifact));
   }, [message.id, isUser, existingArtifacts.length, extractedArtifacts, addArtifact]);
+
+  useEffect(() => {
+    if (isUser || artifacts.length === 0) return;
+    for (const artifact of artifacts) {
+      upsertPanelArtifact({
+        ...artifact,
+        title: artifact.title || 'Untitled',
+        language: artifact.language || artifact.type,
+        messageId: message.id,
+      });
+    }
+  }, [artifacts, isUser, message.id, upsertPanelArtifact]);
 
   const cleanedContent = useMemo(() => {
     if (artifacts.length === 0) return message.content;
@@ -399,15 +415,6 @@ const MessageBubbleComponent = function MessageBubble({
 
           {/* Inline artifact thumbnail cards — quick visual summary, click to open panel */}
           {!isUser && artifacts.length > 0 && <InlineArtifactCards artifacts={artifacts} />}
-
-          {/* Artifacts — full detail view (below inline cards) */}
-          {!isUser && artifacts.length > 0 && (
-            <div className="mt-4 space-y-3">
-              {artifacts.map((artifact) => (
-                <ArtifactPreview key={artifact.id} artifact={artifact} />
-              ))}
-            </div>
-          )}
 
           {/* Image Result with Error Handling */}
           {!isUser &&

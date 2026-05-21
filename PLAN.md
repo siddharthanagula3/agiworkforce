@@ -363,6 +363,7 @@ Tasks:
 - Make CLI able to list/export/open artifacts.
 - Make Mobile request, view, download, and share artifacts; local on-device heavy compute can be deferred.
 - Add artifact versioning, diff, file tree, and share/export controls.
+- Web chat artifacts should render as compact inline cards and open in the sidecar artifact workbench, not duplicate full previews below the assistant message.
 
 ### 4A. Compute, Computer Use, And Generated Files
 

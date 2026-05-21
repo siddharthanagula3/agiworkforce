@@ -256,6 +256,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Wrap `packages/browser-tool` behind the shared `ComputerAction` protocol.
 - [x] Add local compute-session work directories with manifest, TTL metadata, checksum, and audit events.
 - [x] Add shared generated-file presentation helpers and first-pass Desktop/Web/Mobile status, preview, download, share, source, checksum, and privacy labels.
+- [x] Mount the Web chat artifact workbench in the active chat route and sync detected/generated artifacts into its sidecar store.
 - [ ] Add Web/Mobile/Desktop generated-file request, status, preview, download, share, source session, and privacy-label UI.
 - [ ] Add Mobile generated-file delegation path to Desktop/local host or future Managed compute instead of requiring local on-device heavy generation.
 - [x] Add provider-container adapter for OpenAI Code Interpreter-style generated file annotations.

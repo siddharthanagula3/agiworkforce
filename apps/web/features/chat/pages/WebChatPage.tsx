@@ -10,6 +10,7 @@ import { useModelStore } from '@shared/stores/model-store';
 import { ChatSidebar } from '../components/Sidebar/ChatSidebar';
 import { ChatMessageList } from '../components/messages/ChatMessageList';
 import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
+import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/ArtifactsPanel';
 import { LocalByokHandoffDialog } from '../components/dialogs/LocalByokHandoffDialog';
 import {
   buildAcceptedHandoffSystemMessage,
@@ -43,6 +44,20 @@ type PendingByokHandoff = {
 function toChatMessage(m: Message, conversationId: string): ChatMessage {
   const thinkingContent = m.metadata?.thinkingContent;
   const thinkingSteps = thinkingContent ? [thinkingContent] : undefined;
+  const metadata =
+    m.metadata || m.model
+      ? {
+          ...m.metadata,
+          model: m.model ?? m.metadata?.model,
+          thinkingSteps,
+          isThinkingStreaming: m.metadata?.isThinkingStreaming,
+          isSearching: m.metadata?.isSearching,
+          searchResults: m.metadata?.searchResults,
+          isExecutingCode: m.metadata?.isExecutingCode,
+          codeExecutionResult: m.metadata?.codeExecutionResult,
+          reaction: m.metadata?.reaction,
+        }
+      : undefined;
 
   return {
     id: m.id,
@@ -51,19 +66,7 @@ function toChatMessage(m: Message, conversationId: string): ChatMessage {
     content: m.content,
     createdAt: new Date(m.createdAt),
     isStreaming: m.isStreaming,
-    metadata:
-      m.metadata || m.model
-        ? {
-            model: m.model,
-            thinkingSteps,
-            isThinkingStreaming: m.metadata?.isThinkingStreaming,
-            isSearching: m.metadata?.isSearching,
-            searchResults: m.metadata?.searchResults,
-            isExecutingCode: m.metadata?.isExecutingCode,
-            codeExecutionResult: m.metadata?.codeExecutionResult,
-            reaction: m.metadata?.reaction,
-          }
-        : undefined,
+    metadata,
   };
 }
 
@@ -497,33 +500,43 @@ export default function WebChatPage() {
         collapsed={sidebarCollapsed}
       />
 
-      {/* Main area */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Message list */}
-        <div className="flex-1 overflow-hidden">
-          <ChatMessageList
-            messages={chatMessages}
-            isLoading={isLoading && !isStreaming}
-            onRegenerate={handleRegenerateMessage}
-            onDelete={handleDeleteMessage}
-            onSendMessage={(text) => setComposerPrefill(text)}
-          />
-        </div>
+      {/* Main area + artifact workbench */}
+      <div className="flex min-w-0 flex-1 overflow-hidden">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="flex h-11 shrink-0 items-center justify-end border-b border-border/30 px-4">
+            <ArtifactsToggleButton />
+          </div>
 
-        {/* Composer */}
-        <div
-          className={cn('mx-auto w-full max-w-3xl px-4 pb-6', sidebarCollapsed ? 'max-w-4xl' : '')}
-        >
-          <ChatComposerNew
-            onSend={handleSend}
-            onStop={stopGeneration}
-            isLoading={isLoading}
-            isGenerating={isStreaming}
-            prefillText={composerPrefill}
-            onPrefillConsumed={() => setComposerPrefill(undefined)}
-            clearSignal={composerClearSignal}
-          />
+          {/* Message list */}
+          <div className="flex-1 overflow-hidden">
+            <ChatMessageList
+              messages={chatMessages}
+              isLoading={isLoading && !isStreaming}
+              onRegenerate={handleRegenerateMessage}
+              onDelete={handleDeleteMessage}
+              onSendMessage={(text) => setComposerPrefill(text)}
+            />
+          </div>
+
+          {/* Composer */}
+          <div
+            className={cn(
+              'mx-auto w-full max-w-3xl px-4 pb-6',
+              sidebarCollapsed ? 'max-w-4xl' : '',
+            )}
+          >
+            <ChatComposerNew
+              onSend={handleSend}
+              onStop={stopGeneration}
+              isLoading={isLoading}
+              isGenerating={isStreaming}
+              prefillText={composerPrefill}
+              onPrefillConsumed={() => setComposerPrefill(undefined)}
+              clearSignal={composerClearSignal}
+            />
+          </div>
         </div>
+        <ArtifactsPanel />
       </div>
       {pendingByokHandoff && (
         <LocalByokHandoffDialog
