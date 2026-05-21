@@ -1,5 +1,5 @@
 ---
-status: ACTIVE - Web feature-root consolidation started
+status: ACTIVE - Web complete, Mobile domain moves in progress
 owner: team-lead
 last-updated: 2026-05-21
 phase: D (Architecture cleanup, post-launch backlog)
@@ -26,8 +26,13 @@ The Mobile waitlist pilot is complete: app/tests import from
 `apps/mobile/src/features/waitlist`, and the old temporary waitlist barrels have
 been removed.
 
-The Mobile projects and billing domains have started: `ProjectCard` and
-`UpsellCard` now live under `apps/mobile/src/features`.
+The Mobile projects, billing, and schedules domains have moved: `ProjectCard`,
+`UpsellCard`, and the schedule components/API/store now live under
+`apps/mobile/src/features`.
+
+Every current Web, Mobile, and Desktop top-level feature folder now has a local
+ownership README, and `pnpm check:readme-ownership` enforces feature README
+coverage.
 
 ## Why
 

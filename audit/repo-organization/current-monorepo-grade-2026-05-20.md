@@ -7,11 +7,11 @@ Baseline commit: `b7d6debf0` (`chore: snapshot workspace before repo organizatio
 
 ## Executive Grade
 
-Overall grade: **A after the docs consolidation and checkpoint split, with docs/LLM-operability now at A+ shape and remaining repo-wide A+ blockers narrow and explicit.**
+Overall grade: **A after the docs consolidation and A+ push, with docs/LLM-operability at A+ shape and remaining repo-wide A+ blockers narrow and explicit.**
 
 The core monorepo spine is strong: `apps/`, `packages/`, `crates/`, `services/`, `supabase/`, `docs/`, `audit/`, `tasks/`, `reports/`, `examples/`, and `scripts/` are the right large buckets for an OpenAI/Anthropic-style application suite.
 
-The repo no longer has the most damaging founder-plus-LLM symptoms at root: scratch captures, historical campaign docs, reference catalogs, raw reference-index catalogs, local-only artifacts, stale Web feature shims, split Web feature roots, ambiguous Web workspace filters, duplicate Expo app configs, oversized current docs, and the Mobile waitlist pilot barrels have been moved, archived, ignored, untracked, summarized, or removed. The remaining repo-wide A+ work is deeper: CODEOWNERS with real teams, the remaining Mobile/Desktop domain-first cleanup, Supabase migration consolidation, CI blind-spot baselines, CLI/Rust release-package drift checks, and report-retention review.
+The repo no longer has the most damaging founder-plus-LLM symptoms at root: scratch captures, historical campaign docs, reference catalogs, raw reference-index catalogs, local-only artifacts, stale Web feature shims, split Web feature roots, ambiguous Web workspace filters, duplicate Expo app configs, oversized current docs, Mobile waitlist pilot barrels, Mobile schedule layer-sprawl, workspace package deep imports, duplicate CLI release workflows, and CLI release artifact-name drift have been moved, archived, ignored, untracked, summarized, removed, or guarded. The remaining repo-wide A+ work is deeper: CODEOWNERS with real teams, the remaining Mobile/Desktop domain-first cleanup, Supabase migration consolidation, CI blind-spot baselines, and report-retention review.
 
 ## Evidence Snapshot
 
@@ -35,21 +35,22 @@ The repo no longer has the most damaging founder-plus-LLM symptoms at root: scra
 - Mobile Expo config is now single-source: root `app.json` and duplicate `apps/mobile/app.json` are removed, and repo-organization checks enforce `apps/mobile/app.config.js`.
 - Web deployment and helper scripts now use `@agiworkforce/web` as the canonical workspace filter; `pnpm check:structure-conventions` rejects active-file regressions to ambiguous `--filter web`.
 - README ownership markers are no longer advisory. Missing `Status:`, `Owner`, or `Purpose` markers now fail `pnpm check:readme-ownership`.
+- The 2026-05-21 A+ push moved Mobile schedules under `apps/mobile/src/features/schedules`, added feature ownership READMEs for all current Web/Mobile/Desktop feature folders, hardened package public-export boundaries, removed duplicate CLI release workflow drift, restored linux-arm64 CLI release coverage, and aligned CI/Web release filters with canonical workspace names.
 
 ## Scorecard
 
-| Dimension                    | Grade | Why                                                                                                                                             |
-| ---------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Top-level architecture       | A-    | Correct monorepo spine, clear six-surface/product-platform buckets, and root clutter is classified and enforced.                                |
-| Product-code discoverability | B+    | Web feature-root split is fixed; Mobile and Desktop still need domain-first cleanup by domain.                                                  |
-| LLM operability              | A     | Agent docs, lane maps, shared-file policy, task templates, known flaws, command maps, and strict checks are in place.                           |
-| Human onboarding             | A-    | Root docs, CONTRIBUTING, app/package/crate/service READMEs, and current metadata are in place.                                                  |
-| Source-of-truth discipline   | A+    | Current docs are compact, metadata-checked, archived historical docs are isolated, and retired top-level doc paths are guarded.                 |
-| Root hygiene                 | A     | Root is short and intentional; backslash-named root entries, stale Expo app configs, and unclassified root files now fail checks.               |
-| Generated artifact hygiene   | A-    | Tracked local/generated debt is removed or archived; remaining work is retention policy for existing reports and app-local outputs.             |
-| Package boundaries           | A-    | Boundary and README ownership checks pass; public-export/deep-import enforcement can still improve.                                             |
-| CI/repo guardrails           | A-    | Repo-operability CI exists; strict structure, hook, README, doc-status, and artifact checks pass; broader CI blind-spot baselines remain.       |
-| Hiring readiness             | A-    | A new engineer or coding agent can navigate ownership and commands; real GitHub teams and Mobile/Desktop feature-domain moves remain before A+. |
+| Dimension                    | Grade | Why                                                                                                                                              |
+| ---------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Top-level architecture       | A-    | Correct monorepo spine, clear six-surface/product-platform buckets, and root clutter is classified and enforced.                                 |
+| Product-code discoverability | A-    | Web feature-root split is fixed; Mobile waitlist/projects/billing/schedules have canonical domains; Desktop and remaining Mobile domains remain. |
+| LLM operability              | A+    | Agent docs, lane maps, shared-file policy, task templates, known flaws, command maps, feature READMEs, and strict checks are in place.           |
+| Human onboarding             | A-    | Root docs, CONTRIBUTING, app/package/crate/service READMEs, and current metadata are in place.                                                   |
+| Source-of-truth discipline   | A+    | Current docs are compact, metadata-checked, archived historical docs are isolated, and retired top-level doc paths are guarded.                  |
+| Root hygiene                 | A     | Root is short and intentional; backslash-named root entries, stale Expo app configs, and unclassified root files now fail checks.                |
+| Generated artifact hygiene   | A-    | Tracked local/generated debt is removed or archived; remaining work is retention policy for existing reports and app-local outputs.              |
+| Package boundaries           | A     | Boundary and README ownership checks pass; workspace package deep imports now fail unless the package explicitly exports the subpath.            |
+| CI/repo guardrails           | A     | Repo-operability CI exists; strict structure, hook, README, doc-status, artifact, release, and package-boundary checks pass.                     |
+| Hiring readiness             | A     | A new engineer or coding agent can navigate ownership and commands; real GitHub teams and remaining Mobile/Desktop moves remain before A+.       |
 
 ## Main Findings
 
@@ -62,8 +63,8 @@ The repo no longer has the most damaging founder-plus-LLM symptoms at root: scra
 3. **Package and crate ownership context is now covered at the README level.**
    The remaining ownership work is CODEOWNERS mapping to real GitHub teams and deeper feature/domain READMEs inside large apps.
 
-4. **Web feature-root and command-filter drift are closed; Mobile and Desktop are next.**
-   `apps/web/features` is now canonical, `apps/web/src/features` is forbidden by `pnpm check:structure-conventions`, and active Web commands use `@agiworkforce/web`. The Mobile waitlist pilot is cleaned up under `apps/mobile/src/features/waitlist`, and Mobile projects/billing have started under `apps/mobile/src/features`. The rest of `apps/mobile` and `apps/desktop` still need one-domain-at-a-time moves from the existing `docs/plans/domain-first-reorg.md`.
+4. **Web feature-root, Mobile schedules, and release drift are closed; remaining Mobile/Desktop domains are next.**
+   `apps/web/features` is now canonical, `apps/web/src/features` is forbidden by `pnpm check:structure-conventions`, and active Web commands use `@agiworkforce/web`. Mobile waitlist, projects, billing, and schedules now have canonical domains under `apps/mobile/src/features`. The duplicate CLI release workflow is removed; `release-cli.yml`, `install.sh`, and Homebrew asset names align. The rest of `apps/mobile` and `apps/desktop` still need one-domain-at-a-time moves from the existing `docs/plans/domain-first-reorg.md`.
 
 5. **Generated/build directories are present across many subtrees.**
    Many are ignored and not tracked, but their presence makes local exploration noisy. The repo needs stricter ignore and cleanup guidance, plus a check that fails only tracked or unclassified source-tree clutter.
@@ -272,7 +273,11 @@ Acceptance:
 11. Finish Web feature-root cleanup. Done; `apps/web/src/features` is forbidden by structure checks.
 12. Remove stale Expo config drift. Done; `apps/mobile/app.config.js` is canonical.
 13. Fix ambiguous Web workspace filters. Done; active commands use `@agiworkforce/web`.
-14. Continue Mobile and Desktop domain-first cleanup one domain at a time.
+14. Harden package public-export boundaries. Done; workspace package deep imports now fail unless explicitly exported.
+15. Move Mobile schedules into the canonical feature root. Done; old schedule component/service/store paths are forbidden.
+16. Add feature ownership READMEs. Done; Web/Mobile/Desktop feature folders are checked by `pnpm check:readme-ownership`.
+17. Remove duplicate CLI release workflow and align release assets. Done; `release-cli.yml` is canonical and guarded.
+18. Continue remaining Mobile and Desktop domain-first cleanup one domain at a time.
 
 ## Target State
 

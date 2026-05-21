@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { ScheduleRunHistory } from './ScheduleRunHistory';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/lib/theme';
-import type { Schedule } from '@/stores/scheduleStore';
+import type { Schedule } from '../store';
 
 interface ScheduleCardProps {
   schedule: Schedule;

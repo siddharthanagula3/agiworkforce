@@ -101,6 +101,9 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Complete the Mobile waitlist pilot cleanup by migrating callers to `apps/mobile/src/features/waitlist` and removing old waitlist barrels.
 - [x] Start the Mobile projects domain by moving `ProjectCard` into `apps/mobile/src/features/projects`.
 - [x] Start the Mobile billing domain by moving `UpsellCard` into `apps/mobile/src/features/billing`.
+- [x] Move the Mobile schedules domain into `apps/mobile/src/features/schedules` and remove old schedule component/service/store paths.
+- [x] Require ownership READMEs for every top-level Web, Mobile, and Desktop feature folder.
+- [x] Remove the duplicate CLI release workflow and enforce the canonical `release-cli.yml` / stable `v-cli-*` artifact contract.
 - [ ] Execute Mobile domain-first moves into `apps/mobile/src/features` from `docs/plans/domain-first-reorg.md` after root/docs/package contracts are stable.
 - [ ] Execute Desktop domain-first moves into `apps/desktop/src/features` from `docs/plans/domain-first-reorg.md` after root/docs/package contracts are stable.
 

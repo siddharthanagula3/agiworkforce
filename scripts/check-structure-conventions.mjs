@@ -63,6 +63,12 @@ if (exists('apps/web/.feature-migration')) {
   );
 }
 
+if (exists('.github/workflows/cli-release.yml')) {
+  errors.push(
+    'Duplicate CLI release workflow must stay removed; use .github/workflows/release-cli.yml.',
+  );
+}
+
 const forbiddenFeatureMarkers = [
   'src/features/',
   'Barrel re-export',
@@ -155,6 +161,13 @@ for (const retiredMobileWaitlistPath of [
   'apps/mobile/stores/waitlistStore.ts',
   'apps/mobile/components/projects/ProjectCard.tsx',
   'apps/mobile/components/billing/UpsellCard.tsx',
+  'apps/mobile/components/schedules/QuickSchedule.tsx',
+  'apps/mobile/components/schedules/RecurrencePicker.tsx',
+  'apps/mobile/components/schedules/ScheduleCard.tsx',
+  'apps/mobile/components/schedules/ScheduleForm.tsx',
+  'apps/mobile/components/schedules/ScheduleRunHistory.tsx',
+  'apps/mobile/services/schedules.ts',
+  'apps/mobile/stores/scheduleStore.ts',
 ]) {
   if (exists(retiredMobileWaitlistPath)) {
     errors.push(`Retired Mobile feature path must stay removed: ${retiredMobileWaitlistPath}`);
@@ -180,6 +193,15 @@ const mobileWaitlistForbiddenImports = [
   '../components/projects/ProjectCard',
   '@/components/billing/UpsellCard',
   '../components/billing/UpsellCard',
+  '@/components/schedules/QuickSchedule',
+  '@/components/schedules/RecurrencePicker',
+  '@/components/schedules/ScheduleCard',
+  '@/components/schedules/ScheduleForm',
+  '@/components/schedules/ScheduleRunHistory',
+  '@/services/schedules',
+  '@/stores/scheduleStore',
+  '../services/schedules',
+  '../stores/scheduleStore',
 ];
 
 const userFacingCliDocs = [
@@ -209,6 +231,7 @@ for (const file of userFacingCliDocs) {
 const workspaceFilterFiles = [
   'BUILD.md',
   'vercel.json',
+  '.github/workflows/ci.yml',
   'apps/sandbox/README.md',
   'apps/web/scripts/build-chat-spa.sh',
   'apps/web/scripts/build-with-chat.sh',
@@ -241,6 +264,11 @@ requireIncludes('apps/web/features/index.ts', 'canonical Web product-domain root
 requireIncludes('docs/plans/domain-first-reorg.md', '`apps/web/features/`');
 requireIncludes('docs/plans/domain-first-reorg.md', '`apps/mobile/src/features');
 requireIncludes('docs/plans/domain-first-reorg.md', '`apps/desktop/src/features');
+requireIncludes(
+  'apps/mobile/src/features/schedules/README.md',
+  'apps/mobile/src/features/schedules',
+);
+requireIncludes('apps/mobile/src/features/schedules/index.ts', 'public API barrel');
 requireIncludes('docs/engineering/naming-conventions.md', 'Primary CLI command: `agi`.');
 requireIncludes(
   'docs/engineering/naming-conventions.md',
@@ -256,6 +284,14 @@ requireIncludes('apps/cli/Cargo.toml', 'name = "agiworkforce"\npath = "src/bin/a
 requireIncludes('apps/cli/npm/package.json', '"agi": "bin/agi.js"');
 requireIncludes('apps/cli/npm/package.json', '"agiworkforce": "bin/agiworkforce.js"');
 requireIncludes('vercel.json', 'pnpm --filter @agiworkforce/web build');
+requireIncludes('.github/workflows/ci.yml', 'pnpm --filter @agiworkforce/web build');
+requireIncludes('.github/workflows/release-cli.yml', "- 'v-cli-*'");
+requireIncludes('.github/workflows/release-cli.yml', 'agiworkforce-*.${{ matrix.archive }}');
+requireIncludes('.github/workflows/release-cli.yml', 'platform: linux-arm64');
+requireIncludes('.github/workflows/release-cli.yml', 'Replace("win32-", "windows-")');
+requireIncludes('scripts/install.sh', 'agiworkforce-{platform}.{ext}');
+requireIncludes('scripts/update-homebrew-tap.sh', 'agiworkforce-$platform.tar.gz');
+requireIncludes('scripts/update-homebrew-tap.sh', 'SHA_LINUX_ARM64');
 
 if (errors.length > 0) {
   console.error('Structure convention check failed:');

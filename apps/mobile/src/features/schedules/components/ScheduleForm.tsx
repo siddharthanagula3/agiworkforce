@@ -10,7 +10,7 @@ import { RecurrencePicker } from './RecurrencePicker';
 import { ModelPickerSheet } from '@/components/model-picker/ModelPickerSheet';
 import { getDisplayName } from '@/lib/models';
 import { colors } from '@/lib/theme';
-import type { Schedule, RecurrenceType } from '@/stores/scheduleStore';
+import type { Schedule, RecurrenceType } from '../store';
 
 // ---------------------------------------------------------------------------
 // Props

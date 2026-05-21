@@ -4,7 +4,7 @@
 
 ## Mission
 
-The Rust CLI is the **engine** — every other surface wraps it conceptually. It's also the only surface that ships every provider end-to-end on day one. Installable via Homebrew, npm wrapper, GitHub Releases (5 platforms), and curl install.sh.
+The Rust CLI is the **engine** — every other surface wraps it conceptually. It's also the only surface that ships every provider end-to-end on day one. Installable via Homebrew, npm wrapper, GitHub Releases (6 platforms), and curl install.sh.
 
 ## Status at HEAD
 
@@ -39,7 +39,7 @@ The Rust CLI is the **engine** — every other surface wraps it conceptually. It
 | Provider SDKs | Custom OpenAI-compatible HTTP client; no vendor SDKs in CLI (TS packages wrap vendor SDKs)   |
 | MCP           | stdio transport only (HTTP transport via api-gateway)                                        |
 | Sandbox       | macOS Seatbelt + Linux bwrap (Windows + Landlock are stubs — V5 §17 risk #10)                |
-| Distribution  | Homebrew + npm + curl install.sh + GitHub Releases (5 platforms) + Cargo                     |
+| Distribution  | Homebrew + npm + curl install.sh + GitHub Releases (6 platforms) + Cargo                     |
 
 ## File layout
 
@@ -165,9 +165,9 @@ cargo test -p agiworkforce-cli --lib <module>::tests::<name> -- --exact
 
 Tag `v-cli-X.Y.Z` triggers `.github/workflows/release-cli.yml`:
 
-1. Builds 5 platform binaries (darwin x64/arm64, linux x64/arm64, windows x64)
+1. Builds 6 platform binaries (darwin x64/arm64, linux x64/arm64, windows x64/arm64)
 2. Uploads to GitHub Releases
-3. Updates Homebrew formula via `scripts/homebrew/update-homebrew-tap.sh` (taps `siddharthanagula3/homebrew-tap`)
+3. Updates Homebrew formula via `scripts/update-homebrew-tap.sh` (taps `siddharthanagula3/homebrew-tap`)
 4. Publishes npm wrapper `@agiworkforce/cli` (requires `NPM_TOKEN` secret)
 5. Updates `install.sh` for curl-pipe install
 

@@ -1,6 +1,6 @@
-import { api } from './api';
-import type { Schedule, ScheduleRun, CreateScheduleInput } from '@/stores/scheduleStore';
+import { api } from '@/services/api';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import type { Schedule, ScheduleRun, CreateScheduleInput } from './store';
 
 /**
  * Schedule API Service

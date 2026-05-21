@@ -29,8 +29,8 @@ const {
   getModelById,
   getShippableModels,
   getModelsForRole,
-} = require('@agiworkforce/local-llm/src/catalog');
-const { detectCapabilities } = require('@agiworkforce/local-llm/src/capabilities');
+  detectCapabilities,
+} = require('@agiworkforce/local-llm');
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 // System-tier model IDs (OS-resident, not downloaded) — at least one must exist.

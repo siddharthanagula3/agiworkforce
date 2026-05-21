@@ -4,7 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { Input } from '@/components/ui/input';
 import { useSettingsStore } from '@/stores/settingsStore';
-import type { RecurrenceType } from '@/stores/scheduleStore';
+import type { RecurrenceType } from '../store';
 
 // ---------------------------------------------------------------------------
 // Props

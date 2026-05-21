@@ -20,8 +20,8 @@ import {
 } from 'react-native';
 import { Zap, X, ChevronRight } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useScheduleStore, type CreateScheduleInput } from '@/stores/scheduleStore';
 import { colors } from '@/lib/theme';
+import { useScheduleStore, type CreateScheduleInput } from '../store';
 
 // ---------------------------------------------------------------------------
 // Natural language parser

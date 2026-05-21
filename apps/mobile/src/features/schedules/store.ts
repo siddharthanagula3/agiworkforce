@@ -8,7 +8,7 @@ import {
   deleteSchedule as apiDeleteSchedule,
   toggleSchedule as apiToggleSchedule,
   fetchScheduleRuns as apiFetchRuns,
-} from '@/services/schedules';
+} from './service';
 
 // ---------------------------------------------------------------------------
 // Types

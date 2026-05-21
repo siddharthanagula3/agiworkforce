@@ -4,9 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { ScheduleForm } from '@/components/schedules/ScheduleForm';
-import { useScheduleStore } from '@/stores/scheduleStore';
-import type { Schedule } from '@/stores/scheduleStore';
+import { ScheduleForm, useScheduleStore, type Schedule } from '@/src/features/schedules';
 import { colors } from '@/lib/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 

@@ -20,6 +20,7 @@ const ignoredParts = new Set([
 ]);
 
 const uiPackages = new Set(['@agiworkforce/unified-chat', '@agiworkforce/design-tokens']);
+const workspacePackages = new Map();
 
 function walk(dir, files = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -34,6 +35,46 @@ function walk(dir, files = []) {
     }
   }
   return files;
+}
+
+function collectWorkspacePackages(dir) {
+  if (!fs.existsSync(dir)) return;
+
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (ignoredParts.has(entry.name)) continue;
+    const fullPath = path.join(dir, entry.name);
+
+    if (entry.isDirectory()) {
+      collectWorkspacePackages(fullPath);
+      continue;
+    }
+
+    if (entry.name !== 'package.json') continue;
+
+    const packageJson = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+    if (!packageJson.name) continue;
+
+    workspacePackages.set(packageJson.name, {
+      relativePath: relativePath(fullPath),
+      exportedSubpaths: exportedSubpaths(packageJson.exports),
+    });
+  }
+}
+
+function exportedSubpaths(exportsField) {
+  if (!exportsField || typeof exportsField === 'string') {
+    return new Set();
+  }
+
+  if (typeof exportsField !== 'object' || Array.isArray(exportsField)) {
+    return new Set();
+  }
+
+  return new Set(
+    Object.keys(exportsField)
+      .filter((subpath) => subpath !== '.')
+      .map((subpath) => subpath.replace(/^\.\//, '')),
+  );
 }
 
 function importsFrom(source) {
@@ -72,6 +113,8 @@ function appNameFromPath(relative) {
 const scanRoots = ['apps', 'packages', 'services']
   .map((dir) => path.join(root, dir))
   .filter((dir) => fs.existsSync(dir));
+
+collectWorkspacePackages(path.join(root, 'packages'));
 
 for (const scanRoot of scanRoots) {
   for (const file of walk(scanRoot)) {
@@ -121,6 +164,18 @@ for (const scanRoot of scanRoots) {
           if (resolvedRel.startsWith('apps/')) {
             errors.push(`${rel} imports app code via ${specifier}`);
           }
+        }
+      }
+
+      for (const [packageName, packageInfo] of workspacePackages.entries()) {
+        const deepImportPrefix = `${packageName}/`;
+        if (!specifier.startsWith(deepImportPrefix)) continue;
+
+        const subpath = specifier.slice(deepImportPrefix.length);
+        if (!packageInfo.exportedSubpaths.has(subpath)) {
+          errors.push(
+            `${rel} deep-imports workspace package ${specifier}; import ${packageName} or an exported subpath from ${packageInfo.relativePath}.`,
+          );
         }
       }
     }

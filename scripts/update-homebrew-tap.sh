@@ -23,8 +23,7 @@ fi
 
 echo "→ Computing sha256 for each platform binary..."
 # Use plain variables instead of `declare -A` — macOS ships bash 3.2 which
-# lacks associative arrays. linux-arm64 was dropped from the v1.0 matrix
-# (cross-compile openssl issue); add it back here when v1.1 ships.
+# lacks associative arrays.
 fetch_sha() {
   local platform="$1"
   local url="$RELEASE_BASE/agiworkforce-$platform.tar.gz"
@@ -38,6 +37,8 @@ SHA_DARWIN_X64=$(fetch_sha darwin-x64)
 echo "    darwin-x64:   $SHA_DARWIN_X64"
 SHA_LINUX_X64=$(fetch_sha linux-x64)
 echo "    linux-x64:    $SHA_LINUX_X64"
+SHA_LINUX_ARM64=$(fetch_sha linux-arm64)
+echo "    linux-arm64:  $SHA_LINUX_ARM64"
 
 echo ""
 echo "→ Generating $TAP_DIR/Formula/agiworkforce.rb..."
@@ -62,12 +63,14 @@ class Agiworkforce < Formula
     end
   end
 
-  # linux-arm64 omitted in v1.0 (cross-compile openssl-sys not yet wired —
-  # users on arm64 Linux can run: cargo install --git
-  # https://github.com/siddharthanagula3/agiworkforce agiworkforce-cli --bin agi)
   on_linux do
-    url "$RELEASE_BASE/agiworkforce-linux-x64.tar.gz"
-    sha256 "$SHA_LINUX_X64"
+    if Hardware::CPU.arm?
+      url "$RELEASE_BASE/agiworkforce-linux-arm64.tar.gz"
+      sha256 "$SHA_LINUX_ARM64"
+    else
+      url "$RELEASE_BASE/agiworkforce-linux-x64.tar.gz"
+      sha256 "$SHA_LINUX_X64"
+    end
   end
 
   def install

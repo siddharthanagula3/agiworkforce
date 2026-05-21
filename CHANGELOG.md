@@ -148,6 +148,10 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - Mobile waitlist callers now import from canonical `apps/mobile/src/features/waitlist`; the old temporary waitlist barrels under `components/`, `services/`, and `stores/` were removed and guarded by `pnpm check:structure-conventions`.
 - Mobile projects now has a canonical `apps/mobile/src/features/projects` barrel, with `ProjectCard` moved out of legacy `components/projects`.
 - Mobile billing now has a canonical `apps/mobile/src/features/billing` barrel, with `UpsellCard` moved out of legacy `components/billing`.
+- Mobile schedules now has a canonical `apps/mobile/src/features/schedules` domain containing schedule components, API calls, state, and public barrel; old schedule component/service/store paths are removed and guarded.
+- Package boundary checks now reject workspace package deep imports unless the subpath is explicitly exported by that package; `@agiworkforce/runtime/state` and `@agiworkforce/runtime/queue` are now formal exports.
+- Web, Mobile, and Desktop feature roots now require local ownership READMEs for every top-level feature folder.
+- CLI release automation now uses the single canonical `.github/workflows/release-cli.yml`, removes the duplicate workflow, restores linux-arm64 release coverage, uses stable GitHub archive names expected by the installer/Homebrew tap, and guards CI against the old Web filter drift.
 - Former top-level PRD, mobile PRD, appendices, vision, roadmap, pricing, architecture, hosting, scaling, performance, ownership, handoff, strategy, and CLI binary-size docs have moved to `docs/archive/2026-05-21-docs-consolidation/`.
 - The oversized root `AGI_WORKFORCE.md` has been reduced to an LLM-readable current entry point, with the legacy long version archived in the same docs-consolidation folder.
 - `README.md`, `ONBOARDING.md`, surface docs, enterprise/engineering/marketing docs, data-layer docs, and active design/launch/research docs now point at `docs/current` or the dated archive instead of retired top-level docs.

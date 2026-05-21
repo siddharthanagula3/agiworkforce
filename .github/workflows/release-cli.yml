@@ -38,16 +38,15 @@ jobs:
             os: macos-latest
             platform: darwin-x64
             archive: tar.gz
-          # linux-arm64 dropped from v1.0 matrix: openssl-sys cross-compile
-          # needs libssl-dev:arm64 + correct linker setup which cross's
-          # default docker image doesn't ship. Users on linux-arm64 can run:
-          #   cargo install --git https://github.com/siddharthanagula3/agiworkforce agiworkforce-cli --bin agi
-          # which builds natively. v1.1 to add this back via either rustls
-          # migration (no openssl) or self-hosted arm64 runner.
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             platform: linux-x64
             archive: tar.gz
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            platform: linux-arm64
+            archive: tar.gz
+            cross: true
           - target: aarch64-pc-windows-msvc
             os: windows-latest
             platform: win32-arm64
@@ -118,13 +117,18 @@ jobs:
 
       - name: Archive (tar.gz)
         if: matrix.archive == 'tar.gz'
-        run: tar -czf agiworkforce-${{ matrix.platform }}.tar.gz -C dist/cli/${{ matrix.platform }}/bin .
+        shell: bash
+        run: |
+          ARCHIVE_PLATFORM="${{ matrix.platform }}"
+          tar -czf "agiworkforce-${ARCHIVE_PLATFORM}.tar.gz" -C dist/cli/${{ matrix.platform }}/bin .
 
       - name: Archive (zip)
         if: matrix.archive == 'zip'
+        shell: pwsh
         run: |
+          $archivePlatform = "${{ matrix.platform }}".Replace("win32-", "windows-")
           cd dist/cli/${{ matrix.platform }}/bin
-          7z a ../../../../agiworkforce-${{ matrix.platform }}.zip *
+          7z a "../../../../agiworkforce-$archivePlatform.zip" *
 
       - name: Upload binary artifact (npm)
         uses: actions/upload-artifact@v5
@@ -136,7 +140,7 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: archive-${{ matrix.platform }}
-          path: agiworkforce-${{ matrix.platform }}.${{ matrix.archive }}
+          path: agiworkforce-*.${{ matrix.archive }}
 
   publish-npm:
     name: Publish to npm

@@ -8,6 +8,7 @@ const errors = [];
 const warnings = [];
 
 const scanRoots = ['apps', 'packages', 'packages/providers', 'crates', 'services'];
+const featureRoots = ['apps/web/features', 'apps/mobile/src/features', 'apps/desktop/src/features'];
 
 const missingReadmeDebt = new Set([]);
 
@@ -23,24 +24,35 @@ function childDirs(relativeRoot) {
     .sort();
 }
 
+function requireReadmeOwnership(dir) {
+  const readmePath = path.join(root, dir, 'README.md');
+  if (!fs.existsSync(readmePath)) {
+    if (missingReadmeDebt.has(dir)) {
+      warnings.push(`Known README ownership debt: ${dir}/README.md`);
+    } else {
+      errors.push(`Missing README ownership file: ${dir}/README.md`);
+    }
+    return;
+  }
+
+  const body = fs.readFileSync(readmePath, 'utf8');
+  for (const marker of requiredReadmeMarkers) {
+    if (!body.includes(marker)) {
+      errors.push(`${dir}/README.md missing required marker: ${marker}`);
+    }
+  }
+}
+
 for (const scanRoot of scanRoots) {
   for (const dir of childDirs(scanRoot)) {
-    const readmePath = path.join(root, dir, 'README.md');
-    if (!fs.existsSync(readmePath)) {
-      if (missingReadmeDebt.has(dir)) {
-        warnings.push(`Known README ownership debt: ${dir}/README.md`);
-      } else {
-        errors.push(`Missing README ownership file: ${dir}/README.md`);
-      }
-      continue;
-    }
+    requireReadmeOwnership(dir);
+  }
+}
 
-    const body = fs.readFileSync(readmePath, 'utf8');
-    for (const marker of requiredReadmeMarkers) {
-      if (!body.includes(marker)) {
-        errors.push(`${dir}/README.md missing required marker: ${marker}`);
-      }
-    }
+for (const featureRoot of featureRoots) {
+  requireReadmeOwnership(featureRoot);
+  for (const dir of childDirs(featureRoot)) {
+    requireReadmeOwnership(dir);
   }
 }
 

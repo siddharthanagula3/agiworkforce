@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: Platform lead
-Last updated: 2026-05-20
+Last updated: 2026-05-21
 Kind: ts-package
 Criticality: high
 
@@ -21,8 +21,11 @@ Criticality: high
 
 - `.` -> `./src/index.ts`
 - `./node` -> `./src/node.ts`
+- `./state` -> `./src/state/index.ts`
+- `./queue` -> `./src/queue/index.ts`
 
-Do not deep-import implementation files unless migrating an existing consumer.
+Do not deep-import implementation files. Add an explicit `package.json#exports`
+entry before introducing a new public subpath.
 
 ## What Belongs Here
 
