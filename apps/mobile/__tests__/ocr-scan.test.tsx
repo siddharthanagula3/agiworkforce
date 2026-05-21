@@ -1,6 +1,6 @@
 import React from 'react';
 import { NativeModules, Platform } from 'react-native';
-import { recognizeText } from '../services/ocr';
+import { recognizeText } from '../src/features/image/services/ocr';
 
 // ── OCR service unit tests ────────────────────────────────────────────────
 

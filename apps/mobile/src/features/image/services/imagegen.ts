@@ -5,7 +5,7 @@
  * Supports multiple models (DALL-E 3, GPT Image 1, Stable Diffusion XL).
  */
 
-import { api } from './api';
+import { api } from '@/services/api';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
 // ---------------------------------------------------------------------------

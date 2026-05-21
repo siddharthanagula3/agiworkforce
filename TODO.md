@@ -115,6 +115,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Move Mobile model-picker state, model catalog service, and provider-switch guard into `apps/mobile/src/features/model-picker`.
 - [x] Move Mobile project state into `apps/mobile/src/features/projects`.
 - [x] Move Mobile integration state and device/HealthKit integration services into `apps/mobile/src/features/integrations`.
+- [x] Move Mobile image generation, OCR, and vision services into `apps/mobile/src/features/image`.
 - [x] Move Desktop Settings and MCP domains into `apps/desktop/src/features/settings` and `apps/desktop/src/features/mcp`.
 - [x] Move Desktop Unified Agentic Chat into `apps/desktop/src/features/chat`.
 - [x] Move Desktop execution, execution sidecar, memory, memory panel, and tool-calling domains into `apps/desktop/src/features`.

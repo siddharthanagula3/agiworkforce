@@ -38,7 +38,7 @@ import { getModelById, isAutoMode } from '@/lib/models';
 import { useVoicePlayback } from '@/hooks/useVoicePlayback';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { offlineQueue } from '@/services/offlineQueue';
-import { generateImage } from '@/services/imagegen';
+import { generateImage } from '@/src/features/image/services/imagegen';
 import { useThemeColors } from '@/hooks/useTheme';
 import type { ChatMessage } from '@/types/chat';
 

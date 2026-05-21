@@ -24,8 +24,8 @@ import { Pressable } from 'react-native';
 import { X, Send, RotateCcw } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { PerformanceChip } from '@/src/features/chat/components/PerformanceChip';
-import { runVisionQuery, visionRouteLabel } from '@/services/vision';
-import type { VisionResult, VisionRoute } from '@/services/vision';
+import { runVisionQuery, visionRouteLabel } from '@/src/features/image/services/vision';
+import type { VisionResult, VisionRoute } from '@/src/features/image/services/vision';
 import { useThemeColors } from '@/hooks/useTheme';
 import type { RuntimeTier } from '@/src/features/chat/components/PerformanceChip';
 

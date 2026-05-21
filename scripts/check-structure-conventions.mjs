@@ -203,6 +203,9 @@ const retiredMobileFeaturePaths = [
   'apps/mobile/services/healthKitPermission.ts',
   'apps/mobile/services/healthKitQuery.ts',
   'apps/mobile/stores/integrationStore.ts',
+  'apps/mobile/services/imagegen.ts',
+  'apps/mobile/services/ocr.ts',
+  'apps/mobile/services/vision.ts',
 ];
 
 for (const retiredMobileFeaturePath of retiredMobileFeaturePaths) {
@@ -317,6 +320,12 @@ const mobileFeatureForbiddenImports = [
   '../services/healthKitPermission',
   '../services/healthKitQuery',
   '../stores/integrationStore',
+  '@/services/imagegen',
+  '@/services/ocr',
+  '@/services/vision',
+  '../services/imagegen',
+  '../services/ocr',
+  '../services/vision',
 ];
 
 const retiredDesktopFeatureShimPaths = [

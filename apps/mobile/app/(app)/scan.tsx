@@ -21,7 +21,7 @@ import { Text } from '@/components/ui/text';
 import { colors } from '@/lib/theme';
 import { useChatMessageStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
-import { recognizeText, type OcrRegion } from '@/services/ocr';
+import { recognizeText, type OcrRegion } from '@/src/features/image/services/ocr';
 import { useChatExecutionStore } from '@/stores/chatStore';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');

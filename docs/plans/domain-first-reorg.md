@@ -51,6 +51,10 @@ state, device permission helpers, health-context access, and HealthKit helpers
 now live under `apps/mobile/src/features/integrations`, with structure checks
 guarding the old integration service/store paths.
 
+The Mobile image ownership slice is complete: image generation, OCR, and vision
+routing helpers now live under `apps/mobile/src/features/image/services`, with
+structure checks guarding the old image service paths.
+
 The Desktop small-domain wave has moved quick query, voice, simple mode,
 subscription, pricing, planning, reminders, messaging, mobile companion, teams,
 terminal, tools, vision, and workflows out of `src/components` into
