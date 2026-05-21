@@ -94,6 +94,8 @@ export { ArtifactPanel } from './components/ArtifactPanel';
 export type { ArtifactPanelProps } from './components/ArtifactPanel';
 export { DownloadCard } from './components/DownloadCard';
 export type { DownloadCardProps } from './components/DownloadCard';
+export { GeneratedFileCard } from './components/GeneratedFileCard';
+export type { GeneratedFileCardProps } from './components/GeneratedFileCard';
 export { ImageGenCard } from './components/ImageGenCard';
 export type { ImageGenCardProps } from './components/ImageGenCard';
 export { VideoGenCard } from './components/VideoGenCard';
