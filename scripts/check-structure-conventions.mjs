@@ -197,6 +197,7 @@ const retiredMobileFeaturePaths = [
   'apps/mobile/services/modelCatalog.ts',
   'apps/mobile/services/tierGuard.ts',
   'apps/mobile/stores/modelStore.ts',
+  'apps/mobile/stores/projectStore.ts',
 ];
 
 for (const retiredMobileFeaturePath of retiredMobileFeaturePaths) {
@@ -299,6 +300,8 @@ const mobileFeatureForbiddenImports = [
   '../services/modelCatalog',
   '../services/tierGuard',
   '../stores/modelStore',
+  '@/stores/projectStore',
+  '../stores/projectStore',
 ];
 
 const retiredDesktopFeatureShimPaths = [

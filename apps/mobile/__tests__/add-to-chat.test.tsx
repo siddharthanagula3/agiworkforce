@@ -126,7 +126,7 @@ jest.mock('../src/features/chat/components/ToolAccessSelector', () => {
 
 import { AddToChatSheet } from '../src/features/chat/components/AddToChatSheet';
 import { useChatStore } from '../stores/chatStore';
-import { useProjectStore } from '../stores/projectStore';
+import { useProjectStore } from '../src/features/projects/store';
 
 // ---------------------------------------------------------------------------
 // Helpers

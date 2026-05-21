@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
 import { api } from '@/services/api';
-import { useProjectStore } from '@/stores/projectStore';
+import { useProjectStore } from '@/src/features/projects/store';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
 
 interface MessageState {

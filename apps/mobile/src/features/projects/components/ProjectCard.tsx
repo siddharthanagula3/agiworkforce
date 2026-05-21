@@ -4,7 +4,7 @@ import { FolderOpen, Check } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/lib/theme';
 import { formatRelativeTime } from '@agiworkforce/utils';
-import type { Project } from '@/stores/projectStore';
+import type { Project } from '@/src/features/projects/store';
 
 interface ProjectCardProps {
   project: Project;

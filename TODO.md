@@ -113,6 +113,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Move Mobile component-heavy domains into `apps/mobile/src/features`: agents, auth, chat, companion, connectors, drawer, edge cases, image, integrations, messaging, model picker, onboarding, paywall, settings, sidebar, and voice.
 - [x] Move Mobile voice and messaging services/state into their feature domains and guard the old service/store paths.
 - [x] Move Mobile model-picker state, model catalog service, and provider-switch guard into `apps/mobile/src/features/model-picker`.
+- [x] Move Mobile project state into `apps/mobile/src/features/projects`.
 - [x] Move Desktop Settings and MCP domains into `apps/desktop/src/features/settings` and `apps/desktop/src/features/mcp`.
 - [x] Move Desktop Unified Agentic Chat into `apps/desktop/src/features/chat`.
 - [x] Move Desktop execution, execution sidecar, memory, memory panel, and tool-calling domains into `apps/desktop/src/features`.

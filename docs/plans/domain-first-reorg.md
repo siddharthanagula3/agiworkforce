@@ -42,6 +42,10 @@ remote model catalog loading, and provider-switch guard logic now live under
 `services/modelCatalog.ts`, `services/tierGuard.ts`, and `stores/modelStore.ts`
 paths.
 
+The Mobile projects ownership slice is complete: project state now lives under
+`apps/mobile/src/features/projects/store.ts`, with structure checks guarding the
+old `stores/projectStore.ts` path.
+
 The Desktop small-domain wave has moved quick query, voice, simple mode,
 subscription, pricing, planning, reminders, messaging, mobile companion, teams,
 terminal, tools, vision, and workflows out of `src/components` into

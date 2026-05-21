@@ -5,3 +5,4 @@
  * mobile interactions live under this feature.
  */
 export { ProjectCard } from './components/ProjectCard';
+export { useProjectStore, type Project } from './store';

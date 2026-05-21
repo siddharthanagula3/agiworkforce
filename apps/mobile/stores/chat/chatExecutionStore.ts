@@ -4,7 +4,7 @@ import { QueueFullError } from '@agiworkforce/runtime';
 import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
 import { streamChat, type StreamDelta } from '@/services/streaming';
-import { useProjectStore } from '@/stores/projectStore';
+import { useProjectStore } from '@/src/features/projects/store';
 import { retrieveMemoryContext } from '@/stores/memoryStore';
 import type { ChatMessage, MessageAttachment } from '@/types/chat';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';

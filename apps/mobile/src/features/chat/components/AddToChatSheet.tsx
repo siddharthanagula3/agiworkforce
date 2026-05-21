@@ -26,7 +26,7 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { useChatStore, type ChatMode } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useProjectStore } from '@/stores/projectStore';
+import { useProjectStore } from '@/src/features/projects/store';
 import { useAgentControlStore } from '@/stores/agentControlStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useTheme } from '@/hooks/useTheme';
