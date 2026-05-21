@@ -123,6 +123,54 @@ pub fn parse_paywall_body(body: &str) -> Option<CliError> {
     Some(CliError::paywall(feature, required_tier, reason))
 }
 
+fn anthropic_tools_json(tool_defs: &[ToolDefinition]) -> Vec<Value> {
+    let last_idx = tool_defs.len().saturating_sub(1);
+    tool_defs
+        .iter()
+        .enumerate()
+        .map(|(index, tool)| {
+            let mut entry = serde_json::json!({
+                "name": tool.name,
+                "description": tool.description,
+                "input_schema": tool.input_schema,
+            });
+            if index == last_idx && !tool_defs.is_empty() {
+                entry["cache_control"] = serde_json::json!({"type": "ephemeral"});
+            }
+            entry
+        })
+        .collect()
+}
+
+fn openai_function_tools_json(tool_defs: &[ToolDefinition]) -> Vec<Value> {
+    tool_defs
+        .iter()
+        .map(|tool| {
+            serde_json::json!({
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.input_schema,
+                }
+            })
+        })
+        .collect()
+}
+
+fn gemini_function_declarations_json(tool_defs: &[ToolDefinition]) -> Vec<Value> {
+    tool_defs
+        .iter()
+        .map(|tool| {
+            serde_json::json!({
+                "name": tool.name,
+                "description": tool.description,
+                "parameters": tool.input_schema,
+            })
+        })
+        .collect()
+}
+
 // ---------------------------------------------------------------------------
 // Streaming completion (main entry point)
 // ---------------------------------------------------------------------------
@@ -374,23 +422,7 @@ async fn stream_anthropic(
     if let Some(tool_defs) = tools {
         // Mark the last tool with cache_control so the entire tools array is
         // cacheable. Tools rarely change mid-session, so this is pure win.
-        let last_idx = tool_defs.len().saturating_sub(1);
-        let tools_json: Vec<Value> = tool_defs
-            .iter()
-            .enumerate()
-            .map(|(i, t)| {
-                let mut entry = serde_json::json!({
-                    "name": t.name,
-                    "description": t.description,
-                    "input_schema": t.input_schema,
-                });
-                if i == last_idx && !tool_defs.is_empty() {
-                    entry["cache_control"] = serde_json::json!({"type": "ephemeral"});
-                }
-                entry
-            })
-            .collect();
-        body["tools"] = serde_json::json!(tools_json);
+        body["tools"] = serde_json::json!(anthropic_tools_json(tool_defs));
     }
 
     let url = "https://api.anthropic.com/v1/messages";
@@ -622,20 +654,7 @@ async fn stream_openai_compatible(
     }
 
     if let Some(tool_defs) = tools {
-        let tools_json: Vec<Value> = tool_defs
-            .iter()
-            .map(|t| {
-                serde_json::json!({
-                    "type": "function",
-                    "function": {
-                        "name": t.name,
-                        "description": t.description,
-                        "parameters": t.input_schema,
-                    }
-                })
-            })
-            .collect();
-        body["tools"] = serde_json::json!(tools_json);
+        body["tools"] = serde_json::json!(openai_function_tools_json(tool_defs));
     }
 
     let resp = client
@@ -705,16 +724,7 @@ async fn stream_google(
     }
 
     if let Some(tool_defs) = tools {
-        let declarations: Vec<Value> = tool_defs
-            .iter()
-            .map(|t| {
-                serde_json::json!({
-                    "name": t.name,
-                    "description": t.description,
-                    "parameters": t.input_schema,
-                })
-            })
-            .collect();
+        let declarations = gemini_function_declarations_json(tool_defs);
         body["tools"] = serde_json::json!([{ "functionDeclarations": declarations }]);
     }
 
@@ -882,20 +892,7 @@ async fn stream_ollama(
 
     // Ollama supports OpenAI-format tool definitions
     if let Some(tool_defs) = tools {
-        let tools_json: Vec<Value> = tool_defs
-            .iter()
-            .map(|t| {
-                serde_json::json!({
-                    "type": "function",
-                    "function": {
-                        "name": t.name,
-                        "description": t.description,
-                        "parameters": t.input_schema,
-                    }
-                })
-            })
-            .collect();
-        body["tools"] = serde_json::json!(tools_json);
+        body["tools"] = serde_json::json!(openai_function_tools_json(tool_defs));
     }
 
     let url = format!("{}/api/chat", base_url.trim_end_matches('/'));
@@ -1066,20 +1063,7 @@ async fn stream_copilot_api(
     }
 
     if let Some(tool_defs) = tools {
-        let tools_json: Vec<Value> = tool_defs
-            .iter()
-            .map(|t| {
-                serde_json::json!({
-                    "type": "function",
-                    "function": {
-                        "name": t.name,
-                        "description": t.description,
-                        "parameters": t.input_schema,
-                    }
-                })
-            })
-            .collect();
-        body["tools"] = serde_json::json!(tools_json);
+        body["tools"] = serde_json::json!(openai_function_tools_json(tool_defs));
     }
 
     let resp = client
@@ -1145,20 +1129,7 @@ async fn stream_chatgpt_codex(
     }
 
     if let Some(tool_defs) = tools {
-        let tools_json: Vec<Value> = tool_defs
-            .iter()
-            .map(|t| {
-                serde_json::json!({
-                    "type": "function",
-                    "function": {
-                        "name": t.name,
-                        "description": t.description,
-                        "parameters": t.input_schema,
-                    }
-                })
-            })
-            .collect();
-        body["tools"] = serde_json::json!(tools_json);
+        body["tools"] = serde_json::json!(openai_function_tools_json(tool_defs));
     }
 
     let mut req = client
@@ -1334,6 +1305,80 @@ async fn parse_openai_sse_stream(
 mod tests {
     use super::*;
     use std::time::Duration;
+
+    fn test_tool(name: &str) -> ToolDefinition {
+        ToolDefinition {
+            name: name.to_string(),
+            description: format!("{name} description"),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string" }
+                },
+                "required": ["path"]
+            }),
+            is_read_only: true,
+            is_concurrency_safe: true,
+            max_result_size_chars: Some(1234),
+            should_defer: true,
+            aliases: vec!["Read".to_string()],
+            owner: "test-owner".to_string(),
+            permission_class: "read_only".to_string(),
+            diagnostic_tags: vec!["test".to_string()],
+        }
+    }
+
+    fn assert_provider_tool_payload_omits_local_metadata(value: &Value) {
+        let serialized = value.to_string();
+        for local_key in [
+            "aliases",
+            "owner",
+            "permission_class",
+            "diagnostic_tags",
+            "is_read_only",
+            "is_concurrency_safe",
+            "max_result_size_chars",
+            "should_defer",
+        ] {
+            assert!(
+                !serialized.contains(local_key),
+                "provider payload should omit local metadata key `{local_key}`: {serialized}"
+            );
+        }
+    }
+
+    #[test]
+    fn anthropic_tool_schema_uses_messages_shape_and_cache_marker() {
+        let payload = anthropic_tools_json(&[test_tool("read_file"), test_tool("write_file")]);
+
+        assert_eq!(payload[0]["name"], "read_file");
+        assert_eq!(payload[0]["input_schema"]["required"][0], "path");
+        assert!(payload[0].get("cache_control").is_none());
+        assert_eq!(
+            payload[1]["cache_control"],
+            serde_json::json!({"type": "ephemeral"})
+        );
+        assert_provider_tool_payload_omits_local_metadata(&serde_json::json!(payload));
+    }
+
+    #[test]
+    fn openai_tool_schema_uses_function_shape_without_local_metadata() {
+        let payload = openai_function_tools_json(&[test_tool("read_file")]);
+
+        assert_eq!(payload[0]["type"], "function");
+        assert_eq!(payload[0]["function"]["name"], "read_file");
+        assert_eq!(payload[0]["function"]["parameters"]["required"][0], "path");
+        assert_provider_tool_payload_omits_local_metadata(&serde_json::json!(payload));
+    }
+
+    #[test]
+    fn gemini_tool_schema_uses_function_declaration_shape_without_local_metadata() {
+        let payload = gemini_function_declarations_json(&[test_tool("read_file")]);
+
+        assert_eq!(payload[0]["name"], "read_file");
+        assert_eq!(payload[0]["parameters"]["required"][0], "path");
+        assert_provider_tool_payload_omits_local_metadata(&serde_json::json!(payload));
+    }
 
     // -- Context overflow detection --
 
