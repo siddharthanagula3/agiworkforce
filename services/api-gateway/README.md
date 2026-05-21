@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: Backend/data owner
-Last updated: 2026-05-20
+Last updated: 2026-05-21
 Kind: service
 Criticality: high
 
@@ -14,6 +14,7 @@ Criticality: high
 
 - Mobile and web clients where gateway routes are enabled.
 - Future managed/private compute runners.
+- Enterprise admin clients for policy, audit, usage-ledger, and support workflows.
 - Provider adapter packages and Supabase-backed backend flows.
 
 ## Public API / Exports
@@ -39,6 +40,7 @@ Reusable schemas must live in `packages/types`; provider calls must go through p
 ## Key Files
 
 - `src/` - service source.
+- `src/routes/enterprise.ts` - enterprise control-plane route foundation.
 - `__tests__/` - service tests.
 - `Dockerfile` - container build.
 - `mcp-servers.json` - service MCP server config.
@@ -75,6 +77,7 @@ Deploy only with explicit environment review, rate-limit configuration, logging 
 
 - Managed cloud is intentionally not a public default path.
 - API gateway route mounting and future agents/MCP route decisions remain tracked in the parity TODO.
+- Enterprise routes are foundation endpoints only; public managed credits remain gated by ledger, cap, fraud, refund, dispute, and provider-term evidence.
 
 ## CODEOWNERS
 

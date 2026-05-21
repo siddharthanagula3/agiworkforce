@@ -27,6 +27,7 @@ import { cloudChatRouter } from './routes/cloudChat';
 import { llmRouter } from './routes/llm';
 import { providerStreamRouter } from './routes/providerStream';
 import { usageRouter } from './routes/usage';
+import { enterpriseRouter } from './routes/enterprise';
 import { deviceAuthRouter } from './routes/deviceAuth';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import {
@@ -123,6 +124,7 @@ app.use('/api/cloud-chat', cloudChatRouter);
 app.use('/api/llm/v1', llmRouter);
 app.use('/api/v1/providers', providerStreamRouter);
 app.use('/api/v1/usage', usageRouter);
+app.use('/api/v1/enterprise', enterpriseRouter);
 
 // Outbound-worker protocol (direction-inversion layer, Task 1.7).
 // Inbound bridge at /ws remains live for 30-day backward-compat window.

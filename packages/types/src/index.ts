@@ -120,6 +120,9 @@ export * from './dispatch';
 // Workspace analytics types (enterprise usage tracking)
 export * from './workspace-analytics';
 
+// Enterprise admin, compliance, identity, support, and managed-credit contracts
+export * from './enterprise';
+
 // Command capability types (runtime-aware dispatch)
 export * from './command-capabilities';
 
