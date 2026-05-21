@@ -126,6 +126,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - CLI tool catalog and executor drift is now covered by regression tests: built-in catalog entries must have a local or agent-runtime dispatcher, local dispatch arms must have catalog metadata, and team tool dispatchers must match team tool schemas.
 - Current docs now define suite-level requirements for all six surfaces, cross-surface ownership for projects/chats/sessions/artifacts/memory/teams/billing, and a provider capability matrix for routing/privacy claims.
 - Surface docs now reflect current CLI MCP client transports, Desktop onboarding feature paths, and the VS Code tier-response HMAC verification status.
+- Desktop surface docs now reflect the completed removal of the legacy `src/components/UnifiedAgenticChat` folder and point live Desktop chat work at `src/features/chat`; structure checks guard against reintroducing the stale claim.
 - VS Code and unified chat usage meters no longer invent managed-plan quota/reset values; they now use reported quota fields when available and show explicit unavailable/not-managed states otherwise.
 - Desktop and Web MCP surface types now source the canonical `McpServerConfig` name from `@agiworkforce/mcp`; Desktop-only config requirements use `DesktopMcpServerConfig`.
 - API gateway now mounts `agents` at `/api/agents` and MCP at `/api/mcp`; MCP proxy initialization is lazy on first authenticated route use.

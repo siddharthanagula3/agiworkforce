@@ -40,8 +40,9 @@ Native Mac / Windows / Linux app for the same chat layer that runs on web and mo
 ```
 apps/desktop/
 ├── src/                            React frontend
-│   ├── App.tsx                     entry; imports CommandPalette + SearchModal + KeyboardShortcutsOverlay + ToolLabel
+│   ├── App.tsx                     entry; loads ChatInterface and chat overlays
 │   ├── features/
+│   │   ├── chat/                   Desktop-owned chat shell, CommandPalette, SearchModal, ToolLabel, shortcuts
 │   │   └── onboarding/
 │   │       └── OnboardingWizard.tsx   ⚠ canonical mode picker (Local vs Cloud); ModeSelectionDialog was deleted, do NOT reintroduce
 │   ├── stores/                     118 Zustand stores
@@ -64,13 +65,13 @@ apps/desktop/
 
 ## Key files to know
 
-| File                                                        | What                                                                                                                                                                                                                                                            |
-| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/desktop/src/App.tsx`                                  | Entry. Notable: lines 26, 96-105 import `CommandPalette`, `SearchModal`, `KeyboardShortcutsOverlay`, `ToolLabel` from `UnifiedAgenticChat/`. Lines 153-155 have a commented dead lazy-import. W6 fix: relocate the 4 live components and delete the legacy dir. |
-| `apps/desktop/src/features/onboarding/OnboardingWizard.tsx` | Mode picker. **`ModeSelectionDialog` was removed and must not be reintroduced** (PRD V5 §10 lock #2).                                                                                                                                                           |
-| `apps/desktop/src-tauri/Cargo.toml`                         | Workspace lint rules: `unsafe_code = "deny"`, `await_holding_lock = "warn"`.                                                                                                                                                                                    |
-| `apps/desktop/src/constants/models.json`                    | Mirror file — DO NOT edit; SSOT is `packages/types/src/models.json`.                                                                                                                                                                                            |
-| `.github/workflows/release-desktop.yml`                     | Tag-triggered build + sign + notarize. Needs `APPLE_*` + `WINDOWS_CERTIFICATE*` GitHub secrets.                                                                                                                                                                 |
+| File                                                        | What                                                                                                                                                                                                                             |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/desktop/src/App.tsx`                                  | Entry. Loads `ChatInterface` from `@agiworkforce/unified-chat` and Desktop chat overlays from `apps/desktop/src/features/chat/`. The retired `apps/desktop/src/components/UnifiedAgenticChat/` directory is removed and guarded. |
+| `apps/desktop/src/features/onboarding/OnboardingWizard.tsx` | Mode picker. **`ModeSelectionDialog` was removed and must not be reintroduced** (PRD V5 §10 lock #2).                                                                                                                            |
+| `apps/desktop/src-tauri/Cargo.toml`                         | Workspace lint rules: `unsafe_code = "deny"`, `await_holding_lock = "warn"`.                                                                                                                                                     |
+| `apps/desktop/src/constants/models.json`                    | Mirror file — DO NOT edit; SSOT is `packages/types/src/models.json`.                                                                                                                                                             |
+| `.github/workflows/release-desktop.yml`                     | Tag-triggered build + sign + notarize. Needs `APPLE_*` + `WINDOWS_CERTIFICATE*` GitHub secrets.                                                                                                                                  |
 
 ## Build + test commands
 
@@ -119,15 +120,14 @@ All 10+ providers route through `@agiworkforce/llm-normalize` via `packages/api`
 
 ## Current open work (Wave 6, in flight)
 
-1. **W6 #4** — Relocate `CommandPalette` / `SearchModal` / `KeyboardShortcutsOverlay` / `ToolLabel` from `apps/desktop/src/components/UnifiedAgenticChat/` to `Shortcuts/` and `Palette/`, then delete the legacy `UnifiedAgenticChat/` dir entirely.
-2. **W6 #15** — Desktop Dispatch outbound signer (hard deadline 2026-06-05). Currently mobile can send to desktop but desktop can't sign outbound. Without this, mobile rejects desktop signals after 2026-06-05.
-3. **W6 #19** — Remove `?? 'gpt-5.4'` hardcoded fallbacks in 5 Web files (cross-surface — see [docs/surfaces/web.md](web.md)).
-4. **W6 #22** — CLI sandbox hard-refuse on Windows + Linux-no-bwrap (no silent fallthrough). Cross-surface with CLI.
+1. **W6 #15** — Desktop Dispatch outbound signer (hard deadline 2026-06-05). Currently mobile can send to desktop but desktop can't sign outbound. Without this, mobile rejects desktop signals after 2026-06-05.
+2. **W6 #19** — Remove `?? 'gpt-5.4'` hardcoded fallbacks in 5 Web files (cross-surface — see [docs/surfaces/web.md](web.md)).
+3. **W6 #22** — CLI sandbox hard-refuse on Windows + Linux-no-bwrap (no silent fallthrough). Cross-surface with CLI.
 
 ## Gotchas
 
 - **Two stale claims in older docs.** Older MEMORY.md said "84 stores" and "97 component subdirs" — actual today is **118 stores** and **74 component subdirs**. Audit verified.
-- **`apps/desktop/src/components/UnifiedAgenticChat/` is partially dead.** 4 live components (`CommandPalette`, `SearchModal`, `KeyboardShortcutsOverlay`, `ToolLabel`) are still imported from `App.tsx`. Do NOT delete the dir before relocating those 4 files first.
+- **Retired chat folder:** `apps/desktop/src/components/UnifiedAgenticChat/` is removed. Do not recreate it. Desktop-owned chat code now lives in `apps/desktop/src/features/chat/`; the component name `UnifiedAgenticChat` can still appear inside that feature folder and tests.
 - **`apps/desktop/src/constants/models.json` is a mirror.** Never edit this file directly. SSOT is `packages/types/src/models.json`. There's a build-time sync (or should be — verify).
 - **macOS code-signing identity:** `D2PR62RLT4`. Don't change without owner approval.
 - **Bundle identifier:** `com.agiworkforce.desktop`. Don't change — would break update channel.

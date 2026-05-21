@@ -593,12 +593,31 @@ for (const file of walk('apps/desktop/src')) {
   }
 }
 
+if (exists('docs/surfaces/desktop.md')) {
+  const desktopSurfaceDoc = readText('docs/surfaces/desktop.md');
+  const staleDesktopChatClaims = [
+    'from `UnifiedAgenticChat/`',
+    '`apps/desktop/src/components/UnifiedAgenticChat/` is partially dead',
+    'then delete the legacy `UnifiedAgenticChat/` dir entirely',
+  ];
+
+  for (const staleClaim of staleDesktopChatClaims) {
+    if (desktopSurfaceDoc.includes(staleClaim)) {
+      errors.push(
+        `docs/surfaces/desktop.md contains stale Desktop chat migration claim: ${staleClaim}`,
+      );
+    }
+  }
+}
+
 requireIncludes('apps/web/README.md', '`features/` - product-domain feature code.');
 requireIncludes('apps/web/src/README.md', 'Product-domain code belongs in');
 requireIncludes('apps/web/features/index.ts', 'canonical Web product-domain root');
 requireIncludes('docs/plans/domain-first-reorg.md', '`apps/web/features/`');
 requireIncludes('docs/plans/domain-first-reorg.md', '`apps/mobile/src/features');
 requireIncludes('docs/plans/domain-first-reorg.md', '`apps/desktop/src/features');
+requireIncludes('docs/surfaces/desktop.md', 'Retired chat folder');
+requireIncludes('docs/surfaces/desktop.md', 'apps/desktop/src/features/chat/');
 requireIncludes(
   'apps/mobile/src/features/schedules/README.md',
   'apps/mobile/src/features/schedules',
