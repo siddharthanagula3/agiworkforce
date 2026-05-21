@@ -20,7 +20,7 @@
 		13B07F961A680F5B00A75B9A /* agiworkforce.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = agiworkforce.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = agiworkforce/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = agiworkforce/Info.plist; sourceTree = "<group>"; };
-		3A2E48CA8726DED361D5EE5B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = agiworkforce/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		3A2E48CA8726DED361D5EE5B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = agiworkforce/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		426C3EB2A6C160337B300825 /* libPods-agiworkforce.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-agiworkforce.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		4EB6396758A263136A13986D /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-agiworkforce/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		7ABD281178CD93E8BC2EAF11 /* Pods-agiworkforce.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-agiworkforce.debug.xcconfig"; path = "Target Support Files/Pods-agiworkforce/Pods-agiworkforce.debug.xcconfig"; sourceTree = "<group>"; };
@@ -119,7 +119,6 @@
 				7ABD281178CD93E8BC2EAF11 /* Pods-agiworkforce.debug.xcconfig */,
 				9B2C9601CEC95F74C04DE2D4 /* Pods-agiworkforce.release.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -335,6 +334,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D2PR62RLT4;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
@@ -369,6 +369,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D2PR62RLT4;
 				INFOPLIST_FILE = agiworkforce/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
