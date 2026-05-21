@@ -37,7 +37,7 @@ import { MessageAvatar } from './MessageAvatar';
 import { ToolCallCard } from './ToolCallCard';
 import { ToolResultCard } from '../../ToolCalling/ToolResultCard';
 import type { ToolResultUI } from '../../../types/toolCalling';
-import { McpAppCard } from '../../MCP/McpAppCard';
+import { McpAppCard } from '@/features/mcp/McpAppCard';
 import { useMcpAppStore } from '../../../stores/mcpAppStore';
 import type { McpAppContent } from '../../../stores/mcpAppStore';
 import { hasInlineRenderer } from '../InlineToolResults';

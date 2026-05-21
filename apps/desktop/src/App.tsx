@@ -124,7 +124,7 @@ const AuthPage = lazy(() =>
   })),
 );
 const SettingsPanel = lazy(() =>
-  import('./components/Settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })),
+  import('./features/settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })),
 );
 const UpdateChecker = lazy(() =>
   import('./features/updates').then((m) => ({
@@ -132,7 +132,7 @@ const UpdateChecker = lazy(() =>
   })),
 );
 const AutomationPermissionsModal = lazy(() =>
-  import('./components/Settings/AutomationPermissionsModal').then((m) => ({
+  import('./features/settings/AutomationPermissionsModal').then((m) => ({
     default: m.AutomationPermissionsModal,
   })),
 );
