@@ -32,7 +32,6 @@ const allowedRootFiles = new Set([
   'README.md',
   'THIRD_PARTY_LICENSES.md',
   'TODO.md',
-  'app.json',
   'commitlint.config.cjs',
   'docker-compose.yml',
   'eslint.config.mjs',
@@ -147,6 +146,14 @@ for (const dir of requiredDirs) {
 
 if (!fs.existsSync(path.join(root, 'audit/audit-log.md'))) {
   errors.push('Missing required audit fire log: audit/audit-log.md');
+}
+
+for (const staleConfig of ['app.json', 'apps/mobile/app.json']) {
+  if (fs.existsSync(path.join(root, staleConfig))) {
+    errors.push(
+      `Stale Expo config must stay removed: ${staleConfig}. Use apps/mobile/app.config.js.`,
+    );
+  }
 }
 
 const planPath = path.join(root, 'docs/plans/pre-release-repo-organization-2026-05-20.md');

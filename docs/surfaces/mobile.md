@@ -117,7 +117,7 @@ apps/mobile/
 ├── scripts/release/                ios-beta/ios-prod/android-beta/android-prod build scripts + runbook
 ├── store-listing/                  Privacy Manifest + screenshots + App Review notes
 ├── eas.json                        Expo Application Services build profiles
-├── app.config.js                   ⚠ canonical Expo config (NOT app.json)
+├── app.config.js                   canonical Expo config
 └── package.json                    @agiworkforce/mobile
 ```
 
@@ -125,7 +125,7 @@ apps/mobile/
 
 | File                                                     | What                                                                                                             |
 | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `apps/mobile/app.config.js`                              | Canonical Expo config. **`app.json` should be deleted** to avoid drift (W6 cleanup).                             |
+| `apps/mobile/app.config.js`                              | Canonical Expo config. Stale root/mobile `app.json` files were deleted to avoid drift.                           |
 | `apps/mobile/app/(public)/onboarding.tsx`                | 3-branch onboarding state machine. Already shipped per commit `157157c35`.                                       |
 | `apps/mobile/components/onboarding/ByokConsentModal.tsx` | Apple 5.1.2(i) consent modal — single highest App Review rejection risk. Verbatim copy from PRD Appendix B §B.7. |
 | `apps/mobile/components/chat/MessageBubble.tsx`          | Provenance footer "On device" / "BYOK · {provider}" — locked per PRD-MOBILE §6.                                  |
@@ -197,7 +197,8 @@ Cache-discount magnitude locked at 90% per V5 §10 lock #23.
 
 1. **Apple Developer Program** — confirm active, request **Foundation Models Framework Adapter Entitlement** if pursuing LoRA in v1.1
 2. **`pnpm install` blocked** — a `react-native-executorch-expo-resource-fetcher@^1.0.0` reference doesn't exist on npm (latest is 0.8.0). Pin to actual stable.
-3. **`app.json` vs `app.config.js` drift** — Expo prefers `app.config.js`; delete `app.json`
+3. **Expo config drift** — `apps/mobile/app.config.js` is canonical; do not recreate root
+   `app.json` or `apps/mobile/app.json` before EAS builds.
 4. **Brand rename in `app.config.js:5`** — still reads "AGI Workforce", should be "AGI" (public brand 2026-05-15)
 5. **`LSMinimumSystemVersion`** is now 15.1 in `ios/agiworkforce/Info.plist`; keep screenshots/store metadata aligned with that support floor
 6. **Apple Privacy Manifest sync** — canonical Xcode-consumed copy is `ios/agiworkforce/PrivacyInfo.xcprivacy`; store-review copy is `apps/mobile/store-listing/ios/PrivacyInfo.xcprivacy`. Keep them synchronized before EAS Build runs
