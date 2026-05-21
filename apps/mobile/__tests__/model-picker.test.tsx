@@ -96,7 +96,7 @@ jest.mock('react-native-reanimated', () => ({
 
 // Mock tierStore — default to 'free' tier with no conversation provider set.
 // Tests that exercise the guard set these explicitly via useTierStore.setState.
-jest.mock('../stores/tierStore', () => ({
+jest.mock('../src/features/billing/store', () => ({
   useTierStore: jest.fn((selector: (s: unknown) => unknown) =>
     selector({
       tier: 'free',

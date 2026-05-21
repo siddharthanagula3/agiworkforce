@@ -10,7 +10,7 @@ import { Text } from '@/components/ui/text';
 import { AutoModeCards } from './AutoModeCard';
 import { ModelRow } from './ModelRow';
 import { useModelStore } from '@/src/features/model-picker/store';
-import { useTierStore } from '@/stores/tierStore';
+import { useTierStore } from '@/src/features/billing/store';
 import { AUTO_MODES, MODEL_LIST, PROVIDERS, isAutoMode, type ModelDef } from '@/lib/models';
 import { fetchModelCatalog } from '@/src/features/model-picker/service';
 import { colors } from '@/lib/theme';

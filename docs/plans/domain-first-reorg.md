@@ -59,6 +59,10 @@ The Mobile auth ownership slice is complete: auth state, age-gate helpers, and
 the biometric gate hook now live under `apps/mobile/src/features/auth`, with
 structure checks guarding the old auth hook/service/store paths.
 
+The Mobile billing ownership slice is complete: subscription tier state now
+lives under `apps/mobile/src/features/billing/store.ts`, with structure checks
+guarding the old `stores/tierStore.ts` path.
+
 The Desktop small-domain wave has moved quick query, voice, simple mode,
 subscription, pricing, planning, reminders, messaging, mobile companion, teams,
 terminal, tools, vision, and workflows out of `src/components` into

@@ -209,6 +209,7 @@ const retiredMobileFeaturePaths = [
   'apps/mobile/hooks/useBiometricGate.ts',
   'apps/mobile/services/ageGate.ts',
   'apps/mobile/stores/authStore.ts',
+  'apps/mobile/stores/tierStore.ts',
 ];
 
 for (const retiredMobileFeaturePath of retiredMobileFeaturePaths) {
@@ -335,6 +336,8 @@ const mobileFeatureForbiddenImports = [
   '../hooks/useBiometricGate',
   '../services/ageGate',
   '../stores/authStore',
+  '@/stores/tierStore',
+  '../stores/tierStore',
 ];
 
 const retiredDesktopFeatureShimPaths = [

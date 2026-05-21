@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import { Fingerprint } from 'lucide-react-native';
 import { useAuthStore } from '@/src/features/auth/store';
-import { useTierStore } from '@/stores/tierStore';
+import { useTierStore } from '@/src/features/billing/store';
 import { supabase } from '@/services/supabase';
 import { storage, initMmkvEncryption } from '@/lib/mmkv';
 import { hydrateBiometricFlag } from '@/lib/biometricFlagStore';

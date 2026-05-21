@@ -7,3 +7,4 @@
 export { UpsellCard } from './components/UpsellCard';
 export { fetchPortalSessionUrl } from './service';
 export type { PortalSessionResult } from './service';
+export { useTierStore } from './store';

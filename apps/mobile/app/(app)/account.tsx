@@ -18,7 +18,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useAuthStore } from '@/src/features/auth/store';
-import { useTierStore } from '@/stores/tierStore';
+import { useTierStore } from '@/src/features/billing/store';
 import { useChatStore } from '@/stores/chatStore';
 import { fetchPortalSessionUrl } from '@/src/features/billing';
 import { isAllowedExternalUrl, openExternalUrl } from '@/lib/safeOpenURL';

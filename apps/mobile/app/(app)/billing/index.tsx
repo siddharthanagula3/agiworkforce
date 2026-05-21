@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, Check, Zap } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/hooks/useTheme';
-import { useTierStore } from '@/stores/tierStore';
+import { useTierStore } from '@/src/features/billing/store';
 import { api } from '@/services/api';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
