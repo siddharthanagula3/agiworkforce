@@ -13,6 +13,8 @@ import {
   type DeveloperSession,
   type GeneratedFile,
   type HandoffDraft,
+  type LegacyWebSyncedConversation,
+  type LegacyWebSyncedMessage,
   type ProviderMode,
   type RemoteDispatchPayload,
   type SyncedAppConversation,
@@ -23,6 +25,37 @@ describe('suite contracts — trust boundaries', () => {
   it('locks the public privacy and provider mode vocabularies', () => {
     expect(PRIVACY_MODES).toEqual(['local', 'byok', 'managed']);
     expect(PROVIDER_MODES).toEqual(['Local', 'DirectByok', 'ManagedGateway', 'ManagedNative']);
+  });
+
+  it('keeps legacy web sync table records shared while migration debt remains', () => {
+    const conversation = {
+      id: 'conversation-1',
+      user_id: 'user-1',
+      title: 'Web sync compatibility',
+      model: 'gpt-5.1',
+      is_active: true,
+      synced_from: 'mobile',
+      metadata: { source: 'test' },
+      created_at: '2026-05-21T00:00:00.000Z',
+      updated_at: '2026-05-21T00:01:00.000Z',
+      deleted_at: null,
+    } satisfies LegacyWebSyncedConversation;
+
+    const message = {
+      id: 'message-1',
+      conversation_id: conversation.id,
+      role: 'assistant',
+      content: 'ok',
+      model: 'gpt-5.1',
+      input_tokens: 1,
+      output_tokens: 2,
+      cost_cents: 0,
+      created_at: '2026-05-21T00:02:00.000Z',
+      updated_at: null,
+    } satisfies LegacyWebSyncedMessage;
+
+    expect(conversation.synced_from).toBe('mobile');
+    expect(message.conversation_id).toBe(conversation.id);
   });
 
   it('keeps normal app sync separate from developer sessions', () => {

@@ -93,6 +93,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 
 ### Changed
 
+- Web and Mobile conversation-sync services now import `web_conversations` / `web_messages` compatibility record types from `@agiworkforce/types` instead of redefining `SyncedConversation` and `SyncedMessage` locally.
 - Enterprise contracts now alias the canonical suite `PrivacyMode` and include managed-compute eligibility, reservation, and risk-event records for future quota/fraud/refund/dispute enforcement.
 - Mobile imports that previously targeted retired theme/voice layer-first paths now resolve through the new `src/ui/theme` and `src/features/voice` ownership boundaries.
 - Agent context, engineering docs, command maps, and LLM-operability checks now include the service-layer architecture rule so repeated mechanics move behind explicit service APIs instead of drifting across routes/actions.

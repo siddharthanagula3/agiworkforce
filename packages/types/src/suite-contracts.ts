@@ -139,6 +139,42 @@ export interface SyncedAppMessage {
   createdAt: string;
 }
 
+// Compatibility contract for the existing web_conversations/web_messages sync
+// tables. Root conversations/messages remain the target canonical sync schema.
+export type LegacyWebSyncOrigin = SyncedAppSurface;
+export type LegacyWebSyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
+
+export interface LegacyWebSyncedConversation {
+  id: string;
+  user_id: string;
+  title: string | null;
+  model: string | null;
+  is_active: boolean | null;
+  synced_from: LegacyWebSyncOrigin | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string | null;
+  deleted_at: string | null;
+}
+
+export interface LegacyWebSyncedMessage {
+  id: string;
+  conversation_id: string;
+  role: string;
+  content: string;
+  model: string | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  cost_cents: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface LegacyWebSyncEvent {
+  type: 'INSERT' | 'UPDATE' | 'DELETE';
+  conversation: LegacyWebSyncedConversation;
+}
+
 export type DeveloperSessionKind =
   | 'cli'
   | 'ide'
