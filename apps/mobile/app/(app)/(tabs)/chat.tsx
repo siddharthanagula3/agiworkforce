@@ -17,7 +17,7 @@ import { SearchBar } from '@/src/features/sidebar/components/SearchBar';
 import { TagFilter } from '@/src/features/sidebar/components/TagFilter';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
-import { useModelStore } from '@/stores/modelStore';
+import { useModelStore } from '@/src/features/model-picker/store';
 import { useProjectStore } from '@/stores/projectStore';
 import { useThemeColors } from '@/hooks/useTheme';
 import type { ConversationTag } from '@/services/autotag';

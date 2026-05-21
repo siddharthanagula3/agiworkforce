@@ -17,7 +17,7 @@ import { X, Zap, ZapOff, Send, RotateCcw, Camera } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/lib/theme';
 import { useChatStore } from '@/stores/chatStore';
-import { useModelStore } from '@/stores/modelStore';
+import { useModelStore } from '@/src/features/model-picker/store';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 
 /**

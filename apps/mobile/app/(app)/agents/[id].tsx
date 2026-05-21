@@ -27,7 +27,7 @@ import { ToolTimeline } from '@/src/features/agents/components/ToolTimeline';
 import { useAgentStore } from '@/stores/agentStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatStore } from '@/stores/chatStore';
-import { useModelStore } from '@/stores/modelStore';
+import { useModelStore } from '@/src/features/model-picker/store';
 import { colors } from '@/lib/theme';
 import { sendAgentCommand, sendApprovalResponse, getRiskBadgeColor } from '@/services/companion';
 import type { ApprovalRequest, StatusStep, ToolCall } from '@/types/chat';

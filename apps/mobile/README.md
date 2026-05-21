@@ -30,8 +30,8 @@ apps/mobile/
 ├── src/shared/                   Cross-feature components/helpers without a single feature owner
 ├── components/ui/                Shared UI primitives retained for Expo-era import compatibility
 ├── lib/                          Pure utilities — no React state, no async I/O, no platform APIs
-├── services/                     Remaining cross-feature async I/O; feature-owned I/O moves into src/features/<domain>/
-├── stores/                       Remaining cross-feature Zustand state; feature-owned stores move into src/features/<domain>/
+├── services/                     Remaining cross-feature async I/O; feature-owned I/O lives in src/features/<domain>/
+├── stores/                       Remaining cross-feature Zustand state; feature-owned stores live in src/features/<domain>/
 ├── hooks/                        Cross-feature React hooks; feature-scoped hooks colocate in src/features/<domain>/
 ├── storage/                      SQLCipher + MMKV + sqlite-vec; SQL inlined in storage/migrations.ts
 ├── native/                       Custom Swift/Kotlin native modules (Tier 1/2/3 runtime, HealthKit, voice)
@@ -70,7 +70,8 @@ Does it have state or render UI?
 - Component directories: **kebab-case** (`chat/`, `model-picker/`, `paywall/`)
 - Component files: **PascalCase** (`MessageBubble.tsx`, `ProPlusPaywall.tsx`)
 - Non-component files: **camelCase** (`tierGuard.ts`, `safeOpenURL.ts`)
-- Store files: **`<slice>Store.ts`** (`tierStore.ts`, `chatStore.ts`)
+- Feature store files: **`store.ts`** inside `src/features/<domain>/`
+- Cross-feature store files: **`<slice>Store.ts`** inside `stores/`
 - Test files: **`<unit>.test.ts(x)`** colocated or under `__tests__/`
 - Path alias: **`@/`** = `apps/mobile/` (configured in `tsconfig.json` + `babel.config.js`)
 
@@ -87,7 +88,7 @@ Does it have state or render UI?
 
 ## Mobile runtime — three-tier model
 
-Capability-routed per device, configured in `lib/models.ts` + `services/modelCatalog.ts`:
+Capability-routed per device, configured in `lib/models.ts` + `src/features/model-picker/service.ts`:
 
 | Tier | Runtime                       | Devices                        | Default models                |
 | ---- | ----------------------------- | ------------------------------ | ----------------------------- |

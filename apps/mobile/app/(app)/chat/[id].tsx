@@ -31,7 +31,7 @@ import { VoiceConversationScreen } from '@/src/features/voice/components/VoiceCo
 import { ModeToggle } from '@/src/features/chat/components/ModeToggle';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
-import { useModelStore } from '@/stores/modelStore';
+import { useModelStore } from '@/src/features/model-picker/store';
 import { useAgentStore } from '@/stores/agentStore';
 import { CloudWaitlistSheet, joinWaitlist, useWaitlistStore } from '@/src/features/waitlist';
 import { getModelById, isAutoMode } from '@/lib/models';

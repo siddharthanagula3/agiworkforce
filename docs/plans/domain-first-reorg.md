@@ -36,6 +36,12 @@ service/state also moved into their owning feature domains. The only remaining
 legacy `apps/mobile/components` code is the documented `components/ui`
 primitive layer.
 
+The Mobile model-picker ownership slice is complete: model selection state,
+remote model catalog loading, and provider-switch guard logic now live under
+`apps/mobile/src/features/model-picker`, with structure checks guarding the old
+`services/modelCatalog.ts`, `services/tierGuard.ts`, and `stores/modelStore.ts`
+paths.
+
 The Desktop small-domain wave has moved quick query, voice, simple mode,
 subscription, pricing, planning, reminders, messaging, mobile companion, teams,
 terminal, tools, vision, and workflows out of `src/components` into

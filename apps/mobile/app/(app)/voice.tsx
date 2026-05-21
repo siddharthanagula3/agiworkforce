@@ -29,7 +29,7 @@ import { Text } from '@/components/ui/text';
 import { Waveform } from '@/src/features/voice/components/Waveform';
 import { PerformanceChip } from '@/src/features/chat/components/PerformanceChip';
 import { useChatStore } from '@/stores/chatStore';
-import { useModelStore } from '@/stores/modelStore';
+import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
 import * as VoiceInput from '@/src/features/voice/services/voiceInput';
 import * as VoiceOutput from '@/src/features/voice/services/voiceOutput';

@@ -28,7 +28,7 @@ import { useChatStore, type ChatMode } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useAgentControlStore } from '@/stores/agentControlStore';
-import { useModelStore } from '@/stores/modelStore';
+import { useModelStore } from '@/src/features/model-picker/store';
 import { useTheme } from '@/hooks/useTheme';
 import { colors } from '@/lib/theme';
 import { StyleSelector } from './StyleSelector';

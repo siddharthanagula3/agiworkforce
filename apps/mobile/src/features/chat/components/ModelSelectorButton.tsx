@@ -2,7 +2,7 @@ import { View, Pressable } from 'react-native';
 import { Bot, Brain, ChevronDown } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
-import { useModelStore } from '@/stores/modelStore';
+import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { getDisplayName, isAutoMode, getModelById, PROVIDERS } from '@/lib/models';
 import { colors } from '@/lib/theme';

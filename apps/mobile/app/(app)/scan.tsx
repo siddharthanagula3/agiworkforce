@@ -20,7 +20,7 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/lib/theme';
 import { useChatMessageStore } from '@/stores/chatStore';
-import { useModelStore } from '@/stores/modelStore';
+import { useModelStore } from '@/src/features/model-picker/store';
 import { recognizeText, type OcrRegion } from '@/services/ocr';
 import { useChatExecutionStore } from '@/stores/chatStore';
 

@@ -6,7 +6,7 @@
 import { storage } from '@/lib/mmkv';
 import { API_URL } from '@/lib/constants';
 import { MODEL_LIST, type ModelDef, type ModelTier } from '@/lib/models';
-import { secureFetch } from './secureFetch';
+import { secureFetch } from '@/services/secureFetch';
 
 const CACHE_KEY = 'model_catalog_cache';
 const CACHE_TTL_KEY = 'model_catalog_ttl';

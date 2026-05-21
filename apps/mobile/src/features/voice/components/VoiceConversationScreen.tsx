@@ -20,7 +20,7 @@ import { Text } from '@/components/ui/text';
 import { Waveform } from './Waveform';
 import { colors } from '@/lib/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useModelStore } from '@/stores/modelStore';
+import { useModelStore } from '@/src/features/model-picker/store';
 import * as VoiceService from '@/src/features/voice/services/voice';
 import * as TTS from '@/src/features/voice/services/tts';
 

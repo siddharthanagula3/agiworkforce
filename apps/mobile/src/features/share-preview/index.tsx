@@ -14,7 +14,7 @@ import { X, Send, AlertTriangle } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/useTheme';
 import { useChatStore } from '@/stores/chatStore';
-import { useModelStore } from '@/stores/modelStore';
+import { useModelStore } from '@/src/features/model-picker/store';
 
 /** Hard cap on shared text that will be forwarded to the LLM (100 KB). */
 const MAX_SHARED_BYTES = 100 * 1024;

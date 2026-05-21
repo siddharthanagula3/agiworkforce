@@ -9,7 +9,7 @@ import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButt
 import { RecordingOverlay } from '@/src/features/voice/components/RecordingOverlay';
 import * as VoiceService from '@/src/features/voice/services/voice';
 import * as Haptics from 'expo-haptics';
-import { useModelStore } from '@/stores/modelStore';
+import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useTheme } from '@/hooks/useTheme';
 import { getDisplayName } from '@/lib/models';

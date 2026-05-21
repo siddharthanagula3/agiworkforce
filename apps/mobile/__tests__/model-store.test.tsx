@@ -31,7 +31,7 @@ jest.mock('../lib/mmkv', () => ({
 // Import module under test AFTER mocks
 // ---------------------------------------------------------------------------
 
-import { useModelStore } from '../stores/modelStore';
+import { useModelStore } from '../src/features/model-picker/store';
 
 // ---------------------------------------------------------------------------
 // Helpers

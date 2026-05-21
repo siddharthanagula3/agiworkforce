@@ -194,6 +194,9 @@ const retiredMobileFeaturePaths = [
   'apps/mobile/services/voiceInput.ts',
   'apps/mobile/services/voiceOutput.ts',
   'apps/mobile/stores/messagingStore.ts',
+  'apps/mobile/services/modelCatalog.ts',
+  'apps/mobile/services/tierGuard.ts',
+  'apps/mobile/stores/modelStore.ts',
 ];
 
 for (const retiredMobileFeaturePath of retiredMobileFeaturePaths) {
@@ -290,6 +293,12 @@ const mobileFeatureForbiddenImports = [
   '../services/voiceInput',
   '../services/voiceOutput',
   '../stores/messagingStore',
+  '@/services/modelCatalog',
+  '@/services/tierGuard',
+  '@/stores/modelStore',
+  '../services/modelCatalog',
+  '../services/tierGuard',
+  '../stores/modelStore',
 ];
 
 const retiredDesktopFeatureShimPaths = [

@@ -9,13 +9,13 @@ import { Search, X as XIcon } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { AutoModeCards } from './AutoModeCard';
 import { ModelRow } from './ModelRow';
-import { useModelStore } from '@/stores/modelStore';
+import { useModelStore } from '@/src/features/model-picker/store';
 import { useTierStore } from '@/stores/tierStore';
 import { AUTO_MODES, MODEL_LIST, PROVIDERS, isAutoMode, type ModelDef } from '@/lib/models';
-import { fetchModelCatalog } from '@/services/modelCatalog';
+import { fetchModelCatalog } from '@/src/features/model-picker/service';
 import { colors } from '@/lib/theme';
 import { PROVIDER_DISPLAY, type ProviderId } from '@agiworkforce/types';
-import { guardProviderSwitch } from '@/services/tierGuard';
+import { guardProviderSwitch } from '@/src/features/model-picker/tierGuard';
 import { ProPlusPaywall } from '@/src/features/paywall/components/ProPlusPaywall';
 
 // ---------------------------------------------------------------------------

@@ -37,7 +37,7 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-jest.mock('../services/modelCatalog', () => ({
+jest.mock('../src/features/model-picker/service', () => ({
   fetchModelCatalog: jest.fn().mockResolvedValue([]),
 }));
 
@@ -111,7 +111,7 @@ jest.mock('../stores/tierStore', () => ({
 }));
 
 // Mock tierGuard — default to 'allow' so existing tests are unaffected.
-jest.mock('../services/tierGuard', () => ({
+jest.mock('../src/features/model-picker/tierGuard', () => ({
   guardProviderSwitch: jest.fn().mockReturnValue('allow'),
 }));
 
@@ -126,7 +126,7 @@ jest.mock('../src/features/paywall/components/ProPlusPaywall', () => ({
 // ---------------------------------------------------------------------------
 
 import { ModelPickerSheet } from '../src/features/model-picker/components/ModelPickerSheet';
-import { useModelStore } from '../stores/modelStore';
+import { useModelStore } from '../src/features/model-picker/store';
 import { AUTO_MODES, MODEL_LIST } from '../lib/models';
 
 // ---------------------------------------------------------------------------

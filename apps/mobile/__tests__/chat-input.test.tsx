@@ -141,7 +141,7 @@ jest.mock('../src/features/voice/services/voice', () => ({
   transcribe: jest.fn().mockResolvedValue({ text: '' }),
 }));
 
-jest.mock('../stores/modelStore', () => ({
+jest.mock('../src/features/model-picker/store', () => ({
   useModelStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({
       selectedModel: 'claude-sonnet-4.6',

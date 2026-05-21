@@ -31,7 +31,7 @@ import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { useThemeColors } from '@/hooks/useTheme';
-import { useModelStore } from '@/stores/modelStore';
+import { useModelStore } from '@/src/features/model-picker/store';
 import { storage } from '@/lib/mmkv';
 import { getCapabilities, getModelById as getLocalModelById } from '@agiworkforce/local-llm';
 import type { DeviceCapabilities, LocalRuntimeName } from '@agiworkforce/local-llm';
