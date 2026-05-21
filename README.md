@@ -24,7 +24,8 @@ Multi-provider, local-first AI agent platform. One Tauri desktop app, one Next.j
 >
 > **Foundation Sprint shipped** at tag [`v0.7.0-foundation`](https://github.com/siddharthanagula3/agiworkforce/releases/tag/v0.7.0-foundation) (2026-05-13): central state pattern, message-queue priority lane, `packages/llm-runtime`, outbound-worker direction inversion, HKDF dispatch-key rotation, Stripe webhook idempotency RPC live in prod. Stripe wired but **dormant during waitlist period** — flips live Aug 1.
 >
-> **For contributors and AI agents:** [AGI_WORKFORCE.md](AGI_WORKFORCE.md) is the entry point; [docs/README.md](docs/README.md) gives the organized docs map.
+> **For contributors:** [AGI_WORKFORCE.md](AGI_WORKFORCE.md) is the product entry point and [docs/README.md](docs/README.md) gives the organized docs map.
+> **For coding agents:** read [AGENTS.md](AGENTS.md) first, then the relevant scoped `AGENTS.md` and [docs/agent-context/](docs/agent-context/).
 > **For builds and deployment:** [BUILD.md](BUILD.md).
 > **For PR conventions:** [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -126,7 +127,8 @@ cargo run -p agiworkforce-cli --bin agi -- exec "hello"
 - [docs/current/commercial-and-launch.md](docs/current/commercial-and-launch.md) — waitlist, BYOK, managed-compute, payments, and enterprise launch rules
 - [docs/current/agent-and-repo-operability.md](docs/current/agent-and-repo-operability.md) — repo organization, agent workflow, and A+ docs rules
 - [docs/decisions/CURRENT_DECISIONS.md](docs/decisions/CURRENT_DECISIONS.md) — locked decision index and conflict rules
-- [AGI_WORKFORCE.md](AGI_WORKFORCE.md) — single source of truth (start here)
+- [AGI_WORKFORCE.md](AGI_WORKFORCE.md) — product source of truth for humans and high-level context
+- [AGENTS.md](AGENTS.md) — coding-agent source of truth (start here for Codex, Claude Code, Cursor, opencode, VS Code agents, and future agents)
 - [docs/README.md](docs/README.md) — organized documentation map
 - [docs/design/design-spec-2026-05-15.md](docs/design/design-spec-2026-05-15.md) — canonical 2026-05-15 design spec (composer, sidebar, inline tool-call, icons) shipped across all 6 surfaces
 - [apps/cli/ARCHITECTURE.md](apps/cli/ARCHITECTURE.md) — CLI deep-dive

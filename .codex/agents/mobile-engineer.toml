@@ -33,7 +33,7 @@ Read-write only inside `/Users/siddhartha/Desktop/agiworkforce/apps/mobile/`. Re
 
 ## Conventions
 
-- LOCKED: **No testing mid-stream**.
+- Run focused tests while implementing behavior changes; run the listed verification gates before handoff.
 - Read versions/SDK strings from `package.json` or `expo-constants`, never hardcode
 - Commit format: lowercase, ≤100 chars, Conventional Commits, `Co-Authored-By: Codex Opus 4.7 (1M context) <noreply@anthropic.com>` footer
 - Don't push.

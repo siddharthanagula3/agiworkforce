@@ -149,6 +149,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
   - `docs/enterprise/` for profit-first enterprise readiness and control-plane ownership.
 - `docs/agent-context/lanes.json`, `repo-map.json`, and `risk-map.json` entries for enterprise admin/control-plane parallel-agent work.
 - `docs/engineering/agent-harness-rollout.md` locking Claude Code at-scale harness lessons into AGI's agent-native repo rules: lean context files, deterministic hooks, on-demand skills, distributable plugins, LSP/MCP integrations, subagents, rollout phases, and harness ownership.
+- `.opencode/instructions/INSTRUCTIONS.md` and first-class `.opencode/commands/*.md` templates so opencode uses the same canonical repo context and command vocabulary as the other agent harnesses.
 - `docs/current/` as the compact current docs layer:
   - `README.md` for read order and archive rule.
   - `product-suite.md` for product thesis, surfaces, trust modes, and sync boundary.
@@ -161,6 +162,8 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - `PLAN.md`, `TODO.md`, and `docs/decisions/CURRENT_DECISIONS.md` now treat OpenAI/Anthropic-style application-suite parity as the product baseline, with local-first, explicit BYOK, multi-provider routing, and privacy-controlled managed compute as the locked differentiation.
 - `PLAN.md` and `TODO.md` now include pre-release repo organization as a first-class workstream before broad hiring or release operations.
 - `AGENTS.md` is now the canonical tool-neutral coding-agent entry point; `CLAUDE.md` is a Claude-specific mirror.
+- README, Claude agent profiles, Codex agent profiles, and opencode config now separate human/product context from coding-agent context: humans start at `AGI_WORKFORCE.md`, coding agents start at `AGENTS.md` plus scoped agent context.
+- Root `opencode.json` is retired in favor of `.opencode/opencode.json`, and `pnpm check:agent-context` now validates opencode instruction paths, `{file:...}` command/prompt references, and stale tool-agent phrases.
 - Root `package.json` now exposes `check:agent-context`, `check:repo-organization`, `check:boundaries`, and `check:llm-operability`.
 - `scripts/check-repo-organization.mjs` now ignores git-ignored local/build output while warning on known root cleanup debt.
 - `docs/README.md` now points maintainers to root `PLAN.md` and `TODO.md` immediately after `AGI_WORKFORCE.md`.

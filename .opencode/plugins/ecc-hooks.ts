@@ -197,6 +197,7 @@ export const AGIWorkforceHooksPlugin = async ({ client, $, directory, worktree }
           !filePath.includes('CHANGELOG') &&
           !filePath.includes('LICENSE') &&
           !filePath.includes('CONTRIBUTING') &&
+          !filePath.includes('AGENTS.md') &&
           !filePath.includes('CLAUDE.md')
         ) {
           log('warn', `[AGI] Creating ${filePath} - consider if this documentation is necessary`);
@@ -242,14 +243,14 @@ export const AGIWorkforceHooksPlugin = async ({ client, $, directory, worktree }
 
       log('info', `[AGI] Session started - profile=${currentProfile}`);
 
-      // Check for project-specific context files
+      // Check for project-specific agent context files
       try {
-        const hasClaudeMd = await $`test -f ${worktree}/CLAUDE.md && echo "yes"`.text();
-        if (hasClaudeMd.trim() === 'yes') {
-          log('info', '[AGI] Found CLAUDE.md - loading project context');
+        const hasAgentsMd = await $`test -f ${worktree}/AGENTS.md && echo "yes"`.text();
+        if (hasAgentsMd.trim() === 'yes') {
+          log('info', '[AGI] Found AGENTS.md - loading canonical coding-agent context');
         }
       } catch {
-        // No CLAUDE.md found
+        // No AGENTS.md found
       }
     },
 

@@ -82,6 +82,8 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Add canonical `docs/agent-context/` with repo map, risk map, command map, doc-status map, bug-finding guide, and known-flaws ledger.
 - [x] Make root `AGENTS.md` the canonical tool-neutral coding-agent entry point.
 - [x] Convert `CLAUDE.md` into a Claude-specific mirror of `AGENTS.md`.
+- [x] Align Claude, Codex, and opencode tool-specific agent entrypoints around root `AGENTS.md` and `docs/agent-context/`.
+- [x] Retire stale root `opencode.json` and validate `.opencode/opencode.json` instruction and command file references.
 - [x] Add `pnpm check:agent-context`, `pnpm check:repo-organization`, `pnpm check:boundaries`, and `pnpm check:llm-operability`.
 - [x] Grade current monorepo developer-friendliness and record path to A+.
 - [x] Commit repo-organization script fix and monorepo grade report.
@@ -149,6 +151,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Add Claude Code at-scale harness rollout rules for context, hooks, skills, plugins, LSP/MCP, and subagents.
 - [x] Add service-layer architecture rules for action/route orchestration vs reusable operational mechanics.
 - [x] Add `pnpm check:service-layer` and include it in `pnpm check:llm-operability`.
+- [x] Add opencode command templates and adapter instructions so opencode agents load the canonical repo rules without duplicating durable context.
 - [x] Add `pnpm check:mobile-hygiene` for Mobile feature ownership, frozen root hooks/lib imports, and UI direct-I/O drift.
 - [x] Add lane-contract sections to scoped `AGENTS.md` files and enforce them through `pnpm check:agent-context`.
 - [x] Extract repeated API gateway UUID validation into `services/api-gateway/src/validations/ids.ts`.

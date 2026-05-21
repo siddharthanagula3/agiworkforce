@@ -37,6 +37,39 @@ function requireIncludes(relativePath, text) {
   }
 }
 
+function listFilesRecursive(relativeDir, predicate = () => true) {
+  const absoluteDir = path.join(root, relativeDir);
+  if (!fs.existsSync(absoluteDir)) return [];
+
+  const out = [];
+  for (const entry of fs.readdirSync(absoluteDir, { withFileTypes: true })) {
+    const relativePath = path.join(relativeDir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...listFilesRecursive(relativePath, predicate));
+    } else if (entry.isFile() && predicate(relativePath)) {
+      out.push(relativePath);
+    }
+  }
+  return out;
+}
+
+function collectOpencodeFileRefs(value, refs = []) {
+  if (Array.isArray(value)) {
+    for (const item of value) collectOpencodeFileRefs(item, refs);
+    return refs;
+  }
+  if (value && typeof value === 'object') {
+    for (const item of Object.values(value)) collectOpencodeFileRefs(item, refs);
+    return refs;
+  }
+  if (typeof value !== 'string') return refs;
+
+  for (const match of value.matchAll(/\{file:([^}]+)\}/g)) {
+    refs.push(match[1]);
+  }
+  return refs;
+}
+
 const requiredFiles = [
   'AGENTS.md',
   'CLAUDE.md',
@@ -83,6 +116,8 @@ const requiredFiles = [
   'apps/extension-vscode/AGENTS.md',
   'services/AGENTS.md',
   'packages/providers/AGENTS.md',
+  '.opencode/opencode.json',
+  '.opencode/instructions/INSTRUCTIONS.md',
 ];
 
 for (const file of requiredFiles) {
@@ -131,6 +166,48 @@ requireIncludes('docs/research/agentic-company-research-prompts.md', '100 Resear
 requireIncludes('.github/PULL_REQUEST_TEMPLATE/parallel-agent-change.md', 'Lane ID');
 requireIncludes('.github/pull_request_template.md', 'Risk Classification');
 requireIncludes('.github/PULL_REQUEST_TEMPLATE/security-privacy.md', 'Affected Trust Boundary');
+requireIncludes('README.md', 'For coding agents');
+requireIncludes('README.md', '[AGENTS.md](AGENTS.md)');
+requireIncludes('README.md', 'AGI_WORKFORCE.md) — product source of truth');
+
+if (exists('opencode.json')) {
+  errors.push('Root opencode.json is retired; use .opencode/opencode.json');
+}
+
+const staleToolAgentPhrases = [
+  'Next.js 14',
+  'No testing mid-stream',
+  '~/.claude/projects',
+  '~/.Codex/projects',
+  'private memory',
+];
+for (const file of [
+  ...listFilesRecursive('.claude/agents', (filePath) => filePath.endsWith('.md')),
+  ...listFilesRecursive('.codex/agents', (filePath) => filePath.endsWith('.toml')),
+]) {
+  const body = readText(file);
+  for (const phrase of staleToolAgentPhrases) {
+    if (body.includes(phrase)) {
+      errors.push(`${file} contains stale tool-agent phrase ${JSON.stringify(phrase)}`);
+    }
+  }
+}
+
+const opencodeConfig = readJson('.opencode/opencode.json');
+if (opencodeConfig) {
+  for (const instructionPath of opencodeConfig.instructions ?? []) {
+    if (!exists(instructionPath)) {
+      errors.push(`.opencode/opencode.json instruction path does not exist: ${instructionPath}`);
+    }
+  }
+
+  for (const fileRef of collectOpencodeFileRefs(opencodeConfig)) {
+    const relativePath = path.join('.opencode', fileRef);
+    if (!exists(relativePath)) {
+      errors.push(`.opencode/opencode.json file reference does not exist: ${fileRef}`);
+    }
+  }
+}
 
 for (const scopedAgentFile of [
   'apps/cli/AGENTS.md',
