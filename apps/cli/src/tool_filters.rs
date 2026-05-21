@@ -7,7 +7,7 @@ pub struct ToolFilterViolation {
 }
 
 pub fn spec_matches_tool_for_schema(spec: &str, tool_name: &str) -> bool {
-    alias_matches_tool(spec_alias(spec), tool_name)
+    crate::runtime::tool_catalog::policy_alias_matches_tool(spec_alias(spec), tool_name)
 }
 
 pub fn spec_blocks_entire_tool_for_schema(spec: &str, tool_name: &str) -> bool {
@@ -95,48 +95,6 @@ fn spec_alias(spec: &str) -> &str {
 fn spec_argument_filter(spec: &str) -> Option<&str> {
     let (_, rest) = spec.split_once('(')?;
     Some(rest.strip_suffix(')').unwrap_or(rest).trim())
-}
-
-fn alias_matches_tool(alias: &str, tool_name: &str) -> bool {
-    if alias.eq_ignore_ascii_case(tool_name) {
-        return true;
-    }
-
-    let normalized = normalize_alias(alias);
-    alias_tool_names(normalized.as_str()).contains(&tool_name)
-}
-
-fn alias_tool_names(alias: &str) -> &'static [&'static str] {
-    match alias {
-        "bash" | "shell" | "runcommand" => &["run_command"],
-        "powershell" => &["powershell"],
-        "read" | "readfile" => &["read_file", "read_many_files"],
-        "readmanyfiles" => &["read_many_files"],
-        "write" | "writefile" => &["write_file"],
-        "edit" | "editfile" => &["edit_file", "multiedit", "apply_patch"],
-        "multiedit" => &["multiedit"],
-        "applypatch" => &["apply_patch"],
-        "grep" | "grepfiles" => &["grep_files", "search_files"],
-        "glob" => &["glob"],
-        "list" | "ls" | "listdirectory" => &["list_directory"],
-        "webfetch" => &["web_fetch"],
-        "websearch" => &["web_search"],
-        "toolsearch" => &["tool_search"],
-        "task" => &["task"],
-        "batch" => &["batch"],
-        "todoread" => &["todo_read"],
-        "todowrite" => &["todo_write"],
-        "askuser" => &["ask_user"],
-        _ => &[],
-    }
-}
-
-fn normalize_alias(alias: &str) -> String {
-    alias
-        .chars()
-        .filter(|ch| *ch != '_' && *ch != '-' && !ch.is_whitespace())
-        .flat_map(char::to_lowercase)
-        .collect()
 }
 
 fn wildcard_matches(pattern: &str, value: &str) -> bool {

@@ -184,6 +184,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Split CLI tool declarations from executors with schema, diagnostics, permissions, and owner metadata.
 - [x] Apply CLI allowed/disallowed tool filters consistently across one-shot, REPL, and TUI sessions.
 - [x] Route CLI plan-mode mutation gates through the central tool catalog and restore mutable tools after plan approval.
+- [x] Move CLI tool-filter policy aliases into the central tool catalog.
 - [x] De-duplicate the CLI slash-command built-in catalog so the shared registry crate is the single source of truth.
 - [x] Add `agi doctor --json` covering runtime deps, auth, sandbox, MCP, plugins, model access, writable state dirs, stale branches, and transport health.
 - [x] Make `/doctor` reuse the same diagnostic report core as `agi doctor`.
