@@ -50,6 +50,9 @@ Every surface must expose the same product contract even when the native impleme
 | BYOK    | Uses the user's provider key directly.              | Requires explicit provider label, consent, and payload preview when crossing from Local. |
 | Managed | Uses AGI-managed provider access or hosted compute. | Waitlist/private beta until commercial and abuse controls are ready.                     |
 
+Surface UI must source trust-boundary labels and descriptions from `@agiworkforce/types`
+suite contracts instead of hardcoding new Local/BYOK/Managed wording.
+
 Local to BYOK is a fork, not a mode flip. The original Local thread remains Local forever.
 
 ## Sync Boundary

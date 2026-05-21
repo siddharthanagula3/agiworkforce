@@ -2,10 +2,16 @@ import { describe, expect, it } from 'vitest';
 import {
   DEVELOPER_SESSION_EVENT_KINDS,
   DEVELOPER_SESSION_SURFACES,
+  formatPrivacyModeLabel,
+  formatProviderModeLabel,
+  getPrivacyModeDisplay,
+  getProviderModeDisplay,
   isDeveloperSessionSurface,
   isSyncedAppSurface,
+  PRIVACY_MODE_DISPLAY,
   PRIVACY_MODES,
   providerModeToPrivacyMode,
+  PROVIDER_MODE_DISPLAY,
   providerSurfaceToProviderMode,
   PROVIDER_MODES,
   SYNCED_APP_SURFACES,
@@ -22,6 +28,7 @@ import {
   type HandoffDraft,
   type LegacyWebSyncedConversation,
   type LegacyWebSyncedMessage,
+  type PrivacyMode,
   type ProviderMode,
   type RemoteDispatchPayload,
   type SyncedAppConversation,
@@ -125,6 +132,40 @@ describe('suite contracts — trust boundaries', () => {
     expect(providerSurfaceToProviderMode('byok')).toBe('DirectByok');
     expect(providerSurfaceToProviderMode('managed_cloud')).toBe('ManagedGateway');
     expect(providerSurfaceToProviderMode('hidden')).toBeNull();
+  });
+
+  it('locks visible Local/BYOK/Managed display copy for every surface', () => {
+    const expectedPrivacyLabels: Record<PrivacyMode, string> = {
+      local: 'Local',
+      byok: 'BYOK',
+      managed: 'Managed',
+    };
+
+    for (const privacyMode of PRIVACY_MODES) {
+      expect(formatPrivacyModeLabel(privacyMode)).toBe(expectedPrivacyLabels[privacyMode]);
+      expect(getPrivacyModeDisplay(privacyMode).description.length).toBeGreaterThan(20);
+    }
+
+    expect(PRIVACY_MODE_DISPLAY.byok.shortLabel).toBe('BYOK');
+  });
+
+  it('locks provider execution labels to their privacy boundaries', () => {
+    const expectedProviderLabels: Record<ProviderMode, string> = {
+      Local: 'Local',
+      DirectByok: 'BYOK',
+      ManagedGateway: 'Managed Gateway',
+      ManagedNative: 'Managed Native',
+    };
+
+    for (const providerMode of PROVIDER_MODES) {
+      const display = getProviderModeDisplay(providerMode);
+
+      expect(formatProviderModeLabel(providerMode)).toBe(expectedProviderLabels[providerMode]);
+      expect(display.privacyMode).toBe(providerModeToPrivacyMode(providerMode));
+      expect(display.description.length).toBeGreaterThan(20);
+    }
+
+    expect(PROVIDER_MODE_DISPLAY.ManagedGateway.shortLabel).toBe('Managed');
   });
 });
 

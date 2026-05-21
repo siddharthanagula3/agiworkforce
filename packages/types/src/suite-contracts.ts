@@ -53,6 +53,61 @@ export const PROVIDER_MODES = [
   'ManagedNative',
 ] as const satisfies readonly ProviderMode[];
 
+export interface TrustBoundaryDisplayCopy {
+  label: string;
+  shortLabel: string;
+  description: string;
+}
+
+export interface ProviderModeDisplayCopy extends TrustBoundaryDisplayCopy {
+  privacyMode: PrivacyMode;
+}
+
+export const PRIVACY_MODE_DISPLAY = {
+  local: {
+    label: 'Local',
+    shortLabel: 'Local',
+    description: 'Runs on this device or workspace without AGI-managed cloud execution.',
+  },
+  byok: {
+    label: 'BYOK',
+    shortLabel: 'BYOK',
+    description: 'Uses the user-owned provider key; payloads go to that provider account.',
+  },
+  managed: {
+    label: 'Managed',
+    shortLabel: 'Managed',
+    description: 'Uses AGI-managed provider access or hosted compute behind explicit consent.',
+  },
+} as const satisfies Readonly<Record<PrivacyMode, TrustBoundaryDisplayCopy>>;
+
+export const PROVIDER_MODE_DISPLAY = {
+  Local: {
+    label: 'Local',
+    shortLabel: 'Local',
+    privacyMode: 'local',
+    description: 'Model execution stays on the local device, workspace, or local host.',
+  },
+  DirectByok: {
+    label: 'BYOK',
+    shortLabel: 'BYOK',
+    privacyMode: 'byok',
+    description: 'Requests use a user-owned provider key without AGI-managed model credits.',
+  },
+  ManagedGateway: {
+    label: 'Managed Gateway',
+    shortLabel: 'Managed',
+    privacyMode: 'managed',
+    description: 'Requests route through an AGI-managed gateway or proxy with managed consent.',
+  },
+  ManagedNative: {
+    label: 'Managed Native',
+    shortLabel: 'Managed',
+    privacyMode: 'managed',
+    description: 'Requests use AGI-managed provider access directly from managed services.',
+  },
+} as const satisfies Readonly<Record<ProviderMode, ProviderModeDisplayCopy>>;
+
 export const SYNCED_APP_SURFACES = [
   'web',
   'desktop',
@@ -85,6 +140,22 @@ export function providerModeToPrivacyMode(mode: ProviderMode): PrivacyMode {
     case 'ManagedNative':
       return 'managed';
   }
+}
+
+export function getPrivacyModeDisplay(mode: PrivacyMode): TrustBoundaryDisplayCopy {
+  return PRIVACY_MODE_DISPLAY[mode];
+}
+
+export function getProviderModeDisplay(mode: ProviderMode): ProviderModeDisplayCopy {
+  return PROVIDER_MODE_DISPLAY[mode];
+}
+
+export function formatPrivacyModeLabel(mode: PrivacyMode): string {
+  return getPrivacyModeDisplay(mode).label;
+}
+
+export function formatProviderModeLabel(mode: ProviderMode): string {
+  return getProviderModeDisplay(mode).label;
 }
 
 export function providerSurfaceToProviderMode(
