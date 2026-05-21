@@ -383,7 +383,7 @@ Tasks:
 - Extend `SharedArtifact` to reference generated native files and preview derivatives.
 - [x] Wrap `packages/browser-tool` behind a shared `ComputerAction` protocol.
 - [x] Convert Desktop PDF/DOCX/XLSX/PPTX tools into generated-file manifest producers.
-- Add local compute-session work directories with TTL metadata and audit events.
+- [x] Add local compute-session work directories with TTL metadata and audit events.
 - Add generated-file request, status, preview, download, and share controls to Web, Mobile, and Desktop.
 - Add provider-container adapters that convert OpenAI Code Interpreter-style file annotations into AGI `GeneratedFile` records.
 - Add tests proving Local mode does not upload generated files, BYOK transfer requires explicit approval, and Managed mode files carry TTL/quota/deletion metadata.

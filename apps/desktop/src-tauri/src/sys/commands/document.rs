@@ -399,6 +399,9 @@ mod tests {
         let temp_dir = tempfile::tempdir().expect("temp dir");
         let file_path = temp_dir.path().join("deck.pptx");
         std::fs::write(&file_path, b"pptx bytes").expect("test file");
+        let compute_root = temp_dir.path().join("compute-sessions");
+        let previous_compute_root = std::env::var_os("AGIWORKFORCE_LOCAL_COMPUTE_ROOT");
+        std::env::set_var("AGIWORKFORCE_LOCAL_COMPUTE_ROOT", &compute_root);
 
         let result = document_creation_result(
             file_path.to_string_lossy().to_string(),
@@ -425,5 +428,15 @@ mod tests {
             result.artifact_manifest.generated_file_ids,
             vec![result.generated_file.id.clone()]
         );
+        assert!(compute_root
+            .join(&result.compute_session.id)
+            .join("manifest.json")
+            .is_file());
+
+        if let Some(value) = previous_compute_root {
+            std::env::set_var("AGIWORKFORCE_LOCAL_COMPUTE_ROOT", value);
+        } else {
+            std::env::remove_var("AGIWORKFORCE_LOCAL_COMPUTE_ROOT");
+        }
     }
 }

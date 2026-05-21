@@ -64,7 +64,7 @@ Vercel AI Gateway and other managed proxy paths are never default for Local or s
 
 Desktop is the first local heavy-compute surface. Web and Mobile should request, track, preview, download, and share generated files. Mobile should not be the first heavy local PDF/PPTX/DOCX compute surface.
 
-Desktop document generation now has manifest-producing command paths for PDF, DOCX, XLSX, and PPTX. These return the legacy file path plus `ComputeSession`, `GeneratedFile`, and `ArtifactManifest` metadata with local privacy, checksum, byte count, MIME type, and file URI.
+Desktop document generation now has manifest-producing command paths for PDF, DOCX, XLSX, and PPTX. These return the legacy file path plus `ComputeSession`, `GeneratedFile`, and `ArtifactManifest` metadata with local privacy, checksum, byte count, MIME type, and file URI. Each generated-document session also creates a local app-data work directory with `manifest.json`, append-only `audit.jsonl`, and compute-session TTL metadata.
 
 Generated files need:
 

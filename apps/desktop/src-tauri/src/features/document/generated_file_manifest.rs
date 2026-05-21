@@ -1,12 +1,17 @@
 use anyhow::{anyhow, Result};
-use chrono::{SecondsFormat, Utc};
+use chrono::{Duration, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::fs::File;
-use std::io::Read;
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use url::Url;
 
+const LOCAL_COMPUTE_ROOT_ENV: &str = "AGIWORKFORCE_LOCAL_COMPUTE_ROOT";
+const LOCAL_COMPUTE_MANIFEST_FILE: &str = "manifest.json";
+const LOCAL_COMPUTE_AUDIT_FILE: &str = "audit.jsonl";
+const LOCAL_COMPUTE_AUDIT_EVENT_TYPE: &str = "generated_file.created";
+const DEFAULT_LOCAL_COMPUTE_TTL_SECONDS: u64 = 30 * 24 * 60 * 60;
 const LOCAL_OWNER_USER_ID: &str = "local-device";
 const SOURCE_SURFACE_DESKTOP: &str = "desktop";
 const PRIVACY_MODE_LOCAL: &str = "local";
@@ -132,20 +137,38 @@ pub struct GeneratedDocumentBundle {
     pub artifact_manifest: GeneratedDocumentArtifactManifest,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalComputeAuditEvent {
+    pub id: String,
+    pub event_type: String,
+    pub compute_session_id: String,
+    pub generated_file_id: String,
+    pub artifact_manifest_id: String,
+    pub checksum_sha256: String,
+    pub privacy_mode: String,
+    pub provider_mode: String,
+    pub created_at: String,
+}
+
 pub fn build_generated_document_manifest(
     file_path: impl AsRef<Path>,
     kind: GeneratedDocumentKind,
+) -> Result<GeneratedDocumentBundle> {
+    let sessions_root = local_compute_sessions_root()?;
+    build_generated_document_manifest_with_root(file_path, kind, &sessions_root)
+}
+
+fn build_generated_document_manifest_with_root(
+    file_path: impl AsRef<Path>,
+    kind: GeneratedDocumentKind,
+    sessions_root: &Path,
 ) -> Result<GeneratedDocumentBundle> {
     let absolute_path = normalize_existing_path(file_path.as_ref())?;
     let metadata = std::fs::metadata(&absolute_path)
         .map_err(|e| anyhow!("Failed to read generated file metadata: {}", e))?;
     let checksum_sha256 = sha256_file(&absolute_path)?;
     let file_uri = path_to_file_uri(&absolute_path)?;
-    let workdir_uri = path_to_file_uri(
-        absolute_path
-            .parent()
-            .ok_or_else(|| anyhow!("Generated file has no parent directory"))?,
-    )?;
     let file_name = absolute_path
         .file_name()
         .and_then(|name| name.to_str())
@@ -164,8 +187,15 @@ pub fn build_generated_document_manifest(
     let generated_file_id = format!("generated-file-{identity_short}");
     let artifact_id = format!("artifact-{identity_short}");
     let manifest_id = format!("artifact-manifest-{identity_short}");
+    let workdir = sessions_root.join(&compute_session_id);
+    std::fs::create_dir_all(&workdir)
+        .map_err(|e| anyhow!("Failed to create local compute-session workdir: {}", e))?;
+    let workdir_uri = path_to_file_uri(&workdir)?;
+    let ttl_seconds = DEFAULT_LOCAL_COMPUTE_TTL_SECONDS;
+    let retention_expires_at = (Utc::now() + Duration::seconds(ttl_seconds as i64))
+        .to_rfc3339_opts(SecondsFormat::Millis, true);
 
-    Ok(GeneratedDocumentBundle {
+    let bundle = GeneratedDocumentBundle {
         compute_session: GeneratedDocumentComputeSession {
             id: compute_session_id.clone(),
             owner_user_id: LOCAL_OWNER_USER_ID.to_string(),
@@ -177,8 +207,8 @@ pub fn build_generated_document_manifest(
             model: None,
             status: "completed".to_string(),
             workdir_uri,
-            retention_expires_at: None,
-            ttl_seconds: None,
+            retention_expires_at: Some(retention_expires_at),
+            ttl_seconds: Some(ttl_seconds),
             created_at: now.clone(),
             updated_at: now.clone(),
             completed_at: Some(now.clone()),
@@ -219,7 +249,10 @@ pub fn build_generated_document_manifest(
             created_at: now.clone(),
             updated_at: now,
         },
-    })
+    };
+
+    write_local_compute_session_files(&workdir, &bundle)?;
+    Ok(bundle)
 }
 
 fn normalize_existing_path(path: &Path) -> Result<PathBuf> {
@@ -265,6 +298,55 @@ fn sha256_hex(bytes: &[u8]) -> String {
     hex::encode(hasher.finalize())
 }
 
+fn local_compute_sessions_root() -> Result<PathBuf> {
+    if let Ok(root) = std::env::var(LOCAL_COMPUTE_ROOT_ENV) {
+        let trimmed = root.trim();
+        if !trimmed.is_empty() {
+            return Ok(PathBuf::from(trimmed));
+        }
+    }
+
+    Ok(crate::sys::utils::app_data_dir()?.join("compute-sessions"))
+}
+
+fn write_local_compute_session_files(
+    workdir: &Path,
+    bundle: &GeneratedDocumentBundle,
+) -> Result<()> {
+    let manifest_path = workdir.join(LOCAL_COMPUTE_MANIFEST_FILE);
+    let manifest_json = serde_json::to_vec_pretty(bundle)
+        .map_err(|e| anyhow!("Failed to serialize local compute-session manifest: {}", e))?;
+    std::fs::write(&manifest_path, manifest_json)
+        .map_err(|e| anyhow!("Failed to write local compute-session manifest: {}", e))?;
+
+    let audit_event = LocalComputeAuditEvent {
+        id: format!("audit-event-{}", bundle.generated_file.id),
+        event_type: LOCAL_COMPUTE_AUDIT_EVENT_TYPE.to_string(),
+        compute_session_id: bundle.compute_session.id.clone(),
+        generated_file_id: bundle.generated_file.id.clone(),
+        artifact_manifest_id: bundle.artifact_manifest.id.clone(),
+        checksum_sha256: bundle.generated_file.checksum_sha256.clone(),
+        privacy_mode: bundle.compute_session.privacy_mode.clone(),
+        provider_mode: bundle.compute_session.provider_mode.clone(),
+        created_at: bundle.compute_session.updated_at.clone(),
+    };
+    let audit_json = serde_json::to_string(&audit_event).map_err(|e| {
+        anyhow!(
+            "Failed to serialize local compute-session audit event: {}",
+            e
+        )
+    })?;
+    let mut audit_file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(workdir.join(LOCAL_COMPUTE_AUDIT_FILE))
+        .map_err(|e| anyhow!("Failed to open local compute-session audit log: {}", e))?;
+    writeln!(audit_file, "{audit_json}")
+        .map_err(|e| anyhow!("Failed to write local compute-session audit event: {}", e))?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -275,14 +357,25 @@ mod tests {
         let file_path = temp_dir.path().join("Quarterly Report.pdf");
         std::fs::write(&file_path, b"%PDF-1.7\nhello").expect("test file");
 
-        let bundle =
-            build_generated_document_manifest(&file_path, GeneratedDocumentKind::Pdf).unwrap();
+        let sessions_root = temp_dir.path().join("compute-sessions");
+        let bundle = build_generated_document_manifest_with_root(
+            &file_path,
+            GeneratedDocumentKind::Pdf,
+            &sessions_root,
+        )
+        .unwrap();
         let value = serde_json::to_value(&bundle).unwrap();
+        let workdir_path = sessions_root.join(&bundle.compute_session.id);
 
         assert_eq!(bundle.compute_session.source_surface, "desktop");
         assert_eq!(bundle.compute_session.privacy_mode, "local");
         assert_eq!(bundle.compute_session.provider_mode, "Local");
         assert_eq!(bundle.compute_session.status, "completed");
+        assert_eq!(
+            bundle.compute_session.ttl_seconds,
+            Some(DEFAULT_LOCAL_COMPUTE_TTL_SECONDS)
+        );
+        assert!(bundle.compute_session.retention_expires_at.is_some());
         assert_eq!(bundle.generated_file.kind, GeneratedDocumentKind::Pdf);
         assert_eq!(bundle.generated_file.file_name, "Quarterly Report.pdf");
         assert_eq!(bundle.generated_file.mime_type, "application/pdf");
@@ -307,6 +400,11 @@ mod tests {
             .as_str()
             .expect("workdir uri")
             .starts_with("file://"));
+        assert!(workdir_path.join(LOCAL_COMPUTE_MANIFEST_FILE).is_file());
+        assert!(workdir_path.join(LOCAL_COMPUTE_AUDIT_FILE).is_file());
+        let audit_log =
+            std::fs::read_to_string(workdir_path.join(LOCAL_COMPUTE_AUDIT_FILE)).unwrap();
+        assert!(audit_log.contains(LOCAL_COMPUTE_AUDIT_EVENT_TYPE));
     }
 
     #[test]
