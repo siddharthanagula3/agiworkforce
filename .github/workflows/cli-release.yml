@@ -116,28 +116,37 @@ jobs:
 
             #### macOS (x86_64)
             \`\`\`bash
-            curl -fsSL https://github.com/${{ github.repository }}/releases/download/${tag}/agiworkforce-${version}-darwin-x64.tar.gz | tar xz -C ~/.agiworkforce/bin/
+            mkdir -p ~/.agi/bin
+            curl -fsSL https://github.com/${{ github.repository }}/releases/download/${tag}/agiworkforce-${version}-darwin-x64.tar.gz | tar xz -C ~/.agi/bin/
+            ~/.agi/bin/agi --version
             \`\`\`
 
             #### macOS (ARM64)
             \`\`\`bash
-            curl -fsSL https://github.com/${{ github.repository }}/releases/download/${tag}/agiworkforce-${version}-darwin-arm64.tar.gz | tar xz -C ~/.agiworkforce/bin/
+            mkdir -p ~/.agi/bin
+            curl -fsSL https://github.com/${{ github.repository }}/releases/download/${tag}/agiworkforce-${version}-darwin-arm64.tar.gz | tar xz -C ~/.agi/bin/
+            ~/.agi/bin/agi --version
             \`\`\`
 
             #### Linux (x86_64)
             \`\`\`bash
-            curl -fsSL https://github.com/${{ github.repository }}/releases/download/${tag}/agiworkforce-${version}-linux-x64.tar.gz | tar xz -C ~/.agiworkforce/bin/
+            mkdir -p ~/.agi/bin
+            curl -fsSL https://github.com/${{ github.repository }}/releases/download/${tag}/agiworkforce-${version}-linux-x64.tar.gz | tar xz -C ~/.agi/bin/
+            ~/.agi/bin/agi --version
             \`\`\`
 
             #### Linux (ARM64)
             \`\`\`bash
-            curl -fsSL https://github.com/${{ github.repository }}/releases/download/${tag}/agiworkforce-${version}-linux-arm64.tar.gz | tar xz -C ~/.agiworkforce/bin/
+            mkdir -p ~/.agi/bin
+            curl -fsSL https://github.com/${{ github.repository }}/releases/download/${tag}/agiworkforce-${version}-linux-arm64.tar.gz | tar xz -C ~/.agi/bin/
+            ~/.agi/bin/agi --version
             \`\`\`
 
             #### Windows (x86_64)
             \`\`\`bash
             curl -fsSL https://github.com/${{ github.repository }}/releases/download/${tag}/agiworkforce-${version}-windows-x64.zip -o agiworkforce.zip
-            unzip agiworkforce.zip -d %APPDATA%/agiworkforce/bin
+            unzip agiworkforce.zip -d %APPDATA%/agi/bin
+            %APPDATA%/agi/bin/agi.exe --version
             \`\`\`
 
             #### Universal Installer
@@ -253,9 +262,9 @@ jobs:
         shell: bash
         run: |
           if [ "${{ matrix.os }}" = "windows" ]; then
-            BIN_PATH="target/${{ matrix.target }}/release/agiworkforce.exe"
+            BIN_PATH="target/${{ matrix.target }}/release/agi.exe"
           else
-            BIN_PATH="target/${{ matrix.target }}/release/agiworkforce"
+            BIN_PATH="target/${{ matrix.target }}/release/agi"
           fi
           echo "bin_path=${BIN_PATH}" >> $GITHUB_OUTPUT
 
@@ -269,9 +278,10 @@ jobs:
           ARCHIVE_NAME="${ARTIFACT_NAME}.tar.gz"
 
           mkdir -p release
-          cp "$BINARY" "release/agiworkforce"
-          chmod +x "release/agiworkforce"
-          tar -czf "$ARCHIVE_NAME" -C release agiworkforce
+          cp "$BINARY" "release/agi"
+          cp "target/${{ matrix.target }}/release/agiworkforce" "release/agiworkforce"
+          chmod +x "release/agi" "release/agiworkforce"
+          tar -czf "$ARCHIVE_NAME" -C release agi agiworkforce
           ls -lh "$ARCHIVE_NAME"
           echo "archive_name=${ARCHIVE_NAME}" >> $GITHUB_OUTPUT
 
@@ -285,8 +295,9 @@ jobs:
           $archiveName = "${artifactName}.zip"
 
           New-Item -ItemType Directory -Force -Path "release" | Out-Null
-          Copy-Item "$binary" "release/agiworkforce.exe"
-          Compress-Archive -Path "release/agiworkforce.exe" -DestinationPath "$archiveName"
+          Copy-Item "$binary" "release/agi.exe"
+          Copy-Item "target/${{ matrix.target }}/release/agiworkforce.exe" "release/agiworkforce.exe"
+          Compress-Archive -Path "release/agi.exe","release/agiworkforce.exe" -DestinationPath "$archiveName"
           Get-Item "$archiveName" | ForEach-Object { Write-Host "Archive: $($_.Name) ($($_.Length) bytes)" }
           Add-Content -Path $env:GITHUB_OUTPUT -Value "archive_name=${archiveName}"
 

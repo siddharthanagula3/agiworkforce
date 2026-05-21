@@ -41,7 +41,7 @@ jobs:
           # linux-arm64 dropped from v1.0 matrix: openssl-sys cross-compile
           # needs libssl-dev:arm64 + correct linker setup which cross's
           # default docker image doesn't ship. Users on linux-arm64 can run:
-          #   cargo install --git https://github.com/siddharthanagula3/agiworkforce agiworkforce-cli
+          #   cargo install --git https://github.com/siddharthanagula3/agiworkforce agiworkforce-cli --bin agi
           # which builds natively. v1.1 to add this back via either rustls
           # migration (no openssl) or self-hosted arm64 runner.
           - target: x86_64-unknown-linux-gnu
@@ -107,9 +107,12 @@ jobs:
         run: |
           mkdir -p dist/cli/${{ matrix.platform }}/bin
           if [[ "${{ matrix.os }}" == windows-* ]]; then
+            cp target/${{ matrix.target }}/release/agi.exe dist/cli/${{ matrix.platform }}/bin/
             cp target/${{ matrix.target }}/release/agiworkforce.exe dist/cli/${{ matrix.platform }}/bin/
           else
+            cp target/${{ matrix.target }}/release/agi dist/cli/${{ matrix.platform }}/bin/
             cp target/${{ matrix.target }}/release/agiworkforce dist/cli/${{ matrix.platform }}/bin/
+            chmod +x dist/cli/${{ matrix.platform }}/bin/agi
             chmod +x dist/cli/${{ matrix.platform }}/bin/agiworkforce
           fi
 

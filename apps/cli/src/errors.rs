@@ -212,26 +212,26 @@ impl CliError {
             CliError::Api {
                 provider, status, ..
             } if (500..600).contains(status) => format!(
-                "{provider} returned HTTP {status}. Retry the request, or run `agiworkforce \
+                "{provider} returned HTTP {status}. Retry the request, or run `agi \
                  features` to fall back to a different provider."
             ),
             CliError::Api {
                 provider, status, ..
             } => format!(
-                "{provider} rejected the request with HTTP {status}. Check `agiworkforce \
+                "{provider} rejected the request with HTTP {status}. Check `agi \
                  auth-status` and the request payload for invalid fields."
             ),
             CliError::Auth { provider, .. } => format!(
-                "Run `agiworkforce login {provider}` to refresh credentials, or set the \
+                "Run `agi login {provider}` to refresh credentials, or set the \
                  corresponding API key environment variable."
             ),
             CliError::Config { .. } => {
-                "Run `agiworkforce init` to regenerate the default config, or fix the indicated \
+                "Run `agi init` to regenerate the default config, or fix the indicated \
                  file path manually."
                     .to_string()
             }
             CliError::Tool { tool_name, .. } => format!(
-                "Tool `{tool_name}` failed. Run `agiworkforce execpolicy` to see allowed commands \
+                "Tool `{tool_name}` failed. Run `agi execpolicy` to see allowed commands \
                  and re-prompt with the corrected invocation."
             ),
             CliError::Network { .. } => "Check your network connection and retry. If a corporate \

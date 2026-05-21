@@ -221,7 +221,7 @@ pub fn render_privacy_settings(session: &AgentSession) -> String {
         "  Local -> BYOK: explicit only with /continue-with-byok".to_string(),
         "  Attached files: never included in BYOK handoff drafts automatically".to_string(),
         "  Telemetry: CLI-local unless managed cloud features are enabled".to_string(),
-        "  Sync: opt-in with agiworkforce sync".to_string(),
+        "  Sync: opt-in with agi sync".to_string(),
     ]
     .join("\n")
 }
@@ -438,7 +438,7 @@ pub fn handle_tag(session: &mut AgentSession, arg: &str) -> String {
 
 pub fn render_install_app(app_name: &str) -> String {
     format!(
-        "{app_name} app integration\n  Use the connector/app plugin flow when available.\n  For now, authenticate in the target service, then run /plugin or agiworkforce plugin list."
+        "{app_name} app integration\n  Use the connector/app plugin flow when available.\n  For now, authenticate in the target service, then run /plugin or agi plugin list."
     )
 }
 
@@ -564,13 +564,14 @@ pub fn render_fallback(session: &AgentSession) -> String {
 }
 
 pub fn render_replay() -> String {
-    "Session replay: run\n  agiworkforce session list\n  agiworkforce session fork <id> --at-turn N --as <name>".to_string()
+    "Session replay: run\n  agi session list\n  agi session fork <id> --at-turn N --as <name>"
+        .to_string()
 }
 
 pub fn render_insights(session: &AgentSession) -> String {
     let session_id = session.managed_session_id().unwrap_or("(no session)");
     format!(
-        "Inspect this session as JSONL events:\n  agiworkforce exec --json-events --session {session_id} \"<prompt>\" | jq"
+        "Inspect this session as JSONL events:\n  agi exec --json-events --session {session_id} \"<prompt>\" | jq"
     )
 }
 
@@ -596,7 +597,7 @@ pub fn render_team_onboarding() -> String {
         };
     }
     format!(
-        "No team-onboarding guide found at {}. Run `agiworkforce onboarding` to generate one.",
+        "No team-onboarding guide found at {}. Run `agi onboarding` to generate one.",
         path.display()
     )
 }
@@ -606,7 +607,7 @@ pub fn render_terminal_setup() -> String {
         "Shell integration:",
         "# Add to ~/.bashrc or ~/.zshrc:",
         "export AGIWORKFORCE_HOME=\"$HOME/.agiworkforce\"",
-        "alias agi='agiworkforce'",
+        "# agi is the primary command; agiworkforce remains a compatibility alias",
         "# fish: set -gx AGIWORKFORCE_HOME ~/.agiworkforce",
     ]
     .join("\n")

@@ -1,7 +1,7 @@
 //! Daemon mode -- persistent event listener that triggers agent execution.
 //!
 //! Supports cron schedules, webhook HTTP endpoints, and filesystem watchers.
-//! Started via `agiworkforce --daemon` or `agiworkforce daemon`.
+//! Started via `agi --daemon` or `agi daemon`.
 //!
 //! Each trigger spawns a new `AgentSession` (non-interactive).  Results are
 //! logged to `~/.agiworkforce/daemon-logs/`.  Concurrent execution is capped

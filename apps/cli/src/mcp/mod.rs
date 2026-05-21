@@ -1467,7 +1467,7 @@ impl McpManager {
         let mut configs = HashMap::new();
 
         // Project configs win over globals. Support both the historical
-        // `.mcp.json` name and the visible `mcp.json` that `agiworkforce init`
+        // `.mcp.json` name and the visible `mcp.json` that `agi init`
         // creates.
         for path in [
             std::path::Path::new(".mcp.json"),

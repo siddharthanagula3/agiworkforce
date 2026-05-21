@@ -114,7 +114,7 @@ pub fn render_mcp_list(scopes: &[McpScope]) -> String {
         body.push(String::new());
     }
 
-    body.push("  ※ Run `agiworkforce --debug` to see error logs".to_string());
+    body.push("  ※ Run `agi --debug` to see error logs".to_string());
     body.push("  https://code.agiworkforce.com/docs/mcp for help".to_string());
 
     frame(
@@ -560,7 +560,7 @@ pub fn render_chrome() -> String {
         "    Reconnect extension".to_string(),
         "    Enabled by default: Yes".to_string(),
         String::new(),
-        "  Usage: agiworkforce --chrome or agiworkforce --no-chrome".to_string(),
+        "  Usage: agi --chrome or agi --no-chrome".to_string(),
         String::new(),
         "  Site-level permissions are inherited from the Chrome extension. Manage permissions in the".to_string(),
         "  Chrome extension settings to control which sites AGI Workforce can browse, click, and type on.".to_string(),
@@ -1141,7 +1141,7 @@ mod tests {
         assert!(s.contains("Extension: Installed"));
         assert!(s.contains("❯ Manage permissions"));
         assert!(s.contains("Reconnect extension"));
-        assert!(s.contains("Usage: agiworkforce --chrome or agiworkforce --no-chrome"));
+        assert!(s.contains("Usage: agi --chrome or agi --no-chrome"));
         assert!(s.contains("Learn more: https://code.agiworkforce.com/docs/chrome"));
     }
 

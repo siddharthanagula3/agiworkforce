@@ -424,7 +424,7 @@ pub async fn start_pkce_flow(
             .map_err(|_| {
                 anyhow!(
                     "OAuth flow timed out after {}s — re-run interactively or pre-auth via \
-             `agiworkforce mcp oauth login <server>`",
+             `agi mcp oauth login <server>`",
                     OAUTH_INTERACTIVE_TIMEOUT.as_secs()
                 )
             })??;

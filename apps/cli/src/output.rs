@@ -398,7 +398,7 @@ pub fn print_divider() {
 
 /// Print a one-line compact header shown on every interactive launch.
 ///
-/// Format: `agiworkforce 0.1.0 · provider: anthropic · ~/.agiworkforce/auth.json`
+/// Format: `agi 0.1.0 · provider: anthropic · ~/.agiworkforce/auth.json`
 pub fn print_compact_header(provider: &str) {
     let version = env!("CARGO_PKG_VERSION");
     // Resolve auth.json path — fall back to a tilde-prefixed literal if

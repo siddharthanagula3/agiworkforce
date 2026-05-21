@@ -8,15 +8,15 @@ The Rust CLI is the **engine** — every other surface wraps it conceptually. It
 
 ## Status at HEAD
 
-| Item                    | State                                                                                       |
-| ----------------------- | ------------------------------------------------------------------------------------------- |
-| Latest release          | ✅ v1.1.6 (per `git tag` 2026-05-18)                                                        |
-| First release           | ✅ v1.0.0 shipped 2026-05-03                                                                |
-| Homebrew formula        | ✅ `siddharthanagula3/tap/agiworkforce`                                                     |
-| npm wrapper             | ✅ `@agiworkforce/cli` (NPM_TOKEN set)                                                      |
-| Cargo install           | ✅ `cargo install --git https://github.com/siddharthanagula3/agiworkforce agiworkforce-cli` |
-| Cargo check (workspace) | ✅ GREEN                                                                                    |
-| Binary install path     | ✅ `~/.cargo/bin/agiworkforce` (6.0 MB arm64)                                               |
+| Item                    | State                                                                                                 |
+| ----------------------- | ----------------------------------------------------------------------------------------------------- |
+| Latest release          | ✅ v1.1.6 (per `git tag` 2026-05-18)                                                                  |
+| First release           | ✅ v1.0.0 shipped 2026-05-03                                                                          |
+| Homebrew formula        | ✅ `siddharthanagula3/tap/agiworkforce`                                                               |
+| npm wrapper             | ✅ `@agiworkforce/cli` (NPM_TOKEN set)                                                                |
+| Cargo install           | ✅ `cargo install --git https://github.com/siddharthanagula3/agiworkforce agiworkforce-cli --bin agi` |
+| Cargo check (workspace) | ✅ GREEN                                                                                              |
+| Binary install path     | ✅ `~/.cargo/bin/agi` primary, `~/.cargo/bin/agiworkforce` compatibility alias                        |
 
 ## Verified codebase numbers (2026-05-17 audit)
 
@@ -68,7 +68,7 @@ apps/cli/
 │   └── ...
 ├── npm/                            npm wrapper package
 ├── Cargo.toml                      workspace member
-└── target/release/agiworkforce     6.0 MB binary
+└── target/release/agi              6.0 MB primary binary; agiworkforce alias also builds
 
 apps/cli/archive/                   N/A — archived modules moved to _archive/2026-05-17-cleanup/apps/cli/src/
                                     (subagent_v2.rs + tools.rs.bak + safety.rs.bak)
@@ -142,8 +142,8 @@ cargo check --workspace
 cargo build --release -p agiworkforce-cli
 
 # Run
-cargo run -p agiworkforce-cli -- exec "Hello"
-~/.cargo/bin/agiworkforce --help
+cargo run -p agiworkforce-cli --bin agi -- exec "Hello"
+~/.cargo/bin/agi --help
 
 # Test (1,320 tests)
 cargo test -p agiworkforce-cli
@@ -183,7 +183,7 @@ brew install siddharthanagula3/tap/agiworkforce
 curl -fsSL https://raw.githubusercontent.com/siddharthanagula3/agiworkforce/main/scripts/install.sh | bash
 
 # Cargo from git
-cargo install --git https://github.com/siddharthanagula3/agiworkforce agiworkforce-cli
+cargo install --git https://github.com/siddharthanagula3/agiworkforce agiworkforce-cli --bin agi
 
 # npm wrapper
 npm install -g @agiworkforce/cli
@@ -211,13 +211,14 @@ gh release download v-cli-1.1.6 --repo siddharthanagula3/agiworkforce
 - **`FAST_STATUS_MODEL` hardcoded** at `tui/chatwidget.rs:344` violates V5 §10 lock #1 (no hardcoded model IDs). W6 fix.
 - **Ghost model `claude-opus-4-6-mini`** at `tui/chatwidget.rs:412` + `tui/bottom_pane/list_selection_view.rs:1415,1497`. W6 fix.
 
-## Where to look in PRD
+## Current References
 
-- [docs/PRD.md](../PRD.md) §6 — surface coverage matrix (CLI column)
-- [docs/PRD.md](../PRD.md) §10 lock #1 (no hardcoded model IDs)
-- [docs/PRD.md](../PRD.md) §11 — CLI registers 12 named + 1 Custom
-- [docs/PRD.md](../PRD.md) §17 risk #10 (Windows + Linux sandbox), risk #13 (2,409 unwraps)
-- [docs/PRD-APPENDIX-C-MONOREPO-LAYOUT.md](../PRD-APPENDIX-C-MONOREPO-LAYOUT.md) — CLI build/release pipeline
+- [docs/current/product-suite.md](../current/product-suite.md) - six-surface product role and CLI sync boundary.
+- [docs/current/technical-architecture.md](../current/technical-architecture.md) - runtime, provider, and reusable-crate ownership.
+- [docs/current/agent-and-repo-operability.md](../current/agent-and-repo-operability.md) - current docs and agent workflow rules.
+- [docs/engineering/naming-conventions.md](../engineering/naming-conventions.md) - `agi` primary command and `agiworkforce` compatibility alias lock.
+- [docs/decisions/CURRENT_DECISIONS.md](../decisions/CURRENT_DECISIONS.md) - no hardcoded model IDs, no silent routing, and current trust-boundary rules.
+- Historical PRD and layout details live in `docs/archive/2026-05-21-docs-consolidation/`.
 
 ## Memory references
 

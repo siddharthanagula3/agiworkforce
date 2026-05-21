@@ -64,19 +64,25 @@ class Agiworkforce < Formula
 
   # linux-arm64 omitted in v1.0 (cross-compile openssl-sys not yet wired —
   # users on arm64 Linux can run: cargo install --git
-  # https://github.com/siddharthanagula3/agiworkforce agiworkforce-cli)
+  # https://github.com/siddharthanagula3/agiworkforce agiworkforce-cli --bin agi)
   on_linux do
     url "$RELEASE_BASE/agiworkforce-linux-x64.tar.gz"
     sha256 "$SHA_LINUX_X64"
   end
 
   def install
-    bin.install "agiworkforce"
+    if File.exist?("agi")
+      bin.install "agi"
+    else
+      bin.install "agiworkforce" => "agi"
+    end
+    bin.install "agiworkforce" if File.exist?("agiworkforce")
   end
 
   test do
-    assert_match "agiworkforce", shell_output("#{bin}/agiworkforce --version")
-    assert_match "ANTHROPIC", shell_output("#{bin}/agiworkforce --list-models")
+    assert_match "agi", shell_output("#{bin}/agi --version")
+    assert_match "ANTHROPIC", shell_output("#{bin}/agi --list-models")
+    assert_predicate bin/"agiworkforce", :exist?
   end
 end
 EOF
@@ -97,3 +103,4 @@ echo ""
 echo "✓ Tap updated. Users can now:"
 echo "  brew install siddharthanagula3/tap/agiworkforce"
 echo "  brew upgrade siddharthanagula3/tap/agiworkforce"
+echo "  agi --version"

@@ -52,7 +52,7 @@ fi
 # 3. CLI tests
 echo ""
 echo "[3/8] CLI tests"
-test_result=$(cargo test -p agiworkforce-cli --bin agiworkforce 2>&1 | grep "test result" | tail -1)
+test_result=$(cargo test -p agiworkforce-cli --bin agi 2>&1 | grep "test result" | tail -1)
 if echo "$test_result" | grep -q "0 failed"; then
   pass "$test_result"
 else
@@ -63,7 +63,8 @@ fi
 echo ""
 echo "[4/8] Release binary"
 cargo build --release -p agiworkforce-cli 2>&1 | tail -1 | grep -q "Finished" && pass "release build green" || fail "release build failed"
-binary="./target/release/agiworkforce"
+binary="./target/release/agi"
+legacy_binary="./target/release/agiworkforce"
 if [ -x "$binary" ]; then
   ver=$($binary --version)
   cargo_ver=$(grep -E '^version' apps/cli/Cargo.toml | head -1 | cut -d'"' -f2)
@@ -80,6 +81,11 @@ if [ -x "$binary" ]; then
   fi
 else
   fail "binary not found at $binary"
+fi
+if [ -x "$legacy_binary" ]; then
+  pass "legacy compatibility alias present: $legacy_binary"
+else
+  fail "legacy compatibility alias not found at $legacy_binary"
 fi
 
 # 5. Smoke test all 22 subcommands respond to --help

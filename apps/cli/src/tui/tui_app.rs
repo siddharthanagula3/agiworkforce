@@ -1427,7 +1427,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/replay" => SlashResult::SystemMessage(
-            "Session replay: drop to shell and run\n  agiworkforce session list\n  agiworkforce session fork <id> --at-turn N --as <name>\n(Inline turn picker coming in v0.2.)"
+            "Session replay: drop to shell and run\n  agi session list\n  agi session fork <id> --at-turn N --as <name>\n(Inline turn picker coming in v0.2.)"
                 .to_string(),
         ),
 
@@ -1437,7 +1437,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 .managed_session_id()
                 .unwrap_or("(no session)");
             SlashResult::SystemMessage(format!(
-                "Inspect this session as JSONL events:\n  agiworkforce exec --json-events --session {} \"<prompt>\" | jq",
+                "Inspect this session as JSONL events:\n  agi exec --json-events --session {} \"<prompt>\" | jq",
                 sid
             ))
         }
@@ -1714,7 +1714,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/plugins" => {
             SlashResult::SystemMessage(
-                "Plugin management:\n  Use `agiworkforce plugin list` to see installed plugins.\n  Use `agiworkforce plugin install <name>` to install.".to_string()
+                "Plugin management:\n  Use `agi plugin list` to see installed plugins.\n  Use `agi plugin install <name>` to install.".to_string()
             )
         }
 
@@ -1727,10 +1727,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         // ── Voice ──
         // run_voice_mode is async and requires session/config args; the TUI slash
         // handler is sync so we surface instructions instead of invoking directly.
-        // Use `agiworkforce --no-tui --voice-lang en` for the interactive REPL voice loop.
+        // Use `agi --no-tui --voice-lang en` for the interactive REPL voice loop.
         "/voice" | "/v" => {
             SlashResult::SystemMessage(
-                "Voice mode requires the REPL (not TUI). Run:\n  agiworkforce --no-tui --voice-lang en\nSupported languages: en es fr de it pt ja ko zh ar hi ru nl pl sv da no fi tr cs".to_string()
+                "Voice mode requires the REPL (not TUI). Run:\n  agi --no-tui --voice-lang en\nSupported languages: en es fr de it pt ja ko zh ar hi ru nl pl sv da no fi tr cs".to_string()
             )
         }
 
@@ -1938,14 +1938,14 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 }
             } else {
                 SlashResult::SystemMessage(format!(
-                    "No team-onboarding guide found at {}. Run `agiworkforce onboarding` to generate one.",
+                    "No team-onboarding guide found at {}. Run `agi onboarding` to generate one.",
                     path.display()
                 ))
             }
         }
 
         "/terminal-setup" | "/shell-setup" => {
-            let snippet = "# Add to ~/.bashrc or ~/.zshrc:\nexport AGIWORKFORCE_HOME=\"$HOME/.agiworkforce\"\nalias agi='agiworkforce'\n# fish: set -gx AGIWORKFORCE_HOME ~/.agiworkforce";
+            let snippet = "# Add to ~/.bashrc or ~/.zshrc:\nexport AGIWORKFORCE_HOME=\"$HOME/.agiworkforce\"\n# agi is the primary command; agiworkforce remains a compatibility alias\n# fish: set -gx AGIWORKFORCE_HOME ~/.agiworkforce";
             SlashResult::SystemMessage(format!("Shell integration:\n{snippet}"))
         }
 

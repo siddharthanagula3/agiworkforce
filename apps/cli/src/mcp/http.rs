@@ -252,13 +252,13 @@ pub(super) async fn send_request_http(
                 }
             };
 
-            // Headless guard: TTY-less runs (e.g. `agiworkforce -p`) shouldn't
+            // Headless guard: TTY-less runs (e.g. `agi -p`) shouldn't
             // pop a browser; surface a clear error instead.
             if !is_interactive() {
                 bail!(
                     "[{}] [mcp http] received 401 on '{}' but no usable cached token \
                      and not running interactively — re-run from a terminal or pre-auth \
-                     via `agiworkforce mcp oauth login <server>`. body: {}",
+                     via `agi mcp oauth login <server>`. body: {}",
                     server_name,
                     method_name,
                     body_text

@@ -3,7 +3,7 @@
 #
 # Prerequisites:
 #   - NPM_TOKEN env var (or `npm login` already done)
-#   - Built binaries at target/{platform}/release/agiworkforce (one per target)
+#   - Built binaries at target/{platform}/release/agi and target/{platform}/release/agiworkforce
 #   - You're on a clean git tree at a tagged commit (e.g. v-cli-1.0.0)
 #
 # Usage:
@@ -99,4 +99,4 @@ echo ""
 echo "Verify with:"
 echo "  npm view @agiworkforce/cli versions"
 echo "  npm install -g @agiworkforce/cli@$VERSION"
-echo "  agiworkforce --version"
+echo "  agi --version"

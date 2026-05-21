@@ -451,7 +451,7 @@ impl Marketplace {
 /// Format installed plugins for display.
 pub fn format_installed(registry: &InstalledPlugins) -> String {
     if registry.plugins.is_empty() {
-        return "No plugins installed.\n\nInstall with:\n  agiworkforce plugin install <path-or-git-url>"
+        return "No plugins installed.\n\nInstall with:\n  agi plugin install <path-or-git-url>"
             .to_string();
     }
 
@@ -473,7 +473,7 @@ pub fn format_installed(registry: &InstalledPlugins) -> String {
 pub fn format_search_results(plugins: &[MarketplacePlugin]) -> String {
     if plugins.is_empty() {
         return "No plugins found.\n\nThe marketplace registry may be offline. \
-                Try installing directly:\n  agiworkforce plugin install <git-url>"
+                Try installing directly:\n  agi plugin install <git-url>"
             .to_string();
     }
 

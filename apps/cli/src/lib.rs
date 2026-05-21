@@ -107,7 +107,7 @@ pub mod skill_learner; // used by agent/chat.rs session-end hook
 
 // A2A protocol — lives at features::a2a; re-exported here so 6 call-sites in
 // a2a_ws.rs, agent/mod.rs, and repl/mod.rs resolve unchanged.
-#[allow(dead_code)] // PHASE2: expose `agiworkforce a2a serve/discover/delegate`
+#[allow(dead_code)] // PHASE2: expose `agi a2a serve/discover/delegate`
 pub use features::a2a;
 
 // Phase 6 reorg — feature/platform/data layers.
@@ -128,9 +128,9 @@ use std::io::{self, IsTerminal, Read};
 /// AGI Workforce CLI — multi-model AI agent in your terminal
 #[derive(Parser, Debug)]
 #[command(
-    name = "agiworkforce",
+    name = "agi",
     version,
-    about = "AGI Workforce CLI — multi-model AI agent in your terminal",
+    about = "AGI CLI — multi-model AI agent in your terminal",
     long_about = "Multi-provider AI agent for your terminal. \
                   Connects to Anthropic, OpenAI, Google, Ollama, and more."
 )]
@@ -1537,7 +1537,7 @@ pub async fn run_main() -> Result<()> {
                 let statuses = auth::auth_status()?;
                 if statuses.is_empty() {
                     println!("No authentication configured.");
-                    println!("Run `agiworkforce login` to authenticate.");
+                    println!("Run `agi login` to authenticate.");
                 } else {
                     println!("{:<18} {:<10} {:<12} Expires", "Provider", "Type", "Status");
                     println!("{}", "-".repeat(60));
@@ -1626,7 +1626,7 @@ pub async fn run_main() -> Result<()> {
             ShellType::Zsh => clap_complete::Shell::Zsh,
             ShellType::Fish => clap_complete::Shell::Fish,
         };
-        clap_complete::generate(shell_type, &mut cmd, "agiworkforce", &mut io::stdout());
+        clap_complete::generate(shell_type, &mut cmd, "agi", &mut io::stdout());
         return Ok(());
     }
 
@@ -1736,7 +1736,7 @@ pub async fn run_main() -> Result<()> {
                 }
                 println!();
             }
-            println!("{}", "Resume with: agiworkforce --resume <ID>".dimmed());
+            println!("{}", "Resume with: agi --resume <ID>".dimmed());
         }
         return Ok(());
     }
@@ -2268,7 +2268,7 @@ pub async fn run_oneshot(
         }
     } else if output_mode == OneShotOutputMode::JsonPretty {
         // Pretty-printed single JSON object — non-streaming, for shell users
-        // running `agiworkforce -p '...' --output-format json`.
+        // running `agi -p '...' --output-format json`.
         let start = std::time::Instant::now();
         let result = session.send(config, prompt, Box::new(|_chunk| {})).await;
         let duration_ms = start.elapsed().as_millis() as u64;

@@ -31,12 +31,18 @@ class Agiworkforce < Formula
   end
 
   def install
-    bin.install "agiworkforce"
+    if File.exist?("agi")
+      bin.install "agi"
+    else
+      bin.install "agiworkforce" => "agi"
+    end
+    bin.install "agiworkforce" if File.exist?("agiworkforce")
   end
 
   test do
-    assert_match "agiworkforce", shell_output("#{bin}/agiworkforce --version")
+    assert_match "agi", shell_output("#{bin}/agi --version")
     # --list-models works without any API key (proves binary boots)
-    assert_match "ANTHROPIC", shell_output("#{bin}/agiworkforce --list-models")
+    assert_match "ANTHROPIC", shell_output("#{bin}/agi --list-models")
+    assert_predicate bin/"agiworkforce", :exist?
   end
 end
