@@ -100,6 +100,12 @@ export type { VideoGenCardProps } from './components/VideoGenCard';
 
 // Modal overlays
 export { SettingsModal } from './components/SettingsModal';
+export { SettingsShell, DEFAULT_SETTINGS_SECTIONS } from './components/SettingsShell';
+export type { SettingsSection, SettingsShellProps } from './components/SettingsShell';
+export { MemoryEditor } from './components/MemoryEditor';
+export type { MemoryEditorProps } from './components/MemoryEditor';
+export { useMemoryStore, selectMemoryFacts, selectMemoryCount } from './stores/memoryStore';
+export type { MemoryFact } from './stores/memoryStore';
 export { CommandPalette } from './components/CommandPalette';
 
 // Phase A Slice 1 — Budget + agentic-loop status (ported from UAC)
