@@ -7,26 +7,34 @@ Baseline commit: `b7d6debf0` (`chore: snapshot workspace before repo organizatio
 
 ## Executive Grade
 
-Overall grade: **A after the docs consolidation pass, with docs/LLM-operability now at A+ shape and remaining repo-wide A+ blockers narrow and explicit.**
+Overall grade: **A after the docs consolidation and checkpoint split, with docs/LLM-operability now at A+ shape and remaining repo-wide A+ blockers narrow and explicit.**
 
 The core monorepo spine is strong: `apps/`, `packages/`, `crates/`, `services/`, `supabase/`, `docs/`, `audit/`, `tasks/`, `reports/`, `examples/`, and `scripts/` are the right large buckets for an OpenAI/Anthropic-style application suite.
 
-The repo no longer has the most damaging founder-plus-LLM symptoms at root: scratch captures, historical campaign docs, reference catalogs, raw reference-index catalogs, local-only artifacts, stale Web feature shims, split Web feature roots, oversized current docs, and the Mobile waitlist pilot barrels have been moved, archived, ignored, untracked, summarized, or removed. The remaining repo-wide A+ work is deeper: CODEOWNERS with real teams, the remaining Mobile/Desktop domain-first cleanup, Supabase migration consolidation, CI blind-spot baselines, and report-retention review.
+The repo no longer has the most damaging founder-plus-LLM symptoms at root: scratch captures, historical campaign docs, reference catalogs, raw reference-index catalogs, local-only artifacts, stale Web feature shims, split Web feature roots, ambiguous Web workspace filters, duplicate Expo app configs, oversized current docs, and the Mobile waitlist pilot barrels have been moved, archived, ignored, untracked, summarized, or removed. The remaining repo-wide A+ work is deeper: CODEOWNERS with real teams, the remaining Mobile/Desktop domain-first cleanup, Supabase migration consolidation, CI blind-spot baselines, CLI/Rust release-package drift checks, and report-retention review.
 
 ## Evidence Snapshot
 
-| Area                            | Finding                                                                                                                           |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Scoped non-generated file count | `6156` files excluding common generated/build folders.                                                                            |
-| Largest top-level buckets       | `apps` 4752, `packages` 492, `crates` 178, `tasks` 163, `docs` 150, `services` 88.                                                |
-| Largest product surfaces        | `apps/desktop` 2178 tracked files, `apps/web` 1292, `apps/cli` 552, `apps/mobile` 507.                                            |
-| Shared package README coverage  | Top-level packages now have README ownership files. Provider leaf packages now have README files.                                 |
-| App/service README coverage     | Apps and services now have README ownership files.                                                                                |
-| Crate README coverage           | Top-level crates now have README ownership files.                                                                                 |
-| Root source files               | Root is now short and intentional; scratch/historical/reference files were moved.                                                 |
-| Agent operability               | `docs/agent-context/` is implemented, metadata is strict, and checks pass.                                                        |
-| Guardrails                      | `pnpm check:llm-operability` covers agent context, root hygiene, boundaries, structure conventions, artifacts, READMEs, and docs. |
-| Environment baseline            | Current shell uses Node `v22.21.1` and pnpm `9.15.3`, matching the repo engine contract.                                          |
+| Area                            | Finding                                                                                                                                  |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Scoped non-generated file count | `6156` files excluding common generated/build folders.                                                                                   |
+| Largest top-level buckets       | `apps` 4752, `packages` 492, `crates` 178, `tasks` 163, `docs` 150, `services` 88.                                                       |
+| Largest product surfaces        | `apps/desktop` 2178 tracked files, `apps/web` 1292, `apps/cli` 552, `apps/mobile` 507.                                                   |
+| Shared package README coverage  | Top-level packages now have README ownership files. Provider leaf packages now have README files.                                        |
+| App/service README coverage     | Apps and services now have README ownership files.                                                                                       |
+| Crate README coverage           | Top-level crates now have README ownership files.                                                                                        |
+| Root source files               | Root is now short and intentional; scratch/historical/reference files were moved.                                                        |
+| Agent operability               | `docs/agent-context/` is implemented, metadata is strict, and checks pass.                                                               |
+| Guardrails                      | `pnpm check:llm-operability` covers agent context, root hygiene, boundaries, structure conventions, artifacts, READMEs, hooks, and docs. |
+| Environment baseline            | Current shell uses Node `v22.21.1` and pnpm `9.15.3`, matching the repo engine contract.                                                 |
+
+## 2026-05-21 Checkpoint Update
+
+- The broad dirty workspace was split into scoped commits for Web feature-root consolidation, Mobile feature barrels, CLI command naming, enterprise control-plane foundation, extension security cleanup paths, docs consolidation, repo-operability guardrails, Expo config drift removal, Web workspace filter cleanup, and README ownership hardening.
+- The working tree is clean after the checkpoint sequence.
+- Mobile Expo config is now single-source: root `app.json` and duplicate `apps/mobile/app.json` are removed, and repo-organization checks enforce `apps/mobile/app.config.js`.
+- Web deployment and helper scripts now use `@agiworkforce/web` as the canonical workspace filter; `pnpm check:structure-conventions` rejects active-file regressions to ambiguous `--filter web`.
+- README ownership markers are no longer advisory. Missing `Status:`, `Owner`, or `Purpose` markers now fail `pnpm check:readme-ownership`.
 
 ## Scorecard
 
@@ -37,16 +45,16 @@ The repo no longer has the most damaging founder-plus-LLM symptoms at root: scra
 | LLM operability              | A     | Agent docs, lane maps, shared-file policy, task templates, known flaws, command maps, and strict checks are in place.                           |
 | Human onboarding             | A-    | Root docs, CONTRIBUTING, app/package/crate/service READMEs, and current metadata are in place.                                                  |
 | Source-of-truth discipline   | A+    | Current docs are compact, metadata-checked, archived historical docs are isolated, and retired top-level doc paths are guarded.                 |
-| Root hygiene                 | A     | Root is short and intentional; backslash-named root entries and unclassified root files now fail checks.                                        |
+| Root hygiene                 | A     | Root is short and intentional; backslash-named root entries, stale Expo app configs, and unclassified root files now fail checks.               |
 | Generated artifact hygiene   | A-    | Tracked local/generated debt is removed or archived; remaining work is retention policy for existing reports and app-local outputs.             |
 | Package boundaries           | A-    | Boundary and README ownership checks pass; public-export/deep-import enforcement can still improve.                                             |
-| CI/repo guardrails           | A-    | Repo-operability CI exists and strict checks pass; broader CI blind-spot baselines remain.                                                      |
+| CI/repo guardrails           | A-    | Repo-operability CI exists; strict structure, hook, README, doc-status, and artifact checks pass; broader CI blind-spot baselines remain.       |
 | Hiring readiness             | A-    | A new engineer or coding agent can navigate ownership and commands; real GitHub teams and Mobile/Desktop feature-domain moves remain before A+. |
 
 ## Main Findings
 
 1. **Root is now mostly boring.**
-   Scratch design markdown, screenshots, historical campaign docs, reference catalogs, and root downloads were moved. Keep the allowlist strict.
+   Scratch design markdown, screenshots, historical campaign docs, reference catalogs, duplicate Expo config, and root downloads were moved or removed. Keep the allowlist strict.
 
 2. **Docs now have a compact current layer.**
    `docs/current/` summarizes the current product, architecture, commercial posture, and repo-operability rules. Former top-level PRD/roadmap/pricing/architecture/scaling/handoff docs are archived under `docs/archive/2026-05-21-docs-consolidation/`, and active references are guarded by CI.
@@ -54,8 +62,8 @@ The repo no longer has the most damaging founder-plus-LLM symptoms at root: scra
 3. **Package and crate ownership context is now covered at the README level.**
    The remaining ownership work is CODEOWNERS mapping to real GitHub teams and deeper feature/domain READMEs inside large apps.
 
-4. **Web feature-root drift is closed; Mobile and Desktop are next.**
-   `apps/web/features` is now canonical and `apps/web/src/features` is forbidden by `pnpm check:structure-conventions`. The Mobile waitlist pilot is cleaned up under `apps/mobile/src/features/waitlist`, and Mobile projects/billing have started under `apps/mobile/src/features`. The rest of `apps/mobile` and `apps/desktop` still need one-domain-at-a-time moves from the existing `docs/plans/domain-first-reorg.md`.
+4. **Web feature-root and command-filter drift are closed; Mobile and Desktop are next.**
+   `apps/web/features` is now canonical, `apps/web/src/features` is forbidden by `pnpm check:structure-conventions`, and active Web commands use `@agiworkforce/web`. The Mobile waitlist pilot is cleaned up under `apps/mobile/src/features/waitlist`, and Mobile projects/billing have started under `apps/mobile/src/features`. The rest of `apps/mobile` and `apps/desktop` still need one-domain-at-a-time moves from the existing `docs/plans/domain-first-reorg.md`.
 
 5. **Generated/build directories are present across many subtrees.**
    Many are ignored and not tracked, but their presence makes local exploration noisy. The repo needs stricter ignore and cleanup guidance, plus a check that fails only tracked or unclassified source-tree clutter.
@@ -140,7 +148,7 @@ Acceptance:
 
 Goal: one current doc graph for humans and agents.
 
-Status: in progress.
+Status: mostly done.
 
 Tasks:
 
@@ -163,7 +171,7 @@ Acceptance:
 
 Goal: every shared boundary explains itself locally.
 
-Status: next.
+Status: mostly done.
 
 Tasks:
 
@@ -202,7 +210,7 @@ Goal: make large surfaces easy to modify by feature.
 
 Order:
 
-1. Web - `apps/web/src/features` consolidation done.
+1. Web - `apps/web/src/features` consolidation done, and active commands now use `@agiworkforce/web`.
 2. Mobile.
 3. Desktop.
 
@@ -261,7 +269,10 @@ Acceptance:
 8. Add missing READMEs for `apps/web`, `apps/desktop`, `apps/extension`, and both services. Done.
 9. Add P0 package READMEs for `packages/types`, `packages/runtime`, `packages/providers`, and `packages/unified-chat`. Done.
 10. Add CI job for `pnpm check:llm-operability`. Done in `.github/workflows/repo-operability.yml`.
-11. Start Web domain-first cleanup only after tasks 1-10 are green.
+11. Finish Web feature-root cleanup. Done; `apps/web/src/features` is forbidden by structure checks.
+12. Remove stale Expo config drift. Done; `apps/mobile/app.config.js` is canonical.
+13. Fix ambiguous Web workspace filters. Done; active commands use `@agiworkforce/web`.
+14. Continue Mobile and Desktop domain-first cleanup one domain at a time.
 
 ## Target State
 

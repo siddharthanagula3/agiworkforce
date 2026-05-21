@@ -90,6 +90,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - Mobile Expo config is now single-source: stale root `app.json` and duplicate `apps/mobile/app.json` were removed, and repo-organization checks enforce `apps/mobile/app.config.js`.
 - Web deployment commands now use the canonical workspace package filter `@agiworkforce/web`; structure checks prevent the old `--filter web` drift.
 - README ownership checks now fail missing required ownership markers instead of allowing them as advisory warnings.
+- The current monorepo grade ledger now records the 2026-05-21 clean checkpoint, scoped commit split, closed Expo/Web filter drift, and remaining A+ blockers.
 - `AGENTS.md`, `CLAUDE.md`, `docs/agent-context/README.md`, and current repo-operability docs now surface naming conventions and hook policy as required agent context.
   - BYOK continuation draft that redacts obvious sensitive lines and does not send automatically.
 - Slash palette expanded to 83 built-in commands with `privacy-mode` and `continue-with-byok`.
