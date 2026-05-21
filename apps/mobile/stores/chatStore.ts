@@ -47,6 +47,10 @@ export interface CombinedChatState {
   setCurrentConversationId: (id: string | null) => void;
   loadConversations: () => Promise<void>;
   createConversation: (title?: string, projectId?: string) => Promise<string>;
+  forkConversation: (
+    sourceConversationId: string,
+    options?: { title?: string; model?: string },
+  ) => Promise<string>;
   deleteConversation: (id: string) => Promise<void>;
   loadMessages: (conversationId: string) => Promise<void>;
   renameConversation: (id: string, title: string) => Promise<void>;
@@ -93,6 +97,7 @@ function buildCombinedState(
     setCurrentConversationId: msg.setCurrentConversationId,
     loadConversations: msg.loadConversations,
     createConversation: msg.createConversation,
+    forkConversation: msg.forkConversation,
     deleteConversation: msg.deleteConversation,
     loadMessages: msg.loadMessages,
     renameConversation: msg.renameConversation,

@@ -17,6 +17,7 @@ import { DrawerActions } from '@react-navigation/native';
 import { MoreHorizontal, WifiOff, SquarePen, Menu, Cpu } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import { formatPrivacyModeLabel } from '@agiworkforce/types';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { MessageList } from '@/src/features/chat/components/MessageList';
 import { Composer } from '@/src/features/chat/components/Composer/Composer';
@@ -88,6 +89,7 @@ export default function ChatScreen() {
   const isLoadingMessages = useChatStore((s) => s.isLoadingMessages);
   const conversations = useChatStore((s) => s.conversations);
   const loadMessages = useChatStore((s) => s.loadMessages);
+  const forkConversation = useChatStore((s) => s.forkConversation);
   const sendMessage = useChatStore((s) => s.sendMessage);
   const stopStreaming = useChatStore((s) => s.stopStreaming);
   const setCurrentConversationId = useChatStore((s) => s.setCurrentConversationId);
@@ -261,10 +263,37 @@ export default function ChatScreen() {
     [conversationMessages.length, selectedModel, resolveAppMode],
   );
 
-  const handleModeSwitchConfirm = useCallback(() => {
-    useModelStore.getState().setModel(modeSwitchState.pendingModelId);
+  const handleModeSwitchConfirm = useCallback(async () => {
+    const nextModelId = modeSwitchState.pendingModelId;
+    if (!nextModelId) return;
+
+    if (modeSwitchState.fromMode === 'local' && modeSwitchState.toMode === 'cloud' && id) {
+      try {
+        const forkId = await forkConversation(id, {
+          title: `${title} (${formatPrivacyModeLabel('byok')} fork)`,
+          model: nextModelId,
+        });
+        useModelStore.getState().setModel(nextModelId);
+        setModeSwitchState((s) => ({ ...s, visible: false }));
+        router.replace({ pathname: '/(app)/chat/[id]' as const, params: { id: forkId } });
+        return;
+      } catch {
+        Alert.alert('Could not create fork', 'Try again before switching this conversation.');
+        return;
+      }
+    }
+
+    useModelStore.getState().setModel(nextModelId);
     setModeSwitchState((s) => ({ ...s, visible: false }));
-  }, [modeSwitchState.pendingModelId]);
+  }, [
+    forkConversation,
+    id,
+    modeSwitchState.fromMode,
+    modeSwitchState.pendingModelId,
+    modeSwitchState.toMode,
+    router,
+    title,
+  ]);
 
   const handleModeSwitchCancel = useCallback(() => {
     setModeSwitchState((s) => ({ ...s, visible: false }));

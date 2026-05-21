@@ -15,6 +15,10 @@ interface MessageState {
   setCurrentConversationId: (id: string | null) => void;
   loadConversations: () => Promise<void>;
   createConversation: (title?: string, projectId?: string) => Promise<string>;
+  forkConversation: (
+    sourceConversationId: string,
+    options?: { title?: string; model?: string },
+  ) => Promise<string>;
   deleteConversation: (id: string) => Promise<void>;
   loadMessages: (conversationId: string) => Promise<void>;
   renameConversation: (id: string, title: string) => Promise<void>;
@@ -91,6 +95,48 @@ export const useChatMessageStore = create<MessageState>()(
           }));
           return localId;
         }
+      },
+
+      forkConversation: async (sourceConversationId, options) => {
+        const sourceConversation = get().conversations.find((c) => c.id === sourceConversationId);
+        const sourceMessages = get().messages[sourceConversationId] ?? [];
+        const forkTitle =
+          options?.title ??
+          `${sourceConversation?.title ?? 'Chat'} (${options?.model ? 'model' : 'BYOK'} fork)`;
+        const forkId = await get().createConversation(forkTitle, sourceConversation?.projectId);
+        const now = Date.now();
+        const forkedMessages = sourceMessages.map((message, index) => {
+          const {
+            isStreaming: _isStreaming,
+            isQueued: _isQueued,
+            offlineQueueId: _offlineQueueId,
+            ...safeMessage
+          } = message;
+
+          return {
+            ...safeMessage,
+            id: `${message.id}_fork_${now}_${index}`,
+            conversationId: forkId,
+            model: options?.model ?? message.model,
+          };
+        });
+
+        set((state) => ({
+          conversations: state.conversations.map((conversation) =>
+            conversation.id === forkId
+              ? {
+                  ...conversation,
+                  messageCount: forkedMessages.length,
+                  model: options?.model ?? conversation.model,
+                  updatedAt: new Date(now).toISOString(),
+                }
+              : conversation,
+          ),
+          messages: { ...state.messages, [forkId]: forkedMessages },
+          currentConversationId: forkId,
+        }));
+
+        return forkId;
       },
 
       deleteConversation: async (id) => {
