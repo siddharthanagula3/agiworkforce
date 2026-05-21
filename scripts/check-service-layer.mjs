@@ -142,11 +142,8 @@ const canonicalContractNames = [
 
 const allowedLegacyDefinitions = new Set([
   'apps/desktop/src/api/mcp.ts::ConnectorManifest',
-  'apps/desktop/src/features/mcp/MCPServerManager.tsx::McpServerConfig',
   'apps/desktop/src/stores/computerUseStore.ts::ComputerAction',
   'apps/desktop/src/stores/computerUseStore.ts::ComputerUseSession',
-  'apps/desktop/src/types/mcp.ts::McpServerConfig',
-  'apps/web/types/mcp.ts::McpServerConfig',
   'packages/api/src/automation.ts::ComputerUseSession',
   'packages/api/src/mcp.ts::ConnectorManifest',
   'packages/mcp/src/types.ts::McpServerConfig',

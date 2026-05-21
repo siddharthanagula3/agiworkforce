@@ -93,6 +93,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 
 ### Changed
 
+- Desktop and Web MCP surface types now source the canonical `McpServerConfig` name from `@agiworkforce/mcp`; Desktop-only config requirements use `DesktopMcpServerConfig`.
 - API gateway now mounts `agents` at `/api/agents` and MCP at `/api/mcp`; MCP proxy initialization is lazy on first authenticated route use.
 - Web and Mobile conversation-sync services now import `web_conversations` / `web_messages` compatibility record types from `@agiworkforce/types` instead of redefining `SyncedConversation` and `SyncedMessage` locally.
 - Enterprise contracts now alias the canonical suite `PrivacyMode` and include managed-compute eligibility, reservation, and risk-event records for future quota/fraud/refund/dispute enforcement.

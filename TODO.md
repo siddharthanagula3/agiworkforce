@@ -209,7 +209,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [ ] Define cross-surface data ownership for projects, artifacts, memory, teams, and billing.
 - [ ] Migrate allowed legacy duplicate local contracts to canonical `packages/types/src/suite-contracts.ts` imports.
   - [x] Move Web/Mobile `web_conversations` / `web_messages` compatibility sync types into `@agiworkforce/types`.
-  - [ ] Move or rename duplicate MCP config contracts.
+  - [x] Move or rename duplicate MCP config contracts.
   - [ ] Move or rename duplicate computer-use session/action contracts.
 - [x] Mount API gateway `agents` and `mcp` routes.
 - [ ] Replace desktop hook stats placeholder with real stats or visible unsupported state.

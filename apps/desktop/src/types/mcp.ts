@@ -1,3 +1,7 @@
+import type { McpServerConfig } from '@agiworkforce/mcp';
+
+export type { McpServerConfig } from '@agiworkforce/mcp';
+
 export interface McpServerInfo {
   name: string;
   enabled: boolean;
@@ -15,10 +19,10 @@ export interface McpToolInfo {
 }
 
 export interface McpServersConfig {
-  mcpServers: Record<string, McpServerConfig>;
+  mcpServers: Record<string, DesktopMcpServerConfig>;
 }
 
-export interface McpServerConfig {
+export interface DesktopMcpServerConfig extends McpServerConfig {
   command: string;
   args: string[];
   env: Record<string, string>;
@@ -237,7 +241,7 @@ export interface McpBundle {
   githubUrl?: string;
   documentationUrl?: string;
   tools: BundleTool[];
-  configTemplate: McpServerConfig;
+  configTemplate: DesktopMcpServerConfig;
   requiredCredentials: RequiredCredential[];
   rating: number;
   downloads: number;

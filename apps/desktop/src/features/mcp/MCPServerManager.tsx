@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 import { McpClient } from '../../api/mcp';
 import { useShallow } from 'zustand/react/shallow';
 import { useMcpStore } from '../../stores/mcpStore';
-import type { McpServerInfo, McpServersConfig } from '../../types/mcp';
+import type { McpServerConfig, McpServerInfo, McpServersConfig } from '../../types/mcp';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -28,17 +28,17 @@ import { Switch } from '@/components/ui/Switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { MCPLogsViewer } from './MCPLogsViewer';
 
-/** Configuration options for an MCP server */
-interface McpServerConfig {
+/** Editable configuration options for an MCP server */
+type EditableMcpServerConfig = Partial<McpServerConfig> & {
   endpoint?: string;
   [key: string]: unknown;
-}
+};
 
 interface ServerConfigDialogProps {
   server: McpServerInfo | null;
   open: boolean;
   onClose: () => void;
-  onSave: (serverName: string, config: McpServerConfig) => void;
+  onSave: (serverName: string, config: EditableMcpServerConfig) => void;
 }
 
 const curatedCatalog = [
@@ -357,7 +357,7 @@ export function MCPServerManager() {
     setConfigDialogOpen(true);
   };
 
-  const handleSaveConfig = async (_serverName: string, _config: McpServerConfig) => {
+  const handleSaveConfig = async (_serverName: string, _config: EditableMcpServerConfig) => {
     await refreshServers();
   };
 
