@@ -209,6 +209,8 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Define shared `PrivacyMode` contract for Desktop/Mobile/Web/VS Code/Chrome.
 - [ ] Add visible Local/BYOK/Managed labels to every surface.
   - [x] Add canonical shared display-copy helpers for Local/BYOK/Managed and provider execution labels.
+  - [x] Consume the shared display-copy helpers in primary Web, Desktop, Mobile, VS Code, and Chrome tier/provider/onboarding/meter surfaces.
+  - [ ] Replace remaining narrative hardcoded mode copy where it represents an active UI label, not marketing prose.
 - [x] Define `ProviderMode`: `Local`, `DirectByok`, `ManagedGateway`, `ManagedNative`.
 - [x] Add provider capability matrix for Responses, Chat Completions, reasoning, tools, native tools, vision, files, structured output, server state, and ZDR compatibility.
 - [x] Define synced app conversation schema for Web/Mobile/Desktop.

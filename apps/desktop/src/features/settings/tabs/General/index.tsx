@@ -1,5 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { Cloud, Loader2, Shield } from 'lucide-react';
+import { formatPrivacyModeLabel } from '@agiworkforce/types';
 import { isTauri, isCloudWeb } from '@/lib/tauri-mock';
 import { Button } from '@/components/ui/Button';
 import { Label } from '@/components/ui/Label';
@@ -67,7 +68,7 @@ function AppModeSection() {
           )}
         >
           <Shield className="h-4 w-4 shrink-0" />
-          <span>Local</span>
+          <span>{formatPrivacyModeLabel('local')}</span>
           <span className="text-xs opacity-70">(Free)</span>
         </button>
         <button

@@ -8,6 +8,7 @@
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { Cloud, HardDrive, X, CheckCircle2, ChevronRight, Key } from 'lucide-react';
+import { formatPrivacyModeLabel } from '@agiworkforce/types';
 import { useSimpleModeStore } from '../../stores/ui';
 import { useAppModeStore } from '../../stores/appModeStore';
 import { invoke } from '../../lib/tauri-mock';
@@ -220,7 +221,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
                 <HardDrive className="w-5 h-5 text-amber-400" />
               </div>
               <div className="space-y-1">
-                <p className="text-sm font-semibold text-foreground">Local / BYOK</p>
+                <p className="text-sm font-semibold text-foreground">
+                  {formatPrivacyModeLabel('local')} / {formatPrivacyModeLabel('byok')}
+                </p>
                 <p className="text-xs text-muted-foreground leading-relaxed mt-1">
                   Use Ollama, LM Studio, or your own API keys.
                 </p>

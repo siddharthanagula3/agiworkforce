@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { View, Pressable } from 'react-native';
 import { ChevronDown, ChevronUp, Check } from 'lucide-react-native';
+import { formatPrivacyModeLabel } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 
@@ -21,14 +22,14 @@ const MODE_META: Record<
   { title: string; body: string; privacy: string; testIdPrefix: string }
 > = {
   local: {
-    title: 'Local — fully on device',
+    title: `${formatPrivacyModeLabel('local')} — fully on device`,
     body: 'Free forever. No account. No internet needed after one download. Best for sensitive prompts.',
     privacy: 'Your prompts never leave your device. AI runs locally using your phone hardware.',
     testIdPrefix: 'mode-local',
   },
   cloud: {
     title: 'Cloud — bring your own keys',
-    body: 'Use Claude, GPT, Gemini and more with your own API keys. We charge $0. Pay providers directly.',
+    body: `Use Claude, GPT, Gemini and more with your own API keys (${formatPrivacyModeLabel('byok')}). We charge $0. Pay providers directly.`,
     privacy:
       'Prompts are sent to the provider you choose. Each provider has its own privacy policy.',
     testIdPrefix: 'mode-cloud',

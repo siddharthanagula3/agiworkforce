@@ -23,6 +23,7 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { formatPrivacyModeLabel } from '@agiworkforce/types';
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
@@ -908,7 +909,7 @@ export function Sidebar({
           </Button>
           {/* Mode dot — collapsed state shows only the colored dot */}
           <div
-            title={mode === 'local' ? 'Local mode' : 'Cloud mode'}
+            title={mode === 'local' ? `${formatPrivacyModeLabel('local')} mode` : 'Cloud mode'}
             className={cn(
               'w-2 h-2 rounded-full',
               mode === 'local' ? 'bg-emerald-400' : 'bg-blue-400',
@@ -1352,7 +1353,11 @@ export function Sidebar({
               <button
                 type="button"
                 onClick={() => setMode(mode === 'local' ? 'cloud' : 'local')}
-                title={mode === 'local' ? 'Switch to Cloud mode' : 'Switch to Local mode'}
+                title={
+                  mode === 'local'
+                    ? 'Switch to Cloud mode'
+                    : `Switch to ${formatPrivacyModeLabel('local')} mode`
+                }
                 className={cn(
                   'px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider shrink-0 transition-colors cursor-pointer',
                   mode === 'local'
@@ -1360,7 +1365,7 @@ export function Sidebar({
                     : 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30',
                 )}
               >
-                {mode === 'local' ? 'Local' : 'Cloud'}
+                {mode === 'local' ? formatPrivacyModeLabel('local') : 'Cloud'}
               </button>
             )}
             {!collapsed && <NotificationCenter className="shrink-0" />}

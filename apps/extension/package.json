@@ -35,6 +35,7 @@
     "@agiworkforce/browser-tool": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/runtime": "workspace:*",
+    "@agiworkforce/types": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
     "dompurify": "^3.3.3"
   },

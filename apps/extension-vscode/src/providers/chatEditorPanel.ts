@@ -29,7 +29,12 @@ import { PROVIDER_DISPLAY, type AgentMode, type Effort } from '@agiworkforce/typ
 import { Config } from '../platform/config';
 import { isSensitiveFile } from '../utils/pathSafety';
 import { parseWebviewMessage } from '../protocol/webviewMessages';
-import { resolveUsageMeter, formatManagedUsageLabel, daysUntilReset } from '../data/usageMeter';
+import {
+  resolveUsageMeter,
+  formatManagedUsageLabel,
+  formatUsageMeterFallbackLabel,
+  daysUntilReset,
+} from '../data/usageMeter';
 import { getTokenCounter } from '../data/tokenCounter';
 import { guardProviderSwitch } from '../integrations/providerSwitchGuard';
 import { resolveTier } from '../integrations/tierResolver';
@@ -466,8 +471,8 @@ export class ChatEditorPanel {
         resetsIn = `resets in ${days}d`;
       }
       showUpgrade = meter.remaining < 0.2;
-    } else if (meter.source === 'managed-plan') {
-      usageLabel = 'Managed usage unavailable';
+    } else {
+      usageLabel = formatUsageMeterFallbackLabel(meter.source);
     }
 
     this._post({

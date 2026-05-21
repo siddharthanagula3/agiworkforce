@@ -1,4 +1,8 @@
-import { getPlanPriceUsd, getPlanUsageBudgetCents } from '@agiworkforce/types';
+import {
+  formatPrivacyModeLabel,
+  getPlanPriceUsd,
+  getPlanUsageBudgetCents,
+} from '@agiworkforce/types';
 
 export const STRIPE_PRICE_IDS = {
   hobby_monthly: 'price_1Sgwx10zEfO6BZMh7thtFU77',
@@ -56,7 +60,7 @@ export interface PricingPlan {
 export const PRICING_PLANS: PricingPlan[] = [
   {
     id: 'local-only',
-    name: 'Local-only',
+    name: `${formatPrivacyModeLabel('local')}-only`,
     description: 'Run Ollama or LM Studio on your machine. No account required.',
     monthlyPrice: 0,
     yearlyPrice: 0,
@@ -79,7 +83,7 @@ export const PRICING_PLANS: PricingPlan[] = [
   },
   {
     id: 'byok',
-    name: 'BYOK',
+    name: formatPrivacyModeLabel('byok'),
     description: 'Bring your own API keys for any first-party provider.',
     monthlyPrice: 0,
     yearlyPrice: 0,

@@ -1,5 +1,6 @@
 import React, { Suspense, lazy } from 'react';
 import { Check, Loader2, Download, Server } from 'lucide-react';
+import { formatProviderModeLabel } from '@agiworkforce/types';
 import { toast } from 'sonner';
 import { validateUrl } from '@/utils/security';
 import { McpClient } from '@/api/mcp';
@@ -197,7 +198,11 @@ export function ModelsKeysTab({
                       : 'bg-background border-border hover:bg-accent'
                   }`}
                 >
-                  {mode === 'auto' ? '⚡ Auto' : mode === 'local' ? '🖥️ Local' : '☁️ Cloud'}
+                  {mode === 'auto'
+                    ? '⚡ Auto'
+                    : mode === 'local'
+                      ? `🖥️ ${formatProviderModeLabel('Local')}`
+                      : '☁️ Cloud'}
                 </button>
               ))}
             </div>

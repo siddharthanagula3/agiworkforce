@@ -1,11 +1,13 @@
 'use client';
 
 import { useBillingStore } from '@/stores/unified/auth';
-import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
+import { BILLING_PLAN_PRICING, formatPrivacyModeLabel } from '@agiworkforce/types';
 import Link from 'next/link';
 
+const byokLabel = formatPrivacyModeLabel('byok');
+
 const VOICE_CAPS: Record<string, string> = {
-  free: 'BYOK only',
+  free: `${byokLabel} only`,
   hobby: '60 min/mo',
   pro: '300 min/mo',
   pro_plus: '1,500 min/mo',
@@ -16,7 +18,7 @@ const VOICE_CAPS: Record<string, string> = {
 export default function VoiceSettingsPage() {
   const subscription = useBillingStore((s) => s.subscription);
   const tier = subscription?.tier ?? 'free';
-  const voiceCap = VOICE_CAPS[tier] ?? 'BYOK only';
+  const voiceCap = VOICE_CAPS[tier] ?? `${byokLabel} only`;
   const hasVoice = tier !== 'free';
 
   return (

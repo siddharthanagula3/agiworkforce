@@ -8,7 +8,7 @@ import { useThemeColors } from '@/src/ui/theme';
 import { useTierStore } from '@/src/features/billing/store';
 import { api } from '@/services/api';
 import { openExternalUrl } from '@/lib/safeOpenURL';
-import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
+import { BILLING_PLAN_PRICING, formatPrivacyModeLabel } from '@agiworkforce/types';
 import type { BillingPlanTier, BillingInterval } from '@agiworkforce/types';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
@@ -30,8 +30,8 @@ const TIER_CONFIGS: TierDisplayConfig[] = [
     tagline: 'Get started for free',
     features: [
       'Access to basic models',
-      'Local mode (your device)',
-      'Bring Your Own Key (BYOK)',
+      `${formatPrivacyModeLabel('local')} mode (your device)`,
+      `Bring Your Own Key (${formatPrivacyModeLabel('byok')})`,
       'Community support',
     ],
     cta: 'Current plan',

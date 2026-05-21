@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { formatPrivacyModeLabel } from '@agiworkforce/types';
 import type { Database } from '../types/supabase';
 import { invoke, isTauri } from './tauri-mock';
 
@@ -225,8 +226,8 @@ export function asPlanTier(value: string | null | undefined): PlanTier {
 }
 
 export const PLAN_DISPLAY_NAMES: Record<PlanTier, string> = {
-  'local-only': 'Local Only',
-  byok: 'BYOK',
+  'local-only': `${formatPrivacyModeLabel('local')} Only`,
+  byok: formatPrivacyModeLabel('byok'),
   free: 'Free',
   hobby: 'Hobby',
   pro: 'Pro',

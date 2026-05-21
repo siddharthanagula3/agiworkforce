@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { formatPrivacyModeLabel } from '@agiworkforce/types';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
@@ -10,6 +11,10 @@ export const metadata: Metadata = {
 };
 
 export default function ByokPage() {
+  const localLabel = formatPrivacyModeLabel('local');
+  const byokLabel = formatPrivacyModeLabel('byok');
+  const managedLabel = formatPrivacyModeLabel('managed');
+
   return (
     <div data-design="agi">
       <main className="agi-shell">
@@ -69,9 +74,9 @@ export default function ByokPage() {
             <thead>
               <tr>
                 <th>&nbsp;</th>
-                <th>Local mode</th>
-                <th>BYOK Cloud</th>
-                <th>Hobby Managed</th>
+                <th>{localLabel} mode</th>
+                <th>{byokLabel} Cloud</th>
+                <th>Hobby {managedLabel}</th>
               </tr>
             </thead>
             <tbody>

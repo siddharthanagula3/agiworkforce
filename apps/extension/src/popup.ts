@@ -5,6 +5,7 @@ import type {
   ConnectionStatus,
   PaywallHitMessage,
 } from './types';
+import { formatPrivacyModeLabel } from '@agiworkforce/types';
 import { logger, storageUtils } from './utils';
 import { loadPairingState, requestPairing, unpair } from './features/native-bridge/pairing';
 import type { PairingState } from './features/native-bridge/pairing';
@@ -419,8 +420,8 @@ const TIER_LABELS: Readonly<Record<string, string>> = {
   pro: 'Pro',
   pro_plus: 'Pro+',
   max: 'Max',
-  local: 'Local',
-  byok: 'BYOK',
+  local: formatPrivacyModeLabel('local'),
+  byok: formatPrivacyModeLabel('byok'),
 };
 
 /**

@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { fetchTierInfo } from '../utils/api';
-import { formatManagedUsageLabel, resolvePlanTier, resolveUsageMeter } from '../data/usageMeter';
+import {
+  formatManagedUsageLabel,
+  formatUsageMeterFallbackLabel,
+  resolvePlanTier,
+  resolveUsageMeter,
+} from '../data/usageMeter';
 
 vi.mock('../utils/api', () => ({
   fetchTierInfo: vi.fn(),
@@ -81,5 +86,13 @@ describe('usageMeter', () => {
 
   it('formats labels with reported token counts when provided', () => {
     expect(formatManagedUsageLabel(0.75, 100_000, 25_000)).toBe('25.0k/100.0k tokens');
+  });
+
+  it('formats fallback labels from the canonical trust mode vocabulary', () => {
+    expect(formatUsageMeterFallbackLabel('unbounded')).toBe('Local model - no quota tracking');
+    expect(formatUsageMeterFallbackLabel('user-api-key')).toBe(
+      'BYOK mode - no AGI-managed quota is active',
+    );
+    expect(formatUsageMeterFallbackLabel('managed-plan')).toBe('Managed usage unavailable');
   });
 });

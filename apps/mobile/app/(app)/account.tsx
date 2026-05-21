@@ -3,6 +3,7 @@ import { View, ScrollView, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
+import { formatPrivacyModeLabel } from '@agiworkforce/types';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import {
   ArrowLeft,
@@ -26,8 +27,8 @@ import { useThemeColors } from '@/src/ui/theme';
 
 const TIER_LABELS: Record<string, string> = {
   free: 'Free',
-  byok: 'BYOK',
-  'local-only': 'Local',
+  byok: formatPrivacyModeLabel('byok'),
+  'local-only': formatPrivacyModeLabel('local'),
   hobby: 'Hobby',
   pro: 'Pro',
   pro_plus: 'Pro+',

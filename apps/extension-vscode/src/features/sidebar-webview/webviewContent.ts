@@ -971,11 +971,11 @@ export function getWebviewContent(
 
       if (payload.source === 'unbounded') {
         meterLocalIcon.style.display = 'inline';
-        meterText.textContent = 'Local model — no quota tracking';
+        meterText.textContent = payload.usageLabel || 'Local model - no quota tracking';
         meterReset.textContent = '';
       } else if (payload.source === 'user-api-key') {
         meterByokIcon.style.display = 'inline';
-        meterText.textContent = 'No AGI-managed quota is active';
+        meterText.textContent = payload.usageLabel || 'BYOK mode - no AGI-managed quota is active';
         meterReset.textContent = '';
       } else {
         // managed-plan

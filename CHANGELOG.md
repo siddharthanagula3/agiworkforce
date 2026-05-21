@@ -130,6 +130,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - Surface docs now reflect current CLI MCP client transports, Desktop onboarding feature paths, and the VS Code tier-response HMAC verification status.
 - Desktop surface docs now reflect the completed removal of the legacy `src/components/UnifiedAgenticChat` folder and point live Desktop chat work at `src/features/chat`; structure checks guard against reintroducing the stale claim.
 - VS Code and unified chat usage meters no longer invent managed-plan quota/reset values; they now use reported quota fields when available and show explicit unavailable/not-managed states otherwise.
+- Web, Desktop, Mobile, VS Code, and Chrome extension trust-mode labels now consume the canonical `@agiworkforce/types` Local/BYOK/Managed display helpers for primary pricing, provider, account, onboarding, meter, and tier surfaces.
 - Desktop and Web MCP surface types now source the canonical `McpServerConfig` name from `@agiworkforce/mcp`; Desktop-only config requirements use `DesktopMcpServerConfig`.
 - API gateway now mounts `agents` at `/api/agents` and MCP at `/api/mcp`; MCP proxy initialization is lazy on first authenticated route use.
 - Web and Mobile conversation-sync services now import `web_conversations` / `web_messages` compatibility record types from `@agiworkforce/types` instead of redefining `SyncedConversation` and `SyncedMessage` locally.

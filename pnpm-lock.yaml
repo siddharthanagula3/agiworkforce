@@ -472,6 +472,9 @@ importers:
       '@agiworkforce/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
+      '@agiworkforce/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       '@agiworkforce/utils':
         specifier: workspace:*
         version: link:../../packages/utils
@@ -509,6 +512,9 @@ importers:
       '@agiworkforce/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
+      '@agiworkforce/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       '@agiworkforce/utils':
         specifier: workspace:*
         version: link:../../packages/utils

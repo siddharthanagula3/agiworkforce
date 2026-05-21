@@ -849,6 +849,7 @@
   "dependencies": {
     "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/runtime": "workspace:*",
+    "@agiworkforce/types": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
     "dompurify": "^3.4.0",
     "markdown-it": "^14.1.0",

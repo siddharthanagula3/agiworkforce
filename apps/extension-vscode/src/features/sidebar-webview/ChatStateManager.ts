@@ -35,7 +35,12 @@ import {
 // AUDIT-FIX: vscode-reorg
 import { Config } from '../../platform/config';
 import { isSensitiveFile } from '../../utils/pathSafety';
-import { resolveUsageMeter, formatManagedUsageLabel, daysUntilReset } from '../../data/usageMeter';
+import {
+  resolveUsageMeter,
+  formatManagedUsageLabel,
+  formatUsageMeterFallbackLabel,
+  daysUntilReset,
+} from '../../data/usageMeter';
 import { getTokenCounter } from '../../data/tokenCounter';
 import { guardProviderSwitch } from '../../integrations/providerSwitchGuard';
 import { resolveTier } from '../../integrations/tierResolver';
@@ -499,8 +504,8 @@ export class ChatStateManager {
         resetsIn = `resets in ${days}d`;
       }
       showUpgrade = meter.remaining < 0.2;
-    } else if (meter.source === 'managed-plan') {
-      usageLabel = 'Managed usage unavailable';
+    } else {
+      usageLabel = formatUsageMeterFallbackLabel(meter.source);
     }
 
     this._post({

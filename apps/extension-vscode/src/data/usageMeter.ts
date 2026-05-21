@@ -8,7 +8,12 @@
  */
 
 import * as vscode from 'vscode';
-import { isFreePlan, type UsageMeter, type UIPlanTier } from '@agiworkforce/types';
+import {
+  formatPrivacyModeLabel,
+  isFreePlan,
+  type UsageMeter,
+  type UIPlanTier,
+} from '@agiworkforce/types';
 import { fetchTierInfo, type TierInfo } from '../utils/api';
 
 // ─── Local-provider detection ─────────────────────────────────────────────────
@@ -121,6 +126,17 @@ export function formatManagedUsageLabel(
 ): string {
   const usedTokens = reportedUsedTokens ?? Math.round((1 - remaining) * limitTokens);
   return `${fmtK(usedTokens)}/${fmtK(limitTokens)} tokens`;
+}
+
+export function formatUsageMeterFallbackLabel(source: UsageMeter['source']): string | null {
+  switch (source) {
+    case 'unbounded':
+      return `${formatPrivacyModeLabel('local')} model - no quota tracking`;
+    case 'user-api-key':
+      return `${formatPrivacyModeLabel('byok')} mode - no AGI-managed quota is active`;
+    case 'managed-plan':
+      return `${formatPrivacyModeLabel('managed')} usage unavailable`;
+  }
 }
 
 function fmtK(n: number): string {
