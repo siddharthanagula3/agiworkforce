@@ -422,6 +422,7 @@ Tasks:
 - Add OAuth status and refresh UX.
 - Add MCP prompts as slash commands.
 - Add connector install/uninstall across Desktop/Web/CLI.
+- Keep connector customization modal-first: browse in the connector gallery, add custom remote MCP servers through a focused modal, and escalate to settings only for deep MCP/server management.
 - Add Chrome and VS Code bridge status to connector hub.
 
 ### 7. Agents, Tasks, And Automation

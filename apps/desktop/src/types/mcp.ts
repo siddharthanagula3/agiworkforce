@@ -22,11 +22,30 @@ export interface McpServersConfig {
   mcpServers: Record<string, DesktopMcpServerConfig>;
 }
 
-export interface DesktopMcpServerConfig extends McpServerConfig {
+export interface DesktopMcpHttpTransportConfig {
+  type: 'http';
+  url: string;
+  api_key?: string | null;
+  bearer_token?: string | null;
+  headers?: Record<string, string>;
+  timeout_secs?: number;
+  verify_ssl?: boolean;
+}
+
+export interface DesktopMcpStdioTransportConfig {
+  type: 'stdio';
+}
+
+export type DesktopMcpTransportConfig =
+  | DesktopMcpHttpTransportConfig
+  | DesktopMcpStdioTransportConfig;
+
+export interface DesktopMcpServerConfig extends Omit<McpServerConfig, 'env' | 'transport'> {
   command: string;
   args: string[];
   env: Record<string, string>;
   enabled: boolean;
+  transport?: DesktopMcpTransportConfig;
 }
 
 export interface McpConfigLocation {

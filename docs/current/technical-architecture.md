@@ -82,6 +82,8 @@ The Desktop settings surface now implements the first pass of that baseline: set
 
 Desktop file previews also use the shared focused dialog shell, keeping generated/local file inspection in a modal unless the user explicitly opens a deeper artifact workspace.
 
+Desktop connector customization now follows the same modal-first rule. The connector gallery owns the browse/connect surface, while `CustomRemoteMcpConnectorDialog` creates remote HTTP MCP server configs through the existing MCP config API instead of sending users into a broad settings detour. Bearer tokens are stored through the encrypted API-key path and referenced from MCP config placeholders. Connector gallery ownership is single-sourced under `apps/desktop/src/features/connectors/ConnectorGallery.tsx`.
+
 Generated files need:
 
 - owner session,

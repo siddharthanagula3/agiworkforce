@@ -425,8 +425,13 @@ impl McpServersConfig {
             NeedsOAuth(String),
         }
 
-        // Collect (server_name, env_key, resolution) triples
-        let mut plan: Vec<(String, String, Resolved)> = Vec::new();
+        enum CredentialTarget {
+            Env(String),
+            HttpBearerToken,
+        }
+
+        // Collect (server_name, target, resolution) triples.
+        let mut plan: Vec<(String, CredentialTarget, Resolved)> = Vec::new();
 
         {
             // Scope: conn is dropped at the end of this block
@@ -439,7 +444,7 @@ impl McpServersConfig {
                             value[OAUTH_PLACEHOLDER_PREFIX.len()..value.len() - 1].to_string();
                         plan.push((
                             server_name.clone(),
-                            key.clone(),
+                            CredentialTarget::Env(key.clone()),
                             Resolved::NeedsOAuth(provider),
                         ));
                     } else if value.starts_with(API_KEY_PLACEHOLDER_PREFIX) && value.ends_with('>')
@@ -456,7 +461,7 @@ impl McpServersConfig {
                                 Ok(decrypted) => {
                                     plan.push((
                                         server_name.clone(),
-                                        key.clone(),
+                                        CredentialTarget::Env(key.clone()),
                                         Resolved::Done(decrypted),
                                     ));
                                 }
@@ -485,7 +490,7 @@ impl McpServersConfig {
                                 Ok(decrypted) => {
                                     plan.push((
                                         server_name.clone(),
-                                        key.clone(),
+                                        CredentialTarget::Env(key.clone()),
                                         Resolved::Done(decrypted),
                                     ));
                                 }
@@ -509,6 +514,54 @@ impl McpServersConfig {
                         }
                     }
                 }
+
+                if let Some(TransportConfig::Http(http_config)) = &config.transport {
+                    if let Some(value) = &http_config.bearer_token {
+                        if value.starts_with(OAUTH_PLACEHOLDER_PREFIX) && value.ends_with('>') {
+                            let provider =
+                                value[OAUTH_PLACEHOLDER_PREFIX.len()..value.len() - 1].to_string();
+                            plan.push((
+                                server_name.clone(),
+                                CredentialTarget::HttpBearerToken,
+                                Resolved::NeedsOAuth(provider),
+                            ));
+                        } else if value.starts_with(API_KEY_PLACEHOLDER_PREFIX)
+                            && value.ends_with('>')
+                        {
+                            let provider = value[API_KEY_PLACEHOLDER_PREFIX.len()..value.len() - 1]
+                                .to_string();
+                            let api_key_storage_key = format!("api_key_{}", provider);
+                            match conn.query_row(
+                                "SELECT value FROM settings_v2 WHERE key = ?1",
+                                rusqlite::params![api_key_storage_key],
+                                |row| row.get::<_, String>(0),
+                            ) {
+                                Ok(stored_value) => match decrypt_oauth_token(&stored_value) {
+                                    Ok(decrypted) => {
+                                        plan.push((
+                                            server_name.clone(),
+                                            CredentialTarget::HttpBearerToken,
+                                            Resolved::Done(decrypted),
+                                        ));
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!(
+                                            "Skipping MCP server '{}': failed to decrypt transport bearer token: {}",
+                                            server_name,
+                                            e
+                                        );
+                                    }
+                                },
+                                Err(_) => {
+                                    tracing::warn!(
+                                        "API key not found for remote MCP server: {}",
+                                        provider
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
             }
         } // conn dropped here — no !Send value crosses the await below
 
@@ -516,12 +569,23 @@ impl McpServersConfig {
         // For each NeedsOAuth entry, call the async get_oauth_token (which may
         // make an HTTP request). All DB connections within get_oauth_token are
         // also opened and dropped before their own await points.
-        for (server_name, key, resolution) in plan {
+        for (server_name, target, resolution) in plan {
             match resolution {
                 Resolved::Done(val) => {
                     if let Some(config) = self.mcp_servers.get_mut(&server_name) {
-                        if let Some(entry) = config.env.get_mut(&key) {
-                            *entry = val;
+                        match target {
+                            CredentialTarget::Env(key) => {
+                                if let Some(entry) = config.env.get_mut(&key) {
+                                    *entry = val;
+                                }
+                            }
+                            CredentialTarget::HttpBearerToken => {
+                                if let Some(TransportConfig::Http(http_config)) =
+                                    &mut config.transport
+                                {
+                                    http_config.bearer_token = Some(val);
+                                }
+                            }
                         }
                     }
                 }
@@ -529,20 +593,36 @@ impl McpServersConfig {
                     match get_oauth_token(&provider).await {
                         Ok(token) => {
                             if let Some(config) = self.mcp_servers.get_mut(&server_name) {
-                                if let Some(entry) = config.env.get_mut(&key) {
-                                    *entry = if key == "OPENAPI_MCP_HEADERS" && provider == "notion"
-                                    {
-                                        format!(
-                                            r#"{{"Authorization": "Bearer {}","Notion-Version": "2022-06-28"}}"#,
-                                            token
-                                        )
-                                    } else {
-                                        token
-                                    };
-                                    tracing::debug!(
-                                        "Injected OAuth token for provider: {}",
-                                        provider
-                                    );
+                                match &target {
+                                    CredentialTarget::Env(key) => {
+                                        if let Some(entry) = config.env.get_mut(key) {
+                                            *entry = if key == "OPENAPI_MCP_HEADERS"
+                                                && provider == "notion"
+                                            {
+                                                format!(
+                                                    r#"{{"Authorization": "Bearer {}","Notion-Version": "2022-06-28"}}"#,
+                                                    token
+                                                )
+                                            } else {
+                                                token
+                                            };
+                                            tracing::debug!(
+                                                "Injected OAuth token for provider: {}",
+                                                provider
+                                            );
+                                        }
+                                    }
+                                    CredentialTarget::HttpBearerToken => {
+                                        if let Some(TransportConfig::Http(http_config)) =
+                                            &mut config.transport
+                                        {
+                                            http_config.bearer_token = Some(token);
+                                            tracing::debug!(
+                                                "Injected OAuth bearer token for remote MCP provider: {}",
+                                                provider
+                                            );
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -553,6 +633,10 @@ impl McpServersConfig {
                                 e
                             );
                             // Fall back to legacy credential synchronously
+                            let key = match &target {
+                                CredentialTarget::Env(key) => key.as_str(),
+                                CredentialTarget::HttpBearerToken => "bearer_token",
+                            };
                             let cred_key = format!("mcp_credential_{}_{}", server_name, key);
                             if let Ok(conn) = open_mcp_settings_db() {
                                 if let Ok(stored_value) = conn.query_row(
@@ -565,13 +649,31 @@ impl McpServersConfig {
                                             if let Some(config) =
                                                 self.mcp_servers.get_mut(&server_name)
                                             {
-                                                if let Some(entry) = config.env.get_mut(&key) {
-                                                    *entry = decrypted;
-                                                    tracing::debug!(
-                                                        "Injected legacy credential for {} / {}",
-                                                        server_name,
-                                                        key
-                                                    );
+                                                match &target {
+                                                    CredentialTarget::Env(key) => {
+                                                        if let Some(entry) = config.env.get_mut(key)
+                                                        {
+                                                            *entry = decrypted;
+                                                            tracing::debug!(
+                                                                "Injected legacy credential for {} / {}",
+                                                                server_name,
+                                                                key
+                                                            );
+                                                        }
+                                                    }
+                                                    CredentialTarget::HttpBearerToken => {
+                                                        if let Some(TransportConfig::Http(
+                                                            http_config,
+                                                        )) = &mut config.transport
+                                                        {
+                                                            http_config.bearer_token =
+                                                                Some(decrypted);
+                                                            tracing::debug!(
+                                                                "Injected legacy transport bearer credential for {}",
+                                                                server_name
+                                                            );
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }

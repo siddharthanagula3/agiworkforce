@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '@/lib/utils';
 import { useConnectorsStore } from '../../stores/connectorsStore';
-import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
 import {
   CONNECTORS,
   CONNECTOR_CATEGORIES,
@@ -16,6 +15,7 @@ import { McpClient } from '@/api/mcp';
 import { OAuthConnectorCard } from './OAuthConnectorCard';
 import { ConnectorOAuthFlow, type OAuthFlowState } from './ConnectorOAuthFlow';
 import { ConnectorApiKeyDialog } from './ConnectorApiKeyDialog';
+import { CustomRemoteMcpConnectorDialog } from './CustomRemoteMcpConnectorDialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import {
   Select,
@@ -38,7 +38,7 @@ type StatusFilter = 'all' | 'connected' | 'available';
  * - All / Connected / Available status filter pills
  * - Search bar
  * - Category filter (Productivity, Development, Communication, Analytics, etc.)
- * - "+ Custom connector" button that opens MCP settings
+ * - "+ Custom connector" button that opens a focused remote MCP connector modal
  * - OAuth flow dialog for in-progress connections
  * - API key dialog for API-key-based connectors
  */
@@ -49,8 +49,7 @@ export function ConnectorGallery() {
   const [categoryFilter, setCategoryFilter] = useState<ConnectorCategory | 'all'>('all');
   const [oauthState, setOauthState] = useState<OAuthFlowState>({ status: 'idle' });
   const [apiKeyDialogConnector, setApiKeyDialogConnector] = useState<ConnectorDef | null>(null);
-
-  const openSettings = useSettingsDialogStore((s) => s.openSettings);
+  const [customConnectorOpen, setCustomConnectorOpen] = useState(false);
 
   const {
     connectedIds,
@@ -215,8 +214,16 @@ export function ConnectorGallery() {
   }, [lastConnectorName, handleConnect]);
 
   const handleAddCustomConnector = useCallback(() => {
-    openSettings('mcp-skills');
-  }, [openSettings]);
+    setCustomConnectorOpen(true);
+  }, []);
+
+  const handleCustomConnectorSaved = useCallback(
+    (serverName: string) => {
+      setOauthState({ status: 'success', connectorName: serverName });
+      void fetchConnected();
+    },
+    [fetchConnected],
+  );
 
   // Grid content — shared between tab panels
   const GridContent = useCallback(
@@ -375,6 +382,12 @@ export function ConnectorGallery() {
         open={apiKeyDialogConnector !== null}
         onClose={() => setApiKeyDialogConnector(null)}
         onConnect={handleApiKeyConnect}
+      />
+
+      <CustomRemoteMcpConnectorDialog
+        open={customConnectorOpen}
+        onClose={() => setCustomConnectorOpen(false)}
+        onSaved={handleCustomConnectorSaved}
       />
     </div>
   );

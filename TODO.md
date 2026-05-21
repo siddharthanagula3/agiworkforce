@@ -260,6 +260,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Add shared generated-file presentation helpers and first-pass Desktop/Web/Mobile status, preview, download, share, source, checksum, and privacy labels.
 - [x] Mount the Web chat artifact workbench in the active chat route and sync detected/generated artifacts into its sidecar store.
 - [x] Render Web chat server-tool activity in the active assistant message path through the compact tool timeline and persist completed tool metadata.
+- [x] Add Desktop focused custom remote MCP connector modal and single-source the connector gallery owner component.
 - [ ] Add Web/Mobile/Desktop generated-file request, status, preview, download, share, source session, and privacy-label UI.
 - [ ] Add Mobile generated-file delegation path to Desktop/local host or future Managed compute instead of requiring local on-device heavy generation.
 - [x] Add provider-container adapter for OpenAI Code Interpreter-style generated file annotations.
