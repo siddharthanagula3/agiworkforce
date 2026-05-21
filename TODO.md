@@ -240,7 +240,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [ ] Keep Chat Completions fallback for OpenAI-compatible providers and legacy proxy surfaces.
 - [x] Add tests proving OpenAI `store: false` remains default for Local/BYOK turns.
 - [x] Add tests proving Vercel AI Gateway is unreachable unless provider mode is explicitly Managed.
-- [ ] Add Web AI SDK event-to-AGI-event adapter.
+- [x] Add Web AI SDK event-to-AGI-event adapter.
 - [ ] Consolidate `openai`, `@anthropic-ai/sdk`, `ai`, and `@ai-sdk/*` versions after adapter tests exist.
 
 ## Cloud Later
