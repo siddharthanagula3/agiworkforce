@@ -975,17 +975,17 @@ export function getWebviewContent(
         meterReset.textContent = '';
       } else if (payload.source === 'user-api-key') {
         meterByokIcon.style.display = 'inline';
-        meterText.textContent = 'Using your own API key — no usage limit from us';
+        meterText.textContent = 'No AGI-managed quota is active';
         meterReset.textContent = '';
       } else {
         // managed-plan
-        meterBarWrap.style.display = 'flex';
+        meterBarWrap.style.display = payload.remaining !== null ? 'flex' : 'none';
         var pct = payload.remaining !== null ? payload.remaining * 100 : 100;
         var usedPct = 100 - pct;
         var fillColor = pct < 20 ? 'var(--agi-vscode-terra)' : pct < 40 ? 'var(--vscode-editorWarning-foreground, #f59e0b)' : 'var(--agi-vscode-button)';
         meterFill.style.width = Math.max(0, Math.min(100, usedPct)) + '%';
         meterFill.style.background = fillColor;
-        meterText.textContent = 'Usage: ' + (payload.usageLabel || '');
+        meterText.textContent = 'Usage: ' + (payload.usageLabel || 'Managed usage unavailable');
         meterReset.textContent = payload.resetsIn ? '· ' + payload.resetsIn : '';
         if (payload.showUpgrade) {
           upgradeBtn.style.display = 'inline-block';

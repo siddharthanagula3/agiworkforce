@@ -67,6 +67,10 @@ export interface UsageMeter {
   remaining: number | null;
   /** ISO timestamp of next quota reset. Null when unbounded. */
   resetsAt: string | null;
+  /** Tokens used in the active billing window when reported by the source. */
+  usedTokens?: number;
+  /** Token allowance for the active billing window when reported by the source. */
+  limitTokens?: number;
   /** Whose limit this is — affects framing in the UI. */
   source: 'managed-plan' | 'user-api-key' | 'unbounded';
 }

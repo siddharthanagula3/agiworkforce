@@ -16,6 +16,8 @@ export const TierInfoSchema = z
     tier: z.string().min(1).max(64),
     tokens_used: z.number().int().nonnegative().optional(),
     token_cap: z.number().int().nonnegative().optional(),
+    resets_at: z.string().min(1).optional(),
+    quota_resets_at: z.string().min(1).optional(),
     // Future: HMAC signature field added by PR-4B once server signs tier
     // responses. Until then, signature is optional.
     signature: z.string().min(1).optional(),

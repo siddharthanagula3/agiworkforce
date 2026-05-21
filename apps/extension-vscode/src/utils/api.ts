@@ -674,6 +674,8 @@ export interface TierInfo {
   tokensUsed?: number;
   /** Total token cap for the current billing period (may be undefined). */
   tokenCap?: number;
+  /** ISO reset timestamp for the current billing period when returned by the API. */
+  resetsAt?: string;
 }
 
 /**
@@ -747,6 +749,11 @@ export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<Tier
           }
           if (typeof parsed.data.token_cap === 'number') {
             tierInfo.tokenCap = parsed.data.token_cap;
+          }
+          if (typeof parsed.data.quota_resets_at === 'string') {
+            tierInfo.resetsAt = parsed.data.quota_resets_at;
+          } else if (typeof parsed.data.resets_at === 'string') {
+            tierInfo.resetsAt = parsed.data.resets_at;
           }
           resolve(tierInfo);
         } catch {
