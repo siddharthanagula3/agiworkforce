@@ -1,10 +1,10 @@
 /**
- * src/features/teams — public API barrel
+ * apps/web/features/teams - public API barrel
  *
  * Team management with RBAC: team switching, member management,
  * role permissions (admin/editor/viewer), API-backed mutations.
  *
- * Migrated from apps/web/features/teams/ — Phase 5, 2026-05-18
+ * Canonical Web teams feature.
  */
 
 export { TeamSettingsPanel } from './components/TeamSettingsPanel';

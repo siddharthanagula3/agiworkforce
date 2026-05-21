@@ -1,10 +1,10 @@
 /**
- * src/features/support — public API barrel
+ * apps/web/features/support - public API barrel
  *
  * Support ticket management, FAQ fetching, and email notification service.
  * Backed by Supabase (support_tickets, faqs tables) + Netlify functions.
  *
- * Migrated from apps/web/features/support/ — Phase 5, 2026-05-18
+ * Canonical Web support feature.
  */
 
 export { supportService, default as defaultSupportService } from './services/support-service';

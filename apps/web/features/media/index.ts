@@ -1,11 +1,11 @@
 /**
- * src/features/media — public API barrel
+ * apps/web/features/media - public API barrel
  *
  * Media generation API service: image generation (Google/OpenAI/Stability),
  * video generation (Runway/Google), and video status polling.
  * Calls /api/media/image/generate and /api/media/video/* endpoints.
  *
- * Migrated from apps/web/features/media/ — Phase 5, 2026-05-18
+ * Canonical Web media feature.
  */
 
 export {

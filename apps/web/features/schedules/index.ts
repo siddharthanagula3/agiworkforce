@@ -1,10 +1,10 @@
 /**
- * src/features/schedules — public API barrel
+ * apps/web/features/schedules - public API barrel
  *
  * Scheduled AI task management: recurring prompts with CRON expressions,
  * run history, notification settings, API-backed persistence.
  *
- * Migrated from apps/web/features/schedules/ — Phase 5, 2026-05-18
+ * Canonical Web schedules feature.
  */
 
 export { ScheduleCard } from './components/ScheduleCard';

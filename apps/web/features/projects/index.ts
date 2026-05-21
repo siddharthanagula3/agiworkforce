@@ -1,10 +1,10 @@
 /**
- * src/features/projects — public API barrel
+ * apps/web/features/projects - public API barrel
  *
  * Project management: grouped conversations with shared context and
  * custom instructions. Similar to claude.ai Projects.
  *
- * Migrated from apps/web/features/projects/ — Phase 5, 2026-05-18
+ * Canonical Web projects feature.
  */
 
 export { ProjectSettingsDialog } from './components/ProjectSettingsDialog';
