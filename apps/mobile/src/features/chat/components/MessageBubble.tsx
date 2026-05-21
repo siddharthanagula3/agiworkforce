@@ -37,7 +37,7 @@ import { copyToClipboard } from '@/lib/clipboard';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/src/ui/theme';
 import { getModelById, isAutoMode, PROVIDERS } from '@/lib/models';
-import { providerLabels } from '@agiworkforce/types';
+import { formatPrivacyModeLabel, providerLabels } from '@agiworkforce/types';
 import type { ChatMessage, Artifact } from '@/types/chat';
 
 /** Reaction state: cycles thumbsUp -> thumbsDown -> null */
@@ -48,7 +48,7 @@ const LOCAL_PROVIDERS = new Set(['ollama', 'lmstudio']);
 /** Returns provenance strings for an assistant message's model field. */
 function getProvenance(model?: string): { provider?: string; model?: string } | null {
   if (!model) return null;
-  if (isAutoMode(model)) return { provider: 'Cloud', model: 'Auto' };
+  if (isAutoMode(model)) return { provider: formatPrivacyModeLabel('byok'), model: 'Auto' };
 
   const def = getModelById(model);
   if (!def) return null;
@@ -63,7 +63,7 @@ function getProvenance(model?: string): { provider?: string; model?: string } | 
     providerLabels[def.provider as keyof typeof providerLabels] ??
     def.provider;
 
-  return { provider: `Cloud · ${providerLabel}` };
+  return { provider: `${formatPrivacyModeLabel('byok')} · ${providerLabel}` };
 }
 
 interface MessageBubbleProps {
@@ -457,7 +457,7 @@ export const MessageBubble = memo(function MessageBubble({
               </View>
             ) : null}
 
-            {/* Provenance badge: "On device" or "Cloud · {Provider}" */}
+            {/* Provenance badge: "On device" or "BYOK · {Provider}" */}
             {provenance && (
               <ProvenanceFooter provider={provenance.provider} model={provenance.model} />
             )}

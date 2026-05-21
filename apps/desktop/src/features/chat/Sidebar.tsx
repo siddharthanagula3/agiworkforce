@@ -417,7 +417,7 @@ export function Sidebar({
   const modKeySymbol =
     typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? '⌘' : 'Ctrl';
 
-  // Local/Cloud mode — drives the indicator pill in the footer
+  // Local/Managed mode — drives the indicator pill in the footer
   const mode = useAppModeStore(selectMode);
   const setMode = useAppModeStore((s) => s.setMode);
 
@@ -936,7 +936,11 @@ export function Sidebar({
           </Button>
           {/* Mode dot — collapsed state shows only the colored dot */}
           <div
-            title={mode === 'local' ? `${formatPrivacyModeLabel('local')} mode` : 'Cloud mode'}
+            title={
+              mode === 'local'
+                ? `${formatPrivacyModeLabel('local')} mode`
+                : `${formatPrivacyModeLabel('managed')} mode`
+            }
             className={cn(
               'w-2 h-2 rounded-full',
               mode === 'local' ? 'bg-emerald-400' : 'bg-blue-400',
@@ -1389,7 +1393,7 @@ export function Sidebar({
                 onClick={() => setMode(mode === 'local' ? 'cloud' : 'local')}
                 title={
                   mode === 'local'
-                    ? 'Switch to Cloud mode'
+                    ? `Switch to ${formatPrivacyModeLabel('managed')} mode`
                     : `Switch to ${formatPrivacyModeLabel('local')} mode`
                 }
                 className={cn(
@@ -1399,7 +1403,9 @@ export function Sidebar({
                     : 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30',
                 )}
               >
-                {mode === 'local' ? formatPrivacyModeLabel('local') : 'Cloud'}
+                {mode === 'local'
+                  ? formatPrivacyModeLabel('local')
+                  : formatPrivacyModeLabel('managed')}
               </button>
             )}
             {!collapsed && <NotificationCenter className="shrink-0" />}

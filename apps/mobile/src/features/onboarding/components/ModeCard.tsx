@@ -28,7 +28,7 @@ const MODE_META: Record<
     testIdPrefix: 'mode-local',
   },
   cloud: {
-    title: 'Cloud — bring your own keys',
+    title: `${formatPrivacyModeLabel('byok')} — bring your own keys`,
     body: `Use Claude, GPT, Gemini and more with your own API keys (${formatPrivacyModeLabel('byok')}). We charge $0. Pay providers directly.`,
     privacy:
       'Prompts are sent to the provider you choose. Each provider has its own privacy policy.',

@@ -82,7 +82,7 @@ function AppModeSection() {
           )}
         >
           <Cloud className="h-4 w-4 shrink-0" />
-          <span>Cloud</span>
+          <span>{formatPrivacyModeLabel('managed')}</span>
         </button>
       </div>
 
@@ -96,7 +96,8 @@ function AppModeSection() {
         <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 flex items-center gap-3">
           <Cloud className="h-4 w-4 text-blue-400 shrink-0" />
           <p className="text-sm text-blue-400 flex-1">
-            Sign in to unlock Cloud Mode and sync your conversations across devices.
+            Sign in to unlock {formatPrivacyModeLabel('managed')} mode and sync your conversations
+            across devices.
           </p>
           <button
             type="button"
@@ -109,7 +110,7 @@ function AppModeSection() {
             }
             className="shrink-0 px-3 py-1.5 rounded-md text-xs font-medium bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/50 hover:bg-blue-500/30 transition-colors"
           >
-            Sign in to enable Cloud Mode
+            Sign in to enable {formatPrivacyModeLabel('managed')} mode
           </button>
         </div>
       )}
@@ -180,7 +181,8 @@ export function GeneralTab({
         <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 flex items-center gap-3">
           <Cloud className="h-4 w-4 text-blue-400 shrink-0" />
           <p className="text-sm text-blue-400">
-            You are using AGI Workforce Cloud. Models and billing are managed by your plan.
+            You are using AGI Workforce {formatPrivacyModeLabel('managed')}. Models and billing are
+            managed by your plan.
           </p>
         </div>
       ) : (

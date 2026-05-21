@@ -185,7 +185,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
 
           {/* Mode cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-            {/* Cloud card */}
+            {/* Managed card */}
             <div className="flex flex-col items-start gap-3 rounded-xl border border-white/10 p-5 bg-card">
               <div className="flex items-center gap-2 w-full">
                 <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
@@ -196,7 +196,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
                 </span>
               </div>
               <div className="space-y-1">
-                <p className="text-sm font-semibold text-foreground">Cloud</p>
+                <p className="text-sm font-semibold text-foreground">
+                  {formatPrivacyModeLabel('managed')}
+                </p>
                 <p className="text-xs text-blue-400 font-medium">Sync across devices</p>
                 <p className="text-xs text-muted-foreground leading-relaxed mt-1">
                   Managed cloud LLMs. Requires Hobby ($5/mo target) or higher.
@@ -210,7 +212,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
                   'bg-primary text-white hover:bg-primary/90',
                 )}
               >
-                Start Cloud
+                Start {formatPrivacyModeLabel('managed')}
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>

@@ -202,7 +202,7 @@ export function ModelsKeysTab({
                     ? '⚡ Auto'
                     : mode === 'local'
                       ? `🖥️ ${formatProviderModeLabel('Local')}`
-                      : '☁️ Cloud'}
+                      : `☁️ ${formatProviderModeLabel('DirectByok')}`}
                 </button>
               ))}
             </div>
@@ -210,7 +210,7 @@ export function ModelsKeysTab({
               {(resolvedLLMConfig.providerMode ?? 'auto') === 'local'
                 ? 'Always use local Ollama. No data leaves your machine.'
                 : (resolvedLLMConfig.providerMode ?? 'auto') === 'cloud'
-                  ? 'Always use cloud providers (OpenAI, Anthropic, etc.).'
+                  ? 'Always use configured BYOK providers (OpenAI, Anthropic, etc.).'
                   : 'Automatically route to the best provider for each task.'}
             </p>
           </div>
