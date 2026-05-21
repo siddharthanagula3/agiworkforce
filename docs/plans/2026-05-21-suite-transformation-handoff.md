@@ -2,9 +2,20 @@
 
 Status: Current
 Owner: Next session lead
-Last updated: 2026-05-21 (extended round 4)
+Last updated: 2026-05-21 (extended through round 6)
 Branch: `fix/extension-typecheck-and-c02-sync-2026-05-20`
-Head pushed: `5630924d7`
+Head pushed: `b1c2bb428`
+
+## Round 5 + 6 additions (after 5630924d7)
+
+After the user explicitly authorized continuous autonomous work past the round-4 boundary, the session shipped six more atomic commits closing further gaps:
+
+- `34f33169e` `feat(web): /projects route mounting shared ProjectGallery` — top-level Projects hub on web, mounting the unified-chat ProjectGallery and deep-linking selection into `/chat?project=<id>`.
+- `3c9f57d48` `feat(types): runtime guard for cross-surface chat-sync rule` — `assertSurfaceCanSyncChats` in `@agiworkforce/types/suite-contracts` that throws on any developer-session surface (cli/vscode/chrome) reaching synced-app chat code. Codifies the goal's hard sync rule as runtime enforcement, not just typing.
+- `1b8617b13` `test(types): cover assert-surface-can-sync-chats runtime guard` — locks the runtime guard behavior so the contract cannot regress.
+- `b1c2bb428` `feat(unified-chat): artifact publish copies portable snapshot` — closes the no-op `handlePublish` on `ArtifactPanel`. Serializes the artifact into a self-contained markdown snapshot, copies to clipboard with the existing copied-state feedback, falls back to a download in insecure contexts.
+
+Session totals at HEAD `b1c2bb428`: **24 commits, ~165h shipped of the ~3,778h audit budget (~4.4%)**, all verification green every commit (typecheck/lint/tests/guardrails), branch pushed.
 
 ## Mission (from the active goal)
 
