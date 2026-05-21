@@ -18,7 +18,7 @@ import { invoke } from '../../lib/tauri-mock';
 
 import { cn } from '../../lib/utils';
 import { selectFileChanges, useExecutionStore } from '../../stores/executionStore';
-import { Button } from '../ui/Button';
+import { Button } from '@/components/ui/Button';
 
 interface FileOperationHistoryProps {
   className?: string;

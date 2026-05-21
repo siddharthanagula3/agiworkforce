@@ -55,7 +55,7 @@ import {
 import { useChatStore, type ConversationSummary } from '../../stores/chat/chatStore';
 import { invoke, isTauri } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
-import { MemoryManager } from '@/components/Memory/MemoryManager';
+import { MemoryManager } from '@/features/memory/MemoryManager';
 
 // Supported knowledge base file extensions
 const SUPPORTED_KB_EXTENSIONS = [

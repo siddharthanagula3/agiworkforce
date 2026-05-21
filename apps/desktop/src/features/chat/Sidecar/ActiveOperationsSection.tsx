@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import React from 'react';
 import { useUnifiedChatStore } from '../../../stores/unifiedChatStore';
-import { ToolCallCard } from '@/components/ToolCalling/ToolCallCard';
+import { ToolCallCard } from '@/features/tool-calling/ToolCallCard';
 import { ToolCallUI } from '../../../types/toolCalling';
 
 export interface ActiveOperationsSectionProps {

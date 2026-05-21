@@ -12,7 +12,7 @@ import {
   selectTerminalLogs,
   selectActiveGoal,
 } from '../../stores/executionStore';
-import { Button } from '../ui/Button';
+import { Button } from '@/components/ui/Button';
 
 export interface TerminalPanelProps {
   className?: string;

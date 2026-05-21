@@ -57,7 +57,7 @@ import type { PendingUserMessage } from '../../stores/chat/types';
 import { useBillingStore } from '../../stores/auth';
 import { useCustomInstructionsStore } from '../../stores/customInstructionsStore';
 import { useMemoryStore, buildMemoryContext } from '../../stores/memoryStore';
-import { readMemoryPanelSettings } from '@/components/Memory/MemoryPanel';
+import { readMemoryPanelSettings } from '@/features/memory/MemoryPanel';
 import { useExecutionStore } from '../../stores/executionStore';
 import { useExecutionSidecarStore } from '../../stores/executionSidecarStore';
 import { useProjectStore } from '../../stores/projectStore';

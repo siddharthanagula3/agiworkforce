@@ -35,7 +35,7 @@ import { MessageAttachments } from './MessageAttachments';
 import { MessageContextMenu } from './MessageContextMenu';
 import { MessageAvatar } from './MessageAvatar';
 import { ToolCallCard } from './ToolCallCard';
-import { ToolResultCard } from '@/components/ToolCalling/ToolResultCard';
+import { ToolResultCard } from '@/features/tool-calling/ToolResultCard';
 import type { ToolResultUI } from '../../../types/toolCalling';
 import { McpAppCard } from '@/features/mcp/McpAppCard';
 import { useMcpAppStore } from '../../../stores/mcpAppStore';

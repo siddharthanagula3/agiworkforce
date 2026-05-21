@@ -20,7 +20,7 @@ import {
   FileCode,
   AlertCircle,
 } from 'lucide-react';
-import { Button } from '../ui/Button';
+import { Button } from '@/components/ui/Button';
 import { cn } from '../../lib/utils';
 import { JsonViewer } from './JsonViewer';
 import { TableViewer } from './TableViewer';
@@ -31,7 +31,10 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import type { SyntaxHighlighterProps } from 'react-syntax-highlighter';
 import type { ToolResultUI, TableData, DiffData } from '../../types/toolCalling';
 import { sanitizeMarkdownHtml } from '../../utils/security';
-import { FileDownloadButton, type DownloadableFile } from '../FileUpload/FileDownloadButton';
+import {
+  FileDownloadButton,
+  type DownloadableFile,
+} from '@/components/FileUpload/FileDownloadButton';
 
 interface ToolResultCardProps {
   result: ToolResultUI;

@@ -15,8 +15,8 @@ import {
   ChevronsUpDown,
   Search,
 } from 'lucide-react';
-import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { cn } from '../../lib/utils';
 import type { TableData } from '../../types/toolCalling';
 

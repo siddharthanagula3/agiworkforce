@@ -5,7 +5,7 @@ const LazyPersonalizationSettings = lazy(() =>
   import('../../PersonalizationSettings').then((m) => ({ default: m.PersonalizationSettings })),
 );
 const LazyMemoryPanel = lazy(() =>
-  import('@/components/Memory/MemoryPanel').then((m) => ({ default: m.MemoryPanel })),
+  import('@/features/memory/MemoryPanel').then((m) => ({ default: m.MemoryPanel })),
 );
 const LazyCustomInstructionsSettings = lazy(() =>
   import('../../CustomInstructionsSettings').then((m) => ({

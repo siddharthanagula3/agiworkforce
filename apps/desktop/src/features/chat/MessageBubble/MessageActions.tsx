@@ -22,7 +22,7 @@ import {
 import { cn } from '../../../lib/utils';
 import { MessageReaction } from '../../../stores/unifiedChatStore';
 import { ReactionConfig } from './types';
-import { SaveToMemoryButton } from '@/components/Memory/SaveToMemoryButton';
+import { SaveToMemoryButton } from '@/features/memory/SaveToMemoryButton';
 
 export interface MessageActionsProps {
   // State

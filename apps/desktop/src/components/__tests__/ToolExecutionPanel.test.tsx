@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { ToolExecutionTimeline } from '../ToolCalling/ToolExecutionTimeline';
+import { ToolExecutionTimeline } from '@/features/tool-calling/ToolExecutionTimeline';
 import type { ToolExecutionWorkflow, ToolExecutionStep, ToolCallUI } from '../../types/toolCalling';
 
 // Mock child components that have complex dependencies (JsonViewer, Prism, etc.)
-vi.mock('../ToolCalling/ToolCallCard', () => ({
+vi.mock('@/features/tool-calling/ToolCallCard', () => ({
   ToolCallCard: ({
     toolCall,
     onCancel,
@@ -39,7 +39,7 @@ vi.mock('../ToolCalling/ToolCallCard', () => ({
   ),
 }));
 
-vi.mock('../ToolCalling/ToolResultCard', () => ({
+vi.mock('@/features/tool-calling/ToolResultCard', () => ({
   ToolResultCard: ({ result }: { result: { success: boolean; data: unknown; error?: string } }) => (
     <div data-testid="tool-result">
       <span data-testid="result-success">{result.success ? 'success' : 'failure'}</span>
@@ -48,7 +48,7 @@ vi.mock('../ToolCalling/ToolResultCard', () => ({
   ),
 }));
 
-vi.mock('../ToolCalling/ToolErrorDisplay', () => ({
+vi.mock('@/features/tool-calling/ToolErrorDisplay', () => ({
   ToolErrorDisplay: ({
     error,
     toolName,

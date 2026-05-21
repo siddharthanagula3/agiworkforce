@@ -7,7 +7,7 @@
 
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { Download, ZoomIn, ZoomOut, Maximize2, X, Copy, Check } from 'lucide-react';
-import { Button } from '../ui/Button';
+import { Button } from '@/components/ui/Button';
 import { cn } from '../../lib/utils';
 import type { ToolArtifact } from '../../types/toolCalling';
 

@@ -18,7 +18,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { invoke } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
-import { Button } from '../ui/Button';
+import { Button } from '@/components/ui/Button';
 
 interface InteractiveTerminalProps {
   className?: string;

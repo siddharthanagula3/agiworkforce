@@ -19,7 +19,7 @@ import {
   Play,
   X as XIcon,
 } from 'lucide-react';
-import { Button } from '../ui/Button';
+import { Button } from '@/components/ui/Button';
 import { cn } from '../../lib/utils';
 import { JsonViewer } from './JsonViewer';
 import type { ToolCallUI } from '../../types/toolCalling';

@@ -16,13 +16,19 @@ import {
   type MemoryCategory,
   type MemoryEntry,
 } from '../../stores/memoryStore';
-import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
-import { Skeleton } from '../ui/Skeleton';
-import { ScrollArea } from '../ui/ScrollArea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
-import { Slider } from '../ui/Slider';
-import { Textarea } from '../ui/Textarea';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { ScrollArea } from '@/components/ui/ScrollArea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/Select';
+import { Slider } from '@/components/ui/Slider';
+import { Textarea } from '@/components/ui/Textarea';
 
 // ---------------------------------------------------------------------------
 // Types

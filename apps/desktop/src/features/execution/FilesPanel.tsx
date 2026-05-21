@@ -10,7 +10,7 @@ import {
   selectActiveGoal,
 } from '../../stores/executionStore';
 import type { FileChange } from '../../stores/executionStore';
-import { Button } from '../ui/Button';
+import { Button } from '@/components/ui/Button';
 
 export interface FilesPanelProps {
   className?: string;

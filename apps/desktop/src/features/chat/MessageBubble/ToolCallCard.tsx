@@ -13,7 +13,7 @@ import { invoke, isTauri } from '../../../lib/tauri-mock';
 import { respondToolConfirmation } from '../../../api/toolConfirmation';
 import { SidecarMode } from '../../../stores/unifiedChatStore';
 import { useSimpleModeStore } from '../../../stores/ui';
-import { ToolCallCard as SharedToolCallCard } from '@/components/ToolCalling/ToolCallCard';
+import { ToolCallCard as SharedToolCallCard } from '@/features/tool-calling/ToolCallCard';
 import { ToolCallUI } from '../../../types/toolCalling';
 
 export interface ToolCallCardProps {

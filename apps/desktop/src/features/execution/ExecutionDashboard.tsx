@@ -32,7 +32,7 @@ import { TerminalPanel } from './TerminalPanel';
 import { BrowserPanel } from './BrowserPanel';
 import { FilesPanel } from './FilesPanel';
 import { ReflectionPanel } from './ReflectionPanel';
-import { Button } from '../ui/Button';
+import { Button } from '@/components/ui/Button';
 
 export interface ExecutionDashboardProps {
   className?: string;

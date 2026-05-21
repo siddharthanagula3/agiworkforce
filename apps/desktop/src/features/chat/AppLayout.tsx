@@ -13,7 +13,7 @@ import { DynamicSidecar } from './DynamicSidecar';
 import { KeyboardShortcutsOverlay } from './KeyboardShortcutsOverlay';
 import { Sidebar } from './Sidebar';
 import { Breadcrumb } from './Breadcrumb';
-import { MemoryPanel } from '@/components/MemoryPanel';
+import { MemoryPanel } from '@/features/memory-panel';
 import { AgentTaskPanel } from '@/components/AGI/AgentTaskPanel';
 import { CanvasContainer } from '@/components/Canvas/CanvasContainer';
 import { McpAppGallery } from '@/features/mcp/McpAppGallery';
@@ -28,7 +28,7 @@ import { SkillMarketplace } from '@/components/SkillMarketplace/SkillMarketplace
 import { ScheduledTasksPanel } from '@/components/Scheduler/ScheduledTasksPanel';
 import { ArtifactsGallery } from '@/components/Artifacts/ArtifactsGallery';
 import { ShareConversationDialog } from './ShareConversationDialog';
-import { ExecutionSidecar } from '@/components/ExecutionSidecar';
+import { ExecutionSidecar } from '@/features/execution-sidecar';
 import { ReminderList } from '@/features/reminders/ReminderList';
 import { CoworkTab } from '@/components/Cowork/CoworkTab';
 

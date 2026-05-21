@@ -1,6 +1,6 @@
 import React from 'react';
 import { Terminal as TerminalIcon, Maximize2, Minimize2 } from 'lucide-react';
-import { TerminalPanel } from '@/components/Execution/TerminalPanel';
+import { TerminalPanel } from '@/features/execution/TerminalPanel';
 import { cn } from '../../../lib/utils';
 
 interface TerminalViewProps {

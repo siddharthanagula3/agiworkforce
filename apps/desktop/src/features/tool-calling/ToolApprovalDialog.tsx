@@ -7,7 +7,7 @@
 
 import { useState } from 'react';
 import { AlertTriangle, Play, X, ChevronRight, ChevronDown } from 'lucide-react';
-import { Button } from '../ui/Button';
+import { Button } from '@/components/ui/Button';
 import {
   Dialog,
   DialogContent,
@@ -15,7 +15,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '../ui/Dialog';
+} from '@/components/ui/Dialog';
 import { JsonViewer } from './JsonViewer';
 import { cn } from '../../lib/utils';
 import type { ToolApprovalRequestPayload } from '../../types/toolCalling';

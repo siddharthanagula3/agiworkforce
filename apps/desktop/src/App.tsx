@@ -38,7 +38,7 @@ import {
 } from './stores/unifiedChatStore';
 import { useDeepLink } from './hooks/useDeepLink';
 import { useTierBridge } from './hooks/useTierBridge';
-import type { TimeoutWarningData } from './components/Execution/TimeoutWarningDialog';
+import type { TimeoutWarningData } from './features/execution/TimeoutWarningDialog';
 
 import {
   AlertTriangle,
@@ -137,7 +137,7 @@ const AutomationPermissionsModal = lazy(() =>
   })),
 );
 const TimeoutWarningDialog = lazy(() =>
-  import('./components/Execution/TimeoutWarningDialog').then((m) => ({
+  import('./features/execution/TimeoutWarningDialog').then((m) => ({
     default: m.TimeoutWarningDialog,
   })),
 );

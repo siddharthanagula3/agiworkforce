@@ -38,7 +38,7 @@ import type { Artifact } from '../../types/chat';
 import { BrowserVisualization } from '@/components/Browser/BrowserVisualization';
 import { BrowserAutomationPanel } from '@/components/Agent/BrowserAutomationPanel';
 import { MonacoEditor } from '@/components/Editor/MonacoEditor';
-import { TerminalPanel } from '@/components/Execution/TerminalPanel';
+import { TerminalPanel } from '@/features/execution/TerminalPanel';
 import { MediaGallery } from '@/components/Media/MediaGallery';
 import { BackgroundTasksPanel } from '@/components/BackgroundTasks/BackgroundTasksPanel';
 import { ArtifactRenderer } from './ArtifactRenderer';
