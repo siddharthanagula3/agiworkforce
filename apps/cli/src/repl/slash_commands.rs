@@ -383,6 +383,9 @@ pub(super) fn handle_slash_command(
             print_help();
         }
         _ => {
+            if let Some(prompt) = crate::custom_commands::expand_custom_slash_invocation(input) {
+                return SlashResult::Prompt(prompt);
+            }
             output::print_warn(&format!(
                 "Unknown command: {}. Type /help for available commands.",
                 cmd

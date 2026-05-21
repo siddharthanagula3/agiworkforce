@@ -174,7 +174,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Claude migration import for prompts/skills/agents/hooks/settings/MCP.
 - [x] Shared TUI/REPL Claude-parity dispatcher.
 - [x] Local privacy guard before cloud/BYOK sends.
-- [ ] Custom slash commands from `.agiworkforce/commands` and imported `.claude/commands`.
+- [x] Custom slash commands from `.agiworkforce/commands` and imported `.claude/commands`.
 - [ ] MCP prompts as dynamic slash commands.
 - [ ] Full `/agents` management UI in TUI/REPL.
 - [ ] Hook matcher compatibility with Claude tool names.

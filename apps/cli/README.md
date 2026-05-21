@@ -156,6 +156,13 @@ from `~/.agiworkforce/output-styles/<name>.md`:
 /exit           Quit
 ```
 
+Custom commands can be added as markdown files under `.agiworkforce/commands`
+or `~/.agiworkforce/commands`. Nested files become namespaced commands, so
+`.agiworkforce/commands/review/security.md` runs as `/review:security`.
+Command bodies support `$ARGUMENTS` and `$1` through `$9`; imported Claude
+commands under `~/.agiworkforce/prompts/claude` and compatibility
+`.claude/commands` roots are also recognized.
+
 ## Demo flow (90 seconds)
 
 ```

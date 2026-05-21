@@ -17,7 +17,7 @@ use ratatui::Terminal;
 
 use crate::agent::AgentSession;
 use crate::command_registry::{
-    registry_from_builtins_skills_and_prompts, CommandRegistry, RegistryCommand,
+    registry_from_builtins_skills_and_prompts, CommandRegistry, CommandSource, RegistryCommand,
 };
 use crate::config::CliConfig;
 use crate::context::SystemContext;
@@ -195,6 +195,32 @@ impl TuiApp {
             Some(crate::sandbox::SandboxType::detect())
         };
 
+        let mut command_registry =
+            registry_from_builtins_skills_and_prompts(&crate::skills::discover_skills(), &[]);
+        for command in crate::custom_commands::discover_custom_slash_commands() {
+            if command_registry.find(&command.name).is_some() {
+                continue;
+            }
+            let source = match command.source {
+                crate::custom_commands::CustomCommandSource::ProjectAgi
+                | crate::custom_commands::CustomCommandSource::ProjectClaude => {
+                    CommandSource::Project
+                }
+                crate::custom_commands::CustomCommandSource::UserAgi
+                | crate::custom_commands::CustomCommandSource::ImportedClaude
+                | crate::custom_commands::CustomCommandSource::UserClaude => CommandSource::User,
+            };
+            let loaded_from = format!("{}: {}", command.source.label(), command.path.display());
+            let mut registry_command = RegistryCommand::prompt(
+                command.name,
+                command.description,
+                source,
+                Some(&loaded_from),
+            );
+            registry_command.argument_hint = command.argument_hint;
+            command_registry.push(registry_command);
+        }
+
         Self {
             session,
             config,
@@ -224,10 +250,7 @@ impl TuiApp {
             stream_buffer: String::new(),
             stream_start: None,
             git_branch,
-            command_registry: registry_from_builtins_skills_and_prompts(
-                &crate::skills::discover_skills(),
-                &[],
-            ),
+            command_registry,
             fallback_banner: Arc::new(std::sync::Mutex::new(None)),
             active_overlay: None,
         }
@@ -1320,6 +1343,7 @@ enum SlashResult {
     SystemMessage(String),
     Quit,
     SendAsPrompt,
+    SendPrompt(String),
     RunLogin,
     RunLogout,
 }
@@ -1793,9 +1817,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             } else {
                 format!("Please review the code related to: {arg}. Look for bugs, security issues, and improvements.")
             };
-            app.input = review_prompt;
-            app.cursor = app.input.len();
-            SlashResult::SendAsPrompt
+            SlashResult::SendPrompt(review_prompt)
         }
 
         "/effort" | "/e" => {
@@ -1982,25 +2004,28 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             SlashResult::SystemMessage(lines.join("\n"))
         }
 
-        _ => match crate::claude_parity::handle_shared_command(cmd.as_str(), arg, &mut app.session)
-        {
-            crate::claude_parity::ParityCommandResult::SystemMessage(message) => {
-                SlashResult::SystemMessage(message)
+        _ => {
+            if let Some(prompt) = crate::custom_commands::expand_custom_slash_invocation(input) {
+                return SlashResult::SendPrompt(prompt);
             }
-            crate::claude_parity::ParityCommandResult::Prompt(prompt) => {
-                app.input = prompt;
-                app.cursor = app.input.len();
-                SlashResult::SendAsPrompt
+
+            match crate::claude_parity::handle_shared_command(cmd.as_str(), arg, &mut app.session) {
+                crate::claude_parity::ParityCommandResult::SystemMessage(message) => {
+                    SlashResult::SystemMessage(message)
+                }
+                crate::claude_parity::ParityCommandResult::Prompt(prompt) => {
+                    SlashResult::SendPrompt(prompt)
+                }
+                crate::claude_parity::ParityCommandResult::DraftPrompt(prompt) => {
+                    app.input = prompt;
+                    app.cursor = app.input.len();
+                    SlashResult::SystemMessage(
+                        "Drafted BYOK continuation prompt. Review it before pressing Enter.".into(),
+                    )
+                }
+                crate::claude_parity::ParityCommandResult::NotHandled => SlashResult::SendAsPrompt,
             }
-            crate::claude_parity::ParityCommandResult::DraftPrompt(prompt) => {
-                app.input = prompt;
-                app.cursor = app.input.len();
-                SlashResult::SystemMessage(
-                    "Drafted BYOK continuation prompt. Review it before pressing Enter.".into(),
-                )
-            }
-            crate::claude_parity::ParityCommandResult::NotHandled => SlashResult::SendAsPrompt,
-        },
+        }
     }
 }
 
@@ -2262,6 +2287,9 @@ async fn run_event_loop(
                             }
                             SlashResult::NotSlash | SlashResult::SendAsPrompt => {
                                 send_message(terminal, app, &text).await?;
+                            }
+                            SlashResult::SendPrompt(prompt) => {
+                                send_message(terminal, app, &prompt).await?;
                             }
                         }
                     }

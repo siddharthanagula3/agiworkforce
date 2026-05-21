@@ -20,6 +20,7 @@ pub mod compaction;
 pub mod config;
 pub mod context;
 pub mod conversations;
+pub mod custom_commands;
 pub mod daemon;
 pub mod design_system;
 pub mod doctor;
