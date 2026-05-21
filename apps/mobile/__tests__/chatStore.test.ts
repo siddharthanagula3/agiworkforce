@@ -254,6 +254,27 @@ describe('chatStore — streaming state', () => {
 
   describe('local LLM path', () => {
     it('runs the selected installed local model and streams tokens into the assistant message', async () => {
+      useChatStore.setState({
+        messages: {
+          [CONV_ID]: [
+            {
+              id: 'prev-user',
+              conversationId: CONV_ID,
+              role: 'user',
+              content: 'Earlier context',
+              createdAt: new Date().toISOString(),
+            },
+            {
+              id: 'prev-assistant',
+              conversationId: CONV_ID,
+              role: 'assistant',
+              content: 'Earlier response',
+              createdAt: new Date().toISOString(),
+              isStreaming: false,
+            },
+          ],
+        },
+      });
       mockRemoteDisabledReason.mockReturnValue('mobile-local-only');
       mockListInstalledModels.mockResolvedValue([
         {
@@ -272,6 +293,10 @@ describe('chatStore — streaming state', () => {
       mockLocalGenerate.mockImplementation(async (_modelPath, opts) => {
         opts.onToken?.('Hel');
         opts.onToken?.('lo');
+        expect(opts.messages).toEqual([
+          { role: 'user', content: 'Earlier context' },
+          { role: 'assistant', content: 'Earlier response' },
+        ]);
         return { text: 'Hello', runtime: 'executorch', aborted: false };
       });
 
@@ -286,7 +311,7 @@ describe('chatStore — streaming state', () => {
       expect(mockMarkInstalledModelUsed).toHaveBeenCalledWith(LOCAL_MODEL);
 
       const msgs = getState().messages[CONV_ID] ?? [];
-      const assistantMsg = msgs.find((m) => m.role === 'assistant');
+      const assistantMsg = [...msgs].reverse().find((m) => m.role === 'assistant');
       expect(assistantMsg?.content).toBe('Hello');
       expect(assistantMsg?.isStreaming).toBe(false);
       expect(assistantMsg?.metadata).toMatchObject({

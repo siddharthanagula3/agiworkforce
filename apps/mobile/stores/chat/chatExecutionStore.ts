@@ -335,7 +335,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
     try {
       if (remoteDisabledReason) {
-        const localMessages: LocalLlmMessage[] = historyMessages.map((message) => ({
+        const localMessages: LocalLlmMessage[] = historyMessages.slice(0, -1).map((message) => ({
           role:
             message.role === 'assistant' || message.role === 'system' || message.role === 'user'
               ? message.role

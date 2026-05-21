@@ -50,6 +50,8 @@ export function ModelRow({
   const isReady = installStatus.status === 'ready';
   const disabled = isLocked || isDownloading || isUnavailable;
   const progressPercent = Math.round(installStatus.progress * 100);
+  const unavailableHint =
+    installStatus.error ?? 'This model package/system model is unavailable on this device.';
 
   const handlePress = () => {
     if (disabled) return;
@@ -89,13 +91,15 @@ export function ModelRow({
         accessibilityHint={
           isLocked
             ? lockReason
-            : isDownloading
-              ? 'Model download is in progress'
-              : isFailed
-                ? 'Tap to retry download'
-                : installStatus.status === 'download_required'
-                  ? 'Tap to download, long press to favorite'
-                  : 'Tap to select, long press to favorite'
+            : isUnavailable
+              ? unavailableHint
+              : isDownloading
+                ? 'Model download is in progress'
+                : isFailed
+                  ? 'Tap to retry download'
+                  : installStatus.status === 'download_required'
+                    ? 'Tap to download, long press to favorite'
+                    : 'Tap to select, long press to favorite'
         }
         accessibilityState={{ selected: isSelected, disabled }}
       >

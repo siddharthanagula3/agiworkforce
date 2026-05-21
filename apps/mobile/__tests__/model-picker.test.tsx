@@ -112,6 +112,7 @@ import {
   AUTO_MODES,
   DEFAULT_LOCAL_MODEL_ID,
   LOCKED_CLOUD_MODELS,
+  MODEL_LIST,
 } from '../src/features/model-picker/service';
 
 // ---------------------------------------------------------------------------
@@ -304,5 +305,37 @@ describe('ModelPickerSheet', () => {
   it('renders a search input', () => {
     const { getByLabelText } = renderPicker();
     expect(getByLabelText('Search models')).toBeTruthy();
+  });
+
+  it('provides a non-actionable hint for unavailable local models', () => {
+    const unavailableModel = MODEL_LIST.find((model) => model.surface === 'local');
+    expect(unavailableModel).toBeDefined();
+
+    if (!unavailableModel) {
+      throw new Error(
+        'Expected at least one local model in MODEL_LIST for accessibility hint test.',
+      );
+    }
+
+    useModelInstallStore.setState((state) => ({
+      ...state,
+      jobs: {
+        ...state.jobs,
+        [unavailableModel.id]: {
+          status: 'unavailable',
+          progress: 0,
+          error: 'This model package is not available on this device yet.',
+        },
+      },
+    }));
+
+    const { getByLabelText } = renderPicker();
+
+    const unavailableRow = getByLabelText(new RegExp(`${unavailableModel.name}, .*unavailable`));
+    expect(unavailableRow.props.accessibilityState.disabled).toBe(true);
+    expect(unavailableRow.props.accessibilityHint).toBe(
+      'This model package is not available on this device yet.',
+    );
+    expect(unavailableRow.props.accessibilityHint).not.toContain('Tap to select');
   });
 });

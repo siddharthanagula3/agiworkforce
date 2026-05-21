@@ -8,6 +8,7 @@ import {
   DEFAULT_LOCAL_MODEL_ID,
   getSelectableModelById,
   isAutoMode,
+  isSelectableModelId,
   LOCAL_MODEL_LIST,
   type ModelDef,
 } from './service';
@@ -73,6 +74,12 @@ export async function resolveLocalModelRef(requestedModelId: string): Promise<Lo
   const modelId = isAutoMode(requestedModelId)
     ? await resolveAutoModelId(requestedModelId, installedIds)
     : requestedModelId;
+
+  if (!isAutoMode(requestedModelId) && !isSelectableModelId(modelId)) {
+    throw new Error(
+      `Model "${modelId}" is not selectable for local chat. Choose an on-device local model first.`,
+    );
+  }
 
   const model = getSelectableModelById(modelId) ?? getSelectableModelById(DEFAULT_LOCAL_MODEL_ID);
   if (!model) {

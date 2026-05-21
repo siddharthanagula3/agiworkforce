@@ -10,7 +10,6 @@
  * a descriptive error string so the caller can surface it to the user.
  */
 
-import { Platform, NativeModules } from 'react-native';
 import {
   getModelsForRole,
   getDefaultModel,
@@ -18,6 +17,7 @@ import {
   detectCapabilities,
 } from '@agiworkforce/local-llm';
 import { getInstalledModel } from '@/storage/installedModels';
+import { recognizeText } from './ocr';
 
 export type VisionRoute =
   | { kind: 'vl-pack'; modelId: string; displayName: string }
@@ -72,30 +72,15 @@ export async function resolveVisionRoute(): Promise<VisionRoute> {
 }
 
 /**
- * Run OCR on the image using the platform-native OCR engine.
+ * Run OCR on the image using the existing native OCR service.
  * Returns the extracted text, or an empty string if nothing was recognised.
  */
-type NativeOCRModule = { recognizeText?: (uri: string) => Promise<string> };
-
 async function runNativeOCR(imageUri: string): Promise<string> {
   try {
-    if (Platform.OS === 'ios') {
-      const mod = (NativeModules as Record<string, unknown>)['AGIFoundationModels'] as
-        | NativeOCRModule
-        | undefined;
-      if (mod?.recognizeText) {
-        return await mod.recognizeText(imageUri);
-      }
-    } else if (Platform.OS === 'android') {
-      const mod = (NativeModules as Record<string, unknown>)['AGIAICore'] as
-        | NativeOCRModule
-        | undefined;
-      if (mod?.recognizeText) {
-        return await mod.recognizeText(imageUri);
-      }
-    }
+    const result = await recognizeText(imageUri);
+    return result.text;
   } catch {
-    // Native module unavailable
+    // Native OCR module unavailable or failed
   }
   return '';
 }

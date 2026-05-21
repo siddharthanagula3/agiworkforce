@@ -138,6 +138,13 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - CLI TUI `/hooks` now reuses the shared hook-list formatter, and command-surface docs classify TUI slash-command coverage through direct arms plus the shared Claude-parity fallback instead of a stale unhandled list.
 - CLI tool-filter policy aliases now live in the central tool catalog instead of `tool_filters.rs`, preserving broad Claude-style groups such as `Read`, `Edit`, and `Grep` for allow/deny rules without a second alias table.
 - CLI provider streaming now shares tool schema renderers for Anthropic, OpenAI-compatible, Gemini, Ollama, Copilot, and ChatGPT routes, with regression tests proving local tool metadata is never serialized into provider payloads.
+
+### Fixed
+
+- Mobile local LLM turns no longer include the latest user prompt twice in both `messages` history and `prompt`, preserving prompt budget and response quality for on-device runtimes.
+- Mobile local runtime resolution now rejects stale or non-selectable cloud model ids instead of silently downgrading to the default local model.
+- Mobile OCR fallback now routes through the `AGIVisionOCR` service instead of the Foundation Models/AICore modules, restoring native on-device OCR for vision fallback prompts.
+- Mobile model picker unavailable rows now expose a non-actionable accessibility hint instead of telling VoiceOver/TalkBack users to tap-select a disabled model.
 - CLI `--mcp-config` and `--strict-mcp-config` are now wired into MCP loading for TUI, REPL, one-shot, and `exec` entrypoints; explicit files are required, strict mode excludes project/global/plugin discovery, and repeated explicit files override in order.
 - CLI tool catalog and executor drift is now covered by regression tests: built-in catalog entries must have a local or agent-runtime dispatcher, local dispatch arms must have catalog metadata, and team tool dispatchers must match team tool schemas.
 - Current docs now define suite-level requirements for all six surfaces, cross-surface ownership for projects/chats/sessions/artifacts/memory/teams/billing, and a provider capability matrix for routing/privacy claims.
