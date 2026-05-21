@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 
 interface ProvenanceFooterProps {
   /** Provider label shown at base of each assistant message bubble */

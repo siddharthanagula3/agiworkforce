@@ -8,8 +8,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Paperclip, Globe, ChevronRight, ChevronDown, ExternalLink } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useTheme } from '@/hooks/useTheme';
-import { colors } from '@/lib/theme';
+import { useTheme } from '@/src/ui/theme';
+import { colors } from '@/src/ui/theme';
 
 interface Source {
   url: string;

@@ -5,7 +5,7 @@
 
 import { View, Pressable, Modal, TextInput, StyleSheet } from 'react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 interface MessageEditModalProps {
   visible: boolean;

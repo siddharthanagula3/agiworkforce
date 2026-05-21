@@ -15,7 +15,7 @@ import { useState, useCallback } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { copyToClipboard } from '@/lib/clipboard';
 import type { Artifact } from '@/types/chat';
 

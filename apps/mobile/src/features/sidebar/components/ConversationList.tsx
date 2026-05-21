@@ -4,7 +4,7 @@ import { MessageSquare, Pin, Search } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { ConversationItem } from './ConversationItem';
 import { useChatStore } from '@/stores/chatStore';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { TIME_GROUPS } from '@/lib/constants';
 import type { ConversationSummary, ConversationGroup } from '@/types/chat';
 

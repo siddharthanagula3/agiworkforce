@@ -3,7 +3,7 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { EyeOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@/src/ui/theme';
 
 /** Purple brand color used for the temporary-chat active state. */
 const TEMPORARY_PURPLE = '#a855f7';

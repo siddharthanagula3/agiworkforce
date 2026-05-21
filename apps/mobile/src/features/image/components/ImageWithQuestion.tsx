@@ -26,7 +26,7 @@ import { Text } from '@/components/ui/text';
 import { PerformanceChip } from '@/src/features/chat/components/PerformanceChip';
 import { runVisionQuery, visionRouteLabel } from '@/src/features/image/services/vision';
 import type { VisionResult, VisionRoute } from '@/src/features/image/services/vision';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 import type { RuntimeTier } from '@/src/features/chat/components/PerformanceChip';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');

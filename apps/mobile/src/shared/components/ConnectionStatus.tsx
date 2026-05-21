@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { Wifi, WifiOff, Loader2, Monitor } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useConnectionStore, type ConnectionStatus } from '@/stores/connectionStore';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 interface StatusConfig {
   icon: typeof Wifi;

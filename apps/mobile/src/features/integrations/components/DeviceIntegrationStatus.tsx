@@ -14,7 +14,7 @@ import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import {
   getCalendarPermissionStatus,
   getContactsPermissionStatus,

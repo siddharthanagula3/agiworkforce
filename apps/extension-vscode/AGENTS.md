@@ -10,6 +10,13 @@ Read root `AGENTS.md`, then this file, then the extension package README if pres
 
 `apps/extension-vscode` owns the IDE-native developer surface and workspace-scoped agent UI.
 
+## Lane Contract
+
+- Primary lane: `vscode-extension`.
+- Owned write path: `apps/extension-vscode/**`.
+- Read-only context: CLI behavior and shared developer-session contracts.
+- CLI protocol changes and `packages/types/**` edits require the CLI or contracts lane.
+
 ## High-Risk Areas
 
 - Workspace trust, local file edits, terminal/process execution, CLI bridge/protocol behavior, provider keys, and developer-session handoff.

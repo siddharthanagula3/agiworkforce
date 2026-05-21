@@ -7,7 +7,7 @@ import { Text } from '@/components/ui/text';
 import { TaskChips, type TaskChipType } from '@/src/features/chat/components/TaskChips';
 import { storage } from '@/lib/mmkv';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 const MMKV_PAIRING_BANNER_KEY = 'dismissedDesktopPairingBanner';
 

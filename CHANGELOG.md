@@ -12,6 +12,14 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 
 ### Added
 
+- `packages/types/src/suite-contracts.ts` as the canonical cross-surface contract layer for `PrivacyMode`, `ProviderMode`, synced Web/Desktop/Mobile app conversations, CLI/VS Code/Chrome developer sessions, explicit handoff drafts, projects, compute sessions, generated files, artifact manifests, remote-control/computer actions, connector/MCP registry records, and agent/subagent event records.
+- Managed-compute private-beta gate in `services/api-gateway/src/middleware/managedComputeGate.ts`, wired onto AGI-held-key execution paths for cloud chat send, OpenAI-compatible LLM proxy, and provider streaming.
+- Mobile domain-closure slice for theme and voice ownership: theme tokens/hooks now live under `apps/mobile/src/ui/theme`, and voice playback/presets now live under `apps/mobile/src/features/voice`.
+- Focused CLI slash-resolution tests so the TUI preserves exact `/sessions` behavior while normal aliases still resolve through the registry.
+- `docs/engineering/service-layer-architecture.md` and `pnpm check:service-layer` to lock action/route orchestration vs reusable operational mechanics, and to prevent new local duplicate definitions of canonical shared contracts.
+- `scripts/check-mobile-hygiene.mjs` and `pnpm check:mobile-hygiene` to keep Mobile feature folders self-describing, freeze root hook/lib growth, block retired theme/voice imports, and catch new direct I/O in UI files.
+- Lane-contract sections in scoped `AGENTS.md` files for CLI, Web, Mobile, Desktop, Chrome, VS Code, services, and provider adapters, enforced by `pnpm check:agent-context`.
+- Shared API gateway UUID validation in `services/api-gateway/src/validations/ids.ts`, used by chat, desktop, and mobile routes.
 - Root `PLAN.md` as the active transition control plane for Anthropic Applications parity. It defines the mission, non-negotiables, source corpus, parity matrix, transition workstreams, phases, and definition of done.
 - Root `TODO.md` as the active transition checklist. It separates exploration, CLI engine work, cross-surface product tasks, cloud-later tasks, and documentation rules.
 - `docs/engineering/naming-conventions.md` as the locked naming policy for product names, CLI commands, root control files, work logs, folders, files, package/module names, branches, commits, versions, release tags, and enforcement.
@@ -85,6 +93,10 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 
 ### Changed
 
+- Enterprise contracts now alias the canonical suite `PrivacyMode` and include managed-compute eligibility, reservation, and risk-event records for future quota/fraud/refund/dispute enforcement.
+- Mobile imports that previously targeted retired theme/voice layer-first paths now resolve through the new `src/ui/theme` and `src/features/voice` ownership boundaries.
+- Agent context, engineering docs, command maps, and LLM-operability checks now include the service-layer architecture rule so repeated mechanics move behind explicit service APIs instead of drifting across routes/actions.
+- Root agent read order now treats `AGENTS.md` as the entry point before `docs/agent-context`, removing circular first-read wording.
 - CLI distribution now treats `agi` as the primary user-facing command and keeps `agiworkforce` as a backward-compatible alias across Cargo, npm, Homebrew, release archives, install script behavior, docs, and user-facing CLI hints.
 - Root audit fire log moved from `AUDIT_LOG.md` to `audit/audit-log.md`; active references now point at the audit folder.
 - Mobile Expo config is now single-source: stale root `app.json` and duplicate `apps/mobile/app.json` were removed, and repo-organization checks enforce `apps/mobile/app.config.js`.

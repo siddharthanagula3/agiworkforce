@@ -21,7 +21,7 @@ import { Text } from '@/components/ui/text';
 import { DesktopCompanionWidget } from '@/src/shared/components/DesktopCompanionWidget';
 import { useChatStore } from '@/stores/chatStore';
 import { useAuthStore } from '@/src/features/auth/store';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
 // Chat-first primary nav items

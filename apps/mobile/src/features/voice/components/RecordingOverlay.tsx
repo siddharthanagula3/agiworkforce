@@ -13,7 +13,7 @@ import { X, Check } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { Waveform } from './Waveform';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
 
 /**

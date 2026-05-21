@@ -147,6 +147,11 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Add parallel-agent PR template and playbook.
 - [x] Add autonomous feedback-to-patch software-company roadmap.
 - [x] Add Claude Code at-scale harness rollout rules for context, hooks, skills, plugins, LSP/MCP, and subagents.
+- [x] Add service-layer architecture rules for action/route orchestration vs reusable operational mechanics.
+- [x] Add `pnpm check:service-layer` and include it in `pnpm check:llm-operability`.
+- [x] Add `pnpm check:mobile-hygiene` for Mobile feature ownership, frozen root hooks/lib imports, and UI direct-I/O drift.
+- [x] Add lane-contract sections to scoped `AGENTS.md` files and enforce them through `pnpm check:agent-context`.
+- [x] Extract repeated API gateway UUID validation into `services/api-gateway/src/validations/ids.ts`.
 - [x] Add 100 delegated research prompts for the agentic company operating model.
 
 ## Autonomous Company Tasks
@@ -183,25 +188,26 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 ## Cross-Surface Product Tasks
 
 - [ ] Define suite-level product requirements for Web, Desktop, Mobile, CLI, VS Code, and Chrome using the locked application-suite thesis.
-- [ ] Define shared `PrivacyMode` contract for Desktop/Mobile/Web/VS Code/Chrome.
+- [x] Define shared `PrivacyMode` contract for Desktop/Mobile/Web/VS Code/Chrome.
 - [ ] Add visible Local/BYOK/Managed labels to every surface.
-- [ ] Define `ProviderMode`: `Local`, `DirectByok`, `ManagedGateway`, `ManagedNative`.
+- [x] Define `ProviderMode`: `Local`, `DirectByok`, `ManagedGateway`, `ManagedNative`.
 - [ ] Add provider capability matrix for Responses, Chat Completions, reasoning, tools, native tools, vision, files, structured output, server state, and ZDR compatibility.
-- [ ] Define synced app conversation schema for Web/Mobile/Desktop.
-- [ ] Define separate developer session schema for CLI/VS Code/Chrome.
-- [ ] Define Desktop/local-host remote-control schema for Mobile approvals, notifications, generated-file preview, and task steering.
-- [ ] Define explicit developer-session handoff schema into synced app chats.
+- [x] Define synced app conversation schema for Web/Mobile/Desktop.
+- [x] Define separate developer session schema for CLI/VS Code/Chrome.
+- [x] Define Desktop/local-host remote-control schema for Mobile approvals, notifications, generated-file preview, and task steering.
+- [x] Define explicit developer-session handoff schema into synced app chats.
 - [ ] Add Local -> BYOK fork flow on Desktop.
 - [ ] Add Local -> BYOK fork flow on Mobile.
 - [ ] Add Local -> BYOK fork flow on Web.
 - [ ] Add payload preview and secret scan UI before BYOK handoff.
-- [ ] Define shared project schema.
-- [ ] Define shared artifact schema.
-- [ ] Define shared `ComputeSession`, `GeneratedFile`, and `ArtifactManifest` schemas.
-- [ ] Define shared `ComputerAction` protocol for screenshot/action computer use.
-- [ ] Define connector/MCP registry schema.
-- [ ] Define agent/subagent schema.
+- [x] Define shared project schema.
+- [x] Define shared artifact schema.
+- [x] Define shared `ComputeSession`, `GeneratedFile`, and `ArtifactManifest` schemas.
+- [x] Define shared `ComputerAction` protocol for screenshot/action computer use.
+- [x] Define connector/MCP registry schema.
+- [x] Define agent/subagent schema.
 - [ ] Define cross-surface data ownership for projects, artifacts, memory, teams, and billing.
+- [ ] Migrate allowed legacy duplicate local contracts to canonical `packages/types/src/suite-contracts.ts` imports.
 - [ ] Mount or explicitly disable API gateway `agents` and `mcp` routes.
 - [ ] Replace desktop hook stats placeholder with real stats or visible unsupported state.
 - [ ] Replace VS Code managed-plan usage stub with real usage-source reporting.
@@ -212,7 +218,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 
 - [x] Research public Claude and ChatGPT/OpenAI behavior for computer use, code execution, generated files, downloads, and artifact previews.
 - [x] Record AGI implementation implications in `audit/anthropic-apps-parity/compute-artifacts-2026-05-20.md`.
-- [ ] Extend shared artifact contracts so artifacts can reference native generated files and preview derivatives.
+- [x] Extend shared artifact contracts so artifacts can reference native generated files and preview derivatives.
 - [ ] Convert Desktop document creation tools into generated-file manifest producers.
 - [ ] Wrap `packages/browser-tool` behind the shared `ComputerAction` protocol.
 - [ ] Add local compute-session work directories with manifest, TTL metadata, checksum, and audit events.
@@ -236,7 +242,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 
 ## Cloud Later
 
-- [ ] Keep managed cloud waitlisted/private beta.
+- [x] Keep managed cloud waitlisted/private beta.
 - [x] Design usage ledger and provider-price table.
 - [ ] Design quota reservation/settlement.
 - [ ] Design chargeback/refund/dispute handling.

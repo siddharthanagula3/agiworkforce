@@ -28,7 +28,7 @@ import { useAgentStore } from '@/stores/agentStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { sendAgentCommand, sendApprovalResponse, getRiskBadgeColor } from '@/services/companion';
 import type { ApprovalRequest, StatusStep, ToolCall } from '@/types/chat';
 import { FEATURES } from '@/lib/v1FeatureFlags';

@@ -34,7 +34,7 @@ import {
 import { setupCompanionNotifications } from '@/services/companionNotifications';
 import { startMobileHeartbeat, logApprovalDecision } from '@/services/heartbeat';
 import { supabase } from '@/services/supabase';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
 export default function CompanionScreen() {

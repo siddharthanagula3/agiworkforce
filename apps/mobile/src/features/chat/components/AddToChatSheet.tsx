@@ -29,8 +29,8 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useAgentControlStore } from '@/stores/agentControlStore';
 import { useModelStore } from '@/src/features/model-picker/store';
-import { useTheme } from '@/hooks/useTheme';
-import { colors } from '@/lib/theme';
+import { useTheme } from '@/src/ui/theme';
+import { colors } from '@/src/ui/theme';
 import { StyleSelector } from './StyleSelector';
 import { ToolAccessSelector } from './ToolAccessSelector';
 import {

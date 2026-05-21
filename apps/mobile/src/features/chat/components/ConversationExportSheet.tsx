@@ -14,7 +14,7 @@ import BottomSheet, {
 } from '@gorhom/bottom-sheet';
 import { FileText, File, Hash, Copy, CheckCircle2 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@/src/ui/theme';
 import { copyToClipboard } from '@/lib/clipboard';
 import {
   exportConversationToPDF,

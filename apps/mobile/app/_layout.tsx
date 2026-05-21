@@ -23,7 +23,7 @@ import { supabase } from '@/services/supabase';
 import { storage, initMmkvEncryption } from '@/lib/mmkv';
 import { hydrateBiometricFlag } from '@/lib/biometricFlagStore';
 import { useBiometricGate } from '@/src/features/auth/hooks/useBiometricGate';
-import { useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@/src/ui/theme';
 import {
   registerForPushNotifications,
   setupNotificationListeners,

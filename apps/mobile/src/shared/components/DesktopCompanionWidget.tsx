@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useAgentStore } from '@/stores/agentStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 export interface DesktopCompanionWidgetProps {
   /** When true, renders a compact single-row variant for the home screen.

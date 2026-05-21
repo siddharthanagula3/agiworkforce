@@ -10,9 +10,9 @@ This file is for Codex, Claude Code, Cursor, VS Code agents, opencode, Antigravi
 
 Path-scoped `AGENTS.md` files under high-risk surfaces add local rules; read the nearest one before editing.
 
-## Read First
+## After This File
 
-1. `docs/agent-context/README.md` - agent read order and rules.
+1. `docs/agent-context/README.md` - agent context map and rules.
 2. `docs/agent-context/repo-map.json` - surfaces, owner roles, and checks.
 3. `docs/agent-context/lanes.json` - write lanes for 15+ parallel agents.
 4. `docs/agent-context/shared-files.md` - shared-file and collision policy.
@@ -24,7 +24,8 @@ Path-scoped `AGENTS.md` files under high-risk surfaces add local rules; read the
 10. `docs/engineering/agent-native-development.md` - parallel agent/worktree and verification workflow.
 11. `docs/engineering/naming-conventions.md` - naming, root docs, CLI command, package, branch, commit, version, and hook policy.
 12. `docs/engineering/agent-harness-rollout.md` - context, hooks, skills, plugins, LSP/MCP, and subagent rollout order.
-13. `docs/engineering/parallel-agent-playbook.md` - concrete 15+ agent operating procedure.
+13. `docs/engineering/service-layer-architecture.md` - action/route orchestration vs reusable service mechanics.
+14. `docs/engineering/parallel-agent-playbook.md` - concrete 15+ agent operating procedure.
 
 When these files conflict with older plans, prefer the list above.
 
@@ -77,6 +78,7 @@ Machine-readable version: `docs/agent-context/repo-map.json`.
 - Check `docs/agent-context/known-flaws.md` before reporting a bug as new.
 - Do not add new root control docs. Use `PLAN.md`, `TODO.md`, `CHANGELOG.md`, `docs/current`, `docs/plans`, `audit`, `reports`, and `docs/archive` as defined in `docs/engineering/naming-conventions.md`.
 - Keep root context lean. Put durable local rules in path-scoped `AGENTS.md` files, surface READMEs, and `docs/agent-context` maps instead of expanding this file.
+- Keep orchestration and mechanics separate: actions, routes, and command handlers own product policy and state transitions; reusable provider, sandbox, database, generated-file, browser/computer-use, and transport mechanics belong in explicit service functions.
 
 ## Commands
 
@@ -88,6 +90,9 @@ Common commands:
 pnpm check:agent-context
 pnpm check:repo-organization
 pnpm check:boundaries
+pnpm check:structure-conventions
+pnpm check:mobile-hygiene
+pnpm check:service-layer
 pnpm check:hooks
 pnpm check:llm-operability
 pnpm lint

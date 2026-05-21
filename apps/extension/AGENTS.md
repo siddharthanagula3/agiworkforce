@@ -10,6 +10,13 @@ Read root `AGENTS.md`, then this file, then `apps/extension/README.md`.
 
 `apps/extension` owns the Chrome MV3 extension, browser context capture, side panel, content scripts, background worker, packaging, and native messaging bridge.
 
+## Lane Contract
+
+- Primary lane: `chrome-extension`.
+- Owned write path: `apps/extension/**`.
+- Read-only context: `packages/browser-tool/**` and Desktop native-messaging code.
+- Browser tool packages, Desktop native host code, shared contracts, and manifest permission policy outside this app require their owner lane or security review.
+
 ## High-Risk Areas
 
 - Extension permissions, content-script injection, page capture, browser storage, native messaging, cross-origin requests, and any flow that sends page data to Local/BYOK/Managed runtime.

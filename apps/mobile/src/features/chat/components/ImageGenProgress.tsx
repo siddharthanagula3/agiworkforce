@@ -10,7 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 interface ImageGenProgressProps {
   prompt: string;

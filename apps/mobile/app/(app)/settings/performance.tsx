@@ -30,7 +30,7 @@ import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { storage } from '@/lib/mmkv';
 import { getCapabilities, getModelById as getLocalModelById } from '@agiworkforce/local-llm';

@@ -1,6 +1,6 @@
 import { useColorScheme } from 'react-native';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors, getColors, type ColorScheme } from '@/lib/theme';
+import { colors, getColors, type ColorScheme } from './tokens';
 import type { StatusBarStyle } from 'expo-status-bar';
 
 interface ThemeResult {

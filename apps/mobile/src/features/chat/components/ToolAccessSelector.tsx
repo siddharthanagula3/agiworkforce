@@ -6,8 +6,8 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { useChatStore, type ToolAccess } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useTheme } from '@/hooks/useTheme';
-import { colors } from '@/lib/theme';
+import { useTheme } from '@/src/ui/theme';
+import { colors } from '@/src/ui/theme';
 
 const SNAP_POINTS = ['50%'];
 

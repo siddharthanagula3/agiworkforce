@@ -134,3 +134,6 @@ export * from './design-system';
 
 // On-device model catalog types (Path C architecture — local LLM type system)
 export * from './on-device-models';
+
+// Cross-surface application-suite contracts
+export * from './suite-contracts';

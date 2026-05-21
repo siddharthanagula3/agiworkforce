@@ -5,8 +5,8 @@ import { Play, Check } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
 import * as TTS from '@/src/features/voice/services/tts';
-import { colors } from '@/lib/theme';
-import { VOICE_PRESETS, findVoiceForPreset } from '@/lib/voicePresets';
+import { colors } from '@/src/ui/theme';
+import { VOICE_PRESETS, findVoiceForPreset } from '@/src/features/voice/voicePresets';
 import type { VoiceInfo } from '@/src/features/voice/services/tts';
 
 /**

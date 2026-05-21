@@ -49,7 +49,7 @@ jest.mock('@/lib/safeOpenURL', () => ({
 }));
 
 // NativeWind / theme
-jest.mock('../lib/theme', () => ({
+jest.mock('../src/ui/theme', () => ({
   colors: {
     surfaceElevated: '#1e2025',
     textPrimary: '#ffffff',

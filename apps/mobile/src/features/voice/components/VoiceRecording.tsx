@@ -21,7 +21,7 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { Waveform } from './Waveform';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 interface VoiceRecordingProps {
   /** Whether the recording panel is visible */

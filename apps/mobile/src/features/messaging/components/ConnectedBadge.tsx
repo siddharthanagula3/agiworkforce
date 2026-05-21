@@ -8,7 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useEffect } from 'react';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 type ConnectionStatus = 'connected' | 'disconnected' | 'error';
 

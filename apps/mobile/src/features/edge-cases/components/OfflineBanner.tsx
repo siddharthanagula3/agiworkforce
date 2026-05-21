@@ -12,10 +12,10 @@ import { useEffect, useRef } from 'react';
 import { View, Animated, AccessibilityInfo } from 'react-native';
 import { WifiOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { EDGE_COPY } from './copy';
-import { spacing } from '@/lib/theme';
+import { spacing } from '@/src/ui/theme';
 
 /**
  * Renders a slim banner at the top of the screen while the device is offline.

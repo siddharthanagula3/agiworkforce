@@ -5,7 +5,7 @@ import { Text } from '@/components/ui/text';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { getDisplayName, isAutoMode, getModelById, PROVIDERS } from '@/lib/models';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 interface ModelSelectorButtonProps {
   onPress: () => void;

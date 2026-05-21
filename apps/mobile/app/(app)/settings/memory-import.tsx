@@ -9,7 +9,7 @@ import { ArrowLeft, Upload, FileText, CheckCircle, AlertCircle } from 'lucide-re
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { useMemoryStore } from '@/src/features/memory/store';
 import { parseImportFile, type ImportSource } from '@/src/features/memory/services/memoryImport';
 

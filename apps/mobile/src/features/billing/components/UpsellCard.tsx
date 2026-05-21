@@ -12,7 +12,7 @@ import { Zap, Check, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { storage } from '@/lib/mmkv';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 const MMKV_DISMISS_KEY = 'tier_upsell_dismissed_at';
 const DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days

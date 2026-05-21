@@ -18,7 +18,7 @@ import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPi
 import { streamChat, type StreamDelta } from '@/services/streaming';
 import { getModelById, getProviderById, getDisplayName } from '@/lib/models';
 import { getProviderDefaultModel } from '@agiworkforce/types';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 
 // ---------------------------------------------------------------------------
 // Types

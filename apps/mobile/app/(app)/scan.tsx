@@ -18,7 +18,7 @@ import { X, Zap, ZapOff, Send, RotateCcw, ScanText, Copy } from 'lucide-react-na
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { useChatMessageStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { recognizeText, type OcrRegion } from '@/src/features/image/services/ocr';

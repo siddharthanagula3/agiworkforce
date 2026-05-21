@@ -154,15 +154,24 @@ jest.mock('../stores/settingsStore', () => ({
     selector({ hapticsEnabled: false, themeMode: 'dark' }),
 }));
 
-jest.mock('../hooks/useTheme', () => ({
+jest.mock('../src/ui/theme', () => ({
   useTheme: () => ({
     colors: {
       textPrimary: '#fff',
       textMuted: '#888',
       surfaceElevated: '#1a1a1a',
+      teal: '#14b8a6',
+      terraCotta: '#e07a5f',
     },
     isDark: true,
   }),
+  colors: {
+    teal: '#14b8a6',
+    terraCotta: '#e07a5f',
+    textMuted: '#888',
+    textPrimary: '#fff',
+    surfaceElevated: '#1a1a1a',
+  },
 }));
 
 jest.mock('../lib/models', () => ({
@@ -181,14 +190,6 @@ jest.mock('../src/features/chat/components/AutoApproveToggle', () => ({
 
 jest.mock('../src/features/chat/components/TemporaryChatToggle', () => ({
   TemporaryChatToggle: jest.fn().mockReturnValue(null),
-}));
-
-jest.mock('../lib/theme', () => ({
-  colors: {
-    teal: '#14b8a6',
-    terraCotta: '#e07a5f',
-    textMuted: '#888',
-  },
 }));
 
 jest.mock('../lib/constants', () => ({

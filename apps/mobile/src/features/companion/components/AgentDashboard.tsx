@@ -39,7 +39,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useAgentStore, type Agent, type RunArtifact } from '@/stores/agentStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import {
   sendApprovalResponse,
   requestAgentRefresh,

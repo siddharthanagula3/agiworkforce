@@ -4,7 +4,7 @@ import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 // ---------------------------------------------------------------------------
 // Types

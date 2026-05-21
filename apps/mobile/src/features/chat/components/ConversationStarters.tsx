@@ -5,7 +5,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Code, PenLine, Search, Brain, FileText, Lightbulb } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 interface Starter {
   icon: React.ComponentType<{ size: number; color: string }>;

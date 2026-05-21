@@ -1324,17 +1324,27 @@ enum SlashResult {
     RunLogout,
 }
 
+fn resolve_tui_slash_command(input_command: &str, registry: &CommandRegistry) -> String {
+    let normalized = input_command.to_lowercase();
+    // `/sessions` is an exact TUI/REPL runtime command; keep it from being
+    // rewritten through the registry's `/resume` compatibility alias.
+    if matches!(normalized.as_str(), "/sessions") {
+        return normalized;
+    }
+
+    registry
+        .find(input_command)
+        .map(RegistryCommand::slash_name)
+        .unwrap_or(normalized)
+}
+
 fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
     if !input.starts_with('/') {
         return SlashResult::NotSlash;
     }
 
     let parts: Vec<&str> = input.splitn(2, ' ').collect();
-    let cmd = app
-        .command_registry
-        .find(parts[0])
-        .map(RegistryCommand::slash_name)
-        .unwrap_or_else(|| parts[0].to_lowercase());
+    let cmd = resolve_tui_slash_command(parts[0], &app.command_registry);
     let arg = parts.get(1).map(|s| s.trim()).unwrap_or_default();
 
     match cmd.as_str() {
@@ -2370,6 +2380,7 @@ async fn send_message(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::command_registry::builtin_slash_registry_commands;
     use crate::tui::widgets::interactive::{InteractiveView, KeyAction, ViewAction};
 
     // Minimal stub view that tracks how many times handle_key was called.
@@ -2470,5 +2481,29 @@ mod tests {
 
         let consumed = app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Enter));
         assert!(!consumed, "no overlay → dispatch returns false");
+    }
+
+    fn builtin_registry() -> CommandRegistry {
+        let mut registry = CommandRegistry::default();
+        registry.extend(builtin_slash_registry_commands());
+        registry
+    }
+
+    #[test]
+    fn slash_resolution_keeps_exact_sessions_runtime_command() {
+        let registry = builtin_registry();
+
+        assert_eq!(
+            resolve_tui_slash_command("/sessions", &registry),
+            "/sessions"
+        );
+    }
+
+    #[test]
+    fn slash_resolution_still_normalizes_registered_aliases() {
+        let registry = builtin_registry();
+
+        assert_eq!(resolve_tui_slash_command("/branch", &registry), "/fork");
+        assert_eq!(resolve_tui_slash_command("/diagnose", &registry), "/doctor");
     }
 }

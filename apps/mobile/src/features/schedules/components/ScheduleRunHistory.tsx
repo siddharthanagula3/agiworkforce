@@ -10,7 +10,7 @@ import { View, Pressable, ActivityIndicator } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { CheckCircle2, XCircle, Clock, RefreshCw, Loader } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { useScheduleStore, type ScheduleRun } from '../store';
 
 // ---------------------------------------------------------------------------

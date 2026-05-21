@@ -56,6 +56,7 @@ Do not create new root docs such as `ROADMAP.md`, `PRD.md`, `TASKS.md`, `FIXME.m
 - Deployable services live in `services/<service-name>`.
 - Supabase migrations live in `supabase/migrations`.
 - Do not create cross-app imports; move shared code into `packages/` or `crates/`.
+- Mobile root `hooks/` and `lib/` are frozen compatibility roots unless a repo guardrail explicitly allowlists the file. Feature-owned Mobile code belongs under `apps/mobile/src/features/<domain>/`; platform, storage, integration, and UI primitives belong under the matching `apps/mobile/src/*` layer.
 
 ## File Names
 
@@ -76,6 +77,8 @@ Do not create new root docs such as `ROADMAP.md`, `PRD.md`, `TASKS.md`, `FIXME.m
 - Rust crates: `agiworkforce-<domain>` for shared crates and `agiworkforce-cli` for the CLI Cargo package.
 - TypeScript import aliases should point to packages or same-app domains, not another app's source tree.
 - Public API names should describe the domain, not implementation history. Avoid names that mention reference projects unless they are explicit compatibility adapters.
+- Shared persistent or wire contracts live in `packages/types`. Local duplicate contract shapes need an explicit migration baseline and removal plan.
+- UI files should not call network/auth clients directly. Keep provider, Supabase, browser/computer-use, generated-file, and transport mechanics in feature services, integrations, packages, or service-layer modules.
 
 ## Branches, Commits, PRs
 
@@ -104,5 +107,7 @@ Do not create new root docs such as `ROADMAP.md`, `PRD.md`, `TASKS.md`, `FIXME.m
 ## Enforcement
 
 - `pnpm check:structure-conventions` protects the highest-value naming and placement rules.
+- `pnpm check:mobile-hygiene` protects Mobile feature ownership, frozen root hooks/lib imports, and UI/service-layer separation.
+- `pnpm check:service-layer` protects orchestration-vs-service guidance and canonical shared-contract ownership.
 - `pnpm check:llm-operability` is required after docs, repo-structure, agent-context, generated-artifact, or boundary changes.
 - If a convention is intentionally broken, add a current decision doc and update this file in the same change.

@@ -30,6 +30,7 @@ The baseline is feature parity. The reason users should stay is:
 - Normal cloud chat sync is only for Web, Mobile, and Desktop.
 - CLI, VS Code, and Chrome do not silently join global chat history; they stay local/workspace/task scoped unless the user explicitly hands off a redacted preview into a synced app chat.
 - SDKs are adapters, not architecture. AGI owns runtime schemas, event streams, privacy modes, tool contracts, routing, and usage accounting.
+- Actions, routes, and command handlers own domain policy; repeated operational mechanics move behind explicit service-layer functions only when reuse or risk justifies it.
 - Vercel AI Gateway is never a default path for Local or strict BYOK. It can only appear behind explicit Managed mode labeling and consent.
 - Managed cloud remains waitlist/private beta until usage metering, fraud controls, refunds, chargebacks, and provider terms are settled.
 - Every parity claim needs a source, an AGI file path, and verification evidence.
@@ -261,6 +262,7 @@ Deliverables:
 - `docs/agent-context/shared-files.md`
 - `docs/agent-context/task-manifest.schema.json`
 - `docs/engineering/parallel-agent-playbook.md`
+- `docs/engineering/service-layer-architecture.md`
 - `.github/PULL_REQUEST_TEMPLATE/parallel-agent-change.md`
 - `scripts/check-lane-ownership.mjs`
 

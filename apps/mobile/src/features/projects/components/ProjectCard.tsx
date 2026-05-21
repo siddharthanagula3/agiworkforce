@@ -2,7 +2,7 @@ import { View, Pressable } from 'react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { FolderOpen, Check } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { formatRelativeTime } from '@agiworkforce/utils';
 import type { Project } from '@/src/features/projects/store';
 

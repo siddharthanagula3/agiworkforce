@@ -12,7 +12,7 @@ import { Pencil, Trash2, Pin, PinOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import type { MemoryEntry } from '@/src/features/memory/store';
 
 function formatRelativeTime(ts: number): string {

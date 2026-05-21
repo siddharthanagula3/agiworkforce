@@ -24,6 +24,7 @@ This repo therefore needs to be easy for agents to search, split, edit, test, an
 - Read scoped files and produce evidence-backed findings.
 - Implement bounded changes inside explicit write paths.
 - Add focused tests and docs where behavior changes.
+- Keep product orchestration in actions/routes/commands and repeated mechanics in service functions as defined by `docs/engineering/service-layer-architecture.md`.
 - Run the smallest useful checks, then broader checks when shared contracts changed.
 - Summarize changed files, verification, and remaining risk.
 
@@ -47,6 +48,7 @@ Use `docs/agent-context/agent-task-templates.md` when assigning work to Codex, C
 - `docs/agent-context/lanes.json` is the machine-readable lane map for 15+ parallel agents.
 - `docs/agent-context/shared-files.md` defines collision rules for manifests, locks, root docs, CI, shared schemas, migrations, and native projects.
 - `docs/engineering/parallel-agent-playbook.md` defines the human/integrator workflow for running many agents without overlapping writes.
+- `docs/engineering/service-layer-architecture.md` defines how agents extract repeated operational mechanics without hiding product policy.
 - `.github/PULL_REQUEST_TEMPLATE/parallel-agent-change.md` is the PR template for lane-scoped parallel work.
 - `docs/engineering/autonomous-software-company-roadmap.md` defines the later feedback-to-patch automation loop.
 
@@ -57,6 +59,7 @@ Use `docs/agent-context/agent-task-templates.md` when assigning work to Codex, C
 - Do not assign two implementation agents to the same unresolved files.
 - Keep immediate blockers local to the lead agent or human.
 - Delegate sidecar exploration, tests, or disjoint implementation.
+- Extract service-layer code only after identifying repeated mechanics or a high-risk boundary; do not turn a single flow into a god service.
 - Ask every implementation agent to state the files it changed.
 - Integrate subagent work through review, not blind merge.
 - Route shared-file edits through `repo-operability`, `release-ci`, or a final integrator task.
@@ -106,4 +109,5 @@ The repo is A+ for agent-native development when:
 - Stale plans are archived instead of competing with current truth.
 - Generated artifacts are either ignored or in approved report paths.
 - Import boundaries fail fast before drift becomes architecture debt.
+- Repeated operational mechanics are centralized behind explicit service APIs while product policy remains reviewable in orchestration.
 - PR templates route risk and verification without relying on memory.

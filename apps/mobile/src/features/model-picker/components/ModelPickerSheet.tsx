@@ -13,7 +13,7 @@ import { useModelStore } from '@/src/features/model-picker/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { AUTO_MODES, MODEL_LIST, PROVIDERS, isAutoMode, type ModelDef } from '@/lib/models';
 import { fetchModelCatalog } from '@/src/features/model-picker/service';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { PROVIDER_DISPLAY, type ProviderId } from '@agiworkforce/types';
 import { guardProviderSwitch } from '@/src/features/model-picker/tierGuard';
 import { ProPlusPaywall } from '@/src/features/paywall/components/ProPlusPaywall';

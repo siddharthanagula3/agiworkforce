@@ -4,7 +4,7 @@ import { X, FileText } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, FadeOut, Layout } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
 
 /**

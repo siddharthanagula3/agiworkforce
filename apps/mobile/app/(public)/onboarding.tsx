@@ -23,7 +23,7 @@ import { Cpu, Plane, Shield } from 'lucide-react-native';
 import Constants from 'expo-constants';
 import { storage } from '@/lib/mmkv';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 import { FirstRunDisclosureModal } from '@/src/features/onboarding/components/FirstRunDisclosureModal';
 import {
   composeFirstRunDisclosure,

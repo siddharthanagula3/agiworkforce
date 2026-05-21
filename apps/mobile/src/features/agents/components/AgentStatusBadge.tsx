@@ -9,7 +9,7 @@ import Animated, {
 import { useEffect } from 'react';
 import { Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import type { Agent } from '@/stores/agentStore';
 
 interface AgentStatusBadgeProps {

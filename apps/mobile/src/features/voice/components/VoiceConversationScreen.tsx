@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, RadialGradient, Stop, Rect, Circle } from 'react-native-svg';
 import { Text } from '@/components/ui/text';
 import { Waveform } from './Waveform';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import * as VoiceService from '@/src/features/voice/services/voice';

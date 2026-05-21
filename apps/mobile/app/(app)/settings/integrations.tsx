@@ -26,7 +26,7 @@ import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import {
   requestCalendarPermission,
   requestContactsPermission,

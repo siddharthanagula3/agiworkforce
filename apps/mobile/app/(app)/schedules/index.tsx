@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScheduleCard, QuickSchedule, useScheduleStore } from '@/src/features/schedules';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
 export default function SchedulesScreen() {

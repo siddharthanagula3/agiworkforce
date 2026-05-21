@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { Pressable } from 'react-native';
 import { Clock, ChevronRight } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 interface ThinkingLineProps {
   /** Whether the model is still streaming thinking tokens */

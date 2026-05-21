@@ -10,7 +10,7 @@ import {
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import type { Artifact } from '@/types/chat';
 
 interface InlineArtifactCardProps {

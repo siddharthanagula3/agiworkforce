@@ -40,7 +40,7 @@ jest.mock('../services/supabase', () => ({
 
 import { act } from '@testing-library/react-native';
 import { useSettingsStore } from '../stores/settingsStore';
-import { getColors, colors, lightColors } from '../lib/theme';
+import { getColors, colors, lightColors } from '../src/ui/theme';
 
 // ---------------------------------------------------------------------------
 // Helpers

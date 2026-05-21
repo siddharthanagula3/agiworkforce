@@ -14,7 +14,7 @@ import { MessageBubble } from './MessageBubble';
 import { ChatEmptyState } from './ChatEmptyState';
 import { TypingIndicator } from './TypingIndicator';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import type { ChatMessage } from '@/types/chat';
 
 const NEAR_BOTTOM_THRESHOLD = 150;

@@ -58,6 +58,7 @@ const requiredFiles = [
   'docs/current/agent-and-repo-operability.md',
   'docs/engineering/README.md',
   'docs/engineering/naming-conventions.md',
+  'docs/engineering/service-layer-architecture.md',
   'docs/engineering/agent-native-development.md',
   'docs/engineering/agent-harness-rollout.md',
   'docs/engineering/parallel-agent-playbook.md',
@@ -96,6 +97,7 @@ requireIncludes('CLAUDE.md', 'docs/engineering/naming-conventions.md');
 requireIncludes('AGENTS.md', 'docs/engineering/agent-native-development.md');
 requireIncludes('AGENTS.md', 'docs/engineering/naming-conventions.md');
 requireIncludes('AGENTS.md', 'docs/engineering/agent-harness-rollout.md');
+requireIncludes('AGENTS.md', 'docs/engineering/service-layer-architecture.md');
 requireIncludes('AGENTS.md', 'Hooks And Local Gates');
 requireIncludes('AGENTS.md', 'docs/agent-context/lanes.json');
 requireIncludes('docs/current/README.md', 'Archived Source Material');
@@ -106,6 +108,15 @@ requireIncludes('docs/current/agent-and-repo-operability.md', 'A+ Criteria');
 requireIncludes('docs/current/agent-and-repo-operability.md', 'Hook Rules');
 requireIncludes('docs/engineering/naming-conventions.md', 'Primary CLI command: `agi`.');
 requireIncludes('docs/engineering/naming-conventions.md', '## Hooks');
+requireIncludes(
+  'docs/engineering/service-layer-architecture.md',
+  'Actions/routes orchestrate domain rules.',
+);
+requireIncludes(
+  'docs/engineering/service-layer-architecture.md',
+  'Service functions own reusable mechanics.',
+);
+requireIncludes('docs/engineering/service-layer-architecture.md', 'pnpm check:service-layer');
 requireIncludes('docs/engineering/agent-native-development.md', 'Worktree And Session Isolation');
 requireIncludes('docs/engineering/agent-native-development.md', 'High-Risk Merge Gates');
 requireIncludes('docs/engineering/agent-harness-rollout.md', 'Layer Order');
@@ -132,6 +143,7 @@ for (const scopedAgentFile of [
   'packages/providers/AGENTS.md',
 ]) {
   requireIncludes(scopedAgentFile, 'Read root `AGENTS.md`');
+  requireIncludes(scopedAgentFile, 'Lane Contract');
   requireIncludes(scopedAgentFile, 'High-Risk Areas');
   requireIncludes(scopedAgentFile, 'Verification');
 }
@@ -180,6 +192,8 @@ if (commands) {
     'repoOrganization',
     'boundaries',
     'structureConventions',
+    'mobileHygiene',
+    'serviceLayer',
     'laneOwnership',
     'generatedArtifacts',
     'reportRetention',

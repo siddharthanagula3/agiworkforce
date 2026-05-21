@@ -11,7 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Mic, Loader } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
 import * as VoiceService from '@/src/features/voice/services/voice';
 import type { VoiceMeteringEvent } from '@/src/features/voice/services/voice';

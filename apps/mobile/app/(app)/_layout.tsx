@@ -1,7 +1,7 @@
 import { useWindowDimensions } from 'react-native';
 import { Drawer } from 'expo-router/drawer';
 import { DrawerContent } from '@/src/features/drawer/components/DrawerContent';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 
 /**
  * App layout -- Drawer navigator wrapping the entire authenticated section.

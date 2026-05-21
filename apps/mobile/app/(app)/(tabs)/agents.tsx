@@ -10,7 +10,7 @@ import { AgentCard } from '@/src/features/agents/components/AgentCard';
 import { ConnectionStatusBar } from '@/src/shared/components/ConnectionStatus';
 import { useAgentStore } from '@/stores/agentStore';
 import { useConnectionStore } from '@/stores/connectionStore';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
 /**

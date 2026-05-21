@@ -33,7 +33,7 @@ import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
 import * as VoiceInput from '@/src/features/voice/services/voiceInput';
 import * as VoiceOutput from '@/src/features/voice/services/voiceOutput';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { getDisplayName } from '@/lib/models';
 
 // ---------------------------------------------------------------------------

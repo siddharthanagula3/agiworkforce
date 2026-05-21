@@ -37,7 +37,7 @@ import {
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { useAgentStore } from '@/stores/agentStore';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import type { ToolCall } from '@/types/chat';
 
 // ---------------------------------------------------------------------------

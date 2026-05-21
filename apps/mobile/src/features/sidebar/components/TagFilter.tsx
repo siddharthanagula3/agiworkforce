@@ -9,7 +9,7 @@ import { View, ScrollView, Pressable } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { TAG_CATALOG, type ConversationTag } from '@/services/autotag';
 import { formatTagCount } from '@/lib/tagUtils';

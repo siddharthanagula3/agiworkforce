@@ -19,7 +19,7 @@ import {
   Wrench,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 import type { ToolCall } from '@/types/chat';
 
 // §4.6 icon mapping

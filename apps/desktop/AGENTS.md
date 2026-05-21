@@ -10,6 +10,14 @@ Read root `AGENTS.md`, then this file, then `apps/desktop/README.md`.
 
 `apps/desktop` owns the local-first desktop app, Tauri bridge, local files, MCP/connectors, artifacts, generated files, computer-use host behavior, and Desktop as future local compute host.
 
+## Lane Contract
+
+- Primary lanes: `desktop-frontend` and `desktop-native`.
+- `desktop-frontend` owns `apps/desktop/src/**`.
+- `desktop-native` owns `apps/desktop/src-tauri/**`.
+- Shared contracts, Rust crates outside the Desktop package, release signing, and installer metadata need the matching platform or release lane.
+- Cross-boundary Tauri IPC changes need frontend and native verification before merge.
+
 ## High-Risk Areas
 
 - Local file access, filesystem writes, shell/process execution, MCP credentials, browser/computer use, native messaging, sandbox policy, generated files, update/signing, and Local/BYOK/Managed handoffs.

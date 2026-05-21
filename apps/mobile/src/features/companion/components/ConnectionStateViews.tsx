@@ -3,7 +3,7 @@ import { View, ActivityIndicator } from 'react-native';
 import { QrCode, Wifi, WifiOff, Clock } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 export function SessionExpiredView({ onRePair }: { onRePair: () => void }) {
   return (

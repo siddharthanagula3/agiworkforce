@@ -12,7 +12,7 @@ import { View, Pressable } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { CONNECTOR_META } from './connectorData';
 import { useSettingsStore } from '@/stores/settingsStore';
 

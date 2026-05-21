@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { Zap, X, ChevronRight } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { useScheduleStore, type CreateScheduleInput } from '../store';
 
 // ---------------------------------------------------------------------------

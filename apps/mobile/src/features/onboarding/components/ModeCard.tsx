@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { View, Pressable } from 'react-native';
 import { ChevronDown, ChevronUp, Check } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 
 export type OnboardingMode = 'local' | 'cloud' | 'decide_later';
 

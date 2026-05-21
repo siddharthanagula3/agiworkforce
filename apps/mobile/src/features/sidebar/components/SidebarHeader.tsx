@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { SquarePen, Search, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 interface SidebarHeaderProps {
   onSearchChange?: (query: string) => void;

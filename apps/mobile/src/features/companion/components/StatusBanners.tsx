@@ -2,7 +2,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { View, Pressable } from 'react-native';
 import { AlertTriangle, SignalZero, Clock, RotateCcw } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 const STALE_THRESHOLD_MS = 90_000;
 

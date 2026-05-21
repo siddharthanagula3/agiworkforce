@@ -3,7 +3,7 @@ import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated'
 import { Bot } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { AgentStatusBadge } from './AgentStatusBadge';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { formatRelativeTime } from '@agiworkforce/utils';
 import type { Agent } from '@/stores/agentStore';
 

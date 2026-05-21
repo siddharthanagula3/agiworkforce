@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import { useModelStore } from '@/src/features/model-picker/store';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 import { AUTO_MODES, MODEL_LIST } from '@/lib/models';
 
 export default function ModelsScreen() {

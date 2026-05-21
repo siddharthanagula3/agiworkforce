@@ -7,7 +7,7 @@ import BottomSheet, {
 } from '@gorhom/bottom-sheet';
 import { X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 interface ThinkingBottomSheetProps {
   /** The full thinking/reasoning text */

@@ -56,7 +56,7 @@ jest.mock('@/src/features/companion/components/AgentDashboard', () => ({
   AgentDashboard: jest.fn().mockReturnValue(null),
 }));
 
-jest.mock('@/lib/theme', () => ({
+jest.mock('@/src/ui/theme', () => ({
   colors: {
     teal: '#14b8a6',
     agentWarning: '#f59e0b',

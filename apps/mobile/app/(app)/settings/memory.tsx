@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { MemoryItem } from '@/src/features/settings/components/MemoryItem';
 import { AddMemorySheet } from '@/src/features/settings/components/AddMemorySheet';
 import { useMemoryStore, type MemoryEntry } from '@/src/features/memory/store';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 // ---------------------------------------------------------------------------
 // Constants

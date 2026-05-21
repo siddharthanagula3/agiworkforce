@@ -42,7 +42,7 @@ import { useSettingsStore, type ThemeMode } from '@/stores/settingsStore';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { openExternalUrl } from '@/lib/safeOpenURL';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 import { VoiceSelector } from '@/src/features/voice/components/VoiceSelector';
 
 // ---------------------------------------------------------------------------

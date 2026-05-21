@@ -1,7 +1,7 @@
 import { Pressable, Linking } from 'react-native';
 import { ExternalLink } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 interface CitationChipProps {
   index: number;

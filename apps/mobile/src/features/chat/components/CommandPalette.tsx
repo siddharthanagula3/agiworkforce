@@ -3,7 +3,7 @@ import { View, FlatList, Pressable } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Image, Mic, GitCompare, Download } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 /**
  * Slash-command palette shown above the chat input when the user types "/".

@@ -6,7 +6,7 @@ import BottomSheet, {
 } from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import type { MemoryEntry } from '@/src/features/memory/store';
 
 interface AddMemorySheetProps {

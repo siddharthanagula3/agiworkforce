@@ -5,6 +5,8 @@ export * from './components/VoiceRecording';
 export * from './components/VoiceReview';
 export * from './components/VoiceSelector';
 export * from './components/Waveform';
+export * from './hooks/useVoicePlayback';
+export * from './voicePresets';
 export * as TTS from './services/tts';
 export * as VoiceInput from './services/voiceInput';
 export * as VoiceOutput from './services/voiceOutput';

@@ -19,7 +19,7 @@ import { FileText, FileDown, Copy, Share2, X, Check } from 'lucide-react-native'
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Text } from '@/components/ui/text';
 import { copyToClipboard } from '@/lib/clipboard';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { exportToPDF, exportToText, shareFile, type ExportResult } from '@/services/fileCreation';
 
 // ---------------------------------------------------------------------------

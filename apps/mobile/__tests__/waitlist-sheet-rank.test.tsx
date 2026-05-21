@@ -9,7 +9,7 @@
 // Mocks
 // ---------------------------------------------------------------------------
 
-jest.mock('@/hooks/useTheme', () => ({
+jest.mock('@/src/ui/theme', () => ({
   useThemeColors: () => ({
     textPrimary: '#000',
     textSecondary: '#666',

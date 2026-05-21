@@ -14,9 +14,9 @@ import { useEffect, useRef } from 'react';
 import { Modal, View, Animated, AccessibilityInfo } from 'react-native';
 import { Cpu } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 import { EDGE_COPY } from './copy';
-import { spacing, radii } from '@/lib/theme';
+import { spacing, radii } from '@/src/ui/theme';
 
 export interface ModelLoadingFirstRunModalProps {
   /** Controls modal visibility. */

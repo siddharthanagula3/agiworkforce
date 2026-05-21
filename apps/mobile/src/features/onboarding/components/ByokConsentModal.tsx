@@ -13,7 +13,7 @@ import { Modal, View, ScrollView, Pressable, Platform, Animated } from 'react-na
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ExternalLink, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 
 const PROVIDERS = [

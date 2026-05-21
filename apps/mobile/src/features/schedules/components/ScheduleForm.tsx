@@ -9,7 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { RecurrencePicker } from './RecurrencePicker';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import { getDisplayName } from '@/lib/models';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import type { Schedule, RecurrenceType } from '../store';
 
 // ---------------------------------------------------------------------------

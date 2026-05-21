@@ -8,7 +8,7 @@ This folder is the tool-neutral map for coding agents. Codex, Claude Code, Curso
 
 ## Read Order
 
-1. Root `AGENTS.md` - canonical operating rules for all coding agents.
+1. Root `AGENTS.md` - canonical operating rules for all coding agents and the entry point before this folder.
 2. `repo-map.json` - where product and platform code lives.
 3. `lanes.json` - write-lane map for 15+ parallel implementation agents.
 4. `shared-files.md` - collision policy for manifests, locks, root docs, CI, schemas, and migrations.
@@ -18,8 +18,9 @@ This folder is the tool-neutral map for coding agents. Codex, Claude Code, Curso
 8. `doc-status.json` - which docs are current, historical, or working notes.
 9. `../engineering/naming-conventions.md` - product, CLI, files, folders, packages, branches, commits, versions, and hook policy.
 10. `../engineering/agent-harness-rollout.md` - context, hooks, skills, plugins, LSP/MCP, and subagent rollout order.
-11. `bug-finding-guide.md` - workflow for finding bugs without getting lost in stale docs.
-12. `agent-task-templates.md` - standard prompts for exploration, implementation, review, and verification agents.
+11. `../engineering/service-layer-architecture.md` - action/route orchestration vs reusable service mechanics.
+12. `bug-finding-guide.md` - workflow for finding bugs without getting lost in stale docs.
+13. `agent-task-templates.md` - standard prompts for exploration, implementation, review, and verification agents.
 
 ## Rules
 
@@ -30,5 +31,6 @@ This folder is the tool-neutral map for coding agents. Codex, Claude Code, Curso
 - Split parallel agent work by disjoint write paths from `lanes.json` and record verification evidence before committing.
 - Do not edit shared files from feature lanes; route them through the integrator or a lane that owns shared files.
 - Keep root context lean; put local conventions in path-scoped `AGENTS.md` files and owner READMEs.
+- Extract repeated operational mechanics into service functions only when reuse or risk justifies it; keep product policy in actions, routes, and command handlers.
 - Run `pnpm check:hooks` after editing Husky hooks, commit rules, package scripts, or repo-operability checks.
 - Run `pnpm check:llm-operability` after editing report retention, CI, CODEOWNERS, structure, ownership, or agent-context rules.

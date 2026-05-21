@@ -9,7 +9,7 @@ import { Text } from '@/components/ui/text';
 import { PlatformCard } from '@/src/features/messaging/components/PlatformCard';
 import { PlatformSetupSheet } from '@/src/features/messaging/components/PlatformSetupSheet';
 import { useMessagingStore, type MessagingPlatform } from '@/src/features/messaging/store';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
 export default function MessagingScreen() {

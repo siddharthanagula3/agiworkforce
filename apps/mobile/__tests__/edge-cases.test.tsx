@@ -12,7 +12,26 @@
 // Mocks — MUST be before any imports (Jest hoisting)
 // ---------------------------------------------------------------------------
 
-jest.mock('@/hooks/useTheme', () => ({
+jest.mock('@/src/ui/theme', () => ({
+  spacing: {
+    xs: 4,
+    sm: 8,
+    md: 12,
+    lg: 16,
+    xl: 20,
+    '2xl': 24,
+    '3xl': 32,
+    '4xl': 40,
+  },
+  radii: {
+    sm: 6,
+    md: 8,
+    lg: 12,
+    xl: 16,
+    '2xl': 24,
+    '3xl': 32,
+    full: 9999,
+  },
   useThemeColors: () => ({
     textPrimary: '#e8e4db',
     textSecondary: 'rgba(232,228,219,0.75)',

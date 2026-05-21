@@ -46,7 +46,7 @@ jest.mock('@/lib/safeOpenURL', () => ({
   isAllowedExternalUrl: jest.fn().mockReturnValue(true),
 }));
 
-jest.mock('../lib/theme', () => ({
+jest.mock('../src/ui/theme', () => ({
   colors: {
     surfaceElevated: '#1e2025',
     textPrimary: '#ffffff',

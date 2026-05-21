@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Modal, View, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 import type { DisclosureCopy } from '@agiworkforce/compliance';
 
 interface Props {

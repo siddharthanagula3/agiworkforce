@@ -18,7 +18,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { CheckCircle2, XCircle, Search, Terminal, Brain, Code } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import type { StatusStep, StepIcon } from '@/types/chat';
 
 // ---------------------------------------------------------------------------

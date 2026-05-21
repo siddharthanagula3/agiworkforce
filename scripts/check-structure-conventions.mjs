@@ -219,6 +219,10 @@ const retiredMobileFeaturePaths = [
   'apps/mobile/stores/memoryStore.ts',
   'apps/mobile/services/skills.ts',
   'apps/mobile/stores/skillsStore.ts',
+  'apps/mobile/hooks/useTheme.ts',
+  'apps/mobile/hooks/useVoicePlayback.ts',
+  'apps/mobile/lib/theme.ts',
+  'apps/mobile/lib/voicePresets.ts',
 ];
 
 for (const retiredMobileFeaturePath of retiredMobileFeaturePaths) {
@@ -365,6 +369,14 @@ const mobileFeatureForbiddenImports = [
   '@/stores/skillsStore',
   '../services/skills',
   '../stores/skillsStore',
+  '@/hooks/useTheme',
+  '@/hooks/useVoicePlayback',
+  '@/lib/theme',
+  '@/lib/voicePresets',
+  '../hooks/useTheme',
+  '../hooks/useVoicePlayback',
+  '../lib/theme',
+  '../lib/voicePresets',
 ];
 
 const retiredDesktopFeatureShimPaths = [

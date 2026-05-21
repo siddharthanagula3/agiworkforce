@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useAgentStore } from '@/stores/agentStore';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import type { ApprovalRequest, RiskLevel } from '@/types/chat';
 
 interface ApprovalModalProps {

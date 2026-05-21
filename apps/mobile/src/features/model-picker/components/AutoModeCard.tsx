@@ -3,7 +3,7 @@ import { Check } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import type { AutoModeDef } from '@/lib/models';
 
 interface AutoModeCardProps {

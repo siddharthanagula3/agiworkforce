@@ -177,7 +177,7 @@ jest.mock('../src/features/voice/components/VoiceSelector', () => {
 // ---------------------------------------------------------------------------
 
 import SettingsTabScreen from '../app/(app)/(tabs)/settings';
-import { colors } from '../lib/theme';
+import { colors } from '../src/ui/theme';
 
 // ---------------------------------------------------------------------------
 // Tests

@@ -35,11 +35,11 @@ import { useModelStore } from '@/src/features/model-picker/store';
 import { useAgentStore } from '@/stores/agentStore';
 import { CloudWaitlistSheet, joinWaitlist, useWaitlistStore } from '@/src/features/waitlist';
 import { getModelById, isAutoMode } from '@/lib/models';
-import { useVoicePlayback } from '@/hooks/useVoicePlayback';
+import { useVoicePlayback } from '@/src/features/voice/hooks/useVoicePlayback';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { offlineQueue } from '@/services/offlineQueue';
 import { generateImage } from '@/src/features/image/services/imagegen';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 import type { ChatMessage } from '@/types/chat';
 
 /**

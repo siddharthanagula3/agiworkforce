@@ -6,7 +6,7 @@
 import { View, Linking } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { CodeBlockCopyButton } from './CodeBlockCopyButton';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 /**
  * Render inline math: $...$ (not $$)

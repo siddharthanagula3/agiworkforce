@@ -19,7 +19,7 @@ import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useProjectStore } from '@/src/features/projects/store';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 import type { ConversationTag } from '@/services/autotag';
 
 /**

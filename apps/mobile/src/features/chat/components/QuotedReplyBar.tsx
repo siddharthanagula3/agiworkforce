@@ -1,7 +1,7 @@
 import { View, Pressable } from 'react-native';
 import { X, Reply } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import type { ChatMessage } from '@/types/chat';
 
 interface QuotedReplyBarProps {

@@ -13,12 +13,13 @@
  */
 
 import type { Provider } from '../provider';
+import type { PrivacyMode, SourceSurface, SyncedAppSurface } from '../suite-contracts';
 
 export type OrganizationRole = 'owner' | 'admin' | 'member' | 'viewer';
 
-export type EnterpriseSurface = 'web' | 'desktop' | 'mobile' | 'cli' | 'vscode' | 'chrome';
+export type EnterpriseSurface = SourceSurface;
 
-export type EnterprisePrivacyMode = 'local' | 'byok' | 'managed';
+export type EnterprisePrivacyMode = PrivacyMode;
 
 export type EnterprisePlanTier = 'free' | 'pro_individual' | 'team' | 'business' | 'enterprise';
 
@@ -47,7 +48,7 @@ export interface AdminPolicy {
   allowedPrivacyModes: EnterprisePrivacyMode[];
   allowManagedCompute: boolean;
   requireLocalToByokPreview: boolean;
-  chatSyncSurfaces: Array<Extract<EnterpriseSurface, 'web' | 'desktop' | 'mobile'>>;
+  chatSyncSurfaces: SyncedAppSurface[];
   allowCliCloudSync: boolean;
   allowVsCodeCloudSync: boolean;
   allowChromeCloudSync: boolean;
@@ -227,8 +228,80 @@ export interface ManagedCreditAccount {
   hardLimitCents: number;
   monthlyLimitCents: number;
   publicLaunchBlocked: boolean;
+  approvedBy?: string | null;
+  approvedAt?: string | null;
+  privateBetaTermsAcceptedAt?: string | null;
+  riskStatus?: 'clear' | 'review' | 'fraud_hold' | 'dispute_hold' | 'refund_hold';
+  fraudHoldUntil?: string | null;
+  providerTermsReviewedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export type ManagedComputeDenialCode =
+  | 'managed_compute_disabled'
+  | 'public_launch_blocked'
+  | 'not_private_beta'
+  | 'not_org_member'
+  | 'provider_blocked'
+  | 'model_blocked'
+  | 'insufficient_balance'
+  | 'hard_limit_exceeded'
+  | 'monthly_limit_exceeded'
+  | 'fraud_hold'
+  | 'refund_hold'
+  | 'dispute_hold'
+  | 'provider_cost_stale'
+  | 'retention_policy_missing'
+  | 'global_rate_limiter_unavailable';
+
+export interface ManagedComputeEligibility {
+  allowed: boolean;
+  organizationId: string;
+  userId: string;
+  privacyMode: Extract<EnterprisePrivacyMode, 'managed'>;
+  provider: Provider | string;
+  model: string;
+  accountStatus: ManagedCreditAccount['status'];
+  denialCode?: ManagedComputeDenialCode;
+  denialMessage?: string;
+  checkedAt: string;
+}
+
+export interface ManagedUsageReservation {
+  id: string;
+  idempotencyKey: string;
+  organizationId: string;
+  accountId: string;
+  userId: string;
+  provider: Provider | string;
+  model: string;
+  estimatedInputTokens: number;
+  estimatedOutputTokens: number;
+  reservedCents: number;
+  status: 'reserved' | 'settled' | 'released' | 'expired';
+  expiresAt: string;
+  createdAt: string;
+  settledAt?: string | null;
+}
+
+export interface ManagedRiskEvent {
+  id: string;
+  organizationId: string;
+  accountId: string;
+  kind:
+    | 'refund_requested'
+    | 'refund_approved'
+    | 'dispute_opened'
+    | 'dispute_won'
+    | 'dispute_lost'
+    | 'fraud_hold_started'
+    | 'fraud_hold_released'
+    | 'chargeback_reserve_updated';
+  amountCents?: number;
+  status: 'open' | 'resolved' | 'rejected';
+  metadata?: Record<string, unknown>;
+  createdAt: string;
 }
 
 export interface ProviderCostSnapshot {

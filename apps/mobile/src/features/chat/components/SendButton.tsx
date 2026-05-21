@@ -8,7 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Send, Square, Clock } from 'lucide-react-native';
 import { useEffect } from 'react';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 type SendButtonState = 'idle' | 'streaming' | 'queued';
 

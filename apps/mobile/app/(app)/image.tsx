@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { ImageIcon, Camera } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { ImageWithQuestion } from '@/src/features/image/components/ImageWithQuestion';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 
 /**
  * ImageScreen — entry point for the image-with-question flow.

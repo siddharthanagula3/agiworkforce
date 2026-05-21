@@ -11,7 +11,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { FolderOpen, ChevronDown, X, Check, FolderMinus } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useProjectStore, type Project } from '@/src/features/projects/store';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 // ---------------------------------------------------------------------------
 // Dropdown item

@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { X, Send, AlertTriangle } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@/src/ui/theme';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 

@@ -14,7 +14,7 @@ import { cacheDirectory, getInfoAsync, deleteAsync, type FileInfo } from 'expo-f
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 import { listInstalledModels, deleteInstalledModel } from '@/storage/installedModels';
 import { deleteDownloadedModel, getModelStorageBytes } from '@/services/modelDownload';
 import {

@@ -13,7 +13,7 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { PerformanceChip } from '@/src/features/chat/components/PerformanceChip';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 interface VoiceReviewProps {
   /** Whether the review panel is visible */

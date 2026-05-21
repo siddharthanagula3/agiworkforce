@@ -9,7 +9,7 @@ import { Text } from '@/components/ui/text';
 import { AutoTagBadge } from '@/src/features/sidebar/components/AutoTagBadge';
 import { useChatStore } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { formatRelativeTime, truncate } from '@agiworkforce/utils';
 import type { ConversationSummary } from '@/types/chat';
 import type { ConversationTag } from '@/services/autotag';

@@ -25,7 +25,7 @@ import { useChatStore } from '@/stores/chatStore';
 import { useAgentStore } from '@/stores/agentStore';
 import { api } from '@/services/api';
 import { isAllowedExternalUrl, openExternalUrl } from '@/lib/safeOpenURL';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 import { normalizeBillingPlanTier } from '@agiworkforce/types';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 

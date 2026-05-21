@@ -8,7 +8,7 @@ import Animated, {
   Easing,
   cancelAnimation,
 } from 'react-native-reanimated';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 /**
  * Teal sparkle indicator that pulses at the end of streaming text.

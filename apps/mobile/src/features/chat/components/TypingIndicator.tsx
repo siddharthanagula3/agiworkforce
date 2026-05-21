@@ -10,7 +10,7 @@ import Animated, {
   Easing,
   cancelAnimation,
 } from 'react-native-reanimated';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 const DOT_SIZE = 8;
 const DOT_COLOR = colors.teal;

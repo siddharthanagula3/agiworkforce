@@ -12,6 +12,8 @@
     "repoOrganization": "pnpm check:repo-organization",
     "boundaries": "pnpm check:boundaries",
     "structureConventions": "pnpm check:structure-conventions",
+    "mobileHygiene": "pnpm check:mobile-hygiene",
+    "serviceLayer": "pnpm check:service-layer",
     "laneOwnership": "pnpm check:lane-ownership",
     "generatedArtifacts": "pnpm check:generated-artifacts",
     "reportRetention": "pnpm check:report-retention",

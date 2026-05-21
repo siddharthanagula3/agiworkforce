@@ -58,7 +58,7 @@ jest.mock('../stores/settingsStore', () => ({
     selector({ hapticsEnabled: false }),
 }));
 
-jest.mock('../lib/theme', () => ({
+jest.mock('../src/ui/theme', () => ({
   colors: {
     teal: '#14b8a6',
     textMuted: '#888',

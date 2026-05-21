@@ -10,6 +10,13 @@ Read root `AGENTS.md`, then this file, then `apps/cli/README.md`.
 
 `apps/cli` owns the terminal coding-agent surface and reusable developer-engine behavior that has not yet moved into `crates/`.
 
+## Lane Contract
+
+- Primary lane: `cli-app`.
+- Owned write path: `apps/cli/**`.
+- Read-only context: `crates/**`, CLI docs, and command registry tests unless the task is explicitly assigned to the Rust platform lane.
+- Shared-file edits, Cargo workspace edits, and command-registry crate edits require integrator or `rust-command-registry` ownership.
+
 ## High-Risk Areas
 
 - Shell execution, file edits, workspace roots, sandbox policy, MCP, hooks, plugins, slash commands, session replay/forking, and Local/BYOK/Managed routing.

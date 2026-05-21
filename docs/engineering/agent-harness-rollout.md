@@ -29,6 +29,7 @@ For AGI Workforce, the harness is the repo structure, context files, hooks, skil
 
 - Root `AGENTS.md` stays the canonical tool-neutral entry point. `CLAUDE.md` stays Claude-specific and points back to root truth.
 - Surface/path `AGENTS.md` files carry local high-risk rules only. Surface READMEs carry owner, purpose, layout, and commands.
+- Service-layer architecture is part of the harness: agents should not duplicate provider, sandbox, database, generated-file, browser/computer-use, or transport mechanics across actions/routes when a shared service API is the right owner.
 - Agents should start in the narrowest owner path that matches the task when possible, while still reading root context through the documented read order.
 - Test and lint commands should be surface-scoped first. Run repo-wide checks when shared contracts, root docs, guardrails, boundaries, or generated-artifact policy changed.
 - Generated files, build output, screenshots, and reports must be ignored or placed under approved report/audit paths so agents do not waste context.

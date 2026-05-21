@@ -5,7 +5,7 @@ import { ImageOff } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 interface GeneratedImageProps {
   imageUrl: string;

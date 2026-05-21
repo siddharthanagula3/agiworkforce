@@ -5,7 +5,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { ScheduleForm, useScheduleStore, type Schedule } from '@/src/features/schedules';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
 export default function CreateScheduleScreen() {

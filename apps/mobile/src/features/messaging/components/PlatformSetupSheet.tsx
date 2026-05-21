@@ -10,7 +10,7 @@ import { Text } from '@/components/ui/text';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { testConnection } from '@/src/features/messaging/service';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import type { MessagingPlatform } from '@/src/features/messaging/store';
 
 interface PlatformSetupSheetProps {

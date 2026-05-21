@@ -10,7 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { ScheduleRunHistory } from './ScheduleRunHistory';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import type { Schedule } from '../store';
 
 interface ScheduleCardProps {

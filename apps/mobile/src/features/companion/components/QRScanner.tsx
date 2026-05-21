@@ -11,7 +11,7 @@ import Animated, {
 import { Zap, ZapOff, Keyboard, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { isValidPairingCode } from '@/services/companion';
 
 interface QRScannerProps {

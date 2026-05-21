@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { View, TextInput, Pressable } from 'react-native';
 import { Search, X } from 'lucide-react-native';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 interface SearchBarProps {
   value: string;

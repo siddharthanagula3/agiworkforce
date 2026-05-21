@@ -22,7 +22,7 @@ import { useTierStore } from '@/src/features/billing/store';
 import { useChatStore } from '@/stores/chatStore';
 import { fetchPortalSessionUrl } from '@/src/features/billing';
 import { isAllowedExternalUrl, openExternalUrl } from '@/lib/safeOpenURL';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 
 const TIER_LABELS: Record<string, string> = {
   free: 'Free',

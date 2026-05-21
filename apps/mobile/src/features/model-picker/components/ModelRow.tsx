@@ -6,7 +6,7 @@ import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { type ModelDef } from '@/lib/models';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import {
   PROVIDER_DISPLAY,
   CAPABILITY_LABEL,
