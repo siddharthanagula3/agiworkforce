@@ -1039,7 +1039,7 @@ importers:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       openai:
-        specifier: ^6.35.0
+        specifier: ^6.38.0
         version: 6.38.0(ws@8.20.1)(zod@4.4.3)
       pino:
         specifier: ^10.3.1
@@ -1301,8 +1301,8 @@ importers:
         specifier: workspace:*
         version: link:../../types
       '@anthropic-ai/sdk':
-        specifier: ^0.40.1
-        version: 0.40.1
+        specifier: ^0.91.1
+        version: 0.91.1(zod@4.4.3)
     devDependencies:
       vitest:
         specifier: ^4.0.18
@@ -1323,8 +1323,8 @@ importers:
         specifier: workspace:*
         version: link:../../types
       openai:
-        specifier: ^4.85.0
-        version: 4.104.0(ws@8.20.1)(zod@4.4.3)
+        specifier: ^6.38.0
+        version: 6.38.0(ws@8.20.1)(zod@4.4.3)
     devDependencies:
       vitest:
         specifier: ^4.0.18
@@ -1361,8 +1361,8 @@ importers:
         specifier: workspace:*
         version: link:../../types
       openai:
-        specifier: ^4.85.0
-        version: 4.104.0(ws@8.20.1)(zod@4.4.3)
+        specifier: ^6.38.0
+        version: 6.38.0(ws@8.20.1)(zod@4.4.3)
     devDependencies:
       vitest:
         specifier: ^4.0.18
@@ -1396,8 +1396,8 @@ importers:
         specifier: workspace:*
         version: link:../../types
       openai:
-        specifier: ^4.85.0
-        version: 4.104.0(ws@8.20.1)(zod@4.4.3)
+        specifier: ^6.38.0
+        version: 6.38.0(ws@8.20.1)(zod@4.4.3)
     devDependencies:
       vitest:
         specifier: ^4.0.18
@@ -1418,8 +1418,8 @@ importers:
         specifier: workspace:*
         version: link:../../types
       openai:
-        specifier: ^4.85.0
-        version: 4.104.0(ws@8.20.1)(zod@4.4.3)
+        specifier: ^6.38.0
+        version: 6.38.0(ws@8.20.1)(zod@4.4.3)
     devDependencies:
       vitest:
         specifier: ^4.0.18
@@ -1440,8 +1440,8 @@ importers:
         specifier: workspace:*
         version: link:../../types
       openai:
-        specifier: ^4.85.0
-        version: 4.104.0(ws@8.20.1)(zod@4.4.3)
+        specifier: ^6.38.0
+        version: 6.38.0(ws@8.20.1)(zod@4.4.3)
     devDependencies:
       vitest:
         specifier: ^4.0.18
@@ -1817,12 +1817,6 @@ packages:
     resolution:
       {
         integrity: sha512-MGQsmw10ZyI+EJo45CdSER4zEb+p31LpDAFp2Z3gkSd1yqVZGi0Ebx++YTEMonJy4oChEMLsxZ64j8FH6sSqtQ==,
-      }
-
-  '@anthropic-ai/sdk@0.40.1':
-    resolution:
-      {
-        integrity: sha512-DJMWm8lTEM9Lk/MSFL+V+ugF7jKOn0M2Ujvb5fN8r2nY14aHbGPZ1k6sgjL+tpJ3VuOGJNG+4R83jEpOuYPv8w==,
       }
 
   '@anthropic-ai/sdk@0.91.1':
@@ -15561,21 +15555,6 @@ packages:
       }
     engines: { node: '>=12' }
 
-  openai@4.104.0:
-    resolution:
-      {
-        integrity: sha512-p99EFNsA/yX6UhVO93f5kJsDRLAg+CTA2RBqdHK4RtK8u5IJw32Hyb2dTGKbnnFmnuoBv5r7Z2CURI9sGZpSuA==,
-      }
-    hasBin: true
-    peerDependencies:
-      ws: '>=8.20.1'
-      zod: ^4.4.3
-    peerDependenciesMeta:
-      ws:
-        optional: true
-      zod:
-        optional: true
-
   openai@6.38.0:
     resolution:
       {
@@ -19769,18 +19748,6 @@ snapshots:
     dependencies:
       package-manager-detector: 1.6.0
       tinyexec: 1.0.4
-
-  '@anthropic-ai/sdk@0.40.1':
-    dependencies:
-      '@types/node': 22.19.15
-      '@types/node-fetch': 2.6.13
-      abort-controller: 3.0.0
-      agentkeepalive: 4.6.0
-      form-data-encoder: 1.7.2
-      formdata-node: 4.4.1
-      node-fetch: 2.7.0
-    transitivePeerDependencies:
-      - encoding
 
   '@anthropic-ai/sdk@0.91.1(zod@4.4.3)':
     dependencies:
@@ -29678,21 +29645,6 @@ snapshots:
       define-lazy-prop: 2.0.0
       is-docker: 2.2.1
       is-wsl: 2.2.0
-
-  openai@4.104.0(ws@8.20.1)(zod@4.4.3):
-    dependencies:
-      '@types/node': 22.19.15
-      '@types/node-fetch': 2.6.13
-      abort-controller: 3.0.0
-      agentkeepalive: 4.6.0
-      form-data-encoder: 1.7.2
-      formdata-node: 4.4.1
-      node-fetch: 2.7.0
-    optionalDependencies:
-      ws: 8.20.1
-      zod: 4.4.3
-    transitivePeerDependencies:
-      - encoding
 
   openai@6.38.0(ws@8.20.1)(zod@4.4.3):
     optionalDependencies:
