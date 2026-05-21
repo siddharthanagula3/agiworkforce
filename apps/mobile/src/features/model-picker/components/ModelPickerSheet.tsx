@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, TextInput, Pressable } from 'react-native';
 import BottomSheet, {
   BottomSheetBackdrop,
@@ -10,6 +10,7 @@ import { Text } from '@/components/ui/text';
 import { AutoModeCards } from './AutoModeCard';
 import { ModelRow } from './ModelRow';
 import { useModelStore } from '@/src/features/model-picker/store';
+import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import {
   AUTO_MODES,
   MODEL_LIST,
@@ -71,6 +72,12 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
   const setModel = useModelStore((s) => s.setModel);
   const toggleFavorite = useModelStore((s) => s.toggleFavorite);
   const toggleThinkingForModel = useModelStore((s) => s.toggleThinkingForModel);
+  const installJobs = useModelInstallStore((s) => s.jobs);
+  const installedModelIds = useModelInstallStore((s) => s.installedModelIds);
+  const readySystemModelIds = useModelInstallStore((s) => s.readySystemModelIds);
+  const hydrateInstalledModels = useModelInstallStore((s) => s.hydrateInstalledModels);
+  const prepareModel = useModelInstallStore((s) => s.prepareModel);
+  const statusForModel = useModelInstallStore((s) => s.statusForModel);
 
   const [search, setSearch] = useState('');
   const searchInputRef = useRef<TextInput>(null);
@@ -79,6 +86,10 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
   // Track which model row is expanded to show the thinking toggle.
   // A model expands when it is already selected and tapped again.
   const [expandedModelId, setExpandedModelId] = useState<string | null>(null);
+
+  useEffect(() => {
+    void hydrateInstalledModels();
+  }, [hydrateInstalledModels]);
 
   // Filter models by search query
   const query = search.trim().toLowerCase();
@@ -106,18 +117,8 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
 
   const groupedModels = useMemo(() => groupBySurface(nonFavoriteModels), [nonFavoriteModels]);
 
-  const handleSelectModel = useCallback(
+  const selectAndClose = useCallback(
     (id: string) => {
-      const chosenModel = catalogModels.find((m) => m.id === id);
-      if (!chosenModel || chosenModel.availability === 'locked') return;
-
-      // If tapping the already-selected model, toggle expansion (show thinking toggle).
-      if (id === selectedModel && !isAutoMode(id)) {
-        setExpandedModelId((prev) => (prev === id ? null : id));
-        return;
-      }
-
-      // Select the model.
       setExpandedModelId(null);
       if (onSelect) {
         onSelect(id);
@@ -126,7 +127,37 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
       }
       sheetRef.current?.close();
     },
-    [catalogModels, onSelect, setModel, sheetRef, selectedModel],
+    [onSelect, setModel, sheetRef],
+  );
+
+  const handleSelectModel = useCallback(
+    (id: string) => {
+      const chosenModel = catalogModels.find((m) => m.id === id);
+      if (!chosenModel || chosenModel.availability === 'locked') return;
+
+      const installStatus = statusForModel(chosenModel);
+      if (installStatus.status === 'downloading' || installStatus.status === 'unavailable') {
+        return;
+      }
+
+      if (installStatus.status === 'download_required' || installStatus.status === 'failed') {
+        void prepareModel(chosenModel)
+          .then(() => {
+            selectAndClose(id);
+          })
+          .catch(() => undefined);
+        return;
+      }
+
+      // If tapping the already-selected model, toggle expansion (show thinking toggle).
+      if (id === selectedModel && !isAutoMode(id)) {
+        setExpandedModelId((prev) => (prev === id ? null : id));
+        return;
+      }
+
+      selectAndClose(id);
+    },
+    [catalogModels, prepareModel, selectAndClose, selectedModel, statusForModel],
   );
 
   const handleSelectAutoMode = useCallback(
@@ -172,24 +203,37 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
   );
 
   const renderModelRow = useCallback(
-    (model: ModelDef, keyPrefix: string) => (
-      <ModelRow
-        key={`${keyPrefix}-${model.id}`}
-        model={model}
-        isSelected={selectedModel === model.id}
-        isFavorite={favorites.includes(model.id)}
-        isExpanded={expandedModelId === model.id && selectedModel === model.id}
-        thinkingEnabled={thinkingEnabledPerModel[model.id] ?? false}
-        onSelect={handleSelectModel}
-        onToggleFavorite={toggleFavorite}
-        onToggleThinking={handleToggleThinking}
-      />
-    ),
+    (model: ModelDef, keyPrefix: string) => {
+      const installStatus =
+        installJobs[model.id] ??
+        (installedModelIds.includes(model.id) || readySystemModelIds.includes(model.id)
+          ? { status: 'ready' as const, progress: 1 }
+          : statusForModel(model));
+
+      return (
+        <ModelRow
+          key={`${keyPrefix}-${model.id}`}
+          model={model}
+          isSelected={selectedModel === model.id}
+          isFavorite={favorites.includes(model.id)}
+          isExpanded={expandedModelId === model.id && selectedModel === model.id}
+          thinkingEnabled={thinkingEnabledPerModel[model.id] ?? false}
+          installStatus={installStatus}
+          onSelect={handleSelectModel}
+          onToggleFavorite={toggleFavorite}
+          onToggleThinking={handleToggleThinking}
+        />
+      );
+    },
     [
       selectedModel,
       favorites,
       expandedModelId,
       thinkingEnabledPerModel,
+      installJobs,
+      installedModelIds,
+      readySystemModelIds,
+      statusForModel,
       handleSelectModel,
       toggleFavorite,
       handleToggleThinking,

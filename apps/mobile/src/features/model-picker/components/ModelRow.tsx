@@ -1,4 +1,4 @@
-import { View, Pressable, Switch } from 'react-native';
+import { ActivityIndicator, View, Pressable, Switch } from 'react-native';
 import { Brain, Check, CloudOff, Cpu, Download, Lock, Star } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
@@ -6,6 +6,7 @@ import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { type ModelDef } from '@/src/features/model-picker/service';
+import type { ModelInstallJob } from '@/src/features/model-picker/installStore';
 import { colors } from '@/src/ui/theme';
 import { PROVIDER_DISPLAY, type ProviderId } from '@agiworkforce/types';
 import { ProviderLogo } from './ProviderLogo';
@@ -18,6 +19,7 @@ interface ModelRowProps {
   isExpanded: boolean;
   /** Whether thinking is enabled for this specific model. */
   thinkingEnabled: boolean;
+  installStatus: ModelInstallJob;
   onSelect: (id: string) => void;
   onToggleFavorite: (id: string) => void;
   onToggleThinking: (id: string) => void;
@@ -29,6 +31,7 @@ export function ModelRow({
   isFavorite,
   isExpanded,
   thinkingEnabled,
+  installStatus,
   onSelect,
   onToggleFavorite,
   onToggleThinking,
@@ -41,8 +44,15 @@ export function ModelRow({
   const isLocal = model.surface === 'local';
   const lockReason = model.lockReason ?? 'Cloud Managed is locked in Mobile v1';
   const canToggleThinking = !isLocked && model.supportsThinking;
+  const isDownloading = installStatus.status === 'downloading';
+  const isUnavailable = installStatus.status === 'unavailable';
+  const isFailed = installStatus.status === 'failed';
+  const isReady = installStatus.status === 'ready';
+  const disabled = isLocked || isDownloading || isUnavailable;
+  const progressPercent = Math.round(installStatus.progress * 100);
 
   const handlePress = () => {
+    if (disabled) return;
     if (hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
@@ -50,7 +60,7 @@ export function ModelRow({
   };
 
   const handleLongPress = () => {
-    if (isLocked) return;
+    if (disabled) return;
     if (hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
@@ -70,13 +80,24 @@ export function ModelRow({
         onPress={handlePress}
         onLongPress={handleLongPress}
         delayLongPress={400}
+        disabled={disabled}
         className={`flex-row items-center px-4 py-3 gap-3 ${
-          isSelected ? 'bg-teal-500/10' : isLocked ? 'opacity-60' : 'active:bg-white/5'
+          isSelected ? 'bg-teal-500/10' : disabled ? 'opacity-60' : 'active:bg-white/5'
         }`}
-        accessibilityLabel={`${model.name}${isSelected ? ', selected' : ''}${isFavorite ? ', favorite' : ''}${isLocked ? `, locked, ${lockReason}` : ''}`}
+        accessibilityLabel={`${model.name}${isSelected ? ', selected' : ''}${isFavorite ? ', favorite' : ''}${isLocked ? `, locked, ${lockReason}` : ''}${isDownloading ? `, downloading ${progressPercent}%` : ''}${isFailed ? ', download failed' : ''}${isUnavailable ? ', unavailable' : ''}`}
         accessibilityRole="button"
-        accessibilityHint={isLocked ? lockReason : 'Tap to select, long press to favorite'}
-        accessibilityState={{ selected: isSelected, disabled: isLocked }}
+        accessibilityHint={
+          isLocked
+            ? lockReason
+            : isDownloading
+              ? 'Model download is in progress'
+              : isFailed
+                ? 'Tap to retry download'
+                : installStatus.status === 'download_required'
+                  ? 'Tap to download, long press to favorite'
+                  : 'Tap to select, long press to favorite'
+        }
+        accessibilityState={{ selected: isSelected, disabled }}
       >
         <View
           className="w-6 h-6 rounded-md items-center justify-center overflow-hidden"
@@ -108,10 +129,22 @@ export function ModelRow({
         </View>
 
         <View className="flex-row items-center gap-2">
-          {isLocal && model.availability === 'ready' && <Badge label="Ready" color="green" />}
-          {isLocal && model.availability === 'download_required' && (
-            <Download size={14} color={colors.textMuted} />
+          {isLocal && isReady && <Badge label="Ready" color="green" />}
+          {isLocal && installStatus.status === 'download_required' && (
+            <>
+              <Badge label="Download" color="gray" />
+              <Download size={14} color={colors.textMuted} />
+            </>
           )}
+          {isLocal && isDownloading && (
+            <>
+              <Text className="text-[11px] text-teal-300">{progressPercent}%</Text>
+              <ActivityIndicator size="small" color={colors.teal} />
+            </>
+          )}
+          {isLocal && isFailed && <Badge label="Retry" color="yellow" />}
+          {isLocal && isUnavailable && <Badge label="Soon" color="gray" />}
+          {isLocal && installStatus.status === 'locked' && <Badge label="Locked" color="gray" />}
           {isLocked && (
             <>
               <Badge label="Locked" color="gray" />
@@ -132,6 +165,14 @@ export function ModelRow({
           </Text>
         </View>
       )}
+
+      {(isFailed || isUnavailable) && installStatus.error ? (
+        <View className="flex-row items-center gap-1.5 pl-[52px] pr-4 pb-3">
+          <Text className="text-[11px] text-white/35" numberOfLines={1}>
+            {installStatus.error}
+          </Text>
+        </View>
+      ) : null}
 
       {isExpanded && canToggleThinking && (
         <Animated.View

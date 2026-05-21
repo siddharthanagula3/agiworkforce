@@ -66,6 +66,11 @@ export async function recordInstalledModel(model: InstalledModel): Promise<void>
 
 export const insertInstalledModel = recordInstalledModel;
 
+export async function markInstalledModelUsed(id: string, usedAt = Date.now()): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('UPDATE installed_models SET last_used_at = ? WHERE id = ?;', [usedAt, id]);
+}
+
 export async function removeInstalledModel(id: string): Promise<void> {
   const db = await getDb();
   await db.runAsync('DELETE FROM installed_models WHERE id = ?;', [id]);

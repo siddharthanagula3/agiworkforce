@@ -127,6 +127,7 @@ The CLI now has the first enforceable parity foundation:
 - Mobile remote chat now fails closed while v1 is Local Mode + Local LLMs, including attachment upload avoidance and a typed error path until secure Mobile BYOK key storage or Cloud Managed access is enabled.
 - Mobile chat, drawer, settings, onboarding, model picker, add-to-chat, and task-chip surfaces now express the locked three-mode product model: Local Mode + Local LLMs active, Mobile BYOK disabled until secure key storage ships, and Cloud Managed visible as waitlist.
 - Mobile model selection is local-first from `@agiworkforce/local-llm`; cloud provider rows are locked display rows and cannot become active model ids in v1.
+- Mobile local model selection now has preparation/readiness state, selected-model runtime resolution, ExecuTorch preset install records, and local token streaming for installed models.
 - Mobile Artifacts and Code Sessions now exist as Claude-inspired preview/control surfaces. Mobile previews and shares artifacts, and it controls Desktop/future Cloud Managed code environments instead of running heavy compute locally.
 
 This is not enough to claim Claude Code parity. It is the foundation.

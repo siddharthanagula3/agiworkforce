@@ -6,7 +6,10 @@ import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
 import { streamChat, type StreamDelta } from '@/services/streaming';
 import { getRemoteChatDisabledReason, RemoteChatDisabledError } from '@/services/remoteChatGate';
-import { listInstalledModels } from '@/storage/installedModels';
+import {
+  markLocalModelRefUsed,
+  resolveLocalModelRef,
+} from '@/src/features/model-picker/localModelRuntime';
 import { useProjectStore } from '@/src/features/projects/store';
 import { retrieveMemoryContext } from '@/src/features/memory/store';
 import type { ChatMessage, MessageAttachment } from '@/types/chat';
@@ -81,17 +84,14 @@ function normalizeLocalMessageContent(
     .join('\n');
 }
 
-async function resolveInstalledModelPath(): Promise<string | undefined> {
-  const installed = await listInstalledModels().catch(() => []);
-  return installed.find((model) => Boolean(model.local_path))?.local_path ?? undefined;
-}
-
 function localSetupMessage(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error);
   if (
     raw.includes('No model path') ||
     raw.includes('No local runtime') ||
-    raw.includes('Download a model')
+    raw.includes('Download a model') ||
+    raw.includes('not downloaded') ||
+    raw.includes('not available on this device')
   ) {
     return 'Local Mode + Local LLMs is active, but no on-device model is ready yet. Download a local model from Models or join the Cloud Managed waitlist for hosted compute.';
   }
@@ -342,11 +342,42 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               : 'user',
           content: normalizeLocalMessageContent(message.content),
         }));
-        const modelPath = await resolveInstalledModelPath();
-        const result = await localGenerate(modelPath, {
+        const localRef = await resolveLocalModelRef(model);
+        let localStreamingContent = '';
+        const updateLocalStream = (nextContent: string) => {
+          const currentMsgStore = getMsgStore();
+          const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
+          const updatedMsgs = msgs.map((m) =>
+            m.id === assistantMessageId
+              ? {
+                  ...m,
+                  content: nextContent,
+                  isStreaming: true,
+                  metadata: {
+                    ...m.metadata,
+                    localMode: true,
+                    localModelId: localRef.modelId,
+                  },
+                }
+              : m,
+          );
+
+          set({ streamingContent: nextContent });
+          currentMsgStore.setState((s) => ({
+            messages: { ...s.messages, [conversationId]: updatedMsgs },
+          }));
+        };
+
+        const result = await localGenerate(localRef.modelPath, {
+          modelId: localRef.modelId,
           prompt: messageContent,
           messages: localMessages,
           requestId: assistantMessageId,
+          onToken: (token) => {
+            if (controller.signal.aborted) return;
+            localStreamingContent += token;
+            updateLocalStream(localStreamingContent);
+          },
         });
         if (controller.signal.aborted) {
           abortControllers.delete(conversationId);
@@ -355,6 +386,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         }
         const finalContent =
           result.text.trim() ||
+          localStreamingContent.trim() ||
           'The local model returned an empty response. Try again with a shorter prompt.';
 
         const currentMsgStore = getMsgStore();
@@ -369,10 +401,14 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                   ...m.metadata,
                   localRuntime: result.runtime,
                   localMode: true,
+                  localModelId: localRef.modelId,
+                  localModelName: localRef.displayName,
                 },
               }
             : m,
         );
+
+        void markLocalModelRefUsed(localRef);
 
         abortControllers.delete(conversationId);
         streamingConversations.delete(conversationId);

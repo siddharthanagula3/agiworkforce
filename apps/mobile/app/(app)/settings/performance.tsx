@@ -432,9 +432,8 @@ export default function PerformanceScreen() {
         backend,
         generate: async ({ prompt, onToken }) => {
           let tokenCount = 0;
-          // filePath is not on OnDeviceModel — pass undefined so localGenerate
-          // uses its default model path (Tier 1 ignores it entirely).
-          await localGenerate(undefined, {
+          await localGenerate(localModel?.id ?? activeModelId, {
+            modelId: localModel?.id ?? activeModelId,
             prompt,
             onToken: (tok) => {
               onToken(tok);

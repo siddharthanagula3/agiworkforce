@@ -2,6 +2,7 @@ import type { InstalledModel } from '../storage/types';
 import {
   getInstalledModel,
   listInstalledModels,
+  markInstalledModelUsed,
   recordInstalledModel,
   removeInstalledModel,
 } from '../storage/installedModels';
@@ -106,5 +107,14 @@ describe('installed model storage repository', () => {
     expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM installed_models WHERE id = ?;', [
       'qwen3-4b',
     ]);
+  });
+
+  it('updates last_used_at for a model after local inference', async () => {
+    await markInstalledModelUsed('qwen3-4b', 1_800_000_000_000);
+
+    expect(mockDb.runAsync).toHaveBeenCalledWith(
+      'UPDATE installed_models SET last_used_at = ? WHERE id = ?;',
+      [1_800_000_000_000, 'qwen3-4b'],
+    );
   });
 });

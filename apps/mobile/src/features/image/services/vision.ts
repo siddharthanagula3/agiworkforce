@@ -117,6 +117,7 @@ export async function runVisionQuery(query: VisionQuery): Promise<VisionResult> 
         `User question: ${query.question}`;
 
       const result = await localGenerate(undefined, {
+        modelId: route.modelId,
         prompt,
         onToken: query.onToken,
       });
@@ -138,6 +139,7 @@ export async function runVisionQuery(query: VisionQuery): Promise<VisionResult> 
 
   const defaultModel = getDefaultModel();
   const result = await localGenerate(defaultModel.id, {
+    modelId: defaultModel.id,
     prompt,
     onToken: query.onToken,
   });

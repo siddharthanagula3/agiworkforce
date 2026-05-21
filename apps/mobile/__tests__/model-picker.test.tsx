@@ -10,7 +10,7 @@
  */
 
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 // ---------------------------------------------------------------------------
 // Mocks - avoid React.createElement(RN.*) inside factories to prevent
@@ -106,6 +106,7 @@ jest.mock('react-native-reanimated', () => ({
 // ---------------------------------------------------------------------------
 
 import { ModelPickerSheet } from '../src/features/model-picker/components/ModelPickerSheet';
+import { useModelInstallStore } from '../src/features/model-picker/installStore';
 import { useModelStore } from '../src/features/model-picker/store';
 import {
   AUTO_MODES,
@@ -118,6 +119,7 @@ import {
 // ---------------------------------------------------------------------------
 
 function resetModelStore() {
+  const hydrateInstalledModels = jest.fn<Promise<void>, []>(async () => undefined);
   useModelStore.setState({
     selectedModel: DEFAULT_LOCAL_MODEL_ID,
     selectedProvider: 'local',
@@ -125,6 +127,12 @@ function resetModelStore() {
     recentModels: [],
     thinkingModeEnabled: false,
     thinkingEnabledPerModel: {},
+  });
+  useModelInstallStore.setState({
+    installedModelIds: [DEFAULT_LOCAL_MODEL_ID, 'llama-3.2-1b-instruct-spinquant'],
+    readySystemModelIds: [],
+    jobs: {},
+    hydrateInstalledModels,
   });
 }
 
@@ -209,6 +217,21 @@ describe('ModelPickerSheet', () => {
     fireEvent.press(getByLabelText(/AGI Lite/));
 
     expect(useModelStore.getState().selectedModel).toBe('llama-3.2-1b-instruct-spinquant');
+  });
+
+  it('does not select an unprepared downloaded model until preparation finishes', async () => {
+    useModelInstallStore.setState({
+      installedModelIds: [DEFAULT_LOCAL_MODEL_ID],
+      readySystemModelIds: [],
+      jobs: {},
+    });
+    const { getByLabelText } = renderPicker();
+
+    fireEvent.press(getByLabelText(/AGI Lite/));
+
+    await waitFor(() => {
+      expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
+    });
   });
 
   it('calls onSelect callback instead of store when provided', () => {

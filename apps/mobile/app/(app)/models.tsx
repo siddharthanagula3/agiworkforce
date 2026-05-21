@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { View, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -8,9 +8,30 @@ import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
+import {
+  useModelInstallStore,
+  type ModelInstallJob,
+} from '@/src/features/model-picker/installStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useThemeColors } from '@/src/ui/theme';
 import { AUTO_MODES, LOCAL_MODEL_LIST, getDisplayName } from '@/src/features/model-picker/service';
+
+function installLabel(status: ModelInstallJob['status']): string {
+  switch (status) {
+    case 'ready':
+      return 'Ready';
+    case 'downloading':
+      return 'Downloading';
+    case 'failed':
+      return 'Retry download';
+    case 'unavailable':
+      return 'Package pending';
+    case 'locked':
+      return 'Locked';
+    case 'download_required':
+      return 'Download required';
+  }
+}
 
 export default function ModelsScreen() {
   const c = useThemeColors();
@@ -20,6 +41,15 @@ export default function ModelsScreen() {
   const selectedModel = useModelStore((s) => s.selectedModel);
   const favorites = useModelStore((s) => s.favorites);
   const recentModels = useModelStore((s) => s.recentModels);
+  const installJobs = useModelInstallStore((s) => s.jobs);
+  const installedModelIds = useModelInstallStore((s) => s.installedModelIds);
+  const readySystemModelIds = useModelInstallStore((s) => s.readySystemModelIds);
+  const hydrateInstalledModels = useModelInstallStore((s) => s.hydrateInstalledModels);
+  const statusForModel = useModelInstallStore((s) => s.statusForModel);
+
+  useEffect(() => {
+    void hydrateInstalledModels();
+  }, [hydrateInstalledModels]);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -33,8 +63,22 @@ export default function ModelsScreen() {
   const resolvedLabel = getDisplayName(selectedModel);
   const selectedAutoMode = AUTO_MODES.find((m) => m.id === selectedModel);
   const selectedLocalModel = LOCAL_MODEL_LIST.find((m) => m.id === selectedModel);
+  const statusLabelFor = useCallback(
+    (model: (typeof LOCAL_MODEL_LIST)[number]) => {
+      const job = installJobs[model.id];
+      if (job) return installLabel(job.status);
+      if (installedModelIds.includes(model.id) || readySystemModelIds.includes(model.id)) {
+        return 'Ready';
+      }
+      return installLabel(statusForModel(model).status);
+    },
+    [installJobs, installedModelIds, readySystemModelIds, statusForModel],
+  );
   const selectedDetail =
-    selectedAutoMode?.description ?? selectedLocalModel?.detailLabel ?? 'On-device local model';
+    selectedAutoMode?.description ??
+    (selectedLocalModel
+      ? `${selectedLocalModel.detailLabel} - ${statusLabelFor(selectedLocalModel)}`
+      : 'On-device local model');
 
   const favoriteModels = LOCAL_MODEL_LIST.filter((m) => favorites.includes(m.id)).slice(0, 5);
   const recentModelDefs = recentModels
@@ -109,7 +153,7 @@ export default function ModelsScreen() {
                     {m.name}
                   </Text>
                   <Text className="text-xs" style={{ color: c.textMuted }}>
-                    {m.runtimeLabel}
+                    {statusLabelFor(m)}
                   </Text>
                 </View>
               </View>
@@ -133,7 +177,7 @@ export default function ModelsScreen() {
                     {m.name}
                   </Text>
                   <Text className="text-xs" style={{ color: c.textMuted }}>
-                    {m.runtimeLabel}
+                    {statusLabelFor(m)}
                   </Text>
                 </View>
               </View>

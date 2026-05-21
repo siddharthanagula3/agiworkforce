@@ -3,5 +3,7 @@ export * from './components/ModelPickerSheet';
 export * from './components/ModelRow';
 export * from './components/ProviderLogo';
 export * from './service';
+export * from './installStore';
+export * from './localModelRuntime';
 export * from './store';
 export * from './tierGuard';
