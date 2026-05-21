@@ -438,34 +438,296 @@ export interface ConnectorRegistryEntry {
 }
 
 // ============================================================================
-// Agent/Subagent Event Records
+// Developer Session Event Stream, Fork, And Replay Records
 // ============================================================================
 
-export type AgentSessionEventKind =
+export type DeveloperSessionEventKind =
   | 'session.started'
   | 'session.paused'
   | 'session.resumed'
   | 'session.completed'
   | 'session.failed'
   | 'message.created'
+  | 'message.delta'
+  | 'message.completed'
+  | 'tool.requested'
   | 'tool.started'
+  | 'tool.delta'
   | 'tool.completed'
+  | 'tool.failed'
+  | 'permission.requested'
+  | 'permission.resolved'
   | 'hook.started'
   | 'hook.completed'
   | 'mcp.prompt.invoked'
   | 'subagent.started'
   | 'subagent.completed'
+  | 'checkpoint.created'
   | 'privacy.changed'
   | 'provider.changed'
   | 'fork.created'
-  | 'replay.started';
+  | 'replay.started'
+  | 'replay.completed'
+  | 'error';
 
+export const DEVELOPER_SESSION_EVENT_KINDS = [
+  'session.started',
+  'session.paused',
+  'session.resumed',
+  'session.completed',
+  'session.failed',
+  'message.created',
+  'message.delta',
+  'message.completed',
+  'tool.requested',
+  'tool.started',
+  'tool.delta',
+  'tool.completed',
+  'tool.failed',
+  'permission.requested',
+  'permission.resolved',
+  'hook.started',
+  'hook.completed',
+  'mcp.prompt.invoked',
+  'subagent.started',
+  'subagent.completed',
+  'checkpoint.created',
+  'privacy.changed',
+  'provider.changed',
+  'fork.created',
+  'replay.started',
+  'replay.completed',
+  'error',
+] as const satisfies readonly DeveloperSessionEventKind[];
+
+export interface DeveloperSessionLifecycleEventPayload {
+  status?: DeveloperSession['status'];
+  title?: string;
+  workspaceRoot?: string;
+  reason?: string;
+}
+
+export interface DeveloperSessionMessageEventPayload {
+  messageId: string;
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content?: string;
+  delta?: string;
+  tokenCount?: number;
+}
+
+export interface DeveloperSessionToolEventPayload {
+  toolCallId: string;
+  toolName: string;
+  displayName?: string;
+  input?: Record<string, unknown>;
+  output?: Record<string, unknown> | string;
+  exitCode?: number | null;
+  durationMs?: number;
+  riskLevel?: RiskLevel;
+  error?: string;
+}
+
+export interface DeveloperSessionPermissionEventPayload {
+  requestId: string;
+  toolName?: string;
+  question: string;
+  riskLevel: RiskLevel;
+  decision: 'pending' | 'approved' | 'rejected' | 'expired';
+  decidedByUserId?: string | null;
+  reason?: string;
+}
+
+export interface DeveloperSessionHookEventPayload {
+  hookName: string;
+  stage: 'pre_tool' | 'post_tool' | 'session_start' | 'session_stop' | 'custom';
+  status?: 'running' | 'completed' | 'failed';
+  durationMs?: number;
+  output?: string;
+}
+
+export interface DeveloperSessionMcpPromptEventPayload {
+  connectorId: string;
+  promptName: string;
+  arguments?: Record<string, unknown>;
+}
+
+export interface DeveloperSessionSubagentEventPayload {
+  subagentRunId: string;
+  agentSpecId?: string;
+  parentSessionId: string;
+  findingsUri?: string | null;
+  status?: SubagentRun['status'];
+}
+
+export interface DeveloperSessionCheckpointEventPayload {
+  checkpointId: string;
+  summary: string;
+  dirtyState: DeveloperSessionDirtyState;
+}
+
+export interface DeveloperSessionModeChangeEventPayload {
+  previousPrivacyMode?: PrivacyMode;
+  nextPrivacyMode?: PrivacyMode;
+  previousProviderMode?: ProviderMode;
+  nextProviderMode?: ProviderMode;
+  reason?: string;
+}
+
+export interface DeveloperSessionForkEventPayload {
+  forkId: string;
+  targetSessionId: string;
+  forkedFromSequence: number;
+  selectedContextIds: string[];
+  reason?: string;
+}
+
+export interface DeveloperSessionReplayEventPayload {
+  replayId: string;
+  requestId?: string;
+  fromSequence?: number;
+  toSequence?: number;
+  replayedEventCount?: number;
+  skippedEventIds?: string[];
+  status?: DeveloperSessionReplayStatus;
+  error?: string;
+}
+
+export interface DeveloperSessionErrorEventPayload {
+  code: string;
+  message: string;
+  recoverable: boolean;
+}
+
+export interface DeveloperSessionEventPayloads {
+  'session.started': DeveloperSessionLifecycleEventPayload;
+  'session.paused': DeveloperSessionLifecycleEventPayload;
+  'session.resumed': DeveloperSessionLifecycleEventPayload;
+  'session.completed': DeveloperSessionLifecycleEventPayload;
+  'session.failed': DeveloperSessionLifecycleEventPayload;
+  'message.created': DeveloperSessionMessageEventPayload;
+  'message.delta': DeveloperSessionMessageEventPayload;
+  'message.completed': DeveloperSessionMessageEventPayload;
+  'tool.requested': DeveloperSessionToolEventPayload;
+  'tool.started': DeveloperSessionToolEventPayload;
+  'tool.delta': DeveloperSessionToolEventPayload;
+  'tool.completed': DeveloperSessionToolEventPayload;
+  'tool.failed': DeveloperSessionToolEventPayload;
+  'permission.requested': DeveloperSessionPermissionEventPayload;
+  'permission.resolved': DeveloperSessionPermissionEventPayload;
+  'hook.started': DeveloperSessionHookEventPayload;
+  'hook.completed': DeveloperSessionHookEventPayload;
+  'mcp.prompt.invoked': DeveloperSessionMcpPromptEventPayload;
+  'subagent.started': DeveloperSessionSubagentEventPayload;
+  'subagent.completed': DeveloperSessionSubagentEventPayload;
+  'checkpoint.created': DeveloperSessionCheckpointEventPayload;
+  'privacy.changed': DeveloperSessionModeChangeEventPayload;
+  'provider.changed': DeveloperSessionModeChangeEventPayload;
+  'fork.created': DeveloperSessionForkEventPayload;
+  'replay.started': DeveloperSessionReplayEventPayload;
+  'replay.completed': DeveloperSessionReplayEventPayload;
+  error: DeveloperSessionErrorEventPayload;
+}
+
+export type DeveloperSessionEvent = {
+  [Kind in DeveloperSessionEventKind]: {
+    id: string;
+    sessionId: string;
+    parentEventId?: string | null;
+    kind: Kind;
+    sourceSurface: DeveloperSessionSurface;
+    sequence: number;
+    privacyMode: PrivacyMode;
+    providerMode: ProviderMode;
+    payload: DeveloperSessionEventPayloads[Kind];
+    createdAt: string;
+  };
+}[DeveloperSessionEventKind];
+
+export interface DeveloperSessionEventStreamCursor {
+  sessionId: string;
+  afterSequence?: number;
+  afterEventId?: string;
+}
+
+export interface DeveloperSessionEventStreamFrame {
+  sessionId: string;
+  cursor: DeveloperSessionEventStreamCursor;
+  events: DeveloperSessionEvent[];
+  hasMore: boolean;
+  emittedAt: string;
+}
+
+export type DeveloperSessionDirtyState = 'clean' | 'dirty' | 'unknown';
+
+export interface DeveloperSessionCheckpoint {
+  id: string;
+  sessionId: string;
+  eventId: string;
+  sequence: number;
+  workspaceRoot: string;
+  gitHead?: string | null;
+  dirtyState: DeveloperSessionDirtyState;
+  summary: string;
+  createdAt: string;
+}
+
+export interface DeveloperSessionFork {
+  id: string;
+  sourceSessionId: string;
+  targetSessionId: string;
+  forkedFromEventId?: string | null;
+  forkedFromSequence: number;
+  selectedContextIds: string[];
+  privacyMode: PrivacyMode;
+  providerMode: ProviderMode;
+  reason?: string;
+  createdAt: string;
+}
+
+export type DeveloperSessionReplayStatus =
+  | 'queued'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+export interface DeveloperSessionReplayRequest {
+  id: string;
+  sourceSessionId: string;
+  targetSurface: DeveloperSessionSurface;
+  targetWorkspaceRoot?: string | null;
+  fromSequence?: number;
+  toSequence?: number;
+  includeToolResults: boolean;
+  includeGeneratedFiles: boolean;
+  redactionReport?: RedactionReport;
+  createdAt: string;
+}
+
+export interface DeveloperSessionReplayResult {
+  id: string;
+  requestId: string;
+  targetSessionId: string;
+  status: DeveloperSessionReplayStatus;
+  replayedEventCount: number;
+  skippedEventIds: string[];
+  error?: string;
+  createdAt: string;
+  completedAt?: string | null;
+}
+
+export type AgentSessionEventKind = DeveloperSessionEventKind;
+
+// Compatibility name for older agent-session callers. New code should use
+// `DeveloperSessionEvent` so CLI, VS Code, Chrome, and future viewers share
+// sequence-aware stream frames.
 export interface AgentSessionEvent {
   id: string;
   sessionId: string;
   parentEventId?: string | null;
   kind: AgentSessionEventKind;
   sourceSurface: SourceSurface;
+  sequence?: number;
   privacyMode: PrivacyMode;
   providerMode: ProviderMode;
   payload?: Record<string, unknown>;

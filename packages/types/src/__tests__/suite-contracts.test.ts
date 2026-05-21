@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEVELOPER_SESSION_EVENT_KINDS,
   DEVELOPER_SESSION_SURFACES,
   isDeveloperSessionSurface,
   isSyncedAppSurface,
@@ -10,6 +11,12 @@ import {
   SYNCED_APP_SURFACES,
   type ArtifactManifest,
   type ComputeSession,
+  type DeveloperSessionCheckpoint,
+  type DeveloperSessionEvent,
+  type DeveloperSessionEventStreamFrame,
+  type DeveloperSessionFork,
+  type DeveloperSessionReplayRequest,
+  type DeveloperSessionReplayResult,
   type DeveloperSession,
   type GeneratedFile,
   type HandoffDraft,
@@ -68,6 +75,38 @@ describe('suite contracts — trust boundaries', () => {
     expect(isDeveloperSessionSurface('mobile')).toBe(false);
   });
 
+  it('locks the developer-session event stream vocabulary', () => {
+    expect(DEVELOPER_SESSION_EVENT_KINDS).toEqual([
+      'session.started',
+      'session.paused',
+      'session.resumed',
+      'session.completed',
+      'session.failed',
+      'message.created',
+      'message.delta',
+      'message.completed',
+      'tool.requested',
+      'tool.started',
+      'tool.delta',
+      'tool.completed',
+      'tool.failed',
+      'permission.requested',
+      'permission.resolved',
+      'hook.started',
+      'hook.completed',
+      'mcp.prompt.invoked',
+      'subagent.started',
+      'subagent.completed',
+      'checkpoint.created',
+      'privacy.changed',
+      'provider.changed',
+      'fork.created',
+      'replay.started',
+      'replay.completed',
+      'error',
+    ]);
+  });
+
   it('maps provider execution modes to privacy modes', () => {
     const cases: Array<[ProviderMode, string]> = [
       ['Local', 'local'],
@@ -123,6 +162,113 @@ describe('suite contracts — records', () => {
     };
 
     expect(isDeveloperSessionSurface(session.sourceSurface)).toBe(true);
+  });
+
+  it('models developer-session event streams with ordered typed payloads', () => {
+    const toolRequest = {
+      id: 'event-1',
+      sessionId: 'dev-session-1',
+      kind: 'tool.requested',
+      sourceSurface: 'cli',
+      sequence: 42,
+      privacyMode: 'byok',
+      providerMode: 'DirectByok',
+      payload: {
+        toolCallId: 'tool-1',
+        toolName: 'shell.exec',
+        input: { cmd: 'pnpm test' },
+        riskLevel: 'low',
+      },
+      createdAt: '2026-05-21T00:00:00.000Z',
+    } satisfies DeveloperSessionEvent;
+
+    const permissionRequest = {
+      id: 'event-2',
+      sessionId: 'dev-session-1',
+      kind: 'permission.requested',
+      sourceSurface: 'cli',
+      sequence: 43,
+      privacyMode: 'byok',
+      providerMode: 'DirectByok',
+      payload: {
+        requestId: 'approval-1',
+        toolName: 'shell.exec',
+        question: 'Run networked installer?',
+        riskLevel: 'medium',
+        decision: 'pending',
+      },
+      createdAt: '2026-05-21T00:00:01.000Z',
+    } satisfies DeveloperSessionEvent;
+
+    const frame: DeveloperSessionEventStreamFrame = {
+      sessionId: 'dev-session-1',
+      cursor: { sessionId: 'dev-session-1', afterSequence: 41 },
+      events: [toolRequest, permissionRequest],
+      hasMore: false,
+      emittedAt: '2026-05-21T00:00:02.000Z',
+    };
+
+    const firstEvent = frame.events[0];
+
+    expect(frame.events.map((event) => event.sequence)).toEqual([42, 43]);
+    expect(firstEvent?.kind).toBe('tool.requested');
+    if (firstEvent?.kind === 'tool.requested') {
+      expect(firstEvent.payload.toolName).toBe('shell.exec');
+    }
+  });
+
+  it('models durable checkpoint, fork, and replay records for child sessions', () => {
+    const checkpoint: DeveloperSessionCheckpoint = {
+      id: 'checkpoint-1',
+      sessionId: 'dev-session-1',
+      eventId: 'event-10',
+      sequence: 10,
+      workspaceRoot: '/repo',
+      gitHead: 'abc123',
+      dirtyState: 'clean',
+      summary: 'Ready to fork after exploration',
+      createdAt: '2026-05-21T00:00:00.000Z',
+    };
+
+    const fork: DeveloperSessionFork = {
+      id: 'fork-1',
+      sourceSessionId: checkpoint.sessionId,
+      targetSessionId: 'dev-session-child-1',
+      forkedFromEventId: checkpoint.eventId,
+      forkedFromSequence: checkpoint.sequence,
+      selectedContextIds: ['ctx-file-1'],
+      privacyMode: 'byok',
+      providerMode: 'DirectByok',
+      reason: 'Parallel implementation lane',
+      createdAt: '2026-05-21T00:01:00.000Z',
+    };
+
+    const replayRequest: DeveloperSessionReplayRequest = {
+      id: 'replay-request-1',
+      sourceSessionId: fork.sourceSessionId,
+      targetSurface: 'vscode',
+      targetWorkspaceRoot: '/repo',
+      fromSequence: 1,
+      toSequence: checkpoint.sequence,
+      includeToolResults: false,
+      includeGeneratedFiles: false,
+      createdAt: '2026-05-21T00:02:00.000Z',
+    };
+
+    const replayResult: DeveloperSessionReplayResult = {
+      id: 'replay-result-1',
+      requestId: replayRequest.id,
+      targetSessionId: fork.targetSessionId,
+      status: 'completed',
+      replayedEventCount: 10,
+      skippedEventIds: [],
+      createdAt: '2026-05-21T00:02:01.000Z',
+      completedAt: '2026-05-21T00:02:02.000Z',
+    };
+
+    expect(fork.forkedFromSequence).toBe(checkpoint.sequence);
+    expect(replayRequest.targetSurface).toBe('vscode');
+    expect(replayResult.targetSessionId).toBe(fork.targetSessionId);
   });
 
   it('requires handoff drafts to carry redaction and preview evidence', () => {
