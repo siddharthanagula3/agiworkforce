@@ -10,8 +10,8 @@
  */
 
 import { Platform } from 'react-native';
-import { api } from './api';
-import { supabase } from './supabase';
+import { api } from '@/services/api';
+import { supabase } from '@/services/supabase';
 
 export type HealthPermissionStatus = 'granted' | 'denied' | 'undetermined' | 'unavailable';
 

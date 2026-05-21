@@ -33,7 +33,10 @@ import { useTheme } from '@/hooks/useTheme';
 import { colors } from '@/lib/theme';
 import { StyleSelector } from './StyleSelector';
 import { ToolAccessSelector } from './ToolAccessSelector';
-import { isHealthAvailable, requestHealthPermission } from '@/services/healthData';
+import {
+  isHealthAvailable,
+  requestHealthPermission,
+} from '@/src/features/integrations/services/healthData';
 import { getModelById } from '@/lib/models';
 import {
   AGENT_MODE_LABEL,

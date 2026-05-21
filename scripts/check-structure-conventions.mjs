@@ -198,6 +198,11 @@ const retiredMobileFeaturePaths = [
   'apps/mobile/services/tierGuard.ts',
   'apps/mobile/stores/modelStore.ts',
   'apps/mobile/stores/projectStore.ts',
+  'apps/mobile/services/deviceIntegrations.ts',
+  'apps/mobile/services/healthData.ts',
+  'apps/mobile/services/healthKitPermission.ts',
+  'apps/mobile/services/healthKitQuery.ts',
+  'apps/mobile/stores/integrationStore.ts',
 ];
 
 for (const retiredMobileFeaturePath of retiredMobileFeaturePaths) {
@@ -302,6 +307,16 @@ const mobileFeatureForbiddenImports = [
   '../stores/modelStore',
   '@/stores/projectStore',
   '../stores/projectStore',
+  '@/services/deviceIntegrations',
+  '@/services/healthData',
+  '@/services/healthKitPermission',
+  '@/services/healthKitQuery',
+  '@/stores/integrationStore',
+  '../services/deviceIntegrations',
+  '../services/healthData',
+  '../services/healthKitPermission',
+  '../services/healthKitQuery',
+  '../stores/integrationStore',
 ];
 
 const retiredDesktopFeatureShimPaths = [

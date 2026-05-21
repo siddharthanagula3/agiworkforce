@@ -19,12 +19,12 @@ import {
   getCalendarPermissionStatus,
   getContactsPermissionStatus,
   type PermissionStatus,
-} from '@/services/deviceIntegrations';
+} from '@/src/features/integrations/services/deviceIntegrations';
 import {
   isHealthAvailable,
   getHealthPermissionStatus,
   type HealthPermissionStatus,
-} from '@/services/healthData';
+} from '@/src/features/integrations/services/healthData';
 import * as Notifications from 'expo-notifications';
 
 // ---------------------------------------------------------------------------

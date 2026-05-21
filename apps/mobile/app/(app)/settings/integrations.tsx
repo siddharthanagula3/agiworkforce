@@ -33,16 +33,16 @@ import {
   getCalendarPermissionStatus,
   getContactsPermissionStatus,
   type PermissionStatus,
-} from '@/services/deviceIntegrations';
+} from '@/src/features/integrations/services/deviceIntegrations';
 import {
   isHealthAvailable,
   getHealthPermissionStatus,
   requestHealthPermission,
   type HealthPermissionStatus,
-} from '@/services/healthData';
+} from '@/src/features/integrations/services/healthData';
 import { PlatformCard } from '@/src/features/integrations/components/PlatformCard';
 import { DeviceIntegrationStatus } from '@/src/features/integrations/components/DeviceIntegrationStatus';
-import { useIntegrationStore } from '@/stores/integrationStore';
+import { useIntegrationStore } from '@/src/features/integrations/store';
 import { PlatformSetupSheet } from '@/src/features/messaging/components/PlatformSetupSheet';
 import type { MessagingPlatform } from '@/src/features/messaging/store';
 import { FEATURES } from '@/lib/v1FeatureFlags';

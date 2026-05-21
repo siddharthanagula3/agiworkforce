@@ -14,7 +14,7 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, Link2 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/hooks/useTheme';
-import { useIntegrationStore } from '@/stores/integrationStore';
+import { useIntegrationStore } from '@/src/features/integrations/store';
 import { ConnectorItem } from '@/src/features/connectors/components/ConnectorItem';
 import {
   CONNECTORS,

@@ -92,7 +92,7 @@ jest.mock('../services/streaming', () => ({
   streamChat: jest.fn(),
 }));
 
-jest.mock('../services/healthData', () => ({
+jest.mock('../src/features/integrations/services/healthData', () => ({
   isHealthAvailable: jest.fn().mockReturnValue(false),
   requestHealthPermission: jest.fn().mockResolvedValue(false),
 }));

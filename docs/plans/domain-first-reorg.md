@@ -46,6 +46,11 @@ The Mobile projects ownership slice is complete: project state now lives under
 `apps/mobile/src/features/projects/store.ts`, with structure checks guarding the
 old `stores/projectStore.ts` path.
 
+The Mobile integrations ownership slice is complete: platform integration
+state, device permission helpers, health-context access, and HealthKit helpers
+now live under `apps/mobile/src/features/integrations`, with structure checks
+guarding the old integration service/store paths.
+
 The Desktop small-domain wave has moved quick query, voice, simple mode,
 subscription, pricing, planning, reminders, messaging, mobile companion, teams,
 terminal, tools, vision, and workflows out of `src/components` into
