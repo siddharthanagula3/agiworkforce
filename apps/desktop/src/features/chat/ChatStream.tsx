@@ -5,6 +5,7 @@ import {
   Braces,
   ChevronDown,
   ChevronUp,
+  Download,
   FileText,
   MousePointerClick,
   PanelTopOpen,
@@ -46,6 +47,7 @@ import {
   buildPanelArtifactCreateInput,
   getArtifactPanelCandidateIds,
 } from '@/lib/messageArtifactPanel';
+import { getArtifactFileExtension } from '@/lib/artifactUtils';
 import { buildMessageArtifactUpdate, getMergedMessageArtifacts } from '@/lib/messageArtifacts';
 import type { ArtifactMetadata } from '@/api/artifacts';
 
@@ -197,6 +199,38 @@ const ChatMessageItem = React.memo<ChatMessageItemProps>(
       );
     };
 
+    const handleDownloadArtifacts = useCallback(
+      (artifacts: MessageArtifact[]) => {
+        artifacts.forEach((artifact, artifactIndex) => {
+          if (typeof artifact.content !== 'string' || artifact.content.length === 0) {
+            return;
+          }
+
+          const normalizedArtifact: Artifact = {
+            id: artifact.id ?? `${message.id}-artifact-${artifactIndex}`,
+            type: artifact.type ?? 'code',
+            title: artifact.title,
+            content: artifact.content,
+            language: artifact.language,
+            metadata: artifact.metadata,
+          };
+          const createInput = buildPanelArtifactCreateInput(normalizedArtifact);
+          const extension = getArtifactFileExtension(createInput.artifactType);
+          const filename = `${createInput.title || 'artifact'}.${extension}`;
+          const blob = new Blob([createInput.content], { type: 'text/plain' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        });
+      },
+      [message.id],
+    );
+
     return (
       <div
         data-message-index={messageIndex}
@@ -236,6 +270,12 @@ const ChatMessageItem = React.memo<ChatMessageItemProps>(
             (message.metadata as MessageMetadataWithArtifacts | undefined)?.artifacts ??
             [];
           if (artifactList.length === 0) return null;
+          const downloadableArtifacts = artifactList.filter(
+            (artifact) =>
+              !artifact.toolName &&
+              typeof artifact.content === 'string' &&
+              artifact.content.length > 0,
+          );
           return (
             <div className="grid grid-cols-1 gap-2">
               {artifactList.map((artifact, idx) => {
@@ -286,6 +326,16 @@ const ChatMessageItem = React.memo<ChatMessageItemProps>(
                   </button>
                 );
               })}
+              {downloadableArtifacts.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => handleDownloadArtifacts(downloadableArtifacts)}
+                  className="inline-flex w-fit items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download all
+                </button>
+              )}
             </div>
           );
         })()}

@@ -84,6 +84,8 @@ Desktop file previews also use the shared focused dialog shell, keeping generate
 
 Desktop chat artifact cards now use the persistent artifact workbench as their primary click target. `ChatStream` checks for already persisted artifact ids, promotes legacy message artifacts into the Tauri artifact store when needed, records the persisted id back onto message artifact metadata, and opens `ArtifactPanel`; the preview sidecar remains only as a fallback for artifacts without panel-backed content.
 
+Multi-artifact Desktop responses expose a `Download all` action at the card stack, matching the verified Claude batch-artifact pattern while using the same artifact type mapping and file-extension helpers as the workbench path.
+
 The Desktop artifact workbench keeps artifact selection scoped to the side panel, then exposes preview/source switching and primary actions in the viewer toolbar itself. This matches the verified Claude artifact viewer direction where the split pane is a working surface with title/type context, source toggle, copy/download, refresh, close, and deeper version/history controls.
 
 Desktop tool activity uses the same compact event-rail direction as the verified Claude artifact/tool-call references. `ToolTimeline` keeps the existing live tool-event store and expand/collapse behavior, but presents completed runs as short action summaries and expanded runs as icon-specific steps with result/error pills instead of large generic cards.
