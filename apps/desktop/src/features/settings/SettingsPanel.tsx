@@ -6,6 +6,7 @@ import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import {
   Bell,
+  Brain,
   CreditCard,
   Mic,
   Palette,
@@ -55,6 +56,7 @@ import { ConnectorsTab } from './tabs/Connectors';
 import { NotificationsTab } from './tabs/Notifications';
 import { VoiceTab } from './tabs/Voice';
 import { CapabilitiesTab } from './tabs/Capabilities';
+import { MemoryTab } from './tabs/Memory';
 
 type CanonicalTab =
   | 'general'
@@ -67,7 +69,8 @@ type CanonicalTab =
   | 'connectors'
   | 'notifications'
   | 'voice'
-  | 'capabilities';
+  | 'capabilities'
+  | 'memory';
 
 function resolveTab(tab: SettingsTab): CanonicalTab {
   return (LEGACY_TAB_MAP[tab] as CanonicalTab | undefined) ?? (tab as CanonicalTab);
@@ -83,6 +86,7 @@ const SETTINGS_NAV: { key: CanonicalTab; label: string; icon: React.ElementType 
   { key: 'mcp-skills', label: 'MCP & Skills', icon: Wrench },
   { key: 'connectors', label: 'Apps & Integrations', icon: Plug },
   { key: 'capabilities', label: 'Capabilities', icon: Zap },
+  { key: 'memory', label: 'Memory', icon: Brain },
   { key: 'notifications', label: 'Notifications', icon: Bell },
   { key: 'voice', label: 'Voice', icon: Mic },
 ];
@@ -99,7 +103,7 @@ const NAV_GROUPS: { label?: string; keys: CanonicalTab[] }[] = [
   },
   {
     label: 'Customize',
-    keys: ['agents', 'mcp-skills', 'connectors', 'capabilities'],
+    keys: ['agents', 'mcp-skills', 'connectors', 'capabilities', 'memory'],
   },
   {
     label: 'Desktop app',
@@ -592,6 +596,8 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         return <VoiceTab />;
       case 'capabilities':
         return <CapabilitiesTab />;
+      case 'memory':
+        return <MemoryTab />;
       default:
         return null;
     }
