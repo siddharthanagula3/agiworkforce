@@ -2,7 +2,7 @@ import { View, Pressable } from 'react-native';
 import { AlertTriangle } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/hooks/useTheme';
-import { computeContextBudget } from '@/services/contextBudgeter';
+import { computeContextBudget } from '@/src/features/memory/services/contextBudgeter';
 import type { ChatMessage } from '@/types/chat';
 
 interface ContextWarningChipProps {

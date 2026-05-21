@@ -81,7 +81,7 @@ jest.mock('../storage/db', () => ({
 
 import * as LegacyFS from 'expo-file-system/legacy';
 import { parseDocument, DocParseError } from '../services/docParser';
-import { indexDocument, retrieve, deleteDocument } from '../services/ragIndex';
+import { indexDocument, retrieve, deleteDocument } from '../src/features/memory/services/ragIndex';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

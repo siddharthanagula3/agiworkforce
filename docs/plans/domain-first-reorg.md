@@ -63,6 +63,11 @@ The Mobile billing ownership slice is complete: subscription tier state now
 lives under `apps/mobile/src/features/billing/store.ts`, with structure checks
 guarding the old `stores/tierStore.ts` path.
 
+The Mobile memory ownership slice is complete: memory state, cloud-memory API
+helpers, import parsers, context budgeting, compaction, RAG chunking, and RAG
+indexing now live under `apps/mobile/src/features/memory`, with structure
+checks guarding the old memory service/store paths.
+
 The Desktop small-domain wave has moved quick query, voice, simple mode,
 subscription, pricing, planning, reminders, messaging, mobile companion, teams,
 terminal, tools, vision, and workflows out of `src/components` into

@@ -10,8 +10,8 @@ import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { colors } from '@/lib/theme';
-import { useMemoryStore } from '@/stores/memoryStore';
-import { parseImportFile, type ImportSource } from '@/services/memoryImport';
+import { useMemoryStore } from '@/src/features/memory/store';
+import { parseImportFile, type ImportSource } from '@/src/features/memory/services/memoryImport';
 
 type ImportStatus = 'idle' | 'picking' | 'parsing' | 'importing' | 'done' | 'error';
 

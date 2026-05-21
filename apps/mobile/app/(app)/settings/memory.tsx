@@ -9,7 +9,7 @@ import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MemoryItem } from '@/src/features/settings/components/MemoryItem';
 import { AddMemorySheet } from '@/src/features/settings/components/AddMemorySheet';
-import { useMemoryStore, type MemoryEntry } from '@/stores/memoryStore';
+import { useMemoryStore, type MemoryEntry } from '@/src/features/memory/store';
 import { colors } from '@/lib/theme';
 
 // ---------------------------------------------------------------------------

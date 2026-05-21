@@ -7,7 +7,7 @@ import BottomSheet, {
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { colors } from '@/lib/theme';
-import type { MemoryEntry } from '@/stores/memoryStore';
+import type { MemoryEntry } from '@/src/features/memory/store';
 
 interface AddMemorySheetProps {
   sheetRef: React.RefObject<BottomSheet | null>;

@@ -13,7 +13,7 @@ import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { colors } from '@/lib/theme';
-import type { MemoryEntry } from '@/stores/memoryStore';
+import type { MemoryEntry } from '@/src/features/memory/store';
 
 function formatRelativeTime(ts: number): string {
   const diffMs = Date.now() - ts;

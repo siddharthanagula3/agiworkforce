@@ -210,6 +210,13 @@ const retiredMobileFeaturePaths = [
   'apps/mobile/services/ageGate.ts',
   'apps/mobile/stores/authStore.ts',
   'apps/mobile/stores/tierStore.ts',
+  'apps/mobile/services/contextBudgeter.ts',
+  'apps/mobile/services/memory.ts',
+  'apps/mobile/services/memoryCompactor.ts',
+  'apps/mobile/services/memoryImport.ts',
+  'apps/mobile/services/ragChunker.ts',
+  'apps/mobile/services/ragIndex.ts',
+  'apps/mobile/stores/memoryStore.ts',
 ];
 
 for (const retiredMobileFeaturePath of retiredMobileFeaturePaths) {
@@ -338,6 +345,20 @@ const mobileFeatureForbiddenImports = [
   '../stores/authStore',
   '@/stores/tierStore',
   '../stores/tierStore',
+  '@/services/contextBudgeter',
+  '@/services/memory',
+  '@/services/memoryCompactor',
+  '@/services/memoryImport',
+  '@/services/ragChunker',
+  '@/services/ragIndex',
+  '@/stores/memoryStore',
+  '../services/contextBudgeter',
+  '../services/memory',
+  '../services/memoryCompactor',
+  '../services/memoryImport',
+  '../services/ragChunker',
+  '../services/ragIndex',
+  '../stores/memoryStore',
 ];
 
 const retiredDesktopFeatureShimPaths = [

@@ -11,14 +11,14 @@
  * Track: model-catalog-engineer task #18.
  */
 
-import { getDb } from '../storage/db';
+import { getDb } from '@/storage/db';
 import {
   insertDocChunks,
   deleteDocChunks,
   getDocChunksByIds,
   type DocChunk,
-} from '../storage/docChunks';
-import type { ParsedDocument, SupportedDocType } from './docParser';
+} from '@/storage/docChunks';
+import type { ParsedDocument, SupportedDocType } from '@/services/docParser';
 
 // TODO(embedding-model): replace with getModelById() call once catalog has an
 // embedding model entry. Placeholder until task #18 lands.

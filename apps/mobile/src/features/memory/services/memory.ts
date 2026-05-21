@@ -5,7 +5,7 @@
  * Uses the shared `api` helper for authenticated requests.
  */
 
-import { api } from './api';
+import { api } from '@/services/api';
 
 // ---------------------------------------------------------------------------
 // Types

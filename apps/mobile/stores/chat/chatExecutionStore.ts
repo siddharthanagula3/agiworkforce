@@ -5,7 +5,7 @@ import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
 import { streamChat, type StreamDelta } from '@/services/streaming';
 import { useProjectStore } from '@/src/features/projects/store';
-import { retrieveMemoryContext } from '@/stores/memoryStore';
+import { retrieveMemoryContext } from '@/src/features/memory/store';
 import type { ChatMessage, MessageAttachment } from '@/types/chat';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import type { UploadFileInput, UploadFileResult } from '@/services/api';
