@@ -95,6 +95,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 ### Changed
 
 - Desktop and API native computer-use action/session payloads now use `DesktopComputerAction` and `DesktopComputerUseSession`, reserving canonical `ComputerAction` and `ComputerUseSession` names for suite-level shared contracts.
+- Web v2 AI SDK requests now fail closed unless `providerMode` is explicitly `ManagedGateway` or `ManagedNative`, preventing Local/BYOK requests from reaching the managed Vercel AI SDK/Gateway path.
 - Desktop `hooks_get_stats` now returns live per-hook execution totals, success/failure counts, average duration, and last execution time instead of the previous placeholder `None`.
 - OpenAI Responses translation now has regression coverage proving server-side `store` is omitted by default and only set when explicitly requested.
 - Current docs now define suite-level requirements for all six surfaces, cross-surface ownership for projects/chats/sessions/artifacts/memory/teams/billing, and a provider capability matrix for routing/privacy claims.
