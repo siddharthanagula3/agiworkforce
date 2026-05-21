@@ -55,6 +55,7 @@ import { extractArtifacts, removeArtifactBlocks } from '../../utils/artifact-det
 import { useArtifactsStore as useChatArtifactsStore } from '../../stores/artifacts-store';
 import { useArtifactStore } from '@shared/stores/artifact-store';
 import { SearchResults } from '../search/SearchResults';
+import { ToolTimeline, type ToolEntry } from './ToolTimeline';
 import type { SearchResponse } from '@core/integrations/web-search-handler';
 import type { MediaGenerationResult } from '@core/integrations/media-generation-handler';
 import type { GeneratedDocument } from '../../services/document-generation-service';
@@ -145,6 +146,7 @@ interface Message {
     isSynthesis?: boolean;
     searchResults?: SearchResponse;
     isSearching?: boolean;
+    tools?: ToolEntry[];
     toolResult?: boolean;
     toolType?: string;
     imageUrl?: string;
@@ -319,6 +321,7 @@ const MessageBubbleComponent = function MessageBubble({
     message.metadata?.isMultiAgent &&
     message.metadata?.collaborationMessages &&
     message.metadata.collaborationMessages.length > 0;
+  const toolTimeline = !isUser && message.metadata?.tools ? message.metadata.tools : [];
 
   return (
     <motion.div
@@ -473,6 +476,13 @@ const MessageBubbleComponent = function MessageBubble({
           {!isUser && message.metadata?.searchResults && (
             <div className="mt-4">
               <SearchResults searchResponse={message.metadata.searchResults} showAnswer />
+            </div>
+          )}
+
+          {/* Tool timeline — compact, progressively disclosed tool activity. */}
+          {!isUser && toolTimeline.length > 0 && (
+            <div className="mt-3">
+              <ToolTimeline tools={toolTimeline} />
             </div>
           )}
 

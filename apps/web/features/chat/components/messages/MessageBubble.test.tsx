@@ -118,6 +118,25 @@ describe('MessageBubble', () => {
       render(<MessageBubble message={msg} />);
       expect(screen.getByText('Research Agent')).toBeInTheDocument();
     });
+
+    it('renders assistant tool activity in the compact timeline', async () => {
+      const msg = makeMessage({
+        role: 'assistant',
+        content: 'I searched the docs.',
+        metadata: {
+          tools: [{ id: 'tool-1', name: 'web_search', status: 'completed', durationMs: 120 }],
+        },
+      });
+
+      render(<MessageBubble message={msg} />);
+
+      expect(screen.getByText(/1 tool/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /toggle tool timeline/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('web_search')).toBeInTheDocument();
+      });
+    });
   });
 
   describe('streaming state', () => {

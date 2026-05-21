@@ -89,6 +89,9 @@ Local reference corpus:
 - `/Users/siddhartha/Desktop/reference/opencode`
 - `/Users/siddhartha/Desktop/reference/gemini-cli`
 - `/Users/siddhartha/Desktop/reference/ui`
+- Latest Claude desktop modal references:
+  - `/Users/siddhartha/Desktop/reference/ui/desktop/claude/2026-05-13/extended`
+  - `/Users/siddhartha/Desktop/reference/ui/desktop/claude-max20x/2026-05-15`
 
 AGI Workforce surface corpus:
 
@@ -364,6 +367,8 @@ Tasks:
 - Make Mobile request, view, download, and share artifacts; local on-device heavy compute can be deferred.
 - Add artifact versioning, diff, file tree, and share/export controls.
 - Web chat artifacts should render as compact inline cards and open in the sidecar artifact workbench, not duplicate full previews below the assistant message.
+- Claude desktop is the preferred UI baseline. Settings, connectors, plugin browsing, global search, project file preview, and project edit flows should open as focused modals or overlays first; route-sized/full-screen surfaces are reserved for deep workflows such as artifact split-pane viewing, code dashboards, projects indexes, and long-running research traces.
+- Before copying any reference behavior from screenshots, verify the path, filename, dimensions/type, and visible screen content match the intended surface. Mismatched or stale captures are evidence only after a fresh visual check.
 
 ### 4A. Compute, Computer Use, And Generated Files
 

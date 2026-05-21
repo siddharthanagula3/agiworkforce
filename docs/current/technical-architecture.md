@@ -74,6 +74,10 @@ Generated-file trust-boundary validation lives in `@agiworkforce/types`. It prov
 
 The active Web chat route mounts the artifact workbench sidecar next to the conversation. Assistant messages show compact artifact cards; detected code artifacts and generated-file manifests sync into the sidecar store for inspection instead of rendering duplicate full previews inline.
 
+The active Web chat route also renders server-tool activity through the shared compact tool timeline. Streaming tool status events update assistant-message metadata, and completed timelines are saved with the assistant message so reloaded conversations preserve tool provenance.
+
+Desktop/Web UI direction uses the latest Claude desktop modal references as the default baseline: common settings, connector, plugin, search, project edit, and file-preview flows should open as focused overlays before escalating users into full-screen workspaces. Full-screen/split-pane surfaces are for deep artifact viewing, code dashboards, project indexes, and long-running research or agent traces.
+
 Generated files need:
 
 - owner session,

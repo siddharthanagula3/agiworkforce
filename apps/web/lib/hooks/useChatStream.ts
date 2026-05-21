@@ -1,7 +1,13 @@
 'use client';
 
 import { useCallback, useRef, useEffect } from 'react';
-import { useChatStore, type Message, type Attachment } from '@/stores/chatStore';
+import {
+  useChatStore,
+  type Message,
+  type Attachment,
+  type MessageMetadata,
+  type MessageToolEntry,
+} from '@/stores/chatStore';
 
 interface SendMessageOptions {
   model?: string;
@@ -26,7 +32,7 @@ interface UseChatStreamReturn {
  */
 async function saveMessageToDb(
   conversationId: string,
-  message: { role: string; content: string; model?: string; metadata?: Record<string, unknown> },
+  message: { role: string; content: string; model?: string; metadata?: MessageMetadata },
   authToken: string,
 ): Promise<{ id: string } | null> {
   try {
@@ -72,6 +78,7 @@ export function useChatStream(): UseChatStreamReturn {
   const setSearching = useChatStore((state) => state.setSearching);
   const setSearchResults = useChatStore((state) => state.setSearchResults);
   const setExecutingCode = useChatStore((state) => state.setExecutingCode);
+  const setToolTimeline = useChatStore((state) => state.setToolTimeline);
   const setCodeExecutionResult = useChatStore((state) => state.setCodeExecutionResult);
   const startStreaming = useChatStore((state) => state.startStreaming);
   const stopStreaming = useChatStore((state) => state.stopStreaming);
@@ -141,6 +148,112 @@ export function useChatStream(): UseChatStreamReturn {
       startStreaming(assistantMessageId);
       setLoading(true);
       setError(null);
+
+      const toolTimeline: MessageToolEntry[] = [];
+      const toolStartTimes = new Map<string, number>();
+      let currentSearchResults: MessageMetadata['searchResults'];
+      let currentCodeExecutionResult: MessageMetadata['codeExecutionResult'];
+
+      const publishToolTimeline = () => {
+        if (toolTimeline.length === 0) return;
+        setToolTimeline(
+          assistantMessageId,
+          toolTimeline.map((tool) => ({ ...tool })),
+        );
+      };
+
+      const findLastToolIndex = (name: string, statuses?: MessageToolEntry['status'][]) => {
+        for (let index = toolTimeline.length - 1; index >= 0; index -= 1) {
+          const tool = toolTimeline[index];
+          if (!tool || tool.name !== name) continue;
+          if (!statuses || statuses.includes(tool.status)) return index;
+        }
+        return -1;
+      };
+
+      const createToolId = (name: string) =>
+        `${assistantMessageId}-${name.replace(/[^a-z0-9_-]/gi, '-').toLowerCase()}-${
+          toolTimeline.length + 1
+        }`;
+
+      const normalizeToolName = (name: unknown) =>
+        typeof name === 'string' && name.trim() ? name.trim() : 'server_tool';
+
+      const startTool = (rawName: unknown, args?: string) => {
+        const name = normalizeToolName(rawName);
+        const existingIndex = findLastToolIndex(name, ['pending', 'running']);
+        if (existingIndex >= 0) {
+          const existing = toolTimeline[existingIndex];
+          if (existing) {
+            existing.status = 'running';
+            existing.args = args ?? existing.args;
+          }
+          publishToolTimeline();
+          return;
+        }
+
+        const id = createToolId(name);
+        toolStartTimes.set(id, Date.now());
+        toolTimeline.push({
+          id,
+          name,
+          status: 'running',
+          args,
+        });
+        publishToolTimeline();
+      };
+
+      const finishTool = (
+        rawName: unknown,
+        status: Extract<MessageToolEntry['status'], 'completed' | 'failed'>,
+        error?: string,
+      ) => {
+        const name = normalizeToolName(rawName);
+        let index = findLastToolIndex(name, ['pending', 'running']);
+        if (index < 0) {
+          const id = createToolId(name);
+          toolStartTimes.set(id, Date.now());
+          toolTimeline.push({ id, name, status: 'running' });
+          index = toolTimeline.length - 1;
+        }
+
+        const tool = toolTimeline[index];
+        if (!tool) return;
+        const startedAt = tool.id ? toolStartTimes.get(tool.id) : undefined;
+        tool.status = status;
+        tool.durationMs = startedAt ? Date.now() - startedAt : tool.durationMs;
+        tool.error = error;
+        publishToolTimeline();
+      };
+
+      const finishRunningTools = (
+        status: Extract<MessageToolEntry['status'], 'completed' | 'failed'> = 'completed',
+        error?: string,
+      ) => {
+        for (const tool of toolTimeline) {
+          if (tool.status !== 'pending' && tool.status !== 'running') continue;
+          const startedAt = tool.id ? toolStartTimes.get(tool.id) : undefined;
+          tool.status = status;
+          tool.durationMs = startedAt ? Date.now() - startedAt : tool.durationMs;
+          tool.error = error;
+        }
+        publishToolTimeline();
+      };
+
+      const buildAssistantMetadata = (): MessageMetadata | undefined => {
+        const metadata: MessageMetadata = {};
+        if (toolTimeline.length > 0) {
+          metadata.tools = toolTimeline.map((tool) => ({ ...tool }));
+        }
+        if (currentSearchResults && currentSearchResults.length > 0) {
+          metadata.searchResults = currentSearchResults;
+        }
+        if (currentCodeExecutionResult) {
+          metadata.codeExecutionResult = currentCodeExecutionResult;
+        }
+
+        return Object.keys(metadata).length > 0 ? metadata : undefined;
+      };
 
       try {
         // Message content can be string or array (for multimodal)
@@ -243,12 +356,18 @@ export function useChatStream(): UseChatStreamReturn {
                 inThinkingBlock = false;
               }
               // Clear any lingering tool indicators
+              finishRunningTools();
               setSearching(assistantMessageId, false);
               setExecutingCode(assistantMessageId, false);
               if (fullAssistantContent) {
                 saveMessageToDb(
                   conversationId,
-                  { role: 'assistant', content: fullAssistantContent, model },
+                  {
+                    role: 'assistant',
+                    content: fullAssistantContent,
+                    model,
+                    metadata: buildAssistantMetadata(),
+                  },
                   authToken,
                 ).catch((err) =>
                   console.error('[useChatStream] Failed to save assistant message:', err),
@@ -299,6 +418,9 @@ export function useChatStream(): UseChatStreamReturn {
 
               // Handle server-managed tool status indicators
               const toolStatus = parsed.choices?.[0]?.delta?.x_tool_status;
+              if (toolStatus?.type === 'server_tool_use') {
+                startTool(toolStatus.name, toolStatus.status);
+              }
               if (toolStatus?.status === 'searching' || toolStatus?.status === 'fetching') {
                 setSearching(assistantMessageId, true);
               } else if (toolStatus?.status === 'executing') {
@@ -332,12 +454,14 @@ export function useChatStream(): UseChatStreamReturn {
                   rawText.match(/<return_code>(\d+)<\/return_code>/)?.[1] ?? '0',
                   10,
                 );
-                setCodeExecutionResult(assistantMessageId, {
+                currentCodeExecutionResult = {
                   stdout,
                   stderr,
                   returnCode,
                   images: images.length > 0 ? images : undefined,
-                });
+                };
+                setCodeExecutionResult(assistantMessageId, currentCodeExecutionResult);
+                finishTool('code_execution', 'completed');
               }
 
               // Handle web search results (server-managed tool completed)
@@ -351,7 +475,9 @@ export function useChatStream(): UseChatStreamReturn {
                     snippet: (r['encrypted_content'] as string) || '',
                   }));
                 if (results.length > 0) {
+                  currentSearchResults = results;
                   setSearchResults(assistantMessageId, results);
+                  finishTool('web_search', 'completed');
                 }
               }
 
@@ -368,10 +494,16 @@ export function useChatStream(): UseChatStreamReturn {
         }
 
         // Save the complete assistant message to database (in case [DONE] wasn't received)
+        finishRunningTools();
         if (fullAssistantContent) {
           saveMessageToDb(
             conversationId,
-            { role: 'assistant', content: fullAssistantContent, model },
+            {
+              role: 'assistant',
+              content: fullAssistantContent,
+              model,
+              metadata: buildAssistantMetadata(),
+            },
             authToken,
           ).catch((err) => console.error('[useChatStream] Failed to save assistant message:', err));
         }
@@ -387,6 +519,7 @@ export function useChatStream(): UseChatStreamReturn {
           // Real error - show the actual error message to help with debugging
           const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
           console.error('[useChatStream] API Error:', errorMessage, error);
+          finishRunningTools('failed', errorMessage);
 
           // Show the actual error in the message for visibility
           // This helps users and developers understand what went wrong
@@ -410,6 +543,7 @@ export function useChatStream(): UseChatStreamReturn {
       setSearching,
       setSearchResults,
       setExecutingCode,
+      setToolTimeline,
       setCodeExecutionResult,
       startStreaming,
       stopStreaming,

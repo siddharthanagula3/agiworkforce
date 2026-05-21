@@ -17,6 +17,8 @@ export interface MessageMetadata {
   handoffSourceConversationId?: string;
   /** Raw extended thinking text rendered by ThinkingBlock */
   thinkingContent?: string;
+  /** Collapsible thinking summary steps rendered by assistant messages. */
+  thinkingSteps?: string[];
   /** True while thinking content is still streaming */
   isThinkingStreaming?: boolean;
   /** ISO timestamp when thinking started */
@@ -29,6 +31,8 @@ export interface MessageMetadata {
   searchResults?: Array<{ url: string; title: string; snippet: string }>;
   /** True while server-managed code execution is running */
   isExecutingCode?: boolean;
+  /** Tool activity timeline rendered below assistant messages. */
+  tools?: MessageToolEntry[];
   /** Code execution result from server-managed code_execution_20260120 tool */
   codeExecutionResult?: {
     stdout: string;
@@ -43,6 +47,17 @@ export interface MessageMetadata {
   documentData?: { title?: string; content?: string; [key: string]: unknown };
   /** Persisted user reaction (stored in Supabase messages.metadata) */
   reaction?: 'thumbsUp' | 'thumbsDown' | null;
+}
+
+export interface MessageToolEntry {
+  id?: string;
+  name: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  durationMs?: number;
+  args?: string;
+  parameters?: Record<string, unknown>;
+  parallelGroup?: string;
+  error?: string;
 }
 
 export interface Message {
@@ -161,6 +176,7 @@ interface ChatState {
     results: Array<{ url: string; title: string; snippet: string }>,
   ) => void;
   setExecutingCode: (id: string, isExecuting: boolean) => void;
+  setToolTimeline: (id: string, tools: MessageToolEntry[]) => void;
   setCodeExecutionResult: (
     id: string,
     result: NonNullable<MessageMetadata['codeExecutionResult']>,
@@ -350,6 +366,17 @@ export const useChatStore = create<ChatState>()(
             }),
             undefined,
             'chat/setExecutingCode',
+          ),
+
+        setToolTimeline: (id, tools) =>
+          set(
+            (state) => ({
+              messages: state.messages.map((m) =>
+                m.id === id ? { ...m, metadata: { ...m.metadata, tools } } : m,
+              ),
+            }),
+            undefined,
+            'chat/setToolTimeline',
           ),
 
         setCodeExecutionResult: (id, result) =>

@@ -52,10 +52,14 @@ export interface ChatMessage {
     tokensUsed?: number;
     thinkingSteps?: string[];
     tools?: Array<{
+      id?: string;
       name: string;
-      status: 'running' | 'completed' | 'failed';
+      status: 'pending' | 'running' | 'completed' | 'failed';
       durationMs?: number;
       args?: string;
+      parameters?: Record<string, unknown>;
+      parallelGroup?: string;
+      error?: string;
     }>;
     /** Raw extended thinking text accumulated from streaming deltas */
     thinkingContent?: string;

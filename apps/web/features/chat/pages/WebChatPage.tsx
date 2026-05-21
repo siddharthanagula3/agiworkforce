@@ -43,7 +43,7 @@ type PendingByokHandoff = {
 
 function toChatMessage(m: Message, conversationId: string): ChatMessage {
   const thinkingContent = m.metadata?.thinkingContent;
-  const thinkingSteps = thinkingContent ? [thinkingContent] : undefined;
+  const thinkingSteps = thinkingContent ? [thinkingContent] : m.metadata?.thinkingSteps;
   const metadata =
     m.metadata || m.model
       ? {
