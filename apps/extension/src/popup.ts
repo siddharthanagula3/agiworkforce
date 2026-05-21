@@ -26,6 +26,9 @@ const popupState: PopupState = {
 /** Storage key matching inPagePanel/setup.ts IN_PAGE_PANEL_ENABLED_KEY */
 const IN_PAGE_PANEL_ENABLED_KEY = 'in_page_panel_enabled';
 
+/** Storage key matching background.ts siteAllowlistCache + inPagePanel/setup.ts */
+const SITE_ALLOWLIST_KEY = 'agi_site_allowlist';
+
 async function initializePopup(): Promise<void> {
   try {
     await Promise.all([updateStatus(), updateTabInfo(), updateStats(), updateTierDisplay()]);
@@ -33,6 +36,7 @@ async function initializePopup(): Promise<void> {
     startSessionTimer();
     await initInPagePanelToggle();
     await initPairingUI();
+    await initAllowlistUI();
   } catch (error) {
     logger.error('Failed to initialize popup', error);
   }
@@ -664,6 +668,156 @@ async function initInPagePanelToggle(): Promise<void> {
   });
 }
 
+/**
+ * Site allowlist management — surfaces `agi_site_allowlist` in chrome.storage.local.
+ *
+ * Background.ts gates every content-script-originated message on this list;
+ * before this UI shipped the user-facing error pointed at a popup section that
+ * didn't exist ("Add it from the extension popup"). Now the UI is real:
+ *   - Add/Remove button toggles the current tab's origin
+ *   - List below shows all allowlisted origins with per-row Remove buttons
+ *   - Storage writes propagate to background via the existing
+ *     chrome.storage.onChanged listener at background.ts:834
+ */
+async function readAllowlist(): Promise<string[]> {
+  try {
+    const res = await chrome.storage.local.get(SITE_ALLOWLIST_KEY);
+    const list = (res as Record<string, unknown>)[SITE_ALLOWLIST_KEY];
+    return Array.isArray(list) ? (list as string[]).filter((s) => typeof s === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+async function writeAllowlist(next: string[]): Promise<void> {
+  // Normalize: lowercase scheme+host, dedupe, sort for stable rendering.
+  const seen = new Set<string>();
+  const cleaned: string[] = [];
+  for (const raw of next) {
+    if (typeof raw !== 'string') continue;
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    try {
+      const u = new URL(trimmed);
+      const origin = u.origin;
+      if (!seen.has(origin)) {
+        seen.add(origin);
+        cleaned.push(origin);
+      }
+    } catch {
+      // Drop malformed values silently — never persist garbage to the gate.
+    }
+  }
+  cleaned.sort();
+  await chrome.storage.local.set({ [SITE_ALLOWLIST_KEY]: cleaned });
+}
+
+function currentTabOrigin(): Promise<string | null> {
+  return new Promise((resolve) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const url = tabs[0]?.url;
+      if (!url) return resolve(null);
+      try {
+        resolve(new URL(url).origin);
+      } catch {
+        resolve(null);
+      }
+    });
+  });
+}
+
+function renderAllowlistList(list: string[], currentOrigin: string | null): void {
+  const ul = document.getElementById('allowlistList') as HTMLUListElement | null;
+  const empty = document.getElementById('allowlistEmpty') as HTMLParagraphElement | null;
+  if (!ul) return;
+  ul.textContent = '';
+  if (list.length === 0) {
+    if (empty) empty.hidden = false;
+    return;
+  }
+  if (empty) empty.hidden = true;
+  for (const origin of list) {
+    const li = document.createElement('li');
+    li.className = 'allowlist-item';
+    if (origin === currentOrigin) li.classList.add('is-current');
+    const label = document.createElement('span');
+    label.className = 'allowlist-item-origin';
+    label.textContent = origin;
+    li.appendChild(label);
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'allowlist-item-remove';
+    removeBtn.textContent = 'Remove';
+    removeBtn.setAttribute('aria-label', `Remove ${origin} from allowlist`);
+    removeBtn.addEventListener('click', () => {
+      void removeOrigin(origin);
+    });
+    li.appendChild(removeBtn);
+    ul.appendChild(li);
+  }
+}
+
+async function renderAllowlistUI(): Promise<void> {
+  const list = await readAllowlist();
+  const origin = await currentTabOrigin();
+  const originLabel = document.getElementById('allowlistCurrentOrigin') as HTMLSpanElement | null;
+  const toggleBtn = document.getElementById('allowlistToggleBtn') as HTMLButtonElement | null;
+  if (originLabel) {
+    originLabel.textContent = origin ?? 'No active tab';
+    originLabel.title = origin ?? '';
+  }
+  if (toggleBtn) {
+    if (!origin) {
+      toggleBtn.disabled = true;
+      toggleBtn.textContent = 'Add';
+      toggleBtn.classList.remove('is-remove');
+    } else {
+      toggleBtn.disabled = false;
+      const present = list.includes(origin);
+      toggleBtn.textContent = present ? 'Remove' : 'Add';
+      toggleBtn.classList.toggle('is-remove', present);
+    }
+  }
+  renderAllowlistList(list, origin);
+}
+
+async function toggleCurrentOrigin(): Promise<void> {
+  const origin = await currentTabOrigin();
+  if (!origin) return;
+  const list = await readAllowlist();
+  const present = list.includes(origin);
+  const next = present ? list.filter((o) => o !== origin) : [...list, origin];
+  await writeAllowlist(next);
+  // Re-render — storage.onChanged also fires in background; this is the
+  // popup-local refresh path.
+  await renderAllowlistUI();
+}
+
+async function removeOrigin(origin: string): Promise<void> {
+  const list = await readAllowlist();
+  if (!list.includes(origin)) return;
+  await writeAllowlist(list.filter((o) => o !== origin));
+  await renderAllowlistUI();
+}
+
+async function initAllowlistUI(): Promise<void> {
+  const toggleBtn = document.getElementById('allowlistToggleBtn') as HTMLButtonElement | null;
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      void toggleCurrentOrigin();
+    });
+  }
+  // Keep popup in sync if another popup window mutates the list.
+  if (chrome.storage?.onChanged) {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && changes[SITE_ALLOWLIST_KEY]) {
+        void renderAllowlistUI();
+      }
+    });
+  }
+  await renderAllowlistUI();
+}
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initializePopup);
 } else {
@@ -681,9 +835,13 @@ export {
   showPaywallCard,
   initInPagePanelToggle,
   initPairingUI,
+  initAllowlistUI,
+  readAllowlist,
+  writeAllowlist,
   applyPairingState,
   TIER_LABELS,
   PAYWALL_FEATURE_LABELS,
   REQUIRED_TIER_LABELS,
   IN_PAGE_PANEL_ENABLED_KEY,
+  SITE_ALLOWLIST_KEY,
 };

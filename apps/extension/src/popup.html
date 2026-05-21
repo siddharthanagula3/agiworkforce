@@ -83,6 +83,25 @@
 
       <div class="divider"></div>
 
+      <!-- Site Allowlist — manage which origins can drive automation.
+           Fixes the misleading background.ts error string "Add it from the
+           extension popup" that referred to a UI that did not exist. -->
+      <div class="info-section allowlist-section">
+        <div class="section-title">Site allowlist</div>
+        <p class="allowlist-help">
+          Pages on these origins can run AGI automation in their tab. Add the current site, then
+          reload it.
+        </p>
+        <div class="allowlist-current-row">
+          <span class="allowlist-current-origin" id="allowlistCurrentOrigin">—</span>
+          <button class="allowlist-toggle-btn" id="allowlistToggleBtn" disabled>Add</button>
+        </div>
+        <ul class="allowlist-list" id="allowlistList" aria-label="Allowlisted origins"></ul>
+        <p class="allowlist-empty" id="allowlistEmpty" hidden>No sites allowlisted yet.</p>
+      </div>
+
+      <div class="divider"></div>
+
       <!-- Desktop Pairing -->
       <div class="info-section pairing-section">
         <div class="section-title">Desktop Pairing</div>

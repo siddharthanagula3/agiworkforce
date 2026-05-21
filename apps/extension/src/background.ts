@@ -895,7 +895,7 @@ function handleMessage(
     sendResponse({
       success: false,
       error:
-        'This site is not on your AGI Workforce allowlist. Add it from the extension popup to enable automation here.',
+        'This site is not on your AGI Workforce allowlist. Open the extension popup and use the "Site allowlist" section to add this origin, then reload.',
     } as ExtensionResponse);
     return false;
   }

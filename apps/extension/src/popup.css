@@ -665,3 +665,130 @@ body {
     transform: rotate(360deg);
   }
 }
+
+/*
+ * Site allowlist section — round-2 audit P0 #5 (2026-05-21). Fixes the
+ * misleading background.ts error string that referred to a UI which did not
+ * exist before this section was added.
+ */
+.allowlist-section .allowlist-help {
+  margin: 4px 0 10px 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--agi-ext-text-muted);
+}
+
+.allowlist-current-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--agi-ext-bg);
+  border: 1px solid var(--agi-ext-border-strong);
+  border-radius: 8px;
+}
+
+.allowlist-current-origin {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--agi-ext-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.allowlist-toggle-btn {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: linear-gradient(
+    135deg,
+    var(--agi-ext-accent) 0%,
+    var(--agi-ext-accent-secondary) 100%
+  );
+  color: var(--agi-ext-on-accent);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.allowlist-toggle-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.allowlist-toggle-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.allowlist-toggle-btn.is-remove {
+  background: transparent;
+  color: var(--agi-ext-text);
+  border: 1px solid var(--agi-ext-border-strong);
+}
+
+.allowlist-list {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.allowlist-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  background: var(--agi-ext-bg);
+  border: 1px solid var(--agi-ext-border-strong);
+  border-radius: 6px;
+}
+
+.allowlist-item.is-current {
+  border-color: var(--agi-ext-accent);
+}
+
+.allowlist-item-origin {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--agi-ext-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.allowlist-item-remove {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  font-size: 10px;
+  background: transparent;
+  color: var(--agi-ext-text-muted);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.allowlist-item-remove:hover {
+  color: var(--agi-ext-text);
+  border-color: var(--agi-ext-border-strong);
+  background: var(--agi-ext-hover);
+}
+
+.allowlist-empty {
+  margin: 8px 0 0 0;
+  font-size: 11px;
+  color: var(--agi-ext-text-muted);
+  font-style: italic;
+}
