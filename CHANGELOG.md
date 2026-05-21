@@ -25,6 +25,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - CLI `/agents` now provides list, show, path, create, and validate management commands, and agent discovery now includes nested imported Claude-agent folders.
 - CLI slash-command coverage tests now prove every registered built-in command and alias has active REPL and TUI runtime coverage; this also fixed TUI `/plugin`/`/marketplace` aliases and REPL `/resume`.
 - CLI tool declarations now carry local owner, permission-class, diagnostic-tag, and Claude-style alias metadata from the central catalog while keeping provider schemas clean.
+- `scripts/generate-surface-file-ledger.mjs`, `pnpm audit:file-ledger`, and `audit/anthropic-apps-parity/per-file-audit-ledger.{md,jsonl}` seed the file-level audit ledger for CLI and shared engine paths.
 - `docs/engineering/service-layer-architecture.md` and `pnpm check:service-layer` to lock action/route orchestration vs reusable operational mechanics, and to prevent new local duplicate definitions of canonical shared contracts.
 - `scripts/check-mobile-hygiene.mjs` and `pnpm check:mobile-hygiene` to keep Mobile feature folders self-describing, freeze root hook/lib growth, block retired theme/voice imports, and catch new direct I/O in UI files.
 - Lane-contract sections in scoped `AGENTS.md` files for CLI, Web, Mobile, Desktop, Chrome, VS Code, services, and provider adapters, enforced by `pnpm check:agent-context`.

@@ -16,6 +16,7 @@ Use it for source-backed parity data, not for broad strategy prose. The root `PL
 - `competitive-baseline-2026-05-20.md` - dated Anthropic/OpenAI application baseline and AGI chat-sync boundary.
 - `sdk-strategy-2026-05-20.md` - dated OpenAI/Anthropic/Vercel SDK strategy and AGI provider-boundary decision.
 - `compute-artifacts-2026-05-20.md` - dated Claude/ChatGPT compute, computer-use, generated-file, preview, and download architecture research.
+- `per-file-audit-ledger.md` / `per-file-audit-ledger.jsonl` - file-level audit rows for CLI and shared engine paths so agents can divide review work without overlap.
 
 ## Rules
 

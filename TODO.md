@@ -38,7 +38,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Add Husky hook policy and `pnpm check:hooks` so commit, pre-commit, and pre-push gates stay wired.
 - [x] Move the living audit fire log from root `AUDIT_LOG.md` to `audit/audit-log.md`.
 - [x] Remove stale root/mobile Expo `app.json` files and enforce `apps/mobile/app.config.js` as canonical.
-- [ ] Begin per-file AGI audit ledger by surface, starting with CLI and shared engine files.
+- [x] Begin per-file AGI audit ledger by surface, starting with CLI and shared engine files.
 - [x] Lock the long-term agent-native development thesis for AGI Workforce.
 - [x] Implement first enterprise control-plane wave: shared contracts, canonical migrations, API gateway routes, Web admin readiness page, docs, and provisional CODEOWNERS.
 
