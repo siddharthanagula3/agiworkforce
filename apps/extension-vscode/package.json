@@ -372,6 +372,11 @@
         "command": "agi-workforce.setAgentEffort",
         "title": "AGI Workforce: Set Reasoning Effort",
         "icon": "$(brain)"
+      },
+      {
+        "command": "agi-workforce.memory",
+        "title": "AGI Workforce: Memory",
+        "icon": "$(book)"
       }
     ],
     "chatParticipants": [
