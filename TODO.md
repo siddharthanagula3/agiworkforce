@@ -211,7 +211,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
   - [x] Move Web/Mobile `web_conversations` / `web_messages` compatibility sync types into `@agiworkforce/types`.
   - [ ] Move or rename duplicate MCP config contracts.
   - [ ] Move or rename duplicate computer-use session/action contracts.
-- [ ] Mount or explicitly disable API gateway `agents` and `mcp` routes.
+- [x] Mount API gateway `agents` and `mcp` routes.
 - [ ] Replace desktop hook stats placeholder with real stats or visible unsupported state.
 - [ ] Replace VS Code managed-plan usage stub with real usage-source reporting.
 - [ ] Finish Chrome native host installer automation, including Windows.
