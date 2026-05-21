@@ -22,7 +22,8 @@ Path-scoped `AGENTS.md` files under high-risk surfaces add local rules; read the
 8. `docs/decisions/CURRENT_DECISIONS.md` - latest locked product decisions.
 9. `PLAN.md` and `TODO.md` - active strategy and work queue.
 10. `docs/engineering/agent-native-development.md` - parallel agent/worktree and verification workflow.
-11. `docs/engineering/parallel-agent-playbook.md` - concrete 15+ agent operating procedure.
+11. `docs/engineering/naming-conventions.md` - naming, root docs, CLI command, package, branch, commit, version, and hook policy.
+12. `docs/engineering/parallel-agent-playbook.md` - concrete 15+ agent operating procedure.
 
 When these files conflict with older plans, prefer the list above.
 
@@ -62,6 +63,8 @@ Machine-readable version: `docs/agent-context/repo-map.json`.
 
 ## Non-Negotiables
 
+- Public brand is `AGI`; formal platform name is `AGI Workforce`.
+- User-facing CLI examples use `agi`; `agiworkforce` remains only as a compatibility alias or internal repo/package/crate identifier.
 - Never silently route Local chats or developer sessions to BYOK or managed cloud.
 - Local to BYOK is an explicit fork/continuation with context selection, secret scan, payload preview, and visible provider label.
 - Normal chat sync is only for Web, Mobile, and Desktop.
@@ -71,6 +74,7 @@ Machine-readable version: `docs/agent-context/repo-map.json`.
 - Do not combine file moves with behavior changes.
 - Do not move `.claude`, `.codex`, `.cursor`, `.opencode`, `.agents`, or `.mcp.json` until their tool contracts are classified.
 - Check `docs/agent-context/known-flaws.md` before reporting a bug as new.
+- Do not add new root control docs. Use `PLAN.md`, `TODO.md`, `CHANGELOG.md`, `docs/current`, `docs/plans`, `audit`, `reports`, and `docs/archive` as defined in `docs/engineering/naming-conventions.md`.
 
 ## Commands
 
@@ -82,6 +86,8 @@ Common commands:
 pnpm check:agent-context
 pnpm check:repo-organization
 pnpm check:boundaries
+pnpm check:hooks
+pnpm check:llm-operability
 pnpm lint
 pnpm lint:extension
 pnpm typecheck:all
@@ -90,6 +96,15 @@ cargo check --workspace
 ```
 
 Surface-specific commands should come from `docs/agent-context/commands.json` or the surface `package.json`/`Cargo.toml`.
+
+## Hooks And Local Gates
+
+Hook policy is part of repo organization and is enforced by `pnpm check:hooks`.
+
+- `commit-msg` runs commitlint with Conventional Commits.
+- `pre-commit` runs lint-staged, then fast structure and agent-context checks.
+- `pre-push` runs `pnpm check:llm-operability`, `git diff --check`, and `git diff --cached --check`.
+- Use `SKIP_PRE_PUSH=1` only for emergency pushes; record skipped checks in the PR or handoff.
 
 ## Bug-Finding Workflow
 

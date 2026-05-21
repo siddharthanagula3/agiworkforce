@@ -20,7 +20,6 @@ const allowedRootFiles = new Set([
   '.vercelignore',
   'AGENTS.md',
   'AGI_WORKFORCE.md',
-  'AUDIT_LOG.md',
   'BUILD.md',
   'CHANGELOG.md',
   'CLAUDE.md',
@@ -144,6 +143,10 @@ for (const dir of requiredDirs) {
   if (!fs.existsSync(path.join(root, dir))) {
     errors.push(`Missing required directory: ${dir}`);
   }
+}
+
+if (!fs.existsSync(path.join(root, 'audit/audit-log.md'))) {
+  errors.push('Missing required audit fire log: audit/audit-log.md');
 }
 
 const planPath = path.join(root, 'docs/plans/pre-release-repo-organization-2026-05-20.md');

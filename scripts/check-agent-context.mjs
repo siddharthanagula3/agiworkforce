@@ -51,7 +51,13 @@ const requiredFiles = [
   'docs/agent-context/task-manifest.schema.json',
   'docs/agent-context/commands.json',
   'docs/agent-context/doc-status.json',
+  'docs/current/README.md',
+  'docs/current/product-suite.md',
+  'docs/current/technical-architecture.md',
+  'docs/current/commercial-and-launch.md',
+  'docs/current/agent-and-repo-operability.md',
   'docs/engineering/README.md',
+  'docs/engineering/naming-conventions.md',
   'docs/engineering/agent-native-development.md',
   'docs/engineering/parallel-agent-playbook.md',
   'docs/engineering/autonomous-software-company-roadmap.md',
@@ -85,8 +91,19 @@ requireIncludes('AGENTS.md', 'docs/agent-context/');
 requireIncludes('AGENTS.md', 'known-flaws.md');
 requireIncludes('CLAUDE.md', 'AGENTS.md');
 requireIncludes('CLAUDE.md', 'Claude-specific notes');
+requireIncludes('CLAUDE.md', 'docs/engineering/naming-conventions.md');
 requireIncludes('AGENTS.md', 'docs/engineering/agent-native-development.md');
+requireIncludes('AGENTS.md', 'docs/engineering/naming-conventions.md');
+requireIncludes('AGENTS.md', 'Hooks And Local Gates');
 requireIncludes('AGENTS.md', 'docs/agent-context/lanes.json');
+requireIncludes('docs/current/README.md', 'Archived Source Material');
+requireIncludes('docs/current/product-suite.md', 'Trust Modes');
+requireIncludes('docs/current/technical-architecture.md', 'Enterprise Control Plane');
+requireIncludes('docs/current/commercial-and-launch.md', 'Managed Credit Requirements');
+requireIncludes('docs/current/agent-and-repo-operability.md', 'A+ Criteria');
+requireIncludes('docs/current/agent-and-repo-operability.md', 'Hook Rules');
+requireIncludes('docs/engineering/naming-conventions.md', 'Primary CLI command: `agi`.');
+requireIncludes('docs/engineering/naming-conventions.md', '## Hooks');
 requireIncludes('docs/engineering/agent-native-development.md', 'Worktree And Session Isolation');
 requireIncludes('docs/engineering/agent-native-development.md', 'High-Risk Merge Gates');
 requireIncludes('docs/agent-context/shared-files.md', 'Collision Protocol');
@@ -158,10 +175,12 @@ if (commands) {
     'agentContext',
     'repoOrganization',
     'boundaries',
+    'structureConventions',
     'laneOwnership',
     'generatedArtifacts',
     'readmeOwnership',
     'docStatus',
+    'hooks',
     'llmOperability',
   ]) {
     if (!commands.repoWide?.[commandKey]) {

@@ -19,10 +19,7 @@ const ignoredParts = new Set([
   '.expo',
 ]);
 
-const uiPackages = new Set([
-  '@agiworkforce/unified-chat',
-  '@agiworkforce/design-tokens',
-]);
+const uiPackages = new Set(['@agiworkforce/unified-chat', '@agiworkforce/design-tokens']);
 
 function walk(dir, files = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -106,7 +103,11 @@ for (const scanRoot of scanRoots) {
             errors.push(`${rel} imports app code via ${specifier}`);
           }
         }
-        if (specifier.startsWith('apps/') || specifier.startsWith('@agiworkforce/desktop') || specifier.startsWith('@agiworkforce/web')) {
+        if (
+          specifier.startsWith('apps/') ||
+          specifier.startsWith('@agiworkforce/desktop') ||
+          specifier.startsWith('@agiworkforce/web')
+        ) {
           errors.push(`${rel} imports app code via ${specifier}`);
         }
       }
