@@ -2,9 +2,9 @@
 
 Status: Current
 Owner: Next session lead
-Last updated: 2026-05-21 (extended round 2)
+Last updated: 2026-05-21 (extended round 3)
 Branch: `fix/extension-typecheck-and-c02-sync-2026-05-20`
-Head pushed: `51b20c865`
+Head pushed: `38034fedb`
 
 ## Mission (from the active goal)
 
@@ -71,7 +71,7 @@ Not yet run (deferred to next session — see Known blockers):
 | 9   | Artifacts versioning + live preview + publish + edit-in-place                                     | shared + web + desktop         | 186                                   | open — biggest single shared gap                                                                                                                                                                                                                |
 | 10  | CLI slash-command palette (~63 unique core)                                                       | cli                            | ~406                                  | open — existing `/memory` left untouched; the rest of `/init`, `/permissions`, `/mcp`, `/agents`, `/skills`, `/plugin`, `/plan`, `/tasks`, `/context`, `/rewind`, `/branch`, `/clear`, `/compact`, `/recap` still need v1-relevant subset wires |
 
-Hours shipped this session: roughly **~110h** out of **3,778h** total (~2.9%). The biggest remaining hours sit in CLI palette (~280h), Artifacts overhaul (186h), Mobile StoreKit (24h), composer drag-drop wires for chrome-ext + vscode-ext (~31h), and the in-flight Web Settings depth (Profile theme-persistence still uses localStorage — wire `next-themes` when a major theme refactor lands).
+Hours shipped this session: roughly **~125h** out of **3,778h** total (~3.3%). The biggest remaining hours sit in CLI palette (~280h), Artifacts overhaul (186h), Mobile StoreKit (24h), composer drag-drop wires for vscode-ext (~17h, chrome-ext attachment-wire now closed), and the in-flight Web Settings depth (Profile theme-persistence still uses localStorage — wire `next-themes` when a major theme refactor lands).
 
 ## Extended round 2 additions (after the first handoff at b49192bbe)
 
@@ -79,6 +79,13 @@ Hours shipped this session: roughly **~110h** out of **3,778h** total (~2.9%). T
 - **`packages/unified-chat` Projects primitives.** `ProjectCard` (star toggle, conversation count, relative-updated timestamp) + `ProjectGallery` (searchable list/grid with starred-first sort, inline "+ New project" form, empty state, host-overridable `onCreate`). Backed by the existing `useProjectStore`.
 - **2 architecture decisions locked.** `docs/decisions/2026-05-21-unified-chat-as-suite-spine.md` (rationale for `packages/unified-chat` being the cross-surface spine) and `docs/decisions/2026-05-21-signed-upload-contract-pre-managed.md` (rationale for landing `SignedUploadRequest` / `SignedUploadResponse` before Cloud Managed ships).
 - **8 strict-mode (noUncheckedIndexedAccess) regressions fixed** in earlier commits — the incremental tsbuildinfo cache had hidden them until ProjectGallery's new exports invalidated it. ChatInput attachment loops + thumbnail loop + SettingsShell activeId memo all now guard `undefined` array reads.
+
+## Extended round 3 additions (after b81cc377d)
+
+- **Chrome ext attachments now actually reach the model.** Commit `38034fedb` closes the round-2 P0 #3 correctness bug. Both `CHAT_MESSAGE` send sites in `apps/extension/src/side_panel.ts` previously cleared `pendingAttachments.length = 0` _before_ constructing the wire payload, so paste-image and file-picker attachments rendered an attachment preview but were silently dropped on send. The fix:
+  - `ChatMessageMessage` in `apps/extension/src/types.ts` gains a typed `attachments?: string[]` field (alongside the previously-untyped `extendedThinking?: boolean`).
+  - Both send sites snapshot `pendingAttachments.slice()` _before_ clearing and forward the snapshot as `attachments: snapshot.length > 0 ? snapshot : undefined`.
+  - `background.handleChatMessage` destructures `attachments` and, when present, appends a nonce-fenced `<attachments_<nonce>>...</attachments_<nonce>>` annotation to the user content (mirroring the existing pageContext fence pattern) so the model is at least aware the attachments exist. Full multi-modal provider-stream wire-up (Anthropic image blocks, OpenAI image_url parts) remains a follow-up.
 
 ## Recommended next-session priorities (in order)
 
