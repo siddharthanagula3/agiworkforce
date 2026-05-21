@@ -987,6 +987,13 @@ pub async fn run_main() -> Result<()> {
                 }
                 session.quiet = true;
                 session.enable_managed_session()?;
+                attach_mcp_manager_for_session(
+                    &mut session,
+                    &normalized_cli_options.mcp_config_load_options(),
+                    false,
+                    false,
+                )
+                .await?;
                 let is_json = *json;
                 let json_events = cli.json_events;
                 let session_id = session
@@ -1127,6 +1134,7 @@ pub async fn run_main() -> Result<()> {
                     false,
                     normalized_cli_options.allowed_tools.clone(),
                     normalized_cli_options.disallowed_tools.clone(),
+                    normalized_cli_options.mcp_config_load_options(),
                 )
                 .await
             }
@@ -1157,6 +1165,7 @@ pub async fn run_main() -> Result<()> {
                     false,
                     normalized_cli_options.allowed_tools.clone(),
                     normalized_cli_options.disallowed_tools.clone(),
+                    normalized_cli_options.mcp_config_load_options(),
                 )
                 .await
             }
@@ -1977,6 +1986,7 @@ pub async fn run_main() -> Result<()> {
             effective_auto_approve_plan,
             normalized_cli_options.allowed_tools.clone(),
             normalized_cli_options.disallowed_tools.clone(),
+            normalized_cli_options.mcp_config_load_options(),
         )
         .await;
     }
@@ -2086,6 +2096,7 @@ pub async fn run_main() -> Result<()> {
             effective_auto_approve_plan,
             normalized_cli_options.allowed_tools.clone(),
             normalized_cli_options.disallowed_tools.clone(),
+            normalized_cli_options.mcp_config_load_options(),
         )
         .await
     } else {
@@ -2109,6 +2120,7 @@ pub async fn run_main() -> Result<()> {
             cli.no_sandbox,
             normalized_cli_options.allowed_tools.clone(),
             normalized_cli_options.disallowed_tools.clone(),
+            normalized_cli_options.mcp_config_load_options(),
         )
         .await
     }
@@ -2187,6 +2199,45 @@ pub fn exit_with_error(e: &anyhow::Error) -> ! {
     std::process::exit(exit_code)
 }
 
+pub(crate) async fn attach_mcp_manager_for_session(
+    session: &mut agent::AgentSession,
+    mcp_config_options: &mcp::McpConfigLoadOptions,
+    include_default_configs: bool,
+    include_plugin_configs: bool,
+) -> Result<()> {
+    if !include_default_configs && !mcp_config_options.has_explicit_sources() {
+        return Ok(());
+    }
+
+    let mut load_options = mcp_config_options.clone();
+    if !include_default_configs {
+        load_options.strict = true;
+    }
+
+    let mut mcp_configs = mcp::McpManager::load_configs_with_options(&load_options)?;
+    if include_plugin_configs && !load_options.strict {
+        let mut plugin_mgr = plugins::PluginsManager::new();
+        if plugin_mgr
+            .load_all(std::env::current_dir().ok().as_deref())
+            .is_ok()
+        {
+            mcp_configs.extend(plugin_mgr.mcp_configs());
+        }
+    }
+
+    if mcp_configs.is_empty() {
+        return Ok(());
+    }
+
+    let mut mcp_mgr = mcp::McpManager::new();
+    if let Err(err) = mcp_mgr.connect_all(&mcp_configs).await {
+        output::print_warn(&format!("MCP connection error: {err:#}"));
+    }
+    session.set_mcp_manager(mcp_mgr);
+
+    Ok(())
+}
+
 /// Execute a single prompt and exit.
 #[allow(clippy::too_many_arguments)]
 pub async fn run_oneshot(
@@ -2204,6 +2255,7 @@ pub async fn run_oneshot(
     auto_approve_plan: bool,
     allowed_tools: Vec<String>,
     disallowed_tools: Vec<String>,
+    mcp_config_options: mcp::McpConfigLoadOptions,
 ) -> Result<()> {
     let mut session = agent::AgentSession::new(model, sys_context, custom_system_prompt);
     // Apply config-based provider override (e.g. "ollama-cloud") when the
@@ -2224,6 +2276,7 @@ pub async fn run_oneshot(
         session.plan_mode = true;
     }
     session.enable_managed_session()?;
+    attach_mcp_manager_for_session(&mut session, &mcp_config_options, false, false).await?;
 
     if output_mode == OneShotOutputMode::JsonLine {
         // Stream-JSON: NDJSON events on stdout, one per line. The full

@@ -47,6 +47,7 @@ pub async fn run_repl(
     auto_approve_plan: bool,
     allowed_tools: Vec<String>,
     disallowed_tools: Vec<String>,
+    mcp_config_options: crate::mcp::McpConfigLoadOptions,
 ) -> Result<()> {
     let provider_name = crate::models::detect_provider(model);
     let provider_str = format!("{:?}", provider_name).to_lowercase();
@@ -95,15 +96,7 @@ pub async fn run_repl(
         }
     }
 
-    let mcp_configs = crate::mcp::McpManager::load_configs().unwrap_or_default();
-    if !mcp_configs.is_empty() {
-        eprintln!("{}", "Connecting to MCP servers...".dimmed());
-        let mut mcp_mgr = crate::mcp::McpManager::new();
-        if let Err(e) = mcp_mgr.connect_all(&mcp_configs).await {
-            output::print_warn(&format!("MCP connection error: {:#}", e));
-        }
-        session.set_mcp_manager(mcp_mgr);
-    }
+    crate::attach_mcp_manager_for_session(&mut session, &mcp_config_options, true, true).await?;
 
     let hooks_config = session.hooks_config().clone();
     crate::hooks::run_hooks(

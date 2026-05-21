@@ -1451,6 +1451,18 @@ pub struct McpManager {
     prompts: Vec<McpPrompt>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct McpConfigLoadOptions {
+    pub explicit_paths: Vec<std::path::PathBuf>,
+    pub strict: bool,
+}
+
+impl McpConfigLoadOptions {
+    pub fn has_explicit_sources(&self) -> bool {
+        self.strict || !self.explicit_paths.is_empty()
+    }
+}
+
 impl std::fmt::Debug for McpManager {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("McpManager")
@@ -1471,36 +1483,121 @@ fn load_mcp_config_file_into(
     configs: &mut HashMap<String, McpServerConfig>,
     overwrite_existing: bool,
 ) {
-    let Ok(contents) = std::fs::read_to_string(path) else {
-        return;
+    let _ = load_mcp_config_file_into_result(path, configs, overwrite_existing, false);
+}
+
+fn load_mcp_config_file_into_result(
+    path: &std::path::Path,
+    configs: &mut HashMap<String, McpServerConfig>,
+    overwrite_existing: bool,
+    required: bool,
+) -> Result<()> {
+    let contents = match std::fs::read_to_string(path) {
+        Ok(contents) => contents,
+        Err(err) if required => {
+            return Err(err)
+                .with_context(|| format!("Failed to read explicit MCP config {}", path.display()));
+        }
+        Err(_) => return Ok(()),
     };
+
+    let loaded = parse_mcp_config_contents(&contents, path, required)?;
+    if required && loaded.is_empty() {
+        bail!(
+            "Explicit MCP config {} did not define any servers",
+            path.display()
+        );
+    }
+    for (name, config) in loaded {
+        if overwrite_existing {
+            configs.insert(name, config);
+        } else {
+            configs.entry(name).or_insert(config);
+        }
+    }
+
+    Ok(())
+}
+
+fn parse_mcp_config_contents(
+    contents: &str,
+    path: &std::path::Path,
+    strict: bool,
+) -> Result<HashMap<String, McpServerConfig>> {
+    let mut configs = HashMap::new();
 
     // Flat format: { "server_name": { "command": "...", ... } }
     if let Ok(parsed) = serde_json::from_str::<HashMap<String, McpServerConfig>>(&contents) {
         for (name, config) in parsed {
-            if overwrite_existing {
-                configs.insert(name, config);
-            } else {
-                configs.entry(name).or_insert(config);
-            }
+            configs.insert(name, config);
         }
     }
 
     // Nested format: { "mcpServers": { ... } }
-    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&contents) {
-        if let Some(servers) = parsed.get("mcpServers").and_then(|s| s.as_object()) {
-            for (name, config) in servers {
-                if let Ok(server_config) = serde_json::from_value::<McpServerConfig>(config.clone())
-                {
-                    if overwrite_existing {
-                        configs.insert(name.clone(), server_config);
-                    } else {
-                        configs.entry(name.clone()).or_insert(server_config);
+    match serde_json::from_str::<serde_json::Value>(contents) {
+        Ok(parsed) => {
+            if let Some(servers) = parsed.get("mcpServers").and_then(|s| s.as_object()) {
+                for (name, config) in servers {
+                    match serde_json::from_value::<McpServerConfig>(config.clone()) {
+                        Ok(server_config) => {
+                            configs.insert(name.clone(), server_config);
+                        }
+                        Err(err) if strict => {
+                            return Err(err).with_context(|| {
+                                format!(
+                                    "Invalid MCP server '{}' in explicit config {}",
+                                    name,
+                                    path.display()
+                                )
+                            });
+                        }
+                        Err(_) => {}
                     }
                 }
+            } else if strict && configs.is_empty() {
+                bail!(
+                    "Explicit MCP config {} must be a flat server map or contain mcpServers",
+                    path.display()
+                );
             }
         }
+        Err(err) if strict => {
+            return Err(err)
+                .with_context(|| format!("Invalid MCP config JSON in {}", path.display()));
+        }
+        Err(_) => {}
     }
+
+    Ok(configs)
+}
+
+fn load_default_mcp_configs(configs: &mut HashMap<String, McpServerConfig>) {
+    // Project configs win over globals. Support both the historical
+    // `.mcp.json` name and the visible `mcp.json` that `agi init`
+    // creates.
+    for path in [
+        std::path::Path::new(".mcp.json"),
+        std::path::Path::new("mcp.json"),
+    ] {
+        load_mcp_config_file_into(path, configs, true);
+    }
+
+    // Load from ~/.agiworkforce/.mcp.json and ~/.agiworkforce/mcp.json.
+    if let Ok(config_dir) = crate::config::CliConfig::config_dir() {
+        for filename in [".mcp.json", "mcp.json"] {
+            load_mcp_config_file_into(&config_dir.join(filename), configs, false);
+        }
+    }
+}
+
+fn load_explicit_mcp_configs(
+    configs: &mut HashMap<String, McpServerConfig>,
+    explicit_paths: &[std::path::PathBuf],
+) -> Result<()> {
+    for path in explicit_paths {
+        load_mcp_config_file_into_result(path, configs, true, true)?;
+    }
+    Ok(())
 }
 
 impl McpManager {
@@ -1514,24 +1611,25 @@ impl McpManager {
 
     /// Load MCP server configurations from project/global MCP JSON files.
     pub fn load_configs() -> Result<HashMap<String, McpServerConfig>> {
+        Self::load_configs_with_options(&McpConfigLoadOptions::default())
+    }
+
+    /// Load MCP server configurations with explicit CLI file handling.
+    ///
+    /// Default project/global configs are optional and best-effort. Explicit
+    /// `--mcp-config` files are required and validated so misspelled paths do
+    /// not silently remove tools from a headless run. When `strict` is set,
+    /// only explicit files are loaded.
+    pub fn load_configs_with_options(
+        options: &McpConfigLoadOptions,
+    ) -> Result<HashMap<String, McpServerConfig>> {
         let mut configs = HashMap::new();
 
-        // Project configs win over globals. Support both the historical
-        // `.mcp.json` name and the visible `mcp.json` that `agi init`
-        // creates.
-        for path in [
-            std::path::Path::new(".mcp.json"),
-            std::path::Path::new("mcp.json"),
-        ] {
-            load_mcp_config_file_into(path, &mut configs, true);
+        if !options.strict {
+            load_default_mcp_configs(&mut configs);
         }
 
-        // Load from ~/.agiworkforce/.mcp.json and ~/.agiworkforce/mcp.json.
-        if let Ok(config_dir) = crate::config::CliConfig::config_dir() {
-            for filename in [".mcp.json", "mcp.json"] {
-                load_mcp_config_file_into(&config_dir.join(filename), &mut configs, false);
-            }
-        }
+        load_explicit_mcp_configs(&mut configs, &options.explicit_paths)?;
 
         Ok(configs)
     }
@@ -1932,6 +2030,67 @@ mod tests {
         assert!(configs.contains_key("remote"));
         assert_eq!(configs["docs"].transport_kind(), "stdio");
         assert_eq!(configs["remote"].transport_kind(), "sse");
+    }
+
+    #[test]
+    fn strict_load_configs_uses_only_explicit_files() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("explicit.mcp.json");
+        std::fs::write(
+            &path,
+            r#"{"mcpServers":{"explicit":{"command":"node","args":["server.js"]}}}"#,
+        )
+        .expect("write mcp config");
+
+        let configs = McpManager::load_configs_with_options(&McpConfigLoadOptions {
+            explicit_paths: vec![path],
+            strict: true,
+        })
+        .expect("load explicit config");
+
+        assert_eq!(configs.len(), 1);
+        assert!(configs.contains_key("explicit"));
+    }
+
+    #[test]
+    fn repeated_explicit_mcp_configs_override_in_order() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let first = tmp.path().join("first.json");
+        let second = tmp.path().join("second.json");
+        std::fs::write(&first, r#"{"dup":{"command":"node","args":["first.js"]}}"#)
+            .expect("write first config");
+        std::fs::write(
+            &second,
+            r#"{"dup":{"command":"node","args":["second.js"]}}"#,
+        )
+        .expect("write second config");
+
+        let configs = McpManager::load_configs_with_options(&McpConfigLoadOptions {
+            explicit_paths: vec![first, second],
+            strict: true,
+        })
+        .expect("load explicit configs");
+
+        match configs["dup"].as_transport() {
+            McpTransport::Stdio { args, .. } => assert_eq!(args, vec!["second.js"]),
+            other => panic!("expected stdio config, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn missing_explicit_mcp_config_errors() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let missing = tmp.path().join("missing.json");
+
+        let err = McpManager::load_configs_with_options(&McpConfigLoadOptions {
+            explicit_paths: vec![missing],
+            strict: true,
+        })
+        .expect_err("missing explicit config should error");
+
+        assert!(err
+            .to_string()
+            .contains("Failed to read explicit MCP config"));
     }
 
     #[test]

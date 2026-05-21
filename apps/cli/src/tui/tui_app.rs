@@ -2097,6 +2097,7 @@ pub async fn run(
     sandbox_disabled: bool,
     allowed_tools: Vec<String>,
     disallowed_tools: Vec<String>,
+    mcp_config_options: crate::mcp::McpConfigLoadOptions,
 ) -> Result<()> {
     let mut session = AgentSession::new(model, sys_context, custom_system_prompt);
     if let Some(ref provider) = provider_override {
@@ -2157,22 +2158,7 @@ pub async fn run(
         }
     }
 
-    // Connect MCP servers
-    let mut mcp_configs = crate::mcp::McpManager::load_configs().unwrap_or_default();
-    let mut plugin_mgr = crate::plugins::PluginsManager::new();
-    if let Ok(_plugins) = plugin_mgr.load_all(std::env::current_dir().ok().as_deref()) {
-        let plugin_mcp = plugin_mgr.mcp_configs();
-        if !plugin_mcp.is_empty() {
-            mcp_configs.extend(plugin_mcp);
-        }
-    }
-    if !mcp_configs.is_empty() {
-        let mut mcp_mgr = crate::mcp::McpManager::new();
-        if let Err(e) = mcp_mgr.connect_all(&mcp_configs).await {
-            eprintln!("MCP connection warning: {:#}", e);
-        }
-        session.set_mcp_manager(mcp_mgr);
-    }
+    crate::attach_mcp_manager_for_session(&mut session, &mcp_config_options, true, true).await?;
 
     // Hooks
     let hooks_config = session.hooks_config().clone();
