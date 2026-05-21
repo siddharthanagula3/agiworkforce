@@ -22,6 +22,7 @@ pub mod context;
 pub mod conversations;
 pub mod daemon;
 pub mod design_system;
+pub mod doctor;
 pub mod errors;
 // hooks lives at features::hooks::hooks; re-exported here so all 20 call-sites
 // using `crate::hooks::*` continue to resolve unchanged.
@@ -596,6 +597,12 @@ enum Command {
     Logout,
     /// Show authentication status for all configured providers.
     AuthStatus,
+    /// Run local preflight diagnostics.
+    Doctor {
+        /// Emit the diagnostic report as JSON.
+        #[arg(long)]
+        json: bool,
+    },
     /// Browse and install marketplace plugins.
     Marketplace {
         #[command(subcommand)]
@@ -1553,6 +1560,9 @@ pub async fn run_main() -> Result<()> {
                 }
                 Ok(())
             }
+
+            // --- Doctor ---
+            Command::Doctor { json } => doctor::run_doctor(&app_config, *json),
 
             // --- Marketplace ---
             Command::Marketplace { action } => {

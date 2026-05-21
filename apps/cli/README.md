@@ -151,6 +151,7 @@ from `~/.agiworkforce/output-styles/<name>.md`:
 /model <id>     Switch model
 /status         Session info (model, tokens, mode)
 /context        Context window usage
+/doctor        Show local diagnostics inside the current session
 /clear          Clear conversation, keep system prompt
 /exit           Quit
 ```
@@ -177,12 +178,17 @@ agi session fork <id> --at-turn 0 --as refactor-alt
 agi help
 ```
 
-Lists all 22 subcommands: `exec`, `review`, `apply`, `sandbox`, `mcp-server`,
+Lists subcommands including `exec`, `review`, `apply`, `sandbox`, `mcp-server`,
 `app-server`, `resume`, `fork`, `session`, `history`, `login`, `logout`,
-`auth-status`, `init`, `onboarding`, `features`, `execpolicy`, plus
+`auth-status`, `doctor`, `init`, `onboarding`, `features`, `execpolicy`, plus
 deferred-to-Phase-2 surfaces (`cloud`, `plugin`, `sync`, `marketplace`,
 `ecosystem`) currently dispatched to gated stubs — these surfaces will be
 wired or removed per `~/.claude/plans/cli-competitive-floor.md` Sprint A2.
+
+```bash
+agi doctor
+agi doctor --json
+```
 
 ## Architecture
 
