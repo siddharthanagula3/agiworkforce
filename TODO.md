@@ -238,7 +238,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Record decision that SDKs are adapter/UI-edge dependencies, not AGI runtime architecture.
 - [ ] Make `packages/providers/openai` prefer Responses for native OpenAI endpoints when capability metadata supports it.
 - [ ] Keep Chat Completions fallback for OpenAI-compatible providers and legacy proxy surfaces.
-- [ ] Add tests proving OpenAI `store: false` remains default for Local/BYOK turns.
+- [x] Add tests proving OpenAI `store: false` remains default for Local/BYOK turns.
 - [ ] Add tests proving Vercel AI Gateway is unreachable unless provider mode is explicitly Managed.
 - [ ] Add Web AI SDK event-to-AGI-event adapter.
 - [ ] Consolidate `openai`, `@anthropic-ai/sdk`, `ai`, and `@ai-sdk/*` versions after adapter tests exist.

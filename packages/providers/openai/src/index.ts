@@ -10,8 +10,9 @@
  * and any OpenAI-compatible endpoint (Azure OpenAI, OpenRouter, local
  * vLLM/sglang, etc.) when configured with the right `baseUrl`.
  *
- * The Responses API (with server-side `store`, `prompt_cache_key`, server
- * compaction) is NOT yet wired here — defer until our chat layer needs it.
+ * The Responses API is wired behind `useResponsesApi`. It remains opt-in so
+ * OpenAI-compatible proxies keep the Chat Completions path, and server-side
+ * `store` defaults off unless `responsesStore` is explicitly enabled.
  *
  * @packageDocumentation
  */
