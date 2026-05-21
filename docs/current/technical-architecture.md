@@ -78,6 +78,8 @@ The active Web chat route also renders server-tool activity through the shared c
 
 Desktop/Web UI direction uses the latest Claude desktop modal references as the default baseline: common settings, connector, plugin, search, project edit, and file-preview flows should open as focused overlays before escalating users into full-screen workspaces. Full-screen/split-pane surfaces are for deep artifact viewing, code dashboards, project indexes, and long-running research or agent traces.
 
+The Desktop settings surface now implements the first pass of that baseline: settings stay in a focused centered modal, the left rail has search, and settings are grouped into primary account/preferences, customization, and desktop-app sections without changing save behavior.
+
 Generated files need:
 
 - owner session,

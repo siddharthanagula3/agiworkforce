@@ -10,13 +10,14 @@ import {
   Mic,
   Palette,
   Plug,
+  Search,
   Server,
   Settings2,
   Shield,
   Wrench,
   Zap,
 } from 'lucide-react';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { Loader2 } from 'lucide-react';
 
@@ -92,6 +93,20 @@ const visibleNav = isCloudWeb
   ? SETTINGS_NAV.filter((t) => !WEB_HIDDEN_TABS.has(t.key))
   : SETTINGS_NAV;
 
+const NAV_GROUPS: { label?: string; keys: CanonicalTab[] }[] = [
+  {
+    keys: ['general', 'account', 'appearance', 'privacy', 'models-keys'],
+  },
+  {
+    label: 'Customize',
+    keys: ['agents', 'mcp-skills', 'connectors', 'capabilities'],
+  },
+  {
+    label: 'Desktop app',
+    keys: ['notifications', 'voice'],
+  },
+];
+
 function stableSerialize(value: unknown): string {
   const sortRecursively = (input: unknown): unknown => {
     if (Array.isArray(input)) return input.map(sortRecursively);
@@ -155,6 +170,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [navQuery, setNavQuery] = useState('');
   const baselineSnapshotRef = useRef<string | null>(null);
 
   const resolvedLLMConfig = llmConfig ?? createDefaultLLMConfig();
@@ -169,6 +185,24 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const isOllamaAvailable = ollamaStatus?.available && ollamaStatus?.ollamaRunning;
   const ollamaEnabled = Boolean(resolvedLLMConfig.defaultModels?.ollama);
   const isBusy = loading || isSaving || notificationLoading;
+  const normalizedNavQuery = navQuery.trim().toLowerCase();
+  const filteredNavGroups = useMemo(() => {
+    const visibleByKey = new Map(visibleNav.map((item) => [item.key, item]));
+
+    return NAV_GROUPS.map((group) => ({
+      ...group,
+      items: group.keys
+        .map((key) => visibleByKey.get(key))
+        .filter((item): item is (typeof SETTINGS_NAV)[number] => {
+          if (!item) return false;
+          if (!normalizedNavQuery) return true;
+          return (
+            item.label.toLowerCase().includes(normalizedNavQuery) ||
+            item.key.toLowerCase().includes(normalizedNavQuery)
+          );
+        }),
+    })).filter((group) => group.items.length > 0);
+  }, [normalizedNavQuery]);
 
   const handleExportSettings = useCallback(async () => {
     try {
@@ -566,49 +600,82 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   return (
     <SectionErrorBoundary sectionName="Settings Panel">
       <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-        <DialogContent className="max-w-5xl w-full p-0 overflow-hidden bg-background">
-          <div className="flex h-[85vh]">
+        <DialogContent className="w-[min(1040px,calc(100vw-48px))] max-w-none overflow-hidden border-border/70 bg-background p-0 shadow-2xl sm:rounded-xl">
+          <div className="flex h-[min(760px,calc(100vh-80px))] min-h-[520px]">
             <nav
-              className="w-52 border-r border-border bg-muted py-4 px-2 space-y-1 shrink-0 overflow-y-auto"
+              className="w-64 shrink-0 overflow-y-auto border-r border-border bg-muted/70 px-3 py-4"
               aria-label="Settings sections"
             >
-              <DialogHeader className="px-3 pb-4">
-                <DialogTitle className="text-lg font-bold">Settings</DialogTitle>
-                <DialogDescription className="text-xs">
-                  Configure your preferences
+              <DialogHeader className="px-1 pb-4">
+                <DialogTitle className="text-lg font-semibold">Settings</DialogTitle>
+                <DialogDescription className="sr-only">
+                  Search and configure AGI Workforce preferences
                 </DialogDescription>
               </DialogHeader>
 
-              {visibleNav.map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => setActiveTab(item.key)}
-                  disabled={isBusy}
-                  aria-current={activeTab === item.key ? 'page' : undefined}
-                  className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-                    activeTab === item.key
-                      ? 'bg-background text-foreground font-medium'
-                      : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
-                  } ${isBusy ? 'opacity-60 cursor-not-allowed' : ''}`}
-                >
-                  <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span className="truncate flex-1 text-left">{item.label}</span>
-                  {item.key === 'connectors' && connectedConnectorCount > 0 && (
-                    <span
-                      className="ml-auto shrink-0 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-green-500/15 px-1.5 text-[10px] font-semibold text-green-500"
-                      aria-label={`${connectedConnectorCount} connected`}
-                    >
-                      {connectedConnectorCount}
-                    </span>
-                  )}
-                </button>
-              ))}
+              <label className="relative mb-4 block">
+                <span className="sr-only">Search settings</span>
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <input
+                  value={navQuery}
+                  onChange={(event) => setNavQuery(event.target.value)}
+                  placeholder="Search"
+                  className="h-10 w-full rounded-lg border border-transparent bg-background/70 py-2 pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-border focus:bg-background focus:ring-2 focus:ring-ring/30"
+                />
+              </label>
+
+              <div className="space-y-5">
+                {filteredNavGroups.map((group, groupIndex) => (
+                  <div key={group.label ?? 'primary'} className="space-y-1">
+                    {group.label && (
+                      <div className="px-3 pb-1 text-xs font-medium text-muted-foreground">
+                        {group.label}
+                      </div>
+                    )}
+                    {group.items.map((item) => (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => setActiveTab(item.key)}
+                        disabled={isBusy}
+                        aria-current={activeTab === item.key ? 'page' : undefined}
+                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                          activeTab === item.key
+                            ? 'bg-background text-foreground shadow-xs'
+                            : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
+                        } ${isBusy ? 'cursor-not-allowed opacity-60' : ''}`}
+                      >
+                        <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span className="min-w-0 flex-1 truncate text-left">{item.label}</span>
+                        {item.key === 'connectors' && connectedConnectorCount > 0 && (
+                          <span
+                            className="ml-auto flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-green-500/15 px-1.5 text-[10px] font-semibold text-green-500"
+                            aria-label={`${connectedConnectorCount} connected`}
+                          >
+                            {connectedConnectorCount}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                    {groupIndex === 0 && filteredNavGroups.length > 1 && (
+                      <div className="mx-3 mt-3 border-t border-border/70" aria-hidden="true" />
+                    )}
+                  </div>
+                ))}
+                {filteredNavGroups.length === 0 && (
+                  <div className="rounded-lg border border-border bg-background/60 px-3 py-3 text-sm text-muted-foreground">
+                    No settings found
+                  </div>
+                )}
+              </div>
             </nav>
 
             <div className="flex-1 flex flex-col min-w-0">
               <div
-                className={`flex-1 overflow-y-auto px-6 py-6 ${
+                className={`flex-1 overflow-y-auto px-8 py-7 ${
                   isBusy ? 'pointer-events-none opacity-80' : ''
                 }`}
               >
@@ -627,7 +694,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                 )}
               </div>
 
-              <div className="flex justify-end gap-3 px-6 py-4 border-t border-border shrink-0">
+              <div className="flex shrink-0 justify-end gap-3 border-t border-border bg-background/95 px-8 py-4">
                 {requiresDeferredSave ? (
                   <>
                     {saveError && (
