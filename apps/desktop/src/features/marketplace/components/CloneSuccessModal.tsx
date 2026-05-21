@@ -2,15 +2,10 @@ import { ArrowRight, CheckCircle, Play, Settings, Share2, Sparkles } from 'lucid
 import { useShallow } from 'zustand/react/shallow';
 import { toast } from 'sonner';
 import { invoke } from '../../../lib/tauri-mock';
-import { Badge } from '../../../components/ui/Badge';
-import { Button } from '../../../components/ui/Button';
-import { Card } from '../../../components/ui/Card';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from '../../../components/ui/Dialog';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/Dialog';
 import { useMarketplaceStore } from '../marketplaceStore';
 
 export function CloneSuccessModal() {

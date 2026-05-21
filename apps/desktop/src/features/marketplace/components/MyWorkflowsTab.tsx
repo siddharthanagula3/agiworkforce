@@ -11,16 +11,10 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '../../../components/ui/AlertDialog';
-import { Badge } from '../../../components/ui/Badge';
-import { Button } from '../../../components/ui/Button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '../../../components/ui/Card';
+} from '@/components/ui/AlertDialog';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 import { useAuthStore } from '../../../stores/auth';
 import { useMarketplaceStore } from '../marketplaceStore';
 

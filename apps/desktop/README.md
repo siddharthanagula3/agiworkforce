@@ -77,7 +77,7 @@ Desktop release requires platform packaging, signing/notarization where applicab
 
 ## Known Caveats
 
-- Desktop is currently one of the largest surfaces and still needs domain-first cleanup after root/docs/package contracts stabilize.
+- Desktop is one of the largest surfaces; product UI domains now live under `src/features`, while `src/components` is reserved for shared UI primitives.
 - Web build reuse through `/chat/` means some UI changes can affect both Desktop and Web.
 
 ## CODEOWNERS

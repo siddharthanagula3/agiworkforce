@@ -33,7 +33,7 @@ import {
   getBestAutoModeForTier,
 } from '../../constants/llm';
 import type { Provider } from '../../stores/settingsStore';
-import { ScreenCaptureButton } from '@/components/ScreenCapture/ScreenCaptureButton';
+import { ScreenCaptureButton } from '@/features/screen-capture/ScreenCaptureButton';
 import type { CaptureResult } from '../../types/capture';
 
 interface RecentConversationItem {

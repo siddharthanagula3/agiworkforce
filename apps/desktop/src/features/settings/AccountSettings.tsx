@@ -10,9 +10,9 @@ import { Button } from '@/components/ui/Button';
 import { useAccountStore, useAuthStore } from '../../stores/auth';
 import type { CreditBalance } from '../../stores/auth';
 import { openBillingPortal } from '../../lib/stripeCheckout';
-import { PauseFlow } from '@/components/v3/PauseFlow';
-import { DowngradeFlow } from '@/components/v3/DowngradeFlow';
-import { CancelFlow } from '@/components/v3/CancelFlow';
+import { PauseFlow } from '@/features/v3/PauseFlow';
+import { DowngradeFlow } from '@/features/v3/DowngradeFlow';
+import { CancelFlow } from '@/features/v3/CancelFlow';
 import type { BillingPlanTier } from '@agiworkforce/types';
 
 type BillingModal = 'pause' | 'downgrade' | 'cancel' | null;

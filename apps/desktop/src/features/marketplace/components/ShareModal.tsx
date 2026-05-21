@@ -1,16 +1,16 @@
 import { Check, Copy, Link, Briefcase, Mail, MessageSquare, Newspaper, Send } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { Button } from '../../../components/ui/Button';
+import { Button } from '@/components/ui/Button';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '../../../components/ui/Dialog';
-import { Input } from '../../../components/ui/Input';
-import { Textarea } from '../../../components/ui/Textarea';
+} from '@/components/ui/Dialog';
+import { Input } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Textarea';
 import { SHARE_PLATFORMS } from '../../../types/marketplace';
 import { useMarketplaceStore } from '../marketplaceStore';
 

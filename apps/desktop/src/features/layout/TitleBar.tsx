@@ -12,8 +12,8 @@ import {
 } from 'lucide-react';
 import { WindowActions } from '../../hooks/useWindowManager';
 import { useWindowStore } from '../../stores/windowStore';
-import { Button } from '../../components/ui/Button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/ui/Tooltip';
+import { Button } from '@/components/ui/Button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/Tooltip';
 import { cn } from '../../lib/utils';
 import { useAuthStore } from '../../stores/auth';
 

@@ -22,8 +22,8 @@ import type {
 } from '../../types/media';
 import { useBillingStore } from '../../stores/auth';
 import { toast } from 'sonner';
-import { MediaGenerationProgress } from '@/components/Media/MediaGenerationProgress';
-import type { MediaGenProvider } from '@/components/Media/MediaGenerationProgress';
+import { MediaGenerationProgress } from '@/features/media/MediaGenerationProgress';
+import type { MediaGenProvider } from '@/features/media/MediaGenerationProgress';
 
 const imageProviders: Array<{
   id: ImageProviderId;

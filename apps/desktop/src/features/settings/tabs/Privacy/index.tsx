@@ -29,7 +29,7 @@ const LazyAnalyticsSettings = lazy(() =>
   import('../../AnalyticsSettings').then((m) => ({ default: m.AnalyticsSettings })),
 );
 const LazySafetyPolicies = lazy(() =>
-  import('@/components/Governance/SafetyPolicies').then((m) => ({ default: m.SafetyPolicies })),
+  import('@/features/governance/SafetyPolicies').then((m) => ({ default: m.SafetyPolicies })),
 );
 
 function Fallback({ label }: { label: string }) {

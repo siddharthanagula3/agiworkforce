@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, Check, Loader2, Save, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { cn } from '../../../lib/utils';
-import { MonacoEditor } from '@/components/Editor/MonacoEditor';
+import { MonacoEditor } from '@/features/editor/MonacoEditor';
 
 interface CodeCanvasProps {
   contextId?: string;

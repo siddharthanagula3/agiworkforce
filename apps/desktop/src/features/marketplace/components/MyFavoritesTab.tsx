@@ -1,6 +1,6 @@
 import { Heart, Trash2 } from 'lucide-react';
 import React, { useEffect } from 'react';
-import { Button } from '../../../components/ui/Button';
+import { Button } from '@/components/ui/Button';
 import { toast } from 'sonner';
 import { invoke } from '../../../lib/tauri-mock';
 import { useAuthStore } from '../../../stores/auth';

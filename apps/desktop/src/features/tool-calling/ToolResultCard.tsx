@@ -34,7 +34,7 @@ import { sanitizeMarkdownHtml } from '../../utils/security';
 import {
   FileDownloadButton,
   type DownloadableFile,
-} from '@/components/FileUpload/FileDownloadButton';
+} from '@/features/file-upload/FileDownloadButton';
 
 interface ToolResultCardProps {
   result: ToolResultUI;

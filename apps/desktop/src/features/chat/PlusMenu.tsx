@@ -18,7 +18,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { toast } from 'sonner';
 import { isTauri } from '../../lib/tauri-mock';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/Popover';
-import { ScreenCaptureButton } from '@/components/ScreenCapture/ScreenCaptureButton';
+import { ScreenCaptureButton } from '@/features/screen-capture/ScreenCaptureButton';
 import type { CaptureResult } from '../../types/capture';
 import { cn } from '../../lib/utils';
 import { useProjectStore, selectCurrentFolder, formatFolderPath } from '../../stores/projectStore';

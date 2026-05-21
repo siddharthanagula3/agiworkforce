@@ -1,8 +1,8 @@
 import { Clock, Copy, DollarSign, Eye, Share2, Sparkles, Star } from 'lucide-react';
 import React, { memo, useCallback, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { Badge } from '../../../components/ui/Badge';
-import { Button } from '../../../components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import {
   Card,
   CardContent,
@@ -10,7 +10,7 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from '../../../components/ui/Card';
+} from '@/components/ui/Card';
 import { toast } from 'sonner';
 import { useAuthStore } from '../../../stores/auth';
 import type { PublishedWorkflow } from '../../../types/marketplace';

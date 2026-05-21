@@ -79,7 +79,7 @@ vi.mock('../Cards/ActiveToolStreams', () => ({
   ActiveToolStreams: () => null,
 }));
 
-vi.mock('@/components/AGI', () => ({
+vi.mock('@/features/agi', () => ({
   IterationProgressPanel: () => null,
 }));
 

@@ -1,7 +1,7 @@
 import { Download, Image as ImageIcon, Video } from 'lucide-react';
 import type { ToolResultProps } from './index';
 import { Button } from '@/components/ui/Button';
-import { MediaGenerationProgress } from '@/components/Media/MediaGenerationProgress';
+import { MediaGenerationProgress } from '@/features/media/MediaGenerationProgress';
 
 export interface ImageGenerationData {
   prompt?: string;

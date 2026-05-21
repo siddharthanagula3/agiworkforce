@@ -1,5 +1,5 @@
 ---
-status: ACTIVE - Web complete, Mobile component-domain wave complete, Desktop large-domain wave in progress
+status: ACTIVE - Web complete, Mobile component-domain wave complete, Desktop component-domain wave complete
 owner: team-lead
 last-updated: 2026-05-21
 phase: D (Architecture cleanup, post-launch backlog)
@@ -41,13 +41,12 @@ subscription, pricing, planning, reminders, messaging, mobile companion, teams,
 terminal, tools, vision, and workflows out of `src/components` into
 `apps/desktop/src/features`, with call sites and structure checks updated.
 
-Desktop Settings, MCP, Unified Agentic Chat, execution, execution sidecar,
-memory, memory panel, tool-calling, artifacts, browser, canvas, computer-use,
-connectors, marketplace, research, and skill-marketplace domains have also
-moved out of `src/components` into `apps/desktop/src/features`.
-The remaining Desktop migrations are agent, AGI, governance, scheduler,
-screen-capture, ROI dashboard, auth, file/upload, document/media/code,
-overlay, and adjacent component domains.
+The Desktop component-domain wave is complete. Product UI domains have moved
+out of `src/components` into `apps/desktop/src/features`, including chat,
+settings, MCP, execution, memory, tooling side panels, v3 shell, governance,
+scheduler, screen capture, ROI, auth, file upload, document/media/code,
+overlay, and adjacent small domains. `apps/desktop/src/components` is now
+reserved for shared UI primitives only.
 
 Every current Web, Mobile, and Desktop top-level feature folder now has a local
 ownership README, and `pnpm check:readme-ownership` enforces feature README

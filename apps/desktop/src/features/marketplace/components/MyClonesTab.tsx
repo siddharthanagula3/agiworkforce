@@ -1,14 +1,8 @@
 import { Calendar, Copy, ExternalLink } from 'lucide-react';
 import React, { useEffect } from 'react';
-import { Badge } from '../../../components/ui/Badge';
-import { Button } from '../../../components/ui/Button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '../../../components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 import { invoke } from '../../../lib/tauri-mock';
 import { useAuthStore } from '../../../stores/auth';
 import { WORKFLOW_CATEGORIES } from '../../../types/marketplace';

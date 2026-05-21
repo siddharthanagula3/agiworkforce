@@ -1,13 +1,13 @@
 import { SlidersHorizontal, X } from 'lucide-react';
-import { Badge } from '../../../components/ui/Badge';
-import { Button } from '../../../components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../../../components/ui/Select';
+} from '@/components/ui/Select';
 import type { MarketplaceFilters } from '../../../types/marketplace';
 import { WORKFLOW_CATEGORIES } from '../../../types/marketplace';
 import { useMarketplaceStore } from '../marketplaceStore';

@@ -36,24 +36,24 @@ import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
 import type { Artifact } from '../../types/chat';
 import { BrowserVisualization } from '@/features/browser/BrowserVisualization';
-import { BrowserAutomationPanel } from '@/components/Agent/BrowserAutomationPanel';
-import { MonacoEditor } from '@/components/Editor/MonacoEditor';
+import { BrowserAutomationPanel } from '@/features/agent/BrowserAutomationPanel';
+import { MonacoEditor } from '@/features/editor/MonacoEditor';
 import { TerminalPanel } from '@/features/execution/TerminalPanel';
-import { MediaGallery } from '@/components/Media/MediaGallery';
-import { BackgroundTasksPanel } from '@/components/BackgroundTasks/BackgroundTasksPanel';
+import { MediaGallery } from '@/features/media/MediaGallery';
+import { BackgroundTasksPanel } from '@/features/background-tasks/BackgroundTasksPanel';
 import { ArtifactRenderer } from './ArtifactRenderer';
 import { DiffViewer } from './Sidecar/DiffViewer';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 
 // Lazy-loaded sidecar panels
 const LazyGitPanel = lazy(() =>
-  import('@/components/Git/GitPanel').then((m) => ({ default: m.GitPanel })),
+  import('@/features/git/GitPanel').then((m) => ({ default: m.GitPanel })),
 );
 const LazyDatabaseWorkspace = lazy(() =>
-  import('@/components/Database/DatabaseWorkspace').then((m) => ({ default: m.DatabaseWorkspace })),
+  import('@/features/database/DatabaseWorkspace').then((m) => ({ default: m.DatabaseWorkspace })),
 );
 const LazyFilesystemWorkspace = lazy(() =>
-  import('@/components/Filesystem/FilesystemWorkspace').then((m) => ({
+  import('@/features/filesystem/FilesystemWorkspace').then((m) => ({
     default: m.FilesystemWorkspace,
   })),
 );
@@ -66,15 +66,15 @@ const LazyComputerUseMonitor = lazy(() =>
   })),
 );
 const LazySchedulerPanel = lazy(() =>
-  import('@/components/Scheduler/SchedulerPanel').then((m) => ({ default: m.SchedulerPanel })),
+  import('@/features/scheduler/SchedulerPanel').then((m) => ({ default: m.SchedulerPanel })),
 );
 const LazyDocumentGenerator = lazy(() =>
-  import('@/components/Documents/DocumentGenerator').then((m) => ({
+  import('@/features/documents/DocumentGenerator').then((m) => ({
     default: m.DocumentGenerator,
   })),
 );
 const LazyActionRecorder = lazy(() =>
-  import('@/components/Automation/ActionRecorder').then((m) => ({ default: m.ActionRecorder })),
+  import('@/features/automation/ActionRecorder').then((m) => ({ default: m.ActionRecorder })),
 );
 const LazyMarketplacePage = lazy(() =>
   import('@/features/marketplace/MarketplacePage').then((m) => ({ default: m.MarketplacePage })),
@@ -85,15 +85,15 @@ const LazyMessagingIntegrations = lazy(() =>
   })),
 );
 const LazyProductivityWorkspace = lazy(() =>
-  import('@/components/Productivity/ProductivityWorkspace').then((m) => ({
+  import('@/features/productivity/ProductivityWorkspace').then((m) => ({
     default: m.ProductivityWorkspace,
   })),
 );
 const LazyCloudStoragePanel = lazy(() =>
-  import('@/components/Cloud/CloudStoragePanel').then((m) => ({ default: m.CloudStoragePanel })),
+  import('@/features/cloud/CloudStoragePanel').then((m) => ({ default: m.CloudStoragePanel })),
 );
 const LazyGovernanceDashboard = lazy(() =>
-  import('@/components/Governance/GovernanceDashboard').then((m) => ({
+  import('@/features/governance/GovernanceDashboard').then((m) => ({
     default: m.GovernanceDashboard,
   })),
 );
@@ -101,15 +101,15 @@ const LazyCanvasWorkspace = lazy(() =>
   import('@/features/canvas/CanvasWorkspace').then((m) => ({ default: m.CanvasWorkspace })),
 );
 const LazyAgentCollaborationPanel = lazy(() =>
-  import('@/components/AgentCollaboration/AgentCollaborationPanel').then((m) => ({
+  import('@/features/agent-collaboration/AgentCollaborationPanel').then((m) => ({
     default: m.AgentCollaborationPanel,
   })),
 );
 const LazyDynamicCanvas = lazy(() =>
-  import('@/components/DynamicCanvas/DynamicCanvas').then((m) => ({ default: m.DynamicCanvas })),
+  import('@/features/dynamic-canvas/DynamicCanvas').then((m) => ({ default: m.DynamicCanvas })),
 );
 const LazyVisualEditor = lazy(() =>
-  import('@/components/editing/VisualEditor').then((m) => ({ default: m.VisualEditor })),
+  import('@/features/editing/VisualEditor').then((m) => ({ default: m.VisualEditor })),
 );
 
 const SidecarLoadingFallback = () => (

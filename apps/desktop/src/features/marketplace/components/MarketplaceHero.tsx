@@ -1,8 +1,8 @@
 import { Copy, Search, TrendingUp, Upload, Users } from 'lucide-react';
 import React, { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { Button } from '../../../components/ui/Button';
-import { Input } from '../../../components/ui/Input';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { useMarketplaceStore } from '../marketplaceStore';
 import { WorkflowCard } from './WorkflowCard';
 

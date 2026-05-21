@@ -51,7 +51,7 @@ import {
   RefreshCcw,
   Sun,
 } from 'lucide-react';
-import { ErrorBoundary } from './components/ErrorHandling';
+import { ErrorBoundary } from './features/error-handling';
 import { TooltipProvider } from './components/ui/Tooltip';
 import { getModelMetadata, getProviderDefaultModel } from './constants/llm';
 import { errorReportingService } from './services/errorReporting';
@@ -74,12 +74,12 @@ import { applyTheme, getThemeById } from './themes/index';
 import { FeatureFlagName, useFeatureFlag } from './services/featureFlags';
 
 const VisualizationLayer = lazy(() =>
-  import('./components/Overlay/VisualizationLayer').then((m) => ({
+  import('./features/overlay/VisualizationLayer').then((m) => ({
     default: m.VisualizationLayer,
   })),
 );
 const FloatingChat = lazy(() =>
-  import('./components/FloatingChat').then((m) => ({
+  import('./features/floating-chat').then((m) => ({
     default: m.FloatingChat,
   })),
 );
@@ -89,7 +89,7 @@ const ChatInterface = lazy(() =>
   })),
 );
 const DesktopShellV3 = lazy(() =>
-  import('./components/v3').then((m) => ({
+  import('./features/v3').then((m) => ({
     default: m.DesktopShellV3,
   })),
 );
@@ -119,7 +119,7 @@ const OnboardingWelcome = lazy(() =>
   })),
 );
 const AuthPage = lazy(() =>
-  import('./components/Auth/AuthPage').then((m) => ({
+  import('./features/auth/AuthPage').then((m) => ({
     default: m.AuthPage,
   })),
 );

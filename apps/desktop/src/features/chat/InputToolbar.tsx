@@ -10,7 +10,7 @@ import { cn } from '../../lib/utils';
 import { getModelMetadata } from '../../constants/llm';
 import { VoiceInputButton } from './VoiceInputButton';
 import { FolderSelector } from './FolderSelector';
-import { ScreenCaptureButton } from '@/components/ScreenCapture/ScreenCaptureButton';
+import { ScreenCaptureButton } from '@/features/screen-capture/ScreenCaptureButton';
 import type { CaptureResult } from '../../types/capture';
 
 export interface InputToolbarProps {

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/Tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { CloneSuccessModal } from './components/CloneSuccessModal';
 import { DiscoverTab } from './components/DiscoverTab';
 import { MarketplaceHero } from './components/MarketplaceHero';

@@ -31,7 +31,7 @@ import { getToolRenderer, hasInlineRenderer } from './InlineToolResults';
 import { Button } from '@/components/ui/Button';
 import { MessageBubble } from './MessageBubble';
 import { ActiveToolStreams } from './Cards/ActiveToolStreams';
-import { IterationProgressPanel } from '@/components/AGI';
+import { IterationProgressPanel } from '@/features/agi';
 import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/ui';
 import { SimpleEmptyState } from './SimpleEmptyState';
 import { AdvancedEmptyState } from './AdvancedEmptyState';

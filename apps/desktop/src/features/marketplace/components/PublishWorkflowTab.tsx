@@ -1,25 +1,19 @@
 import { AlertCircle, CheckCircle, Plus, Upload, X } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
-import { Alert } from '../../../components/ui/Alert';
-import { Badge } from '../../../components/ui/Badge';
-import { Button } from '../../../components/ui/Button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '../../../components/ui/Card';
-import { Input } from '../../../components/ui/Input';
-import { Label } from '../../../components/ui/Label';
+import { Alert } from '@/components/ui/Alert';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
+import { Label } from '@/components/ui/Label';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../../../components/ui/Select';
-import { Textarea } from '../../../components/ui/Textarea';
+} from '@/components/ui/Select';
+import { Textarea } from '@/components/ui/Textarea';
 import { invoke } from '../../../lib/tauri-mock';
 import { useAuthStore } from '../../../stores/auth';
 import { WORKFLOW_CATEGORIES, type WorkflowLicense } from '../../../types/marketplace';
