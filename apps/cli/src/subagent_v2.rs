@@ -14,6 +14,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::{mpsc, oneshot, RwLock};
 use uuid::Uuid;
 
@@ -248,11 +249,22 @@ impl SubagentSpec {
 pub struct SubagentHandle {
     pub id: SubagentId,
     pub status: Arc<RwLock<SubagentStatus>>,
+    pub created_at_unix_ms: u128,
     inbox_tx: mpsc::Sender<String>,
     outbox_rx: Arc<RwLock<mpsc::Receiver<SubagentMessage>>>,
     kill_tx: Option<oneshot::Sender<()>>,
     join_handle: Option<tokio::task::JoinHandle<()>>,
     spec: SubagentSpec,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubagentSnapshot {
+    pub id: SubagentId,
+    pub model: String,
+    pub status: SubagentStatus,
+    pub max_turns: usize,
+    pub has_system_prompt: bool,
+    pub created_at_unix_ms: u128,
 }
 
 impl SubagentHandle {
@@ -270,6 +282,17 @@ impl SubagentHandle {
 
     pub async fn status(&self) -> SubagentStatus {
         *self.status.read().await
+    }
+
+    pub async fn snapshot(&self) -> SubagentSnapshot {
+        SubagentSnapshot {
+            id: self.id,
+            model: self.spec.model.clone(),
+            status: self.status().await,
+            max_turns: self.spec.max_turns,
+            has_system_prompt: self.spec.system_prompt.is_some(),
+            created_at_unix_ms: self.created_at_unix_ms,
+        }
     }
 
     pub async fn kill(&mut self) -> Result<()> {
@@ -334,6 +357,7 @@ impl SubagentRegistry {
         let handle = SubagentHandle {
             id,
             status,
+            created_at_unix_ms: unix_epoch_ms(),
             inbox_tx,
             outbox_rx: Arc::new(RwLock::new(outbox_rx)),
             kill_tx: Some(kill_tx),
@@ -353,6 +377,21 @@ impl SubagentRegistry {
         self.inner.read().await.keys().copied().collect()
     }
 
+    pub async fn list_snapshots(&self) -> Vec<SubagentSnapshot> {
+        let handles: Vec<Arc<RwLock<SubagentHandle>>> =
+            self.inner.read().await.values().cloned().collect();
+        let mut snapshots = Vec::with_capacity(handles.len());
+        for handle in handles {
+            snapshots.push(handle.read().await.snapshot().await);
+        }
+        snapshots.sort_by(|a, b| {
+            a.created_at_unix_ms
+                .cmp(&b.created_at_unix_ms)
+                .then(a.id.cmp(&b.id))
+        });
+        snapshots
+    }
+
     pub async fn kill(&self, id: SubagentId) -> Result<()> {
         let Some(arc) = self.get(id).await else {
             anyhow::bail!("no subagent {id}")
@@ -368,6 +407,13 @@ impl SubagentRegistry {
         let mut handle = arc.write().await;
         handle.wait().await
     }
+}
+
+fn unix_epoch_ms() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
 }
 
 /// Production LlmCaller that wraps `crate::models::stream_completion`. Use
@@ -460,6 +506,42 @@ mod tests {
         let b = r.spawn(spec("haiku")).await.unwrap();
         assert_ne!(a, b);
         assert_eq!(r.list().await.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn list_snapshots_exposes_status_and_runtime_metadata() {
+        let r = SubagentRegistry::new();
+        let mut spec = SubagentSpec::new("claude-opus-4-7");
+        spec.max_turns = 9;
+        spec.system_prompt = Some("work independently".into());
+        let id = r.spawn(spec).await.unwrap();
+
+        let snapshots = r.list_snapshots().await;
+        assert_eq!(snapshots.len(), 1);
+        let snapshot = &snapshots[0];
+        assert_eq!(snapshot.id, id);
+        assert_eq!(snapshot.model, "claude-opus-4-7");
+        assert_eq!(snapshot.max_turns, 9);
+        assert!(snapshot.has_system_prompt);
+        assert!(snapshot.created_at_unix_ms > 0);
+        assert!(matches!(
+            snapshot.status,
+            SubagentStatus::Pending | SubagentStatus::Running | SubagentStatus::Completed
+        ));
+    }
+
+    #[tokio::test]
+    async fn list_snapshots_reflects_killed_status() {
+        let r = SubagentRegistry::new();
+        let id = r.spawn(spec("opus")).await.unwrap();
+        r.kill(id).await.unwrap();
+
+        let snapshots = r.list_snapshots().await;
+        let snapshot = snapshots
+            .iter()
+            .find(|snapshot| snapshot.id == id)
+            .expect("snapshot");
+        assert_eq!(snapshot.status, SubagentStatus::Killed);
     }
 
     #[tokio::test]

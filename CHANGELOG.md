@@ -116,6 +116,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - CLI `allowed_tools` schema filtering now accepts Claude-style aliases and pattern-qualified rules such as `Read`, `Bash`, and `Bash(cargo *)` instead of requiring internal tool names.
 - CLI hook matcher alias expansion now reads Claude-style tool aliases from the central tool catalog instead of maintaining a duplicate alias table.
 - CLI `PreToolUse` hook control-flow is now shared by task subagents, parallel read-only tool batches, and sequential tools; hook block/stop decisions and `updated_input` rewrites are honored before any tool execution path runs.
+- CLI legacy tool-call conversion is now compiled only for tests, keeping strict dead-code checks usable for focused subagent harness verification.
 - CLI `/permissions` now supports adding/removing allow, deny, and session command-prefix rules; command approvals match the full command before program fallbacks, reject shell-metachar suffixes on cached prefixes, and keep session approvals in process memory.
 - CLI `allowed_tools` and `disallowed_tools` are now applied to normal one-shot, REPL, and TUI agent sessions; whole-tool deny rules hide schemas and pattern rules reject matching calls before execution.
 - CLI plan-mode mutation gates now read tool permission metadata from the central tool catalog, including team/MCP-facing tools, and approved plans restore the normal mutable tool surface.
@@ -169,6 +170,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
   - `docs/enterprise/` for profit-first enterprise readiness and control-plane ownership.
 - `docs/agent-context/lanes.json`, `repo-map.json`, and `risk-map.json` entries for enterprise admin/control-plane parallel-agent work.
 - `docs/engineering/agent-harness-rollout.md` locking Claude Code at-scale harness lessons into AGI's agent-native repo rules: lean context files, deterministic hooks, on-demand skills, distributable plugins, LSP/MCP integrations, subagents, rollout phases, and harness ownership.
+- CLI subagent v2 runtime snapshots expose subagent id, model, status, creation time, max-turn budget, and system-prompt presence for future visual agent-manager and orchestration surfaces.
 - `.opencode/instructions/INSTRUCTIONS.md` and first-class `.opencode/commands/*.md` templates so opencode uses the same canonical repo context and command vocabulary as the other agent harnesses.
 - Contract READMEs for tracked hidden tool folders (`.claude`, `.codex`, `.cursor`, `.opencode`, `.agents`, `.minimax`, `.superpowers`) plus missing `SKILL.md` metadata for tracked `.agents/skills` entries.
 - `docs/current/` as the compact current docs layer:

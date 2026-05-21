@@ -36,6 +36,7 @@ For AGI Workforce, the harness is the repo structure, context files, hooks, skil
 - `docs/agent-context/repo-map.json`, `risk-map.json`, `commands.json`, and local READMEs are the codebase map. Keep them current instead of adding long prose to root context.
 - LSP support is a high-value future investment for TypeScript, Rust, Swift/Kotlin, and native extension work. Until then, use `rg`, typecheck errors, and local owner READMEs as the navigation baseline.
 - MCP and plugin work must follow the same privacy boundaries as the product: no silent Local to BYOK/Managed handoff, no unreviewed secret-bearing workflows.
+- Subagent runtimes need queryable snapshots before they become visual agent-manager surfaces. The minimum snapshot is id, model, status, creation time, max-turn budget, and whether a system prompt is active.
 
 ## Rollout Phases
 

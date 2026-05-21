@@ -425,6 +425,7 @@ Goal: Claude subagents plus AGI cross-provider/task runtime.
 Tasks:
 
 - Add visual agent manager.
+- Add queryable subagent runtime snapshots for status, model, prompt, and execution metadata.
 - Add per-agent tool and model restrictions.
 - Add task execution history and background task UI.
 - Add GitHub PR/issue automation design for private beta.

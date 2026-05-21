@@ -158,6 +158,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Add opencode command templates and adapter instructions so opencode agents load the canonical repo rules without duplicating durable context.
 - [x] Add `pnpm check:mobile-hygiene` for Mobile feature ownership, frozen root hooks/lib imports, and UI direct-I/O drift.
 - [x] Add lane-contract sections to scoped `AGENTS.md` files and enforce them through `pnpm check:agent-context`.
+- [x] Add CLI subagent v2 runtime snapshots so future visual agent managers and orchestration surfaces can inspect model, status, prompt, and execution metadata.
 - [x] Extract repeated API gateway UUID validation into `services/api-gateway/src/validations/ids.ts`.
 - [x] Add 100 delegated research prompts for the agentic company operating model.
 
