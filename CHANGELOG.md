@@ -94,6 +94,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 ### Changed
 
 - Desktop and API native computer-use action/session payloads now use `DesktopComputerAction` and `DesktopComputerUseSession`, reserving canonical `ComputerAction` and `ComputerUseSession` names for suite-level shared contracts.
+- Desktop `hooks_get_stats` now returns live per-hook execution totals, success/failure counts, average duration, and last execution time instead of the previous placeholder `None`.
 - VS Code and unified chat usage meters no longer invent managed-plan quota/reset values; they now use reported quota fields when available and show explicit unavailable/not-managed states otherwise.
 - Desktop and Web MCP surface types now source the canonical `McpServerConfig` name from `@agiworkforce/mcp`; Desktop-only config requirements use `DesktopMcpServerConfig`.
 - API gateway now mounts `agents` at `/api/agents` and MCP at `/api/mcp`; MCP proxy initialization is lazy on first authenticated route use.
