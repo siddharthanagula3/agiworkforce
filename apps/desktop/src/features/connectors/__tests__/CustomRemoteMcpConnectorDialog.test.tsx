@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { buildRemoteMcpConnectorEntry } from '../CustomRemoteMcpConnectorDialog';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  buildRemoteMcpConnectorEntry,
+  CustomRemoteMcpConnectorDialog,
+} from '../CustomRemoteMcpConnectorDialog';
 
 describe('buildRemoteMcpConnectorEntry', () => {
   it('builds a Tauri-compatible HTTP MCP server config', () => {
@@ -56,5 +61,22 @@ describe('buildRemoteMcpConnectorEntry', () => {
         verifySsl: true,
       }),
     ).toThrow('Header "X-Workspace" must be a string');
+  });
+
+  it('keeps advanced connector fields collapsed until requested', async () => {
+    const user = userEvent.setup();
+    render(<CustomRemoteMcpConnectorDialog open onClose={vi.fn()} />);
+
+    expect(screen.getByRole('dialog', { name: /Add custom connector/i })).toBeInTheDocument();
+    expect(screen.getByText('Beta')).toBeInTheDocument();
+    expect(screen.getByLabelText('Name')).toBeInTheDocument();
+    expect(screen.getByLabelText('Remote MCP URL')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Bearer token')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Advanced settings' }));
+
+    expect(screen.getByLabelText('Bearer token')).toBeInTheDocument();
+    expect(screen.getByLabelText('Headers JSON')).toBeInTheDocument();
+    expect(screen.getByLabelText('Timeout')).toBeInTheDocument();
   });
 });
