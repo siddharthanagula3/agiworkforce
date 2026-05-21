@@ -1,6 +1,6 @@
 import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { combineAbortSignals } from '@/lib/abortSignal';
-import { AbortError } from '@agiworkforce/utils';
+import { AbortError } from '@agiworkforce/utils/async';
 import {
   streamFromProvider,
   type ProviderStreamProvider,

@@ -4,7 +4,7 @@ import { Bot } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { AgentStatusBadge } from './AgentStatusBadge';
 import { colors } from '@/src/ui/theme';
-import { formatRelativeTime } from '@agiworkforce/utils';
+import { formatRelativeTime } from '@agiworkforce/utils/format';
 import type { Agent } from '@/stores/agentStore';
 
 interface AgentCardProps {

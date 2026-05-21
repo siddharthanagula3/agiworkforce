@@ -16,7 +16,7 @@ import { getDisplayName } from '@/src/features/model-picker/service';
 import { colors } from '@/src/ui/theme';
 import { MAX_INPUT_LINES } from '@/lib/constants';
 import type { VoiceMeteringEvent } from '@/src/features/voice/services/voice';
-import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils';
+import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils/voice';
 
 interface ChatInputProps {
   onSend: (text: string, attachments?: Attachment[]) => void;

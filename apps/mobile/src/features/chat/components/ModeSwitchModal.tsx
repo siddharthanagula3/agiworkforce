@@ -7,7 +7,7 @@ import {
   buildLocalToByokHandoffDraft,
   type HandoffPreviewContextItem,
   type LocalToByokHandoffPreview,
-} from '@agiworkforce/utils';
+} from '@agiworkforce/utils/privacy-handoff';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 

@@ -10,7 +10,7 @@ import { AutoTagBadge } from '@/src/features/sidebar/components/AutoTagBadge';
 import { useChatStore } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/src/ui/theme';
-import { formatRelativeTime, truncate } from '@agiworkforce/utils';
+import { formatRelativeTime, truncate } from '@agiworkforce/utils/format';
 import type { ConversationSummary } from '@/types/chat';
 import type { ConversationTag } from '@/services/autotag';
 

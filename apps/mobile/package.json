@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "license": "PROPRIETARY",
-  "main": "expo-router/entry",
+  "main": "index.js",
   "scripts": {
     "dev": "expo start",
     "android": "expo run:android",

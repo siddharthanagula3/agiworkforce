@@ -4,7 +4,7 @@ import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
 import { api } from '@/services/api';
 import { useProjectStore } from '@/src/features/projects/store';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
-import type { LocalToByokHandoffPreview } from '@agiworkforce/utils';
+import type { LocalToByokHandoffPreview } from '@agiworkforce/utils/privacy-handoff';
 
 export interface ForkConversationOptions {
   title?: string;

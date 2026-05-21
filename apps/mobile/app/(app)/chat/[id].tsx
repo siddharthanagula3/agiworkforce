@@ -18,7 +18,7 @@ import { MoreHorizontal, WifiOff, SquarePen, Menu, Cpu } from 'lucide-react-nati
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { formatPrivacyModeLabel } from '@agiworkforce/types';
-import type { LocalToByokHandoffPreview } from '@agiworkforce/utils';
+import type { LocalToByokHandoffPreview } from '@agiworkforce/utils/privacy-handoff';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { MessageList } from '@/src/features/chat/components/MessageList';
 import { Composer } from '@/src/features/chat/components/Composer/Composer';

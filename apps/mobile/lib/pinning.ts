@@ -160,6 +160,7 @@ function enforceProvisionedPinsForRelease(): void {
   // Test environments and dev tooling should NOT trip the placeholder guard.
   if (typeof __DEV__ !== 'undefined' && __DEV__) return;
   if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') return;
+  if (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_APP_ENV === 'development') return;
   if (PINNING_ENFORCED && hasPlaceholderPins()) {
     throw new Error('TLS pinning not provisioned');
   }

@@ -1,4 +1,4 @@
-import type { LocalToByokHandoffPreview } from '@agiworkforce/utils';
+import type { LocalToByokHandoffPreview } from '@agiworkforce/utils/privacy-handoff';
 
 jest.mock('../services/api', () => ({
   api: {
