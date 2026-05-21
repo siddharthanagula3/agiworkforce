@@ -153,7 +153,7 @@ export function ChatInput({
     if (accepted.length > 0) {
       setAttachedFiles((prev) => [...prev, ...accepted]);
     }
-    setAttachmentError(rejections.length > 0 ? rejections[0] : null);
+    setAttachmentError(rejections[0] ?? null);
   }, []);
 
   // Drag-drop + paste-image — parity-gap round-2 P0 #3 (2026-05-21). Mirrors
@@ -195,6 +195,7 @@ export function ChatInput({
       const pasted: File[] = [];
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
+        if (!item) continue;
         if (item.kind === 'file') {
           const file = item.getAsFile();
           if (file) pasted.push(file);
@@ -216,6 +217,7 @@ export function ChatInput({
     const urls: Array<{ key: string; url: string | null }> = [];
     for (let i = 0; i < attachedFiles.length; i++) {
       const file = attachedFiles[i];
+      if (!file) continue;
       const key = `${file.name}-${i}-${file.size}`;
       const url = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
       urls.push({ key, url });

@@ -104,6 +104,10 @@ export { SettingsShell, DEFAULT_SETTINGS_SECTIONS } from './components/SettingsS
 export type { SettingsSection, SettingsShellProps } from './components/SettingsShell';
 export { MemoryEditor } from './components/MemoryEditor';
 export type { MemoryEditorProps } from './components/MemoryEditor';
+export { ProjectCard } from './components/ProjectCard';
+export type { ProjectCardProps } from './components/ProjectCard';
+export { ProjectGallery } from './components/ProjectGallery';
+export type { ProjectGalleryProps } from './components/ProjectGallery';
 export { useMemoryStore, selectMemoryFacts, selectMemoryCount } from './stores/memoryStore';
 export type { MemoryFact } from './stores/memoryStore';
 export { CommandPalette } from './components/CommandPalette';

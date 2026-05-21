@@ -181,10 +181,10 @@ export function SettingsShell({
   // store carries an unknown tab id (e.g. a host opened a tab that has since
   // been removed from the section list).
   const visible = useMemo(() => sections.filter((s) => !s.hidden), [sections]);
-  const activeId = useMemo(() => {
+  const activeId = useMemo<string | null>(() => {
     if (visible.length === 0) return null;
     if (visible.some((s) => s.id === settingsTab)) return settingsTab;
-    return visible[0].id;
+    return visible[0]?.id ?? null;
   }, [visible, settingsTab]);
   const active = useMemo(() => visible.find((s) => s.id === activeId) ?? null, [visible, activeId]);
 
