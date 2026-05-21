@@ -48,6 +48,22 @@ const requiredFiles = [
   'docs/agent-context/risk-map.json',
   'docs/agent-context/commands.json',
   'docs/agent-context/doc-status.json',
+  'docs/engineering/README.md',
+  'docs/engineering/agent-native-development.md',
+  '.github/pull_request_template.md',
+  '.github/PULL_REQUEST_TEMPLATE/product-surface.md',
+  '.github/PULL_REQUEST_TEMPLATE/refactor-move.md',
+  '.github/PULL_REQUEST_TEMPLATE/security-privacy.md',
+  '.github/PULL_REQUEST_TEMPLATE/docs-research.md',
+  '.github/PULL_REQUEST_TEMPLATE/release-infra.md',
+  'apps/cli/AGENTS.md',
+  'apps/web/AGENTS.md',
+  'apps/mobile/AGENTS.md',
+  'apps/desktop/AGENTS.md',
+  'apps/extension/AGENTS.md',
+  'apps/extension-vscode/AGENTS.md',
+  'services/AGENTS.md',
+  'packages/providers/AGENTS.md',
 ];
 
 for (const file of requiredFiles) {
@@ -58,6 +74,26 @@ requireIncludes('AGENTS.md', 'docs/agent-context/');
 requireIncludes('AGENTS.md', 'known-flaws.md');
 requireIncludes('CLAUDE.md', 'AGENTS.md');
 requireIncludes('CLAUDE.md', 'Claude-specific notes');
+requireIncludes('AGENTS.md', 'docs/engineering/agent-native-development.md');
+requireIncludes('docs/engineering/agent-native-development.md', 'Worktree And Session Isolation');
+requireIncludes('docs/engineering/agent-native-development.md', 'High-Risk Merge Gates');
+requireIncludes('.github/pull_request_template.md', 'Risk Classification');
+requireIncludes('.github/PULL_REQUEST_TEMPLATE/security-privacy.md', 'Affected Trust Boundary');
+
+for (const scopedAgentFile of [
+  'apps/cli/AGENTS.md',
+  'apps/web/AGENTS.md',
+  'apps/mobile/AGENTS.md',
+  'apps/desktop/AGENTS.md',
+  'apps/extension/AGENTS.md',
+  'apps/extension-vscode/AGENTS.md',
+  'services/AGENTS.md',
+  'packages/providers/AGENTS.md',
+]) {
+  requireIncludes(scopedAgentFile, 'Read root `AGENTS.md`');
+  requireIncludes(scopedAgentFile, 'High-Risk Areas');
+  requireIncludes(scopedAgentFile, 'Verification');
+}
 
 const repoMap = readJson('docs/agent-context/repo-map.json');
 if (repoMap) {

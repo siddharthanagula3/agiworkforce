@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-20
+Last updated: 2026-05-21
 
 Use these templates when splitting AGI Workforce work across Codex, Claude Code, Cursor agents, VS Code agents, opencode, or future internal agents.
 
@@ -92,3 +92,25 @@ Required final output:
 - Never assign two agents to the same unresolved files unless one is read-only.
 - Ask workers to edit directly only inside their owned paths.
 - Integrate returned work with a human or lead-agent review before committing.
+- For long-running or parallel implementation, follow `docs/engineering/agent-native-development.md`.
+
+## Worktree Task
+
+Use when an agent or human needs an isolated branch/worktree.
+
+Required prompt fields:
+
+- Goal.
+- Branch name.
+- Worktree path.
+- Owned write paths.
+- Integration target.
+- Required checks before handoff.
+
+Required final output:
+
+- Branch/worktree used.
+- Files changed.
+- Checks run and result.
+- Integration notes.
+- Remaining risks.

@@ -2,7 +2,7 @@
 
 Status: Current strategic evidence
 Owner: Platform lead
-Last updated: 2026-05-20
+Last updated: 2026-05-21
 
 Purpose: lock the long-term assumption that AGI Workforce should be organized for a future where most implementation work is delegated to LLM coding agents, while humans own product judgment, architecture, safety, review, and release accountability.
 
@@ -31,6 +31,17 @@ This does not mean no one understands code. It means the scarce skill shifts upw
 | GitHub Copilot cloud agent docs, `https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-cloud-agent`                        | Copilot cloud agent uses ephemeral GitHub Actions environments to explore code, edit, run tests, create branches, and optionally open PRs.                       | AGI needs CI/workflow parity with local commands and machine-readable task/test ownership.                             |
 | GitHub coding agent press release, `https://github.com/newsroom/press-releases/coding-agent-for-github-copilot`                            | GitHub frames the future as configurable, steerable, verifiable agent collaboration with controlled internet access and human approval before workflows run.     | AGI must define approval gates, internet/network policy, and human review requirements for agent-generated code.       |
 | Google Gemini CLI launch, `https://blog.google/innovation-and-ai/technology/developers-tools/introducing-gemini-cli-open-source-ai-agent/` | Gemini CLI is open source, terminal-native, MCP/extensible, non-interactive/scriptable, and shares technology with IDE agent mode.                               | AGI should keep CLI, IDE, Desktop, and cloud flows on shared runtime contracts instead of surface-specific logic.      |
+
+## 2026 Direction Check
+
+The latest public direction reinforces the same thesis:
+
+- Claude Code is moving toward multi-session agent management, desktop session orchestration, web/cloud sessions, scheduled/remote work, and mobile push notifications when the agent needs human input.
+- OpenAI positions Codex as a coding agent available across local, cloud, Slack, computer-use, and long-horizon workflows.
+- GitHub positions coding agents as issue-to-draft-PR workers that run in controlled Actions environments and still require human approval.
+- Google positions Gemini CLI as an open, terminal-native, MCP-extensible agent that shares technology with IDE workflows.
+
+AGI's repo must therefore optimize for agent-directed development now: scoped tasks, isolated sessions, reviewable diffs, repeatable setup, explicit trust boundaries, and verification logs.
 
 ## Local Reference Corpus
 

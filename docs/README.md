@@ -3,7 +3,7 @@
 Status: Current
 Owner: Docs/platform
 Last organized: 2026-05-20.
-Last updated: 2026-05-20
+Last updated: 2026-05-21
 
 This directory is for durable repo documentation. Generated files, build artifacts, personal memory, and one-off transcripts should not live here unless they are explicitly archived.
 
@@ -14,11 +14,12 @@ This directory is for durable repo documentation. Generated files, build artifac
 3. [`../TODO.md`](../TODO.md) - active transition checklist.
 4. [`../BUILD.md`](../BUILD.md) - toolchain, build, test, and release commands.
 5. [`agent-context/`](./agent-context/) - canonical LLM-operability maps, known flaws, risk areas, and commands for coding agents.
-6. [`plans/pre-release-repo-organization-2026-05-20.md`](./plans/pre-release-repo-organization-2026-05-20.md) - pre-release repo organization, naming, ownership, and team-onboarding plan.
-7. [`../audit/anthropic-apps-parity/`](../audit/anthropic-apps-parity/) - source-backed parity evidence, including competitive baseline, SDK strategy, and compute/artifact research.
-8. [`PRD.md`](./PRD.md) - repo product spec.
-9. [`decisions/CURRENT_DECISIONS.md`](./decisions/CURRENT_DECISIONS.md) - latest decision index and mobile-v1 launch clarification.
-10. [`surfaces/`](./surfaces/) - one operational guide per shipping surface.
+6. [`engineering/`](./engineering/) - internal engineering workflow, PR, review, and agent-native development rules.
+7. [`plans/pre-release-repo-organization-2026-05-20.md`](./plans/pre-release-repo-organization-2026-05-20.md) - pre-release repo organization, naming, ownership, and team-onboarding plan.
+8. [`../audit/anthropic-apps-parity/`](../audit/anthropic-apps-parity/) - source-backed parity evidence, including competitive baseline, SDK strategy, and compute/artifact research.
+9. [`PRD.md`](./PRD.md) - repo product spec.
+10. [`decisions/CURRENT_DECISIONS.md`](./decisions/CURRENT_DECISIONS.md) - latest decision index and mobile-v1 launch clarification.
+11. [`surfaces/`](./surfaces/) - one operational guide per shipping surface.
 
 ## Current Product Specs
 
@@ -37,18 +38,19 @@ This directory is for durable repo documentation. Generated files, build artifac
 
 ## Current Engineering References
 
-| File                                                                                       | Purpose                                                     |
-| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
-| [`ARCHITECTURE.md`](./ARCHITECTURE.md)                                                     | Cross-surface system map.                                   |
-| [`architecture/foundation-2026.md`](./architecture/foundation-2026.md)                     | Accepted Foundation Sprint architecture.                    |
-| [`architecture/worker-protocol.md`](./architecture/worker-protocol.md)                     | Worker direction-inversion protocol.                        |
-| [`HOSTING.md`](./HOSTING.md)                                                               | Web/service hosting, domains, and deployment options.       |
-| [`SCALING.md`](./SCALING.md)                                                               | Supabase-to-Neon and provider-swap playbooks.               |
-| [`PERFORMANCE.md`](./PERFORMANCE.md)                                                       | Performance, caching, provider failover, and traffic notes. |
-| [`OWNERSHIP.md`](./OWNERSHIP.md)                                                           | High-risk ownership boundaries.                             |
-| [`cli/COMMAND_SURFACE.md`](./cli/COMMAND_SURFACE.md)                                       | CLI process, slash command, and TUI command inventory.      |
-| [`api/openapi.yaml`](./api/openapi.yaml)                                                   | OpenAPI reference.                                          |
-| [`api/AGI_Workforce.postman_collection.json`](./api/AGI_Workforce.postman_collection.json) | Postman collection.                                         |
+| File                                                                                       | Purpose                                                                            |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| [`ARCHITECTURE.md`](./ARCHITECTURE.md)                                                     | Cross-surface system map.                                                          |
+| [`architecture/foundation-2026.md`](./architecture/foundation-2026.md)                     | Accepted Foundation Sprint architecture.                                           |
+| [`architecture/worker-protocol.md`](./architecture/worker-protocol.md)                     | Worker direction-inversion protocol.                                               |
+| [`engineering/agent-native-development.md`](./engineering/agent-native-development.md)     | Human/agent task splitting, worktree/session isolation, and verification workflow. |
+| [`HOSTING.md`](./HOSTING.md)                                                               | Web/service hosting, domains, and deployment options.                              |
+| [`SCALING.md`](./SCALING.md)                                                               | Supabase-to-Neon and provider-swap playbooks.                                      |
+| [`PERFORMANCE.md`](./PERFORMANCE.md)                                                       | Performance, caching, provider failover, and traffic notes.                        |
+| [`OWNERSHIP.md`](./OWNERSHIP.md)                                                           | High-risk ownership boundaries.                                                    |
+| [`cli/COMMAND_SURFACE.md`](./cli/COMMAND_SURFACE.md)                                       | CLI process, slash command, and TUI command inventory.                             |
+| [`api/openapi.yaml`](./api/openapi.yaml)                                                   | OpenAPI reference.                                                                 |
+| [`api/AGI_Workforce.postman_collection.json`](./api/AGI_Workforce.postman_collection.json) | Postman collection.                                                                |
 
 ## Surface Guides
 

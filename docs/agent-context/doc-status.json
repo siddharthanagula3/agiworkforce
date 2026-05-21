@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-05-20",
+  "lastUpdated": "2026-05-21",
   "currentSourcesOfTruth": [
     "AGENTS.md",
     "AGI_WORKFORCE.md",
@@ -16,8 +16,18 @@
     "docs/decisions/CURRENT_DECISIONS.md",
     "docs/decisions/2026-05-20-openai-anthropic-application-suite-thesis.md",
     "docs/plans/pre-release-repo-organization-2026-05-20.md",
+    "docs/engineering/README.md",
+    "docs/engineering/agent-native-development.md",
     "docs/agent-context/README.md",
-    "docs/agent-context/agent-task-templates.md"
+    "docs/agent-context/agent-task-templates.md",
+    "apps/cli/AGENTS.md",
+    "apps/web/AGENTS.md",
+    "apps/mobile/AGENTS.md",
+    "apps/desktop/AGENTS.md",
+    "apps/extension/AGENTS.md",
+    "apps/extension-vscode/AGENTS.md",
+    "services/AGENTS.md",
+    "packages/providers/AGENTS.md"
   ],
   "currentEvidence": [
     "audit/anthropic-apps-parity/application-suite-thesis-2026-05-20.md",

@@ -2,11 +2,13 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-20
+Last updated: 2026-05-21
 
 Canonical tool-neutral agent entry point for AGI Workforce.
 
 This file is for Codex, Claude Code, Cursor, VS Code agents, opencode, Antigravity-style agents, and future coding agents. Tool-specific files must point back here instead of duplicating repo truth.
+
+Path-scoped `AGENTS.md` files under high-risk surfaces add local rules; read the nearest one before editing.
 
 ## Read First
 
@@ -17,6 +19,7 @@ This file is for Codex, Claude Code, Cursor, VS Code agents, opencode, Antigravi
 5. `docs/agent-context/commands.json` - canonical commands by surface.
 6. `docs/decisions/CURRENT_DECISIONS.md` - latest locked product decisions.
 7. `PLAN.md` and `TODO.md` - active strategy and work queue.
+8. `docs/engineering/agent-native-development.md` - parallel agent/worktree and verification workflow.
 
 When these files conflict with older plans, prefer the list above.
 

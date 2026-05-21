@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-20
+Last updated: 2026-05-21
 
 Claude-specific notes for Claude Code.
 
@@ -10,7 +10,7 @@ Claude-specific notes for Claude Code.
 
 ## Claude-Specific Notes
 
-- Follow `AGENTS.md`, `docs/agent-context/README.md`, and `docs/agent-context/known-flaws.md` before using older launch plans.
+- Follow `AGENTS.md`, `docs/agent-context/README.md`, `docs/engineering/agent-native-development.md`, and `docs/agent-context/known-flaws.md` before using older launch plans.
 - Keep Claude memory and `.claude/` project files as tool-specific context, not the repo source of truth.
 - Do not duplicate repo maps or command lists here. Update `AGENTS.md` and `docs/agent-context/*` instead.
 - If Claude Code finds a repeated bug class, update `docs/agent-context/known-flaws.md`.

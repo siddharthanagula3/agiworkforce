@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-05-20.
+Last updated: 2026-05-21.
 
 ## Mission
 
@@ -227,6 +227,7 @@ Rules:
 Deliverable:
 
 - `audit/repo-organization/agentic-development-outlook-2026-05-20.md`
+- `docs/engineering/agent-native-development.md`
 
 ### 2. CLI As Engine
 

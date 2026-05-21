@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-20.
+Last updated: 2026-05-21.
 
 This is the active checklist for the transition described in `PLAN.md`. Keep it short enough to operate from daily; move evidence and long analysis to `audit/anthropic-apps-parity/`.
 
@@ -77,8 +77,8 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Add or update README files for each shared package.
 - [x] Add P0/P1 README ownership files for Web, Desktop, Chrome extension, API gateway, signaling server, types, runtime, providers, and unified-chat.
 - [ ] Add `.github/CODEOWNERS` with real GitHub teams/handles after org ownership names are available.
-- [ ] Expand `CONTRIBUTING.md` into a real engineering workflow guide.
-- [ ] Add PR templates by change type.
+- [x] Expand `CONTRIBUTING.md` into a real engineering workflow guide.
+- [x] Add PR templates by change type.
 - [ ] Normalize `docs/plans` vs `docs/planning` and archive superseded plans.
 - [ ] Create `docs/marketing/`.
 - [ ] Create `docs/support/`.
@@ -89,9 +89,9 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 
 - [x] Add external and local-reference evidence for agentic development as the expected future workflow.
 - [x] Add `PLAN.md` rules for agent-native repo design.
-- [ ] Add path-scoped agent rules for high-risk surfaces after root cleanup.
+- [x] Add path-scoped agent rules for high-risk surfaces after root cleanup.
 - [x] Add agent task templates for exploration, implementation, review, and verification.
-- [ ] Add worktree/session isolation guidance for parallel AGI development.
+- [x] Add worktree/session isolation guidance for parallel AGI development.
 - [x] Add CI enforcement for docs and LLM-operability checks on docs-only changes.
 - [x] Add debt-aware README ownership coverage enforcement for apps, packages, crates, and services.
 - [x] Add debt-aware generated artifact drift check.
