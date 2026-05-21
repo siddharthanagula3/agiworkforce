@@ -382,7 +382,7 @@ Tasks:
 - Define `ComputeSession`, `GeneratedFile`, and `ArtifactManifest` in shared types.
 - Extend `SharedArtifact` to reference generated native files and preview derivatives.
 - Wrap `packages/browser-tool` behind a shared `ComputerAction` protocol.
-- Convert Desktop PDF/DOCX/XLSX/PPTX tools into generated-file manifest producers.
+- [x] Convert Desktop PDF/DOCX/XLSX/PPTX tools into generated-file manifest producers.
 - Add local compute-session work directories with TTL metadata and audit events.
 - Add generated-file request, status, preview, download, and share controls to Web, Mobile, and Desktop.
 - Add provider-container adapters that convert OpenAI Code Interpreter-style file annotations into AGI `GeneratedFile` records.

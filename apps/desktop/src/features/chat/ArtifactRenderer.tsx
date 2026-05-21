@@ -174,7 +174,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
         .map((p) => p.trim())
         .filter((p) => p.length > 0);
 
-      await invoke('document_create_pdf_simple', {
+      await invoke('document_create_pdf_simple_manifest', {
         outputPath: savePath,
         title: artifact.title || 'Document',
         author: null,
@@ -203,7 +203,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
         .map((p) => p.trim())
         .filter((p) => p.length > 0);
 
-      await invoke('document_create_word_simple', {
+      await invoke('document_create_word_simple_manifest', {
         outputPath: savePath,
         title: artifact.title || 'Document',
         author: null,
@@ -252,7 +252,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
       const headers = Object.keys(firstRow);
       const rows = data.map((row) => headers.map((h) => String(row[h] ?? '')));
 
-      await invoke('document_create_excel_simple', {
+      await invoke('document_create_excel_simple_manifest', {
         outputPath: savePath,
         sheetName: artifact.title || 'Sheet1',
         headers,

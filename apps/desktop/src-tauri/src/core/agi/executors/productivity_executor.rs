@@ -21,13 +21,16 @@
 
 use super::{ExecutorContext, ToolExecutor};
 use crate::core::agi::ExecutionContext;
-use crate::features::document::{ExcelDocumentCreator, PdfDocumentCreator, WordDocumentCreator};
+use crate::features::document::{
+    build_generated_document_manifest, ExcelDocumentCreator, GeneratedDocumentKind,
+    PdfDocumentCreator, WordDocumentCreator,
+};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Executor for productivity operations.
 ///
@@ -201,6 +204,26 @@ fn resolve_doc_path(output_path: &str) -> Result<PathBuf> {
     };
 
     Ok(resolved)
+}
+
+fn created_document_value(
+    path: &Path,
+    format: &'static str,
+    kind: GeneratedDocumentKind,
+) -> Result<Value> {
+    let path_string = path.to_string_lossy().to_string();
+    let bundle = build_generated_document_manifest(path, kind)?;
+
+    Ok(json!({
+        "success": true,
+        "file_path": path_string.clone(),
+        "filePath": path_string,
+        "format": format,
+        "status": "created",
+        "computeSession": bundle.compute_session,
+        "generatedFile": bundle.generated_file,
+        "artifactManifest": bundle.artifact_manifest
+    }))
 }
 
 /// Execute productivity_create_task operation.
@@ -555,11 +578,7 @@ async fn execute_create_word(
         resolved_path.display()
     );
 
-    Ok(json!({
-        "success": true,
-        "file_path": resolved_path.to_string_lossy(),
-        "format": "docx"
-    }))
+    created_document_value(&resolved_path, "docx", GeneratedDocumentKind::Docx)
 }
 
 /// Execute document_create_pdf operation.
@@ -608,11 +627,7 @@ async fn execute_create_pdf(
         resolved_path.display()
     );
 
-    Ok(json!({
-        "success": true,
-        "file_path": resolved_path.to_string_lossy(),
-        "format": "pdf"
-    }))
+    created_document_value(&resolved_path, "pdf", GeneratedDocumentKind::Pdf)
 }
 
 /// Execute document_create_excel operation.
@@ -677,11 +692,7 @@ async fn execute_create_excel(
         resolved_path.display()
     );
 
-    Ok(json!({
-        "success": true,
-        "file_path": resolved_path.to_string_lossy(),
-        "format": "xlsx"
-    }))
+    created_document_value(&resolved_path, "xlsx", GeneratedDocumentKind::Xlsx)
 }
 
 #[cfg(test)]

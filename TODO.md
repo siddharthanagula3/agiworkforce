@@ -250,7 +250,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] Research public Claude and ChatGPT/OpenAI behavior for computer use, code execution, generated files, downloads, and artifact previews.
 - [x] Record AGI implementation implications in `audit/anthropic-apps-parity/compute-artifacts-2026-05-20.md`.
 - [x] Extend shared artifact contracts so artifacts can reference native generated files and preview derivatives.
-- [ ] Convert Desktop document creation tools into generated-file manifest producers.
+- [x] Convert Desktop document creation tools into generated-file manifest producers.
 - [ ] Wrap `packages/browser-tool` behind the shared `ComputerAction` protocol.
 - [ ] Add local compute-session work directories with manifest, TTL metadata, checksum, and audit events.
 - [ ] Add Web/Mobile/Desktop generated-file request, status, preview, download, share, source session, and privacy-label UI.
