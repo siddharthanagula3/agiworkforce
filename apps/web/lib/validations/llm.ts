@@ -11,6 +11,20 @@ import { ToolCallResponseSchema } from './tool-calls';
  *  rather than here. */
 const MAX_OUTPUT_TOKENS = 32_768;
 
+/**
+ * Hard cap on per-message content length at any LLM API gateway. Prevents
+ * prompt-bomb abuse (single 10MB string drains credit reservation +
+ * triggers quadratic provider parsing). 100k characters is generous
+ * (≈ 25k tokens before tokenization, larger than the legal/contract
+ * extracts users typically paste) but short enough to bound parse + bill
+ * cost. Used by `/api/llm/completion` and the OpenAI-compat
+ * `/api/llm/v1/chat/completions` gateways — both gates must enforce the
+ * same limit; this constant is the single source of truth.
+ *
+ * 2026-05-22 ultrathink audit unified two duplicate inline definitions.
+ */
+export const MAX_MESSAGE_LENGTH = 100_000;
+
 /** Strict tool-definition schema for the OpenAI/Anthropic tool-call
  *  protocol. WEB-6 (audit 2026-05-03): the previous z.unknown() let
  *  callers forward arbitrary JSON to upstream APIs, including
