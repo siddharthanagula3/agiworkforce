@@ -7,7 +7,7 @@
   "license": "PROPRIETARY",
   "repository": {
     "type": "git",
-    "url": "https://github.com/agiworkforce/agiworkforce"
+    "url": "https://github.com/siddharthanagula3/agiworkforce"
   },
   "engines": {
     "vscode": "^1.95.0"
