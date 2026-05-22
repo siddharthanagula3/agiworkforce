@@ -2,9 +2,28 @@
 
 Status: Current
 Owner: Next session lead
-Last updated: 2026-05-21 (extended through round 7, integration pass)
+Last updated: 2026-05-21 (extended through round 8, sendpreview lane)
 Branch: `fix/extension-typecheck-and-c02-sync-2026-05-20`
-Head pushed: `9409e954e`
+Head pushed: `f9dd7900f`
+
+## Round 8 additions (after Round 7 wrap at `55305313e`)
+
+Round 8 closes the PLAN.md section 5 task: "Add visible 'what will be sent' previews for cloud/BYOK turns." A privacy-critical UX gap that matches Claude/OpenAI parity AND reinforces AGI's local-first stance. 5 commits, all gates green, branch pushed (`55305313e..f9dd7900f`).
+
+- `dd419e5b4` `feat(types,unified-chat): sendpreview primitive for cloud/byok turns` — `SendPreviewInput`, `SendPreviewPresentation`, `summarizeSendPreview` in `@agiworkforce/types`. Shared `SendPreview` web component in `@agiworkforce/unified-chat`. Privacy-positive banner copy for Local turns ("Stays on this device", "nothing is uploaded"). BYOK turns name the destination host and API-key path. Managed turns name the gateway and retention call-out. 21 new tests (11 types + 10 unified-chat).
+- `885523e87` `feat(web): adopt sendpreview disclosure above the chat composer` — Web `WebChatPage` computes presentation from `selectedModel.providerKey` → `ProviderMode` mapping + canonical destination hosts (`api.anthropic.com`, `api.openai.com`, `generativelanguage.googleapis.com`, `gateway.agiworkforce.com`).
+- `c103d72a9` `feat(mobile): rn-native sendpreview mirror + chat tab adoption` — RN-native `SendPreview` sibling consuming the same presentation. Mounted above ChatInput in the chat tab. 7 new RN tests.
+- `3625a68af` `feat(desktop): adopt sendpreview disclosure above chat input area` — Desktop chat shell maps its provider taxonomy (`ollama`/`lmstudio` → Local, `managed_cloud` → ManagedGateway, others → DirectByok).
+- `f9dd7900f` `docs(control-files): record round-8 sendpreview lane closure` — PLAN.md / TODO.md / CHANGELOG.md updates.
+
+All three Local-mode surfaces (Web/Mobile/Desktop) now share the same `SendPreviewPresentation` contract for the privacy-disclosure banner. The pattern is the same as the GeneratedFileCard adoption (types shared, JSX/RN-native diverges).
+
+### Round 8 — open paths for next session
+
+1. **Extend SendPreview to live-update with composer state** — currently the presentation is computed from steady-state (provider + model). Wiring it to the composer's current input string would let it show real-time body chars / attachment count / context-budget estimate. Requires plumbing composer state into the host's memoization.
+2. **PLAN.md section 5 remaining tasks** — "Define project schema", "Support project-level memory", "Add file inclusion policy and per-file privacy labels", "Add project export/import bundle".
+3. **PLAN.md section 6** — OAuth status + refresh UX on connectors, MCP prompts as slash commands, connector install/uninstall across Desktop/Web/CLI.
+4. **PLAN.md section 7** — Visual agent manager, queryable subagent runtime snapshots.
 
 ## Round 7 additions (after `b1c2bb428`)
 
