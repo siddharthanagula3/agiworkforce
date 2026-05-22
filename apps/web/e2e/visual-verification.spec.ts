@@ -77,6 +77,23 @@ test.describe('visual verification — web shared primitives', () => {
     );
   });
 
+  test('projects route captures the enhanced create form', async ({ page }) => {
+    await page.goto('/projects');
+    await page.waitForLoadState('networkidle');
+    // Click "New" to open the enhanced create form (Round 10 emoji + presets).
+    const newButton = page.getByRole('button', { name: /^new$/i }).first();
+    if (await newButton.count()) {
+      await newButton.click();
+    }
+    // Wait for the form to mount.
+    await page.waitForSelector('[data-testid="project-create-form"]', { timeout: 5000 });
+    mkdirSync(SCREENSHOT_DIR, { recursive: true });
+    await page.screenshot({
+      path: `${SCREENSHOT_DIR}/projects-create-form-viewport.png`,
+      fullPage: false,
+    });
+  });
+
   test('home route renders and captures a screenshot', async ({ page }) => {
     const capture = await captureRoute(page, '/', 'home-route');
     mkdirSync(SCREENSHOT_DIR, { recursive: true });
