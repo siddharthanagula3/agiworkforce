@@ -3,37 +3,24 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { ToolExecutionTimeline } from '@/features/tool-calling/ToolExecutionTimeline';
 import type { ToolExecutionWorkflow, ToolExecutionStep, ToolCallUI } from '@/types/toolCalling';
 
-// Mock child components that have complex dependencies (JsonViewer, Prism, etc.)
-vi.mock('@/features/tool-calling/ToolCallCard', () => ({
+// Mock the canonical ToolCallCard (consolidated in R25 V7)
+vi.mock('@/features/chat/MessageBubble/ToolCallCard', () => ({
   ToolCallCard: ({
-    toolCall,
-    onCancel,
-    onApprove,
-    onReject,
+    messageId,
+    toolName,
+    toolStatus,
+    requiresApproval,
   }: {
-    toolCall: ToolCallUI;
-    onCancel?: (id: string) => void;
-    onApprove?: (id: string) => void;
-    onReject?: (id: string) => void;
-    defaultExpanded?: boolean;
+    messageId: string;
+    toolName?: string;
+    toolStatus?: string;
+    requiresApproval: boolean;
   }) => (
-    <div data-testid={`tool-call-${toolCall.id}`}>
-      <span data-testid="tool-name">{toolCall.tool_name}</span>
-      <span data-testid="tool-status">{toolCall.status}</span>
-      {onCancel && (
-        <button data-testid={`cancel-${toolCall.id}`} onClick={() => onCancel(toolCall.id)}>
-          Cancel
-        </button>
-      )}
-      {onApprove && (
-        <button data-testid={`approve-${toolCall.id}`} onClick={() => onApprove(toolCall.id)}>
-          Approve
-        </button>
-      )}
-      {onReject && (
-        <button data-testid={`reject-${toolCall.id}`} onClick={() => onReject(toolCall.id)}>
-          Reject
-        </button>
+    <div data-testid={`tool-call-${messageId}`} data-icon-style="badge">
+      <span data-testid="tool-name">{toolName}</span>
+      <span data-testid="tool-status">{toolStatus}</span>
+      {requiresApproval && (
+        <span data-testid={`approval-required-${messageId}`}>Approval required</span>
       )}
     </div>
   ),
@@ -186,9 +173,10 @@ describe('ToolExecutionTimeline', () => {
 
     render(<ToolExecutionTimeline workflow={workflow} />);
 
+    // Both steps should render via the canonical badge-mode card (mock uses data-testid="tool-call-{id}")
     expect(screen.getByTestId('tool-call-tc-1')).toBeInTheDocument();
     expect(screen.getByTestId('tool-call-tc-2')).toBeInTheDocument();
-    // Both tool names should be visible via testids
+    // Both tool names should be visible
     expect(
       screen.getByTestId('tool-call-tc-1').querySelector('[data-testid="tool-name"]'),
     ).toHaveTextContent('File Read');
@@ -296,9 +284,7 @@ describe('ToolExecutionTimeline', () => {
     expect(screen.getByTestId('error-tool')).toHaveTextContent('API Call');
   });
 
-  it('should invoke cancel callback when cancel is clicked', () => {
-    const onCancel = vi.fn();
-
+  it('should render in-progress step with badge-mode card', () => {
     const steps: ToolExecutionStep[] = [
       makeStep({
         step_number: 1,
@@ -316,11 +302,11 @@ describe('ToolExecutionTimeline', () => {
 
     const workflow = makeWorkflow({ steps, status: 'in_progress' });
 
-    render(<ToolExecutionTimeline workflow={workflow} onCancelTool={onCancel} />);
+    render(<ToolExecutionTimeline workflow={workflow} />);
 
-    fireEvent.click(screen.getByTestId('cancel-tc-1'));
-
-    expect(onCancel).toHaveBeenCalledWith('tc-1');
+    // Canonical badge-mode card should render for in-progress step
+    expect(screen.getByTestId('tool-call-tc-1')).toBeInTheDocument();
+    expect(screen.getByTestId('tool-call-tc-1')).toHaveAttribute('data-icon-style', 'badge');
   });
 
   it('should invoke retry callback on failed step retry', () => {

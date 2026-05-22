@@ -11,8 +11,7 @@ import {
 } from 'lucide-react';
 import React from 'react';
 import { useUnifiedChatStore } from '../../../stores/unifiedChatStore';
-import { ToolCallCard } from '@/features/tool-calling/ToolCallCard';
-import { ToolCallUI } from '../../../types/toolCalling';
+import { ToolCallCard } from '@/features/chat/MessageBubble/ToolCallCard';
 
 export interface ActiveOperationsSectionProps {
   className?: string;
@@ -200,28 +199,15 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
               Recent Tool Executions
             </h4>
             <div className="space-y-2">
-              {recentToolExecs.map((exec) => {
-                // Map store execution to ToolCallUI
-                const toolCall: ToolCallUI = {
-                  id: exec.id,
-                  tool_id: exec.id,
-                  tool_name: exec.toolName,
-                  tool_description: '',
-                  parameters: {}, // Params not readily available in summarized store view
-                  status: exec.success ? 'completed' : 'failed',
-                  created_at: new Date().toISOString(),
-                  duration_ms: exec.duration,
-                };
-
-                return (
-                  <ToolCallCard
-                    key={exec.id}
-                    toolCall={toolCall}
-                    className="bg-card border-border"
-                    showParameters={false}
-                  />
-                );
-              })}
+              {recentToolExecs.map((exec) => (
+                <ToolCallCard
+                  key={exec.id}
+                  messageId={exec.id}
+                  toolName={exec.toolName}
+                  toolStatus={exec.success ? 'completed' : 'failed'}
+                  requiresApproval={false}
+                />
+              ))}
             </div>
           </div>
         )}
