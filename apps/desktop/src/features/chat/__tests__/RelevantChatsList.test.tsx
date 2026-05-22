@@ -10,7 +10,7 @@
  * - Snapshot: renders 3 conversations correctly
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -70,6 +70,10 @@ describe('RelevantChatsList', () => {
     vi.clearAllMocks();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('renders conversation titles', () => {
     render(<RelevantChatsList />);
     expect(screen.getByText('Competitive analysis')).toBeInTheDocument();
@@ -90,6 +94,10 @@ describe('RelevantChatsList', () => {
   });
 
   it('matches snapshot with three conversations', () => {
+    // Freeze the clock just past the most-recent conversation so the
+    // "Xm ago" formatter renders deterministic labels for this snapshot.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-22T10:02:00Z'));
     const { container } = render(<RelevantChatsList />);
     expect(container.firstChild).toMatchSnapshot();
   });
