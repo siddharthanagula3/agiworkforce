@@ -1572,24 +1572,19 @@ mod tests {
     /// and models.rs) may contain a hardcoded model ID literal matching the patterns
     /// gpt-5\.\d, claude-(opus|sonnet|haiku)-\d, gemini-\d, or grok-\d.
     ///
-    /// This test scans the source tree at compile time using include_str! for the
-    /// files known to have been violation sites and asserts the literals are absent.
+    /// This test scans the live tui implementation files at compile time using include_str!
+    /// and asserts the known forbidden literals are absent.
     #[test]
-    fn no_hardcoded_model_ids_in_chatwidget() {
-        // include_str! resolves at compile time relative to the source file.
-        // We check chatwidget.rs and list_selection_view.rs — the two files
-        // identified as violation sites in the CLI-GHOST-MODEL / CLI-FAST-STATUS-MODEL
-        // audit findings. exec_cell/render.rs and history_cell.rs are added as
-        // they were modified in the icon render refactor and must stay clean.
-        let chatwidget_src = include_str!("tui/chatwidget.rs");
-        let list_sel_src = include_str!("tui/bottom_pane/list_selection_view.rs");
-        let exec_render_src = include_str!("tui/exec_cell/render.rs");
+    fn no_hardcoded_model_ids_in_tui() {
+        // tui_app.rs is the live ratatui implementation (~3K LOC). cost_hud.rs
+        // renders token/cost metrics. Both were identified as likely violation sites
+        // after the orphan tree removal in e3a316d39.
+        // Note: tui_app.rs contains a #[cfg(test)] fixture using "claude-sonnet-4-6"
+        // which is intentional and not in the forbidden list below.
+        let tui_app_src = include_str!("tui/tui_app.rs");
+        let cost_hud_src = include_str!("tui/cost_hud.rs");
 
         // Patterns that would indicate a hardcoded model literal (not inside a comment).
-        // We check for the known offenders specifically to avoid false positives from
-        // legitimate display strings that contain model names for UI copy.
-        // Note: history_cell.rs is excluded because its #[cfg(test)] block uses model-name
-        // fixture strings in unit tests — those are not production hardcodings.
         let forbidden: &[&str] = &[
             "\"gpt-5.4\"",
             "\"gpt-5.5\"",
@@ -1599,11 +1594,7 @@ mod tests {
         ];
 
         for literal in forbidden {
-            for (file, src) in [
-                ("chatwidget.rs", chatwidget_src),
-                ("list_selection_view.rs", list_sel_src),
-                ("exec_cell/render.rs", exec_render_src),
-            ] {
+            for (file, src) in [("tui_app.rs", tui_app_src), ("cost_hud.rs", cost_hud_src)] {
                 assert!(
                     !src.contains(literal),
                     "{file} contains hardcoded model literal {literal} — \
