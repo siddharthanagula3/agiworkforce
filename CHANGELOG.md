@@ -6,6 +6,17 @@ Last updated: 2026-05-21
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased — autonomous suite transformation, round 8] — 2026-05-21
+
+Round 8 closes the PLAN.md section 5 task "Add visible 'what will be sent' previews for cloud/BYOK turns" — a privacy-critical UX gap that matches Claude/OpenAI parity AND reinforces AGI's local-first stance.
+
+### Added
+
+- `SendPreviewInput` + `SendPreviewPresentation` + `summarizeSendPreview` in `@agiworkforce/types/suite-contracts`. Derives the destination label, privacy short-label, banner copy, and compact body/attachment/context/system-prompt/tools labels from a single input. Privacy-positive banner copy for Local turns ("Stays on this device", "nothing is uploaded"). BYOK turns name the destination host and the API-key path. Managed turns name the gateway and retention call-out. 11 new vitest tests.
+- Shared `SendPreview` web component in `@agiworkforce/unified-chat`. Renders destination + privacy chip row, banner copy, and an expand/collapse details block. Emerald/amber/sky accent class keyed off provider mode. `data-provider-mode` + `data-stays-local` attributes for host wiring. 10 new vitest tests.
+- Mobile RN-native `SendPreview` mirror in `apps/mobile/src/features/chat/components/SendPreview.tsx` consuming the same `SendPreviewPresentation` type. 7 new jest tests pinning destination labelling per provider mode, banner copy, expand/collapse.
+- Three host adoptions: Web `WebChatPage` above the composer, Mobile chat tab above `ChatInput`, Desktop chat shell above `ChatInputArea`. Each maps its own provider taxonomy to `ProviderMode` + `destinationHost` (e.g. `anthropic` → `api.anthropic.com`, `managed_cloud` → `gateway.agiworkforce.com`, `ollama`/`lmstudio` → Local).
+
 ## [Unreleased — autonomous suite transformation, round 7] — 2026-05-21
 
 Continuation of the parity transition. This round closes round-2 audit P0 #3 entirely (composer drag-drop + paste-image across shared, vscode-ext, and chrome-ext consumers) and round-2 audit P0 #9 entirely (artifact versioning + publish + live preview + edit-in-place).

@@ -417,7 +417,7 @@ Tasks:
 - Support project-level memory and imported Claude project instructions.
 - Add file inclusion policy and per-file privacy labels.
 - Add project export/import bundle.
-- Add visible "what will be sent" previews for cloud/BYOK turns.
+- [x] Add visible "what will be sent" previews for cloud/BYOK turns. (Round 8 — shared `SendPreview` in `packages/unified-chat` + Mobile RN mirror in `apps/mobile`. Adopted by `apps/web` `WebChatPage` above the composer, `apps/mobile` chat tab above `ChatInput`, and `apps/desktop` chat shell above `ChatInputArea`. All three surfaces share `SendPreviewPresentation` from `@agiworkforce/types`, mapping their provider taxonomies to ProviderMode + destinationHost.)
 
 ### 6. Connectors And MCP Marketplace
 
