@@ -15,6 +15,7 @@ import {
   Copy,
   Download,
   Eye,
+  Globe,
   History,
   Maximize2,
   Minimize2,
@@ -56,6 +57,7 @@ import { ArtifactRendererView } from './ArtifactRendererView';
 import { InlineArtifactEditor } from './InlineArtifactEditor';
 import { ShareArtifactDialog } from './ShareArtifactDialog';
 import { VersionHistoryDialog } from './VersionHistoryDialog';
+import { makeDesktopPublishCallback } from './publishAdapter';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
@@ -329,6 +331,65 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
     setShareDialogArtifactId(activeArtifactId);
   }, [activeArtifactId]);
 
+  /**
+   * Publish via the canonical artifact-publish service.
+   *
+   * R20 lane 2: wires @agiworkforce/services publishArtifact with the Tauri
+   * localFileWriter adapter. v1 LOCAL ONLY — cloud is waitlist-gated.
+   * Versioning + inline editor deferred (TODO: EXEC-SUMMARY-r2 hours).
+   */
+  const handlePublish = useCallback(async () => {
+    if (!activeArtifactId) return;
+    try {
+      const artifact = await getArtifact(activeArtifactId);
+      if (!artifact) {
+        toast.error('Could not load artifact content for publishing');
+        return;
+      }
+      // Derive language from metadata for code artifacts.
+      const language =
+        (artifact.metadata as Record<string, unknown> & { Code?: { language?: string } })?.Code
+          ?.language ?? undefined;
+
+      const publishFn = makeDesktopPublishCallback(
+        {
+          id: artifact.id,
+          title: artifact.title,
+          content: artifact.content,
+          type: artifact.artifact_type,
+          language,
+        },
+        'local', // v1 LOCAL ONLY
+      );
+
+      const result = await publishFn();
+
+      if (result.kind === 'local') {
+        toast.success(`Artifact saved to ${result.shareUrl}`, {
+          action: {
+            label: 'Copy path',
+            onClick: () => void navigator.clipboard.writeText(result.shareUrl),
+          },
+          duration: 6000,
+        });
+      } else {
+        // waitlist-gated
+        toast.info('Cloud publish is coming soon. Join the waitlist to be notified.', {
+          action: {
+            label: 'Join waitlist',
+            onClick: () => {
+              window.open('https://agi.engineer/waitlist', '_blank', 'noopener,noreferrer');
+            },
+          },
+          duration: 8000,
+        });
+      }
+    } catch (err) {
+      console.error('[ArtifactPanel] handlePublish failed:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to publish artifact');
+    }
+  }, [activeArtifactId, getArtifact]);
+
   const handleRefreshRenderedArtifact = useCallback(async () => {
     if (!activeArtifactId) return;
     try {
@@ -591,6 +652,10 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
                             <DropdownMenuItem onClick={handleShare}>
                               <Share2 className="h-4 w-4 mr-2" />
                               Share
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => void handlePublish()}>
+                              <Globe className="h-4 w-4 mr-2" />
+                              Publish
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={handlePin}>
