@@ -2,8 +2,11 @@
  * POST /api/artifacts/publish
  *
  * Cloud Managed — waitlist-gated pending private beta migration.
- * In v1 LOCAL ONLY mode this route will always 503 because the
- * `published_artifacts` table does not exist yet.
+ *
+ * In v1 LOCAL ONLY mode this route always returns 200 with
+ * `{ kind: 'waitlist', shareUrl: null, waitlistGated: true }`.
+ * The previous 503 path (ArtifactPersistenceUnavailableError) is gone;
+ * the publisher now returns a clean discriminated union instead of throwing.
  *
  * See: locks/v1-local-only-cloud-waitlist-2026-05-18.md
  */
@@ -14,11 +17,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
-import {
-  publishArtifact,
-  TrustBoundaryViolationError,
-  ArtifactPersistenceUnavailableError,
-} from '@/lib/artifact-publisher';
+import { publishArtifact, TrustBoundaryViolationError } from '@/lib/artifact-publisher';
 import {
   PRIVACY_MODES,
   PROVIDER_MODES,
@@ -92,7 +91,7 @@ async function handlePublishArtifact(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { user, userDb } = await getAuthenticatedUserWithClient(request);
+  const { user } = await getAuthenticatedUserWithClient(request);
 
   let body: Record<string, unknown>;
   try {
@@ -134,9 +133,9 @@ async function handlePublishArtifact(request: NextRequest) {
       artifactManifest: body['artifactManifest'] as ArtifactManifest,
       transfer,
       managed,
-      userDb,
-      userId: user.id,
     });
+    // kind='waitlist' is the v1 LOCAL ONLY result; kind='local' would be
+    // Desktop-only. Both are valid 200 responses from this route.
     return NextResponse.json(result, { status: 200 });
   } catch (err) {
     if (err instanceof TrustBoundaryViolationError) {
@@ -147,15 +146,6 @@ async function handlePublishArtifact(request: NextRequest) {
           message: err.message,
         },
         { status: 400 },
-      );
-    }
-    if (err instanceof ArtifactPersistenceUnavailableError) {
-      return NextResponse.json(
-        {
-          error: 'artifact_persistence_unavailable',
-          message: 'Artifact persistence requires Cloud Managed (pending private beta migration)',
-        },
-        { status: 503 },
       );
     }
     throw err;

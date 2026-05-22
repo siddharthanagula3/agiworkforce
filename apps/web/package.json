@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@agiworkforce/api": "workspace:*",
+    "@agiworkforce/services": "workspace:*",
     "@agiworkforce/apply-patch": "workspace:*",
     "@agiworkforce/data-layer": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
