@@ -42,7 +42,14 @@ Round 9 closes the PLAN.md section 6 task: "Add Chrome and VS Code bridge status
 3. **PLAN.md section 7** — Visual agent manager, queryable subagent runtime snapshots, per-agent tool/model restrictions.
 4. **PLAN.md section 5 remaining tasks** — "Define project schema", "Support project-level memory", "Add project export/import bundle".
 
-### Visual verification debt — Rounds 7-9
+### Visual verification debt — Rounds 7-9 [PARTIAL DISCHARGE 2026-05-21]
+
+**Web debt discharged** via the Round-10 visual-verification slice (`5a70bd734`). New playwright spec at `apps/web/e2e/visual-verification.spec.ts` captures full + viewport screenshots of `/projects` and `/`. Output committed to `docs/visual-verification/web/`. 4 vitest DOM snapshot tests lock the rendered HTML structure of the shared primitives. Real findings surfaced:
+
+- `/projects` dark-mode text contrast is dangerously low — accessibility blocker.
+- `/` home page has CSP violations blocking inline scripts and open-dyslexic font CDN.
+
+Remaining visual-verification debt:
 
 Per the /goal checklist, "Screenshots confirming UI parity against Claude/OpenAI references" is required for completion. Rounds 7-9 shipped 14+ UI-touching commits with **zero visual verification** — typecheck + lint + unit tests + llm-operability all pass, which confirms code correctness but not pixel/layout correctness. Items pending a visual pass:
 

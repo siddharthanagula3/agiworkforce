@@ -18,7 +18,18 @@ Closes the PLAN.md section 5 task "Define project schema." Types-first cross-sur
 - [x] Mobile RN-native `ProjectHeader` mirror — `bd0f487bf`
 - [x] Rust mirror of project schema in `crates/agiworkforce-protocol` — `14942c481`
 - [x] VS Code + Chrome SOURCE_SURFACE anchors with sync-rule assertion — `ebc9b2672`
-- [x] 55 new tests across types (15) + unified-chat (11) + mobile (8) + protocol (13) + extensions (8)
+- [x] Visual-verification debt discharged for Web (playwright spec + 6 PNGs + 2 findings JSON + docs/visual-verification/README.md) — `5a70bd734`
+- [x] 4 DOM-snapshot tests for shared primitives in @agiworkforce/unified-chat — `5a70bd734`
+- [x] 59 new tests across types (15) + unified-chat (15) + mobile (8) + protocol (13) + extensions (8)
+
+### Visual-verification findings — 2026-05-21
+
+These need follow-up but were surfaced BY the visual-verification slice, which proves the workflow works:
+
+- [ ] /projects: dark-mode text nearly invisible (`var(--text-1)` heading + `var(--text-3)` description against black background). High severity — accessibility.
+- [ ] / home: CSP violations blocking inline scripts and open-dyslexic CDN font. Medium severity — accessibility regression for users who need the dyslexia-friendly font.
+
+Remaining visual-verification surfaces (Desktop / Mobile / VS Code / Chrome) still need their own capture infrastructure.
 
 ## 2026-05-21 Suite Transformation Session — Round 9 (in progress)
 
