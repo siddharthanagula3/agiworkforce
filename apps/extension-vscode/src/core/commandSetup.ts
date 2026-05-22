@@ -13,6 +13,8 @@ import {
   ConversationTreeItem,
   ContextPanelProvider,
 } from '../features/trees';
+import { MemoryTreeProvider, MemoryFactItem } from '../memory/memoryTreeProvider';
+import { loadFacts, addFact, updateFact, deleteFact, clearFacts } from '../memory/memoryStore';
 import { AgentModePanel } from '../providers/agentModeProvider';
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
 import { ModelMetricsPanel } from '../features/model-picker/modelMetrics';
@@ -90,6 +92,7 @@ export interface CommandDeps {
   conversationStore: ConversationStore;
   conversationTreeProvider: ConversationTreeProvider;
   contextPanelProvider: ContextPanelProvider;
+  memoryTreeProvider: MemoryTreeProvider;
   diffDecorationProvider: DiffDecorationProvider;
   diagnosticsProvider: AgiDiagnosticsProvider;
 }
@@ -100,6 +103,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     conversationStore,
     conversationTreeProvider,
     contextPanelProvider,
+    memoryTreeProvider,
     diffDecorationProvider,
     diagnosticsProvider,
   } = deps;
@@ -1234,36 +1238,9 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
     // Round-2 audit P0 #8 (2026-05-21) — cross-conversation memory facts the
     // assistant should remember. Workspace-scoped (per the goal contract:
-    // VS Code is NOT a synced chat surface), persisted in globalState. The
-    // companion `agi-workforce.memory` QuickPick exposes add/list/clear so
-    // users can manage facts without leaving the editor.
+    // VS Code is NOT a synced chat surface), persisted in globalState ONLY.
+    // The companion sidebar tree (agi-workforce.memory view) provides list/edit/delete.
     vscode.commands.registerCommand('agi-workforce.memory', async () => {
-      const MEMORY_KEY = 'agiWorkforce.memoryFacts';
-
-      interface VsMemoryFact {
-        id: string;
-        text: string;
-        createdAt: string;
-      }
-
-      function loadFacts(): VsMemoryFact[] {
-        const stored = context.globalState.get<unknown>(MEMORY_KEY);
-        if (!Array.isArray(stored)) return [];
-        return stored
-          .filter(
-            (f): f is VsMemoryFact =>
-              !!f &&
-              typeof (f as VsMemoryFact).id === 'string' &&
-              typeof (f as VsMemoryFact).text === 'string' &&
-              typeof (f as VsMemoryFact).createdAt === 'string',
-          )
-          .slice();
-      }
-
-      async function saveFacts(facts: VsMemoryFact[]): Promise<void> {
-        await context.globalState.update(MEMORY_KEY, facts);
-      }
-
       const action = await vscode.window.showQuickPick(
         [
           { label: '$(add) Add a memory fact', detail: 'add' },
@@ -1275,38 +1252,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       if (!action) return;
 
       if (action.detail === 'add') {
-        const text = await vscode.window.showInputBox({
-          title: 'Add a memory fact',
-          prompt:
-            'A short statement the assistant should remember about you. Stored locally on this device.',
-          placeHolder: 'Example: I prefer Python over JavaScript for data work.',
-          validateInput: (value) => {
-            const trimmed = value.trim();
-            if (!trimmed) return 'Fact cannot be empty.';
-            if (trimmed.length > 280) return 'Keep facts under 280 characters.';
-            return undefined;
-          },
-        });
-        if (!text) return;
-        const facts = loadFacts();
-        const trimmed = text.trim();
-        if (facts.some((f) => f.text.toLowerCase() === trimmed.toLowerCase())) {
-          vscode.window.showInformationMessage('That fact is already in your memory.');
-          return;
-        }
-        const now = new Date().toISOString();
-        const id =
-          typeof globalThis.crypto?.randomUUID === 'function'
-            ? `mem_${globalThis.crypto.randomUUID()}`
-            : `mem_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
-        facts.unshift({ id, text: trimmed, createdAt: now });
-        await saveFacts(facts);
-        vscode.window.showInformationMessage('Memory fact saved.');
+        await vscode.commands.executeCommand('agi-workforce.memory.create');
         return;
       }
 
       if (action.detail === 'list') {
-        const facts = loadFacts();
+        const facts = loadFacts(context.globalState);
         if (facts.length === 0) {
           vscode.window.showInformationMessage('No memory facts yet. Add one to get started.');
           return;
@@ -1322,15 +1273,14 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
             placeHolder: 'Select a fact to remove (Esc to keep all)',
           },
         );
-        if (!pick) return;
-        const next = facts.filter((f) => f.id !== pick.detail);
-        await saveFacts(next);
+        if (!pick || pick.detail === undefined) return;
+        await deleteFact(context.globalState, pick.detail);
         vscode.window.showInformationMessage('Fact removed.');
         return;
       }
 
       if (action.detail === 'clear') {
-        const facts = loadFacts();
+        const facts = loadFacts(context.globalState);
         if (facts.length === 0) {
           vscode.window.showInformationMessage('No memory facts to forget.');
           return;
@@ -1341,9 +1291,74 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           'Forget everything',
         );
         if (confirm === 'Forget everything') {
-          await saveFacts([]);
+          await clearFacts(context.globalState);
           vscode.window.showInformationMessage('All memory facts deleted.');
         }
+      }
+    }),
+
+    // ── memory tree commands ────────────────────────────────────────────────────
+
+    vscode.commands.registerCommand('agi-workforce.memory.refresh', () => {
+      memoryTreeProvider.refresh();
+    }),
+
+    vscode.commands.registerCommand('agi-workforce.memory.create', async () => {
+      const text = await vscode.window.showInputBox({
+        title: 'AGI Workforce — Add Memory Fact',
+        prompt:
+          'A short statement the assistant should remember about you. Stored locally on this device.',
+        placeHolder: 'Example: I prefer Python over JavaScript for data work.',
+        ignoreFocusOut: true,
+        validateInput: (value) => {
+          const trimmed = value.trim();
+          if (!trimmed) return 'Fact cannot be empty.';
+          if (trimmed.length > 280) return 'Keep facts under 280 characters.';
+          return undefined;
+        },
+      });
+      if (!text) return;
+      const trimmed = text.trim();
+      const existing = loadFacts(context.globalState);
+      if (existing.some((f) => f.text.toLowerCase() === trimmed.toLowerCase())) {
+        vscode.window.showInformationMessage('That fact is already in your memory.');
+        return;
+      }
+      await addFact(context.globalState, trimmed);
+      vscode.window.showInformationMessage('Memory fact saved.');
+    }),
+
+    vscode.commands.registerCommand('agi-workforce.memory.edit', async (item: MemoryFactItem) => {
+      const newText = await vscode.window.showInputBox({
+        title: 'AGI Workforce — Edit Memory Fact',
+        value: item.fact.text,
+        prompt: 'Update this memory fact (stored locally on this device)',
+        ignoreFocusOut: true,
+        validateInput: (value) => {
+          const trimmed = value.trim();
+          if (!trimmed) return 'Fact cannot be empty.';
+          if (trimmed.length > 280) return 'Keep facts under 280 characters.';
+          return undefined;
+        },
+      });
+      if (!newText || newText.trim() === item.fact.text) return;
+      const updated = await updateFact(context.globalState, item.fact.id, newText.trim());
+      if (updated) {
+        vscode.window.showInformationMessage('Memory fact updated.');
+      } else {
+        vscode.window.showWarningMessage('AGI Workforce: Memory fact not found.');
+      }
+    }),
+
+    vscode.commands.registerCommand('agi-workforce.memory.delete', async (item: MemoryFactItem) => {
+      const confirm = await vscode.window.showWarningMessage(
+        `Delete this memory fact?\n\n"${item.fact.text.slice(0, 80)}${item.fact.text.length > 80 ? '…' : ''}"`,
+        { modal: true },
+        'Delete',
+      );
+      if (confirm === 'Delete') {
+        await deleteFact(context.globalState, item.fact.id);
+        vscode.window.showInformationMessage('Memory fact deleted.');
       }
     }),
   );

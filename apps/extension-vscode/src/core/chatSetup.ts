@@ -9,12 +9,14 @@ import {
 } from '../features/trees';
 import { type DiffDecorationProvider } from '../providers/diffDecorationProvider';
 import { WorkspaceIndexer } from '../data/workspaceIndexer';
+import { MemoryTreeProvider } from '../memory/memoryTreeProvider';
 
 export interface ChatState {
   conversationStore: ConversationStore;
   conversationTreeProvider: ConversationTreeProvider;
   sidebarProvider: SidebarProvider;
   contextPanelProvider: ContextPanelProvider;
+  memoryTreeProvider: MemoryTreeProvider;
 }
 
 export function setupChat(
@@ -56,8 +58,21 @@ export function setupChat(
     contextPanelProvider,
   );
 
+  // ── Memory tree (cross-conversation facts) ──────────────────────────────────
+  const memoryTreeProvider = new MemoryTreeProvider(context.globalState);
+  context.subscriptions.push(
+    vscode.window.registerTreeDataProvider('agi-workforce.memory', memoryTreeProvider),
+    memoryTreeProvider,
+  );
+
   const indexer = new WorkspaceIndexer(context);
   context.subscriptions.push(...indexer.registerFileWatcher());
 
-  return { conversationStore, conversationTreeProvider, sidebarProvider, contextPanelProvider };
+  return {
+    conversationStore,
+    conversationTreeProvider,
+    sidebarProvider,
+    contextPanelProvider,
+    memoryTreeProvider,
+  };
 }
