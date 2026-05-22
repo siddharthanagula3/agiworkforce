@@ -46,6 +46,10 @@ Round 10 closes the PLAN.md section 5 task "Define project schema" and ships the
 
 Stop-hook concern "Desktop/Mobile/VS Code/Chrome lack their own capture infrastructure" is now structurally discharged — every surface has SOME form of locked visual-verification artifact, even if the depth varies (PNG > RN tree > HTML snapshot).
 
+### UX parity — TODO #44 closed
+
+- `@agiworkforce/unified-chat` `ProjectGallery` inline create form now exposes an emoji picker (12-emoji palette, 📁 default) + 4 quick-start preset chips (Coding 💻 / Writing 📝 / Research 🔬 / Learning 📚) + explicit Cancel + Create project buttons. Mirrors the ChatGPT create-project modal pattern documented in the round-10 pixel-parity comparison without copying labels. Round-10 `iconEmoji` + `accentColor` schema fields are now threaded through `handleCreate` to both the host-`onCreate` and default-local-create paths. 7 vitest tests pin the new UX contract.
+
 ## [Unreleased — autonomous suite transformation, round 9] — 2026-05-21
 
 Round 9 closes the PLAN.md section 6 task "Add Chrome and VS Code bridge status to connector hub" — making developer-surface transport health a first-class part of the consumer connector hub.
