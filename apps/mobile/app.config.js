@@ -48,7 +48,7 @@ const conditionalPlugins = [
 const config = {
   name: 'AGI Workforce',
   slug: 'agi-workforce',
-  version: '1.0.0',
+  version: '1.2.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
   scheme: 'agiworkforce',
