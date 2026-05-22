@@ -41,6 +41,20 @@ Output overwrites the existing PNGs in `docs/visual-verification/{web,desktop}/`
 3. If the diff is intentional, commit the new PNGs.
 4. If the diff exposes a regression, fix it before committing.
 
+## Round 18 capture (2026-05-22)
+
+Settings + connector hub parity for web (round-18 task). Captures written
+to `round-18-*` stems.
+
+| Surface | Artifact                                          | Tooling                                                            |
+| ------- | ------------------------------------------------- | ------------------------------------------------------------------ |
+| web     | `web/round-18-{settings,connectors}-viewport.png` | playwright via `apps/web/e2e/round-18-visual-verification.spec.ts` |
+
+Findings:
+
+- `/settings` correctly redirects to `/login` for unauthenticated users. Auth gate is verified.
+- `/connectors` hub renders the full grid with category tabs, status filter pills, search input, and 32 connector cards across 9 categories. Structural match to Claude's connector directory reference.
+
 ## Round 17 capture (2026-05-22)
 
 Refresh sweep across all 6 surfaces after rounds 12-16. Captures are written
