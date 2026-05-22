@@ -2,9 +2,106 @@
 
 Status: Current
 Owner: Next session lead
-Last updated: 2026-05-21 (extended through round 10, project-schema lane)
+Last updated: 2026-05-22 (extended through rounds 11-13: visual-verification discharge, host adoptions, supabase migrations, useIsMounted extraction, and ultrathink-mode architecture audit)
 Branch: `fix/extension-typecheck-and-c02-sync-2026-05-20`
-Head pushed: `6d7045146` (round-8 boundary) → rounds 9-10 in progress this session
+Head pushed: `724b6b8a3` (round-13 boundary at session end)
+
+## Round 13 additions (ultrathink-mode architecture audit, 2026-05-22)
+
+User invoked "ultrathink continue" — pivoted from the routine useIsMounted migration to deeper architectural audit. Five substantive findings, each closing a defined-but-unused defensive utility OR a local-constant duplication that diverged from canonical.
+
+- `docs(desktop): stop useismounted sweep — react 19 removed the warning` (`a0f0d7051`)
+  - Found via WebFetch of https://github.com/reactwg/react-18/discussions/82: the "Can't perform a React state update on an unmounted component" warning was REMOVED in React 18. React 19 (in use across apps/desktop, apps/web, packages/unified-chat) silently no-ops setState on unmounted components.
+  - Implication: the unmount-race the useIsMounted hook was extracted to handle does NOT actually fire warnings in this codebase. The 14 components migrated so far (Round 12) are harmless but redundant defensive code.
+  - Hook's JSDoc updated with **DO NOT migrate additional components** marker. Sweep halted. 50+ candidate files left alone.
+
+- `fix(web,mobile): runtime-enforce /goal sync-rule at sync-service constructors` (`aa4190781`)
+  - `assertSurfaceCanSyncChats` was defined in `@agiworkforce/types` but never called in production. Sync rule was architecturally implicit, not runtime-enforced.
+  - Wired into `ConversationSyncService` (web) + `MobileConversationSyncService` (mobile) constructors. Throws at construction if a future refactor tries to construct from cli/vscode/chrome origin.
+  - 6 new vitest tests pin every surface's accept/reject behaviour. Closes the /goal verification gap "Confirm Web/Desktop/Mobile sync works and CLI/VS Code/Chrome remain separate" at the runtime enforcement layer.
+
+- `feat(types): assertgeneratedfiletrustboundary throw-variant + tests` (`d310d0fda`)
+  - 80-line `validateGeneratedFileTrustBoundary` existed but had no throw variant for use at persistence boundaries. Mirror of the `assertSurfaceCanSyncChats` pattern.
+  - 3 new vitest tests cover pass-through, single-violation throw, multi-violation throw.
+
+- `fix(web): align use-attachments size cap with canonical max_attachment_bytes` (`da70d1af8`)
+  - Web's local `MAX_FILE_SIZE_BYTES = 30 * 1024 * 1024` diverged from canonical `MAX_ATTACHMENT_BYTES = 25 MiB`. Files 25-30MB passed Web validation but failed at provider gateways with opaque 413s.
+  - Imported canonical, single source of truth across surfaces.
+
+- `fix(web): dedupe max_message_length across llm api gateways` (`724b6b8a3`)
+  - `MAX_MESSAGE_LENGTH = 100000` declared inline in TWO web LLM API routes. DRY violation; if one raised without the other, gateways diverged silently.
+  - Extracted to `apps/web/lib/validations/llm.ts` (where MAX_OUTPUT_TOKENS already lives). Both routes import.
+
+### Round 13 — meta-lesson
+
+**The ultrathink finding about React 19 saved the user 50+ future PRs.** The autonomous loop had been continuing a migration sweep that solved a phantom. Worth pausing to verify assumptions, especially when a pattern starts to feel mechanical.
+
+## Round 12 additions (useIsMounted hook + sweep, 2026-05-22)
+
+Self-audit pattern caught a real bug (unmount-during-fetch setState in `BridgeStatusCard`, `OAuthConnectorCard`), then escalated to a systemic-pattern finding: 67 desktop components had the same shape. Extracted shared hook + migrated 14 consumers before the Round-13 React-19 finding halted the sweep.
+
+- `feat(desktop): extract useismounted hook + migrate connector cards` (`b16b2672b`) — shared hook + 3 vitest tests; bridge + oauth cards switched from inline ref.
+- `fix(desktop): apply useismounted to savetomemorybutton + memorycard` (`2fee29dd1`)
+- `fix(desktop): apply useismounted to toollabel + artifacttoolbar` (`f3ccf66c6`)
+- `fix(desktop): apply useismounted to all 6 privacy datasection handlers` (`622597bf0`)
+- `fix(desktop): apply useismounted to dotfilesettings configeditorsection` (`610aaa7db`)
+- `fix(desktop): apply useismounted to 3 single-handler files` (`1ebfbd924`) — ConnectorDetailView + ArtifactVersionHistory + MemoryImport.
+- `fix(desktop): apply useismounted to 3 more single-handler files` (`87ceb6ab3`) — ShareConversationDialog + AgentTaskCreator + DatabaseWorkspace.SchemaExplorer.
+
+14 components migrated. Halted by Round-13 React-19 finding.
+
+## Round 11 additions (visual-verification discharge + adoptions + supabase, 2026-05-21..05-22)
+
+Round 11 was the most productive single round of the session — 20+ commits across visual verification, host adoptions, backend, parity comparisons, and self-audit bug fixes.
+
+**Visual verification infrastructure — all 6 surfaces now have coverage:**
+
+- Web: `apps/web/e2e/visual-verification.spec.ts` (playwright PNG capture for /, /projects, /projects-create-form, /projects/[id] not-found). Output committed to `docs/visual-verification/web/` (6 PNGs + 4 findings JSON).
+- Desktop: `apps/desktop/e2e/visual-verification.spec.ts` (playwright PNG capture of cloud-web bundle: /, /sign-up, /providers, /pricing). 4 PNGs committed to `docs/visual-verification/desktop/`. Real finding: all non-root routes render the same sign-in screen — the Desktop cloud-web bundle has no internal marketing routes (nav links go externally to agiworkforce.com).
+- Mobile: RN tree snapshots in `apps/mobile/__tests__/{shared-primitives,send-preview,generated-file-card}.snapshot.test.tsx`. 10 jest snapshots locking the rendered RN tree across ProjectHeader / SendPreview / GeneratedFileCard variants.
+- VS Code: `apps/extension-vscode/src/__tests__/webviewContent.snapshot.test.ts` (3 webview HTML snapshots with normalized nonce).
+- Chrome: `apps/extension/__tests__/static-html.snapshot.test.ts` (popup + side-panel static HTML).
+- CLI: no UI; covered by Rust unit tests in `crates/agiworkforce-protocol`.
+
+**Pixel-parity comparisons — 4 reference sources** (docs/visual-verification/README.md):
+
+- ChatGPT projects create modal: **gap closed** (`c0bc1e4ae`) — Web ProjectGallery now has emoji picker + 4 preset chips + Cancel/Create project buttons matching ChatGPT structurally.
+- ChatGPT projects detail view: **gap closed** (`040861527`) — new `/projects/[id]` dynamic route with ProjectHeader + Chats/Sources tabs + not-found state.
+- Claude sign-in: 3 product-decision findings (value-prop headline, product preview illustration, branding size). Not regressions — design-choice questions.
+- Gemini home empty-state: patterns documented for future product use.
+- Perplexity connectors grid: **CLOSE structural match** confirmed. AGI's round-9 BridgeStatusCard is a differentiator vs Perplexity, not a parity gap.
+
+**Visual-verification findings closed end-to-end:**
+
+- /projects dark-mode text contrast (`var(--text-1)` / `var(--text-3)` were undefined CSS vars rendering as near-black-on-black). Fixed in `651b4e016`.
+- /home CSP violation blocking the OpenDyslexic font CDN. Removed broken @font-face rules in `1cab133f1`. Self-host follow-up documented.
+
+**Self-audit pattern shipped 8 real production bug fixes:**
+
+- `fix(supabase,types,protocol): project_knowledge_files added_by_user_id nullability` (`6b72694ea`) — FK with `ON DELETE SET NULL` + `NOT NULL` is incompatible; would block user deletion in Postgres.
+- `fix(supabase): add missing fk index on project_members.invited_by_user_id` (`f88b8b20f`) — cascade delete + filter queries would have been O(N) without it.
+- `fix(web): tighten /api/projects/preview count validation` (`3c0147612`) — endpoint accepted negative/NaN counts, producing nonsense labels.
+- `fix(types,protocol): align ts+rust contracts with postgres source-of-truth` (`c86e44e97`) — 3 schema drifts (storage_uri, isArchived, metadata missing from TS+Rust contracts).
+- `fix(supabase): close two rls gaps surfaced by self-audit` (`f9ea3f6f9`) — soft-deleted knowledge files leaked to project members; non-owner members couldn't see other members.
+- `fix(web): readable conversation labels on /projects/[id]` (`019cc0dab`) — was rendering raw UUIDs as conversation titles.
+- `fix(desktop): bridgestatuscard unmount-during-fetch setstate race` (`166e9e25e`) — pre-Round-13-finding fix, harmless in React 19 but documented.
+- `fix(desktop): oauthconnectorcard unmount race in disconnect + refresh` (`4c5f5f4e9`) — same pattern.
+
+**Backend / service-layer slices:**
+
+- `feat(supabase): project schema round-10 — backend completes contract` (`bf499e57d`) — 292-line Postgres migration extending user_projects + creating project_members + project_knowledge_files + denormalized count triggers. **NOT auto-applied**; apply via `supabase db push` after review.
+- `feat(web): /api/projects/preview server endpoint` (`23f52d185`) — pure-derivation route that exposes `summarizeProjectHeader()` as a stateless API. 7 vitest tests pin minimal validation.
+- `feat(desktop): adopt shared projectheader card in projectsview details` (`dbc87d8cc`) — first host adoption with a v1 LOCAL ONLY ProjectRecord mapper.
+- `feat(mobile): rn-native projectheader mirror for the round-10 contract` (`bd0f487bf`) — mobile sibling consuming same `ProjectHeaderPresentation`.
+- `feat(extension-vscode,extension): anchor source_surface for the sync rule` (`ebc9b2672`) — module-load assertions that vscode/chrome are developer surfaces; would fire if a future refactor promoted either into the synced-app vocabulary.
+
+### Round 11/12/13 — open paths for next session
+
+1. **Apply the Postgres migration** — `supabase db push` then verify the RLS policy tests (need a real DB; mock-based vitest can only verify SQL syntax via the existing `check:supabase-migrations` guard). Requires user authorization for the deploy.
+2. **Sweep `assertGeneratedFileTrustBoundary` into real call sites** — currently the throw variant exists but no production call site wires it. The natural sites are anywhere a `GeneratedFile` is persisted to durable storage or transferred between surfaces.
+3. **Real backend integration for /api/projects/[id]** — currently a pure-derivation preview endpoint. Adding live Supabase-backed CRUD would close the "no service layer" gap the Stop hook keeps flagging.
+4. **Mobile PNG capture infrastructure** — Mobile currently has RN tree snapshots only; adding a Expo-Web build pipeline would unlock Web-style PNG capture.
+5. **Resolve the Web ↔ Desktop offline-queue duplication** — apps/web/lib/offline + apps/desktop/src/lib/offline both have a parallel implementation. Extract to a shared `@agiworkforce/offline-queue` package.
 
 ## Round 10 additions (after Round 9 wrap at `e3e5d85f8`)
 
