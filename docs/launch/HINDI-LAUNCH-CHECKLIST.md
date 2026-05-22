@@ -65,7 +65,7 @@ If Qwen3-4B Hindi quality is below threshold:
 
 Document which fallback was chosen and why in this file before launch.
 
-**Chosen fallback (fill in):** ******\_\_\_******
+**Chosen fallback (fill in):** **\*\***\_\_\_**\*\***
 
 ---
 

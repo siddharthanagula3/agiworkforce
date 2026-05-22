@@ -21,6 +21,10 @@ pub(super) enum SlashResult {
     A2a(String, String),
     /// Batch operation — carries (glob_pattern, prompt) for parallel file processing.
     Batch(String, String),
+    /// Turn the slash command into a first-class prompt.
+    Prompt(String),
+    /// Resolve and send an MCP prompt command.
+    McpPrompt(String),
     /// Run ecosystem scan.
     Ecosystem(String),
     /// Run marketplace search.
@@ -39,6 +43,25 @@ pub(super) fn handle_slash_command(
     let parts: Vec<&str> = input.splitn(2, ' ').collect();
     let cmd = parts[0].to_lowercase();
     let arg = parts.get(1).map(|s| s.trim()).unwrap_or_default();
+
+    match crate::claude_parity::handle_shared_command(cmd.as_str(), arg, session) {
+        crate::claude_parity::ParityCommandResult::SystemMessage(message) => {
+            persist_shared_ui_config(cmd.as_str(), arg, session, config);
+            eprintln!("{message}");
+            return SlashResult::Handled;
+        }
+        crate::claude_parity::ParityCommandResult::Prompt(prompt) => {
+            return SlashResult::Prompt(prompt);
+        }
+        crate::claude_parity::ParityCommandResult::DraftPrompt(prompt) => {
+            eprintln!("{prompt}");
+            output::print_info(
+                "Review this BYOK continuation draft. It was not sent automatically.",
+            );
+            return SlashResult::Handled;
+        }
+        crate::claude_parity::ParityCommandResult::NotHandled => {}
+    }
 
     match cmd.as_str() {
         "/exit" | "/quit" | "/q" => {
@@ -80,7 +103,7 @@ pub(super) fn handle_slash_command(
         "/save" => {
             registry::handle_save(session);
         }
-        "/load" => {
+        "/load" | "/resume" => {
             registry::handle_load(arg, session);
         }
         "/history" => {
@@ -98,7 +121,7 @@ pub(super) fn handle_slash_command(
         "/setup" => {
             dialogs::handle_setup(config);
         }
-        "/permissions" | "/perms" => {
+        "/permissions" | "/perms" | "/approvals" => {
             registry::handle_permissions(arg);
         }
         "/models" => {
@@ -135,6 +158,9 @@ pub(super) fn handle_slash_command(
             );
             eprintln!("  Checkpoints: {}", session.checkpoint_count());
             eprintln!("  Skip perms: {}", session.skip_permissions);
+        }
+        "/usage" => {
+            eprintln!("{}", crate::claude_parity::render_stats(session));
         }
         "/sessions" => {
             registry::handle_sessions(arg);
@@ -174,9 +200,7 @@ pub(super) fn handle_slash_command(
                 session.permission_mode,
                 crate::cli_options::PermissionMode::Plan
             ) {
-                output::print_warn(
-                    "/plan accept: not in plan mode. Use `/plan` to enter first.",
-                );
+                output::print_warn("/plan accept: not in plan mode. Use `/plan` to enter first.");
             } else if session.current_plan.is_none() {
                 output::print_warn(
                     "/plan accept: no plan to approve yet. Ask the model to call `update_plan` first.",
@@ -189,9 +213,7 @@ pub(super) fn handle_slash_command(
         "/plan" if arg.starts_with("reject") => {
             let feedback = arg.strip_prefix("reject").unwrap_or("").trim().to_string();
             if feedback.is_empty() {
-                output::print_warn(
-                    "/plan reject: needs a reason. Usage: /plan reject <feedback>",
-                );
+                output::print_warn("/plan reject: needs a reason. Usage: /plan reject <feedback>");
             } else {
                 session.plan_rejection_feedback = Some(feedback);
                 session.current_plan = None;
@@ -205,7 +227,11 @@ pub(super) fn handle_slash_command(
         "/plan" if arg == "show" || arg == "view" => {
             match (&session.current_plan, &session.current_plan_path) {
                 (Some(plan), Some(path)) => {
-                    eprintln!("\n# Plan ({})\n\n{}", path.display(), plan.render_markdown());
+                    eprintln!(
+                        "\n# Plan ({})\n\n{}",
+                        path.display(),
+                        plan.render_markdown()
+                    );
                 }
                 (Some(plan), None) => {
                     eprintln!("\n{}", plan.render_markdown());
@@ -321,7 +347,7 @@ pub(super) fn handle_slash_command(
             let subcmd = if arg.is_empty() { "scan" } else { arg };
             return SlashResult::Ecosystem(subcmd.to_string());
         }
-        "/marketplace" | "/market" => {
+        "/marketplace" | "/market" | "/plugin" | "/plugins" => {
             let subcmd = if arg.is_empty() { "list" } else { arg };
             return SlashResult::Marketplace(subcmd.to_string());
         }
@@ -360,6 +386,12 @@ pub(super) fn handle_slash_command(
             print_help();
         }
         _ => {
+            if let Some(prompt) = crate::custom_commands::expand_custom_slash_invocation(input) {
+                return SlashResult::Prompt(prompt);
+            }
+            if input.trim_start().starts_with("/mcp:") {
+                return SlashResult::McpPrompt(input.to_string());
+            }
             output::print_warn(&format!(
                 "Unknown command: {}. Type /help for available commands.",
                 cmd
@@ -370,177 +402,129 @@ pub(super) fn handle_slash_command(
     SlashResult::Handled
 }
 
+#[cfg(test)]
+fn repl_runtime_command_names() -> std::collections::BTreeSet<&'static str> {
+    let mut names = std::collections::BTreeSet::new();
+    names.extend(
+        crate::claude_parity::shared_runtime_command_names()
+            .iter()
+            .copied(),
+    );
+    names.extend([
+        "exit",
+        "quit",
+        "q",
+        "model",
+        "m",
+        "clear",
+        "cost",
+        "save",
+        "load",
+        "resume",
+        "history",
+        "delete",
+        "export",
+        "providers",
+        "setup",
+        "permissions",
+        "perms",
+        "approvals",
+        "models",
+        "skills",
+        "hooks",
+        "context",
+        "ctx",
+        "status",
+        "usage",
+        "sessions",
+        "rename",
+        "import",
+        "migrate",
+        "compact",
+        "btw",
+        "plan",
+        "fast",
+        "rewind",
+        "branch",
+        "fork",
+        "diff",
+        "batch",
+        "memory",
+        "mem",
+        "init",
+        "config",
+        "voice",
+        "v",
+        "theme",
+        "login",
+        "logout",
+        "a2a",
+        "ecosystem",
+        "eco",
+        "marketplace",
+        "market",
+        "plugin",
+        "plugins",
+        "sync",
+        "onboarding",
+        "auth",
+        "help",
+        "h",
+        "?",
+    ]);
+    names
+}
+
+fn persist_shared_ui_config(cmd: &str, arg: &str, session: &AgentSession, config: &mut CliConfig) {
+    match cmd {
+        "/output-style" if !arg.trim().is_empty() => {
+            if let Err(err) = config.persist_output_style_project(&session.output_style) {
+                output::print_warn(&format!("Failed to persist output style: {err}"));
+            }
+        }
+        "/privacy-mode" | "/trust-boundary"
+            if crate::agent::PrivacyMode::from_arg(arg).is_some() =>
+        {
+            if let Err(err) = config.persist_privacy_mode_project(session.privacy_mode.label()) {
+                output::print_warn(&format!("Failed to persist privacy mode: {err}"));
+            }
+        }
+        _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn registered_builtin_commands_have_repl_runtime_coverage() {
+        let runtime = super::repl_runtime_command_names();
+
+        for command in crate::command_registry::builtin_slash_registry_commands() {
+            assert!(
+                runtime.contains(command.name.as_str()),
+                "/{} is registered but has no REPL runtime coverage",
+                command.name
+            );
+            for alias in command.aliases {
+                assert!(
+                    runtime.contains(alias.as_str()),
+                    "/{} alias for /{} has no REPL runtime coverage",
+                    alias,
+                    command.name
+                );
+            }
+        }
+    }
+}
+
 pub(super) fn print_help() {
-    eprintln!("{}", "Agent & Mode:".cyan().bold());
+    let skills = crate::skills::discover_skills();
+    let registry = crate::command_registry::registry_from_builtins_and_skills(&skills);
     eprintln!(
-        "  {}    Switch model (e.g. /model gpt-5.5)",
-        "/model <name>".bold()
-    );
-    eprintln!(
-        "  {}             Toggle plan mode (read-only tools)",
-        "/plan".bold()
-    );
-    eprintln!(
-        "  {}    Toggle fast mode (cheaper model)",
-        "/fast [on|off]".bold()
-    );
-    eprintln!("  {} Manual context compaction", "/compact [focus]".bold());
-    eprintln!(
-        "  {}  Set syntax theme (dark/light/ansi/solarized-dark/…)",
-        "/theme [name]".bold()
-    );
-    eprintln!(
-        "  {}  Side query (not added to history)",
-        "/btw <question>".bold()
-    );
-    eprintln!(
-        "  {}  Voice input (push-to-talk with Whisper STT)",
-        "/voice [lang]".bold()
-    );
-    eprintln!(
-        "  {}           Rewind to previous checkpoint",
-        "/rewind".bold()
-    );
-    eprintln!(
-        "  {}   Fork conversation at current point",
-        "/branch [name]".bold()
-    );
-    eprintln!(
-        "  {}             Show uncommitted git changes",
-        "/diff".bold()
-    );
-    eprintln!(
-        "  {} Batch apply prompt to files",
-        "/batch <glob> <prompt>".bold()
-    );
-    eprintln!();
-    eprintln!("{}", "Configuration:".cyan().bold());
-    eprintln!(
-        "  {}           Show current configuration",
-        "/config".bold()
-    );
-    eprintln!("  {} Set config value", "/config set <k> <v>".bold());
-    eprintln!("  {}    Get config value", "/config get <key>".bold());
-    eprintln!(
-        "  {}        List all providers and key status",
-        "/providers".bold()
-    );
-    eprintln!(
-        "  {}            Interactive provider setup",
-        "/setup".bold()
-    );
-    eprintln!("  {}     View/reset permissions", "/permissions".bold());
-    eprintln!();
-    eprintln!("{}", "Sessions:".cyan().bold());
-    eprintln!("  {}             Save conversation", "/save".bold());
-    eprintln!("  {}     Load a saved conversation", "/load <id>".bold());
-    eprintln!("  {}          List saved conversations", "/history".bold());
-    eprintln!("  {}   Delete a conversation", "/delete <id>".bold());
-    eprintln!(
-        "  {}           Export (markdown or /export json)",
-        "/export".bold()
-    );
-    eprintln!("  {} Rename session", "/rename <id> <title>".bold());
-    eprintln!("  {}         List managed sessions", "/sessions".bold());
-    eprintln!("  {}   Migrate JSON conversations", "/migrate".bold());
-    eprintln!();
-    eprintln!("{}", "Memory & Project:".cyan().bold());
-    eprintln!(
-        "  {}        Show all memory tiers (global/project/local)",
-        "/memory".bold()
-    );
-    eprintln!("  {}  View a specific tier", "/memory <tier>".bold());
-    eprintln!(
-        "  {} Add text to tier (default: project)",
-        "/memory add [tier] <text>".bold()
-    );
-    eprintln!(
-        "  {}      Edit tier in $EDITOR",
-        "/memory edit [tier]".bold()
-    );
-    eprintln!(
-        "  {}             Initialize project with CLAUDE.md",
-        "/init".bold()
-    );
-    eprintln!(
-        "  {}        Append text to project CLAUDE.md",
-        "# <text>".bold()
-    );
-    eprintln!();
-    eprintln!("{}", "Info:".cyan().bold());
-    eprintln!(
-        "  {}           Show version, model, provider, status",
-        "/status".bold()
-    );
-    eprintln!("  {}             Show session cost summary", "/cost".bold());
-    eprintln!("  {}          Show context window usage", "/context".bold());
-    eprintln!("  {}           List available models", "/models".bold());
-    eprintln!("  {}           List available skills", "/skills".bold());
-    eprintln!("  {}            Show configured hooks", "/hooks".bold());
-    eprintln!("  {}            Login with subscription", "/login".bold());
-    eprintln!("  {}           Logout", "/logout".bold());
-    eprintln!(
-        "  {}            Clear conversation context",
-        "/clear".bold()
-    );
-    eprintln!("  {}             Show this help", "/help".bold());
-    eprintln!("  {}             Exit", "/exit".bold());
-    eprintln!();
-    eprintln!("{}", "Ecosystem & Sync:".cyan().bold());
-    eprintln!(
-        "  {}     Scan for AI tools (Claude, Codex, Cursor, etc.)",
-        "/ecosystem".bold()
-    );
-    eprintln!(
-        "  {}     Import MCP configs from detected tools",
-        "/eco import".bold()
-    );
-    eprintln!(
-        "  {}     Search/list marketplace plugins",
-        "/marketplace".bold()
-    );
-    eprintln!("  {}  Search marketplace", "/market search <q>".bold());
-    eprintln!(
-        "  {}             Check sync status of dotfiles",
-        "/sync".bold()
-    );
-    eprintln!(
-        "  {}      Export synced settings as JSON",
-        "/sync export".bold()
-    );
-    eprintln!(
-        "  {}             Show auth status for all providers",
-        "/auth".bold()
-    );
-    eprintln!(
-        "  {}       Re-run first-run setup wizard",
-        "/onboarding".bold()
-    );
-    eprintln!();
-    eprintln!("{}", "Agent-to-Agent (A2A):".cyan().bold());
-    eprintln!("  {}     List known peer agents", "/a2a discover".bold());
-    eprintln!("  {} Delegate task", "/a2a delegate <agent> <task>".bold());
-    eprintln!("  {} Start A2A server", "/a2a serve [port]".bold());
-    eprintln!("  {} Add peer agent", "/a2a register <url>".bold());
-    eprintln!("  {}         Show this agent's card", "/a2a card".bold());
-    eprintln!();
-    eprintln!("{}", "Shortcuts:".cyan().bold());
-    eprintln!(
-        "  {}           Run shell command (output added to context)",
-        "! <command>".bold()
-    );
-    eprintln!(
-        "  {}        Append text to project CLAUDE.md",
-        "# <text>".bold()
-    );
-    eprintln!("  {} Multi-line input", "\\".bold());
-    eprintln!(
-        "  {}              Cancel input / {} Exit",
-        "Ctrl-C".bold(),
-        "Ctrl-D".bold()
-    );
-    eprintln!(
-        "  {}            Set AGIWORKFORCE_VI=1 for vim keybindings",
-        "Vi mode".bold()
+        "{}",
+        crate::command_registry::format_command_help(
+            &registry,
+            crate::command_registry::ShortcutHelp::Repl,
+        )
     );
 }

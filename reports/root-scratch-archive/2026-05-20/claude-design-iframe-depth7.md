@@ -1,0 +1,4541 @@
+- iframe [ref=e1280] [box=400,79,1233,849]:
+  - generic [ref=f7e4] [box=0,0,15612,32819]:
+    - generic [ref=f7e5] [box=0,60,15612,1082]:
+      - generic [ref=f7e7] [box=60,60,15492,94]:
+        - generic [ref=f7e8] [box=58,60,349,33]: R6 · AGI Mobile v1 canonical
+        - generic [ref=f7e9] [box=60,99,15492,19]: On-device first · light-first · 3-bucket models · BYOK fork · Settings/Storage/Privacy
+      - generic [ref=f7e10] [box=0,154,12148,988]:
+        - generic [ref=f7e11] [box=60,154,480,988]:
+          - generic [ref=f7e12] [box=56,126,484,24]:
+            - generic [ref=f7e13] [box=56,126,438,24]:
+              - generic "Drag to reorder" [ref=f7e14] [box=56,127,17,23]
+              - generic "Click to focus" [ref=f7e22] [cursor=pointer] [box=77,128,417,21]
+            - generic [ref=f7e24] [box=494,127,46,22]:
+              - button "More" [ref=f7e26] [cursor=pointer] [box=494,127,22,22]
+              - button "Focus" [ref=f7e31] [cursor=pointer] [box=518,127,22,22]
+          - generic [ref=f7e36] [box=85,182,430,932]:
+            - generic [box=85,182,430,72]:
+              - generic [box=115,217,37,21]: 9:41
+              - generic [box=414,221,71,13]
+            - generic [ref=f7e39] [box=85,236,430,844]:
+              - generic [ref=f7e40] [box=85,236,430,729]
+              - generic [ref=f7e63] [box=85,965,430,115]
+        - generic [ref=f7e68] [box=588,154,480,988]:
+          - generic [ref=f7e69] [box=584,126,484,24]:
+            - generic [ref=f7e70] [box=584,126,438,24]:
+              - generic "Drag to reorder" [ref=f7e71] [box=584,127,17,23]
+              - generic "Click to focus" [ref=f7e79] [cursor=pointer] [box=605,128,417,21]
+            - generic [ref=f7e81] [box=1022,127,46,22]:
+              - button "More" [ref=f7e83] [cursor=pointer] [box=1022,127,22,22]
+              - button "Focus" [ref=f7e88] [cursor=pointer] [box=1046,127,22,22]
+          - generic [ref=f7e93] [box=613,182,430,932]:
+            - generic [box=613,182,430,72]:
+              - generic [box=643,217,37,21]: 9:41
+              - generic [box=942,221,71,13]
+            - generic [ref=f7e96] [box=613,236,430,844]:
+              - generic [ref=f7e97] [box=613,236,430,729]
+              - generic [ref=f7e120] [box=613,965,430,115]
+        - generic [ref=f7e125] [box=1116,154,480,988]:
+          - generic [ref=f7e126] [box=1112,126,484,24]:
+            - generic [ref=f7e127] [box=1112,126,438,24]:
+              - generic "Drag to reorder" [ref=f7e128] [box=1112,127,17,23]
+              - generic "Click to focus" [ref=f7e136] [cursor=pointer] [box=1133,128,417,21]
+            - generic [ref=f7e138] [box=1550,127,46,22]:
+              - button "More" [ref=f7e140] [cursor=pointer] [box=1550,127,22,22]
+              - button "Focus" [ref=f7e145] [cursor=pointer] [box=1574,127,22,22]
+          - generic [ref=f7e150] [box=1141,182,430,932]:
+            - generic [box=1141,182,430,72]:
+              - generic [box=1171,217,37,21]: 9:41
+              - generic [box=1470,221,71,13]
+            - generic [ref=f7e153] [box=1141,236,430,844]:
+              - generic [ref=f7e154] [box=1141,236,430,69]
+              - generic [ref=f7e159] [box=1141,305,430,147]
+              - generic [ref=f7e166] [box=1155,474,402,235]
+              - generic [ref=f7e192] [box=1163,730,107,13]: Or pick another
+              - generic [ref=f7e193] [box=1155,752,402,60]
+              - generic [ref=f7e202] [box=1155,820,402,60]
+              - button "Download Apple Foundation 3B" [ref=f7e213] [box=1159,1012,394,52]
+        - generic [ref=f7e218] [box=1644,154,480,988]:
+          - generic [ref=f7e219] [box=1640,126,484,24]:
+            - generic [ref=f7e220] [box=1640,126,438,24]:
+              - generic "Drag to reorder" [ref=f7e221] [box=1640,127,17,23]
+              - generic "Click to focus" [ref=f7e229] [cursor=pointer] [box=1661,128,417,21]
+            - generic [ref=f7e231] [box=2078,127,46,22]:
+              - button "More" [ref=f7e233] [cursor=pointer] [box=2078,127,22,22]
+              - button "Focus" [ref=f7e238] [cursor=pointer] [box=2102,127,22,22]
+          - generic [ref=f7e243] [box=1669,182,430,932]:
+            - generic [box=1669,182,430,72]:
+              - generic [box=1699,217,37,21]: 9:41
+              - generic [box=1998,221,71,13]
+            - generic [ref=f7e246] [box=1669,236,430,844]:
+              - generic [ref=f7e247] [box=1669,236,430,69]
+              - generic [ref=f7e252] [box=1669,305,430,147]
+              - generic [ref=f7e259] [box=1683,474,402,235]
+              - generic [ref=f7e285] [box=1691,730,107,13]: Or pick another
+              - generic [ref=f7e286] [box=1683,752,402,60]
+              - generic [ref=f7e295] [box=1683,820,402,60]
+              - button "Download Apple Foundation 3B" [ref=f7e306] [box=1687,1012,394,52]
+        - generic [ref=f7e311] [box=2172,154,480,988]:
+          - generic [ref=f7e312] [box=2168,126,484,24]:
+            - generic [ref=f7e313] [box=2168,126,438,24]:
+              - generic "Drag to reorder" [ref=f7e314] [box=2168,127,17,23]
+              - generic "Click to focus" [ref=f7e322] [cursor=pointer] [box=2189,128,417,21]
+            - generic [ref=f7e324] [box=2606,127,46,22]:
+              - button "More" [ref=f7e326] [cursor=pointer] [box=2606,127,22,22]
+              - button "Focus" [ref=f7e331] [cursor=pointer] [box=2630,127,22,22]
+          - generic [ref=f7e336] [box=2197,182,430,932]:
+            - generic [box=2197,182,430,72]:
+              - generic [box=2227,217,37,21]: 9:41
+              - generic [box=2526,221,71,13]
+            - generic [ref=f7e339] [box=2197,236,430,844]:
+              - generic [ref=f7e340] [box=2197,236,430,65]
+              - generic [ref=f7e358] [box=2298,307,228,25]
+              - generic [ref=f7e362] [box=2197,332,430,682]
+              - generic [ref=f7e373] [box=2211,1022,402,44]
+        - generic [ref=f7e389] [box=2700,154,480,988]:
+          - generic [ref=f7e390] [box=2696,126,484,24]:
+            - generic [ref=f7e391] [box=2696,126,438,24]:
+              - generic "Drag to reorder" [ref=f7e392] [box=2696,127,17,23]
+              - generic "Click to focus" [ref=f7e400] [cursor=pointer] [box=2717,128,417,21]
+            - generic [ref=f7e402] [box=3134,127,46,22]:
+              - button "More" [ref=f7e404] [cursor=pointer] [box=3134,127,22,22]
+              - button "Focus" [ref=f7e409] [cursor=pointer] [box=3158,127,22,22]
+          - generic [ref=f7e414] [box=2725,182,430,932]:
+            - generic [box=2725,182,430,72]:
+              - generic [box=2755,217,37,21]: 9:41
+              - generic [box=3054,221,71,13]
+            - generic [ref=f7e417] [box=2725,236,430,844]:
+              - generic [ref=f7e418] [box=2725,236,430,65]
+              - generic [ref=f7e436] [box=2826,307,228,25]
+              - generic [ref=f7e440] [box=2725,332,430,682]
+              - generic [ref=f7e451] [box=2739,1022,402,44]
+        - generic [ref=f7e467] [box=3228,154,480,988]:
+          - generic [ref=f7e468] [box=3224,126,484,24]:
+            - generic [ref=f7e469] [box=3224,126,438,24]:
+              - generic "Drag to reorder" [ref=f7e470] [box=3224,127,17,23]
+              - generic "Click to focus" [ref=f7e478] [cursor=pointer] [box=3245,128,417,21]
+            - generic [ref=f7e480] [box=3662,127,46,22]:
+              - button "More" [ref=f7e482] [cursor=pointer] [box=3662,127,22,22]
+              - button "Focus" [ref=f7e487] [cursor=pointer] [box=3686,127,22,22]
+          - generic [ref=f7e492] [box=3253,182,430,932]:
+            - generic [box=3253,182,430,72]:
+              - generic [box=3283,217,37,21]: 9:41
+              - generic [box=3582,221,71,13]
+            - generic [ref=f7e495] [box=3253,236,430,844]:
+              - generic [ref=f7e496] [box=3253,236,430,65]
+              - generic [ref=f7e513] [box=3253,301,430,713]
+              - generic [ref=f7e534] [box=3267,1022,402,44]
+        - generic [ref=f7e550] [box=3756,154,480,988]:
+          - generic [ref=f7e551] [box=3752,126,484,24]:
+            - generic [ref=f7e552] [box=3752,126,438,24]:
+              - generic "Drag to reorder" [ref=f7e553] [box=3752,127,17,23]
+              - generic "Click to focus" [ref=f7e561] [cursor=pointer] [box=3773,128,417,21]
+            - generic [ref=f7e563] [box=4190,127,46,22]:
+              - button "More" [ref=f7e565] [cursor=pointer] [box=4190,127,22,22]
+              - button "Focus" [ref=f7e570] [cursor=pointer] [box=4214,127,22,22]
+          - generic [ref=f7e575] [box=3781,182,430,932]:
+            - generic [box=3781,182,430,72]:
+              - generic [box=3811,217,37,21]: 9:41
+              - generic [box=4110,221,71,13]
+            - generic [ref=f7e578] [box=3781,236,430,844]:
+              - generic [ref=f7e579] [box=3781,236,430,65]
+              - generic [ref=f7e596] [box=3781,301,430,713]
+              - generic [ref=f7e617] [box=3795,1022,402,44]
+        - generic [ref=f7e633] [box=4284,154,480,988]:
+          - generic [ref=f7e634] [box=4280,126,484,24]:
+            - generic [ref=f7e635] [box=4280,126,438,24]:
+              - generic "Drag to reorder" [ref=f7e636] [box=4280,127,17,23]
+              - generic "Click to focus" [ref=f7e644] [cursor=pointer] [box=4301,128,417,21]
+            - generic [ref=f7e646] [box=4718,127,46,22]:
+              - button "More" [ref=f7e648] [cursor=pointer] [box=4718,127,22,22]
+              - button "Focus" [ref=f7e653] [cursor=pointer] [box=4742,127,22,22]
+          - generic [ref=f7e658] [box=4309,182,430,932]:
+            - generic [box=4309,182,430,72]:
+              - generic [box=4339,217,37,21]: 9:41
+              - generic [box=4638,221,71,13]
+            - generic [ref=f7e661] [box=4309,236,430,844]:
+              - generic [ref=f7e662] [box=4309,236,422,844]
+              - generic [ref=f7e719] [box=4331,1018,386,48]
+        - generic [ref=f7e729] [box=4812,154,480,988]:
+          - generic [ref=f7e730] [box=4808,126,484,24]:
+            - generic [ref=f7e731] [box=4808,126,438,24]:
+              - generic "Drag to reorder" [ref=f7e732] [box=4808,127,17,23]
+              - generic "Click to focus" [ref=f7e740] [cursor=pointer] [box=4829,128,417,21]
+            - generic [ref=f7e742] [box=5246,127,46,22]:
+              - button "More" [ref=f7e744] [cursor=pointer] [box=5246,127,22,22]
+              - button "Focus" [ref=f7e749] [cursor=pointer] [box=5270,127,22,22]
+          - generic [ref=f7e754] [box=4837,182,430,932]:
+            - generic [box=4837,182,430,72]:
+              - generic [box=4867,217,37,21]: 9:41
+              - generic [box=5166,221,71,13]
+            - generic [ref=f7e757] [box=4837,236,430,844]:
+              - generic [ref=f7e758] [box=4837,236,422,844]
+              - generic [ref=f7e815] [box=4859,1018,386,48]
+        - generic [ref=f7e825] [box=5340,154,480,988]:
+          - generic [ref=f7e826] [box=5336,126,484,24]:
+            - generic [ref=f7e827] [box=5336,126,438,24]:
+              - generic "Drag to reorder" [ref=f7e828] [box=5336,127,17,23]
+              - generic "Click to focus" [ref=f7e836] [cursor=pointer] [box=5357,128,417,21]
+            - generic [ref=f7e838] [box=5774,127,46,22]:
+              - button "More" [ref=f7e840] [cursor=pointer] [box=5774,127,22,22]
+              - button "Focus" [ref=f7e845] [cursor=pointer] [box=5798,127,22,22]
+          - generic [ref=f7e850] [box=5365,182,430,932]:
+            - generic [box=5365,182,430,72]:
+              - generic [box=5395,217,37,21]: 9:41
+              - generic [box=5694,221,71,13]
+            - generic [ref=f7e853] [box=5365,236,430,844]:
+              - img [ref=f7e855] [box=5560,306,40,40]
+              - generic [ref=f7e863] [box=5365,536,430,544]
+        - generic [ref=f7e918] [box=5868,154,480,988]:
+          - generic [ref=f7e919] [box=5864,126,484,24]:
+            - generic [ref=f7e920] [box=5864,126,438,24]:
+              - generic "Drag to reorder" [ref=f7e921] [box=5864,127,17,23]
+              - generic "Click to focus" [ref=f7e929] [cursor=pointer] [box=5885,128,417,21]
+            - generic [ref=f7e931] [box=6302,127,46,22]:
+              - button "More" [ref=f7e933] [cursor=pointer] [box=6302,127,22,22]
+              - button "Focus" [ref=f7e938] [cursor=pointer] [box=6326,127,22,22]
+          - generic [ref=f7e943] [box=5893,182,430,932]:
+            - generic [box=5893,182,430,72]:
+              - generic [box=5923,217,37,21]: 9:41
+              - generic [box=6222,221,71,13]
+            - generic [ref=f7e946] [box=5893,236,430,844]:
+              - img [ref=f7e948] [box=6088,306,40,40]
+              - generic [ref=f7e956] [box=5893,536,430,544]
+        - generic [ref=f7e1011] [box=6396,154,480,988]:
+          - generic [ref=f7e1012] [box=6392,126,484,24]:
+            - generic [ref=f7e1013] [box=6392,126,438,24]:
+              - generic "Drag to reorder" [ref=f7e1014] [box=6392,127,17,23]
+              - generic "Click to focus" [ref=f7e1022] [cursor=pointer] [box=6413,128,417,21]
+            - generic [ref=f7e1024] [box=6830,127,46,22]:
+              - button "More" [ref=f7e1026] [cursor=pointer] [box=6830,127,22,22]
+              - button "Focus" [ref=f7e1031] [cursor=pointer] [box=6854,127,22,22]
+          - generic [ref=f7e1036] [box=6421,182,430,932]:
+            - generic [box=6421,182,430,72]:
+              - generic [box=6451,217,37,21]: 9:41
+              - generic [box=6750,221,71,13]
+            - generic [ref=f7e1042] [box=6421,277,430,803]:
+              - generic [ref=f7e1044] [box=6421,303,430,45]
+              - generic [ref=f7e1049] [box=6421,348,430,732]
+        - generic [ref=f7e1164] [box=6924,154,480,988]:
+          - generic [ref=f7e1165] [box=6920,126,484,24]:
+            - generic [ref=f7e1166] [box=6920,126,438,24]:
+              - generic "Drag to reorder" [ref=f7e1167] [box=6920,127,17,23]
+              - generic "Click to focus" [ref=f7e1175] [cursor=pointer] [box=6941,128,417,21]
+            - generic [ref=f7e1177] [box=7358,127,46,22]:
+              - button "More" [ref=f7e1179] [cursor=pointer] [box=7358,127,22,22]
+              - button "Focus" [ref=f7e1184] [cursor=pointer] [box=7382,127,22,22]
+          - generic [ref=f7e1189] [box=6949,182,430,932]:
+            - generic [box=6949,182,430,72]:
+              - generic [box=6979,217,37,21]: 9:41
+              - generic [box=7278,221,71,13]
+            - generic [ref=f7e1195] [box=6949,277,430,803]:
+              - generic [ref=f7e1197] [box=6949,303,430,45]
+              - generic [ref=f7e1202] [box=6949,348,430,732]
+        - generic [ref=f7e1317] [box=7452,154,480,988]:
+          - generic [ref=f7e1318] [box=7448,126,484,24]:
+            - generic [ref=f7e1319] [box=7448,126,438,24]:
+              - generic "Drag to reorder" [ref=f7e1320] [box=7448,127,17,23]
+              - generic "Click to focus" [ref=f7e1328] [cursor=pointer] [box=7469,128,417,21]
+            - generic [ref=f7e1330] [box=7886,127,46,22]:
+              - button "More" [ref=f7e1332] [cursor=pointer] [box=7886,127,22,22]
+              - button "Focus" [ref=f7e1337] [cursor=pointer] [box=7910,127,22,22]
+          - generic [ref=f7e1342] [box=7477,182,430,932]:
+            - generic [box=7477,182,430,72]:
+              - generic [box=7507,217,37,21]: 9:41
+              - generic [box=7806,221,71,13]
+            - generic [ref=f7e1345] [box=7477,236,430,844]:
+              - generic [ref=f7e1346] [box=7477,236,430,69]
+              - generic [ref=f7e1353] [box=7499,313,386,85]
+              - generic [ref=f7e1359] [box=7477,412,430,668]
+        - generic [ref=f7e1434] [box=7980,154,480,988]:
+          - generic [ref=f7e1435] [box=7976,126,484,24]:
+            - generic [ref=f7e1436] [box=7976,126,438,24]:
+              - generic "Drag to reorder" [ref=f7e1437] [box=7976,127,17,23]
+              - generic "Click to focus" [ref=f7e1445] [cursor=pointer] [box=7997,128,417,21]
+            - generic [ref=f7e1447] [box=8414,127,46,22]:
+              - button "More" [ref=f7e1449] [cursor=pointer] [box=8414,127,22,22]
+              - button "Focus" [ref=f7e1454] [cursor=pointer] [box=8438,127,22,22]
+          - generic [ref=f7e1459] [box=8005,182,430,932]:
+            - generic [box=8005,182,430,72]:
+              - generic [box=8035,217,37,21]: 9:41
+              - generic [box=8334,221,71,13]
+            - generic [ref=f7e1462] [box=8005,236,430,844]:
+              - generic [ref=f7e1463] [box=8005,236,430,69]
+              - generic [ref=f7e1470] [box=8027,313,386,85]
+              - generic [ref=f7e1476] [box=8005,412,430,668]
+        - generic [ref=f7e1551] [box=8508,154,480,988]:
+          - generic [ref=f7e1552] [box=8504,126,484,24]:
+            - generic [ref=f7e1553] [box=8504,126,438,24]:
+              - generic "Drag to reorder" [ref=f7e1554] [box=8504,127,17,23]
+              - generic "Click to focus" [ref=f7e1562] [cursor=pointer] [box=8525,128,417,21]
+            - generic [ref=f7e1564] [box=8942,127,46,22]:
+              - button "More" [ref=f7e1566] [cursor=pointer] [box=8942,127,22,22]
+              - button "Focus" [ref=f7e1571] [cursor=pointer] [box=8966,127,22,22]
+          - generic [ref=f7e1576] [box=8533,182,430,932]:
+            - generic [box=8533,182,430,72]:
+              - generic [box=8563,217,37,21]: 9:41
+              - generic [box=8862,221,71,13]
+            - generic [ref=f7e1579] [box=8533,236,430,896]:
+              - generic [ref=f7e1580] [box=8533,236,430,69]
+              - generic [ref=f7e1587] [box=8533,305,430,720]
+              - generic [ref=f7e1658] [box=8533,1025,430,107]
+        - generic [ref=f7e1664] [box=9036,154,480,988]:
+          - generic [ref=f7e1665] [box=9032,126,484,24]:
+            - generic [ref=f7e1666] [box=9032,126,438,24]:
+              - generic "Drag to reorder" [ref=f7e1667] [box=9032,127,17,23]
+              - generic "Click to focus" [ref=f7e1675] [cursor=pointer] [box=9053,128,417,21]
+            - generic [ref=f7e1677] [box=9470,127,46,22]:
+              - button "More" [ref=f7e1679] [cursor=pointer] [box=9470,127,22,22]
+              - button "Focus" [ref=f7e1684] [cursor=pointer] [box=9494,127,22,22]
+          - generic [ref=f7e1689] [box=9061,182,430,932]:
+            - generic [box=9061,182,430,72]:
+              - generic [box=9091,217,37,21]: 9:41
+              - generic [box=9390,221,71,13]
+            - generic [ref=f7e1692] [box=9061,236,430,896]:
+              - generic [ref=f7e1693] [box=9061,236,430,69]
+              - generic [ref=f7e1700] [box=9061,305,430,720]
+              - generic [ref=f7e1771] [box=9061,1025,430,107]
+        - generic [ref=f7e1777] [box=9564,154,480,988]:
+          - generic [ref=f7e1778] [box=9560,126,484,24]:
+            - generic [ref=f7e1779] [box=9560,126,438,24]:
+              - generic "Drag to reorder" [ref=f7e1780] [box=9560,127,17,23]
+              - generic "Click to focus" [ref=f7e1788] [cursor=pointer] [box=9581,128,417,21]
+            - generic [ref=f7e1790] [box=9998,127,46,22]:
+              - button "More" [ref=f7e1792] [cursor=pointer] [box=9998,127,22,22]
+              - button "Focus" [ref=f7e1797] [cursor=pointer] [box=10022,127,22,22]
+          - generic [ref=f7e1802] [box=9589,182,430,932]:
+            - generic [box=9589,182,430,72]:
+              - generic [box=9619,217,37,21]: 9:41
+              - generic [box=9918,221,71,13]
+            - generic [ref=f7e1805] [box=9589,236,430,992]:
+              - generic [ref=f7e1806] [box=9589,236,430,69]
+              - generic [ref=f7e1812] [box=9589,305,430,923]
+        - generic [ref=f7e1899] [box=10092,154,480,988]:
+          - generic [ref=f7e1900] [box=10088,126,484,24]:
+            - generic [ref=f7e1901] [box=10088,126,438,24]:
+              - generic "Drag to reorder" [ref=f7e1902] [box=10088,127,17,23]
+              - generic "Click to focus" [ref=f7e1910] [cursor=pointer] [box=10109,128,417,21]
+            - generic [ref=f7e1912] [box=10526,127,46,22]:
+              - button "More" [ref=f7e1914] [cursor=pointer] [box=10526,127,22,22]
+              - button "Focus" [ref=f7e1919] [cursor=pointer] [box=10550,127,22,22]
+          - generic [ref=f7e1924] [box=10117,182,430,932]:
+            - generic [box=10117,182,430,72]:
+              - generic [box=10147,217,37,21]: 9:41
+              - generic [box=10446,221,71,13]
+            - generic [ref=f7e1927] [box=10117,236,430,844]:
+              - generic [ref=f7e1928] [box=10117,236,430,69]
+              - generic [ref=f7e1935] [box=10135,313,394,172]
+              - generic [ref=f7e1952] [box=10131,499,402,194]
+              - generic [ref=f7e1980] [box=10139,709,384,34]: Export creates a .zip on your device and opens the iOS share sheet. Nothing is uploaded.
+              - generic [ref=f7e1981] [box=10117,744,430,43]: Danger zone
+              - generic [ref=f7e1983] [box=10131,788,402,48]
+        - generic [ref=f7e1988] [box=10620,154,480,988]:
+          - generic [ref=f7e1989] [box=10616,126,484,24]:
+            - generic [ref=f7e1990] [box=10616,126,438,24]:
+              - generic "Drag to reorder" [ref=f7e1991] [box=10616,127,17,23]
+              - generic "Click to focus" [ref=f7e1999] [cursor=pointer] [box=10637,128,417,21]
+            - generic [ref=f7e2001] [box=11054,127,46,22]:
+              - button "More" [ref=f7e2003] [cursor=pointer] [box=11054,127,22,22]
+              - button "Focus" [ref=f7e2008] [cursor=pointer] [box=11078,127,22,22]
+          - generic [ref=f7e2013] [box=10645,182,430,932]:
+            - generic [box=10645,182,430,72]:
+              - generic [box=10675,217,37,21]: 9:41
+              - generic [box=10974,221,71,13]
+            - generic [ref=f7e2016] [box=10645,236,430,938]:
+              - generic [ref=f7e2017] [box=10645,236,430,69]
+              - generic [ref=f7e2024] [box=10663,313,394,116]
+              - generic [ref=f7e2029] [box=10645,443,430,43]: Trust signals
+              - generic [ref=f7e2030] [box=10659,486,402,194]
+              - generic [ref=f7e2047] [box=10645,692,430,43]: When you use BYOK
+              - generic [ref=f7e2048] [box=10659,735,402,178]
+              - generic [ref=f7e2067] [box=10645,925,430,43]: Documents
+              - generic [ref=f7e2068] [box=10659,969,402,194]
+        - generic [ref=f7e2094] [box=11148,154,446,928]:
+          - generic [ref=f7e2095] [box=11144,126,450,24]:
+            - generic [ref=f7e2096] [box=11144,126,404,24]:
+              - generic "Drag to reorder" [ref=f7e2097] [box=11144,127,17,23]
+              - generic "Click to focus" [ref=f7e2105] [cursor=pointer] [box=11165,128,383,21]
+            - generic [ref=f7e2107] [box=11548,127,46,22]:
+              - button "More" [ref=f7e2109] [cursor=pointer] [box=11548,127,22,22]
+              - button "Focus" [ref=f7e2114] [cursor=pointer] [box=11572,127,22,22]
+          - generic [ref=f7e2119] [box=11166,171,410,895]:
+            - generic [ref=f7e2121] [box=11168,172,407,48]:
+              - generic [ref=f7e2122] [box=11190,188,26,16]: 9:41
+              - generic [ref=f7e2123] [box=11524,189,28,14]: ▴ ⌬ ▮
+            - generic [ref=f7e2124] [box=11168,204,407,832]:
+              - generic [ref=f7e2125] [box=11168,204,407,723]
+              - generic [ref=f7e2148] [box=11168,927,407,109]
+        - generic [ref=f7e2153] [box=11642,154,446,928]:
+          - generic [ref=f7e2154] [box=11638,126,450,24]:
+            - generic [ref=f7e2155] [box=11638,126,404,24]:
+              - generic "Drag to reorder" [ref=f7e2156] [box=11638,127,17,23]
+              - generic "Click to focus" [ref=f7e2164] [cursor=pointer] [box=11659,128,383,21]
+            - generic [ref=f7e2166] [box=12042,127,46,22]:
+              - button "More" [ref=f7e2168] [cursor=pointer] [box=12042,127,22,22]
+              - button "Focus" [ref=f7e2173] [cursor=pointer] [box=12066,127,22,22]
+          - generic [ref=f7e2178] [box=11660,171,410,895]:
+            - generic [ref=f7e2180] [box=11662,172,407,48]:
+              - generic [ref=f7e2181] [box=11684,188,26,16]: 9:41
+              - generic [ref=f7e2182] [box=12018,189,28,14]: ▴ ⌬ ▮
+            - generic [ref=f7e2183] [box=11662,204,407,832]:
+              - generic [ref=f7e2184] [box=11662,204,407,72]
+              - generic [ref=f7e2188] [box=11662,236,312,772]
+    - generic [ref=f7e2227] [box=0,1222,15612,1082]:
+      - generic [ref=f7e2229] [box=60,1222,15492,94]:
+        - generic [ref=f7e2230] [box=58,1222,505,33]: R5 · AGI canonical (light-first, sans body)
+        - generic [ref=f7e2231] [box=60,1262,15492,19]: On-device hero · 'Ask anything' · 3-bucket model picker · Local→BYOK fork
+      - generic [ref=f7e2232] [box=0,1316,6408,988]:
+        - generic [ref=f7e2233] [box=60,1316,480,988]:
+          - generic [ref=f7e2234] [box=56,1288,484,24]:
+            - generic [ref=f7e2235] [box=56,1288,438,24]:
+              - generic "Drag to reorder" [ref=f7e2236] [box=56,1289,17,23]
+              - generic "Click to focus" [ref=f7e2244] [cursor=pointer] [box=77,1290,417,21]
+            - generic [ref=f7e2246] [box=494,1289,46,22]:
+              - button "More" [ref=f7e2248] [cursor=pointer] [box=494,1289,22,22]
+              - button "Focus" [ref=f7e2253] [cursor=pointer] [box=518,1289,22,22]
+          - generic [ref=f7e2258] [box=85,1344,430,932]:
+            - generic [box=85,1344,430,72]:
+              - generic [box=115,1379,37,21]: 9:41
+              - generic [box=414,1383,71,13]
+            - generic [ref=f7e2261] [box=85,1398,430,844]:
+              - generic [ref=f7e2262] [box=85,1398,430,65]
+              - generic [ref=f7e2281] [box=184,1472,232,25]
+              - generic [ref=f7e2285] [box=85,1497,430,680]
+              - generic [ref=f7e2296] [box=99,2184,402,44]
+        - generic [ref=f7e2313] [box=588,1316,480,988]:
+          - generic [ref=f7e2314] [box=584,1288,484,24]:
+            - generic [ref=f7e2315] [box=584,1288,438,24]:
+              - generic "Drag to reorder" [ref=f7e2316] [box=584,1289,17,23]
+              - generic "Click to focus" [ref=f7e2324] [cursor=pointer] [box=605,1290,417,21]
+            - generic [ref=f7e2326] [box=1022,1289,46,22]:
+              - button "More" [ref=f7e2328] [cursor=pointer] [box=1022,1289,22,22]
+              - button "Focus" [ref=f7e2333] [cursor=pointer] [box=1046,1289,22,22]
+          - generic [ref=f7e2338] [box=613,1344,430,932]:
+            - generic [box=613,1344,430,72]:
+              - generic [box=643,1379,37,21]: 9:41
+              - generic [box=942,1383,71,13]
+            - generic [ref=f7e2341] [box=613,1398,430,844]:
+              - generic [ref=f7e2342] [box=613,1398,430,65]
+              - generic [ref=f7e2361] [box=712,1472,232,25]
+              - generic [ref=f7e2365] [box=613,1497,430,680]
+              - generic [ref=f7e2376] [box=627,2184,402,44]
+        - generic [ref=f7e2393] [box=1116,1316,480,988]:
+          - generic [ref=f7e2394] [box=1112,1288,484,24]:
+            - generic [ref=f7e2395] [box=1112,1288,438,24]:
+              - generic "Drag to reorder" [ref=f7e2396] [box=1112,1289,17,23]
+              - generic "Click to focus" [ref=f7e2404] [cursor=pointer] [box=1133,1290,417,21]
+            - generic [ref=f7e2406] [box=1550,1289,46,22]:
+              - button "More" [ref=f7e2408] [cursor=pointer] [box=1550,1289,22,22]
+              - button "Focus" [ref=f7e2413] [cursor=pointer] [box=1574,1289,22,22]
+          - generic [ref=f7e2418] [box=1141,1344,430,932]:
+            - generic [box=1141,1344,430,72]:
+              - generic [box=1171,1379,37,21]: 9:41
+              - generic [box=1470,1383,71,13]
+            - generic [ref=f7e2421] [box=1141,1398,430,844]:
+              - generic [ref=f7e2422] [box=1141,1398,430,65]
+              - generic [ref=f7e2440] [box=1141,1464,430,713]
+              - generic [ref=f7e2454] [box=1155,2184,402,44]
+        - generic [ref=f7e2470] [box=1644,1316,480,988]:
+          - generic [ref=f7e2471] [box=1640,1288,484,24]:
+            - generic [ref=f7e2472] [box=1640,1288,438,24]:
+              - generic "Drag to reorder" [ref=f7e2473] [box=1640,1289,17,23]
+              - generic "Click to focus" [ref=f7e2481] [cursor=pointer] [box=1661,1290,417,21]
+            - generic [ref=f7e2483] [box=2078,1289,46,22]:
+              - button "More" [ref=f7e2485] [cursor=pointer] [box=2078,1289,22,22]
+              - button "Focus" [ref=f7e2490] [cursor=pointer] [box=2102,1289,22,22]
+          - generic [ref=f7e2495] [box=1669,1344,430,932]:
+            - generic [box=1669,1344,430,72]:
+              - generic [box=1699,1379,37,21]: 9:41
+              - generic [box=1998,1383,71,13]
+            - generic [ref=f7e2498] [box=1669,1398,430,844]:
+              - generic [ref=f7e2499] [box=1669,1398,430,65]
+              - generic [ref=f7e2517] [box=1669,1464,430,713]
+              - generic [ref=f7e2531] [box=1683,2184,402,44]
+        - generic [ref=f7e2547] [box=2172,1316,480,988]:
+          - generic [ref=f7e2548] [box=2168,1288,484,24]:
+            - generic [ref=f7e2549] [box=2168,1288,438,24]:
+              - generic "Drag to reorder" [ref=f7e2550] [box=2168,1289,17,23]
+              - generic "Click to focus" [ref=f7e2558] [cursor=pointer] [box=2189,1290,417,21]
+            - generic [ref=f7e2560] [box=2606,1289,46,22]:
+              - button "More" [ref=f7e2562] [cursor=pointer] [box=2606,1289,22,22]
+              - button "Focus" [ref=f7e2567] [cursor=pointer] [box=2630,1289,22,22]
+          - generic [ref=f7e2572] [box=2197,1344,430,932]:
+            - generic [box=2197,1344,430,72]:
+              - generic [box=2227,1379,37,21]: 9:41
+              - generic [box=2526,1383,71,13]
+            - generic [ref=f7e2575] [box=2197,1398,430,844]:
+              - generic [ref=f7e2576] [box=2197,1398,422,844]
+              - generic [ref=f7e2624] [box=2219,2180,386,48]
+        - generic [ref=f7e2634] [box=2700,1316,480,988]:
+          - generic [ref=f7e2635] [box=2696,1288,484,24]:
+            - generic [ref=f7e2636] [box=2696,1288,438,24]:
+              - generic "Drag to reorder" [ref=f7e2637] [box=2696,1289,17,23]
+              - generic "Click to focus" [ref=f7e2645] [cursor=pointer] [box=2717,1290,417,21]
+            - generic [ref=f7e2647] [box=3134,1289,46,22]:
+              - button "More" [ref=f7e2649] [cursor=pointer] [box=3134,1289,22,22]
+              - button "Focus" [ref=f7e2654] [cursor=pointer] [box=3158,1289,22,22]
+          - generic [ref=f7e2659] [box=2725,1344,430,932]:
+            - generic [box=2725,1344,430,72]:
+              - generic [box=2755,1379,37,21]: 9:41
+              - generic [box=3054,1383,71,13]
+            - generic [ref=f7e2662] [box=2725,1398,430,844]:
+              - generic [ref=f7e2663] [box=2725,1398,422,844]
+              - generic [ref=f7e2711] [box=2747,2180,386,48]
+        - generic [ref=f7e2721] [box=3228,1316,480,988]:
+          - generic [ref=f7e2722] [box=3224,1288,484,24]:
+            - generic [ref=f7e2723] [box=3224,1288,438,24]:
+              - generic "Drag to reorder" [ref=f7e2724] [box=3224,1289,17,23]
+              - generic "Click to focus" [ref=f7e2732] [cursor=pointer] [box=3245,1290,417,21]
+            - generic [ref=f7e2734] [box=3662,1289,46,22]:
+              - button "More" [ref=f7e2736] [cursor=pointer] [box=3662,1289,22,22]
+              - button "Focus" [ref=f7e2741] [cursor=pointer] [box=3686,1289,22,22]
+          - generic [ref=f7e2746] [box=3253,1344,430,932]:
+            - generic [box=3253,1344,430,72]:
+              - generic [box=3283,1379,37,21]: 9:41
+              - generic [box=3582,1383,71,13]
+            - generic [ref=f7e2749] [box=3253,1398,430,844]:
+              - img [ref=f7e2751] [box=3446,1458,44,44]
+              - generic [ref=f7e2759] [box=3253,1611,430,632]
+        - generic [ref=f7e2829] [box=3756,1316,480,988]:
+          - generic [ref=f7e2830] [box=3752,1288,484,24]:
+            - generic [ref=f7e2831] [box=3752,1288,438,24]:
+              - generic "Drag to reorder" [ref=f7e2832] [box=3752,1289,17,23]
+              - generic "Click to focus" [ref=f7e2840] [cursor=pointer] [box=3773,1290,417,21]
+            - generic [ref=f7e2842] [box=4190,1289,46,22]:
+              - button "More" [ref=f7e2844] [cursor=pointer] [box=4190,1289,22,22]
+              - button "Focus" [ref=f7e2849] [cursor=pointer] [box=4214,1289,22,22]
+          - generic [ref=f7e2854] [box=3781,1344,430,932]:
+            - generic [box=3781,1344,430,72]:
+              - generic [box=3811,1379,37,21]: 9:41
+              - generic [box=4110,1383,71,13]
+            - generic [ref=f7e2857] [box=3781,1398,430,844]:
+              - img [ref=f7e2859] [box=3974,1458,44,44]
+              - generic [ref=f7e2867] [box=3781,1611,430,632]
+        - generic [ref=f7e2937] [box=4284,1316,480,988]:
+          - generic [ref=f7e2938] [box=4280,1288,484,24]:
+            - generic [ref=f7e2939] [box=4280,1288,438,24]:
+              - generic "Drag to reorder" [ref=f7e2940] [box=4280,1289,17,23]
+              - generic "Click to focus" [ref=f7e2948] [cursor=pointer] [box=4301,1290,417,21]
+            - generic [ref=f7e2950] [box=4718,1289,46,22]:
+              - button "More" [ref=f7e2952] [cursor=pointer] [box=4718,1289,22,22]
+              - button "Focus" [ref=f7e2957] [cursor=pointer] [box=4742,1289,22,22]
+          - generic [ref=f7e2962] [box=4309,1344,430,932]:
+            - generic [box=4309,1344,430,72]:
+              - generic [box=4339,1379,37,21]: 9:41
+              - generic [box=4638,1383,71,13]
+            - generic [ref=f7e2965] [box=4309,1398,430,844]:
+              - generic [ref=f7e2967] [box=4430,1793,188,54]
+              - generic [ref=f7e2970] [box=4309,1456,430,786]
+        - generic [ref=f7e3088] [box=4812,1316,480,988]:
+          - generic [ref=f7e3089] [box=4808,1288,484,24]:
+            - generic [ref=f7e3090] [box=4808,1288,438,24]:
+              - generic "Drag to reorder" [ref=f7e3091] [box=4808,1289,17,23]
+              - generic "Click to focus" [ref=f7e3099] [cursor=pointer] [box=4829,1290,417,21]
+            - generic [ref=f7e3101] [box=5246,1289,46,22]:
+              - button "More" [ref=f7e3103] [cursor=pointer] [box=5246,1289,22,22]
+              - button "Focus" [ref=f7e3108] [cursor=pointer] [box=5270,1289,22,22]
+          - generic [ref=f7e3113] [box=4837,1344,430,932]:
+            - generic [box=4837,1344,430,72]:
+              - generic [box=4867,1379,37,21]: 9:41
+              - generic [box=5166,1383,71,13]
+            - generic [ref=f7e3116] [box=4837,1398,430,844]:
+              - generic [ref=f7e3118] [box=4958,1793,188,54]
+              - generic [ref=f7e3121] [box=4837,1456,430,786]
+        - generic [ref=f7e3239] [box=5340,1316,480,988]:
+          - generic [ref=f7e3240] [box=5336,1288,484,24]:
+            - generic [ref=f7e3241] [box=5336,1288,438,24]:
+              - generic "Drag to reorder" [ref=f7e3242] [box=5336,1289,17,23]
+              - generic "Click to focus" [ref=f7e3250] [cursor=pointer] [box=5357,1290,417,21]
+            - generic [ref=f7e3252] [box=5774,1289,46,22]:
+              - button "More" [ref=f7e3254] [cursor=pointer] [box=5774,1289,22,22]
+              - button "Focus" [ref=f7e3259] [cursor=pointer] [box=5798,1289,22,22]
+          - generic [ref=f7e3264] [box=5365,1344,430,932]:
+            - generic [box=5365,1344,430,72]:
+              - generic [box=5395,1379,37,21]: 9:41
+              - generic [box=5694,1383,71,13]
+            - generic [ref=f7e3267] [box=5365,1398,430,844]:
+              - generic [ref=f7e3268] [box=5365,1398,430,65]
+              - generic [ref=f7e3274] [box=5365,1464,430,671]
+              - generic [ref=f7e3312] [box=5365,2135,430,107]
+        - generic [ref=f7e3318] [box=5868,1316,480,988]:
+          - generic [ref=f7e3319] [box=5864,1288,484,24]:
+            - generic [ref=f7e3320] [box=5864,1288,438,24]:
+              - generic "Drag to reorder" [ref=f7e3321] [box=5864,1289,17,23]
+              - generic "Click to focus" [ref=f7e3329] [cursor=pointer] [box=5885,1290,417,21]
+            - generic [ref=f7e3331] [box=6302,1289,46,22]:
+              - button "More" [ref=f7e3333] [cursor=pointer] [box=6302,1289,22,22]
+              - button "Focus" [ref=f7e3338] [cursor=pointer] [box=6326,1289,22,22]
+          - generic [ref=f7e3343] [box=5893,1344,430,932]:
+            - generic [box=5893,1344,430,72]:
+              - generic [box=5923,1379,37,21]: 9:41
+              - generic [box=6222,1383,71,13]
+            - generic [ref=f7e3346] [box=5893,1398,430,844]:
+              - generic [ref=f7e3347] [box=5893,1398,430,65]
+              - generic [ref=f7e3353] [box=5893,1464,430,671]
+              - generic [ref=f7e3391] [box=5893,2135,430,107]
+    - generic [ref=f7e3397] [box=0,2384,15612,1082]:
+      - generic [ref=f7e3399] [box=60,2384,15492,94]:
+        - generic [ref=f7e3400] [box=58,2384,359,33]: R4 · Claude iOS-style frames
+        - generic [ref=f7e3401] [box=60,2424,15492,19]: serif body · Opus 4.7 · Add to Chat sheet · Thought process
+      - generic [ref=f7e3402] [box=0,2479,4296,988]:
+        - generic [ref=f7e3403] [box=60,2479,480,988]:
+          - generic [ref=f7e3404] [box=56,2451,484,24]:
+            - generic [ref=f7e3405] [box=56,2451,438,24]:
+              - generic "Drag to reorder" [ref=f7e3406] [box=56,2451,17,23]
+              - generic "Click to focus" [ref=f7e3414] [cursor=pointer] [box=77,2452,417,21]
+            - generic [ref=f7e3416] [box=494,2452,46,22]:
+              - button "More" [ref=f7e3418] [cursor=pointer] [box=494,2452,22,22]
+              - button "Focus" [ref=f7e3423] [cursor=pointer] [box=518,2452,22,22]
+          - generic [ref=f7e3428] [box=85,2507,430,932]:
+            - generic [box=85,2507,430,72]:
+              - generic [box=115,2541,37,21]: 9:41
+              - generic [box=414,2545,71,13]
+            - generic [ref=f7e3431] [box=85,2561,430,844]:
+              - generic [ref=f7e3432] [box=85,2561,430,61]
+              - generic [ref=f7e3445] [box=85,2622,430,684]
+              - generic [ref=f7e3468] [box=99,3306,402,83]
+        - generic [ref=f7e3476] [box=588,2479,480,988]:
+          - generic [ref=f7e3477] [box=584,2451,484,24]:
+            - generic [ref=f7e3478] [box=584,2451,438,24]:
+              - generic "Drag to reorder" [ref=f7e3479] [box=584,2451,17,23]
+              - generic "Click to focus" [ref=f7e3487] [cursor=pointer] [box=605,2452,417,21]
+            - generic [ref=f7e3489] [box=1022,2452,46,22]:
+              - button "More" [ref=f7e3491] [cursor=pointer] [box=1022,2452,22,22]
+              - button "Focus" [ref=f7e3496] [cursor=pointer] [box=1046,2452,22,22]
+          - generic [ref=f7e3501] [box=613,2507,430,932]:
+            - generic [box=613,2507,430,72]:
+              - generic [box=643,2541,37,21]: 9:41
+              - generic [box=942,2545,71,13]
+            - generic [ref=f7e3504] [box=613,2561,430,844]:
+              - generic [ref=f7e3505] [box=613,2561,430,61]
+              - generic [ref=f7e3518] [box=613,2622,430,684]
+              - generic [ref=f7e3541] [box=627,3306,402,83]
+        - generic [ref=f7e3549] [box=1116,2479,480,988]:
+          - generic [ref=f7e3550] [box=1112,2451,484,24]:
+            - generic [ref=f7e3551] [box=1112,2451,438,24]:
+              - generic "Drag to reorder" [ref=f7e3552] [box=1112,2451,17,23]
+              - generic "Click to focus" [ref=f7e3560] [cursor=pointer] [box=1133,2452,417,21]
+            - generic [ref=f7e3562] [box=1550,2452,46,22]:
+              - button "More" [ref=f7e3564] [cursor=pointer] [box=1550,2452,22,22]
+              - button "Focus" [ref=f7e3569] [cursor=pointer] [box=1574,2452,22,22]
+          - generic [ref=f7e3574] [box=1141,2507,430,932]:
+            - generic [box=1141,2507,430,72]:
+              - generic [box=1171,2541,37,21]: 9:41
+              - generic [box=1470,2545,71,13]
+            - generic [ref=f7e3577] [box=1141,2561,430,844]:
+              - generic [ref=f7e3578] [box=1141,2561,430,61]
+              - generic [ref=f7e3591] [box=1141,2622,430,674]
+              - generic [ref=f7e3615] [box=1155,3296,402,93]
+        - generic [ref=f7e3623] [box=1644,2479,480,988]:
+          - generic [ref=f7e3624] [box=1640,2451,484,24]:
+            - generic [ref=f7e3625] [box=1640,2451,438,24]:
+              - generic "Drag to reorder" [ref=f7e3626] [box=1640,2451,17,23]
+              - generic "Click to focus" [ref=f7e3634] [cursor=pointer] [box=1661,2452,417,21]
+            - generic [ref=f7e3636] [box=2078,2452,46,22]:
+              - button "More" [ref=f7e3638] [cursor=pointer] [box=2078,2452,22,22]
+              - button "Focus" [ref=f7e3643] [cursor=pointer] [box=2102,2452,22,22]
+          - generic [ref=f7e3648] [box=1669,2507,430,932]:
+            - generic [box=1669,2507,430,72]:
+              - generic [box=1699,2541,37,21]: 9:41
+              - generic [box=1998,2545,71,13]
+            - generic [ref=f7e3651] [box=1669,2561,430,844]:
+              - generic [ref=f7e3652] [box=1669,2561,430,61]
+              - generic [ref=f7e3665] [box=1669,2622,430,674]
+              - generic [ref=f7e3689] [box=1683,3296,402,93]
+        - generic [ref=f7e3697] [box=2172,2479,480,988]:
+          - generic [ref=f7e3698] [box=2168,2451,484,24]:
+            - generic [ref=f7e3699] [box=2168,2451,438,24]:
+              - generic "Drag to reorder" [ref=f7e3700] [box=2168,2451,17,23]
+              - generic "Click to focus" [ref=f7e3708] [cursor=pointer] [box=2189,2452,417,21]
+            - generic [ref=f7e3710] [box=2606,2452,46,22]:
+              - button "More" [ref=f7e3712] [cursor=pointer] [box=2606,2452,22,22]
+              - button "Focus" [ref=f7e3717] [cursor=pointer] [box=2630,2452,22,22]
+          - generic [ref=f7e3722] [box=2197,2507,430,932]:
+            - generic [box=2197,2507,430,72]:
+              - generic [box=2227,2541,37,21]: 9:41
+              - generic [box=2526,2545,71,13]
+            - generic [ref=f7e3725] [box=2197,2561,430,844]:
+              - generic [ref=f7e3726] [box=2197,2561,430,61]
+              - generic [ref=f7e3741] [box=2197,2739,430,665]
+        - generic [ref=f7e3813] [box=2700,2479,480,988]:
+          - generic [ref=f7e3814] [box=2696,2451,484,24]:
+            - generic [ref=f7e3815] [box=2696,2451,438,24]:
+              - generic "Drag to reorder" [ref=f7e3816] [box=2696,2451,17,23]
+              - generic "Click to focus" [ref=f7e3824] [cursor=pointer] [box=2717,2452,417,21]
+            - generic [ref=f7e3826] [box=3134,2452,46,22]:
+              - button "More" [ref=f7e3828] [cursor=pointer] [box=3134,2452,22,22]
+              - button "Focus" [ref=f7e3833] [cursor=pointer] [box=3158,2452,22,22]
+          - generic [ref=f7e3838] [box=2725,2507,430,932]:
+            - generic [box=2725,2507,430,72]:
+              - generic [box=2755,2541,37,21]: 9:41
+              - generic [box=3054,2545,71,13]
+            - generic [ref=f7e3841] [box=2725,2561,430,844]:
+              - generic [ref=f7e3842] [box=2725,2561,430,61]
+              - generic [ref=f7e3857] [box=2725,2739,430,665]
+        - generic [ref=f7e3929] [box=3228,2479,480,988]:
+          - generic [ref=f7e3930] [box=3224,2451,484,24]:
+            - generic [ref=f7e3931] [box=3224,2451,438,24]:
+              - generic "Drag to reorder" [ref=f7e3932] [box=3224,2451,17,23]
+              - generic "Click to focus" [ref=f7e3940] [cursor=pointer] [box=3245,2452,417,21]
+            - generic [ref=f7e3942] [box=3662,2452,46,22]:
+              - button "More" [ref=f7e3944] [cursor=pointer] [box=3662,2452,22,22]
+              - button "Focus" [ref=f7e3949] [cursor=pointer] [box=3686,2452,22,22]
+          - generic [ref=f7e3954] [box=3253,2507,430,932]:
+            - generic [box=3253,2507,430,72]:
+              - generic [box=3283,2541,37,21]: 9:41
+              - generic [box=3582,2545,71,13]
+            - generic [ref=f7e3957] [box=3253,2561,430,844]:
+              - generic [ref=f7e3958] [box=3253,2561,430,61]
+              - generic [ref=f7e3974] [box=3355,2651,291,19]: Can a one-person team rival Anthropic?
+              - generic [ref=f7e3976] [box=3253,2671,430,734]
+        - generic [ref=f7e3989] [box=3756,2479,480,988]:
+          - generic [ref=f7e3990] [box=3752,2451,484,24]:
+            - generic [ref=f7e3991] [box=3752,2451,438,24]:
+              - generic "Drag to reorder" [ref=f7e3992] [box=3752,2451,17,23]
+              - generic "Click to focus" [ref=f7e4000] [cursor=pointer] [box=3773,2452,417,21]
+            - generic [ref=f7e4002] [box=4190,2452,46,22]:
+              - button "More" [ref=f7e4004] [cursor=pointer] [box=4190,2452,22,22]
+              - button "Focus" [ref=f7e4009] [cursor=pointer] [box=4214,2452,22,22]
+          - generic [ref=f7e4014] [box=3781,2507,430,932]:
+            - generic [box=3781,2507,430,72]:
+              - generic [box=3811,2541,37,21]: 9:41
+              - generic [box=4110,2545,71,13]
+            - generic [ref=f7e4017] [box=3781,2561,430,844]:
+              - generic [ref=f7e4018] [box=3781,2561,430,61]
+              - generic [ref=f7e4034] [box=3884,2650,291,19]: Can a one-person team rival Anthropic?
+              - generic [ref=f7e4036] [box=3781,2671,430,734]
+    - generic [ref=f7e4049] [box=0,3547,15612,1082]:
+      - generic [ref=f7e4051] [box=60,3547,15492,94]:
+        - generic [ref=f7e4052] [box=58,3547,361,33]: R4 · Code task surface (dark)
+        - generic [ref=f7e4053] [box=60,3586,15492,19]: task list · task detail · branch popover · attachment popover
+      - generic [ref=f7e4054] [box=0,3641,2184,988]:
+        - generic [ref=f7e4055] [box=60,3641,480,988]:
+          - generic [ref=f7e4056] [box=56,3613,484,24]:
+            - generic [ref=f7e4057] [box=56,3613,438,24]:
+              - generic "Drag to reorder" [ref=f7e4058] [box=56,3613,17,23]
+              - generic "Click to focus" [ref=f7e4066] [cursor=pointer] [box=77,3614,417,21]
+            - generic [ref=f7e4068] [box=494,3614,46,22]:
+              - button "More" [ref=f7e4070] [cursor=pointer] [box=494,3614,22,22]
+              - button "Focus" [ref=f7e4075] [cursor=pointer] [box=518,3614,22,22]
+          - generic [ref=f7e4080] [box=85,3669,430,932]:
+            - generic [box=85,3669,430,72]:
+              - generic [box=115,3704,37,21]: 9:41
+              - generic [box=414,3707,71,13]
+            - generic [ref=f7e4083] [box=85,3723,430,950]:
+              - generic [ref=f7e4084] [box=85,3723,430,61]
+              - generic [ref=f7e4090] [box=85,3784,430,889]
+              - img [ref=f7e4193] [box=454,4608,26,26]
+        - generic [ref=f7e4196] [box=588,3641,480,988]:
+          - generic [ref=f7e4197] [box=584,3613,484,24]:
+            - generic [ref=f7e4198] [box=584,3613,438,24]:
+              - generic "Drag to reorder" [ref=f7e4199] [box=584,3613,17,23]
+              - generic "Click to focus" [ref=f7e4207] [cursor=pointer] [box=605,3614,417,21]
+            - generic [ref=f7e4209] [box=1022,3614,46,22]:
+              - button "More" [ref=f7e4211] [cursor=pointer] [box=1022,3614,22,22]
+              - button "Focus" [ref=f7e4216] [cursor=pointer] [box=1046,3614,22,22]
+          - generic [ref=f7e4221] [box=613,3669,430,932]:
+            - generic [box=613,3669,430,72]:
+              - generic [box=643,3704,37,21]: 9:41
+              - generic [box=942,3707,71,13]
+            - generic [ref=f7e4224] [box=613,3723,430,844]:
+              - generic [ref=f7e4225] [box=613,3723,430,65]
+              - generic [ref=f7e4234] [box=613,3788,430,779]
+              - generic [ref=f7e4246] [box=627,4448,402,95]
+        - generic [ref=f7e4258] [box=1116,3641,480,988]:
+          - generic [ref=f7e4259] [box=1112,3613,484,24]:
+            - generic [ref=f7e4260] [box=1112,3613,438,24]:
+              - generic "Drag to reorder" [ref=f7e4261] [box=1112,3613,17,23]
+              - generic "Click to focus" [ref=f7e4269] [cursor=pointer] [box=1133,3614,417,21]
+            - generic [ref=f7e4271] [box=1550,3614,46,22]:
+              - button "More" [ref=f7e4273] [cursor=pointer] [box=1550,3614,22,22]
+              - button "Focus" [ref=f7e4278] [cursor=pointer] [box=1574,3614,22,22]
+          - generic [ref=f7e4283] [box=1141,3669,430,932]:
+            - generic [box=1141,3669,430,72]:
+              - generic [box=1171,3704,37,21]: 9:41
+              - generic [box=1470,3707,71,13]
+            - generic [ref=f7e4286] [box=1141,3723,430,844]:
+              - generic [ref=f7e4287] [box=1141,3723,430,65]
+              - generic [ref=f7e4296] [box=1141,3788,430,779]
+              - generic [ref=f7e4308] [box=1278,3787,281,210]
+              - generic [ref=f7e4330] [box=1155,4448,402,95]
+        - generic [ref=f7e4342] [box=1644,3641,480,988]:
+          - generic [ref=f7e4343] [box=1640,3613,484,24]:
+            - generic [ref=f7e4344] [box=1640,3613,438,24]:
+              - generic "Drag to reorder" [ref=f7e4345] [box=1640,3613,17,23]
+              - generic "Click to focus" [ref=f7e4353] [cursor=pointer] [box=1661,3614,417,21]
+            - generic [ref=f7e4355] [box=2078,3614,46,22]:
+              - button "More" [ref=f7e4357] [cursor=pointer] [box=2078,3614,22,22]
+              - button "Focus" [ref=f7e4362] [cursor=pointer] [box=2102,3614,22,22]
+          - generic [ref=f7e4367] [box=1669,3669,430,932]:
+            - generic [box=1669,3669,430,72]:
+              - generic [box=1699,3704,37,21]: 9:41
+              - generic [box=1998,3707,71,13]
+            - generic [ref=f7e4370] [box=1669,3723,430,844]:
+              - generic [ref=f7e4371] [box=1669,3723,430,65]
+              - generic [ref=f7e4380] [box=1669,3788,430,779]
+              - generic [ref=f7e4392] [box=1749,4364,221,103]
+              - generic [ref=f7e4401] [box=1683,4448,402,95]
+    - generic [ref=f7e4413] [box=0,4709,15612,1082]:
+      - generic [ref=f7e4415] [box=60,4709,15492,94]:
+        - generic [ref=f7e4416] [box=58,4709,415,33]: R4 · Claude Settings sub-screens
+        - generic [ref=f7e4417] [box=60,4748,15492,19]: profile · billing · permissions · notifications · usage · select mode · connecting
+      - generic [ref=f7e4418] [box=0,4803,3768,988]:
+        - generic [ref=f7e4419] [box=60,4803,480,988]:
+          - generic [ref=f7e4420] [box=56,4775,484,24]:
+            - generic [ref=f7e4421] [box=56,4775,438,24]:
+              - generic "Drag to reorder" [ref=f7e4422] [box=56,4776,17,23]
+              - generic "Click to focus" [ref=f7e4430] [cursor=pointer] [box=77,4777,417,21]
+            - generic [ref=f7e4432] [box=494,4776,46,22]:
+              - button "More" [ref=f7e4434] [cursor=pointer] [box=494,4776,22,22]
+              - button "Focus" [ref=f7e4439] [cursor=pointer] [box=518,4776,22,22]
+          - generic [ref=f7e4444] [box=85,4831,430,932]:
+            - generic [box=85,4831,430,72]:
+              - generic [box=115,4866,37,21]: 9:41
+              - generic [box=414,4870,71,13]
+            - generic [ref=f7e4447] [box=85,4885,430,844]:
+              - generic [ref=f7e4448] [box=85,4885,430,69]
+              - generic [ref=f7e4453] [box=85,4954,430,775]
+        - generic [ref=f7e4476] [box=588,4803,480,988]:
+          - generic [ref=f7e4477] [box=584,4775,484,24]:
+            - generic [ref=f7e4478] [box=584,4775,438,24]:
+              - generic "Drag to reorder" [ref=f7e4479] [box=584,4776,17,23]
+              - generic "Click to focus" [ref=f7e4487] [cursor=pointer] [box=605,4777,417,21]
+            - generic [ref=f7e4489] [box=1022,4776,46,22]:
+              - button "More" [ref=f7e4491] [cursor=pointer] [box=1022,4776,22,22]
+              - button "Focus" [ref=f7e4496] [cursor=pointer] [box=1046,4776,22,22]
+          - generic [ref=f7e4501] [box=613,4831,430,932]:
+            - generic [box=613,4831,430,72]:
+              - generic [box=643,4866,37,21]: 9:41
+              - generic [box=942,4870,71,13]
+            - generic [ref=f7e4504] [box=613,4885,430,844]:
+              - generic [ref=f7e4505] [box=613,4885,430,69]
+              - generic [ref=f7e4510] [box=613,4954,430,775]
+        - generic [ref=f7e4523] [box=1116,4803,480,988]:
+          - generic [ref=f7e4524] [box=1112,4775,484,24]:
+            - generic [ref=f7e4525] [box=1112,4775,438,24]:
+              - generic "Drag to reorder" [ref=f7e4526] [box=1112,4776,17,23]
+              - generic "Click to focus" [ref=f7e4534] [cursor=pointer] [box=1133,4777,417,21]
+            - generic [ref=f7e4536] [box=1550,4776,46,22]:
+              - button "More" [ref=f7e4538] [cursor=pointer] [box=1550,4776,22,22]
+              - button "Focus" [ref=f7e4543] [cursor=pointer] [box=1574,4776,22,22]
+          - generic [ref=f7e4548] [box=1141,4831,430,932]:
+            - generic [box=1141,4831,430,72]:
+              - generic [box=1171,4866,37,21]: 9:41
+              - generic [box=1470,4870,71,13]
+            - generic [ref=f7e4551] [box=1141,4885,430,844]:
+              - generic [ref=f7e4552] [box=1141,4885,430,69]
+              - generic [ref=f7e4557] [box=1141,4954,430,775]
+        - generic [ref=f7e4599] [box=1644,4803,480,988]:
+          - generic [ref=f7e4600] [box=1640,4775,484,24]:
+            - generic [ref=f7e4601] [box=1640,4775,438,24]:
+              - generic "Drag to reorder" [ref=f7e4602] [box=1640,4776,17,23]
+              - generic "Click to focus" [ref=f7e4610] [cursor=pointer] [box=1661,4777,417,21]
+            - generic [ref=f7e4612] [box=2078,4776,46,22]:
+              - button "More" [ref=f7e4614] [cursor=pointer] [box=2078,4776,22,22]
+              - button "Focus" [ref=f7e4619] [cursor=pointer] [box=2102,4776,22,22]
+          - generic [ref=f7e4624] [box=1669,4831,430,932]:
+            - generic [box=1669,4831,430,72]:
+              - generic [box=1699,4866,37,21]: 9:41
+              - generic [box=1998,4870,71,13]
+            - generic [ref=f7e4627] [box=1669,4885,430,844]:
+              - generic [ref=f7e4628] [box=1669,4885,430,69]
+              - generic [ref=f7e4633] [box=1669,4954,430,775]
+        - generic [ref=f7e4661] [box=2172,4803,480,988]:
+          - generic [ref=f7e4662] [box=2168,4775,484,24]:
+            - generic [ref=f7e4663] [box=2168,4775,438,24]:
+              - generic "Drag to reorder" [ref=f7e4664] [box=2168,4776,17,23]
+              - generic "Click to focus" [ref=f7e4672] [cursor=pointer] [box=2189,4777,417,21]
+            - generic [ref=f7e4674] [box=2606,4776,46,22]:
+              - button "More" [ref=f7e4676] [cursor=pointer] [box=2606,4776,22,22]
+              - button "Focus" [ref=f7e4681] [cursor=pointer] [box=2630,4776,22,22]
+          - generic [ref=f7e4686] [box=2197,4831,430,932]:
+            - generic [box=2197,4831,430,72]:
+              - generic [box=2227,4866,37,21]: 9:41
+              - generic [box=2526,4870,71,13]
+            - generic [ref=f7e4689] [box=2197,4885,430,844]:
+              - generic [ref=f7e4690] [box=2197,4885,430,69]
+              - generic [ref=f7e4698] [box=2197,4954,430,775]
+        - generic [ref=f7e4717] [box=2700,4803,480,988]:
+          - generic [ref=f7e4718] [box=2696,4775,484,24]:
+            - generic [ref=f7e4719] [box=2696,4775,438,24]:
+              - generic "Drag to reorder" [ref=f7e4720] [box=2696,4776,17,23]
+              - generic "Click to focus" [ref=f7e4728] [cursor=pointer] [box=2717,4777,417,21]
+            - generic [ref=f7e4730] [box=3134,4776,46,22]:
+              - button "More" [ref=f7e4732] [cursor=pointer] [box=3134,4776,22,22]
+              - button "Focus" [ref=f7e4737] [cursor=pointer] [box=3158,4776,22,22]
+          - generic [ref=f7e4742] [box=2725,4831,430,932]:
+            - generic [box=2725,4831,430,72]:
+              - generic [box=2755,4866,37,21]: 9:41
+              - generic [box=3054,4870,71,13]
+            - generic [ref=f7e4745] [box=2725,4885,430,844]:
+              - paragraph [ref=f7e4747] [box=2747,4917,386,50]: a. zero vector filtering. Already committed and pushed. All agents have now completed.
+              - generic [ref=f7e4749] [box=2725,5265,430,464]
+        - generic [ref=f7e4772] [box=3228,4803,480,988]:
+          - generic [ref=f7e4773] [box=3224,4775,484,24]:
+            - generic [ref=f7e4774] [box=3224,4775,438,24]:
+              - generic "Drag to reorder" [ref=f7e4775] [box=3224,4776,17,23]
+              - generic "Click to focus" [ref=f7e4783] [cursor=pointer] [box=3245,4777,417,21]
+            - generic [ref=f7e4785] [box=3662,4776,46,22]:
+              - button "More" [ref=f7e4787] [cursor=pointer] [box=3662,4776,22,22]
+              - button "Focus" [ref=f7e4792] [cursor=pointer] [box=3686,4776,22,22]
+          - generic [ref=f7e4797] [box=3253,4831,430,932]:
+            - generic [box=3253,4831,430,72]:
+              - generic [box=3283,4866,37,21]: 9:41
+              - generic [box=3582,4870,71,13]
+            - generic [ref=f7e4800] [box=3253,4885,430,844]:
+              - generic [ref=f7e4801] [box=3253,4885,430,65]
+              - generic [ref=f7e4812] [box=3267,5563,402,47]
+              - generic [ref=f7e4818] [box=3267,5618,402,93]
+    - generic [ref=f7e4830] [box=0,5871,15612,1082]:
+      - generic [ref=f7e4832] [box=60,5871,15492,94]:
+        - generic [ref=f7e4833] [box=58,5871,326,33]: R4 · Claude extra surfaces
+        - generic [ref=f7e4834] [box=60,5910,15492,19]: settings index · capabilities · connectors · code idle · artifacts · projects
+      - generic [ref=f7e4835] [box=0,5965,3768,988]:
+        - generic [ref=f7e4836] [box=60,5965,480,988]:
+          - generic [ref=f7e4837] [box=56,5937,484,24]:
+            - generic [ref=f7e4838] [box=56,5937,438,24]:
+              - generic "Drag to reorder" [ref=f7e4839] [box=56,5938,17,23]
+              - generic "Click to focus" [ref=f7e4847] [cursor=pointer] [box=77,5939,417,21]
+            - generic [ref=f7e4849] [box=494,5938,46,22]:
+              - button "More" [ref=f7e4851] [cursor=pointer] [box=494,5938,22,22]
+              - button "Focus" [ref=f7e4856] [cursor=pointer] [box=518,5938,22,22]
+          - generic [ref=f7e4861] [box=85,5993,430,932]:
+            - generic [box=85,5993,430,72]:
+              - generic [box=115,6028,37,21]: 9:41
+              - generic [box=414,6032,71,13]
+            - generic [ref=f7e4864] [box=85,6047,430,906]:
+              - generic [ref=f7e4865] [box=85,6047,430,69]
+              - generic [ref=f7e4874] [box=85,6116,430,837]
+        - generic [ref=f7e4960] [box=588,5965,480,988]:
+          - generic [ref=f7e4961] [box=584,5937,484,24]:
+            - generic [ref=f7e4962] [box=584,5937,438,24]:
+              - generic "Drag to reorder" [ref=f7e4963] [box=584,5938,17,23]
+              - generic "Click to focus" [ref=f7e4971] [cursor=pointer] [box=605,5939,417,21]
+            - generic [ref=f7e4973] [box=1022,5938,46,22]:
+              - button "More" [ref=f7e4975] [cursor=pointer] [box=1022,5938,22,22]
+              - button "Focus" [ref=f7e4980] [cursor=pointer] [box=1046,5938,22,22]
+          - generic [ref=f7e4985] [box=613,5993,430,932]:
+            - generic [box=613,5993,430,72]:
+              - generic [box=643,6028,37,21]: 9:41
+              - generic [box=942,6032,71,13]
+            - generic [ref=f7e4988] [box=613,6047,430,1127]:
+              - generic [ref=f7e4989] [box=613,6047,430,69]
+              - generic [ref=f7e4994] [box=613,6116,430,1057]
+        - generic [ref=f7e5056] [box=1116,5965,480,988]:
+          - generic [ref=f7e5057] [box=1112,5937,484,24]:
+            - generic [ref=f7e5058] [box=1112,5937,438,24]:
+              - generic "Drag to reorder" [ref=f7e5059] [box=1112,5938,17,23]
+              - generic "Click to focus" [ref=f7e5067] [cursor=pointer] [box=1133,5939,417,21]
+            - generic [ref=f7e5069] [box=1550,5938,46,22]:
+              - button "More" [ref=f7e5071] [cursor=pointer] [box=1550,5938,22,22]
+              - button "Focus" [ref=f7e5076] [cursor=pointer] [box=1574,5938,22,22]
+          - generic [ref=f7e5081] [box=1141,5993,430,932]:
+            - generic [box=1141,5993,430,72]:
+              - generic [box=1171,6028,37,21]: 9:41
+              - generic [box=1470,6032,71,13]
+            - generic [ref=f7e5084] [box=1141,6047,430,844]:
+              - generic [ref=f7e5085] [box=1141,6047,430,69]
+              - generic [ref=f7e5090] [box=1141,6116,430,775]
+        - generic [ref=f7e5149] [box=1644,5965,480,988]:
+          - generic [ref=f7e5150] [box=1640,5937,484,24]:
+            - generic [ref=f7e5151] [box=1640,5937,438,24]:
+              - generic "Drag to reorder" [ref=f7e5152] [box=1640,5938,17,23]
+              - generic "Click to focus" [ref=f7e5160] [cursor=pointer] [box=1661,5939,417,21]
+            - generic [ref=f7e5162] [box=2078,5938,46,22]:
+              - button "More" [ref=f7e5164] [cursor=pointer] [box=2078,5938,22,22]
+              - button "Focus" [ref=f7e5169] [cursor=pointer] [box=2102,5938,22,22]
+          - generic [ref=f7e5174] [box=1669,5993,430,932]:
+            - generic [box=1669,5993,430,72]:
+              - generic [box=1699,6028,37,21]: 9:41
+              - generic [box=1998,6032,71,13]
+            - generic [ref=f7e5177] [box=1669,6047,430,1011]:
+              - generic [ref=f7e5178] [box=1669,6047,430,69]
+              - generic [ref=f7e5185] [box=1669,6116,430,942]
+              - img [ref=f7e5290] [box=2038,6993,26,26]
+        - generic [ref=f7e5293] [box=2172,5965,480,988]:
+          - generic [ref=f7e5294] [box=2168,5937,484,24]:
+            - generic [ref=f7e5295] [box=2168,5937,438,24]:
+              - generic "Drag to reorder" [ref=f7e5296] [box=2168,5938,17,23]
+              - generic "Click to focus" [ref=f7e5304] [cursor=pointer] [box=2189,5939,417,21]
+            - generic [ref=f7e5306] [box=2606,5938,46,22]:
+              - button "More" [ref=f7e5308] [cursor=pointer] [box=2606,5938,22,22]
+              - button "Focus" [ref=f7e5313] [cursor=pointer] [box=2630,5938,22,22]
+          - generic [ref=f7e5318] [box=2197,5993,430,932]:
+            - generic [box=2197,5993,430,72]:
+              - generic [box=2227,6028,37,21]: 9:41
+              - generic [box=2526,6032,71,13]
+            - generic [ref=f7e5321] [box=2197,6047,430,844]:
+              - generic [ref=f7e5322] [box=2197,6047,430,69]
+              - generic [ref=f7e5329] [box=2197,6116,430,775]
+        - generic [ref=f7e5370] [box=2700,5965,480,988]:
+          - generic [ref=f7e5371] [box=2696,5937,484,24]:
+            - generic [ref=f7e5372] [box=2696,5937,438,24]:
+              - generic "Drag to reorder" [ref=f7e5373] [box=2696,5938,17,23]
+              - generic "Click to focus" [ref=f7e5381] [cursor=pointer] [box=2717,5939,417,21]
+            - generic [ref=f7e5383] [box=3134,5938,46,22]:
+              - button "More" [ref=f7e5385] [cursor=pointer] [box=3134,5938,22,22]
+              - button "Focus" [ref=f7e5390] [cursor=pointer] [box=3158,5938,22,22]
+          - generic [ref=f7e5395] [box=2725,5993,430,932]:
+            - generic [box=2725,5993,430,72]:
+              - generic [box=2755,6028,37,21]: 9:41
+              - generic [box=3054,6032,71,13]
+            - generic [ref=f7e5398] [box=2725,6047,430,844]:
+              - generic [ref=f7e5399] [box=2725,6047,430,69]
+              - generic [ref=f7e5407] [box=2739,6124,402,52]
+        - generic [ref=f7e5441] [box=3228,5965,480,988]:
+          - generic [ref=f7e5442] [box=3224,5937,484,24]:
+            - generic [ref=f7e5443] [box=3224,5937,438,24]:
+              - generic "Drag to reorder" [ref=f7e5444] [box=3224,5938,17,23]
+              - generic "Click to focus" [ref=f7e5452] [cursor=pointer] [box=3245,5939,417,21]
+            - generic [ref=f7e5454] [box=3662,5938,46,22]:
+              - button "More" [ref=f7e5456] [cursor=pointer] [box=3662,5938,22,22]
+              - button "Focus" [ref=f7e5461] [cursor=pointer] [box=3686,5938,22,22]
+          - generic [ref=f7e5466] [box=3253,5993,430,932]:
+            - generic [box=3253,5993,430,72]:
+              - generic [box=3283,6028,37,21]: 9:41
+              - generic [box=3582,6032,71,13]
+            - generic [ref=f7e5469] [box=3253,6047,430,844]:
+              - generic [ref=f7e5470] [box=3253,6047,430,69]
+              - generic [ref=f7e5480] [box=3253,6116,430,698]
+              - generic [ref=f7e5500] [box=3269,6827,398,49]
+              - img [ref=f7e5505] [box=3622,6770,26,26]
+    - generic [ref=f7e5508] [box=0,7033,15612,1082]:
+      - generic [ref=f7e5510] [box=60,7033,15492,94]:
+        - generic [ref=f7e5511] [box=58,7033,280,33]: R4 · Claude final batch
+        - generic [ref=f7e5512] [box=60,7073,15492,19]: Cowork · Model dropdown · Side drawer (Dispatch new) · Usage warn chip · Splash
+      - generic [ref=f7e5513] [box=0,7128,2712,988]:
+        - generic [ref=f7e5514] [box=60,7128,480,988]:
+          - generic [ref=f7e5515] [box=56,7100,484,24]:
+            - generic [ref=f7e5516] [box=56,7100,438,24]:
+              - generic "Drag to reorder" [ref=f7e5517] [box=56,7100,17,23]
+              - generic "Click to focus" [ref=f7e5525] [cursor=pointer] [box=77,7101,417,21]
+            - generic [ref=f7e5527] [box=494,7101,46,22]:
+              - button "More" [ref=f7e5529] [cursor=pointer] [box=494,7101,22,22]
+              - button "Focus" [ref=f7e5534] [cursor=pointer] [box=518,7101,22,22]
+          - generic [ref=f7e5539] [box=85,7155,430,932]:
+            - generic [box=85,7155,430,72]:
+              - generic [box=115,7190,37,21]: 9:41
+              - generic [box=414,7194,71,13]
+            - generic [ref=f7e5542] [box=85,7209,430,844]:
+              - generic [ref=f7e5544] [box=85,7209,430,69]
+              - generic [ref=f7e5550] [box=85,7279,430,775]
+        - generic [ref=f7e5580] [box=588,7128,480,988]:
+          - generic [ref=f7e5581] [box=584,7100,484,24]:
+            - generic [ref=f7e5582] [box=584,7100,438,24]:
+              - generic "Drag to reorder" [ref=f7e5583] [box=584,7100,17,23]
+              - generic "Click to focus" [ref=f7e5591] [cursor=pointer] [box=605,7101,417,21]
+            - generic [ref=f7e5593] [box=1022,7101,46,22]:
+              - button "More" [ref=f7e5595] [cursor=pointer] [box=1022,7101,22,22]
+              - button "Focus" [ref=f7e5600] [cursor=pointer] [box=1046,7101,22,22]
+          - generic [ref=f7e5605] [box=613,7155,430,932]:
+            - generic [box=613,7155,430,72]:
+              - generic [box=643,7190,37,21]: 9:41
+              - generic [box=942,7194,71,13]
+            - generic [ref=f7e5608] [box=613,7209,430,844]:
+              - generic [ref=f7e5609] [box=613,7209,430,69]
+              - generic [ref=f7e5620] [box=653,7279,350,389]
+              - generic [ref=f7e5650] [box=704,7684,249,70]
+              - generic [ref=f7e5653] [box=627,7943,402,95]
+        - generic [ref=f7e5668] [box=1116,7128,480,988]:
+          - generic [ref=f7e5669] [box=1112,7100,484,24]:
+            - generic [ref=f7e5670] [box=1112,7100,438,24]:
+              - generic "Drag to reorder" [ref=f7e5671] [box=1112,7100,17,23]
+              - generic "Click to focus" [ref=f7e5679] [cursor=pointer] [box=1133,7101,417,21]
+            - generic [ref=f7e5681] [box=1550,7101,46,22]:
+              - button "More" [ref=f7e5683] [cursor=pointer] [box=1550,7101,22,22]
+              - button "Focus" [ref=f7e5688] [cursor=pointer] [box=1574,7101,22,22]
+          - generic [ref=f7e5693] [box=1141,7155,430,932]:
+            - generic [box=1141,7155,430,72]:
+              - generic [box=1171,7190,37,21]: 9:41
+              - generic [box=1470,7194,71,13]
+            - generic [ref=f7e5696] [box=1141,7209,430,844]:
+              - generic [ref=f7e5697] [box=1141,7209,422,844]
+              - generic [ref=f7e5748] [box=1163,7992,386,48]
+        - generic [ref=f7e5758] [box=1644,7128,480,988]:
+          - generic [ref=f7e5759] [box=1640,7100,484,24]:
+            - generic [ref=f7e5760] [box=1640,7100,438,24]:
+              - generic "Drag to reorder" [ref=f7e5761] [box=1640,7100,17,23]
+              - generic "Click to focus" [ref=f7e5769] [cursor=pointer] [box=1661,7101,417,21]
+            - generic [ref=f7e5771] [box=2078,7101,46,22]:
+              - button "More" [ref=f7e5773] [cursor=pointer] [box=2078,7101,22,22]
+              - button "Focus" [ref=f7e5778] [cursor=pointer] [box=2102,7101,22,22]
+          - generic [ref=f7e5783] [box=1669,7155,430,932]:
+            - generic [box=1669,7155,430,72]:
+              - generic [box=1699,7190,37,21]: 9:41
+              - generic [box=1998,7194,71,13]
+            - generic [ref=f7e5786] [box=1669,7209,430,844]:
+              - generic [ref=f7e5787] [box=1669,7209,430,71]
+              - generic [ref=f7e5803] [box=1669,7281,430,577]
+              - generic [ref=f7e5812] [box=1669,7857,430,196]
+        - generic [ref=f7e5832] [box=2172,7128,480,988]:
+          - generic [ref=f7e5833] [box=2168,7100,484,24]:
+            - generic [ref=f7e5834] [box=2168,7100,438,24]:
+              - generic "Drag to reorder" [ref=f7e5835] [box=2168,7100,17,23]
+              - generic "Click to focus" [ref=f7e5843] [cursor=pointer] [box=2189,7101,417,21]
+            - generic [ref=f7e5845] [box=2606,7101,46,22]:
+              - button "More" [ref=f7e5847] [cursor=pointer] [box=2606,7101,22,22]
+              - button "Focus" [ref=f7e5852] [cursor=pointer] [box=2630,7101,22,22]
+          - generic [ref=f7e5857] [box=2197,7155,430,932]:
+            - generic [box=2197,7155,430,72]:
+              - generic [box=2227,7190,37,21]: 9:41
+              - generic [box=2526,7194,71,13]
+            - generic [ref=f7e5860] [box=2197,7209,430,844]:
+              - generic [ref=f7e5861] [box=2332,7600,160,63]
+              - generic [ref=f7e5871] [box=2309,8007,205,16]: BY AGI AUTOMATION LLC
+    - generic [ref=f7e5873] [box=0,8195,15612,1082]:
+      - generic [ref=f7e5875] [box=60,8195,15492,94]:
+        - generic [ref=f7e5876] [box=58,8195,472,33]: R3 · ChatGPT-style production frames
+        - generic [ref=f7e5877] [box=60,8235,15492,19]: Pulse empty · drawer · settings · plus menu · project detail
+      - generic [ref=f7e5878] [box=0,8290,8520,988]:
+        - generic [ref=f7e5879] [box=60,8290,480,988]:
+          - generic [ref=f7e5880] [box=56,8262,484,24]:
+            - generic [ref=f7e5881] [box=56,8262,438,24]:
+              - generic "Drag to reorder" [ref=f7e5882] [box=56,8262,17,23]
+              - generic "Click to focus" [ref=f7e5890] [cursor=pointer] [box=77,8263,417,21]
+            - generic [ref=f7e5892] [box=494,8263,46,22]:
+              - button "More" [ref=f7e5894] [cursor=pointer] [box=494,8263,22,22]
+              - button "Focus" [ref=f7e5899] [cursor=pointer] [box=518,8263,22,22]
+          - generic [ref=f7e5904] [box=85,8318,430,932]:
+            - generic [box=85,8318,430,72]:
+              - generic [box=115,8352,37,21]: 9:41
+              - generic [box=414,8356,71,13]
+            - generic [ref=f7e5907] [box=85,8372,430,844]:
+              - generic [ref=f7e5908] [box=85,8372,430,56]
+              - generic [ref=f7e5916] [box=85,8428,430,722]
+              - generic [ref=f7e5930] [box=99,9158,402,44]
+        - generic [ref=f7e5946] [box=588,8290,480,988]:
+          - generic [ref=f7e5947] [box=584,8262,484,24]:
+            - generic [ref=f7e5948] [box=584,8262,438,24]:
+              - generic "Drag to reorder" [ref=f7e5949] [box=584,8262,17,23]
+              - generic "Click to focus" [ref=f7e5957] [cursor=pointer] [box=605,8263,417,21]
+            - generic [ref=f7e5959] [box=1022,8263,46,22]:
+              - button "More" [ref=f7e5961] [cursor=pointer] [box=1022,8263,22,22]
+              - button "Focus" [ref=f7e5966] [cursor=pointer] [box=1046,8263,22,22]
+          - generic [ref=f7e5971] [box=613,8318,430,932]:
+            - generic [box=613,8318,430,72]:
+              - generic [box=643,8352,37,21]: 9:41
+              - generic [box=942,8356,71,13]
+            - generic [ref=f7e5974] [box=613,8372,430,844]:
+              - generic [ref=f7e5975] [box=613,8372,430,56]
+              - generic [ref=f7e5983] [box=613,8428,430,722]
+              - generic [ref=f7e5997] [box=627,9158,402,44]
+        - generic [ref=f7e6013] [box=1116,8290,480,988]:
+          - generic [ref=f7e6014] [box=1112,8262,484,24]:
+            - generic [ref=f7e6015] [box=1112,8262,438,24]:
+              - generic "Drag to reorder" [ref=f7e6016] [box=1112,8262,17,23]
+              - generic "Click to focus" [ref=f7e6024] [cursor=pointer] [box=1133,8263,417,21]
+            - generic [ref=f7e6026] [box=1550,8263,46,22]:
+              - button "More" [ref=f7e6028] [cursor=pointer] [box=1550,8263,22,22]
+              - button "Focus" [ref=f7e6033] [cursor=pointer] [box=1574,8263,22,22]
+          - generic [ref=f7e6038] [box=1141,8318,430,932]:
+            - generic [box=1141,8318,430,72]:
+              - generic [box=1171,8352,37,21]: 9:41
+              - generic [box=1470,8356,71,13]
+            - generic [ref=f7e6041] [box=1141,8372,430,1116]:
+              - generic [ref=f7e6042] [box=1141,8372,430,66]
+              - generic [ref=f7e6050] [box=1141,8438,430,1050]
+              - generic [ref=f7e6105] [box=1447,9422,106,43]
+        - generic [ref=f7e6110] [box=1644,8290,480,988]:
+          - generic [ref=f7e6111] [box=1640,8262,484,24]:
+            - generic [ref=f7e6112] [box=1640,8262,438,24]:
+              - generic "Drag to reorder" [ref=f7e6113] [box=1640,8262,17,23]
+              - generic "Click to focus" [ref=f7e6121] [cursor=pointer] [box=1661,8263,417,21]
+            - generic [ref=f7e6123] [box=2078,8263,46,22]:
+              - button "More" [ref=f7e6125] [cursor=pointer] [box=2078,8263,22,22]
+              - button "Focus" [ref=f7e6130] [cursor=pointer] [box=2102,8263,22,22]
+          - generic [ref=f7e6135] [box=1669,8318,430,932]:
+            - generic [box=1669,8318,430,72]:
+              - generic [box=1699,8352,37,21]: 9:41
+              - generic [box=1998,8356,71,13]
+            - generic [ref=f7e6138] [box=1669,8372,430,1116]:
+              - generic [ref=f7e6139] [box=1669,8372,430,66]
+              - generic [ref=f7e6147] [box=1669,8438,430,1050]
+              - generic [ref=f7e6202] [box=1975,9422,106,43]
+        - generic [ref=f7e6207] [box=2172,8290,480,988]:
+          - generic [ref=f7e6208] [box=2168,8262,484,24]:
+            - generic [ref=f7e6209] [box=2168,8262,438,24]:
+              - generic "Drag to reorder" [ref=f7e6210] [box=2168,8262,17,23]
+              - generic "Click to focus" [ref=f7e6218] [cursor=pointer] [box=2189,8263,417,21]
+            - generic [ref=f7e6220] [box=2606,8263,46,22]:
+              - button "More" [ref=f7e6222] [cursor=pointer] [box=2606,8263,22,22]
+              - button "Focus" [ref=f7e6227] [cursor=pointer] [box=2630,8263,22,22]
+          - generic [ref=f7e6232] [box=2197,8318,430,932]:
+            - generic [box=2197,8318,430,72]:
+              - generic [box=2227,8352,37,21]: 9:41
+              - generic [box=2526,8356,71,13]
+            - generic [ref=f7e6235] [box=2197,8372,430,2258]:
+              - generic [ref=f7e6236] [box=2197,8372,430,58]
+              - generic [ref=f7e6242] [box=2197,8430,430,2200]
+        - generic [ref=f7e6438] [box=2700,8290,480,988]:
+          - generic [ref=f7e6439] [box=2696,8262,484,24]:
+            - generic [ref=f7e6440] [box=2696,8262,438,24]:
+              - generic "Drag to reorder" [ref=f7e6441] [box=2696,8262,17,23]
+              - generic "Click to focus" [ref=f7e6449] [cursor=pointer] [box=2717,8263,417,21]
+            - generic [ref=f7e6451] [box=3134,8263,46,22]:
+              - button "More" [ref=f7e6453] [cursor=pointer] [box=3134,8263,22,22]
+              - button "Focus" [ref=f7e6458] [cursor=pointer] [box=3158,8263,22,22]
+          - generic [ref=f7e6463] [box=2725,8318,430,932]:
+            - generic [box=2725,8318,430,72]:
+              - generic [box=2755,8352,37,21]: 9:41
+              - generic [box=3054,8356,71,13]
+            - generic [ref=f7e6466] [box=2725,8372,430,2258]:
+              - generic [ref=f7e6467] [box=2725,8372,430,58]
+              - generic [ref=f7e6473] [box=2725,8430,430,2200]
+        - generic [ref=f7e6669] [box=3228,8290,480,988]:
+          - generic [ref=f7e6670] [box=3224,8262,484,24]:
+            - generic [ref=f7e6671] [box=3224,8262,438,24]:
+              - generic "Drag to reorder" [ref=f7e6672] [box=3224,8262,17,23]
+              - generic "Click to focus" [ref=f7e6680] [cursor=pointer] [box=3245,8263,417,21]
+            - generic [ref=f7e6682] [box=3662,8263,46,22]:
+              - button "More" [ref=f7e6684] [cursor=pointer] [box=3662,8263,22,22]
+              - button "Focus" [ref=f7e6689] [cursor=pointer] [box=3686,8263,22,22]
+          - generic [ref=f7e6694] [box=3253,8318,430,932]:
+            - generic [box=3253,8318,430,72]:
+              - generic [box=3283,8352,37,21]: 9:41
+              - generic [box=3582,8356,71,13]
+            - generic [ref=f7e6697] [box=3253,8372,430,844]:
+              - generic [ref=f7e6698] [box=3253,8372,430,58]
+              - generic [ref=f7e6705] [box=3253,8430,430,786]
+        - generic [ref=f7e6756] [box=3756,8290,480,988]:
+          - generic [ref=f7e6757] [box=3752,8262,484,24]:
+            - generic [ref=f7e6758] [box=3752,8262,438,24]:
+              - generic "Drag to reorder" [ref=f7e6759] [box=3752,8262,17,23]
+              - generic "Click to focus" [ref=f7e6767] [cursor=pointer] [box=3773,8263,417,21]
+            - generic [ref=f7e6769] [box=4190,8263,46,22]:
+              - button "More" [ref=f7e6771] [cursor=pointer] [box=4190,8263,22,22]
+              - button "Focus" [ref=f7e6776] [cursor=pointer] [box=4214,8263,22,22]
+          - generic [ref=f7e6781] [box=3781,8318,430,932]:
+            - generic [box=3781,8318,430,72]:
+              - generic [box=3811,8352,37,21]: 9:41
+              - generic [box=4110,8356,71,13]
+            - generic [ref=f7e6784] [box=3781,8372,430,844]:
+              - generic [ref=f7e6785] [box=3781,8372,430,58]
+              - generic [ref=f7e6792] [box=3781,8430,430,786]
+        - generic [ref=f7e6843] [box=4284,8290,480,988]:
+          - generic [ref=f7e6844] [box=4280,8262,484,24]:
+            - generic [ref=f7e6845] [box=4280,8262,438,24]:
+              - generic "Drag to reorder" [ref=f7e6846] [box=4280,8262,17,23]
+              - generic "Click to focus" [ref=f7e6854] [cursor=pointer] [box=4301,8263,417,21]
+            - generic [ref=f7e6856] [box=4718,8263,46,22]:
+              - button "More" [ref=f7e6858] [cursor=pointer] [box=4718,8263,22,22]
+              - button "Focus" [ref=f7e6863] [cursor=pointer] [box=4742,8263,22,22]
+          - generic [ref=f7e6868] [box=4309,8318,430,932]:
+            - generic [box=4309,8318,430,72]:
+              - generic [box=4339,8352,37,21]: 9:41
+              - generic [box=4638,8356,71,13]
+            - generic [ref=f7e6871] [box=4309,8372,430,844]:
+              - generic [ref=f7e6872] [box=4309,8372,430,56]
+              - generic [ref=f7e6882] [box=4309,8468,430,748]
+        - generic [ref=f7e6967] [box=4812,8290,480,988]:
+          - generic [ref=f7e6968] [box=4808,8262,484,24]:
+            - generic [ref=f7e6969] [box=4808,8262,438,24]:
+              - generic "Drag to reorder" [ref=f7e6970] [box=4808,8262,17,23]
+              - generic "Click to focus" [ref=f7e6978] [cursor=pointer] [box=4829,8263,417,21]
+            - generic [ref=f7e6980] [box=5246,8263,46,22]:
+              - button "More" [ref=f7e6982] [cursor=pointer] [box=5246,8263,22,22]
+              - button "Focus" [ref=f7e6987] [cursor=pointer] [box=5270,8263,22,22]
+          - generic [ref=f7e6992] [box=4837,8318,430,932]:
+            - generic [box=4837,8318,430,72]:
+              - generic [box=4867,8352,37,21]: 9:41
+              - generic [box=5166,8356,71,13]
+            - generic [ref=f7e6995] [box=4837,8372,430,844]:
+              - generic [ref=f7e6996] [box=4837,8372,430,56]
+              - generic [ref=f7e7006] [box=4837,8468,430,748]
+        - generic [ref=f7e7091] [box=5340,8290,480,988]:
+          - generic [ref=f7e7092] [box=5336,8262,484,24]:
+            - generic [ref=f7e7093] [box=5336,8262,438,24]:
+              - generic "Drag to reorder" [ref=f7e7094] [box=5336,8262,17,23]
+              - generic "Click to focus" [ref=f7e7102] [cursor=pointer] [box=5357,8263,417,21]
+            - generic [ref=f7e7104] [box=5774,8263,46,22]:
+              - button "More" [ref=f7e7106] [cursor=pointer] [box=5774,8263,22,22]
+              - button "Focus" [ref=f7e7111] [cursor=pointer] [box=5798,8263,22,22]
+          - generic [ref=f7e7116] [box=5365,8318,430,932]:
+            - generic [box=5365,8318,430,72]:
+              - generic [box=5395,8352,37,21]: 9:41
+              - generic [box=5694,8356,71,13]
+            - generic [ref=f7e7119] [box=5365,8372,430,844]:
+              - generic [ref=f7e7120] [box=5365,8372,430,56]
+              - generic [ref=f7e7131] [box=5365,8428,430,62]
+              - generic [ref=f7e7135] [box=5365,8490,430,51]
+              - generic [ref=f7e7140] [box=5365,8541,430,675]
+              - generic [ref=f7e7162] [box=5379,9146,402,48]
+        - generic [ref=f7e7177] [box=5868,8290,480,988]:
+          - generic [ref=f7e7178] [box=5864,8262,484,24]:
+            - generic [ref=f7e7179] [box=5864,8262,438,24]:
+              - generic "Drag to reorder" [ref=f7e7180] [box=5864,8262,17,23]
+              - generic "Click to focus" [ref=f7e7188] [cursor=pointer] [box=5885,8263,417,21]
+            - generic [ref=f7e7190] [box=6302,8263,46,22]:
+              - button "More" [ref=f7e7192] [cursor=pointer] [box=6302,8263,22,22]
+              - button "Focus" [ref=f7e7197] [cursor=pointer] [box=6326,8263,22,22]
+          - generic [ref=f7e7202] [box=5893,8318,430,932]:
+            - generic [box=5893,8318,430,72]:
+              - generic [box=5923,8352,37,21]: 9:41
+              - generic [box=6222,8356,71,13]
+            - generic [ref=f7e7205] [box=5893,8372,430,844]:
+              - generic [ref=f7e7206] [box=5893,8372,430,56]
+              - generic [ref=f7e7217] [box=5893,8428,430,62]
+              - generic [ref=f7e7221] [box=5893,8490,430,51]
+              - generic [ref=f7e7226] [box=5893,8541,430,675]
+              - generic [ref=f7e7248] [box=5907,9146,402,48]
+        - generic [ref=f7e7263] [box=6396,8290,480,988]:
+          - generic [ref=f7e7264] [box=6392,8262,484,24]:
+            - generic [ref=f7e7265] [box=6392,8262,438,24]:
+              - generic "Drag to reorder" [ref=f7e7266] [box=6392,8262,17,23]
+              - generic "Click to focus" [ref=f7e7274] [cursor=pointer] [box=6413,8263,417,21]
+            - generic [ref=f7e7276] [box=6830,8263,46,22]:
+              - button "More" [ref=f7e7278] [cursor=pointer] [box=6830,8263,22,22]
+              - button "Focus" [ref=f7e7283] [cursor=pointer] [box=6854,8263,22,22]
+          - generic [ref=f7e7288] [box=6421,8318,430,932]:
+            - generic [box=6421,8318,430,72]:
+              - generic [box=6451,8352,37,21]: 9:41
+              - generic [box=6750,8356,71,13]
+            - generic [ref=f7e7291] [box=6421,8372,430,844]:
+              - generic [ref=f7e7293] [box=6544,8766,183,56]
+              - generic [ref=f7e7296] [box=6421,8479,430,736]
+        - generic [ref=f7e7377] [box=6924,8290,480,988]:
+          - generic [ref=f7e7378] [box=6920,8262,484,24]:
+            - generic [ref=f7e7379] [box=6920,8262,438,24]:
+              - generic "Drag to reorder" [ref=f7e7380] [box=6920,8262,17,23]
+              - generic "Click to focus" [ref=f7e7388] [cursor=pointer] [box=6941,8263,417,21]
+            - generic [ref=f7e7390] [box=7358,8263,46,22]:
+              - button "More" [ref=f7e7392] [cursor=pointer] [box=7358,8263,22,22]
+              - button "Focus" [ref=f7e7397] [cursor=pointer] [box=7382,8263,22,22]
+          - generic [ref=f7e7402] [box=6949,8318,430,932]:
+            - generic [box=6949,8318,430,72]:
+              - generic [box=6979,8352,37,21]: 9:41
+              - generic [box=7278,8356,71,13]
+            - generic [ref=f7e7405] [box=6949,8372,430,844]:
+              - generic [ref=f7e7407] [box=7072,8766,183,56]
+              - generic [ref=f7e7410] [box=6949,8479,430,736]
+        - generic [ref=f7e7491] [box=7452,8290,480,988]:
+          - generic [ref=f7e7492] [box=7448,8262,484,24]:
+            - generic [ref=f7e7493] [box=7448,8262,438,24]:
+              - generic "Drag to reorder" [ref=f7e7494] [box=7448,8262,17,23]
+              - generic "Click to focus" [ref=f7e7502] [cursor=pointer] [box=7469,8263,417,21]
+            - generic [ref=f7e7504] [box=7886,8263,46,22]:
+              - button "More" [ref=f7e7506] [cursor=pointer] [box=7886,8263,22,22]
+              - button "Focus" [ref=f7e7511] [cursor=pointer] [box=7910,8263,22,22]
+          - generic [ref=f7e7516] [box=7477,8318,430,932]:
+            - generic [box=7477,8318,430,72]:
+              - generic [box=7507,8352,37,21]: 9:41
+              - generic [box=7806,8356,71,13]
+            - generic [ref=f7e7519] [box=7477,8372,430,844]:
+              - generic [ref=f7e7521] [box=7600,8766,183,56]
+              - generic [ref=f7e7524] [box=7477,8657,430,559]
+        - generic [ref=f7e7591] [box=7980,8290,480,988]:
+          - generic [ref=f7e7592] [box=7976,8262,484,24]:
+            - generic [ref=f7e7593] [box=7976,8262,438,24]:
+              - generic "Drag to reorder" [ref=f7e7594] [box=7976,8262,17,23]
+              - generic "Click to focus" [ref=f7e7602] [cursor=pointer] [box=7997,8263,417,21]
+            - generic [ref=f7e7604] [box=8414,8263,46,22]:
+              - button "More" [ref=f7e7606] [cursor=pointer] [box=8414,8263,22,22]
+              - button "Focus" [ref=f7e7611] [cursor=pointer] [box=8438,8263,22,22]
+          - generic [ref=f7e7616] [box=8005,8318,430,932]:
+            - generic [box=8005,8318,430,72]:
+              - generic [box=8035,8352,37,21]: 9:41
+              - generic [box=8334,8356,71,13]
+            - generic [ref=f7e7619] [box=8005,8372,430,844]:
+              - generic [ref=f7e7621] [box=8128,8766,183,56]
+              - generic [ref=f7e7624] [box=8005,8657,430,559]
+    - generic [ref=f7e7691] [box=0,9358,15612,1082]:
+      - generic [ref=f7e7693] [box=60,9358,15492,94]:
+        - generic [ref=f7e7694] [box=58,9358,431,33]: R2 · H1 — Onboarding (production)
+        - generic [ref=f7e7695] [box=60,9397,15492,19]: hero · device-tier · model download
+      - generic [ref=f7e7696] [box=0,9452,3240,988]:
+        - generic [ref=f7e7697] [box=60,9452,480,988]:
+          - generic [ref=f7e7698] [box=56,9424,484,24]:
+            - generic [ref=f7e7699] [box=56,9424,438,24]:
+              - generic "Drag to reorder" [ref=f7e7700] [box=56,9424,17,23]
+              - generic "Click to focus" [ref=f7e7708] [cursor=pointer] [box=77,9425,417,21]
+            - generic [ref=f7e7710] [box=494,9425,46,22]:
+              - button "More" [ref=f7e7712] [cursor=pointer] [box=494,9425,22,22]
+              - button "Focus" [ref=f7e7717] [cursor=pointer] [box=518,9425,22,22]
+          - generic [ref=f7e7722] [box=85,9480,430,932]:
+            - generic [box=85,9480,430,72]:
+              - generic [box=115,9515,37,21]: 9:41
+              - generic [box=414,9518,71,13]
+            - generic [ref=f7e7725] [box=85,9534,430,844]:
+              - generic [ref=f7e7726] [box=85,9534,430,718]
+              - generic [ref=f7e7747] [box=85,10252,430,126]
+        - generic [ref=f7e7755] [box=588,9452,480,988]:
+          - generic [ref=f7e7756] [box=584,9424,484,24]:
+            - generic [ref=f7e7757] [box=584,9424,438,24]:
+              - generic "Drag to reorder" [ref=f7e7758] [box=584,9424,17,23]
+              - generic "Click to focus" [ref=f7e7766] [cursor=pointer] [box=605,9425,417,21]
+            - generic [ref=f7e7768] [box=1022,9425,46,22]:
+              - button "More" [ref=f7e7770] [cursor=pointer] [box=1022,9425,22,22]
+              - button "Focus" [ref=f7e7775] [cursor=pointer] [box=1046,9425,22,22]
+          - generic [ref=f7e7780] [box=613,9480,430,932]:
+            - generic [box=613,9480,430,72]:
+              - generic [box=643,9515,37,21]: 9:41
+              - generic [box=942,9518,71,13]
+            - generic [ref=f7e7783] [box=613,9534,430,844]:
+              - generic [ref=f7e7784] [box=613,9534,430,718]
+              - generic [ref=f7e7805] [box=613,10252,430,126]
+        - generic [ref=f7e7813] [box=1116,9452,480,988]:
+          - generic [ref=f7e7814] [box=1112,9424,484,24]:
+            - generic [ref=f7e7815] [box=1112,9424,438,24]:
+              - generic "Drag to reorder" [ref=f7e7816] [box=1112,9424,17,23]
+              - generic "Click to focus" [ref=f7e7824] [cursor=pointer] [box=1133,9425,417,21]
+            - generic [ref=f7e7826] [box=1550,9425,46,22]:
+              - button "More" [ref=f7e7828] [cursor=pointer] [box=1550,9425,22,22]
+              - button "Focus" [ref=f7e7833] [cursor=pointer] [box=1574,9425,22,22]
+          - generic [ref=f7e7838] [box=1141,9480,430,932]:
+            - generic [box=1141,9480,430,72]:
+              - generic [box=1171,9515,37,21]: 9:41
+              - generic [box=1470,9518,71,13]
+            - generic [ref=f7e7840] [box=1141,9534,430,844]:
+              - generic [ref=f7e7841] [box=1141,9534,430,760]
+              - button "Download Apple Foundation 3B" [ref=f7e7901] [cursor=pointer] [box=1159,10306,394,54]
+        - generic [ref=f7e7906] [box=1644,9452,480,988]:
+          - generic [ref=f7e7907] [box=1640,9424,484,24]:
+            - generic [ref=f7e7908] [box=1640,9424,438,24]:
+              - generic "Drag to reorder" [ref=f7e7909] [box=1640,9424,17,23]
+              - generic "Click to focus" [ref=f7e7917] [cursor=pointer] [box=1661,9425,417,21]
+            - generic [ref=f7e7919] [box=2078,9425,46,22]:
+              - button "More" [ref=f7e7921] [cursor=pointer] [box=2078,9425,22,22]
+              - button "Focus" [ref=f7e7926] [cursor=pointer] [box=2102,9425,22,22]
+          - generic [ref=f7e7931] [box=1669,9480,430,932]:
+            - generic [box=1669,9480,430,72]:
+              - generic [box=1699,9515,37,21]: 9:41
+              - generic [box=1998,9518,71,13]
+            - generic [ref=f7e7933] [box=1669,9534,430,844]:
+              - generic [ref=f7e7934] [box=1669,9534,430,760]
+              - button "Download Apple Foundation 3B" [ref=f7e7994] [cursor=pointer] [box=1687,10306,394,54]
+        - generic [ref=f7e7999] [box=2172,9452,480,988]:
+          - generic [ref=f7e8000] [box=2168,9424,484,24]:
+            - generic [ref=f7e8001] [box=2168,9424,438,24]:
+              - generic "Drag to reorder" [ref=f7e8002] [box=2168,9424,17,23]
+              - generic "Click to focus" [ref=f7e8010] [cursor=pointer] [box=2189,9425,417,21]
+            - generic [ref=f7e8012] [box=2606,9425,46,22]:
+              - button "More" [ref=f7e8014] [cursor=pointer] [box=2606,9425,22,22]
+              - button "Focus" [ref=f7e8019] [cursor=pointer] [box=2630,9425,22,22]
+          - generic [ref=f7e8024] [box=2197,9480,430,932]:
+            - generic [box=2197,9480,430,72]:
+              - generic [box=2227,9515,37,21]: 9:41
+              - generic [box=2526,9518,71,13]
+            - generic [ref=f7e8027] [box=2197,9534,430,844]:
+              - generic [ref=f7e8028] [box=2197,9534,430,44]
+              - generic [ref=f7e8032] [box=2197,9578,430,66]
+              - generic [ref=f7e8037] [box=2292,9664,240,240]
+              - generic [ref=f7e8045] [box=2211,9924,402,115]
+              - generic [ref=f7e8062] [box=2329,10055,167,29]
+              - generic [ref=f7e8067] [box=2274,10102,276,14]: You can close this screen — it keeps downloading.
+        - generic [ref=f7e8069] [box=2700,9452,480,988]:
+          - generic [ref=f7e8070] [box=2696,9424,484,24]:
+            - generic [ref=f7e8071] [box=2696,9424,438,24]:
+              - generic "Drag to reorder" [ref=f7e8072] [box=2696,9424,17,23]
+              - generic "Click to focus" [ref=f7e8080] [cursor=pointer] [box=2717,9425,417,21]
+            - generic [ref=f7e8082] [box=3134,9425,46,22]:
+              - button "More" [ref=f7e8084] [cursor=pointer] [box=3134,9425,22,22]
+              - button "Focus" [ref=f7e8089] [cursor=pointer] [box=3158,9425,22,22]
+          - generic [ref=f7e8094] [box=2725,9480,430,932]:
+            - generic [box=2725,9480,430,72]:
+              - generic [box=2755,9515,37,21]: 9:41
+              - generic [box=3054,9518,71,13]
+            - generic [ref=f7e8097] [box=2725,9534,430,844]:
+              - generic [ref=f7e8098] [box=2725,9534,430,44]
+              - generic [ref=f7e8102] [box=2725,9578,430,66]
+              - generic [ref=f7e8107] [box=2820,9664,240,240]
+              - generic [ref=f7e8115] [box=2739,9924,402,115]
+              - generic [ref=f7e8132] [box=2857,10055,167,29]
+              - generic [ref=f7e8137] [box=2802,10102,276,14]: You can close this screen — it keeps downloading.
+    - generic [ref=f7e8139] [box=0,10520,15612,1082]:
+      - generic [ref=f7e8141] [box=60,10520,15492,94]:
+        - generic [ref=f7e8142] [box=58,10520,409,33]: R2 · H2 — Chat hero (production)
+        - generic [ref=f7e8143] [box=60,10559,15492,19]: empty · active · waitlist entry · waitlist confirmed
+      - generic [ref=f7e8144] [box=0,10614,5352,988]:
+        - generic [ref=f7e8145] [box=60,10614,480,988]:
+          - generic [ref=f7e8146] [box=56,10586,484,24]:
+            - generic [ref=f7e8147] [box=56,10586,438,24]:
+              - generic "Drag to reorder" [ref=f7e8148] [box=56,10587,17,23]
+              - generic "Click to focus" [ref=f7e8156] [cursor=pointer] [box=77,10588,417,21]
+            - generic [ref=f7e8158] [box=494,10587,46,22]:
+              - button "More" [ref=f7e8160] [cursor=pointer] [box=494,10587,22,22]
+              - button "Focus" [ref=f7e8165] [cursor=pointer] [box=518,10587,22,22]
+          - generic [ref=f7e8170] [box=85,10642,430,932]:
+            - generic [box=85,10642,430,72]:
+              - generic [box=115,10677,37,21]: 9:41
+              - generic [box=414,10681,71,13]
+            - generic [ref=f7e8172] [box=85,10696,430,844]:
+              - generic [ref=f7e8173] [box=85,10696,430,72]
+              - generic [ref=f7e8190] [box=85,10768,430,664]
+              - generic [ref=f7e8200] [box=85,11432,430,42]
+              - generic [ref=f7e8226] [box=99,11482,402,44]
+        - generic [ref=f7e8243] [box=588,10614,480,988]:
+          - generic [ref=f7e8244] [box=584,10586,484,24]:
+            - generic [ref=f7e8245] [box=584,10586,438,24]:
+              - generic "Drag to reorder" [ref=f7e8246] [box=584,10587,17,23]
+              - generic "Click to focus" [ref=f7e8254] [cursor=pointer] [box=605,10588,417,21]
+            - generic [ref=f7e8256] [box=1022,10587,46,22]:
+              - button "More" [ref=f7e8258] [cursor=pointer] [box=1022,10587,22,22]
+              - button "Focus" [ref=f7e8263] [cursor=pointer] [box=1046,10587,22,22]
+          - generic [ref=f7e8268] [box=613,10642,430,932]:
+            - generic [box=613,10642,430,72]:
+              - generic [box=643,10677,37,21]: 9:41
+              - generic [box=942,10681,71,13]
+            - generic [ref=f7e8270] [box=613,10696,430,844]:
+              - generic [ref=f7e8271] [box=613,10696,430,72]
+              - generic [ref=f7e8288] [box=613,10768,430,664]
+              - generic [ref=f7e8298] [box=613,11432,430,42]
+              - generic [ref=f7e8324] [box=627,11482,402,44]
+        - generic [ref=f7e8341] [box=1116,10614,480,988]:
+          - generic [ref=f7e8342] [box=1112,10586,484,24]:
+            - generic [ref=f7e8343] [box=1112,10586,438,24]:
+              - generic "Drag to reorder" [ref=f7e8344] [box=1112,10587,17,23]
+              - generic "Click to focus" [ref=f7e8352] [cursor=pointer] [box=1133,10588,417,21]
+            - generic [ref=f7e8354] [box=1550,10587,46,22]:
+              - button "More" [ref=f7e8356] [cursor=pointer] [box=1550,10587,22,22]
+              - button "Focus" [ref=f7e8361] [cursor=pointer] [box=1574,10587,22,22]
+          - generic [ref=f7e8366] [box=1141,10642,430,932]:
+            - generic [box=1141,10642,430,72]:
+              - generic [box=1171,10677,37,21]: 9:41
+              - generic [box=1470,10681,71,13]
+            - generic [ref=f7e8368] [box=1141,10696,430,844]:
+              - generic [ref=f7e8369] [box=1141,10696,430,72]
+              - generic [ref=f7e8386] [box=1141,10768,430,706]
+              - generic [ref=f7e8436] [box=1155,11482,402,44]
+        - generic [ref=f7e8453] [box=1644,10614,480,988]:
+          - generic [ref=f7e8454] [box=1640,10586,484,24]:
+            - generic [ref=f7e8455] [box=1640,10586,438,24]:
+              - generic "Drag to reorder" [ref=f7e8456] [box=1640,10587,17,23]
+              - generic "Click to focus" [ref=f7e8464] [cursor=pointer] [box=1661,10588,417,21]
+            - generic [ref=f7e8466] [box=2078,10587,46,22]:
+              - button "More" [ref=f7e8468] [cursor=pointer] [box=2078,10587,22,22]
+              - button "Focus" [ref=f7e8473] [cursor=pointer] [box=2102,10587,22,22]
+          - generic [ref=f7e8478] [box=1669,10642,430,932]:
+            - generic [box=1669,10642,430,72]:
+              - generic [box=1699,10677,37,21]: 9:41
+              - generic [box=1998,10681,71,13]
+            - generic [ref=f7e8480] [box=1669,10696,430,844]:
+              - generic [ref=f7e8481] [box=1669,10696,430,72]
+              - generic [ref=f7e8498] [box=1669,10768,430,706]
+              - generic [ref=f7e8548] [box=1683,11482,402,44]
+        - generic [ref=f7e8565] [box=2172,10614,480,988]:
+          - generic [ref=f7e8566] [box=2168,10586,484,24]:
+            - generic [ref=f7e8567] [box=2168,10586,438,24]:
+              - generic "Drag to reorder" [ref=f7e8568] [box=2168,10587,17,23]
+              - generic "Click to focus" [ref=f7e8576] [cursor=pointer] [box=2189,10588,417,21]
+            - generic [ref=f7e8578] [box=2606,10587,46,22]:
+              - button "More" [ref=f7e8580] [cursor=pointer] [box=2606,10587,22,22]
+              - button "Focus" [ref=f7e8585] [cursor=pointer] [box=2630,10587,22,22]
+          - generic [ref=f7e8590] [box=2197,10642,430,932]:
+            - generic [box=2197,10642,430,72]:
+              - generic [box=2227,10677,37,21]: 9:41
+              - generic [box=2526,10681,71,13]
+            - generic [ref=f7e8592] [box=2197,10696,430,844]:
+              - generic [ref=f7e8593] [box=2197,10696,430,72]
+              - generic [ref=f7e8610] [box=2197,10768,430,706]
+              - generic [ref=f7e8654] [box=2370,11396,100,16]: Stop generating
+              - generic [ref=f7e8656] [box=2211,11482,402,44]
+        - generic [ref=f7e8673] [box=2700,10614,480,988]:
+          - generic [ref=f7e8674] [box=2696,10586,484,24]:
+            - generic [ref=f7e8675] [box=2696,10586,438,24]:
+              - generic "Drag to reorder" [ref=f7e8676] [box=2696,10587,17,23]
+              - generic "Click to focus" [ref=f7e8684] [cursor=pointer] [box=2717,10588,417,21]
+            - generic [ref=f7e8686] [box=3134,10587,46,22]:
+              - button "More" [ref=f7e8688] [cursor=pointer] [box=3134,10587,22,22]
+              - button "Focus" [ref=f7e8693] [cursor=pointer] [box=3158,10587,22,22]
+          - generic [ref=f7e8698] [box=2725,10642,430,932]:
+            - generic [box=2725,10642,430,72]:
+              - generic [box=2755,10677,37,21]: 9:41
+              - generic [box=3054,10681,71,13]
+            - generic [ref=f7e8700] [box=2725,10696,430,844]:
+              - generic [ref=f7e8701] [box=2725,10696,430,72]
+              - generic [ref=f7e8718] [box=2725,10768,430,706]
+              - generic [ref=f7e8762] [box=2898,11396,100,16]: Stop generating
+              - generic [ref=f7e8764] [box=2739,11482,402,44]
+        - generic [ref=f7e8781] [box=3228,10614,480,988]:
+          - generic [ref=f7e8782] [box=3224,10586,484,24]:
+            - generic [ref=f7e8783] [box=3224,10586,438,24]:
+              - generic "Drag to reorder" [ref=f7e8784] [box=3224,10587,17,23]
+              - generic "Click to focus" [ref=f7e8792] [cursor=pointer] [box=3245,10588,417,21]
+            - generic [ref=f7e8794] [box=3662,10587,46,22]:
+              - button "More" [ref=f7e8796] [cursor=pointer] [box=3662,10587,22,22]
+              - button "Focus" [ref=f7e8801] [cursor=pointer] [box=3686,10587,22,22]
+          - generic [ref=f7e8806] [box=3253,10642,430,932]:
+            - generic [box=3253,10642,430,72]:
+              - generic [box=3283,10677,37,21]: 9:41
+              - generic [box=3582,10681,71,13]
+            - generic [ref=f7e8808] [box=3253,10696,430,844]:
+              - generic [ref=f7e8809] [box=3253,10696,430,72]
+              - generic [ref=f7e8826] [box=3253,10768,430,772]
+              - generic [ref=f7e8838] [box=3253,10881,430,679]
+        - generic [ref=f7e8868] [box=3756,10614,480,988]:
+          - generic [ref=f7e8869] [box=3752,10586,484,24]:
+            - generic [ref=f7e8870] [box=3752,10586,438,24]:
+              - generic "Drag to reorder" [ref=f7e8871] [box=3752,10587,17,23]
+              - generic "Click to focus" [ref=f7e8879] [cursor=pointer] [box=3773,10588,417,21]
+            - generic [ref=f7e8881] [box=4190,10587,46,22]:
+              - button "More" [ref=f7e8883] [cursor=pointer] [box=4190,10587,22,22]
+              - button "Focus" [ref=f7e8888] [cursor=pointer] [box=4214,10587,22,22]
+          - generic [ref=f7e8893] [box=3781,10642,430,932]:
+            - generic [box=3781,10642,430,72]:
+              - generic [box=3811,10677,37,21]: 9:41
+              - generic [box=4110,10681,71,13]
+            - generic [ref=f7e8895] [box=3781,10696,430,844]:
+              - generic [ref=f7e8896] [box=3781,10696,430,72]
+              - generic [ref=f7e8913] [box=3781,10768,430,772]
+              - generic [ref=f7e8925] [box=3781,10881,430,679]
+        - generic [ref=f7e8955] [box=4284,10614,480,988]:
+          - generic [ref=f7e8956] [box=4280,10586,484,24]:
+            - generic [ref=f7e8957] [box=4280,10586,438,24]:
+              - generic "Drag to reorder" [ref=f7e8958] [box=4280,10587,17,23]
+              - generic "Click to focus" [ref=f7e8966] [cursor=pointer] [box=4301,10588,417,21]
+            - generic [ref=f7e8968] [box=4718,10587,46,22]:
+              - button "More" [ref=f7e8970] [cursor=pointer] [box=4718,10587,22,22]
+              - button "Focus" [ref=f7e8975] [cursor=pointer] [box=4742,10587,22,22]
+          - generic [ref=f7e8980] [box=4309,10642,430,932]:
+            - generic [box=4309,10642,430,72]:
+              - generic [box=4339,10677,37,21]: 9:41
+              - generic [box=4638,10681,71,13]
+            - generic [ref=f7e8982] [box=4309,10696,430,844]:
+              - generic [ref=f7e8983] [box=4309,10696,430,72]
+              - generic [ref=f7e9004] [box=4501,10867,208,17]: What's a good 78% hydration…
+              - generic [ref=f7e9009] [box=4309,10941,430,621]
+        - generic [ref=f7e9032] [box=4812,10614,480,988]:
+          - generic [ref=f7e9033] [box=4808,10586,484,24]:
+            - generic [ref=f7e9034] [box=4808,10586,438,24]:
+              - generic "Drag to reorder" [ref=f7e9035] [box=4808,10587,17,23]
+              - generic "Click to focus" [ref=f7e9043] [cursor=pointer] [box=4829,10588,417,21]
+            - generic [ref=f7e9045] [box=5246,10587,46,22]:
+              - button "More" [ref=f7e9047] [cursor=pointer] [box=5246,10587,22,22]
+              - button "Focus" [ref=f7e9052] [cursor=pointer] [box=5270,10587,22,22]
+          - generic [ref=f7e9057] [box=4837,10642,430,932]:
+            - generic [box=4837,10642,430,72]:
+              - generic [box=4867,10677,37,21]: 9:41
+              - generic [box=5166,10681,71,13]
+            - generic [ref=f7e9059] [box=4837,10696,430,844]:
+              - generic [ref=f7e9060] [box=4837,10696,430,72]
+              - generic [ref=f7e9081] [box=5028,10867,208,17]: What's a good 78% hydration…
+              - generic [ref=f7e9086] [box=4837,10941,430,621]
+    - generic [ref=f7e9109] [box=0,11682,15612,1082]:
+      - generic [ref=f7e9111] [box=60,11682,15492,94]:
+        - generic [ref=f7e9112] [box=58,11682,526,33]: R2 · H3 — On-device features (production)
+        - generic [ref=f7e9113] [box=60,11721,15492,19]: image + Q · voice · doc Q&A · OCR · performance
+      - generic [ref=f7e9114] [box=0,11776,5352,988]:
+        - generic [ref=f7e9115] [box=60,11776,480,988]:
+          - generic [ref=f7e9116] [box=56,11748,484,24]:
+            - generic [ref=f7e9117] [box=56,11748,438,24]:
+              - generic "Drag to reorder" [ref=f7e9118] [box=56,11749,17,23]
+              - generic "Click to focus" [ref=f7e9126] [cursor=pointer] [box=77,11750,417,21]
+            - generic [ref=f7e9128] [box=494,11749,46,22]:
+              - button "More" [ref=f7e9130] [cursor=pointer] [box=494,11749,22,22]
+              - button "Focus" [ref=f7e9135] [cursor=pointer] [box=518,11749,22,22]
+          - generic [ref=f7e9140] [box=85,11804,430,932]:
+            - generic [box=85,11804,430,72]:
+              - generic [box=115,11839,37,21]: 9:41
+              - generic [box=414,11843,71,13]
+            - generic [ref=f7e9143] [box=85,11858,430,844]:
+              - generic [ref=f7e9144] [box=85,11858,430,585]
+              - generic [ref=f7e9161] [box=85,12443,430,259]
+        - generic [ref=f7e9193] [box=588,11776,480,988]:
+          - generic [ref=f7e9194] [box=584,11748,484,24]:
+            - generic [ref=f7e9195] [box=584,11748,438,24]:
+              - generic "Drag to reorder" [ref=f7e9196] [box=584,11749,17,23]
+              - generic "Click to focus" [ref=f7e9204] [cursor=pointer] [box=605,11750,417,21]
+            - generic [ref=f7e9206] [box=1022,11749,46,22]:
+              - button "More" [ref=f7e9208] [cursor=pointer] [box=1022,11749,22,22]
+              - button "Focus" [ref=f7e9213] [cursor=pointer] [box=1046,11749,22,22]
+          - generic [ref=f7e9218] [box=613,11804,430,932]:
+            - generic [box=613,11804,430,72]:
+              - generic [box=643,11839,37,21]: 9:41
+              - generic [box=942,11843,71,13]
+            - generic [ref=f7e9221] [box=613,11858,430,844]:
+              - generic [ref=f7e9222] [box=613,11858,430,585]
+              - generic [ref=f7e9239] [box=613,12443,430,259]
+        - generic [ref=f7e9271] [box=1116,11776,480,988]:
+          - generic [ref=f7e9272] [box=1112,11748,484,24]:
+            - generic [ref=f7e9273] [box=1112,11748,438,24]:
+              - generic "Drag to reorder" [ref=f7e9274] [box=1112,11749,17,23]
+              - generic "Click to focus" [ref=f7e9282] [cursor=pointer] [box=1133,11750,417,21]
+            - generic [ref=f7e9284] [box=1550,11749,46,22]:
+              - button "More" [ref=f7e9286] [cursor=pointer] [box=1550,11749,22,22]
+              - button "Focus" [ref=f7e9291] [cursor=pointer] [box=1574,11749,22,22]
+          - generic [ref=f7e9296] [box=1141,11804,430,932]:
+            - generic [box=1141,11804,430,72]:
+              - generic [box=1171,11839,37,21]: 9:41
+              - generic [box=1470,11843,71,13]
+            - generic [ref=f7e9299] [box=1141,11858,430,844]:
+              - generic [ref=f7e9300] [box=1141,11878,430,28]
+              - generic [ref=f7e9306] [box=1141,11906,430,684]
+              - generic [ref=f7e9345] [box=1141,12590,430,76]
+        - generic [ref=f7e9356] [box=1644,11776,480,988]:
+          - generic [ref=f7e9357] [box=1640,11748,484,24]:
+            - generic [ref=f7e9358] [box=1640,11748,438,24]:
+              - generic "Drag to reorder" [ref=f7e9359] [box=1640,11749,17,23]
+              - generic "Click to focus" [ref=f7e9367] [cursor=pointer] [box=1661,11750,417,21]
+            - generic [ref=f7e9369] [box=2078,11749,46,22]:
+              - button "More" [ref=f7e9371] [cursor=pointer] [box=2078,11749,22,22]
+              - button "Focus" [ref=f7e9376] [cursor=pointer] [box=2102,11749,22,22]
+          - generic [ref=f7e9381] [box=1669,11804,430,932]:
+            - generic [box=1669,11804,430,72]:
+              - generic [box=1699,11839,37,21]: 9:41
+              - generic [box=1998,11843,71,13]
+            - generic [ref=f7e9384] [box=1669,11858,430,844]:
+              - generic [ref=f7e9385] [box=1669,11878,430,28]
+              - generic [ref=f7e9391] [box=1669,11906,430,684]
+              - generic [ref=f7e9430] [box=1669,12590,430,76]
+        - generic [ref=f7e9441] [box=2172,11776,480,988]:
+          - generic [ref=f7e9442] [box=2168,11748,484,24]:
+            - generic [ref=f7e9443] [box=2168,11748,438,24]:
+              - generic "Drag to reorder" [ref=f7e9444] [box=2168,11749,17,23]
+              - generic "Click to focus" [ref=f7e9452] [cursor=pointer] [box=2189,11750,417,21]
+            - generic [ref=f7e9454] [box=2606,11749,46,22]:
+              - button "More" [ref=f7e9456] [cursor=pointer] [box=2606,11749,22,22]
+              - button "Focus" [ref=f7e9461] [cursor=pointer] [box=2630,11749,22,22]
+          - generic [ref=f7e9466] [box=2197,11804,430,932]:
+            - generic [box=2197,11804,430,72]:
+              - generic [box=2227,11839,37,21]: 9:41
+              - generic [box=2526,11843,71,13]
+            - generic [ref=f7e9468] [box=2197,11858,430,844]:
+              - generic [ref=f7e9469] [box=2197,11858,430,57]
+              - generic [ref=f7e9475] [box=2197,11915,430,787]
+        - generic [ref=f7e9535] [box=2700,11776,480,988]:
+          - generic [ref=f7e9536] [box=2696,11748,484,24]:
+            - generic [ref=f7e9537] [box=2696,11748,438,24]:
+              - generic "Drag to reorder" [ref=f7e9538] [box=2696,11749,17,23]
+              - generic "Click to focus" [ref=f7e9546] [cursor=pointer] [box=2717,11750,417,21]
+            - generic [ref=f7e9548] [box=3134,11749,46,22]:
+              - button "More" [ref=f7e9550] [cursor=pointer] [box=3134,11749,22,22]
+              - button "Focus" [ref=f7e9555] [cursor=pointer] [box=3158,11749,22,22]
+          - generic [ref=f7e9560] [box=2725,11804,430,932]:
+            - generic [box=2725,11804,430,72]:
+              - generic [box=2755,11839,37,21]: 9:41
+              - generic [box=3054,11843,71,13]
+            - generic [ref=f7e9562] [box=2725,11858,430,844]:
+              - generic [ref=f7e9563] [box=2725,11858,430,57]
+              - generic [ref=f7e9569] [box=2725,11915,430,787]
+        - generic [ref=f7e9629] [box=3228,11776,480,988]:
+          - generic [ref=f7e9630] [box=3224,11748,484,24]:
+            - generic [ref=f7e9631] [box=3224,11748,438,24]:
+              - generic "Drag to reorder" [ref=f7e9632] [box=3224,11749,17,23]
+              - generic "Click to focus" [ref=f7e9640] [cursor=pointer] [box=3245,11750,417,21]
+            - generic [ref=f7e9642] [box=3662,11749,46,22]:
+              - button "More" [ref=f7e9644] [cursor=pointer] [box=3662,11749,22,22]
+              - button "Focus" [ref=f7e9649] [cursor=pointer] [box=3686,11749,22,22]
+          - generic [ref=f7e9654] [box=3253,11804,430,932]:
+            - generic [box=3253,11804,430,72]:
+              - generic [box=3283,11839,37,21]: 9:41
+              - generic [box=3582,11843,71,13]
+            - generic [ref=f7e9657] [box=3253,11858,430,844]:
+              - generic [ref=f7e9659] [box=3265,11870,406,820]
+              - generic [ref=f7e9682] [box=3253,11858,430,60]
+              - generic [ref=f7e9693] [box=3253,11858,430,844]
+              - generic [ref=f7e9716] [box=3404,12552,141,14]: 7 lines detected · instant
+              - generic [ref=f7e9717] [box=3253,12583,430,84]
+        - generic [ref=f7e9729] [box=3756,11776,480,988]:
+          - generic [ref=f7e9730] [box=3752,11748,484,24]:
+            - generic [ref=f7e9731] [box=3752,11748,438,24]:
+              - generic "Drag to reorder" [ref=f7e9732] [box=3752,11749,17,23]
+              - generic "Click to focus" [ref=f7e9740] [cursor=pointer] [box=3773,11750,417,21]
+            - generic [ref=f7e9742] [box=4190,11749,46,22]:
+              - button "More" [ref=f7e9744] [cursor=pointer] [box=4190,11749,22,22]
+              - button "Focus" [ref=f7e9749] [cursor=pointer] [box=4214,11749,22,22]
+          - generic [ref=f7e9754] [box=3781,11804,430,932]:
+            - generic [box=3781,11804,430,72]:
+              - generic [box=3811,11839,37,21]: 9:41
+              - generic [box=4110,11843,71,13]
+            - generic [ref=f7e9757] [box=3781,11858,430,844]:
+              - generic [ref=f7e9759] [box=3793,11870,406,820]
+              - generic [ref=f7e9782] [box=3781,11858,430,60]
+              - generic [ref=f7e9793] [box=3781,11858,430,844]
+              - generic [ref=f7e9816] [box=3932,12552,141,14]: 7 lines detected · instant
+              - generic [ref=f7e9817] [box=3781,12583,430,84]
+        - generic [ref=f7e9829] [box=4284,11776,480,988]:
+          - generic [ref=f7e9830] [box=4280,11748,484,24]:
+            - generic [ref=f7e9831] [box=4280,11748,438,24]:
+              - generic "Drag to reorder" [ref=f7e9832] [box=4280,11749,17,23]
+              - generic "Click to focus" [ref=f7e9840] [cursor=pointer] [box=4301,11750,417,21]
+            - generic [ref=f7e9842] [box=4718,11749,46,22]:
+              - button "More" [ref=f7e9844] [cursor=pointer] [box=4718,11749,22,22]
+              - button "Focus" [ref=f7e9849] [cursor=pointer] [box=4742,11749,22,22]
+          - generic [ref=f7e9854] [box=4309,11804,430,932]:
+            - generic [box=4309,11804,430,72]:
+              - generic [box=4339,11839,37,21]: 9:41
+              - generic [box=4638,11843,71,13]
+            - generic [ref=f7e9856] [box=4309,11858,430,844]:
+              - generic [ref=f7e9857] [box=4309,11858,430,57]
+              - generic [ref=f7e9861] [box=4309,11915,430,787]
+        - generic [ref=f7e9930] [box=4812,11776,480,988]:
+          - generic [ref=f7e9931] [box=4808,11748,484,24]:
+            - generic [ref=f7e9932] [box=4808,11748,438,24]:
+              - generic "Drag to reorder" [ref=f7e9933] [box=4808,11749,17,23]
+              - generic "Click to focus" [ref=f7e9941] [cursor=pointer] [box=4829,11750,417,21]
+            - generic [ref=f7e9943] [box=5246,11749,46,22]:
+              - button "More" [ref=f7e9945] [cursor=pointer] [box=5246,11749,22,22]
+              - button "Focus" [ref=f7e9950] [cursor=pointer] [box=5270,11749,22,22]
+          - generic [ref=f7e9955] [box=4837,11804,430,932]:
+            - generic [box=4837,11804,430,72]:
+              - generic [box=4867,11839,37,21]: 9:41
+              - generic [box=5166,11843,71,13]
+            - generic [ref=f7e9957] [box=4837,11858,430,844]:
+              - generic [ref=f7e9958] [box=4837,11858,430,57]
+              - generic [ref=f7e9962] [box=4837,11915,430,787]
+    - generic [ref=f7e10031] [box=0,12844,15612,2890]:
+      - generic [ref=f7e10033] [box=60,12844,15492,94]:
+        - generic [ref=f7e10034] [box=58,12844,408,33]: R2 · AS — App Store screenshots
+        - generic [ref=f7e10035] [box=60,12884,15492,19]: 10 frames @ 1290×2796 · iPhone 6.9"
+      - generic [ref=f7e10036] [box=0,12939,13452,2796]:
+        - generic [ref=f7e10037] [box=60,12939,1290,2796]:
+          - generic [ref=f7e10038] [box=56,12911,1294,24]:
+            - generic [ref=f7e10039] [box=56,12911,1248,24]:
+              - generic "Drag to reorder" [ref=f7e10040] [box=56,12911,17,23]
+              - generic "Click to focus" [ref=f7e10048] [cursor=pointer] [box=77,12912,1227,21]
+            - generic [ref=f7e10050] [box=1304,12912,46,22]:
+              - button "More" [ref=f7e10052] [cursor=pointer] [box=1304,12912,22,22]
+              - button "Focus" [ref=f7e10057] [cursor=pointer] [box=1328,12912,22,22]
+          - generic [ref=f7e10063] [box=160,13079,1090,358]:
+            - generic [ref=f7e10064] [box=160,13079,1090,53]:
+              - img [ref=f7e10065] [box=160,13079,52,52]
+              - generic [ref=f7e10068] [box=226,13079,72,53]: AGI
+              - generic [ref=f7e10069] [box=1194,13083,56,44]: v1
+            - generic [ref=f7e10070] [box=160,13168,1090,196]:
+              - text: AGI runs on
+              - text: your device.
+            - generic [ref=f7e10071] [box=160,13390,1000,47]: No login. No cloud. No tracking. Free forever.
+        - generic [ref=f7e10072] [box=1398,12939,1290,2796]:
+          - generic [ref=f7e10073] [box=1394,12911,1294,24]:
+            - generic [ref=f7e10074] [box=1394,12911,1248,24]:
+              - generic "Drag to reorder" [ref=f7e10075] [box=1394,12911,17,23]
+              - generic "Click to focus" [ref=f7e10083] [cursor=pointer] [box=1415,12912,1227,21]
+            - generic [ref=f7e10085] [box=2642,12912,46,22]:
+              - button "More" [ref=f7e10087] [cursor=pointer] [box=2642,12912,22,22]
+              - button "Focus" [ref=f7e10092] [cursor=pointer] [box=2666,12912,22,22]
+          - generic [ref=f7e10098] [box=1498,13079,1090,405]:
+            - generic [ref=f7e10099] [box=1498,13079,1090,53]:
+              - img [ref=f7e10100] [box=1498,13079,52,52]
+              - generic [ref=f7e10103] [box=1564,13079,72,53]: AGI
+              - generic [ref=f7e10104] [box=2525,13083,63,44]: $0
+            - generic [ref=f7e10105] [box=1498,13168,1090,196]:
+              - text: Free, forever,
+              - text: on-device.
+            - generic [ref=f7e10106] [box=1498,13390,1000,94]: What ChatGPT Plus charges $20/mo for — yours, on-device, $0.
+        - generic [ref=f7e10107] [box=2736,12939,1290,2796]:
+          - generic [ref=f7e10108] [box=2732,12911,1294,24]:
+            - generic [ref=f7e10109] [box=2732,12911,1248,24]:
+              - generic "Drag to reorder" [ref=f7e10110] [box=2732,12911,17,23]
+              - generic "Click to focus" [ref=f7e10118] [cursor=pointer] [box=2753,12912,1227,21]
+            - generic [ref=f7e10120] [box=3980,12912,46,22]:
+              - button "More" [ref=f7e10122] [cursor=pointer] [box=3980,12912,22,22]
+              - button "Focus" [ref=f7e10127] [cursor=pointer] [box=4004,12912,22,22]
+          - generic [ref=f7e10133] [box=2836,13079,1090,405]:
+            - generic [ref=f7e10134] [box=2836,13079,1090,53]:
+              - img [ref=f7e10135] [box=2836,13079,52,52]
+              - generic [ref=f7e10138] [box=2902,13079,72,53]: AGI
+            - generic [ref=f7e10139] [box=2836,13168,1090,196]:
+              - text: Free image
+              - text: analysis.
+            - generic [ref=f7e10140] [box=2836,13390,1000,94]: Powered by your phone's Neural Engine. Nothing uploaded.
+        - generic [ref=f7e10141] [box=4074,12939,1290,2796]:
+          - generic [ref=f7e10142] [box=4070,12911,1294,24]:
+            - generic [ref=f7e10143] [box=4070,12911,1248,24]:
+              - generic "Drag to reorder" [ref=f7e10144] [box=4070,12911,17,23]
+              - generic "Click to focus" [ref=f7e10152] [cursor=pointer] [box=4091,12912,1227,21]
+            - generic [ref=f7e10154] [box=5318,12912,46,22]:
+              - button "More" [ref=f7e10156] [cursor=pointer] [box=5318,12912,22,22]
+              - button "Focus" [ref=f7e10161] [cursor=pointer] [box=5342,12912,22,22]
+          - generic [ref=f7e10167] [box=4174,13079,1090,456]:
+            - generic [ref=f7e10168] [box=4174,13079,1090,53]:
+              - img [ref=f7e10169] [box=4174,13079,52,52]
+              - generic [ref=f7e10172] [box=4240,13079,72,53]: AGI
+            - generic [ref=f7e10173] [box=4174,13168,1090,294]:
+              - text: Your voice
+              - text: never leaves
+              - text: your phone.
+            - generic [ref=f7e10174] [box=4174,13488,1000,47]: On-device Whisper. Never trained on.
+        - generic [ref=f7e10175] [box=5412,12939,1290,2796]:
+          - generic [ref=f7e10176] [box=5408,12911,1294,24]:
+            - generic [ref=f7e10177] [box=5408,12911,1248,24]:
+              - generic "Drag to reorder" [ref=f7e10178] [box=5408,12911,17,23]
+              - generic "Click to focus" [ref=f7e10186] [cursor=pointer] [box=5429,12912,1227,21]
+            - generic [ref=f7e10188] [box=6656,12912,46,22]:
+              - button "More" [ref=f7e10190] [cursor=pointer] [box=6656,12912,22,22]
+              - button "Focus" [ref=f7e10195] [cursor=pointer] [box=6680,12912,22,22]
+          - generic [ref=f7e10201] [box=5512,13079,1090,358]:
+            - generic [ref=f7e10202] [box=5512,13079,1090,53]:
+              - img [ref=f7e10203] [box=5512,13079,52,52]
+              - generic [ref=f7e10206] [box=5578,13079,72,53]: AGI
+            - generic [ref=f7e10207] [box=5512,13168,1090,196]:
+              - text: Read any PDF.
+              - text: On-device.
+            - generic [ref=f7e10208] [box=5512,13390,1000,47]: Chunked + indexed locally. Even works in airplane mode.
+        - generic [ref=f7e10209] [box=6750,12939,1290,2796]:
+          - generic [ref=f7e10210] [box=6746,12911,1294,24]:
+            - generic [ref=f7e10211] [box=6746,12911,1248,24]:
+              - generic "Drag to reorder" [ref=f7e10212] [box=6746,12911,17,23]
+              - generic "Click to focus" [ref=f7e10220] [cursor=pointer] [box=6767,12912,1227,21]
+            - generic [ref=f7e10222] [box=7994,12912,46,22]:
+              - button "More" [ref=f7e10224] [cursor=pointer] [box=7994,12912,22,22]
+              - button "Focus" [ref=f7e10229] [cursor=pointer] [box=8018,12912,22,22]
+          - generic [ref=f7e10235] [box=6850,13079,1090,307]:
+            - generic [ref=f7e10236] [box=6850,13079,1090,53]:
+              - img [ref=f7e10237] [box=6850,13079,52,52]
+              - generic [ref=f7e10240] [box=6916,13079,72,53]: AGI
+            - generic [ref=f7e10241] [box=6850,13168,1090,98]: Live OCR.
+            - generic [ref=f7e10242] [box=6850,13292,1000,94]: Apple Vision + on-device LLM. Instant. ₹828 total recognized.
+        - generic [ref=f7e10243] [box=8088,12939,1290,2796]:
+          - generic [ref=f7e10244] [box=8084,12911,1294,24]:
+            - generic [ref=f7e10245] [box=8084,12911,1248,24]:
+              - generic "Drag to reorder" [ref=f7e10246] [box=8084,12911,17,23]
+              - generic "Click to focus" [ref=f7e10254] [cursor=pointer] [box=8105,12912,1227,21]
+            - generic [ref=f7e10256] [box=9332,12912,46,22]:
+              - button "More" [ref=f7e10258] [cursor=pointer] [box=9332,12912,22,22]
+              - button "Focus" [ref=f7e10263] [cursor=pointer] [box=9356,12912,22,22]
+          - generic [ref=f7e10269] [box=8188,13079,1090,358]:
+            - generic [ref=f7e10270] [box=8188,13079,1090,53]:
+              - img [ref=f7e10271] [box=8188,13079,52,52]
+              - generic [ref=f7e10274] [box=8254,13079,72,53]: AGI
+            - generic [ref=f7e10275] [box=8188,13168,1090,196]:
+              - text: आपके फ़ोन पर
+              - text: ही AI.
+            - generic [ref=f7e10276] [box=8188,13390,1000,47]: Hindi support on-device. More Indian languages coming.
+        - generic [ref=f7e10277] [box=9426,12939,1290,2796]:
+          - generic [ref=f7e10278] [box=9422,12911,1294,24]:
+            - generic [ref=f7e10279] [box=9422,12911,1248,24]:
+              - generic "Drag to reorder" [ref=f7e10280] [box=9422,12911,17,23]
+              - generic "Click to focus" [ref=f7e10288] [cursor=pointer] [box=9443,12912,1227,21]
+            - generic [ref=f7e10290] [box=10670,12912,46,22]:
+              - button "More" [ref=f7e10292] [cursor=pointer] [box=10670,12912,22,22]
+              - button "Focus" [ref=f7e10297] [cursor=pointer] [box=10694,12912,22,22]
+          - generic [ref=f7e10303] [box=9526,13079,1090,405]:
+            - generic [ref=f7e10304] [box=9526,13079,1090,53]:
+              - img [ref=f7e10305] [box=9526,13079,52,52]
+              - generic [ref=f7e10308] [box=9592,13079,72,53]: AGI
+            - generic [ref=f7e10309] [box=9526,13168,1090,196]:
+              - text: Compare local
+              - text: models side-by-side.
+            - generic [ref=f7e10310] [box=9526,13390,1000,94]: Llama 3B · Apple Foundation 3B · Qwen 0.5B. Pick the right one per task.
+        - generic [ref=f7e10311] [box=10764,12939,1290,2796]:
+          - generic [ref=f7e10312] [box=10760,12911,1294,24]:
+            - generic [ref=f7e10313] [box=10760,12911,1248,24]:
+              - generic "Drag to reorder" [ref=f7e10314] [box=10760,12911,17,23]
+              - generic "Click to focus" [ref=f7e10322] [cursor=pointer] [box=10781,12912,1227,21]
+            - generic [ref=f7e10324] [box=12008,12912,46,22]:
+              - button "More" [ref=f7e10326] [cursor=pointer] [box=12008,12912,22,22]
+              - button "Focus" [ref=f7e10331] [cursor=pointer] [box=12032,12912,22,22]
+          - generic [ref=f7e10337] [box=10864,13079,1090,405]:
+            - generic [ref=f7e10338] [box=10864,13079,1090,53]:
+              - img [ref=f7e10339] [box=10864,13079,52,52]
+              - generic [ref=f7e10342] [box=10930,13079,72,53]: AGI
+            - generic [ref=f7e10343] [box=10864,13168,1090,196]:
+              - text: Works in
+              - text: airplane mode.
+            - generic [ref=f7e10344] [box=10864,13390,1000,94]: Because the AI is on your phone — not someone else's server.
+        - generic [ref=f7e10345] [box=12102,12939,1290,2796]:
+          - generic [ref=f7e10346] [box=12098,12911,1294,24]:
+            - generic [ref=f7e10347] [box=12098,12911,1248,24]:
+              - generic "Drag to reorder" [ref=f7e10348] [box=12098,12911,17,23]
+              - generic "Click to focus" [ref=f7e10356] [cursor=pointer] [box=12119,12912,1227,21]
+            - generic [ref=f7e10358] [box=13346,12912,46,22]:
+              - button "More" [ref=f7e10360] [cursor=pointer] [box=13346,12912,22,22]
+              - button "Focus" [ref=f7e10365] [cursor=pointer] [box=13370,12912,22,22]
+          - generic [ref=f7e10371] [box=12202,13079,1090,358]:
+            - generic [ref=f7e10372] [box=12202,13079,1090,53]:
+              - img [ref=f7e10373] [box=12202,13079,52,52]
+              - generic [ref=f7e10376] [box=12268,13079,72,53]: AGI
+            - generic [ref=f7e10377] [box=12202,13168,1090,196]:
+              - text: Cloud opens
+              - text: soon.
+            - generic [ref=f7e10378] [box=12202,13390,1000,47]: Subscription + top-up later. Free on-device forever.
+    - generic [ref=f7e10379] [box=0,15815,15612,2134]:
+      - generic [ref=f7e10381] [box=60,15815,15492,94]:
+        - generic [ref=f7e10382] [box=58,15815,168,33]: 00 — System
+        - generic [ref=f7e10383] [box=60,15854,15492,19]: tokens · type · iconography · radius · brand
+      - generic [ref=f7e10384] [box=0,15909,2728,2040]:
+        - generic [ref=f7e10385] [box=60,15909,1280,2040]:
+          - generic [ref=f7e10386] [box=56,15881,1284,24]:
+            - generic [ref=f7e10387] [box=56,15881,1238,24]:
+              - generic "Drag to reorder" [ref=f7e10388] [box=56,15881,17,23]
+              - generic "Click to focus" [ref=f7e10396] [cursor=pointer] [box=77,15882,1217,21]
+            - generic [ref=f7e10398] [box=1294,15882,46,22]:
+              - button "More" [ref=f7e10400] [cursor=pointer] [box=1294,15882,22,22]
+              - button "Focus" [ref=f7e10405] [cursor=pointer] [box=1318,15882,22,22]
+          - generic [ref=f7e10409] [box=60,15909,1280,2040]:
+            - generic [ref=f7e10410] [box=116,15965,1168,61]:
+              - generic [ref=f7e10411] [box=116,15965,358,61]: AGI Mobile — System
+              - generic [ref=f7e10412] [box=490,15994,252,22]: tokens · type · iconography · radius · brand
+            - generic [ref=f7e10414] [box=116,16032,346,19]: Light theme · inherits 16 locked decisions from Desktop v1 prompt
+            - generic [ref=f7e10415] [box=116,16083,1168,1602]:
+              - generic [ref=f7e10417] [box=116,16083,145,16]: 01 · Color palette
+              - generic [ref=f7e10418] [box=116,16117,1168,1568]
+            - generic [ref=f7e10514] [box=116,17713,1168,272]:
+              - generic [ref=f7e10516] [box=116,17713,528,16]: 02 · Type ramp · SF Pro / Roboto (no custom font load on mobile)
+              - generic [ref=f7e10517] [box=116,17747,1168,238]
+            - generic [ref=f7e10546] [box=116,18013,1168,129]:
+              - generic [ref=f7e10548] [box=116,18013,134,16]: 03 · Radius scale
+              - generic [ref=f7e10549] [box=116,18047,1168,95]
+            - generic [ref=f7e10565] [box=116,18170,1168,190]:
+              - generic [ref=f7e10567] [box=116,18170,544,16]: 04 · Iconography · Lucide 24px / 1.5 stroke (one family, all screens)
+              - generic [ref=f7e10568] [box=116,18204,1168,156]
+            - generic [ref=f7e10769] [box=116,18388,1168,197]:
+              - generic [ref=f7e10771] [box=116,18388,571,16]: 05 · Brand mark · neutral geometric placeholder (final A/B/C pending)
+              - generic [ref=f7e10772] [box=116,18422,1168,163]
+            - generic [ref=f7e10784] [box=116,18613,1168,129]:
+              - generic [ref=f7e10786] [box=116,18613,467,16]: 06 · Three-tier runtime · capability-routed (no UI switcher)
+              - generic [ref=f7e10787] [box=116,18647,1168,95]
+            - generic [ref=f7e10797] [box=116,18770,1168,265]:
+              - generic [ref=f7e10799] [box=116,18770,308,16]: 07 · v1 = local-only · cloud is waitlist
+              - generic [ref=f7e10800] [box=116,18804,1168,230]
+            - generic [ref=f7e10901] [box=116,19063,1168,157]:
+              - generic [ref=f7e10903] [box=116,19063,302,16]: 08 · Developer brand · India-first GTM
+              - generic [ref=f7e10904] [box=116,19097,1168,123]
+            - generic [ref=f7e10937] [box=1242,15914,85,33]: Light · WIP
+        - generic [ref=f7e10938] [box=1388,15909,1280,2040]:
+          - generic [ref=f7e10939] [box=1384,15881,1284,24]:
+            - generic [ref=f7e10940] [box=1384,15881,1238,24]:
+              - generic "Drag to reorder" [ref=f7e10941] [box=1384,15881,17,23]
+              - generic "Click to focus" [ref=f7e10949] [cursor=pointer] [box=1405,15882,1217,21]
+            - generic [ref=f7e10951] [box=2622,15882,46,22]:
+              - button "More" [ref=f7e10953] [cursor=pointer] [box=2622,15882,22,22]
+              - button "Focus" [ref=f7e10958] [cursor=pointer] [box=2646,15882,22,22]
+          - generic [ref=f7e10962] [box=1388,15909,1280,2040]:
+            - generic [ref=f7e10963] [box=1444,15965,1168,61]:
+              - generic [ref=f7e10964] [box=1444,15965,358,61]: AGI Mobile — System
+              - generic [ref=f7e10965] [box=1818,15994,252,22]: tokens · type · iconography · radius · brand
+            - generic [ref=f7e10967] [box=1444,16032,343,19]: Dark theme · inherits 16 locked decisions from Desktop v1 prompt
+            - generic [ref=f7e10968] [box=1444,16083,1168,1602]:
+              - generic [ref=f7e10970] [box=1444,16083,145,16]: 01 · Color palette
+              - generic [ref=f7e10971] [box=1444,16117,1168,1568]
+            - generic [ref=f7e11067] [box=1444,17713,1168,272]:
+              - generic [ref=f7e11069] [box=1444,17713,528,16]: 02 · Type ramp · SF Pro / Roboto (no custom font load on mobile)
+              - generic [ref=f7e11070] [box=1444,17747,1168,238]
+            - generic [ref=f7e11099] [box=1444,18013,1168,129]:
+              - generic [ref=f7e11101] [box=1444,18013,134,16]: 03 · Radius scale
+              - generic [ref=f7e11102] [box=1444,18047,1168,95]
+            - generic [ref=f7e11118] [box=1444,18170,1168,190]:
+              - generic [ref=f7e11120] [box=1444,18170,544,16]: 04 · Iconography · Lucide 24px / 1.5 stroke (one family, all screens)
+              - generic [ref=f7e11121] [box=1444,18204,1168,156]
+            - generic [ref=f7e11322] [box=1444,18388,1168,197]:
+              - generic [ref=f7e11324] [box=1444,18388,571,16]: 05 · Brand mark · neutral geometric placeholder (final A/B/C pending)
+              - generic [ref=f7e11325] [box=1444,18422,1168,163]
+            - generic [ref=f7e11337] [box=1444,18613,1168,129]:
+              - generic [ref=f7e11339] [box=1444,18613,467,16]: 06 · Three-tier runtime · capability-routed (no UI switcher)
+              - generic [ref=f7e11340] [box=1444,18647,1168,95]
+            - generic [ref=f7e11350] [box=1444,18770,1168,265]:
+              - generic [ref=f7e11352] [box=1444,18770,308,16]: 07 · v1 = local-only · cloud is waitlist
+              - generic [ref=f7e11353] [box=1444,18804,1168,230]
+            - generic [ref=f7e11454] [box=1444,19063,1168,157]:
+              - generic [ref=f7e11456] [box=1444,19063,302,16]: 08 · Developer brand · India-first GTM
+              - generic [ref=f7e11457] [box=1444,19097,1168,123]
+            - generic [ref=f7e11490] [box=2572,15914,82,33]: Dark · WIP
+    - generic [ref=f7e11491] [box=0,18029,15612,1734]:
+      - generic [ref=f7e11493] [box=60,18029,15492,94]:
+        - generic [ref=f7e11494] [box=58,18029,230,33]: 01 — Components
+        - generic [ref=f7e11495] [box=60,18068,15492,19]: 12 cross-cutting reusables (§5)
+      - generic [ref=f7e11496] [box=0,18123,2728,1640]:
+        - generic [ref=f7e11497] [box=60,18123,1280,1640]:
+          - generic [ref=f7e11498] [box=56,18095,1284,24]:
+            - generic [ref=f7e11499] [box=56,18095,1238,24]:
+              - generic "Drag to reorder" [ref=f7e11500] [box=56,18096,17,23]
+              - generic "Click to focus" [ref=f7e11508] [cursor=pointer] [box=77,18097,1217,21]
+            - generic [ref=f7e11510] [box=1294,18096,46,22]:
+              - button "More" [ref=f7e11512] [cursor=pointer] [box=1294,18096,22,22]
+              - button "Focus" [ref=f7e11517] [cursor=pointer] [box=1318,18096,22,22]
+          - generic [ref=f7e11521] [box=60,18123,1280,1640]:
+            - generic [ref=f7e11522] [box=116,18179,1168,56]:
+              - generic [ref=f7e11523] [box=116,18179,396,56]: Cross-cutting components
+              - generic [ref=f7e11524] [box=528,18205,163,22]: 12 reusables · §5 of prompt
+            - generic [ref=f7e11525] [box=116,18259,1168,887]:
+              - generic [ref=f7e11526] [box=116,18259,379,211]
+              - generic [ref=f7e11551] [box=511,18259,379,211]
+              - generic [ref=f7e11581] [box=905,18259,379,211]
+              - generic [ref=f7e11589] [box=131,18501,348,19]: 04 · Sheet handle
+              - generic [ref=f7e11593] [box=511,18486,379,223]
+              - generic [ref=f7e11602] [box=905,18486,379,223]
+              - generic [ref=f7e11616] [box=116,18725,379,187]
+              - generic [ref=f7e11631] [box=511,18725,379,187]
+              - generic [ref=f7e11641] [box=905,18725,379,187]
+              - generic [ref=f7e11653] [box=116,18928,379,218]
+              - generic [ref=f7e11667] [box=511,18928,379,218]
+              - generic [ref=f7e11684] [box=905,18928,379,218]
+            - generic [ref=f7e11695] [box=1275,18129,52,31]: Light
+        - generic [ref=f7e11696] [box=1388,18123,1280,1640]:
+          - generic [ref=f7e11697] [box=1384,18095,1284,24]:
+            - generic [ref=f7e11698] [box=1384,18095,1238,24]:
+              - generic "Drag to reorder" [ref=f7e11699] [box=1384,18096,17,23]
+              - generic "Click to focus" [ref=f7e11707] [cursor=pointer] [box=1405,18097,1217,21]
+            - generic [ref=f7e11709] [box=2622,18096,46,22]:
+              - button "More" [ref=f7e11711] [cursor=pointer] [box=2622,18096,22,22]
+              - button "Focus" [ref=f7e11716] [cursor=pointer] [box=2646,18096,22,22]
+          - generic [ref=f7e11720] [box=1388,18123,1280,1640]:
+            - generic [ref=f7e11721] [box=1444,18179,1168,56]:
+              - generic [ref=f7e11722] [box=1444,18179,396,56]: Cross-cutting components
+              - generic [ref=f7e11723] [box=1856,18205,163,22]: 12 reusables · §5 of prompt
+            - generic [ref=f7e11724] [box=1444,18259,1168,887]:
+              - generic [ref=f7e11725] [box=1444,18259,379,211]
+              - generic [ref=f7e11750] [box=1839,18259,379,211]
+              - generic [ref=f7e11780] [box=2233,18259,379,211]
+              - generic [ref=f7e11788] [box=1459,18501,348,19]: 04 · Sheet handle
+              - generic [ref=f7e11792] [box=1839,18486,379,223]
+              - generic [ref=f7e11801] [box=2233,18486,379,223]
+              - generic [ref=f7e11815] [box=1444,18725,379,187]
+              - generic [ref=f7e11830] [box=1839,18725,379,187]
+              - generic [ref=f7e11840] [box=2233,18725,379,187]
+              - generic [ref=f7e11852] [box=1444,18928,379,218]
+              - generic [ref=f7e11866] [box=1839,18928,379,218]
+              - generic [ref=f7e11883] [box=2233,18928,379,218]
+            - generic [ref=f7e11894] [box=2605,18129,49,31]: Dark
+    - generic [ref=f7e11895] [box=0,19843,15612,1094]:
+      - generic [ref=f7e11897] [box=60,19843,15492,94]:
+        - generic [ref=f7e11898] [box=58,19843,174,33]: 02 — First run
+        - generic [ref=f7e11899] [box=60,19882,15492,19]: onboarding hero (6 variants) · local welcome (no login in v1 — see §13 Waitlist)
+      - generic [ref=f7e11900] [box=0,19937,6288,1000]:
+        - generic [ref=f7e11901] [box=60,19937,470,1000]:
+          - generic [ref=f7e11902] [box=56,19909,474,24]:
+            - generic [ref=f7e11903] [box=56,19909,428,24]:
+              - generic "Drag to reorder" [ref=f7e11904] [box=56,19910,17,23]
+              - generic "Click to focus" [ref=f7e11912] [cursor=pointer] [box=77,19911,407,21]
+            - generic [ref=f7e11914] [box=484,19910,46,22]:
+              - button "More" [ref=f7e11916] [cursor=pointer] [box=484,19910,22,22]
+              - button "Focus" [ref=f7e11921] [cursor=pointer] [box=508,19910,22,22]
+          - generic [ref=f7e11926] [box=80,19971,430,932]:
+            - generic [ref=f7e11928] [box=82,19973,427,80]:
+              - generic [ref=f7e11929] [box=114,20012,22,22]: 9:41
+              - generic [ref=f7e11930] [box=428,20015,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e11932] [box=82,20033,427,833]:
+              - generic [ref=f7e11933] [box=82,20033,427,657]
+              - generic [ref=f7e11943] [box=82,20690,427,175]
+        - generic [ref=f7e11951] [box=578,19937,470,1000]:
+          - generic [ref=f7e11952] [box=574,19909,474,24]:
+            - generic [ref=f7e11953] [box=574,19909,428,24]:
+              - generic "Drag to reorder" [ref=f7e11954] [box=574,19910,17,23]
+              - generic "Click to focus" [ref=f7e11962] [cursor=pointer] [box=595,19911,407,21]
+            - generic [ref=f7e11964] [box=1002,19910,46,22]:
+              - button "More" [ref=f7e11966] [cursor=pointer] [box=1002,19910,22,22]
+              - button "Focus" [ref=f7e11971] [cursor=pointer] [box=1026,19910,22,22]
+          - generic [ref=f7e11976] [box=598,19971,430,932]:
+            - generic [ref=f7e11978] [box=600,19973,427,80]:
+              - generic [ref=f7e11979] [box=632,20012,22,22]: 9:41
+              - generic [ref=f7e11980] [box=946,20015,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e11982] [box=600,20033,427,833]:
+              - generic [ref=f7e11983] [box=600,20033,427,657]
+              - generic [ref=f7e11993] [box=600,20690,427,175]
+        - generic [ref=f7e12001] [box=1096,19937,470,1000]:
+          - generic [ref=f7e12002] [box=1092,19909,474,24]:
+            - generic [ref=f7e12003] [box=1092,19909,428,24]:
+              - generic "Drag to reorder" [ref=f7e12004] [box=1092,19910,17,23]
+              - generic "Click to focus" [ref=f7e12012] [cursor=pointer] [box=1113,19911,407,21]
+            - generic [ref=f7e12014] [box=1520,19910,46,22]:
+              - button "More" [ref=f7e12016] [cursor=pointer] [box=1520,19910,22,22]
+              - button "Focus" [ref=f7e12021] [cursor=pointer] [box=1544,19910,22,22]
+          - generic [ref=f7e12026] [box=1116,19971,430,932]:
+            - generic [ref=f7e12028] [box=1118,19973,427,80]:
+              - generic [ref=f7e12029] [box=1150,20012,22,22]: 9:41
+              - generic [ref=f7e12030] [box=1464,20015,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e12032] [box=1118,20033,427,833]:
+              - generic [ref=f7e12033] [box=1118,20033,427,376]
+              - generic [ref=f7e12041] [box=1118,20409,427,74]
+        - generic [ref=f7e12048] [box=1614,19937,470,1000]:
+          - generic [ref=f7e12049] [box=1610,19909,474,24]:
+            - generic [ref=f7e12050] [box=1610,19909,428,24]:
+              - generic "Drag to reorder" [ref=f7e12051] [box=1610,19910,17,23]
+              - generic "Click to focus" [ref=f7e12059] [cursor=pointer] [box=1631,19911,407,21]
+            - generic [ref=f7e12061] [box=2038,19910,46,22]:
+              - button "More" [ref=f7e12063] [cursor=pointer] [box=2038,19910,22,22]
+              - button "Focus" [ref=f7e12068] [cursor=pointer] [box=2062,19910,22,22]
+          - generic [ref=f7e12073] [box=1634,19971,430,932]:
+            - generic [ref=f7e12075] [box=1636,19973,427,80]:
+              - generic [ref=f7e12076] [box=1668,20012,22,22]: 9:41
+              - generic [ref=f7e12077] [box=1982,20015,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e12079] [box=1636,20033,427,833]:
+              - generic [ref=f7e12080] [box=1636,20033,427,376]
+              - generic [ref=f7e12088] [box=1636,20409,427,74]
+        - generic [ref=f7e12095] [box=2132,19937,470,1000]:
+          - generic [ref=f7e12096] [box=2128,19909,474,24]:
+            - generic [ref=f7e12097] [box=2128,19909,428,24]:
+              - generic "Drag to reorder" [ref=f7e12098] [box=2128,19910,17,23]
+              - generic "Click to focus" [ref=f7e12106] [cursor=pointer] [box=2149,19911,407,21]
+            - generic [ref=f7e12108] [box=2556,19910,46,22]:
+              - button "More" [ref=f7e12110] [cursor=pointer] [box=2556,19910,22,22]
+              - button "Focus" [ref=f7e12115] [cursor=pointer] [box=2580,19910,22,22]
+          - generic [ref=f7e12120] [box=2152,19971,430,932]:
+            - generic [ref=f7e12122] [box=2154,19973,427,80]:
+              - generic [ref=f7e12123] [box=2186,20012,22,22]: 9:41
+              - generic [ref=f7e12124] [box=2500,20015,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e12126] [box=2154,20033,427,833]:
+              - generic [ref=f7e12127] [box=2154,20033,427,236]
+              - generic [ref=f7e12137] [box=2154,20269,427,111]
+        - generic [ref=f7e12144] [box=2650,19937,470,1000]:
+          - generic [ref=f7e12145] [box=2646,19909,474,24]:
+            - generic [ref=f7e12146] [box=2646,19909,428,24]:
+              - generic "Drag to reorder" [ref=f7e12147] [box=2646,19910,17,23]
+              - generic "Click to focus" [ref=f7e12155] [cursor=pointer] [box=2667,19911,407,21]
+            - generic [ref=f7e12157] [box=3074,19910,46,22]:
+              - button "More" [ref=f7e12159] [cursor=pointer] [box=3074,19910,22,22]
+              - button "Focus" [ref=f7e12164] [cursor=pointer] [box=3098,19910,22,22]
+          - generic [ref=f7e12169] [box=2670,19971,430,932]:
+            - generic [ref=f7e12171] [box=2672,19973,427,80]:
+              - generic [ref=f7e12172] [box=2704,20012,22,22]: 9:41
+              - generic [ref=f7e12173] [box=3018,20015,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e12175] [box=2672,20033,427,833]:
+              - generic [ref=f7e12176] [box=2672,20033,427,349]
+              - generic [ref=f7e12219] [box=2672,20382,427,111]
+        - generic [ref=f7e12226] [box=3168,19937,470,1000]:
+          - generic [ref=f7e12227] [box=3164,19909,474,24]:
+            - generic [ref=f7e12228] [box=3164,19909,428,24]:
+              - generic "Drag to reorder" [ref=f7e12229] [box=3164,19910,17,23]
+              - generic "Click to focus" [ref=f7e12237] [cursor=pointer] [box=3185,19911,407,21]
+            - generic [ref=f7e12239] [box=3592,19910,46,22]:
+              - button "More" [ref=f7e12241] [cursor=pointer] [box=3592,19910,22,22]
+              - button "Focus" [ref=f7e12246] [cursor=pointer] [box=3616,19910,22,22]
+          - generic [ref=f7e12251] [box=3188,19971,430,932]:
+            - generic [ref=f7e12253] [box=3190,19973,427,80]:
+              - generic [ref=f7e12254] [box=3222,20012,22,22]: 9:41
+              - generic [ref=f7e12255] [box=3536,20015,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e12257] [box=3190,20033,427,833]:
+              - generic [ref=f7e12258] [box=3190,20033,427,349]
+              - generic [ref=f7e12301] [box=3190,20382,427,111]
+        - generic [ref=f7e12308] [box=3686,19937,470,1000]:
+          - generic [ref=f7e12309] [box=3682,19909,474,24]:
+            - generic [ref=f7e12310] [box=3682,19909,428,24]:
+              - generic "Drag to reorder" [ref=f7e12311] [box=3682,19910,17,23]
+              - generic "Click to focus" [ref=f7e12319] [cursor=pointer] [box=3703,19911,407,21]
+            - generic [ref=f7e12321] [box=4110,19910,46,22]:
+              - button "More" [ref=f7e12323] [cursor=pointer] [box=4110,19910,22,22]
+              - button "Focus" [ref=f7e12328] [cursor=pointer] [box=4134,19910,22,22]
+          - generic [ref=f7e12333] [box=3706,19971,430,932]:
+            - generic [ref=f7e12335] [box=3708,19973,427,80]:
+              - generic [ref=f7e12336] [box=3740,20012,22,22]: 9:41
+              - generic [ref=f7e12337] [box=4054,20015,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e12339] [box=3708,20033,427,833]:
+              - generic [ref=f7e12340] [box=3708,20033,427,36]
+              - generic [ref=f7e12343] [box=3708,20069,427,516]
+              - generic [ref=f7e12358] [box=4040,20616,51,23]: Next →
+        - generic [ref=f7e12360] [box=4204,19937,470,1000]:
+          - generic [ref=f7e12361] [box=4200,19909,474,24]:
+            - generic [ref=f7e12362] [box=4200,19909,428,24]:
+              - generic "Drag to reorder" [ref=f7e12363] [box=4200,19910,17,23]
+              - generic "Click to focus" [ref=f7e12371] [cursor=pointer] [box=4221,19911,407,21]
+            - generic [ref=f7e12373] [box=4628,19910,46,22]:
+              - button "More" [ref=f7e12375] [cursor=pointer] [box=4628,19910,22,22]
+              - button "Focus" [ref=f7e12380] [cursor=pointer] [box=4652,19910,22,22]
+          - generic [ref=f7e12385] [box=4224,19971,430,932]:
+            - generic [ref=f7e12387] [box=4226,19973,427,80]:
+              - generic [ref=f7e12388] [box=4258,20012,22,22]: 9:41
+              - generic [ref=f7e12389] [box=4572,20015,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e12391] [box=4226,20033,427,833]:
+              - generic [ref=f7e12392] [box=4226,20033,427,382]
+              - generic [ref=f7e12412] [box=4226,20415,427,130]
+        - generic [ref=f7e12418] [box=4722,19937,470,1000]:
+          - generic [ref=f7e12419] [box=4718,19909,474,24]:
+            - generic [ref=f7e12420] [box=4718,19909,428,24]:
+              - generic "Drag to reorder" [ref=f7e12421] [box=4718,19910,17,23]
+              - generic "Click to focus" [ref=f7e12429] [cursor=pointer] [box=4739,19911,407,21]
+            - generic [ref=f7e12431] [box=5146,19910,46,22]:
+              - button "More" [ref=f7e12433] [cursor=pointer] [box=5146,19910,22,22]
+              - button "Focus" [ref=f7e12438] [cursor=pointer] [box=5170,19910,22,22]
+          - generic [ref=f7e12443] [box=4742,19971,430,932]:
+            - generic [ref=f7e12445] [box=4744,19973,427,80]:
+              - generic [ref=f7e12446] [box=4776,20012,22,22]: 9:41
+              - generic [ref=f7e12447] [box=5090,20015,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e12449] [box=4744,20033,427,833]:
+              - generic [ref=f7e12450] [box=4744,20033,427,382]
+              - generic [ref=f7e12470] [box=4744,20415,427,130]
+        - generic [ref=f7e12476] [box=5240,19937,470,1000]:
+          - generic [ref=f7e12477] [box=5236,19909,474,24]:
+            - generic [ref=f7e12478] [box=5236,19909,428,24]:
+              - generic "Drag to reorder" [ref=f7e12479] [box=5236,19910,17,23]
+              - generic "Click to focus" [ref=f7e12487] [cursor=pointer] [box=5257,19911,407,21]
+            - generic [ref=f7e12489] [box=5664,19910,46,22]:
+              - button "More" [ref=f7e12491] [cursor=pointer] [box=5664,19910,22,22]
+              - button "Focus" [ref=f7e12496] [cursor=pointer] [box=5688,19910,22,22]
+          - generic [ref=f7e12501] [box=5260,19971,430,932]:
+            - generic [ref=f7e12503] [box=5262,19973,427,80]:
+              - generic [ref=f7e12504] [box=5294,20012,22,22]: 9:41
+              - generic [ref=f7e12505] [box=5608,20015,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e12506] [box=5262,20033,427,833]:
+              - img [ref=f7e12508] [box=5280,20047,24,24]
+              - generic [ref=f7e12511] [box=5262,20085,427,667]
+              - generic [ref=f7e12568] [box=5262,20752,427,113]
+        - generic [ref=f7e12574] [box=5758,19937,470,1000]:
+          - generic [ref=f7e12575] [box=5754,19909,474,24]:
+            - generic [ref=f7e12576] [box=5754,19909,428,24]:
+              - generic "Drag to reorder" [ref=f7e12577] [box=5754,19910,17,23]
+              - generic "Click to focus" [ref=f7e12585] [cursor=pointer] [box=5775,19911,407,21]
+            - generic [ref=f7e12587] [box=6182,19910,46,22]:
+              - button "More" [ref=f7e12589] [cursor=pointer] [box=6182,19910,22,22]
+              - button "Focus" [ref=f7e12594] [cursor=pointer] [box=6206,19910,22,22]
+          - generic [ref=f7e12599] [box=5778,19971,430,932]:
+            - generic [ref=f7e12601] [box=5780,19973,427,80]:
+              - generic [ref=f7e12602] [box=5812,20012,22,22]: 9:41
+              - generic [ref=f7e12603] [box=6126,20015,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e12604] [box=5780,20033,427,833]:
+              - img [ref=f7e12606] [box=5798,20047,24,24]
+              - generic [ref=f7e12609] [box=5780,20085,427,667]
+              - generic [ref=f7e12666] [box=5780,20752,427,113]
+    - generic [ref=f7e12672] [box=0,21017,15612,1094]:
+      - generic [ref=f7e12674] [box=60,21017,15492,94]:
+        - generic [ref=f7e12675] [box=58,21017,232,33]: 03 — Chat surface
+        - generic [ref=f7e12676] [box=60,21057,15492,19]: empty state (6 variants) · active · long-press · compare
+      - generic [ref=f7e12677] [box=0,21111,9396,1000]:
+        - generic [ref=f7e12678] [box=60,21111,470,1000]:
+          - generic [ref=f7e12679] [box=56,21083,474,24]:
+            - generic [ref=f7e12680] [box=56,21083,428,24]:
+              - generic "Drag to reorder" [ref=f7e12681] [box=56,21084,17,23]
+              - generic "Click to focus" [ref=f7e12689] [cursor=pointer] [box=77,21085,407,21]
+            - generic [ref=f7e12691] [box=484,21084,46,22]:
+              - button "More" [ref=f7e12693] [cursor=pointer] [box=484,21084,22,22]
+              - button "Focus" [ref=f7e12698] [cursor=pointer] [box=508,21084,22,22]
+          - generic [ref=f7e12703] [box=80,21145,430,932]:
+            - generic [ref=f7e12705] [box=82,21147,427,80]:
+              - generic [ref=f7e12706] [box=114,21186,22,22]: 9:41
+              - generic [ref=f7e12707] [box=428,21189,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e12708] [box=82,21207,427,833]:
+              - generic [ref=f7e12709] [box=82,21207,427,57]
+              - generic [ref=f7e12732] [box=82,21264,427,282]
+              - generic [ref=f7e12741] [box=82,21903,427,42]
+              - generic [ref=f7e12749] [box=96,21956,399,70]
+        - generic [ref=f7e12764] [box=578,21111,470,1000]:
+          - generic [ref=f7e12765] [box=574,21083,474,24]:
+            - generic [ref=f7e12766] [box=574,21083,428,24]:
+              - generic "Drag to reorder" [ref=f7e12767] [box=574,21084,17,23]
+              - generic "Click to focus" [ref=f7e12775] [cursor=pointer] [box=595,21085,407,21]
+            - generic [ref=f7e12777] [box=1002,21084,46,22]:
+              - button "More" [ref=f7e12779] [cursor=pointer] [box=1002,21084,22,22]
+              - button "Focus" [ref=f7e12784] [cursor=pointer] [box=1026,21084,22,22]
+          - generic [ref=f7e12789] [box=598,21145,430,932]:
+            - generic [ref=f7e12791] [box=600,21147,427,80]:
+              - generic [ref=f7e12792] [box=632,21186,22,22]: 9:41
+              - generic [ref=f7e12793] [box=946,21189,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e12794] [box=600,21207,427,833]:
+              - generic [ref=f7e12795] [box=600,21207,427,57]
+              - generic [ref=f7e12818] [box=600,21264,427,301]
+              - generic [ref=f7e12824] [box=600,21903,427,42]
+              - generic [ref=f7e12832] [box=614,21956,399,70]
+        - generic [ref=f7e12847] [box=1096,21111,470,1000]:
+          - generic [ref=f7e12848] [box=1092,21083,474,24]:
+            - generic [ref=f7e12849] [box=1092,21083,428,24]:
+              - generic "Drag to reorder" [ref=f7e12850] [box=1092,21084,17,23]
+              - generic "Click to focus" [ref=f7e12858] [cursor=pointer] [box=1113,21085,407,21]
+            - generic [ref=f7e12860] [box=1520,21084,46,22]:
+              - button "More" [ref=f7e12862] [cursor=pointer] [box=1520,21084,22,22]
+              - button "Focus" [ref=f7e12867] [cursor=pointer] [box=1544,21084,22,22]
+          - generic [ref=f7e12872] [box=1116,21145,430,932]:
+            - generic [ref=f7e12874] [box=1118,21147,427,80]:
+              - generic [ref=f7e12875] [box=1150,21186,22,22]: 9:41
+              - generic [ref=f7e12876] [box=1464,21189,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e12877] [box=1118,21207,427,833]:
+              - generic [ref=f7e12878] [box=1118,21207,427,56]
+              - generic [ref=f7e12895] [box=1273,21263,116,44]
+              - generic [ref=f7e12899] [box=1132,21913,399,110]
+        - generic [ref=f7e12924] [box=1614,21111,470,1000]:
+          - generic [ref=f7e12925] [box=1610,21083,474,24]:
+            - generic [ref=f7e12926] [box=1610,21083,428,24]:
+              - generic "Drag to reorder" [ref=f7e12927] [box=1610,21084,17,23]
+              - generic "Click to focus" [ref=f7e12935] [cursor=pointer] [box=1631,21085,407,21]
+            - generic [ref=f7e12937] [box=2038,21084,46,22]:
+              - button "More" [ref=f7e12939] [cursor=pointer] [box=2038,21084,22,22]
+              - button "Focus" [ref=f7e12944] [cursor=pointer] [box=2062,21084,22,22]
+          - generic [ref=f7e12949] [box=1634,21145,430,932]:
+            - generic [ref=f7e12951] [box=1636,21147,427,80]:
+              - generic [ref=f7e12952] [box=1668,21186,22,22]: 9:41
+              - generic [ref=f7e12953] [box=1982,21189,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e12954] [box=1636,21207,427,833]:
+              - generic [ref=f7e12955] [box=1636,21207,427,57]
+              - generic [ref=f7e12978] [box=1636,21264,427,276]
+              - generic [ref=f7e12986] [box=1636,21903,427,42]
+              - generic [ref=f7e12994] [box=1650,21956,399,70]
+        - generic [ref=f7e13009] [box=2132,21111,470,1000]:
+          - generic [ref=f7e13010] [box=2128,21083,474,24]:
+            - generic [ref=f7e13011] [box=2128,21083,428,24]:
+              - generic "Drag to reorder" [ref=f7e13012] [box=2128,21084,17,23]
+              - generic "Click to focus" [ref=f7e13020] [cursor=pointer] [box=2149,21085,407,21]
+            - generic [ref=f7e13022] [box=2556,21084,46,22]:
+              - button "More" [ref=f7e13024] [cursor=pointer] [box=2556,21084,22,22]
+              - button "Focus" [ref=f7e13029] [cursor=pointer] [box=2580,21084,22,22]
+          - generic [ref=f7e13034] [box=2152,21145,430,932]:
+            - generic [ref=f7e13036] [box=2154,21147,427,80]:
+              - generic [ref=f7e13037] [box=2186,21186,22,22]: 9:41
+              - generic [ref=f7e13038] [box=2500,21189,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e13039] [box=2154,21207,427,833]:
+              - generic [ref=f7e13040] [box=2154,21207,427,57]
+              - generic [ref=f7e13062] [box=2154,21264,427,681]
+              - generic [ref=f7e13113] [box=2168,21956,399,70]
+        - generic [ref=f7e13128] [box=2650,21111,470,1000]:
+          - generic [ref=f7e13129] [box=2646,21083,474,24]:
+            - generic [ref=f7e13130] [box=2646,21083,428,24]:
+              - generic "Drag to reorder" [ref=f7e13131] [box=2646,21084,17,23]
+              - generic "Click to focus" [ref=f7e13139] [cursor=pointer] [box=2667,21085,407,21]
+            - generic [ref=f7e13141] [box=3074,21084,46,22]:
+              - button "More" [ref=f7e13143] [cursor=pointer] [box=3074,21084,22,22]
+              - button "Focus" [ref=f7e13148] [cursor=pointer] [box=3098,21084,22,22]
+          - generic [ref=f7e13153] [box=2670,21145,430,932]:
+            - generic [ref=f7e13155] [box=2672,21147,427,80]:
+              - generic [ref=f7e13156] [box=2704,21186,22,22]: 9:41
+              - generic [ref=f7e13157] [box=3018,21189,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e13158] [box=2672,21207,427,833]:
+              - generic [ref=f7e13159] [box=2672,21207,427,57]
+              - generic [ref=f7e13182] [box=2672,21264,427,370]
+              - generic [ref=f7e13194] [box=2686,21956,399,70]
+        - generic [ref=f7e13209] [box=3168,21111,470,1000]:
+          - generic [ref=f7e13210] [box=3164,21083,474,24]:
+            - generic [ref=f7e13211] [box=3164,21083,428,24]:
+              - generic "Drag to reorder" [ref=f7e13212] [box=3164,21084,17,23]
+              - generic "Click to focus" [ref=f7e13220] [cursor=pointer] [box=3185,21085,407,21]
+            - generic [ref=f7e13222] [box=3592,21084,46,22]:
+              - button "More" [ref=f7e13224] [cursor=pointer] [box=3592,21084,22,22]
+              - button "Focus" [ref=f7e13229] [cursor=pointer] [box=3616,21084,22,22]
+          - generic [ref=f7e13234] [box=3188,21145,430,932]:
+            - generic [ref=f7e13236] [box=3190,21147,427,80]:
+              - generic [ref=f7e13237] [box=3222,21186,22,22]: 9:41
+              - generic [ref=f7e13238] [box=3536,21189,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e13239] [box=3190,21207,427,833]:
+              - generic [ref=f7e13240] [box=3190,21207,427,57]
+              - generic [ref=f7e13263] [box=3190,21264,427,282]
+              - generic [ref=f7e13272] [box=3190,21903,427,42]
+              - generic [ref=f7e13280] [box=3204,21956,399,70]
+        - generic [ref=f7e13295] [box=3686,21111,470,1000]:
+          - generic [ref=f7e13296] [box=3682,21083,474,24]:
+            - generic [ref=f7e13297] [box=3682,21083,428,24]:
+              - generic "Drag to reorder" [ref=f7e13298] [box=3682,21084,17,23]
+              - generic "Click to focus" [ref=f7e13306] [cursor=pointer] [box=3703,21085,407,21]
+            - generic [ref=f7e13308] [box=4110,21084,46,22]:
+              - button "More" [ref=f7e13310] [cursor=pointer] [box=4110,21084,22,22]
+              - button "Focus" [ref=f7e13315] [cursor=pointer] [box=4134,21084,22,22]
+          - generic [ref=f7e13320] [box=3706,21145,430,932]:
+            - generic [ref=f7e13322] [box=3708,21147,427,80]:
+              - generic [ref=f7e13323] [box=3740,21186,22,22]: 9:41
+              - generic [ref=f7e13324] [box=4054,21189,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e13325] [box=3708,21207,427,833]:
+              - generic [ref=f7e13326] [box=3708,21207,427,56]
+              - generic [ref=f7e13343] [box=3863,21263,116,44]
+              - generic [ref=f7e13347] [box=3722,21913,399,110]
+        - generic [ref=f7e13372] [box=4204,21111,470,1000]:
+          - generic [ref=f7e13373] [box=4200,21083,474,24]:
+            - generic [ref=f7e13374] [box=4200,21083,428,24]:
+              - generic "Drag to reorder" [ref=f7e13375] [box=4200,21084,17,23]
+              - generic "Click to focus" [ref=f7e13383] [cursor=pointer] [box=4221,21085,407,21]
+            - generic [ref=f7e13385] [box=4628,21084,46,22]:
+              - button "More" [ref=f7e13387] [cursor=pointer] [box=4628,21084,22,22]
+              - button "Focus" [ref=f7e13392] [cursor=pointer] [box=4652,21084,22,22]
+          - generic [ref=f7e13397] [box=4224,21145,430,932]:
+            - generic [ref=f7e13399] [box=4226,21147,427,80]:
+              - generic [ref=f7e13400] [box=4258,21186,22,22]: 9:41
+              - generic [ref=f7e13401] [box=4572,21189,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e13402] [box=4226,21207,427,833]:
+              - generic [ref=f7e13403] [box=4226,21207,427,57]
+              - generic [ref=f7e13426] [box=4226,21264,427,276]
+              - generic [ref=f7e13434] [box=4226,21903,427,42]
+              - generic [ref=f7e13442] [box=4240,21956,399,70]
+        - generic [ref=f7e13457] [box=4722,21111,470,1000]:
+          - generic [ref=f7e13458] [box=4718,21083,474,24]:
+            - generic [ref=f7e13459] [box=4718,21083,428,24]:
+              - generic "Drag to reorder" [ref=f7e13460] [box=4718,21084,17,23]
+              - generic "Click to focus" [ref=f7e13468] [cursor=pointer] [box=4739,21085,407,21]
+            - generic [ref=f7e13470] [box=5146,21084,46,22]:
+              - button "More" [ref=f7e13472] [cursor=pointer] [box=5146,21084,22,22]
+              - button "Focus" [ref=f7e13477] [cursor=pointer] [box=5170,21084,22,22]
+          - generic [ref=f7e13482] [box=4742,21145,430,932]:
+            - generic [ref=f7e13484] [box=4744,21147,427,80]:
+              - generic [ref=f7e13485] [box=4776,21186,22,22]: 9:41
+              - generic [ref=f7e13486] [box=5090,21189,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e13487] [box=4744,21207,427,833]:
+              - generic [ref=f7e13488] [box=4744,21207,427,57]
+              - generic [ref=f7e13511] [box=4744,21264,427,370]
+              - generic [ref=f7e13523] [box=4758,21956,399,70]
+        - generic [ref=f7e13538] [box=5240,21111,470,1000]:
+          - generic [ref=f7e13539] [box=5236,21083,474,24]:
+            - generic [ref=f7e13540] [box=5236,21083,428,24]:
+              - generic "Drag to reorder" [ref=f7e13541] [box=5236,21084,17,23]
+              - generic "Click to focus" [ref=f7e13549] [cursor=pointer] [box=5257,21085,407,21]
+            - generic [ref=f7e13551] [box=5664,21084,46,22]:
+              - button "More" [ref=f7e13553] [cursor=pointer] [box=5664,21084,22,22]
+              - button "Focus" [ref=f7e13558] [cursor=pointer] [box=5688,21084,22,22]
+          - generic [ref=f7e13563] [box=5260,21145,430,932]:
+            - generic [ref=f7e13565] [box=5262,21147,427,80]:
+              - generic [ref=f7e13566] [box=5294,21186,22,22]: 9:41
+              - generic [ref=f7e13567] [box=5608,21189,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e13568] [box=5262,21207,427,833]:
+              - generic [ref=f7e13569] [box=5262,21207,427,57]
+              - generic [ref=f7e13591] [box=5262,21264,427,681]
+              - generic [ref=f7e13633] [box=5276,21956,399,70]
+        - generic [ref=f7e13648] [box=5758,21111,470,1000]:
+          - generic [ref=f7e13649] [box=5754,21083,474,24]:
+            - generic [ref=f7e13650] [box=5754,21083,428,24]:
+              - generic "Drag to reorder" [ref=f7e13651] [box=5754,21084,17,23]
+              - generic "Click to focus" [ref=f7e13659] [cursor=pointer] [box=5775,21085,407,21]
+            - generic [ref=f7e13661] [box=6182,21084,46,22]:
+              - button "More" [ref=f7e13663] [cursor=pointer] [box=6182,21084,22,22]
+              - button "Focus" [ref=f7e13668] [cursor=pointer] [box=6206,21084,22,22]
+          - generic [ref=f7e13673] [box=5778,21145,430,932]:
+            - generic [ref=f7e13675] [box=5780,21147,427,80]:
+              - generic [ref=f7e13676] [box=5812,21186,22,22]: 9:41
+              - generic [ref=f7e13677] [box=6126,21189,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e13678] [box=5780,21207,427,833]:
+              - generic [ref=f7e13679] [box=5780,21207,427,57]
+              - generic [ref=f7e13701] [box=5780,21264,427,681]
+              - generic [ref=f7e13737] [box=6156,21888,20,16]: Stop
+              - generic [ref=f7e13739] [box=5794,21956,399,70]
+        - generic [ref=f7e13754] [box=6276,21111,470,1000]:
+          - generic [ref=f7e13755] [box=6272,21083,474,24]:
+            - generic [ref=f7e13756] [box=6272,21083,428,24]:
+              - generic "Drag to reorder" [ref=f7e13757] [box=6272,21084,17,23]
+              - generic "Click to focus" [ref=f7e13765] [cursor=pointer] [box=6293,21085,407,21]
+            - generic [ref=f7e13767] [box=6700,21084,46,22]:
+              - button "More" [ref=f7e13769] [cursor=pointer] [box=6700,21084,22,22]
+              - button "Focus" [ref=f7e13774] [cursor=pointer] [box=6724,21084,22,22]
+          - generic [ref=f7e13779] [box=6296,21145,430,932]:
+            - generic [ref=f7e13781] [box=6298,21147,427,80]:
+              - generic [ref=f7e13782] [box=6330,21186,22,22]: 9:41
+              - generic [ref=f7e13783] [box=6644,21189,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e13784] [box=6298,21207,427,833]:
+              - generic [ref=f7e13785] [box=6298,21207,427,57]
+              - generic [ref=f7e13807] [box=6298,21264,427,681]
+              - generic [ref=f7e13849] [box=6312,21956,399,70]
+        - generic [ref=f7e13864] [box=6794,21111,470,1000]:
+          - generic [ref=f7e13865] [box=6790,21083,474,24]:
+            - generic [ref=f7e13866] [box=6790,21083,428,24]:
+              - generic "Drag to reorder" [ref=f7e13867] [box=6790,21084,17,23]
+              - generic "Click to focus" [ref=f7e13875] [cursor=pointer] [box=6811,21085,407,21]
+            - generic [ref=f7e13877] [box=7218,21084,46,22]:
+              - button "More" [ref=f7e13879] [cursor=pointer] [box=7218,21084,22,22]
+              - button "Focus" [ref=f7e13884] [cursor=pointer] [box=7242,21084,22,22]
+          - generic [ref=f7e13889] [box=6814,21145,430,932]:
+            - generic [ref=f7e13891] [box=6816,21147,427,80]:
+              - generic [ref=f7e13892] [box=6848,21186,22,22]: 9:41
+              - generic [ref=f7e13893] [box=7162,21189,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e13894] [box=6816,21207,427,833]:
+              - generic [ref=f7e13895] [box=6816,21207,427,57]
+              - generic [ref=f7e13917] [box=6816,21264,427,776]
+              - generic [ref=f7e13939] [box=6817,21706,424,390]
+        - generic [ref=f7e13998] [box=7312,21111,470,1000]:
+          - generic [ref=f7e13999] [box=7308,21083,474,24]:
+            - generic [ref=f7e14000] [box=7308,21083,428,24]:
+              - generic "Drag to reorder" [ref=f7e14001] [box=7308,21084,17,23]
+              - generic "Click to focus" [ref=f7e14009] [cursor=pointer] [box=7329,21085,407,21]
+            - generic [ref=f7e14011] [box=7736,21084,46,22]:
+              - button "More" [ref=f7e14013] [cursor=pointer] [box=7736,21084,22,22]
+              - button "Focus" [ref=f7e14018] [cursor=pointer] [box=7760,21084,22,22]
+          - generic [ref=f7e14023] [box=7332,21145,430,932]:
+            - generic [ref=f7e14025] [box=7334,21147,427,80]:
+              - generic [ref=f7e14026] [box=7366,21186,22,22]: 9:41
+              - generic [ref=f7e14027] [box=7680,21189,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e14028] [box=7334,21207,427,833]:
+              - generic [ref=f7e14029] [box=7334,21207,427,57]
+              - generic [ref=f7e14051] [box=7334,21264,427,776]
+              - generic [ref=f7e14073] [box=7335,21706,424,390]
+        - generic [ref=f7e14132] [box=7830,21111,470,1000]:
+          - generic [ref=f7e14133] [box=7826,21083,474,24]:
+            - generic [ref=f7e14134] [box=7826,21083,428,24]:
+              - generic "Drag to reorder" [ref=f7e14135] [box=7826,21084,17,23]
+              - generic "Click to focus" [ref=f7e14143] [cursor=pointer] [box=7847,21085,407,21]
+            - generic [ref=f7e14145] [box=8254,21084,46,22]:
+              - button "More" [ref=f7e14147] [cursor=pointer] [box=8254,21084,22,22]
+              - button "Focus" [ref=f7e14152] [cursor=pointer] [box=8278,21084,22,22]
+          - generic [ref=f7e14157] [box=7850,21145,430,932]:
+            - generic [ref=f7e14159] [box=7852,21147,427,80]:
+              - generic [ref=f7e14160] [box=7884,21186,22,22]: 9:41
+              - generic [ref=f7e14161] [box=8198,21189,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e14162] [box=7852,21207,427,833]:
+              - generic [ref=f7e14163] [box=7852,21207,427,53]
+              - generic [ref=f7e14177] [box=7852,21260,427,780]
+        - generic [ref=f7e14205] [box=8348,21111,470,1000]:
+          - generic [ref=f7e14206] [box=8344,21083,474,24]:
+            - generic [ref=f7e14207] [box=8344,21083,428,24]:
+              - generic "Drag to reorder" [ref=f7e14208] [box=8344,21084,17,23]
+              - generic "Click to focus" [ref=f7e14216] [cursor=pointer] [box=8365,21085,407,21]
+            - generic [ref=f7e14218] [box=8772,21084,46,22]:
+              - button "More" [ref=f7e14220] [cursor=pointer] [box=8772,21084,22,22]
+              - button "Focus" [ref=f7e14225] [cursor=pointer] [box=8796,21084,22,22]
+          - generic [ref=f7e14230] [box=8368,21145,430,932]:
+            - generic [ref=f7e14232] [box=8370,21147,427,80]:
+              - generic [ref=f7e14233] [box=8402,21186,22,22]: 9:41
+              - generic [ref=f7e14234] [box=8716,21189,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e14235] [box=8370,21207,427,833]:
+              - generic [ref=f7e14236] [box=8370,21207,427,53]
+              - generic [ref=f7e14250] [box=8370,21260,427,780]
+        - generic [ref=f7e14292] [box=8866,21111,470,1000]:
+          - generic [ref=f7e14293] [box=8862,21083,474,24]:
+            - generic [ref=f7e14294] [box=8862,21083,428,24]:
+              - generic "Drag to reorder" [ref=f7e14295] [box=8862,21084,17,23]
+              - generic "Click to focus" [ref=f7e14303] [cursor=pointer] [box=8883,21085,407,21]
+            - generic [ref=f7e14305] [box=9290,21084,46,22]:
+              - button "More" [ref=f7e14307] [cursor=pointer] [box=9290,21084,22,22]
+              - button "Focus" [ref=f7e14312] [cursor=pointer] [box=9314,21084,22,22]
+          - generic [ref=f7e14317] [box=8886,21145,430,932]:
+            - generic [ref=f7e14319] [box=8888,21147,427,80]:
+              - generic [ref=f7e14320] [box=8920,21186,22,22]: 9:41
+              - generic [ref=f7e14321] [box=9234,21189,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e14322] [box=8888,21207,427,833]:
+              - generic [ref=f7e14323] [box=8888,21207,427,53]
+              - generic [ref=f7e14337] [box=8888,21260,427,780]
+    - generic [ref=f7e14365] [box=0,22191,15612,1094]:
+      - generic [ref=f7e14367] [box=60,22191,15492,94]:
+        - generic [ref=f7e14368] [box=58,22191,312,33]: 05 — Composer overlays
+        - generic [ref=f7e14369] [box=60,22231,15492,19]: plus menu · model picker (6 variants) · voice record · voice review
+      - generic [ref=f7e14370] [box=0,22286,9396,1000]:
+        - generic [ref=f7e14371] [box=60,22286,470,1000]:
+          - generic [ref=f7e14372] [box=56,22258,474,24]:
+            - generic [ref=f7e14373] [box=56,22258,428,24]:
+              - generic "Drag to reorder" [ref=f7e14374] [box=56,22258,17,23]
+              - generic "Click to focus" [ref=f7e14382] [cursor=pointer] [box=77,22259,407,21]
+            - generic [ref=f7e14384] [box=484,22259,46,22]:
+              - button "More" [ref=f7e14386] [cursor=pointer] [box=484,22259,22,22]
+              - button "Focus" [ref=f7e14391] [cursor=pointer] [box=508,22259,22,22]
+          - generic [ref=f7e14396] [box=80,22320,430,932]:
+            - generic [ref=f7e14398] [box=82,22321,427,80]:
+              - generic [ref=f7e14399] [box=114,22360,22,22]: 9:41
+              - generic [ref=f7e14400] [box=428,22363,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e14401] [box=82,22381,427,833]:
+              - generic [ref=f7e14402] [box=82,22381,427,53]
+              - generic [ref=f7e14422] [box=83,22760,424,440]
+        - generic [ref=f7e14479] [box=578,22286,470,1000]:
+          - generic [ref=f7e14480] [box=574,22258,474,24]:
+            - generic [ref=f7e14481] [box=574,22258,428,24]:
+              - generic "Drag to reorder" [ref=f7e14482] [box=574,22258,17,23]
+              - generic "Click to focus" [ref=f7e14490] [cursor=pointer] [box=595,22259,407,21]
+            - generic [ref=f7e14492] [box=1002,22259,46,22]:
+              - button "More" [ref=f7e14494] [cursor=pointer] [box=1002,22259,22,22]
+              - button "Focus" [ref=f7e14499] [cursor=pointer] [box=1026,22259,22,22]
+          - generic [ref=f7e14504] [box=598,22320,430,932]:
+            - generic [ref=f7e14506] [box=600,22321,427,80]:
+              - generic [ref=f7e14507] [box=632,22360,22,22]: 9:41
+              - generic [ref=f7e14508] [box=946,22363,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e14509] [box=600,22381,427,833]:
+              - generic [ref=f7e14512] [box=755,22541,116,56]
+              - generic [ref=f7e14517] [box=601,22640,424,560]
+        - generic [ref=f7e14610] [box=1096,22286,470,1000]:
+          - generic [ref=f7e14611] [box=1092,22258,474,24]:
+            - generic [ref=f7e14612] [box=1092,22258,428,24]:
+              - generic "Drag to reorder" [ref=f7e14613] [box=1092,22258,17,23]
+              - generic "Click to focus" [ref=f7e14621] [cursor=pointer] [box=1113,22259,407,21]
+            - generic [ref=f7e14623] [box=1520,22259,46,22]:
+              - button "More" [ref=f7e14625] [cursor=pointer] [box=1520,22259,22,22]
+              - button "Focus" [ref=f7e14630] [cursor=pointer] [box=1544,22259,22,22]
+          - generic [ref=f7e14635] [box=1116,22320,430,932]:
+            - generic [ref=f7e14637] [box=1118,22321,427,80]:
+              - generic [ref=f7e14638] [box=1150,22360,22,22]: 9:41
+              - generic [ref=f7e14639] [box=1464,22363,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e14645] [box=1119,22520,424,680]:
+              - generic [ref=f7e14646] [box=1119,22520,424,29]
+              - generic [ref=f7e14653] [box=1119,22549,424,110]
+              - generic [ref=f7e14678] [box=1119,22660,424,481]
+        - generic [ref=f7e14737] [box=1614,22286,470,1000]:
+          - generic [ref=f7e14738] [box=1610,22258,474,24]:
+            - generic [ref=f7e14739] [box=1610,22258,428,24]:
+              - generic "Drag to reorder" [ref=f7e14740] [box=1610,22258,17,23]
+              - generic "Click to focus" [ref=f7e14748] [cursor=pointer] [box=1631,22259,407,21]
+            - generic [ref=f7e14750] [box=2038,22259,46,22]:
+              - button "More" [ref=f7e14752] [cursor=pointer] [box=2038,22259,22,22]
+              - button "Focus" [ref=f7e14757] [cursor=pointer] [box=2062,22259,22,22]
+          - generic [ref=f7e14762] [box=1634,22320,430,932]:
+            - generic [ref=f7e14764] [box=1636,22321,427,80]:
+              - generic [ref=f7e14765] [box=1668,22360,22,22]: 9:41
+              - generic [ref=f7e14766] [box=1982,22363,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e14767] [box=1636,22381,427,833]:
+              - generic [ref=f7e14770] [box=1791,22541,116,56]
+              - generic [ref=f7e14775] [box=1637,22640,424,560]
+        - generic [ref=f7e14868] [box=2132,22286,470,1000]:
+          - generic [ref=f7e14869] [box=2128,22258,474,24]:
+            - generic [ref=f7e14870] [box=2128,22258,428,24]:
+              - generic "Drag to reorder" [ref=f7e14871] [box=2128,22258,17,23]
+              - generic "Click to focus" [ref=f7e14879] [cursor=pointer] [box=2149,22259,407,21]
+            - generic [ref=f7e14881] [box=2556,22259,46,22]:
+              - button "More" [ref=f7e14883] [cursor=pointer] [box=2556,22259,22,22]
+              - button "Focus" [ref=f7e14888] [cursor=pointer] [box=2580,22259,22,22]
+          - generic [ref=f7e14893] [box=2152,22320,430,932]:
+            - generic [ref=f7e14895] [box=2154,22321,427,80]:
+              - generic [ref=f7e14896] [box=2186,22360,22,22]: 9:41
+              - generic [ref=f7e14897] [box=2500,22363,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e14903] [box=2155,22520,424,680]:
+              - generic [ref=f7e14904] [box=2155,22520,424,29]
+              - generic [ref=f7e14911] [box=2155,22549,424,110]
+              - generic [ref=f7e14936] [box=2155,22660,424,481]
+        - generic [ref=f7e14995] [box=2650,22286,470,1000]:
+          - generic [ref=f7e14996] [box=2646,22258,474,24]:
+            - generic [ref=f7e14997] [box=2646,22258,428,24]:
+              - generic "Drag to reorder" [ref=f7e14998] [box=2646,22258,17,23]
+              - generic "Click to focus" [ref=f7e15006] [cursor=pointer] [box=2667,22259,407,21]
+            - generic [ref=f7e15008] [box=3074,22259,46,22]:
+              - button "More" [ref=f7e15010] [cursor=pointer] [box=3074,22259,22,22]
+              - button "Focus" [ref=f7e15015] [cursor=pointer] [box=3098,22259,22,22]
+          - generic [ref=f7e15020] [box=2670,22320,430,932]:
+            - generic [ref=f7e15022] [box=2672,22321,427,80]:
+              - generic [ref=f7e15023] [box=2704,22360,22,22]: 9:41
+              - generic [ref=f7e15024] [box=3018,22363,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e15031] [box=2673,22540,424,421]:
+              - generic [ref=f7e15032] [box=2691,22540,388,36]
+              - generic [ref=f7e15038] [box=2691,22590,388,32]
+              - generic [ref=f7e15046] [box=2691,22639,75,15]: BEST FOR CODING
+              - generic [ref=f7e15047] [box=2691,22660,388,136]
+              - generic [ref=f7e15058] [box=2691,22812,388,80]
+              - generic [ref=f7e15071] [box=2691,22906,388,38]
+        - generic [ref=f7e15077] [box=3168,22286,470,1000]:
+          - generic [ref=f7e15078] [box=3164,22258,474,24]:
+            - generic [ref=f7e15079] [box=3164,22258,428,24]:
+              - generic "Drag to reorder" [ref=f7e15080] [box=3164,22258,17,23]
+              - generic "Click to focus" [ref=f7e15088] [cursor=pointer] [box=3185,22259,407,21]
+            - generic [ref=f7e15090] [box=3592,22259,46,22]:
+              - button "More" [ref=f7e15092] [cursor=pointer] [box=3592,22259,22,22]
+              - button "Focus" [ref=f7e15097] [cursor=pointer] [box=3616,22259,22,22]
+          - generic [ref=f7e15102] [box=3188,22320,430,932]:
+            - generic [ref=f7e15104] [box=3190,22321,427,80]:
+              - generic [ref=f7e15105] [box=3222,22360,22,22]: 9:41
+              - generic [ref=f7e15106] [box=3536,22363,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e15112] [box=3191,22540,424,660]:
+              - generic [ref=f7e15113] [box=3191,22540,424,44]
+              - generic [ref=f7e15121] [box=3225,22598,356,42]
+              - generic [ref=f7e15130] [box=3191,22671,424,476]
+        - generic [ref=f7e15174] [box=3686,22286,470,1000]:
+          - generic [ref=f7e15175] [box=3682,22258,474,24]:
+            - generic [ref=f7e15176] [box=3682,22258,428,24]:
+              - generic "Drag to reorder" [ref=f7e15177] [box=3682,22258,17,23]
+              - generic "Click to focus" [ref=f7e15185] [cursor=pointer] [box=3703,22259,407,21]
+            - generic [ref=f7e15187] [box=4110,22259,46,22]:
+              - button "More" [ref=f7e15189] [cursor=pointer] [box=4110,22259,22,22]
+              - button "Focus" [ref=f7e15194] [cursor=pointer] [box=4134,22259,22,22]
+          - generic [ref=f7e15199] [box=3706,22320,430,932]:
+            - generic [ref=f7e15201] [box=3708,22321,427,80]:
+              - generic [ref=f7e15202] [box=3740,22360,22,22]: 9:41
+              - generic [ref=f7e15203] [box=4054,22363,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e15209] [box=3709,22540,424,660]:
+              - generic [ref=f7e15211] [box=3727,22540,113,20]: Top picks for coding
+              - generic [ref=f7e15212] [box=3709,22560,424,198]
+              - generic [ref=f7e15226] [box=3727,22762,50,15]: ALL MODELS
+              - generic [ref=f7e15227] [box=3709,22777,424,314]
+        - generic [ref=f7e15273] [box=4204,22286,470,1000]:
+          - generic [ref=f7e15274] [box=4200,22258,474,24]:
+            - generic [ref=f7e15275] [box=4200,22258,428,24]:
+              - generic "Drag to reorder" [ref=f7e15276] [box=4200,22258,17,23]
+              - generic "Click to focus" [ref=f7e15284] [cursor=pointer] [box=4221,22259,407,21]
+            - generic [ref=f7e15286] [box=4628,22259,46,22]:
+              - button "More" [ref=f7e15288] [cursor=pointer] [box=4628,22259,22,22]
+              - button "Focus" [ref=f7e15293] [cursor=pointer] [box=4652,22259,22,22]
+          - generic [ref=f7e15298] [box=4224,22320,430,932]:
+            - generic [ref=f7e15300] [box=4226,22321,427,80]:
+              - generic [ref=f7e15301] [box=4258,22360,22,22]: 9:41
+              - generic [ref=f7e15302] [box=4572,22363,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e15308] [box=4227,22540,424,660]:
+              - generic [ref=f7e15309] [box=4227,22540,424,57]
+              - generic [ref=f7e15313] [box=4227,22597,424,184]
+              - generic [ref=f7e15350] [box=4249,22790,63,15]: RECOMMENDED
+              - generic [ref=f7e15351] [box=4227,22811,424,220]
+        - generic [ref=f7e15378] [box=4722,22286,470,1000]:
+          - generic [ref=f7e15379] [box=4718,22258,474,24]:
+            - generic [ref=f7e15380] [box=4718,22258,428,24]:
+              - generic "Drag to reorder" [ref=f7e15381] [box=4718,22258,17,23]
+              - generic "Click to focus" [ref=f7e15389] [cursor=pointer] [box=4739,22259,407,21]
+            - generic [ref=f7e15391] [box=5146,22259,46,22]:
+              - button "More" [ref=f7e15393] [cursor=pointer] [box=5146,22259,22,22]
+              - button "Focus" [ref=f7e15398] [cursor=pointer] [box=5170,22259,22,22]
+          - generic [ref=f7e15403] [box=4742,22320,430,932]:
+            - generic [ref=f7e15405] [box=4744,22321,427,80]:
+              - generic [ref=f7e15406] [box=4776,22360,22,22]: 9:41
+              - generic [ref=f7e15407] [box=5090,22363,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e15413] [box=4745,22600,424,600]:
+              - generic [ref=f7e15415] [box=4763,22600,72,20]: Cost & speed
+              - generic [ref=f7e15416] [box=4745,22626,424,321]
+        - generic [ref=f7e15460] [box=5240,22286,470,1000]:
+          - generic [ref=f7e15461] [box=5236,22258,474,24]:
+            - generic [ref=f7e15462] [box=5236,22258,428,24]:
+              - generic "Drag to reorder" [ref=f7e15463] [box=5236,22258,17,23]
+              - generic "Click to focus" [ref=f7e15471] [cursor=pointer] [box=5257,22259,407,21]
+            - generic [ref=f7e15473] [box=5664,22259,46,22]:
+              - button "More" [ref=f7e15475] [cursor=pointer] [box=5664,22259,22,22]
+              - button "Focus" [ref=f7e15480] [cursor=pointer] [box=5688,22259,22,22]
+          - generic [ref=f7e15485] [box=5260,22320,430,932]:
+            - generic [ref=f7e15487] [box=5262,22321,427,80]:
+              - generic [ref=f7e15488] [box=5294,22360,22,22]: 9:41
+              - generic [ref=f7e15489] [box=5608,22363,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e15490] [box=5262,22381,427,833]:
+              - generic [ref=f7e15491] [box=5262,22381,427,53]
+              - generic [ref=f7e15502] [box=5262,22784,427,430]
+        - generic [ref=f7e15554] [box=5758,22286,470,1000]:
+          - generic [ref=f7e15555] [box=5754,22258,474,24]:
+            - generic [ref=f7e15556] [box=5754,22258,428,24]:
+              - generic "Drag to reorder" [ref=f7e15557] [box=5754,22258,17,23]
+              - generic "Click to focus" [ref=f7e15565] [cursor=pointer] [box=5775,22259,407,21]
+            - generic [ref=f7e15567] [box=6182,22259,46,22]:
+              - button "More" [ref=f7e15569] [cursor=pointer] [box=6182,22259,22,22]
+              - button "Focus" [ref=f7e15574] [cursor=pointer] [box=6206,22259,22,22]
+          - generic [ref=f7e15579] [box=5778,22320,430,932]:
+            - generic [ref=f7e15581] [box=5780,22321,427,80]:
+              - generic [ref=f7e15582] [box=5812,22360,22,22]: 9:41
+              - generic [ref=f7e15583] [box=6126,22363,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e15590] [box=5781,22540,424,421]:
+              - generic [ref=f7e15591] [box=5799,22540,388,36]
+              - generic [ref=f7e15597] [box=5799,22590,388,32]
+              - generic [ref=f7e15605] [box=5799,22639,75,15]: BEST FOR CODING
+              - generic [ref=f7e15606] [box=5799,22660,388,136]
+              - generic [ref=f7e15617] [box=5799,22812,388,80]
+              - generic [ref=f7e15630] [box=5799,22906,388,38]
+        - generic [ref=f7e15636] [box=6276,22286,470,1000]:
+          - generic [ref=f7e15637] [box=6272,22258,474,24]:
+            - generic [ref=f7e15638] [box=6272,22258,428,24]:
+              - generic "Drag to reorder" [ref=f7e15639] [box=6272,22258,17,23]
+              - generic "Click to focus" [ref=f7e15647] [cursor=pointer] [box=6293,22259,407,21]
+            - generic [ref=f7e15649] [box=6700,22259,46,22]:
+              - button "More" [ref=f7e15651] [cursor=pointer] [box=6700,22259,22,22]
+              - button "Focus" [ref=f7e15656] [cursor=pointer] [box=6724,22259,22,22]
+          - generic [ref=f7e15661] [box=6296,22320,430,932]:
+            - generic [ref=f7e15663] [box=6298,22321,427,80]:
+              - generic [ref=f7e15664] [box=6330,22360,22,22]: 9:41
+              - generic [ref=f7e15665] [box=6644,22363,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e15671] [box=6299,22600,424,600]:
+              - generic [ref=f7e15673] [box=6317,22600,72,20]: Cost & speed
+              - generic [ref=f7e15674] [box=6299,22626,424,321]
+        - generic [ref=f7e15718] [box=6794,22286,470,1000]:
+          - generic [ref=f7e15719] [box=6790,22258,474,24]:
+            - generic [ref=f7e15720] [box=6790,22258,428,24]:
+              - generic "Drag to reorder" [ref=f7e15721] [box=6790,22258,17,23]
+              - generic "Click to focus" [ref=f7e15729] [cursor=pointer] [box=6811,22259,407,21]
+            - generic [ref=f7e15731] [box=7218,22259,46,22]:
+              - button "More" [ref=f7e15733] [cursor=pointer] [box=7218,22259,22,22]
+              - button "Focus" [ref=f7e15738] [cursor=pointer] [box=7242,22259,22,22]
+          - generic [ref=f7e15743] [box=6814,22320,430,932]:
+            - generic [ref=f7e15745] [box=6816,22321,427,80]:
+              - generic [ref=f7e15746] [box=6848,22360,22,22]: 9:41
+              - generic [ref=f7e15747] [box=7162,22363,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e15749] [box=6816,22381,427,833]:
+              - generic [ref=f7e15750] [box=6816,22381,427,48]
+              - generic [ref=f7e15754] [box=6816,22429,427,673]
+              - generic [ref=f7e15797] [box=6816,23102,427,112]
+        - generic [ref=f7e15812] [box=7312,22286,470,1000]:
+          - generic [ref=f7e15813] [box=7308,22258,474,24]:
+            - generic [ref=f7e15814] [box=7308,22258,428,24]:
+              - generic "Drag to reorder" [ref=f7e15815] [box=7308,22258,17,23]
+              - generic "Click to focus" [ref=f7e15823] [cursor=pointer] [box=7329,22259,407,21]
+            - generic [ref=f7e15825] [box=7736,22259,46,22]:
+              - button "More" [ref=f7e15827] [cursor=pointer] [box=7736,22259,22,22]
+              - button "Focus" [ref=f7e15832] [cursor=pointer] [box=7760,22259,22,22]
+          - generic [ref=f7e15837] [box=7332,22320,430,932]:
+            - generic [ref=f7e15839] [box=7334,22321,427,80]:
+              - generic [ref=f7e15840] [box=7366,22360,22,22]: 9:41
+              - generic [ref=f7e15841] [box=7680,22363,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e15843] [box=7334,22381,427,833]:
+              - generic [ref=f7e15844] [box=7334,22381,427,48]
+              - generic [ref=f7e15848] [box=7334,22429,427,673]
+              - generic [ref=f7e15891] [box=7334,23102,427,112]
+        - generic [ref=f7e15906] [box=7830,22286,470,1000]:
+          - generic [ref=f7e15907] [box=7826,22258,474,24]:
+            - generic [ref=f7e15908] [box=7826,22258,428,24]:
+              - generic "Drag to reorder" [ref=f7e15909] [box=7826,22258,17,23]
+              - generic "Click to focus" [ref=f7e15917] [cursor=pointer] [box=7847,22259,407,21]
+            - generic [ref=f7e15919] [box=8254,22259,46,22]:
+              - button "More" [ref=f7e15921] [cursor=pointer] [box=8254,22259,22,22]
+              - button "Focus" [ref=f7e15926] [cursor=pointer] [box=8278,22259,22,22]
+          - generic [ref=f7e15931] [box=7850,22320,430,932]:
+            - generic [ref=f7e15933] [box=7852,22321,427,80]:
+              - generic [ref=f7e15934] [box=7884,22360,22,22]: 9:41
+              - generic [ref=f7e15935] [box=8198,22363,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e15937] [box=7852,22381,427,833]:
+              - generic [ref=f7e15938] [box=7852,22381,427,48]
+              - generic [ref=f7e15942] [box=7852,22429,427,673]
+              - generic [ref=f7e15985] [box=7852,23102,427,112]
+        - generic [ref=f7e16000] [box=8348,22286,470,1000]:
+          - generic [ref=f7e16001] [box=8344,22258,474,24]:
+            - generic [ref=f7e16002] [box=8344,22258,428,24]:
+              - generic "Drag to reorder" [ref=f7e16003] [box=8344,22258,17,23]
+              - generic "Click to focus" [ref=f7e16011] [cursor=pointer] [box=8365,22259,407,21]
+            - generic [ref=f7e16013] [box=8772,22259,46,22]:
+              - button "More" [ref=f7e16015] [cursor=pointer] [box=8772,22259,22,22]
+              - button "Focus" [ref=f7e16020] [cursor=pointer] [box=8796,22259,22,22]
+          - generic [ref=f7e16025] [box=8368,22320,430,932]:
+            - generic [ref=f7e16027] [box=8370,22321,427,80]:
+              - generic [ref=f7e16028] [box=8402,22360,22,22]: 9:41
+              - generic [ref=f7e16029] [box=8716,22363,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e16030] [box=8370,22381,427,833]:
+              - generic [ref=f7e16031] [box=8370,22381,427,53]
+              - generic [ref=f7e16049] [box=8384,23072,399,128]
+        - generic [ref=f7e16067] [box=8866,22286,470,1000]:
+          - generic [ref=f7e16068] [box=8862,22258,474,24]:
+            - generic [ref=f7e16069] [box=8862,22258,428,24]:
+              - generic "Drag to reorder" [ref=f7e16070] [box=8862,22258,17,23]
+              - generic "Click to focus" [ref=f7e16078] [cursor=pointer] [box=8883,22259,407,21]
+            - generic [ref=f7e16080] [box=9290,22259,46,22]:
+              - button "More" [ref=f7e16082] [cursor=pointer] [box=9290,22259,22,22]
+              - button "Focus" [ref=f7e16087] [cursor=pointer] [box=9314,22259,22,22]
+          - generic [ref=f7e16092] [box=8886,22320,430,932]:
+            - generic [ref=f7e16094] [box=8888,22321,427,80]:
+              - generic [ref=f7e16095] [box=8920,22360,22,22]: 9:41
+              - generic [ref=f7e16096] [box=9234,22363,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e16097] [box=8888,22381,427,833]:
+              - generic [ref=f7e16098] [box=8888,22381,427,53]
+              - generic [ref=f7e16116] [box=8902,23072,399,128]
+    - generic [ref=f7e16134] [box=0,23366,15612,1094]:
+      - generic [ref=f7e16136] [box=60,23366,15492,94]:
+        - generic [ref=f7e16137] [box=58,23366,240,33]: 06 — Drawer & nav
+        - generic [ref=f7e16138] [box=60,23405,15492,19]: drawer (6 variants) · gesture peek · about
+      - generic [ref=f7e16139] [box=0,23460,6806,1000]:
+        - generic [ref=f7e16140] [box=60,23460,470,1000]:
+          - generic [ref=f7e16141] [box=56,23432,474,24]:
+            - generic [ref=f7e16142] [box=56,23432,428,24]:
+              - generic "Drag to reorder" [ref=f7e16143] [box=56,23432,17,23]
+              - generic "Click to focus" [ref=f7e16151] [cursor=pointer] [box=77,23433,407,21]
+            - generic [ref=f7e16153] [box=484,23433,46,22]:
+              - button "More" [ref=f7e16155] [cursor=pointer] [box=484,23433,22,22]
+              - button "Focus" [ref=f7e16160] [cursor=pointer] [box=508,23433,22,22]
+          - generic [ref=f7e16165] [box=80,23494,430,932]:
+            - generic [ref=f7e16167] [box=82,23496,427,80]:
+              - generic [ref=f7e16168] [box=114,23535,22,22]: 9:41
+              - generic [ref=f7e16169] [box=428,23537,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e16170] [box=82,23556,427,833]:
+              - generic [ref=f7e16171] [box=82,23556,427,53]
+              - generic [ref=f7e16181] [box=82,23556,341,833]
+        - generic [ref=f7e16235] [box=578,23460,470,1000]:
+          - generic [ref=f7e16236] [box=574,23432,474,24]:
+            - generic [ref=f7e16237] [box=574,23432,428,24]:
+              - generic "Drag to reorder" [ref=f7e16238] [box=574,23432,17,23]
+              - generic "Click to focus" [ref=f7e16246] [cursor=pointer] [box=595,23433,407,21]
+            - generic [ref=f7e16248] [box=1002,23433,46,22]:
+              - button "More" [ref=f7e16250] [cursor=pointer] [box=1002,23433,22,22]
+              - button "Focus" [ref=f7e16255] [cursor=pointer] [box=1026,23433,22,22]
+          - generic [ref=f7e16260] [box=598,23494,430,932]:
+            - generic [ref=f7e16262] [box=600,23496,427,80]:
+              - generic [ref=f7e16263] [box=632,23535,22,22]: 9:41
+              - generic [ref=f7e16264] [box=946,23537,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e16266] [box=600,23556,427,833]:
+              - generic [ref=f7e16267] [box=600,23556,427,64]
+              - generic [ref=f7e16277] [box=600,23620,427,769]
+              - generic [ref=f7e16332] [box=924,24331,85,39]
+        - generic [ref=f7e16338] [box=1096,23460,470,1000]:
+          - generic [ref=f7e16339] [box=1092,23432,474,24]:
+            - generic [ref=f7e16340] [box=1092,23432,428,24]:
+              - generic "Drag to reorder" [ref=f7e16341] [box=1092,23432,17,23]
+              - generic "Click to focus" [ref=f7e16349] [cursor=pointer] [box=1113,23433,407,21]
+            - generic [ref=f7e16351] [box=1520,23433,46,22]:
+              - button "More" [ref=f7e16353] [cursor=pointer] [box=1520,23433,22,22]
+              - button "Focus" [ref=f7e16358] [cursor=pointer] [box=1544,23433,22,22]
+          - generic [ref=f7e16363] [box=1116,23494,430,932]:
+            - generic [ref=f7e16365] [box=1118,23496,427,80]:
+              - generic [ref=f7e16366] [box=1150,23535,22,22]: 9:41
+              - generic [ref=f7e16367] [box=1464,23537,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e16368] [box=1118,23556,427,833]:
+              - img [ref=f7e16370] [box=1136,23570,24,24]
+              - generic [ref=f7e16375] [box=1118,23556,87,833]
+              - generic [ref=f7e16417] [box=1204,23556,283,833]
+        - generic [ref=f7e16427] [box=1614,23460,470,1000]:
+          - generic [ref=f7e16428] [box=1610,23432,474,24]:
+            - generic [ref=f7e16429] [box=1610,23432,428,24]:
+              - generic "Drag to reorder" [ref=f7e16430] [box=1610,23432,17,23]
+              - generic "Click to focus" [ref=f7e16438] [cursor=pointer] [box=1631,23433,407,21]
+            - generic [ref=f7e16440] [box=2038,23433,46,22]:
+              - button "More" [ref=f7e16442] [cursor=pointer] [box=2038,23433,22,22]
+              - button "Focus" [ref=f7e16447] [cursor=pointer] [box=2062,23433,22,22]
+          - generic [ref=f7e16452] [box=1634,23494,430,932]:
+            - generic [ref=f7e16454] [box=1636,23496,427,80]:
+              - generic [ref=f7e16455] [box=1668,23535,22,22]: 9:41
+              - generic [ref=f7e16456] [box=1982,23537,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e16458] [box=1636,23556,427,833]:
+              - generic [ref=f7e16459] [box=1636,23556,427,50]
+              - generic [ref=f7e16465] [box=1636,23606,427,122]
+              - generic [ref=f7e16472] [box=1636,23728,427,384]
+              - generic [ref=f7e16511] [box=1636,24341,427,48]
+        - generic [ref=f7e16515] [box=2132,23460,470,1000]:
+          - generic [ref=f7e16516] [box=2128,23432,474,24]:
+            - generic [ref=f7e16517] [box=2128,23432,428,24]:
+              - generic "Drag to reorder" [ref=f7e16518] [box=2128,23432,17,23]
+              - generic "Click to focus" [ref=f7e16526] [cursor=pointer] [box=2149,23433,407,21]
+            - generic [ref=f7e16528] [box=2556,23433,46,22]:
+              - button "More" [ref=f7e16530] [cursor=pointer] [box=2556,23433,22,22]
+              - button "Focus" [ref=f7e16535] [cursor=pointer] [box=2580,23433,22,22]
+          - generic [ref=f7e16540] [box=2152,23494,430,932]:
+            - generic [ref=f7e16542] [box=2154,23496,427,80]:
+              - generic [ref=f7e16543] [box=2186,23535,22,22]: 9:41
+              - generic [ref=f7e16544] [box=2500,23537,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e16545] [box=2154,23556,427,833]:
+              - img [ref=f7e16548] [box=2538,23570,24,24]
+              - generic [ref=f7e16553] [box=2207,23556,373,833]
+        - generic [ref=f7e16623] [box=2650,23460,470,1000]:
+          - generic [ref=f7e16624] [box=2646,23432,474,24]:
+            - generic [ref=f7e16625] [box=2646,23432,428,24]:
+              - generic "Drag to reorder" [ref=f7e16626] [box=2646,23432,17,23]
+              - generic "Click to focus" [ref=f7e16634] [cursor=pointer] [box=2667,23433,407,21]
+            - generic [ref=f7e16636] [box=3074,23433,46,22]:
+              - button "More" [ref=f7e16638] [cursor=pointer] [box=3074,23433,22,22]
+              - button "Focus" [ref=f7e16643] [cursor=pointer] [box=3098,23433,22,22]
+          - generic [ref=f7e16648] [box=2670,23494,430,932]:
+            - generic [ref=f7e16650] [box=2672,23496,427,80]:
+              - generic [ref=f7e16651] [box=2704,23535,22,22]: 9:41
+              - generic [ref=f7e16652] [box=3018,23537,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e16653] [box=2672,23556,427,833]:
+              - img [ref=f7e16655] [box=2690,23570,24,24]
+              - generic [ref=f7e16663] [box=2673,23774,424,394]
+        - generic [ref=f7e16713] [box=3168,23460,470,1000]:
+          - generic [ref=f7e16714] [box=3164,23432,474,24]:
+            - generic [ref=f7e16715] [box=3164,23432,428,24]:
+              - generic "Drag to reorder" [ref=f7e16716] [box=3164,23432,17,23]
+              - generic "Click to focus" [ref=f7e16724] [cursor=pointer] [box=3185,23433,407,21]
+            - generic [ref=f7e16726] [box=3592,23433,46,22]:
+              - button "More" [ref=f7e16728] [cursor=pointer] [box=3592,23433,22,22]
+              - button "Focus" [ref=f7e16733] [cursor=pointer] [box=3616,23433,22,22]
+          - generic [ref=f7e16738] [box=3188,23494,430,932]:
+            - generic [ref=f7e16740] [box=3190,23496,427,80]:
+              - generic [ref=f7e16741] [box=3222,23535,22,22]: 9:41
+              - generic [ref=f7e16742] [box=3536,23537,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e16743] [box=3190,23556,427,833]:
+              - generic [ref=f7e16744] [box=3190,23556,427,53]
+              - generic [ref=f7e16754] [box=3190,23556,341,833]
+        - generic [ref=f7e16808] [box=3686,23460,470,1000]:
+          - generic [ref=f7e16809] [box=3682,23432,474,24]:
+            - generic [ref=f7e16810] [box=3682,23432,428,24]:
+              - generic "Drag to reorder" [ref=f7e16811] [box=3682,23432,17,23]
+              - generic "Click to focus" [ref=f7e16819] [cursor=pointer] [box=3703,23433,407,21]
+            - generic [ref=f7e16821] [box=4110,23433,46,22]:
+              - button "More" [ref=f7e16823] [cursor=pointer] [box=4110,23433,22,22]
+              - button "Focus" [ref=f7e16828] [cursor=pointer] [box=4134,23433,22,22]
+          - generic [ref=f7e16833] [box=3706,23494,430,932]:
+            - generic [ref=f7e16835] [box=3708,23496,427,80]:
+              - generic [ref=f7e16836] [box=3740,23535,22,22]: 9:41
+              - generic [ref=f7e16837] [box=4054,23537,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e16839] [box=3708,23556,427,833]:
+              - generic [ref=f7e16840] [box=3708,23556,427,64]
+              - generic [ref=f7e16850] [box=3708,23620,427,769]
+              - generic [ref=f7e16905] [box=4032,24331,85,39]
+        - generic [ref=f7e16911] [box=4204,23460,470,1000]:
+          - generic [ref=f7e16912] [box=4200,23432,474,24]:
+            - generic [ref=f7e16913] [box=4200,23432,428,24]:
+              - generic "Drag to reorder" [ref=f7e16914] [box=4200,23432,17,23]
+              - generic "Click to focus" [ref=f7e16922] [cursor=pointer] [box=4221,23433,407,21]
+            - generic [ref=f7e16924] [box=4628,23433,46,22]:
+              - button "More" [ref=f7e16926] [cursor=pointer] [box=4628,23433,22,22]
+              - button "Focus" [ref=f7e16931] [cursor=pointer] [box=4652,23433,22,22]
+          - generic [ref=f7e16936] [box=4224,23494,430,932]:
+            - generic [ref=f7e16938] [box=4226,23496,427,80]:
+              - generic [ref=f7e16939] [box=4258,23535,22,22]: 9:41
+              - generic [ref=f7e16940] [box=4572,23537,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e16942] [box=4226,23556,427,833]:
+              - generic [ref=f7e16943] [box=4226,23556,427,50]
+              - generic [ref=f7e16949] [box=4226,23606,427,122]
+              - generic [ref=f7e16956] [box=4226,23728,427,384]
+              - generic [ref=f7e16995] [box=4226,24341,427,48]
+        - generic [ref=f7e16999] [box=4722,23460,470,1000]:
+          - generic [ref=f7e17000] [box=4718,23432,474,24]:
+            - generic [ref=f7e17001] [box=4718,23432,428,24]:
+              - generic "Drag to reorder" [ref=f7e17002] [box=4718,23432,17,23]
+              - generic "Click to focus" [ref=f7e17010] [cursor=pointer] [box=4739,23433,407,21]
+            - generic [ref=f7e17012] [box=5146,23433,46,22]:
+              - button "More" [ref=f7e17014] [cursor=pointer] [box=5146,23433,22,22]
+              - button "Focus" [ref=f7e17019] [cursor=pointer] [box=5170,23433,22,22]
+          - generic [ref=f7e17024] [box=4742,23494,430,932]:
+            - generic [ref=f7e17026] [box=4744,23496,427,80]:
+              - generic [ref=f7e17027] [box=4776,23535,22,22]: 9:41
+              - generic [ref=f7e17028] [box=5090,23537,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e17029] [box=4744,23556,427,833]:
+              - generic [ref=f7e17030] [box=4744,23556,427,53]
+              - generic [ref=f7e17048] [box=4758,24304,399,70]
+              - generic [ref=f7e17062] [box=4744,23616,61,737]
+              - generic [ref=f7e17080] [box=4810,23966,102,15]: ← swipe right to expand
+        - generic [ref=f7e17082] [box=5240,23460,470,1000]:
+          - generic [ref=f7e17083] [box=5236,23432,474,24]:
+            - generic [ref=f7e17084] [box=5236,23432,428,24]:
+              - generic "Drag to reorder" [ref=f7e17085] [box=5236,23432,17,23]
+              - generic "Click to focus" [ref=f7e17093] [cursor=pointer] [box=5257,23433,407,21]
+            - generic [ref=f7e17095] [box=5664,23433,46,22]:
+              - button "More" [ref=f7e17097] [cursor=pointer] [box=5664,23433,22,22]
+              - button "Focus" [ref=f7e17102] [cursor=pointer] [box=5688,23433,22,22]
+          - generic [ref=f7e17107] [box=5260,23494,430,932]:
+            - generic [ref=f7e17109] [box=5262,23496,427,80]:
+              - generic [ref=f7e17110] [box=5294,23535,22,22]: 9:41
+              - generic [ref=f7e17111] [box=5608,23537,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e17112] [box=5262,23556,427,833]:
+              - generic [ref=f7e17113] [box=5262,23556,427,53]
+              - generic [ref=f7e17131] [box=5276,24304,399,70]
+              - generic [ref=f7e17145] [box=5262,23616,61,737]
+              - generic [ref=f7e17163] [box=5328,23966,102,15]: ← swipe right to expand
+        - generic [ref=f7e17165] [box=5758,23460,470,1000]:
+          - generic [ref=f7e17166] [box=5754,23432,474,24]:
+            - generic [ref=f7e17167] [box=5754,23432,428,24]:
+              - generic "Drag to reorder" [ref=f7e17168] [box=5754,23432,17,23]
+              - generic "Click to focus" [ref=f7e17176] [cursor=pointer] [box=5775,23433,407,21]
+            - generic [ref=f7e17178] [box=6182,23433,46,22]:
+              - button "More" [ref=f7e17180] [cursor=pointer] [box=6182,23433,22,22]
+              - button "Focus" [ref=f7e17185] [cursor=pointer] [box=6206,23433,22,22]
+          - generic [ref=f7e17190] [box=5778,23494,430,932]:
+            - generic [ref=f7e17192] [box=5780,23496,427,80]:
+              - generic [ref=f7e17193] [box=5812,23535,22,22]: 9:41
+              - generic [ref=f7e17194] [box=6126,23537,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e17195] [box=5780,23556,427,833]:
+              - generic [ref=f7e17196] [box=5780,23556,427,53]
+              - generic [ref=f7e17202] [box=5780,23608,427,780]
+        - generic [ref=f7e17311] [box=6276,23460,470,1000]:
+          - generic [ref=f7e17312] [box=6272,23432,474,24]:
+            - generic [ref=f7e17313] [box=6272,23432,428,24]:
+              - generic "Drag to reorder" [ref=f7e17314] [box=6272,23432,17,23]
+              - generic "Click to focus" [ref=f7e17322] [cursor=pointer] [box=6293,23433,407,21]
+            - generic [ref=f7e17324] [box=6700,23433,46,22]:
+              - button "More" [ref=f7e17326] [cursor=pointer] [box=6700,23433,22,22]
+              - button "Focus" [ref=f7e17331] [cursor=pointer] [box=6724,23433,22,22]
+          - generic [ref=f7e17336] [box=6296,23494,430,932]:
+            - generic [ref=f7e17338] [box=6298,23496,427,80]:
+              - generic [ref=f7e17339] [box=6330,23535,22,22]: 9:41
+              - generic [ref=f7e17340] [box=6644,23537,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e17341] [box=6298,23556,427,833]:
+              - generic [ref=f7e17342] [box=6298,23556,427,53]
+              - generic [ref=f7e17348] [box=6298,23608,427,780]
+    - generic [ref=f7e17457] [box=0,24540,15612,1094]:
+      - generic [ref=f7e17459] [box=60,24540,15492,94]:
+        - generic [ref=f7e17460] [box=58,24540,320,33]: 07 — Drawer destinations
+        - generic [ref=f7e17461] [box=60,24579,15492,19]: Skills · Projects · Dispatch · Connectors · Settings · Account
+      - generic [ref=f7e17462] [box=0,24634,7324,1000]:
+        - generic [ref=f7e17463] [box=60,24634,470,1000]:
+          - generic [ref=f7e17464] [box=56,24606,474,24]:
+            - generic [ref=f7e17465] [box=56,24606,428,24]:
+              - generic "Drag to reorder" [ref=f7e17466] [box=56,24607,17,23]
+              - generic "Click to focus" [ref=f7e17474] [cursor=pointer] [box=77,24608,407,21]
+            - generic [ref=f7e17476] [box=484,24607,46,22]:
+              - button "More" [ref=f7e17478] [cursor=pointer] [box=484,24607,22,22]
+              - button "Focus" [ref=f7e17483] [cursor=pointer] [box=508,24607,22,22]
+          - generic [ref=f7e17488] [box=80,24668,430,932]:
+            - generic [ref=f7e17490] [box=82,24670,427,80]:
+              - generic [ref=f7e17491] [box=114,24709,22,22]: 9:41
+              - generic [ref=f7e17492] [box=428,24712,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e17493] [box=82,24730,427,833]:
+              - generic [ref=f7e17494] [box=82,24730,427,53]
+              - generic [ref=f7e17508] [box=82,24782,427,780]
+        - generic [ref=f7e17569] [box=578,24634,470,1000]:
+          - generic [ref=f7e17570] [box=574,24606,474,24]:
+            - generic [ref=f7e17571] [box=574,24606,428,24]:
+              - generic "Drag to reorder" [ref=f7e17572] [box=574,24607,17,23]
+              - generic "Click to focus" [ref=f7e17580] [cursor=pointer] [box=595,24608,407,21]
+            - generic [ref=f7e17582] [box=1002,24607,46,22]:
+              - button "More" [ref=f7e17584] [cursor=pointer] [box=1002,24607,22,22]
+              - button "Focus" [ref=f7e17589] [cursor=pointer] [box=1026,24607,22,22]
+          - generic [ref=f7e17594] [box=598,24668,430,932]:
+            - generic [ref=f7e17596] [box=600,24670,427,80]:
+              - generic [ref=f7e17597] [box=632,24709,22,22]: 9:41
+              - generic [ref=f7e17598] [box=946,24712,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e17599] [box=600,24730,427,833]:
+              - generic [ref=f7e17600] [box=600,24730,427,53]
+              - generic [ref=f7e17615] [box=600,24782,427,303]
+        - generic [ref=f7e17627] [box=1096,24634,470,1000]:
+          - generic [ref=f7e17628] [box=1092,24606,474,24]:
+            - generic [ref=f7e17629] [box=1092,24606,428,24]:
+              - generic "Drag to reorder" [ref=f7e17630] [box=1092,24607,17,23]
+              - generic "Click to focus" [ref=f7e17638] [cursor=pointer] [box=1113,24608,407,21]
+            - generic [ref=f7e17640] [box=1520,24607,46,22]:
+              - button "More" [ref=f7e17642] [cursor=pointer] [box=1520,24607,22,22]
+              - button "Focus" [ref=f7e17647] [cursor=pointer] [box=1544,24607,22,22]
+          - generic [ref=f7e17652] [box=1116,24668,430,932]:
+            - generic [ref=f7e17654] [box=1118,24670,427,80]:
+              - generic [ref=f7e17655] [box=1150,24709,22,22]: 9:41
+              - generic [ref=f7e17656] [box=1464,24712,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e17657] [box=1118,24730,427,833]:
+              - generic [ref=f7e17658] [box=1118,24730,427,53]
+              - generic [ref=f7e17672] [box=1118,24782,427,780]
+        - generic [ref=f7e17733] [box=1614,24634,470,1000]:
+          - generic [ref=f7e17734] [box=1610,24606,474,24]:
+            - generic [ref=f7e17735] [box=1610,24606,428,24]:
+              - generic "Drag to reorder" [ref=f7e17736] [box=1610,24607,17,23]
+              - generic "Click to focus" [ref=f7e17744] [cursor=pointer] [box=1631,24608,407,21]
+            - generic [ref=f7e17746] [box=2038,24607,46,22]:
+              - button "More" [ref=f7e17748] [cursor=pointer] [box=2038,24607,22,22]
+              - button "Focus" [ref=f7e17753] [cursor=pointer] [box=2062,24607,22,22]
+          - generic [ref=f7e17758] [box=1634,24668,430,932]:
+            - generic [ref=f7e17760] [box=1636,24670,427,80]:
+              - generic [ref=f7e17761] [box=1668,24709,22,22]: 9:41
+              - generic [ref=f7e17762] [box=1982,24712,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e17763] [box=1636,24730,427,833]:
+              - generic [ref=f7e17764] [box=1636,24730,427,53]
+              - generic [ref=f7e17775] [box=1636,24782,427,780]
+              - img [ref=f7e17842] [box=2003,25451,26,26]
+        - generic [ref=f7e17846] [box=2132,24634,470,1000]:
+          - generic [ref=f7e17847] [box=2128,24606,474,24]:
+            - generic [ref=f7e17848] [box=2128,24606,428,24]:
+              - generic "Drag to reorder" [ref=f7e17849] [box=2128,24607,17,23]
+              - generic "Click to focus" [ref=f7e17857] [cursor=pointer] [box=2149,24608,407,21]
+            - generic [ref=f7e17859] [box=2556,24607,46,22]:
+              - button "More" [ref=f7e17861] [cursor=pointer] [box=2556,24607,22,22]
+              - button "Focus" [ref=f7e17866] [cursor=pointer] [box=2580,24607,22,22]
+          - generic [ref=f7e17871] [box=2152,24668,430,932]:
+            - generic [ref=f7e17873] [box=2154,24670,427,80]:
+              - generic [ref=f7e17874] [box=2186,24709,22,22]: 9:41
+              - generic [ref=f7e17875] [box=2500,24712,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e17876] [box=2154,24730,427,833]:
+              - generic [ref=f7e17877] [box=2154,24730,427,53]
+              - generic [ref=f7e17889] [box=2154,24782,427,236]
+              - img [ref=f7e17898] [box=2521,25451,26,26]
+        - generic [ref=f7e17902] [box=2650,24634,470,1000]:
+          - generic [ref=f7e17903] [box=2646,24606,474,24]:
+            - generic [ref=f7e17904] [box=2646,24606,428,24]:
+              - generic "Drag to reorder" [ref=f7e17905] [box=2646,24607,17,23]
+              - generic "Click to focus" [ref=f7e17913] [cursor=pointer] [box=2667,24608,407,21]
+            - generic [ref=f7e17915] [box=3074,24607,46,22]:
+              - button "More" [ref=f7e17917] [cursor=pointer] [box=3074,24607,22,22]
+              - button "Focus" [ref=f7e17922] [cursor=pointer] [box=3098,24607,22,22]
+          - generic [ref=f7e17927] [box=2670,24668,430,932]:
+            - generic [ref=f7e17929] [box=2672,24670,427,80]:
+              - generic [ref=f7e17930] [box=2704,24709,22,22]: 9:41
+              - generic [ref=f7e17931] [box=3018,24712,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e17932] [box=2672,24730,427,833]:
+              - generic [ref=f7e17933] [box=2672,24730,427,53]
+              - generic [ref=f7e17944] [box=2672,24782,427,780]
+              - img [ref=f7e18011] [box=3039,25451,26,26]
+        - generic [ref=f7e18015] [box=3168,24634,470,1000]:
+          - generic [ref=f7e18016] [box=3164,24606,474,24]:
+            - generic [ref=f7e18017] [box=3164,24606,428,24]:
+              - generic "Drag to reorder" [ref=f7e18018] [box=3164,24607,17,23]
+              - generic "Click to focus" [ref=f7e18026] [cursor=pointer] [box=3185,24608,407,21]
+            - generic [ref=f7e18028] [box=3592,24607,46,22]:
+              - button "More" [ref=f7e18030] [cursor=pointer] [box=3592,24607,22,22]
+              - button "Focus" [ref=f7e18035] [cursor=pointer] [box=3616,24607,22,22]
+          - generic [ref=f7e18040] [box=3188,24668,430,932]:
+            - generic [ref=f7e18042] [box=3190,24670,427,80]:
+              - generic [ref=f7e18043] [box=3222,24709,22,22]: 9:41
+              - generic [ref=f7e18044] [box=3536,24712,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e18045] [box=3190,24730,427,833]:
+              - generic [ref=f7e18046] [box=3190,24730,427,53]
+              - generic [ref=f7e18061] [box=3190,24782,427,780]
+              - img [ref=f7e18108] [box=3557,25451,26,26]
+        - generic [ref=f7e18112] [box=3686,24634,470,1000]:
+          - generic [ref=f7e18113] [box=3682,24606,474,24]:
+            - generic [ref=f7e18114] [box=3682,24606,428,24]:
+              - generic "Drag to reorder" [ref=f7e18115] [box=3682,24607,17,23]
+              - generic "Click to focus" [ref=f7e18123] [cursor=pointer] [box=3703,24608,407,21]
+            - generic [ref=f7e18125] [box=4110,24607,46,22]:
+              - button "More" [ref=f7e18127] [cursor=pointer] [box=4110,24607,22,22]
+              - button "Focus" [ref=f7e18132] [cursor=pointer] [box=4134,24607,22,22]
+          - generic [ref=f7e18137] [box=3706,24668,430,932]:
+            - generic [ref=f7e18139] [box=3708,24670,427,80]:
+              - generic [ref=f7e18140] [box=3740,24709,22,22]: 9:41
+              - generic [ref=f7e18141] [box=4054,24712,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e18142] [box=3708,24730,427,833]:
+              - generic [ref=f7e18143] [box=3708,24730,427,53]
+              - generic [ref=f7e18158] [box=3708,24782,427,780]
+              - img [ref=f7e18205] [box=4075,25451,26,26]
+        - generic [ref=f7e18209] [box=4204,24634,470,1000]:
+          - generic [ref=f7e18210] [box=4200,24606,474,24]:
+            - generic [ref=f7e18211] [box=4200,24606,428,24]:
+              - generic "Drag to reorder" [ref=f7e18212] [box=4200,24607,17,23]
+              - generic "Click to focus" [ref=f7e18220] [cursor=pointer] [box=4221,24608,407,21]
+            - generic [ref=f7e18222] [box=4628,24607,46,22]:
+              - button "More" [ref=f7e18224] [cursor=pointer] [box=4628,24607,22,22]
+              - button "Focus" [ref=f7e18229] [cursor=pointer] [box=4652,24607,22,22]
+          - generic [ref=f7e18234] [box=4224,24668,430,932]:
+            - generic [ref=f7e18236] [box=4226,24670,427,80]:
+              - generic [ref=f7e18237] [box=4258,24709,22,22]: 9:41
+              - generic [ref=f7e18238] [box=4572,24712,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e18239] [box=4226,24730,427,833]:
+              - generic [ref=f7e18240] [box=4226,24730,427,53]
+              - generic [ref=f7e18251] [box=4226,24782,427,780]
+        - generic [ref=f7e18354] [box=4722,24634,470,1000]:
+          - generic [ref=f7e18355] [box=4718,24606,474,24]:
+            - generic [ref=f7e18356] [box=4718,24606,428,24]:
+              - generic "Drag to reorder" [ref=f7e18357] [box=4718,24607,17,23]
+              - generic "Click to focus" [ref=f7e18365] [cursor=pointer] [box=4739,24608,407,21]
+            - generic [ref=f7e18367] [box=5146,24607,46,22]:
+              - button "More" [ref=f7e18369] [cursor=pointer] [box=5146,24607,22,22]
+              - button "Focus" [ref=f7e18374] [cursor=pointer] [box=5170,24607,22,22]
+          - generic [ref=f7e18379] [box=4742,24668,430,932]:
+            - generic [ref=f7e18381] [box=4744,24670,427,80]:
+              - generic [ref=f7e18382] [box=4776,24709,22,22]: 9:41
+              - generic [ref=f7e18383] [box=5090,24712,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e18384] [box=4744,24730,427,833]:
+              - generic [ref=f7e18385] [box=4744,24730,427,53]
+              - generic [ref=f7e18396] [box=4744,24782,427,780]
+        - generic [ref=f7e18499] [box=5240,24634,470,1000]:
+          - generic [ref=f7e18500] [box=5236,24606,474,24]:
+            - generic [ref=f7e18501] [box=5236,24606,428,24]:
+              - generic "Drag to reorder" [ref=f7e18502] [box=5236,24607,17,23]
+              - generic "Click to focus" [ref=f7e18510] [cursor=pointer] [box=5257,24608,407,21]
+            - generic [ref=f7e18512] [box=5664,24607,46,22]:
+              - button "More" [ref=f7e18514] [cursor=pointer] [box=5664,24607,22,22]
+              - button "Focus" [ref=f7e18519] [cursor=pointer] [box=5688,24607,22,22]
+          - generic [ref=f7e18524] [box=5260,24668,430,932]:
+            - generic [ref=f7e18526] [box=5262,24670,427,80]:
+              - generic [ref=f7e18527] [box=5294,24709,22,22]: 9:41
+              - generic [ref=f7e18528] [box=5608,24712,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e18529] [box=5262,24730,427,833]:
+              - generic [ref=f7e18530] [box=5262,24730,427,53]
+              - generic [ref=f7e18541] [box=5262,24782,427,780]
+        - generic [ref=f7e18706] [box=5758,24634,470,1000]:
+          - generic [ref=f7e18707] [box=5754,24606,474,24]:
+            - generic [ref=f7e18708] [box=5754,24606,428,24]:
+              - generic "Drag to reorder" [ref=f7e18709] [box=5754,24607,17,23]
+              - generic "Click to focus" [ref=f7e18717] [cursor=pointer] [box=5775,24608,407,21]
+            - generic [ref=f7e18719] [box=6182,24607,46,22]:
+              - button "More" [ref=f7e18721] [cursor=pointer] [box=6182,24607,22,22]
+              - button "Focus" [ref=f7e18726] [cursor=pointer] [box=6206,24607,22,22]
+          - generic [ref=f7e18731] [box=5778,24668,430,932]:
+            - generic [ref=f7e18733] [box=5780,24670,427,80]:
+              - generic [ref=f7e18734] [box=5812,24709,22,22]: 9:41
+              - generic [ref=f7e18735] [box=6126,24712,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e18736] [box=5780,24730,427,833]:
+              - generic [ref=f7e18737] [box=5780,24730,427,53]
+              - generic [ref=f7e18748] [box=5780,24782,427,780]
+        - generic [ref=f7e18913] [box=6276,24634,470,1000]:
+          - generic [ref=f7e18914] [box=6272,24606,474,24]:
+            - generic [ref=f7e18915] [box=6272,24606,428,24]:
+              - generic "Drag to reorder" [ref=f7e18916] [box=6272,24607,17,23]
+              - generic "Click to focus" [ref=f7e18924] [cursor=pointer] [box=6293,24608,407,21]
+            - generic [ref=f7e18926] [box=6700,24607,46,22]:
+              - button "More" [ref=f7e18928] [cursor=pointer] [box=6700,24607,22,22]
+              - button "Focus" [ref=f7e18933] [cursor=pointer] [box=6724,24607,22,22]
+          - generic [ref=f7e18938] [box=6296,24668,430,932]:
+            - generic [ref=f7e18940] [box=6298,24670,427,80]:
+              - generic [ref=f7e18941] [box=6330,24709,22,22]: 9:41
+              - generic [ref=f7e18942] [box=6644,24712,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e18943] [box=6298,24730,427,833]:
+              - generic [ref=f7e18944] [box=6298,24730,427,53]
+              - generic [ref=f7e18950] [box=6298,24782,427,780]
+        - generic [ref=f7e19013] [box=6794,24634,470,1000]:
+          - generic [ref=f7e19014] [box=6790,24606,474,24]:
+            - generic [ref=f7e19015] [box=6790,24606,428,24]:
+              - generic "Drag to reorder" [ref=f7e19016] [box=6790,24607,17,23]
+              - generic "Click to focus" [ref=f7e19024] [cursor=pointer] [box=6811,24608,407,21]
+            - generic [ref=f7e19026] [box=7218,24607,46,22]:
+              - button "More" [ref=f7e19028] [cursor=pointer] [box=7218,24607,22,22]
+              - button "Focus" [ref=f7e19033] [cursor=pointer] [box=7242,24607,22,22]
+          - generic [ref=f7e19038] [box=6814,24668,430,932]:
+            - generic [ref=f7e19040] [box=6816,24670,427,80]:
+              - generic [ref=f7e19041] [box=6848,24709,22,22]: 9:41
+              - generic [ref=f7e19042] [box=7162,24712,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e19043] [box=6816,24730,427,833]:
+              - generic [ref=f7e19044] [box=6816,24730,427,53]
+              - generic [ref=f7e19050] [box=6816,24782,427,780]
+    - generic [ref=f7e19113] [box=0,25714,15612,1094]:
+      - generic [ref=f7e19115] [box=60,25714,15492,94]:
+        - generic [ref=f7e19116] [box=58,25714,339,33]: 08 — Settings sub-screens
+        - generic [ref=f7e19117] [box=60,25753,15492,19]: personalization · memory · notifications · capabilities · auto-approve · integrations · storage · voice
+      - generic [ref=f7e19118] [box=0,25808,8360,1000]:
+        - generic [ref=f7e19119] [box=60,25808,470,1000]:
+          - generic [ref=f7e19120] [box=56,25780,474,24]:
+            - generic [ref=f7e19121] [box=56,25780,428,24]:
+              - generic "Drag to reorder" [ref=f7e19122] [box=56,25781,17,23]
+              - generic "Click to focus" [ref=f7e19130] [cursor=pointer] [box=77,25782,407,21]
+            - generic [ref=f7e19132] [box=484,25781,46,22]:
+              - button "More" [ref=f7e19134] [cursor=pointer] [box=484,25781,22,22]
+              - button "Focus" [ref=f7e19139] [cursor=pointer] [box=508,25781,22,22]
+          - generic [ref=f7e19144] [box=80,25842,430,932]:
+            - generic [ref=f7e19146] [box=82,25844,427,80]:
+              - generic [ref=f7e19147] [box=114,25883,22,22]: 9:41
+              - generic [ref=f7e19148] [box=428,25886,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e19149] [box=82,25904,427,833]:
+              - generic [ref=f7e19150] [box=82,25904,427,53]
+              - generic [ref=f7e19156] [box=82,25957,427,780]
+        - generic [ref=f7e19208] [box=578,25808,470,1000]:
+          - generic [ref=f7e19209] [box=574,25780,474,24]:
+            - generic [ref=f7e19210] [box=574,25780,428,24]:
+              - generic "Drag to reorder" [ref=f7e19211] [box=574,25781,17,23]
+              - generic "Click to focus" [ref=f7e19219] [cursor=pointer] [box=595,25782,407,21]
+            - generic [ref=f7e19221] [box=1002,25781,46,22]:
+              - button "More" [ref=f7e19223] [cursor=pointer] [box=1002,25781,22,22]
+              - button "Focus" [ref=f7e19228] [cursor=pointer] [box=1026,25781,22,22]
+          - generic [ref=f7e19233] [box=598,25842,430,932]:
+            - generic [ref=f7e19235] [box=600,25844,427,80]:
+              - generic [ref=f7e19236] [box=632,25883,22,22]: 9:41
+              - generic [ref=f7e19237] [box=946,25886,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e19238] [box=600,25904,427,833]:
+              - generic [ref=f7e19239] [box=600,25904,427,53]
+              - generic [ref=f7e19245] [box=600,25957,427,780]
+        - generic [ref=f7e19297] [box=1096,25808,470,1000]:
+          - generic [ref=f7e19298] [box=1092,25780,474,24]:
+            - generic [ref=f7e19299] [box=1092,25780,428,24]:
+              - generic "Drag to reorder" [ref=f7e19300] [box=1092,25781,17,23]
+              - generic "Click to focus" [ref=f7e19308] [cursor=pointer] [box=1113,25782,407,21]
+            - generic [ref=f7e19310] [box=1520,25781,46,22]:
+              - button "More" [ref=f7e19312] [cursor=pointer] [box=1520,25781,22,22]
+              - button "Focus" [ref=f7e19317] [cursor=pointer] [box=1544,25781,22,22]
+          - generic [ref=f7e19322] [box=1116,25842,430,932]:
+            - generic [ref=f7e19324] [box=1118,25844,427,80]:
+              - generic [ref=f7e19325] [box=1150,25883,22,22]: 9:41
+              - generic [ref=f7e19326] [box=1464,25886,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e19327] [box=1118,25904,427,833]:
+              - generic [ref=f7e19328] [box=1118,25904,427,53]
+              - generic [ref=f7e19339] [box=1118,25957,427,780]
+        - generic [ref=f7e19426] [box=1614,25808,470,1000]:
+          - generic [ref=f7e19427] [box=1610,25780,474,24]:
+            - generic [ref=f7e19428] [box=1610,25780,428,24]:
+              - generic "Drag to reorder" [ref=f7e19429] [box=1610,25781,17,23]
+              - generic "Click to focus" [ref=f7e19437] [cursor=pointer] [box=1631,25782,407,21]
+            - generic [ref=f7e19439] [box=2038,25781,46,22]:
+              - button "More" [ref=f7e19441] [cursor=pointer] [box=2038,25781,22,22]
+              - button "Focus" [ref=f7e19446] [cursor=pointer] [box=2062,25781,22,22]
+          - generic [ref=f7e19451] [box=1634,25842,430,932]:
+            - generic [ref=f7e19453] [box=1636,25844,427,80]:
+              - generic [ref=f7e19454] [box=1668,25883,22,22]: 9:41
+              - generic [ref=f7e19455] [box=1982,25886,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e19456] [box=1636,25904,427,833]:
+              - generic [ref=f7e19457] [box=1636,25904,427,53]
+              - generic [ref=f7e19468] [box=1636,25957,427,780]
+        - generic [ref=f7e19555] [box=2132,25808,470,1000]:
+          - generic [ref=f7e19556] [box=2128,25780,474,24]:
+            - generic [ref=f7e19557] [box=2128,25780,428,24]:
+              - generic "Drag to reorder" [ref=f7e19558] [box=2128,25781,17,23]
+              - generic "Click to focus" [ref=f7e19566] [cursor=pointer] [box=2149,25782,407,21]
+            - generic [ref=f7e19568] [box=2556,25781,46,22]:
+              - button "More" [ref=f7e19570] [cursor=pointer] [box=2556,25781,22,22]
+              - button "Focus" [ref=f7e19575] [cursor=pointer] [box=2580,25781,22,22]
+          - generic [ref=f7e19580] [box=2152,25842,430,932]:
+            - generic [ref=f7e19582] [box=2154,25844,427,80]:
+              - generic [ref=f7e19583] [box=2186,25883,22,22]: 9:41
+              - generic [ref=f7e19584] [box=2500,25886,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e19585] [box=2154,25904,427,833]:
+              - generic [ref=f7e19586] [box=2154,25904,427,53]
+              - generic [ref=f7e19592] [box=2154,25957,427,780]
+        - generic [ref=f7e19633] [box=2650,25808,470,1000]:
+          - generic [ref=f7e19634] [box=2646,25780,474,24]:
+            - generic [ref=f7e19635] [box=2646,25780,428,24]:
+              - generic "Drag to reorder" [ref=f7e19636] [box=2646,25781,17,23]
+              - generic "Click to focus" [ref=f7e19644] [cursor=pointer] [box=2667,25782,407,21]
+            - generic [ref=f7e19646] [box=3074,25781,46,22]:
+              - button "More" [ref=f7e19648] [cursor=pointer] [box=3074,25781,22,22]
+              - button "Focus" [ref=f7e19653] [cursor=pointer] [box=3098,25781,22,22]
+          - generic [ref=f7e19658] [box=2670,25842,430,932]:
+            - generic [ref=f7e19660] [box=2672,25844,427,80]:
+              - generic [ref=f7e19661] [box=2704,25883,22,22]: 9:41
+              - generic [ref=f7e19662] [box=3018,25886,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e19663] [box=2672,25904,427,833]:
+              - generic [ref=f7e19664] [box=2672,25904,427,53]
+              - generic [ref=f7e19670] [box=2672,25957,427,780]
+        - generic [ref=f7e19711] [box=3168,25808,470,1000]:
+          - generic [ref=f7e19712] [box=3164,25780,474,24]:
+            - generic [ref=f7e19713] [box=3164,25780,428,24]:
+              - generic "Drag to reorder" [ref=f7e19714] [box=3164,25781,17,23]
+              - generic "Click to focus" [ref=f7e19722] [cursor=pointer] [box=3185,25782,407,21]
+            - generic [ref=f7e19724] [box=3592,25781,46,22]:
+              - button "More" [ref=f7e19726] [cursor=pointer] [box=3592,25781,22,22]
+              - button "Focus" [ref=f7e19731] [cursor=pointer] [box=3616,25781,22,22]
+          - generic [ref=f7e19736] [box=3188,25842,430,932]:
+            - generic [ref=f7e19738] [box=3190,25844,427,80]:
+              - generic [ref=f7e19739] [box=3222,25883,22,22]: 9:41
+              - generic [ref=f7e19740] [box=3536,25886,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e19741] [box=3190,25904,427,833]:
+              - generic [ref=f7e19742] [box=3190,25904,427,53]
+              - generic [ref=f7e19749] [box=3190,25957,427,780]
+        - generic [ref=f7e19821] [box=3686,25808,470,1000]:
+          - generic [ref=f7e19822] [box=3682,25780,474,24]:
+            - generic [ref=f7e19823] [box=3682,25780,428,24]:
+              - generic "Drag to reorder" [ref=f7e19824] [box=3682,25781,17,23]
+              - generic "Click to focus" [ref=f7e19832] [cursor=pointer] [box=3703,25782,407,21]
+            - generic [ref=f7e19834] [box=4110,25781,46,22]:
+              - button "More" [ref=f7e19836] [cursor=pointer] [box=4110,25781,22,22]
+              - button "Focus" [ref=f7e19841] [cursor=pointer] [box=4134,25781,22,22]
+          - generic [ref=f7e19846] [box=3706,25842,430,932]:
+            - generic [ref=f7e19848] [box=3708,25844,427,80]:
+              - generic [ref=f7e19849] [box=3740,25883,22,22]: 9:41
+              - generic [ref=f7e19850] [box=4054,25886,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e19851] [box=3708,25904,427,833]:
+              - generic [ref=f7e19852] [box=3708,25904,427,53]
+              - generic [ref=f7e19859] [box=3708,25957,427,780]
+        - generic [ref=f7e19931] [box=4204,25808,470,1000]:
+          - generic [ref=f7e19932] [box=4200,25780,474,24]:
+            - generic [ref=f7e19933] [box=4200,25780,428,24]:
+              - generic "Drag to reorder" [ref=f7e19934] [box=4200,25781,17,23]
+              - generic "Click to focus" [ref=f7e19942] [cursor=pointer] [box=4221,25782,407,21]
+            - generic [ref=f7e19944] [box=4628,25781,46,22]:
+              - button "More" [ref=f7e19946] [cursor=pointer] [box=4628,25781,22,22]
+              - button "Focus" [ref=f7e19951] [cursor=pointer] [box=4652,25781,22,22]
+          - generic [ref=f7e19956] [box=4224,25842,430,932]:
+            - generic [ref=f7e19958] [box=4226,25844,427,80]:
+              - generic [ref=f7e19959] [box=4258,25883,22,22]: 9:41
+              - generic [ref=f7e19960] [box=4572,25886,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e19961] [box=4226,25904,427,833]:
+              - generic [ref=f7e19962] [box=4226,25904,427,53]
+              - generic [ref=f7e19969] [box=4226,25957,427,780]
+        - generic [ref=f7e20009] [box=4722,25808,470,1000]:
+          - generic [ref=f7e20010] [box=4718,25780,474,24]:
+            - generic [ref=f7e20011] [box=4718,25780,428,24]:
+              - generic "Drag to reorder" [ref=f7e20012] [box=4718,25781,17,23]
+              - generic "Click to focus" [ref=f7e20020] [cursor=pointer] [box=4739,25782,407,21]
+            - generic [ref=f7e20022] [box=5146,25781,46,22]:
+              - button "More" [ref=f7e20024] [cursor=pointer] [box=5146,25781,22,22]
+              - button "Focus" [ref=f7e20029] [cursor=pointer] [box=5170,25781,22,22]
+          - generic [ref=f7e20034] [box=4742,25842,430,932]:
+            - generic [ref=f7e20036] [box=4744,25844,427,80]:
+              - generic [ref=f7e20037] [box=4776,25883,22,22]: 9:41
+              - generic [ref=f7e20038] [box=5090,25886,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e20039] [box=4744,25904,427,833]:
+              - generic [ref=f7e20040] [box=4744,25904,427,53]
+              - generic [ref=f7e20047] [box=4744,25957,427,780]
+        - generic [ref=f7e20087] [box=5240,25808,470,1000]:
+          - generic [ref=f7e20088] [box=5236,25780,474,24]:
+            - generic [ref=f7e20089] [box=5236,25780,428,24]:
+              - generic "Drag to reorder" [ref=f7e20090] [box=5236,25781,17,23]
+              - generic "Click to focus" [ref=f7e20098] [cursor=pointer] [box=5257,25782,407,21]
+            - generic [ref=f7e20100] [box=5664,25781,46,22]:
+              - button "More" [ref=f7e20102] [cursor=pointer] [box=5664,25781,22,22]
+              - button "Focus" [ref=f7e20107] [cursor=pointer] [box=5688,25781,22,22]
+          - generic [ref=f7e20112] [box=5260,25842,430,932]:
+            - generic [ref=f7e20114] [box=5262,25844,427,80]:
+              - generic [ref=f7e20115] [box=5294,25883,22,22]: 9:41
+              - generic [ref=f7e20116] [box=5608,25886,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e20117] [box=5262,25904,427,833]:
+              - generic [ref=f7e20118] [box=5262,25904,427,53]
+              - generic [ref=f7e20124] [box=5262,25957,427,780]
+        - generic [ref=f7e20195] [box=5758,25808,470,1000]:
+          - generic [ref=f7e20196] [box=5754,25780,474,24]:
+            - generic [ref=f7e20197] [box=5754,25780,428,24]:
+              - generic "Drag to reorder" [ref=f7e20198] [box=5754,25781,17,23]
+              - generic "Click to focus" [ref=f7e20206] [cursor=pointer] [box=5775,25782,407,21]
+            - generic [ref=f7e20208] [box=6182,25781,46,22]:
+              - button "More" [ref=f7e20210] [cursor=pointer] [box=6182,25781,22,22]
+              - button "Focus" [ref=f7e20215] [cursor=pointer] [box=6206,25781,22,22]
+          - generic [ref=f7e20220] [box=5778,25842,430,932]:
+            - generic [ref=f7e20222] [box=5780,25844,427,80]:
+              - generic [ref=f7e20223] [box=5812,25883,22,22]: 9:41
+              - generic [ref=f7e20224] [box=6126,25886,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e20225] [box=5780,25904,427,833]:
+              - generic [ref=f7e20226] [box=5780,25904,427,53]
+              - generic [ref=f7e20232] [box=5780,25957,427,780]
+        - generic [ref=f7e20303] [box=6276,25808,470,1000]:
+          - generic [ref=f7e20304] [box=6272,25780,474,24]:
+            - generic [ref=f7e20305] [box=6272,25780,428,24]:
+              - generic "Drag to reorder" [ref=f7e20306] [box=6272,25781,17,23]
+              - generic "Click to focus" [ref=f7e20314] [cursor=pointer] [box=6293,25782,407,21]
+            - generic [ref=f7e20316] [box=6700,25781,46,22]:
+              - button "More" [ref=f7e20318] [cursor=pointer] [box=6700,25781,22,22]
+              - button "Focus" [ref=f7e20323] [cursor=pointer] [box=6724,25781,22,22]
+          - generic [ref=f7e20328] [box=6296,25842,430,932]:
+            - generic [ref=f7e20330] [box=6298,25844,427,80]:
+              - generic [ref=f7e20331] [box=6330,25883,22,22]: 9:41
+              - generic [ref=f7e20332] [box=6644,25886,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e20333] [box=6298,25904,427,833]:
+              - generic [ref=f7e20334] [box=6298,25904,427,53]
+              - generic [ref=f7e20341] [box=6298,25957,427,780]
+        - generic [ref=f7e20389] [box=6794,25808,470,1000]:
+          - generic [ref=f7e20390] [box=6790,25780,474,24]:
+            - generic [ref=f7e20391] [box=6790,25780,428,24]:
+              - generic "Drag to reorder" [ref=f7e20392] [box=6790,25781,17,23]
+              - generic "Click to focus" [ref=f7e20400] [cursor=pointer] [box=6811,25782,407,21]
+            - generic [ref=f7e20402] [box=7218,25781,46,22]:
+              - button "More" [ref=f7e20404] [cursor=pointer] [box=7218,25781,22,22]
+              - button "Focus" [ref=f7e20409] [cursor=pointer] [box=7242,25781,22,22]
+          - generic [ref=f7e20414] [box=6814,25842,430,932]:
+            - generic [ref=f7e20416] [box=6816,25844,427,80]:
+              - generic [ref=f7e20417] [box=6848,25883,22,22]: 9:41
+              - generic [ref=f7e20418] [box=7162,25886,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e20419] [box=6816,25904,427,833]:
+              - generic [ref=f7e20420] [box=6816,25904,427,53]
+              - generic [ref=f7e20427] [box=6816,25957,427,780]
+        - generic [ref=f7e20475] [box=7312,25808,470,1000]:
+          - generic [ref=f7e20476] [box=7308,25780,474,24]:
+            - generic [ref=f7e20477] [box=7308,25780,428,24]:
+              - generic "Drag to reorder" [ref=f7e20478] [box=7308,25781,17,23]
+              - generic "Click to focus" [ref=f7e20486] [cursor=pointer] [box=7329,25782,407,21]
+            - generic [ref=f7e20488] [box=7736,25781,46,22]:
+              - button "More" [ref=f7e20490] [cursor=pointer] [box=7736,25781,22,22]
+              - button "Focus" [ref=f7e20495] [cursor=pointer] [box=7760,25781,22,22]
+          - generic [ref=f7e20500] [box=7332,25842,430,932]:
+            - generic [ref=f7e20502] [box=7334,25844,427,80]:
+              - generic [ref=f7e20503] [box=7366,25883,22,22]: 9:41
+              - generic [ref=f7e20504] [box=7680,25886,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e20505] [box=7334,25904,427,833]:
+              - generic [ref=f7e20506] [box=7334,25904,427,53]
+              - generic [ref=f7e20512] [box=7334,25957,427,780]
+        - generic [ref=f7e20564] [box=7830,25808,470,1000]:
+          - generic [ref=f7e20565] [box=7826,25780,474,24]:
+            - generic [ref=f7e20566] [box=7826,25780,428,24]:
+              - generic "Drag to reorder" [ref=f7e20567] [box=7826,25781,17,23]
+              - generic "Click to focus" [ref=f7e20575] [cursor=pointer] [box=7847,25782,407,21]
+            - generic [ref=f7e20577] [box=8254,25781,46,22]:
+              - button "More" [ref=f7e20579] [cursor=pointer] [box=8254,25781,22,22]
+              - button "Focus" [ref=f7e20584] [cursor=pointer] [box=8278,25781,22,22]
+          - generic [ref=f7e20589] [box=7850,25842,430,932]:
+            - generic [ref=f7e20591] [box=7852,25844,427,80]:
+              - generic [ref=f7e20592] [box=7884,25883,22,22]: 9:41
+              - generic [ref=f7e20593] [box=8198,25886,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e20594] [box=7852,25904,427,833]:
+              - generic [ref=f7e20595] [box=7852,25904,427,53]
+              - generic [ref=f7e20601] [box=7852,25957,427,780]
+    - generic [ref=f7e20653] [box=0,26888,15612,1094]:
+      - generic [ref=f7e20655] [box=60,26888,15492,94]:
+        - generic [ref=f7e20656] [box=58,26888,337,33]: 09 — Agents & Companion
+        - generic [ref=f7e20657] [box=60,26928,15492,19]: agents list · agent detail · Companion (6 variants)
+      - generic [ref=f7e20658] [box=0,26983,6288,1000]:
+        - generic [ref=f7e20659] [box=60,26983,470,1000]:
+          - generic [ref=f7e20660] [box=56,26955,474,24]:
+            - generic [ref=f7e20661] [box=56,26955,428,24]:
+              - generic "Drag to reorder" [ref=f7e20662] [box=56,26955,17,23]
+              - generic "Click to focus" [ref=f7e20670] [cursor=pointer] [box=77,26956,407,21]
+            - generic [ref=f7e20672] [box=484,26956,46,22]:
+              - button "More" [ref=f7e20674] [cursor=pointer] [box=484,26956,22,22]
+              - button "Focus" [ref=f7e20679] [cursor=pointer] [box=508,26956,22,22]
+          - generic [ref=f7e20684] [box=80,27017,430,932]:
+            - generic [ref=f7e20686] [box=82,27018,427,80]:
+              - generic [ref=f7e20687] [box=114,27057,22,22]: 9:41
+              - generic [ref=f7e20688] [box=428,27060,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e20689] [box=82,27078,427,833]:
+              - generic [ref=f7e20690] [box=82,27078,427,53]
+              - generic [ref=f7e20705] [box=82,27131,427,780]
+              - img [ref=f7e20757] [box=449,27800,26,26]
+        - generic [ref=f7e20761] [box=578,26983,470,1000]:
+          - generic [ref=f7e20762] [box=574,26955,474,24]:
+            - generic [ref=f7e20763] [box=574,26955,428,24]:
+              - generic "Drag to reorder" [ref=f7e20764] [box=574,26955,17,23]
+              - generic "Click to focus" [ref=f7e20772] [cursor=pointer] [box=595,26956,407,21]
+            - generic [ref=f7e20774] [box=1002,26956,46,22]:
+              - button "More" [ref=f7e20776] [cursor=pointer] [box=1002,26956,22,22]
+              - button "Focus" [ref=f7e20781] [cursor=pointer] [box=1026,26956,22,22]
+          - generic [ref=f7e20786] [box=598,27017,430,932]:
+            - generic [ref=f7e20788] [box=600,27018,427,80]:
+              - generic [ref=f7e20789] [box=632,27057,22,22]: 9:41
+              - generic [ref=f7e20790] [box=946,27060,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e20791] [box=600,27078,427,833]:
+              - generic [ref=f7e20792] [box=600,27078,427,53]
+              - generic [ref=f7e20807] [box=600,27131,427,780]
+              - img [ref=f7e20859] [box=967,27800,26,26]
+        - generic [ref=f7e20863] [box=1096,26983,470,1000]:
+          - generic [ref=f7e20864] [box=1092,26955,474,24]:
+            - generic [ref=f7e20865] [box=1092,26955,428,24]:
+              - generic "Drag to reorder" [ref=f7e20866] [box=1092,26955,17,23]
+              - generic "Click to focus" [ref=f7e20874] [cursor=pointer] [box=1113,26956,407,21]
+            - generic [ref=f7e20876] [box=1520,26956,46,22]:
+              - button "More" [ref=f7e20878] [cursor=pointer] [box=1520,26956,22,22]
+              - button "Focus" [ref=f7e20883] [cursor=pointer] [box=1544,26956,22,22]
+          - generic [ref=f7e20888] [box=1116,27017,430,932]:
+            - generic [ref=f7e20890] [box=1118,27018,427,80]:
+              - generic [ref=f7e20891] [box=1150,27057,22,22]: 9:41
+              - generic [ref=f7e20892] [box=1464,27060,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e20893] [box=1118,27078,427,833]:
+              - generic [ref=f7e20894] [box=1118,27078,427,53]
+              - generic [ref=f7e20905] [box=1118,27131,427,698]
+              - generic [ref=f7e20991] [box=1118,27829,427,82]
+        - generic [ref=f7e20998] [box=1614,26983,470,1000]:
+          - generic [ref=f7e20999] [box=1610,26955,474,24]:
+            - generic [ref=f7e21000] [box=1610,26955,428,24]:
+              - generic "Drag to reorder" [ref=f7e21001] [box=1610,26955,17,23]
+              - generic "Click to focus" [ref=f7e21009] [cursor=pointer] [box=1631,26956,407,21]
+            - generic [ref=f7e21011] [box=2038,26956,46,22]:
+              - button "More" [ref=f7e21013] [cursor=pointer] [box=2038,26956,22,22]
+              - button "Focus" [ref=f7e21018] [cursor=pointer] [box=2062,26956,22,22]
+          - generic [ref=f7e21023] [box=1634,27017,430,932]:
+            - generic [ref=f7e21025] [box=1636,27018,427,80]:
+              - generic [ref=f7e21026] [box=1668,27057,22,22]: 9:41
+              - generic [ref=f7e21027] [box=1982,27060,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e21028] [box=1636,27078,427,833]:
+              - generic [ref=f7e21029] [box=1636,27078,427,53]
+              - generic [ref=f7e21040] [box=1636,27131,427,698]
+              - generic [ref=f7e21126] [box=1636,27829,427,82]
+        - generic [ref=f7e21133] [box=2132,26983,470,1000]:
+          - generic [ref=f7e21134] [box=2128,26955,474,24]:
+            - generic [ref=f7e21135] [box=2128,26955,428,24]:
+              - generic "Drag to reorder" [ref=f7e21136] [box=2128,26955,17,23]
+              - generic "Click to focus" [ref=f7e21144] [cursor=pointer] [box=2149,26956,407,21]
+            - generic [ref=f7e21146] [box=2556,26956,46,22]:
+              - button "More" [ref=f7e21148] [cursor=pointer] [box=2556,26956,22,22]
+              - button "Focus" [ref=f7e21153] [cursor=pointer] [box=2580,26956,22,22]
+          - generic [ref=f7e21158] [box=2152,27017,430,932]:
+            - generic [ref=f7e21160] [box=2154,27018,427,80]:
+              - generic [ref=f7e21161] [box=2186,27057,22,22]: 9:41
+              - generic [ref=f7e21162] [box=2500,27060,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e21164] [box=2154,27078,427,833]:
+              - generic [ref=f7e21165] [box=2154,27078,427,42]
+              - generic [ref=f7e21179] [box=2327,27541,79,25]: Listening…
+              - generic [ref=f7e21180] [box=2154,27817,427,94]
+        - generic [ref=f7e21195] [box=2650,26983,470,1000]:
+          - generic [ref=f7e21196] [box=2646,26955,474,24]:
+            - generic [ref=f7e21197] [box=2646,26955,428,24]:
+              - generic "Drag to reorder" [ref=f7e21198] [box=2646,26955,17,23]
+              - generic "Click to focus" [ref=f7e21206] [cursor=pointer] [box=2667,26956,407,21]
+            - generic [ref=f7e21208] [box=3074,26956,46,22]:
+              - button "More" [ref=f7e21210] [cursor=pointer] [box=3074,26956,22,22]
+              - button "Focus" [ref=f7e21215] [cursor=pointer] [box=3098,26956,22,22]
+          - generic [ref=f7e21220] [box=2670,27017,430,932]:
+            - generic [ref=f7e21222] [box=2672,27018,427,80]:
+              - generic [ref=f7e21223] [box=2704,27057,22,22]: 9:41
+              - generic [ref=f7e21224] [box=3018,27060,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e21226] [box=2672,27078,427,833]:
+              - generic [ref=f7e21227] [box=2672,27078,427,42]
+              - generic [ref=f7e21236] [box=2672,27120,427,696]
+              - generic [ref=f7e21255] [box=2672,27817,427,94]
+        - generic [ref=f7e21266] [box=3168,26983,470,1000]:
+          - generic [ref=f7e21267] [box=3164,26955,474,24]:
+            - generic [ref=f7e21268] [box=3164,26955,428,24]:
+              - generic "Drag to reorder" [ref=f7e21269] [box=3164,26955,17,23]
+              - generic "Click to focus" [ref=f7e21277] [cursor=pointer] [box=3185,26956,407,21]
+            - generic [ref=f7e21279] [box=3592,26956,46,22]:
+              - button "More" [ref=f7e21281] [cursor=pointer] [box=3592,26956,22,22]
+              - button "Focus" [ref=f7e21286] [cursor=pointer] [box=3616,26956,22,22]
+          - generic [ref=f7e21291] [box=3188,27017,430,932]:
+            - generic [ref=f7e21293] [box=3190,27018,427,80]:
+              - generic [ref=f7e21294] [box=3222,27057,22,22]: 9:41
+              - generic [ref=f7e21295] [box=3536,27060,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e21297] [box=3190,27078,427,833]:
+              - generic [ref=f7e21298] [box=3190,27078,427,42]
+              - generic [ref=f7e21307] [box=3190,27120,427,729]
+              - generic [ref=f7e21351] [box=3190,27849,427,62]
+        - generic [ref=f7e21361] [box=3686,26983,470,1000]:
+          - generic [ref=f7e21362] [box=3682,26955,474,24]:
+            - generic [ref=f7e21363] [box=3682,26955,428,24]:
+              - generic "Drag to reorder" [ref=f7e21364] [box=3682,26955,17,23]
+              - generic "Click to focus" [ref=f7e21372] [cursor=pointer] [box=3703,26956,407,21]
+            - generic [ref=f7e21374] [box=4110,26956,46,22]:
+              - button "More" [ref=f7e21376] [cursor=pointer] [box=4110,26956,22,22]
+              - button "Focus" [ref=f7e21381] [cursor=pointer] [box=4134,26956,22,22]
+          - generic [ref=f7e21386] [box=3706,27017,430,932]:
+            - generic [ref=f7e21388] [box=3708,27018,427,80]:
+              - generic [ref=f7e21389] [box=3740,27057,22,22]: 9:41
+              - generic [ref=f7e21390] [box=4054,27060,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e21392] [box=3708,27078,427,833]:
+              - generic [ref=f7e21393] [box=3708,27078,427,42]
+              - generic [ref=f7e21402] [box=3708,27120,427,699]
+              - generic [ref=f7e21457] [box=3708,27819,427,92]
+        - generic [ref=f7e21466] [box=4204,26983,470,1000]:
+          - generic [ref=f7e21467] [box=4200,26955,474,24]:
+            - generic [ref=f7e21468] [box=4200,26955,428,24]:
+              - generic "Drag to reorder" [ref=f7e21469] [box=4200,26955,17,23]
+              - generic "Click to focus" [ref=f7e21477] [cursor=pointer] [box=4221,26956,407,21]
+            - generic [ref=f7e21479] [box=4628,26956,46,22]:
+              - button "More" [ref=f7e21481] [cursor=pointer] [box=4628,26956,22,22]
+              - button "Focus" [ref=f7e21486] [cursor=pointer] [box=4652,26956,22,22]
+          - generic [ref=f7e21491] [box=4224,27017,430,932]:
+            - generic [ref=f7e21493] [box=4226,27018,427,80]:
+              - generic [ref=f7e21494] [box=4258,27057,22,22]: 9:41
+              - generic [ref=f7e21495] [box=4572,27060,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e21497] [box=4226,27078,427,833]:
+              - generic [ref=f7e21498] [box=4226,27078,427,42]
+              - generic [ref=f7e21507] [box=4226,27120,427,679]
+              - generic [ref=f7e21522] [box=4226,27799,427,112]
+        - generic [ref=f7e21532] [box=4722,26983,470,1000]:
+          - generic [ref=f7e21533] [box=4718,26955,474,24]:
+            - generic [ref=f7e21534] [box=4718,26955,428,24]:
+              - generic "Drag to reorder" [ref=f7e21535] [box=4718,26955,17,23]
+              - generic "Click to focus" [ref=f7e21543] [cursor=pointer] [box=4739,26956,407,21]
+            - generic [ref=f7e21545] [box=5146,26956,46,22]:
+              - button "More" [ref=f7e21547] [cursor=pointer] [box=5146,26956,22,22]
+              - button "Focus" [ref=f7e21552] [cursor=pointer] [box=5170,26956,22,22]
+          - generic [ref=f7e21557] [box=4742,27017,430,932]:
+            - generic [ref=f7e21559] [box=4744,27018,427,80]:
+              - generic [ref=f7e21560] [box=4776,27057,22,22]: 9:41
+              - generic [ref=f7e21561] [box=5090,27060,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e21563] [box=4744,27078,427,833]:
+              - generic [ref=f7e21564] [box=4744,27078,427,42]
+              - generic [ref=f7e21573] [box=4744,27120,427,696]
+              - generic [ref=f7e21612] [box=4776,27817,363,58]
+        - generic [ref=f7e21620] [box=5240,26983,470,1000]:
+          - generic [ref=f7e21621] [box=5236,26955,474,24]:
+            - generic [ref=f7e21622] [box=5236,26955,428,24]:
+              - generic "Drag to reorder" [ref=f7e21623] [box=5236,26955,17,23]
+              - generic "Click to focus" [ref=f7e21631] [cursor=pointer] [box=5257,26956,407,21]
+            - generic [ref=f7e21633] [box=5664,26956,46,22]:
+              - button "More" [ref=f7e21635] [cursor=pointer] [box=5664,26956,22,22]
+              - button "Focus" [ref=f7e21640] [cursor=pointer] [box=5688,26956,22,22]
+          - generic [ref=f7e21645] [box=5260,27017,430,932]:
+            - generic [ref=f7e21647] [box=5262,27018,427,80]:
+              - generic [ref=f7e21648] [box=5294,27057,22,22]: 9:41
+              - generic [ref=f7e21649] [box=5608,27060,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e21651] [box=5262,27078,427,833]:
+              - generic [ref=f7e21652] [box=5262,27078,427,42]
+              - generic [ref=f7e21666] [box=5435,27541,79,25]: Listening…
+              - generic [ref=f7e21667] [box=5262,27817,427,94]
+        - generic [ref=f7e21682] [box=5758,26983,470,1000]:
+          - generic [ref=f7e21683] [box=5754,26955,474,24]:
+            - generic [ref=f7e21684] [box=5754,26955,428,24]:
+              - generic "Drag to reorder" [ref=f7e21685] [box=5754,26955,17,23]
+              - generic "Click to focus" [ref=f7e21693] [cursor=pointer] [box=5775,26956,407,21]
+            - generic [ref=f7e21695] [box=6182,26956,46,22]:
+              - button "More" [ref=f7e21697] [cursor=pointer] [box=6182,26956,22,22]
+              - button "Focus" [ref=f7e21702] [cursor=pointer] [box=6206,26956,22,22]
+          - generic [ref=f7e21707] [box=5778,27017,430,932]:
+            - generic [ref=f7e21709] [box=5780,27018,427,80]:
+              - generic [ref=f7e21710] [box=5812,27057,22,22]: 9:41
+              - generic [ref=f7e21711] [box=6126,27060,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e21713] [box=5780,27078,427,833]:
+              - generic [ref=f7e21714] [box=5780,27078,427,42]
+              - generic [ref=f7e21723] [box=5780,27120,427,696]
+              - generic [ref=f7e21742] [box=5780,27817,427,94]
+    - generic [ref=f7e21753] [box=0,28063,15612,1094]:
+      - generic [ref=f7e21755] [box=60,28063,15492,94]:
+        - generic [ref=f7e21756] [box=58,28063,241,33]: 10 — Misc surfaces
+        - generic [ref=f7e21757] [box=60,28102,15492,19]: Camera · Share preview · Widget setup (Billing removed in v1 — see §13 Waitlist)
+      - generic [ref=f7e21758] [box=0,28157,2662,1000]:
+        - generic [ref=f7e21759] [box=60,28157,470,1000]:
+          - generic [ref=f7e21760] [box=56,28129,474,24]:
+            - generic [ref=f7e21761] [box=56,28129,428,24]:
+              - generic "Drag to reorder" [ref=f7e21762] [box=56,28129,17,23]
+              - generic "Click to focus" [ref=f7e21770] [cursor=pointer] [box=77,28130,407,21]
+            - generic [ref=f7e21772] [box=484,28130,46,22]:
+              - button "More" [ref=f7e21774] [cursor=pointer] [box=484,28130,22,22]
+              - button "Focus" [ref=f7e21779] [cursor=pointer] [box=508,28130,22,22]
+          - generic [ref=f7e21784] [box=80,28191,430,932]:
+            - generic [ref=f7e21786] [box=82,28192,427,80]:
+              - generic [ref=f7e21787] [box=114,28232,22,22]: 9:41
+              - generic [ref=f7e21788] [box=428,28234,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e21790] [box=82,28252,427,833]:
+              - generic [ref=f7e21792] [box=98,28268,395,27]
+              - img [ref=f7e21806] [box=441,28952,22,22]
+        - generic [ref=f7e21811] [box=578,28157,470,1000]:
+          - generic [ref=f7e21812] [box=574,28129,474,24]:
+            - generic [ref=f7e21813] [box=574,28129,428,24]:
+              - generic "Drag to reorder" [ref=f7e21814] [box=574,28129,17,23]
+              - generic "Click to focus" [ref=f7e21822] [cursor=pointer] [box=595,28130,407,21]
+            - generic [ref=f7e21824] [box=1002,28130,46,22]:
+              - button "More" [ref=f7e21826] [cursor=pointer] [box=1002,28130,22,22]
+              - button "Focus" [ref=f7e21831] [cursor=pointer] [box=1026,28130,22,22]
+          - generic [ref=f7e21836] [box=598,28191,430,932]:
+            - generic [ref=f7e21838] [box=600,28192,427,80]:
+              - generic [ref=f7e21839] [box=632,28232,22,22]: 9:41
+              - generic [ref=f7e21840] [box=946,28234,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e21841] [box=600,28252,427,833]:
+              - generic [ref=f7e21842] [box=600,28252,427,53]
+              - generic [ref=f7e21852] [box=600,28305,427,705]
+              - generic [ref=f7e21892] [box=600,29010,427,75]
+        - generic [ref=f7e21899] [box=1096,28157,470,1000]:
+          - generic [ref=f7e21900] [box=1092,28129,474,24]:
+            - generic [ref=f7e21901] [box=1092,28129,428,24]:
+              - generic "Drag to reorder" [ref=f7e21902] [box=1092,28129,17,23]
+              - generic "Click to focus" [ref=f7e21910] [cursor=pointer] [box=1113,28130,407,21]
+            - generic [ref=f7e21912] [box=1520,28130,46,22]:
+              - button "More" [ref=f7e21914] [cursor=pointer] [box=1520,28130,22,22]
+              - button "Focus" [ref=f7e21919] [cursor=pointer] [box=1544,28130,22,22]
+          - generic [ref=f7e21924] [box=1116,28191,430,932]:
+            - generic [ref=f7e21926] [box=1118,28192,427,80]:
+              - generic [ref=f7e21927] [box=1150,28232,22,22]: 9:41
+              - generic [ref=f7e21928] [box=1464,28234,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e21929] [box=1118,28252,427,833]:
+              - generic [ref=f7e21930] [box=1118,28252,427,53]
+              - generic [ref=f7e21940] [box=1118,28305,427,705]
+              - generic [ref=f7e21980] [box=1118,29010,427,75]
+        - generic [ref=f7e21987] [box=1614,28157,470,1000]:
+          - generic [ref=f7e21988] [box=1610,28129,474,24]:
+            - generic [ref=f7e21989] [box=1610,28129,428,24]:
+              - generic "Drag to reorder" [ref=f7e21990] [box=1610,28129,17,23]
+              - generic "Click to focus" [ref=f7e21998] [cursor=pointer] [box=1631,28130,407,21]
+            - generic [ref=f7e22000] [box=2038,28130,46,22]:
+              - button "More" [ref=f7e22002] [cursor=pointer] [box=2038,28130,22,22]
+              - button "Focus" [ref=f7e22007] [cursor=pointer] [box=2062,28130,22,22]
+          - generic [ref=f7e22012] [box=1634,28191,430,932]:
+            - generic [ref=f7e22014] [box=1636,28192,427,80]:
+              - generic [ref=f7e22015] [box=1668,28232,22,22]: 9:41
+              - generic [ref=f7e22016] [box=1982,28234,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e22017] [box=1636,28252,427,833]:
+              - generic [ref=f7e22018] [box=1636,28252,427,53]
+              - generic [ref=f7e22024] [box=1636,28305,427,780]
+        - generic [ref=f7e22075] [box=2132,28157,470,1000]:
+          - generic [ref=f7e22076] [box=2128,28129,474,24]:
+            - generic [ref=f7e22077] [box=2128,28129,428,24]:
+              - generic "Drag to reorder" [ref=f7e22078] [box=2128,28129,17,23]
+              - generic "Click to focus" [ref=f7e22086] [cursor=pointer] [box=2149,28130,407,21]
+            - generic [ref=f7e22088] [box=2556,28130,46,22]:
+              - button "More" [ref=f7e22090] [cursor=pointer] [box=2556,28130,22,22]
+              - button "Focus" [ref=f7e22095] [cursor=pointer] [box=2580,28130,22,22]
+          - generic [ref=f7e22100] [box=2152,28191,430,932]:
+            - generic [ref=f7e22102] [box=2154,28192,427,80]:
+              - generic [ref=f7e22103] [box=2186,28232,22,22]: 9:41
+              - generic [ref=f7e22104] [box=2500,28234,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e22105] [box=2154,28252,427,833]:
+              - generic [ref=f7e22106] [box=2154,28252,427,53]
+              - generic [ref=f7e22112] [box=2154,28305,427,780]
+    - generic [ref=f7e22163] [box=0,29237,15612,1094]:
+      - generic [ref=f7e22165] [box=60,29237,15492,94]:
+        - generic [ref=f7e22166] [box=58,29237,236,33]: 11 — Legal & errors
+        - generic [ref=f7e22167] [box=60,29276,15492,19]: legal index · Article 50 · 404/offline/5xx
+      - generic [ref=f7e22168] [box=0,29331,4216,1000]:
+        - generic [ref=f7e22169] [box=60,29331,470,1000]:
+          - generic [ref=f7e22170] [box=56,29303,474,24]:
+            - generic [ref=f7e22171] [box=56,29303,428,24]:
+              - generic "Drag to reorder" [ref=f7e22172] [box=56,29303,17,23]
+              - generic "Click to focus" [ref=f7e22180] [cursor=pointer] [box=77,29304,407,21]
+            - generic [ref=f7e22182] [box=484,29304,46,22]:
+              - button "More" [ref=f7e22184] [cursor=pointer] [box=484,29304,22,22]
+              - button "Focus" [ref=f7e22189] [cursor=pointer] [box=508,29304,22,22]
+          - generic [ref=f7e22194] [box=80,29365,430,932]:
+            - generic [ref=f7e22196] [box=82,29367,427,80]:
+              - generic [ref=f7e22197] [box=114,29406,22,22]: 9:41
+              - generic [ref=f7e22198] [box=428,29409,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e22199] [box=82,29427,427,833]:
+              - generic [ref=f7e22200] [box=82,29427,427,53]
+              - generic [ref=f7e22206] [box=82,29479,427,780]
+        - generic [ref=f7e22284] [box=578,29331,470,1000]:
+          - generic [ref=f7e22285] [box=574,29303,474,24]:
+            - generic [ref=f7e22286] [box=574,29303,428,24]:
+              - generic "Drag to reorder" [ref=f7e22287] [box=574,29303,17,23]
+              - generic "Click to focus" [ref=f7e22295] [cursor=pointer] [box=595,29304,407,21]
+            - generic [ref=f7e22297] [box=1002,29304,46,22]:
+              - button "More" [ref=f7e22299] [cursor=pointer] [box=1002,29304,22,22]
+              - button "Focus" [ref=f7e22304] [cursor=pointer] [box=1026,29304,22,22]
+          - generic [ref=f7e22309] [box=598,29365,430,932]:
+            - generic [ref=f7e22311] [box=600,29367,427,80]:
+              - generic [ref=f7e22312] [box=632,29406,22,22]: 9:41
+              - generic [ref=f7e22313] [box=946,29409,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e22314] [box=600,29427,427,833]:
+              - generic [ref=f7e22315] [box=600,29427,427,53]
+              - generic [ref=f7e22321] [box=600,29479,427,780]
+        - generic [ref=f7e22399] [box=1096,29331,470,1000]:
+          - generic [ref=f7e22400] [box=1092,29303,474,24]:
+            - generic [ref=f7e22401] [box=1092,29303,428,24]:
+              - generic "Drag to reorder" [ref=f7e22402] [box=1092,29303,17,23]
+              - generic "Click to focus" [ref=f7e22410] [cursor=pointer] [box=1113,29304,407,21]
+            - generic [ref=f7e22412] [box=1520,29304,46,22]:
+              - button "More" [ref=f7e22414] [cursor=pointer] [box=1520,29304,22,22]
+              - button "Focus" [ref=f7e22419] [cursor=pointer] [box=1544,29304,22,22]
+          - generic [ref=f7e22424] [box=1116,29365,430,932]:
+            - generic [ref=f7e22426] [box=1118,29367,427,80]:
+              - generic [ref=f7e22427] [box=1150,29406,22,22]: 9:41
+              - generic [ref=f7e22428] [box=1464,29409,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e22429] [box=1118,29427,427,833]:
+              - generic [ref=f7e22430] [box=1118,29427,427,53]
+              - generic [ref=f7e22437] [box=1118,29479,427,698]
+              - generic [ref=f7e22476] [box=1310,30206,87,20]: Continue to AGI
+        - generic [ref=f7e22478] [box=1614,29331,470,1000]:
+          - generic [ref=f7e22479] [box=1610,29303,474,24]:
+            - generic [ref=f7e22480] [box=1610,29303,428,24]:
+              - generic "Drag to reorder" [ref=f7e22481] [box=1610,29303,17,23]
+              - generic "Click to focus" [ref=f7e22489] [cursor=pointer] [box=1631,29304,407,21]
+            - generic [ref=f7e22491] [box=2038,29304,46,22]:
+              - button "More" [ref=f7e22493] [cursor=pointer] [box=2038,29304,22,22]
+              - button "Focus" [ref=f7e22498] [cursor=pointer] [box=2062,29304,22,22]
+          - generic [ref=f7e22503] [box=1634,29365,430,932]:
+            - generic [ref=f7e22505] [box=1636,29367,427,80]:
+              - generic [ref=f7e22506] [box=1668,29406,22,22]: 9:41
+              - generic [ref=f7e22507] [box=1982,29409,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e22508] [box=1636,29427,427,833]:
+              - generic [ref=f7e22509] [box=1636,29427,427,53]
+              - generic [ref=f7e22516] [box=1636,29479,427,698]
+              - generic [ref=f7e22555] [box=1828,30206,87,20]: Continue to AGI
+        - generic [ref=f7e22557] [box=2132,29331,470,1000]:
+          - generic [ref=f7e22558] [box=2128,29303,474,24]:
+            - generic [ref=f7e22559] [box=2128,29303,428,24]:
+              - generic "Drag to reorder" [ref=f7e22560] [box=2128,29303,17,23]
+              - generic "Click to focus" [ref=f7e22568] [cursor=pointer] [box=2149,29304,407,21]
+            - generic [ref=f7e22570] [box=2556,29304,46,22]:
+              - button "More" [ref=f7e22572] [cursor=pointer] [box=2556,29304,22,22]
+              - button "Focus" [ref=f7e22577] [cursor=pointer] [box=2580,29304,22,22]
+          - generic [ref=f7e22582] [box=2152,29365,430,932]:
+            - generic [ref=f7e22584] [box=2154,29367,427,80]:
+              - generic [ref=f7e22585] [box=2186,29406,22,22]: 9:41
+              - generic [ref=f7e22586] [box=2500,29409,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e22587] [box=2154,29427,427,833]:
+              - img [ref=f7e22589] [box=2172,29441,24,24]
+              - generic [ref=f7e22593] [box=2154,29479,427,363]
+        - generic [ref=f7e22606] [box=2650,29331,470,1000]:
+          - generic [ref=f7e22607] [box=2646,29303,474,24]:
+            - generic [ref=f7e22608] [box=2646,29303,428,24]:
+              - generic "Drag to reorder" [ref=f7e22609] [box=2646,29303,17,23]
+              - generic "Click to focus" [ref=f7e22617] [cursor=pointer] [box=2667,29304,407,21]
+            - generic [ref=f7e22619] [box=3074,29304,46,22]:
+              - button "More" [ref=f7e22621] [cursor=pointer] [box=3074,29304,22,22]
+              - button "Focus" [ref=f7e22626] [cursor=pointer] [box=3098,29304,22,22]
+          - generic [ref=f7e22631] [box=2670,29365,430,932]:
+            - generic [ref=f7e22633] [box=2672,29367,427,80]:
+              - generic [ref=f7e22634] [box=2704,29406,22,22]: 9:41
+              - generic [ref=f7e22635] [box=3018,29409,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e22636] [box=2672,29427,427,833]:
+              - img [ref=f7e22638] [box=2690,29441,24,24]
+              - generic [ref=f7e22642] [box=2672,29479,427,363]
+        - generic [ref=f7e22655] [box=3168,29331,470,1000]:
+          - generic [ref=f7e22656] [box=3164,29303,474,24]:
+            - generic [ref=f7e22657] [box=3164,29303,428,24]:
+              - generic "Drag to reorder" [ref=f7e22658] [box=3164,29303,17,23]
+              - generic "Click to focus" [ref=f7e22666] [cursor=pointer] [box=3185,29304,407,21]
+            - generic [ref=f7e22668] [box=3592,29304,46,22]:
+              - button "More" [ref=f7e22670] [cursor=pointer] [box=3592,29304,22,22]
+              - button "Focus" [ref=f7e22675] [cursor=pointer] [box=3616,29304,22,22]
+          - generic [ref=f7e22680] [box=3188,29365,430,932]:
+            - generic [ref=f7e22682] [box=3190,29367,427,80]:
+              - generic [ref=f7e22683] [box=3222,29406,22,22]: 9:41
+              - generic [ref=f7e22684] [box=3536,29409,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e22685] [box=3190,29427,427,833]:
+              - img [ref=f7e22687] [box=3208,29441,24,24]
+              - generic [ref=f7e22691] [box=3190,29479,427,363]
+        - generic [ref=f7e22704] [box=3686,29331,470,1000]:
+          - generic [ref=f7e22705] [box=3682,29303,474,24]:
+            - generic [ref=f7e22706] [box=3682,29303,428,24]:
+              - generic "Drag to reorder" [ref=f7e22707] [box=3682,29303,17,23]
+              - generic "Click to focus" [ref=f7e22715] [cursor=pointer] [box=3703,29304,407,21]
+            - generic [ref=f7e22717] [box=4110,29304,46,22]:
+              - button "More" [ref=f7e22719] [cursor=pointer] [box=4110,29304,22,22]
+              - button "Focus" [ref=f7e22724] [cursor=pointer] [box=4134,29304,22,22]
+          - generic [ref=f7e22729] [box=3706,29365,430,932]:
+            - generic [ref=f7e22731] [box=3708,29367,427,80]:
+              - generic [ref=f7e22732] [box=3740,29406,22,22]: 9:41
+              - generic [ref=f7e22733] [box=4054,29409,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e22734] [box=3708,29427,427,833]:
+              - img [ref=f7e22736] [box=3726,29441,24,24]
+              - generic [ref=f7e22740] [box=3708,29479,427,363]
+    - generic [ref=f7e22753] [box=0,30411,15612,1094]:
+      - generic [ref=f7e22755] [box=60,30411,15492,94]:
+        - generic [ref=f7e22756] [box=58,30411,289,33]: 13 — Local v1 additions
+        - generic [ref=f7e22757] [box=60,30450,15492,19]: waitlist · file/image guards · thermal/battery · model loading · context nudge · performance · on-device features
+      - generic [ref=f7e22758] [box=0,30505,15612,1000]:
+        - generic [ref=f7e22759] [box=60,30505,470,1000]:
+          - generic [ref=f7e22760] [box=56,30477,474,24]:
+            - generic [ref=f7e22761] [box=56,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e22762] [box=56,30478,17,23]
+              - generic "Click to focus" [ref=f7e22770] [cursor=pointer] [box=77,30479,407,21]
+            - generic [ref=f7e22772] [box=484,30478,46,22]:
+              - button "More" [ref=f7e22774] [cursor=pointer] [box=484,30478,22,22]
+              - button "Focus" [ref=f7e22779] [cursor=pointer] [box=508,30478,22,22]
+          - generic [ref=f7e22784] [box=80,30539,430,932]:
+            - generic [ref=f7e22786] [box=82,30541,427,80]:
+              - generic [ref=f7e22787] [box=114,30580,22,22]: 9:41
+              - generic [ref=f7e22788] [box=428,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e22794] [box=83,30820,424,600]:
+              - generic [ref=f7e22795] [box=83,30820,424,375]
+              - generic [ref=f7e22819] [box=83,31194,424,113]
+        - generic [ref=f7e22825] [box=578,30505,470,1000]:
+          - generic [ref=f7e22826] [box=574,30477,474,24]:
+            - generic [ref=f7e22827] [box=574,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e22828] [box=574,30478,17,23]
+              - generic "Click to focus" [ref=f7e22836] [cursor=pointer] [box=595,30479,407,21]
+            - generic [ref=f7e22838] [box=1002,30478,46,22]:
+              - button "More" [ref=f7e22840] [cursor=pointer] [box=1002,30478,22,22]
+              - button "Focus" [ref=f7e22845] [cursor=pointer] [box=1026,30478,22,22]
+          - generic [ref=f7e22850] [box=598,30539,430,932]:
+            - generic [ref=f7e22852] [box=600,30541,427,80]:
+              - generic [ref=f7e22853] [box=632,30580,22,22]: 9:41
+              - generic [ref=f7e22854] [box=946,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e22860] [box=601,30820,424,600]:
+              - generic [ref=f7e22861] [box=601,30820,424,375]
+              - generic [ref=f7e22885] [box=601,31194,424,113]
+        - generic [ref=f7e22891] [box=1096,30505,470,1000]:
+          - generic [ref=f7e22892] [box=1092,30477,474,24]:
+            - generic [ref=f7e22893] [box=1092,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e22894] [box=1092,30478,17,23]
+              - generic "Click to focus" [ref=f7e22902] [cursor=pointer] [box=1113,30479,407,21]
+            - generic [ref=f7e22904] [box=1520,30478,46,22]:
+              - button "More" [ref=f7e22906] [cursor=pointer] [box=1520,30478,22,22]
+              - button "Focus" [ref=f7e22911] [cursor=pointer] [box=1544,30478,22,22]
+          - generic [ref=f7e22916] [box=1116,30539,430,932]:
+            - generic [ref=f7e22918] [box=1118,30541,427,80]:
+              - generic [ref=f7e22919] [box=1150,30580,22,22]: 9:41
+              - generic [ref=f7e22920] [box=1464,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e22927] [box=1119,30928,424,335]:
+              - img [ref=f7e22929] [box=1311,30948,40,40]
+              - generic [ref=f7e22933] [box=1242,31024,178,38]: You're confirmed.
+              - generic [ref=f7e22935] [box=1181,31070,300,39]: We'll email you when cloud opens. No date promised yet — we'll let you in waves so the cloud doesn't melt.
+              - generic [ref=f7e22937] [box=1230,31141,202,16]: siddhartha@example.com · 🇮🇳 · joined May 18
+              - generic [ref=f7e22940] [box=1277,31207,107,20]: Continue on-device
+        - generic [ref=f7e22942] [box=1614,30505,470,1000]:
+          - generic [ref=f7e22943] [box=1610,30477,474,24]:
+            - generic [ref=f7e22944] [box=1610,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e22945] [box=1610,30478,17,23]
+              - generic "Click to focus" [ref=f7e22953] [cursor=pointer] [box=1631,30479,407,21]
+            - generic [ref=f7e22955] [box=2038,30478,46,22]:
+              - button "More" [ref=f7e22957] [cursor=pointer] [box=2038,30478,22,22]
+              - button "Focus" [ref=f7e22962] [cursor=pointer] [box=2062,30478,22,22]
+          - generic [ref=f7e22967] [box=1634,30539,430,932]:
+            - generic [ref=f7e22969] [box=1636,30541,427,80]:
+              - generic [ref=f7e22970] [box=1668,30580,22,22]: 9:41
+              - generic [ref=f7e22971] [box=1982,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e22978] [box=1637,30928,424,335]:
+              - img [ref=f7e22980] [box=1829,30948,40,40]
+              - generic [ref=f7e22984] [box=1760,31024,178,38]: You're confirmed.
+              - generic [ref=f7e22986] [box=1699,31070,300,39]: We'll email you when cloud opens. No date promised yet — we'll let you in waves so the cloud doesn't melt.
+              - generic [ref=f7e22988] [box=1748,31141,202,16]: siddhartha@example.com · 🇮🇳 · joined May 18
+              - generic [ref=f7e22991] [box=1795,31207,107,20]: Continue on-device
+        - generic [ref=f7e22993] [box=2132,30505,470,1000]:
+          - generic [ref=f7e22994] [box=2128,30477,474,24]:
+            - generic [ref=f7e22995] [box=2128,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e22996] [box=2128,30478,17,23]
+              - generic "Click to focus" [ref=f7e23004] [cursor=pointer] [box=2149,30479,407,21]
+            - generic [ref=f7e23006] [box=2556,30478,46,22]:
+              - button "More" [ref=f7e23008] [cursor=pointer] [box=2556,30478,22,22]
+              - button "Focus" [ref=f7e23013] [cursor=pointer] [box=2580,30478,22,22]
+          - generic [ref=f7e23018] [box=2152,30539,430,932]:
+            - generic [ref=f7e23020] [box=2154,30541,427,80]:
+              - generic [ref=f7e23021] [box=2186,30580,22,22]: 9:41
+              - generic [ref=f7e23022] [box=2500,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e23029] [box=2155,31060,424,262]:
+              - img [ref=f7e23031] [box=2189,31072,24,24]
+              - generic [ref=f7e23035] [box=2177,31120,170,28]: You're on the waitlist.
+              - generic [ref=f7e23037] [box=2177,31156,212,17]
+              - generic [ref=f7e23040] [box=2189,31201,344,35]: Tier 2 cloud models (Opus 4.7, GPT-5.4, Gemini) need cloud. We'll email when your slot opens.
+              - generic [ref=f7e23041] [box=2177,31262,380,46]
+        - generic [ref=f7e23048] [box=2650,30505,470,1000]:
+          - generic [ref=f7e23049] [box=2646,30477,474,24]:
+            - generic [ref=f7e23050] [box=2646,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e23051] [box=2646,30478,17,23]
+              - generic "Click to focus" [ref=f7e23059] [cursor=pointer] [box=2667,30479,407,21]
+            - generic [ref=f7e23061] [box=3074,30478,46,22]:
+              - button "More" [ref=f7e23063] [cursor=pointer] [box=3074,30478,22,22]
+              - button "Focus" [ref=f7e23068] [cursor=pointer] [box=3098,30478,22,22]
+          - generic [ref=f7e23073] [box=2670,30539,430,932]:
+            - generic [ref=f7e23075] [box=2672,30541,427,80]:
+              - generic [ref=f7e23076] [box=2704,30580,22,22]: 9:41
+              - generic [ref=f7e23077] [box=3018,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e23084] [box=2673,31060,424,262]:
+              - img [ref=f7e23086] [box=2707,31072,24,24]
+              - generic [ref=f7e23090] [box=2695,31120,170,28]: You're on the waitlist.
+              - generic [ref=f7e23092] [box=2695,31156,212,17]
+              - generic [ref=f7e23095] [box=2707,31201,344,35]: Tier 2 cloud models (Opus 4.7, GPT-5.4, Gemini) need cloud. We'll email when your slot opens.
+              - generic [ref=f7e23096] [box=2695,31262,380,46]
+        - generic [ref=f7e23103] [box=3168,30505,470,1000]:
+          - generic [ref=f7e23104] [box=3164,30477,474,24]:
+            - generic [ref=f7e23105] [box=3164,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e23106] [box=3164,30478,17,23]
+              - generic "Click to focus" [ref=f7e23114] [cursor=pointer] [box=3185,30479,407,21]
+            - generic [ref=f7e23116] [box=3592,30478,46,22]:
+              - button "More" [ref=f7e23118] [cursor=pointer] [box=3592,30478,22,22]
+              - button "Focus" [ref=f7e23123] [cursor=pointer] [box=3616,30478,22,22]
+          - generic [ref=f7e23128] [box=3188,30539,430,932]:
+            - generic [ref=f7e23130] [box=3190,30541,427,80]:
+              - generic [ref=f7e23131] [box=3222,30580,22,22]: 9:41
+              - generic [ref=f7e23132] [box=3536,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e23139] [box=3191,30980,424,356]:
+              - img [ref=f7e23141] [box=3573,30980,20,20]
+              - img [ref=f7e23145] [box=3226,31017,26,26]
+              - generic [ref=f7e23150] [box=3213,31068,289,30]: That PDF is too big for on-device.
+              - generic [ref=f7e23152] [box=3213,31108,187,17]
+              - generic [ref=f7e23155] [box=3227,31154,323,16]: On-device context fits ~40 pages at a time on your A15. We can split it.
+              - generic [ref=f7e23156] [box=3213,31197,380,139]
+        - generic [ref=f7e23164] [box=3686,30505,470,1000]:
+          - generic [ref=f7e23165] [box=3682,30477,474,24]:
+            - generic [ref=f7e23166] [box=3682,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e23167] [box=3682,30478,17,23]
+              - generic "Click to focus" [ref=f7e23175] [cursor=pointer] [box=3703,30479,407,21]
+            - generic [ref=f7e23177] [box=4110,30478,46,22]:
+              - button "More" [ref=f7e23179] [cursor=pointer] [box=4110,30478,22,22]
+              - button "Focus" [ref=f7e23184] [cursor=pointer] [box=4134,30478,22,22]
+          - generic [ref=f7e23189] [box=3706,30539,430,932]:
+            - generic [ref=f7e23191] [box=3708,30541,427,80]:
+              - generic [ref=f7e23192] [box=3740,30580,22,22]: 9:41
+              - generic [ref=f7e23193] [box=4054,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e23200] [box=3709,30980,424,356]:
+              - img [ref=f7e23202] [box=4091,30980,20,20]
+              - img [ref=f7e23206] [box=3744,31017,26,26]
+              - generic [ref=f7e23211] [box=3731,31068,289,30]: That PDF is too big for on-device.
+              - generic [ref=f7e23213] [box=3731,31108,187,17]
+              - generic [ref=f7e23216] [box=3745,31154,323,16]: On-device context fits ~40 pages at a time on your A15. We can split it.
+              - generic [ref=f7e23217] [box=3731,31197,380,139]
+        - generic [ref=f7e23225] [box=4204,30505,470,1000]:
+          - generic [ref=f7e23226] [box=4200,30477,474,24]:
+            - generic [ref=f7e23227] [box=4200,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e23228] [box=4200,30478,17,23]
+              - generic "Click to focus" [ref=f7e23236] [cursor=pointer] [box=4221,30479,407,21]
+            - generic [ref=f7e23238] [box=4628,30478,46,22]:
+              - button "More" [ref=f7e23240] [cursor=pointer] [box=4628,30478,22,22]
+              - button "Focus" [ref=f7e23245] [cursor=pointer] [box=4652,30478,22,22]
+          - generic [ref=f7e23250] [box=4224,30539,430,932]:
+            - generic [ref=f7e23252] [box=4226,30541,427,80]:
+              - generic [ref=f7e23253] [box=4258,30580,22,22]: 9:41
+              - generic [ref=f7e23254] [box=4572,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e23261] [box=4227,31020,424,285]:
+              - img [ref=f7e23263] [box=4262,31033,26,26]
+              - generic [ref=f7e23267] [box=4249,31084,196,30]: We can't read this file.
+              - generic [ref=f7e23269] [box=4249,31124,343,17]
+              - generic [ref=f7e23272] [box=4263,31170,286,16]: Try OCR — we'll run Apple Vision on each page first, then Q&A.
+              - generic [ref=f7e23273] [box=4249,31213,380,92]
+        - generic [ref=f7e23279] [box=4722,30505,470,1000]:
+          - generic [ref=f7e23280] [box=4718,30477,474,24]:
+            - generic [ref=f7e23281] [box=4718,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e23282] [box=4718,30478,17,23]
+              - generic "Click to focus" [ref=f7e23290] [cursor=pointer] [box=4739,30479,407,21]
+            - generic [ref=f7e23292] [box=5146,30478,46,22]:
+              - button "More" [ref=f7e23294] [cursor=pointer] [box=5146,30478,22,22]
+              - button "Focus" [ref=f7e23299] [cursor=pointer] [box=5170,30478,22,22]
+          - generic [ref=f7e23304] [box=4742,30539,430,932]:
+            - generic [ref=f7e23306] [box=4744,30541,427,80]:
+              - generic [ref=f7e23307] [box=4776,30580,22,22]: 9:41
+              - generic [ref=f7e23308] [box=5090,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e23315] [box=4745,30980,424,311]:
+              - img [ref=f7e23317] [box=4780,30993,26,26]
+              - generic [ref=f7e23323] [box=4767,31044,160,30]: This photo is huge.
+              - generic [ref=f7e23325] [box=4767,31084,181,17]
+              - generic [ref=f7e23328] [box=4781,31130,341,35]: On-device vision works best at 1024×1024. We'll downscale before analyzing — no quality loss in your library.
+              - generic [ref=f7e23329] [box=4767,31191,380,39]
+              - generic [ref=f7e23338] [box=4919,31256,114,23]: Analyze on-device
+        - generic [ref=f7e23340] [box=5240,30505,470,1000]:
+          - generic [ref=f7e23341] [box=5236,30477,474,24]:
+            - generic [ref=f7e23342] [box=5236,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e23343] [box=5236,30478,17,23]
+              - generic "Click to focus" [ref=f7e23351] [cursor=pointer] [box=5257,30479,407,21]
+            - generic [ref=f7e23353] [box=5664,30478,46,22]:
+              - button "More" [ref=f7e23355] [cursor=pointer] [box=5664,30478,22,22]
+              - button "Focus" [ref=f7e23360] [cursor=pointer] [box=5688,30478,22,22]
+          - generic [ref=f7e23365] [box=5260,30539,430,932]:
+            - generic [ref=f7e23367] [box=5262,30541,427,80]:
+              - generic [ref=f7e23368] [box=5294,30580,22,22]: 9:41
+              - generic [ref=f7e23369] [box=5608,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e23370] [box=5262,30601,427,833]:
+              - generic [ref=f7e23371] [box=5262,30601,427,57]
+              - generic [ref=f7e23393] [box=5262,30657,427,681]
+              - generic [ref=f7e23418] [box=5276,31349,399,70]
+        - generic [ref=f7e23433] [box=5758,30505,470,1000]:
+          - generic [ref=f7e23434] [box=5754,30477,474,24]:
+            - generic [ref=f7e23435] [box=5754,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e23436] [box=5754,30478,17,23]
+              - generic "Click to focus" [ref=f7e23444] [cursor=pointer] [box=5775,30479,407,21]
+            - generic [ref=f7e23446] [box=6182,30478,46,22]:
+              - button "More" [ref=f7e23448] [cursor=pointer] [box=6182,30478,22,22]
+              - button "Focus" [ref=f7e23453] [cursor=pointer] [box=6206,30478,22,22]
+          - generic [ref=f7e23458] [box=5778,30539,430,932]:
+            - generic [ref=f7e23460] [box=5780,30541,427,80]:
+              - generic [ref=f7e23461] [box=5812,30580,22,22]: 9:41
+              - generic [ref=f7e23462] [box=6126,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e23463] [box=5780,30601,427,833]:
+              - generic [ref=f7e23464] [box=5780,30601,427,57]
+              - generic [ref=f7e23486] [box=5780,30657,427,681]
+              - generic [ref=f7e23511] [box=5794,31349,399,70]
+        - generic [ref=f7e23526] [box=6276,30505,470,1000]:
+          - generic [ref=f7e23527] [box=6272,30477,474,24]:
+            - generic [ref=f7e23528] [box=6272,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e23529] [box=6272,30478,17,23]
+              - generic "Click to focus" [ref=f7e23537] [cursor=pointer] [box=6293,30479,407,21]
+            - generic [ref=f7e23539] [box=6700,30478,46,22]:
+              - button "More" [ref=f7e23541] [cursor=pointer] [box=6700,30478,22,22]
+              - button "Focus" [ref=f7e23546] [cursor=pointer] [box=6724,30478,22,22]
+          - generic [ref=f7e23551] [box=6296,30539,430,932]:
+            - generic [ref=f7e23553] [box=6298,30541,427,80]:
+              - generic [ref=f7e23554] [box=6330,30580,22,22]: 9:41
+              - generic [ref=f7e23555] [box=6644,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e23556] [box=6298,30601,427,833]:
+              - generic [ref=f7e23557] [box=6298,30601,427,53]
+              - generic [ref=f7e23565] [box=6298,30653,427,685]
+              - generic [ref=f7e23590] [box=6312,31349,399,70]
+        - generic [ref=f7e23605] [box=6794,30505,470,1000]:
+          - generic [ref=f7e23606] [box=6790,30477,474,24]:
+            - generic [ref=f7e23607] [box=6790,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e23608] [box=6790,30478,17,23]
+              - generic "Click to focus" [ref=f7e23616] [cursor=pointer] [box=6811,30479,407,21]
+            - generic [ref=f7e23618] [box=7218,30478,46,22]:
+              - button "More" [ref=f7e23620] [cursor=pointer] [box=7218,30478,22,22]
+              - button "Focus" [ref=f7e23625] [cursor=pointer] [box=7242,30478,22,22]
+          - generic [ref=f7e23630] [box=6814,30539,430,932]:
+            - generic [ref=f7e23632] [box=6816,30541,427,80]:
+              - generic [ref=f7e23633] [box=6848,30580,22,22]: 9:41
+              - generic [ref=f7e23634] [box=7162,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e23641] [box=6817,30860,424,373]:
+              - img [ref=f7e23643] [box=6852,30873,26,26]
+              - generic [ref=f7e23647] [box=6839,30924,154,30]: Not enough space.
+              - generic [ref=f7e23649] [box=6839,30962,308,17]
+              - generic [ref=f7e23657] [box=6839,31015,380,14]
+              - generic [ref=f7e23670] [box=6839,31044,380,157]
+              - generic [ref=f7e23693] [box=6839,31217,135,16]: Or free up space in Photos →
+        - generic [ref=f7e23695] [box=7312,30505,470,1000]:
+          - generic [ref=f7e23696] [box=7308,30477,474,24]:
+            - generic [ref=f7e23697] [box=7308,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e23698] [box=7308,30478,17,23]
+              - generic "Click to focus" [ref=f7e23706] [cursor=pointer] [box=7329,30479,407,21]
+            - generic [ref=f7e23708] [box=7736,30478,46,22]:
+              - button "More" [ref=f7e23710] [cursor=pointer] [box=7736,30478,22,22]
+              - button "Focus" [ref=f7e23715] [cursor=pointer] [box=7760,30478,22,22]
+          - generic [ref=f7e23720] [box=7332,30539,430,932]:
+            - generic [ref=f7e23722] [box=7334,30541,427,80]:
+              - generic [ref=f7e23723] [box=7366,30580,22,22]: 9:41
+              - generic [ref=f7e23724] [box=7680,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e23731] [box=7335,30860,424,373]:
+              - img [ref=f7e23733] [box=7370,30873,26,26]
+              - generic [ref=f7e23737] [box=7357,30924,154,30]: Not enough space.
+              - generic [ref=f7e23739] [box=7357,30962,308,17]
+              - generic [ref=f7e23747] [box=7357,31015,380,14]
+              - generic [ref=f7e23760] [box=7357,31044,380,157]
+              - generic [ref=f7e23783] [box=7357,31217,135,16]: Or free up space in Photos →
+        - generic [ref=f7e23785] [box=7830,30505,470,1000]:
+          - generic [ref=f7e23786] [box=7826,30477,474,24]:
+            - generic [ref=f7e23787] [box=7826,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e23788] [box=7826,30478,17,23]
+              - generic "Click to focus" [ref=f7e23796] [cursor=pointer] [box=7847,30479,407,21]
+            - generic [ref=f7e23798] [box=8254,30478,46,22]:
+              - button "More" [ref=f7e23800] [cursor=pointer] [box=8254,30478,22,22]
+              - button "Focus" [ref=f7e23805] [cursor=pointer] [box=8278,30478,22,22]
+          - generic [ref=f7e23810] [box=7850,30539,430,932]:
+            - generic [ref=f7e23812] [box=7852,30541,427,80]:
+              - generic [ref=f7e23813] [box=7884,30580,22,22]: 9:41
+              - generic [ref=f7e23814] [box=8198,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e23815] [box=7852,30601,427,833]:
+              - generic [ref=f7e23816] [box=7852,30601,427,53]
+              - generic [ref=f7e23824] [box=7852,30653,427,634]
+              - generic [ref=f7e23844] [box=7852,31288,427,146]
+        - generic [ref=f7e23866] [box=8348,30505,470,1000]:
+          - generic [ref=f7e23867] [box=8344,30477,474,24]:
+            - generic [ref=f7e23868] [box=8344,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e23869] [box=8344,30478,17,23]
+              - generic "Click to focus" [ref=f7e23877] [cursor=pointer] [box=8365,30479,407,21]
+            - generic [ref=f7e23879] [box=8772,30478,46,22]:
+              - button "More" [ref=f7e23881] [cursor=pointer] [box=8772,30478,22,22]
+              - button "Focus" [ref=f7e23886] [cursor=pointer] [box=8796,30478,22,22]
+          - generic [ref=f7e23891] [box=8368,30539,430,932]:
+            - generic [ref=f7e23893] [box=8370,30541,427,80]:
+              - generic [ref=f7e23894] [box=8402,30580,22,22]: 9:41
+              - generic [ref=f7e23895] [box=8716,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e23896] [box=8370,30601,427,833]:
+              - generic [ref=f7e23897] [box=8370,30601,427,53]
+              - generic [ref=f7e23905] [box=8370,30653,427,634]
+              - generic [ref=f7e23925] [box=8370,31288,427,146]
+        - generic [ref=f7e23947] [box=8866,30505,470,1000]:
+          - generic [ref=f7e23948] [box=8862,30477,474,24]:
+            - generic [ref=f7e23949] [box=8862,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e23950] [box=8862,30478,17,23]
+              - generic "Click to focus" [ref=f7e23958] [cursor=pointer] [box=8883,30479,407,21]
+            - generic [ref=f7e23960] [box=9290,30478,46,22]:
+              - button "More" [ref=f7e23962] [cursor=pointer] [box=9290,30478,22,22]
+              - button "Focus" [ref=f7e23967] [cursor=pointer] [box=9314,30478,22,22]
+          - generic [ref=f7e23972] [box=8886,30539,430,932]:
+            - generic [ref=f7e23974] [box=8888,30541,427,80]:
+              - generic [ref=f7e23975] [box=8920,30580,22,22]: 9:41
+              - generic [ref=f7e23976] [box=9234,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e23982] [box=8889,30868,424,415]:
+              - img [ref=f7e23984] [box=9084,30887,34,34]
+              - generic [ref=f7e23988] [box=8991,30954,219,30]: Setting up your AI team…
+              - generic [ref=f7e23990] [box=8944,30994,314,36]: Downloading Llama 3.2 3B (Tier 2 for your A15). Happens once — never again.
+              - generic [ref=f7e23991] [box=8913,31052,376,84]
+              - generic [ref=f7e24000] [box=8913,31150,376,82]
+              - generic [ref=f7e24005] [box=9016,31249,170,16]: Pause download · use lighter model →
+        - generic [ref=f7e24007] [box=9384,30505,470,1000]:
+          - generic [ref=f7e24008] [box=9380,30477,474,24]:
+            - generic [ref=f7e24009] [box=9380,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e24010] [box=9380,30478,17,23]
+              - generic "Click to focus" [ref=f7e24018] [cursor=pointer] [box=9401,30479,407,21]
+            - generic [ref=f7e24020] [box=9808,30478,46,22]:
+              - button "More" [ref=f7e24022] [cursor=pointer] [box=9808,30478,22,22]
+              - button "Focus" [ref=f7e24027] [cursor=pointer] [box=9832,30478,22,22]
+          - generic [ref=f7e24032] [box=9404,30539,430,932]:
+            - generic [ref=f7e24034] [box=9406,30541,427,80]:
+              - generic [ref=f7e24035] [box=9438,30580,22,22]: 9:41
+              - generic [ref=f7e24036] [box=9752,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e24042] [box=9407,30868,424,415]:
+              - img [ref=f7e24044] [box=9602,30887,34,34]
+              - generic [ref=f7e24048] [box=9509,30954,219,30]: Setting up your AI team…
+              - generic [ref=f7e24050] [box=9462,30994,314,36]: Downloading Llama 3.2 3B (Tier 2 for your A15). Happens once — never again.
+              - generic [ref=f7e24051] [box=9431,31052,376,84]
+              - generic [ref=f7e24060] [box=9431,31150,376,82]
+              - generic [ref=f7e24065] [box=9534,31249,170,16]: Pause download · use lighter model →
+        - generic [ref=f7e24067] [box=9902,30505,470,1000]:
+          - generic [ref=f7e24068] [box=9898,30477,474,24]:
+            - generic [ref=f7e24069] [box=9898,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e24070] [box=9898,30478,17,23]
+              - generic "Click to focus" [ref=f7e24078] [cursor=pointer] [box=9919,30479,407,21]
+            - generic [ref=f7e24080] [box=10326,30478,46,22]:
+              - button "More" [ref=f7e24082] [cursor=pointer] [box=10326,30478,22,22]
+              - button "Focus" [ref=f7e24087] [cursor=pointer] [box=10350,30478,22,22]
+          - generic [ref=f7e24092] [box=9922,30539,430,932]:
+            - generic [ref=f7e24094] [box=9924,30541,427,80]:
+              - generic [ref=f7e24095] [box=9956,30580,22,22]: 9:41
+              - generic [ref=f7e24096] [box=10270,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e24097] [box=9924,30601,427,833]:
+              - generic [ref=f7e24098] [box=9924,30601,427,53]
+              - generic [ref=f7e24106] [box=9924,30653,427,685]
+              - generic [ref=f7e24138] [box=9938,31349,399,70]
+        - generic [ref=f7e24153] [box=10420,30505,470,1000]:
+          - generic [ref=f7e24154] [box=10416,30477,474,24]:
+            - generic [ref=f7e24155] [box=10416,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e24156] [box=10416,30478,17,23]
+              - generic "Click to focus" [ref=f7e24164] [cursor=pointer] [box=10437,30479,407,21]
+            - generic [ref=f7e24166] [box=10844,30478,46,22]:
+              - button "More" [ref=f7e24168] [cursor=pointer] [box=10844,30478,22,22]
+              - button "Focus" [ref=f7e24173] [cursor=pointer] [box=10868,30478,22,22]
+          - generic [ref=f7e24178] [box=10440,30539,430,932]:
+            - generic [ref=f7e24180] [box=10442,30541,427,80]:
+              - generic [ref=f7e24181] [box=10474,30580,22,22]: 9:41
+              - generic [ref=f7e24182] [box=10788,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e24183] [box=10442,30601,427,833]:
+              - generic [ref=f7e24184] [box=10442,30601,427,53]
+              - generic [ref=f7e24192] [box=10442,30653,427,685]
+              - generic [ref=f7e24224] [box=10456,31349,399,70]
+        - generic [ref=f7e24239] [box=10938,30505,470,1000]:
+          - generic [ref=f7e24240] [box=10934,30477,474,24]:
+            - generic [ref=f7e24241] [box=10934,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e24242] [box=10934,30478,17,23]
+              - generic "Click to focus" [ref=f7e24250] [cursor=pointer] [box=10955,30479,407,21]
+            - generic [ref=f7e24252] [box=11362,30478,46,22]:
+              - button "More" [ref=f7e24254] [cursor=pointer] [box=11362,30478,22,22]
+              - button "Focus" [ref=f7e24259] [cursor=pointer] [box=11386,30478,22,22]
+          - generic [ref=f7e24264] [box=10958,30539,430,932]:
+            - generic [ref=f7e24266] [box=10960,30541,427,80]:
+              - generic [ref=f7e24267] [box=10992,30580,22,22]: 9:41
+              - generic [ref=f7e24268] [box=11306,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e24269] [box=10960,30601,427,833]:
+              - generic [ref=f7e24270] [box=10960,30601,427,53]
+              - generic [ref=f7e24277] [box=10960,30653,427,780]
+        - generic [ref=f7e24351] [box=11456,30505,470,1000]:
+          - generic [ref=f7e24352] [box=11452,30477,474,24]:
+            - generic [ref=f7e24353] [box=11452,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e24354] [box=11452,30478,17,23]
+              - generic "Click to focus" [ref=f7e24362] [cursor=pointer] [box=11473,30479,407,21]
+            - generic [ref=f7e24364] [box=11880,30478,46,22]:
+              - button "More" [ref=f7e24366] [cursor=pointer] [box=11880,30478,22,22]
+              - button "Focus" [ref=f7e24371] [cursor=pointer] [box=11904,30478,22,22]
+          - generic [ref=f7e24376] [box=11476,30539,430,932]:
+            - generic [ref=f7e24378] [box=11478,30541,427,80]:
+              - generic [ref=f7e24379] [box=11510,30580,22,22]: 9:41
+              - generic [ref=f7e24380] [box=11824,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e24381] [box=11478,30601,427,833]:
+              - generic [ref=f7e24382] [box=11478,30601,427,53]
+              - generic [ref=f7e24389] [box=11478,30653,427,780]
+        - generic [ref=f7e24463] [box=11974,30505,470,1000]:
+          - generic [ref=f7e24464] [box=11970,30477,474,24]:
+            - generic [ref=f7e24465] [box=11970,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e24466] [box=11970,30478,17,23]
+              - generic "Click to focus" [ref=f7e24474] [cursor=pointer] [box=11991,30479,407,21]
+            - generic [ref=f7e24476] [box=12398,30478,46,22]:
+              - button "More" [ref=f7e24478] [cursor=pointer] [box=12398,30478,22,22]
+              - button "Focus" [ref=f7e24483] [cursor=pointer] [box=12422,30478,22,22]
+          - generic [ref=f7e24488] [box=11994,30539,430,932]:
+            - generic [ref=f7e24490] [box=11996,30541,427,80]:
+              - generic [ref=f7e24491] [box=12028,30580,22,22]: 9:41
+              - generic [ref=f7e24492] [box=12342,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e24493] [box=11996,30601,427,833]:
+              - generic [ref=f7e24494] [box=11996,30601,427,53]
+              - generic [ref=f7e24506] [box=11996,30653,427,685]
+              - generic [ref=f7e24550] [box=12010,31349,399,70]
+        - generic [ref=f7e24565] [box=12492,30505,470,1000]:
+          - generic [ref=f7e24566] [box=12488,30477,474,24]:
+            - generic [ref=f7e24567] [box=12488,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e24568] [box=12488,30478,17,23]
+              - generic "Click to focus" [ref=f7e24576] [cursor=pointer] [box=12509,30479,407,21]
+            - generic [ref=f7e24578] [box=12916,30478,46,22]:
+              - button "More" [ref=f7e24580] [cursor=pointer] [box=12916,30478,22,22]
+              - button "Focus" [ref=f7e24585] [cursor=pointer] [box=12940,30478,22,22]
+          - generic [ref=f7e24590] [box=12512,30539,430,932]:
+            - generic [ref=f7e24592] [box=12514,30541,427,80]:
+              - generic [ref=f7e24593] [box=12546,30580,22,22]: 9:41
+              - generic [ref=f7e24594] [box=12860,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e24595] [box=12514,30601,427,833]:
+              - generic [ref=f7e24596] [box=12514,30601,427,53]
+              - generic [ref=f7e24608] [box=12514,30653,427,685]
+              - generic [ref=f7e24652] [box=12528,31349,399,70]
+        - generic [ref=f7e24667] [box=13010,30505,470,1000]:
+          - generic [ref=f7e24668] [box=13006,30477,474,24]:
+            - generic [ref=f7e24669] [box=13006,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e24670] [box=13006,30478,17,23]
+              - generic "Click to focus" [ref=f7e24678] [cursor=pointer] [box=13027,30479,407,21]
+            - generic [ref=f7e24680] [box=13434,30478,46,22]:
+              - button "More" [ref=f7e24682] [cursor=pointer] [box=13434,30478,22,22]
+              - button "Focus" [ref=f7e24687] [cursor=pointer] [box=13458,30478,22,22]
+          - generic [ref=f7e24692] [box=13030,30539,430,932]:
+            - generic [ref=f7e24694] [box=13032,30541,427,80]:
+              - generic [ref=f7e24695] [box=13064,30580,22,22]: 9:41
+              - generic [ref=f7e24696] [box=13378,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e24697] [box=13032,30601,427,833]:
+              - generic [ref=f7e24698] [box=13032,30601,427,53]
+              - generic [ref=f7e24705] [box=13032,30653,427,550]
+        - generic [ref=f7e24758] [box=13528,30505,470,1000]:
+          - generic [ref=f7e24759] [box=13524,30477,474,24]:
+            - generic [ref=f7e24760] [box=13524,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e24761] [box=13524,30478,17,23]
+              - generic "Click to focus" [ref=f7e24769] [cursor=pointer] [box=13545,30479,407,21]
+            - generic [ref=f7e24771] [box=13952,30478,46,22]:
+              - button "More" [ref=f7e24773] [cursor=pointer] [box=13952,30478,22,22]
+              - button "Focus" [ref=f7e24778] [cursor=pointer] [box=13976,30478,22,22]
+          - generic [ref=f7e24783] [box=13548,30539,430,932]:
+            - generic [ref=f7e24785] [box=13550,30541,427,80]:
+              - generic [ref=f7e24786] [box=13582,30580,22,22]: 9:41
+              - generic [ref=f7e24787] [box=13896,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e24788] [box=13550,30601,427,833]:
+              - generic [ref=f7e24789] [box=13550,30601,427,53]
+              - generic [ref=f7e24796] [box=13550,30653,427,550]
+        - generic [ref=f7e24849] [box=14046,30505,470,1000]:
+          - generic [ref=f7e24850] [box=14042,30477,474,24]:
+            - generic [ref=f7e24851] [box=14042,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e24852] [box=14042,30478,17,23]
+              - generic "Click to focus" [ref=f7e24860] [cursor=pointer] [box=14063,30479,407,21]
+            - generic [ref=f7e24862] [box=14470,30478,46,22]:
+              - button "More" [ref=f7e24864] [cursor=pointer] [box=14470,30478,22,22]
+              - button "Focus" [ref=f7e24869] [cursor=pointer] [box=14494,30478,22,22]
+          - generic [ref=f7e24874] [box=14066,30539,430,932]:
+            - generic [ref=f7e24876] [box=14068,30541,427,80]:
+              - generic [ref=f7e24877] [box=14100,30580,22,22]: 9:41
+              - generic [ref=f7e24878] [box=14414,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e24880] [box=14068,30601,427,833]:
+              - generic [ref=f7e24882] [box=14084,30617,395,27]
+              - generic [ref=f7e24891] [box=14098,30741,367,473]
+              - generic [ref=f7e24903] [box=14210,31317,141,16]: Hold steady · 4 lines recognized
+              - generic [ref=f7e24904] [box=14068,31330,427,80]
+        - generic [ref=f7e24912] [box=14564,30505,470,1000]:
+          - generic [ref=f7e24913] [box=14560,30477,474,24]:
+            - generic [ref=f7e24914] [box=14560,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e24915] [box=14560,30478,17,23]
+              - generic "Click to focus" [ref=f7e24923] [cursor=pointer] [box=14581,30479,407,21]
+            - generic [ref=f7e24925] [box=14988,30478,46,22]:
+              - button "More" [ref=f7e24927] [cursor=pointer] [box=14988,30478,22,22]
+              - button "Focus" [ref=f7e24932] [cursor=pointer] [box=15012,30478,22,22]
+          - generic [ref=f7e24937] [box=14584,30539,430,932]:
+            - generic [ref=f7e24939] [box=14586,30541,427,80]:
+              - generic [ref=f7e24940] [box=14618,30580,22,22]: 9:41
+              - generic [ref=f7e24941] [box=14932,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e24942] [box=14586,30601,427,833]:
+              - generic [ref=f7e24943] [box=14586,30601,427,53]
+              - generic [ref=f7e24955] [box=14586,30653,427,780]
+        - generic [ref=f7e25029] [box=15082,30505,470,1000]:
+          - generic [ref=f7e25030] [box=15078,30477,474,24]:
+            - generic [ref=f7e25031] [box=15078,30477,428,24]:
+              - generic "Drag to reorder" [ref=f7e25032] [box=15078,30478,17,23]
+              - generic "Click to focus" [ref=f7e25040] [cursor=pointer] [box=15099,30479,407,21]
+            - generic [ref=f7e25042] [box=15506,30478,46,22]:
+              - button "More" [ref=f7e25044] [cursor=pointer] [box=15506,30478,22,22]
+              - button "Focus" [ref=f7e25049] [cursor=pointer] [box=15530,30478,22,22]
+          - generic [ref=f7e25054] [box=15102,30539,430,932]:
+            - generic [ref=f7e25056] [box=15104,30541,427,80]:
+              - generic [ref=f7e25057] [box=15136,30580,22,22]: 9:41
+              - generic [ref=f7e25058] [box=15450,30583,48,16]: ••• ▴ ▮▮▮
+            - generic [ref=f7e25059] [box=15104,30601,427,833]:
+              - generic [ref=f7e25060] [box=15104,30601,427,53]
+              - generic [ref=f7e25072] [box=15104,30653,427,780]
+    - generic [ref=f7e25146] [box=0,31585,15612,1074]:
+      - generic [ref=f7e25148] [box=60,31585,15492,94]:
+        - generic [ref=f7e25149] [box=58,31585,271,33]: 12 — Android variants
+        - generic [ref=f7e25150] [box=60,31625,15492,19]: Drawer · Onboarding · Storage/Settings (per prompt §0)
+      - generic [ref=f7e25151] [box=0,31679,3060,980]:
+        - generic [ref=f7e25152] [box=60,31679,450,980]:
+          - generic [ref=f7e25153] [box=56,31651,454,24]:
+            - generic [ref=f7e25154] [box=56,31651,408,24]:
+              - generic "Drag to reorder" [ref=f7e25155] [box=56,31652,17,23]
+              - generic "Click to focus" [ref=f7e25163] [cursor=pointer] [box=77,31653,387,21]
+            - generic [ref=f7e25165] [box=464,31652,46,22]:
+              - button "More" [ref=f7e25167] [cursor=pointer] [box=464,31652,22,22]
+              - button "Focus" [ref=f7e25172] [cursor=pointer] [box=488,31652,22,22]
+          - generic [ref=f7e25177] [box=79,31723,412,892]:
+            - generic [ref=f7e25179] [box=81,31725,409,52]:
+              - generic [ref=f7e25180] [box=103,31743,17,16]: 9:41
+              - generic [ref=f7e25181] [box=439,31744,28,15]: ▴ ⌬ ▮
+            - generic [ref=f7e25182] [box=81,31761,409,825]:
+              - generic [ref=f7e25183] [box=81,31761,409,56]
+              - generic [ref=f7e25197] [box=81,31761,320,825]
+        - generic [ref=f7e25240] [box=558,31679,450,980]:
+          - generic [ref=f7e25241] [box=554,31651,454,24]:
+            - generic [ref=f7e25242] [box=554,31651,408,24]:
+              - generic "Drag to reorder" [ref=f7e25243] [box=554,31652,17,23]
+              - generic "Click to focus" [ref=f7e25251] [cursor=pointer] [box=575,31653,387,21]
+            - generic [ref=f7e25253] [box=962,31652,46,22]:
+              - button "More" [ref=f7e25255] [cursor=pointer] [box=962,31652,22,22]
+              - button "Focus" [ref=f7e25260] [cursor=pointer] [box=986,31652,22,22]
+          - generic [ref=f7e25265] [box=577,31723,412,892]:
+            - generic [ref=f7e25267] [box=579,31725,409,52]:
+              - generic [ref=f7e25268] [box=601,31743,17,16]: 9:41
+              - generic [ref=f7e25269] [box=937,31744,28,15]: ▴ ⌬ ▮
+            - generic [ref=f7e25270] [box=579,31761,409,825]:
+              - generic [ref=f7e25271] [box=579,31761,409,56]
+              - generic [ref=f7e25285] [box=579,31761,320,825]
+        - generic [ref=f7e25328] [box=1056,31679,450,980]:
+          - generic [ref=f7e25329] [box=1052,31651,454,24]:
+            - generic [ref=f7e25330] [box=1052,31651,408,24]:
+              - generic "Drag to reorder" [ref=f7e25331] [box=1052,31652,17,23]
+              - generic "Click to focus" [ref=f7e25339] [cursor=pointer] [box=1073,31653,387,21]
+            - generic [ref=f7e25341] [box=1460,31652,46,22]:
+              - button "More" [ref=f7e25343] [cursor=pointer] [box=1460,31652,22,22]
+              - button "Focus" [ref=f7e25348] [cursor=pointer] [box=1484,31652,22,22]
+          - generic [ref=f7e25353] [box=1075,31723,412,892]:
+            - generic [ref=f7e25355] [box=1077,31725,409,52]:
+              - generic [ref=f7e25356] [box=1099,31743,17,16]: 9:41
+              - generic [ref=f7e25357] [box=1435,31744,28,15]: ▴ ⌬ ▮
+            - generic [ref=f7e25359] [box=1077,31761,409,825]:
+              - generic [ref=f7e25360] [box=1077,31761,409,274]
+              - generic [ref=f7e25370] [box=1077,32035,409,150]
+        - generic [ref=f7e25376] [box=1554,31679,450,980]:
+          - generic [ref=f7e25377] [box=1550,31651,454,24]:
+            - generic [ref=f7e25378] [box=1550,31651,408,24]:
+              - generic "Drag to reorder" [ref=f7e25379] [box=1550,31652,17,23]
+              - generic "Click to focus" [ref=f7e25387] [cursor=pointer] [box=1571,31653,387,21]
+            - generic [ref=f7e25389] [box=1958,31652,46,22]:
+              - button "More" [ref=f7e25391] [cursor=pointer] [box=1958,31652,22,22]
+              - button "Focus" [ref=f7e25396] [cursor=pointer] [box=1982,31652,22,22]
+          - generic [ref=f7e25401] [box=1573,31723,412,892]:
+            - generic [ref=f7e25403] [box=1575,31725,409,52]:
+              - generic [ref=f7e25404] [box=1597,31743,17,16]: 9:41
+              - generic [ref=f7e25405] [box=1933,31744,28,15]: ▴ ⌬ ▮
+            - generic [ref=f7e25407] [box=1575,31761,409,825]:
+              - generic [ref=f7e25408] [box=1575,31761,409,274]
+              - generic [ref=f7e25418] [box=1575,32035,409,150]
+        - generic [ref=f7e25424] [box=2052,31679,450,980]:
+          - generic [ref=f7e25425] [box=2048,31651,454,24]:
+            - generic [ref=f7e25426] [box=2048,31651,408,24]:
+              - generic "Drag to reorder" [ref=f7e25427] [box=2048,31652,17,23]
+              - generic "Click to focus" [ref=f7e25435] [cursor=pointer] [box=2069,31653,387,21]
+            - generic [ref=f7e25437] [box=2456,31652,46,22]:
+              - button "More" [ref=f7e25439] [cursor=pointer] [box=2456,31652,22,22]
+              - button "Focus" [ref=f7e25444] [cursor=pointer] [box=2480,31652,22,22]
+          - generic [ref=f7e25449] [box=2071,31723,412,892]:
+            - generic [ref=f7e25451] [box=2073,31725,409,52]:
+              - generic [ref=f7e25452] [box=2095,31743,17,16]: 9:41
+              - generic [ref=f7e25453] [box=2431,31744,28,15]: ▴ ⌬ ▮
+            - generic [ref=f7e25454] [box=2073,31761,409,825]:
+              - generic [ref=f7e25455] [box=2073,31761,409,56]
+              - generic [ref=f7e25460] [box=2073,31817,409,769]
+        - generic [ref=f7e25513] [box=2550,31679,450,980]:
+          - generic [ref=f7e25514] [box=2546,31651,454,24]:
+            - generic [ref=f7e25515] [box=2546,31651,408,24]:
+              - generic "Drag to reorder" [ref=f7e25516] [box=2546,31652,17,23]
+              - generic "Click to focus" [ref=f7e25524] [cursor=pointer] [box=2567,31653,387,21]
+            - generic [ref=f7e25526] [box=2954,31652,46,22]:
+              - button "More" [ref=f7e25528] [cursor=pointer] [box=2954,31652,22,22]
+              - button "Focus" [ref=f7e25533] [cursor=pointer] [box=2978,31652,22,22]
+          - generic [ref=f7e25538] [box=2569,31723,412,892]:
+            - generic [ref=f7e25540] [box=2571,31725,409,52]:
+              - generic [ref=f7e25541] [box=2593,31743,17,16]: 9:41
+              - generic [ref=f7e25542] [box=2929,31744,28,15]: ▴ ⌬ ▮
+            - generic [ref=f7e25543] [box=2571,31761,409,825]:
+              - generic [ref=f7e25544] [box=2571,31761,409,56]
+              - generic [ref=f7e25549] [box=2571,31817,409,769]

@@ -1,0 +1,362 @@
+{
+  "version": 1,
+  "lastUpdated": "2026-05-21",
+  "purpose": "Machine-readable write-lane map for safe 15+ parallel human/agent implementation work.",
+  "recommendedParallelism": {
+    "writerLanes": 19,
+    "reviewAndVerificationLanes": 4,
+    "rule": "Run many agents only when each owns a lane with disjoint write paths. Shared files go through the integrator lane."
+  },
+  "sharedFilePolicy": {
+    "defaultRule": "Do not edit shared files from a feature lane. Ask the lead/integrator to make the shared-file change or allocate a dedicated integration task.",
+    "integrationLaneIds": ["repo-operability", "release-ci"],
+    "paths": [
+      "package.json",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml",
+      "Cargo.toml",
+      "Cargo.lock",
+      "tsconfig.base.json",
+      "eslint.config.mjs",
+      ".gitignore",
+      ".gitattributes",
+      ".github/**",
+      "AGENTS.md",
+      "CLAUDE.md",
+      "PLAN.md",
+      "TODO.md",
+      "CHANGELOG.md",
+      "BUILD.md",
+      "docs/agent-context/**",
+      "docs/engineering/**",
+      "packages/types/**",
+      "supabase/migrations/**",
+      "ios/**"
+    ]
+  },
+  "lanes": [
+    {
+      "id": "cli-app",
+      "name": "CLI app and terminal UX",
+      "ownerRole": "CLI lead",
+      "ownedWritePaths": ["apps/cli/**"],
+      "readOnlyContextPaths": ["crates/**", "docs/cli/**", "docs/surfaces/cli.md"],
+      "blockedPaths": ["crates/**", "Cargo.toml", "Cargo.lock"],
+      "requiredChecks": ["cargo check -p agiworkforce-cli", "cargo test -p agiworkforce-cli --lib"],
+      "escalationOwners": ["Rust platform", "Security/privacy lead"]
+    },
+    {
+      "id": "rust-command-registry",
+      "name": "Rust slash command registry",
+      "ownerRole": "Rust platform",
+      "ownedWritePaths": ["crates/agiworkforce-command-registry/**"],
+      "readOnlyContextPaths": ["apps/cli/**", "docs/cli/**"],
+      "blockedPaths": ["apps/cli/**", "Cargo.lock"],
+      "requiredChecks": ["cargo test -p agiworkforce-command-registry --test slash_palette_golden"],
+      "escalationOwners": ["CLI lead"]
+    },
+    {
+      "id": "rust-runtime-protocol",
+      "name": "Rust runtime, protocol, sandbox, and task crates",
+      "ownerRole": "Rust platform",
+      "ownedWritePaths": ["crates/**"],
+      "readOnlyContextPaths": ["apps/cli/**", "apps/desktop/src-tauri/**"],
+      "blockedPaths": ["apps/**", "Cargo.lock"],
+      "requiredChecks": ["cargo check --workspace", "cargo test --workspace --lib"],
+      "escalationOwners": ["CLI lead", "Desktop lead", "Security/privacy lead"]
+    },
+    {
+      "id": "desktop-frontend",
+      "name": "Desktop React frontend",
+      "ownerRole": "Desktop lead",
+      "ownedWritePaths": ["apps/desktop/src/**"],
+      "readOnlyContextPaths": ["packages/unified-chat/**", "apps/desktop/src-tauri/**"],
+      "blockedPaths": ["apps/desktop/src-tauri/**", "packages/**"],
+      "requiredChecks": [
+        "pnpm --filter @agiworkforce/desktop typecheck",
+        "pnpm --filter @agiworkforce/desktop test"
+      ],
+      "escalationOwners": ["Frontend platform", "Security/privacy lead"]
+    },
+    {
+      "id": "desktop-native",
+      "name": "Desktop Tauri and local native runtime",
+      "ownerRole": "Desktop lead + Rust platform",
+      "ownedWritePaths": ["apps/desktop/src-tauri/**"],
+      "readOnlyContextPaths": ["apps/desktop/src/**", "crates/**"],
+      "blockedPaths": ["apps/desktop/src/**", "packages/**"],
+      "requiredChecks": ["cargo check -p agiworkforce-desktop"],
+      "escalationOwners": ["Security/privacy lead", "Release owner"]
+    },
+    {
+      "id": "web-ui",
+      "name": "Web app UI and product features",
+      "ownerRole": "Web lead",
+      "ownedWritePaths": [
+        "apps/web/app/**",
+        "apps/web/components/**",
+        "apps/web/features/**",
+        "apps/web/hooks/**",
+        "apps/web/lib/**"
+      ],
+      "readOnlyContextPaths": ["packages/unified-chat/**", "packages/types/**", "apps/sandbox/**"],
+      "blockedPaths": ["apps/web/app/api/**", "supabase/**", "packages/**"],
+      "requiredChecks": [
+        "pnpm --filter @agiworkforce/web typecheck",
+        "pnpm --filter @agiworkforce/web test",
+        "pnpm check:structure-conventions"
+      ],
+      "escalationOwners": ["Backend/data owner", "Security/privacy lead"]
+    },
+    {
+      "id": "web-api-billing",
+      "name": "Web API, auth, billing, and waitlist",
+      "ownerRole": "Web lead + Backend/data owner",
+      "ownedWritePaths": [
+        "apps/web/app/api/**",
+        "apps/web/api/**",
+        "apps/web/core/auth/**",
+        "apps/web/core/billing/**"
+      ],
+      "readOnlyContextPaths": ["supabase/**", "packages/types/**", "packages/data-layer/**"],
+      "blockedPaths": ["supabase/migrations/**", "packages/types/**", "pnpm-lock.yaml"],
+      "requiredChecks": [
+        "pnpm --filter @agiworkforce/web test",
+        "pnpm --filter @agiworkforce/web typecheck"
+      ],
+      "escalationOwners": ["Security/privacy lead", "Backend/data owner"]
+    },
+    {
+      "id": "enterprise-admin-surface",
+      "name": "Enterprise admin UI, gateway routes, and docs",
+      "ownerRole": "Enterprise/platform lead",
+      "ownedWritePaths": [
+        "apps/web/app/admin/**",
+        "apps/web/features/admin/**",
+        "services/api-gateway/src/routes/enterprise.ts",
+        "services/api-gateway/__tests__/routes/enterprise.test.ts",
+        "docs/enterprise/**"
+      ],
+      "readOnlyContextPaths": [
+        "packages/types/src/enterprise/**",
+        "supabase/migrations/**",
+        "apps/web/app/api/admin/**",
+        "docs/current/commercial-and-launch.md",
+        "docs/current/technical-architecture.md"
+      ],
+      "blockedPaths": [
+        "packages/types/**",
+        "supabase/migrations/**",
+        "services/api-gateway/src/middleware/**",
+        "pnpm-lock.yaml"
+      ],
+      "requiredChecks": [
+        "pnpm --filter @agiworkforce/web typecheck",
+        "pnpm --filter @agiworkforce/api-gateway test -- enterprise",
+        "pnpm check:llm-operability"
+      ],
+      "escalationOwners": ["Backend/data owner", "Billing owner", "Security/privacy lead"]
+    },
+    {
+      "id": "mobile-app",
+      "name": "Mobile React Native app",
+      "ownerRole": "Mobile lead",
+      "ownedWritePaths": [
+        "apps/mobile/app/**",
+        "apps/mobile/src/features/**",
+        "apps/mobile/src/shared/**",
+        "apps/mobile/components/ui/**",
+        "apps/mobile/services/**",
+        "apps/mobile/stores/**",
+        "apps/mobile/storage/**",
+        "apps/mobile/lib/**",
+        "apps/mobile/hooks/**"
+      ],
+      "readOnlyContextPaths": [
+        "apps/mobile/native/**",
+        "ios/**",
+        "packages/local-llm/**",
+        "packages/types/**"
+      ],
+      "blockedPaths": ["ios/**", "apps/mobile/native/**", "apps/mobile/secrets/**"],
+      "requiredChecks": [
+        "pnpm --filter @agiworkforce/mobile typecheck",
+        "pnpm --filter @agiworkforce/mobile test"
+      ],
+      "escalationOwners": ["Security/privacy lead", "Mobile native owner"]
+    },
+    {
+      "id": "mobile-native-store",
+      "name": "Mobile native modules, iOS project, and store metadata",
+      "ownerRole": "Mobile lead",
+      "ownedWritePaths": ["apps/mobile/native/**", "apps/mobile/store-listing/**", "ios/**"],
+      "readOnlyContextPaths": [
+        "apps/mobile/app.config.js",
+        "apps/mobile/scripts/**",
+        "docs/surfaces/mobile.md"
+      ],
+      "blockedPaths": ["apps/mobile/secrets/**"],
+      "requiredChecks": ["pnpm --filter @agiworkforce/mobile typecheck"],
+      "escalationOwners": ["Release owner", "Legal/compliance", "Security/privacy lead"]
+    },
+    {
+      "id": "chrome-extension",
+      "name": "Chrome extension",
+      "ownerRole": "Extension lead",
+      "ownedWritePaths": ["apps/extension/**"],
+      "readOnlyContextPaths": [
+        "packages/browser-tool/**",
+        "apps/desktop/src-tauri/src/integrations/native_messaging/**"
+      ],
+      "blockedPaths": ["packages/**", "apps/desktop/**"],
+      "requiredChecks": ["pnpm lint:extension", "pnpm --filter @agiworkforce/extension test"],
+      "escalationOwners": ["Security/privacy lead", "Desktop lead"]
+    },
+    {
+      "id": "vscode-extension",
+      "name": "VS Code extension",
+      "ownerRole": "Extension lead",
+      "ownedWritePaths": ["apps/extension-vscode/**"],
+      "readOnlyContextPaths": ["apps/cli/**", "packages/types/**"],
+      "blockedPaths": ["packages/types/**", "apps/cli/**"],
+      "requiredChecks": [
+        "pnpm --filter agi-workforce typecheck",
+        "pnpm --filter agi-workforce test"
+      ],
+      "escalationOwners": ["CLI lead", "Platform lead"]
+    },
+    {
+      "id": "contracts-types",
+      "name": "Shared TypeScript contracts",
+      "ownerRole": "Platform lead",
+      "ownedWritePaths": ["packages/types/**"],
+      "readOnlyContextPaths": ["apps/**", "packages/**", "services/**"],
+      "blockedPaths": ["apps/**", "services/**", "pnpm-lock.yaml"],
+      "requiredChecks": ["pnpm -r --if-present typecheck", "pnpm check:boundaries"],
+      "escalationOwners": ["Affected surface owners", "Security/privacy lead"]
+    },
+    {
+      "id": "provider-routing",
+      "name": "Provider adapters, model routing, and LLM normalization",
+      "ownerRole": "Provider/platform owner",
+      "ownedWritePaths": [
+        "packages/providers/**",
+        "packages/llm-normalize/**",
+        "packages/llm-runtime/**",
+        "packages/routing/**"
+      ],
+      "readOnlyContextPaths": [
+        "packages/types/**",
+        "apps/cli/src/models/**",
+        "audit/anthropic-apps-parity/sdk-strategy-2026-05-20.md"
+      ],
+      "blockedPaths": ["packages/types/**", "apps/**"],
+      "requiredChecks": [
+        "pnpm --filter './packages/providers/*' --if-present typecheck",
+        "scripts/check-no-hardcoded-models.sh"
+      ],
+      "escalationOwners": ["Security/privacy lead", "Billing owner"]
+    },
+    {
+      "id": "chat-artifacts",
+      "name": "Shared chat, artifacts, and sandbox",
+      "ownerRole": "Frontend platform",
+      "ownedWritePaths": [
+        "packages/unified-chat/**",
+        "apps/sandbox/**",
+        "packages/browser-tool/**"
+      ],
+      "readOnlyContextPaths": ["apps/web/**", "apps/desktop/**", "packages/types/**"],
+      "blockedPaths": ["apps/web/**", "apps/desktop/**", "packages/types/**"],
+      "requiredChecks": [
+        "pnpm --filter @agiworkforce/unified-chat test",
+        "pnpm --filter @agiworkforce/sandbox build"
+      ],
+      "escalationOwners": ["Web lead", "Desktop lead", "Security/privacy lead"]
+    },
+    {
+      "id": "backend-services",
+      "name": "Backend services and signaling",
+      "ownerRole": "Backend/data owner",
+      "ownedWritePaths": ["services/**"],
+      "readOnlyContextPaths": ["supabase/**", "packages/types/**", "packages/data-layer/**"],
+      "blockedPaths": ["supabase/migrations/**", "packages/types/**"],
+      "requiredChecks": [
+        "pnpm --filter @agiworkforce/api-gateway test",
+        "pnpm --filter @agiworkforce/signaling-server test"
+      ],
+      "escalationOwners": ["Security/privacy lead", "Billing owner"]
+    },
+    {
+      "id": "database-compliance",
+      "name": "Database, compliance, and data layer",
+      "ownerRole": "Backend/data owner",
+      "ownedWritePaths": ["supabase/**", "packages/data-layer/**", "packages/compliance/**"],
+      "readOnlyContextPaths": [
+        "apps/web/**",
+        "services/**",
+        "docs/current/technical-architecture.md"
+      ],
+      "blockedPaths": ["apps/**", "services/**"],
+      "requiredChecks": ["pnpm check:boundaries"],
+      "escalationOwners": ["Security/privacy lead", "Legal/compliance"]
+    },
+    {
+      "id": "repo-operability",
+      "name": "Repo docs, agent context, and guardrails",
+      "ownerRole": "Platform lead",
+      "ownedWritePaths": [
+        "AGENTS.md",
+        "CLAUDE.md",
+        "CONTRIBUTING.md",
+        "PLAN.md",
+        "TODO.md",
+        "CHANGELOG.md",
+        "docs/agent-context/**",
+        "docs/engineering/**",
+        "audit/repo-organization/**",
+        "scripts/check-*.mjs"
+      ],
+      "readOnlyContextPaths": ["apps/**", "packages/**", "crates/**", "services/**"],
+      "blockedPaths": ["pnpm-lock.yaml", "Cargo.lock"],
+      "requiredChecks": ["pnpm check:llm-operability"],
+      "escalationOwners": ["Founder", "Security/privacy lead"]
+    },
+    {
+      "id": "release-ci",
+      "name": "Release, CI, installers, and infrastructure",
+      "ownerRole": "Release owner",
+      "ownedWritePaths": [
+        ".github/**",
+        "BUILD.md",
+        "docs/launch/**",
+        "scripts/release.sh",
+        "scripts/publish-cli.sh",
+        "scripts/launch-*.sh",
+        "apps/desktop/src-tauri/tauri.conf.json"
+      ],
+      "readOnlyContextPaths": ["apps/**", "services/**", "docs/security/**"],
+      "blockedPaths": ["apps/mobile/secrets/**", ".env", ".env.*"],
+      "requiredChecks": ["pnpm check:llm-operability", "bash scripts/check-action-pins.sh"],
+      "escalationOwners": ["Security/privacy lead", "Legal/compliance", "Founder"]
+    }
+  ],
+  "reviewAndVerificationLanes": [
+    {
+      "id": "review-security-privacy",
+      "purpose": "Review high-risk trust-boundary diffs before merge."
+    },
+    {
+      "id": "review-product-parity",
+      "purpose": "Review OpenAI/Anthropic parity claims, UX behavior, and source evidence."
+    },
+    {
+      "id": "verify-ci-release",
+      "purpose": "Run CI/release checks and summarize failures without broad edits."
+    },
+    {
+      "id": "integrator",
+      "purpose": "Merge lane outputs, resolve shared-file edits, update changelog/TODO, and commit."
+    }
+  ]
+}

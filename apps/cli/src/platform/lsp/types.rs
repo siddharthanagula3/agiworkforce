@@ -72,7 +72,10 @@ mod tests {
 
     #[test]
     fn position_roundtrip() {
-        let p = Position { line: 5, character: 12 };
+        let p = Position {
+            line: 5,
+            character: 12,
+        };
         let j = serde_json::to_string(&p).unwrap();
         let back: Position = serde_json::from_str(&j).unwrap();
         assert_eq!(p.line, back.line);
@@ -83,8 +86,14 @@ mod tests {
     fn diagnostic_with_severity() {
         let d = Diagnostic {
             range: Range {
-                start: Position { line: 0, character: 0 },
-                end: Position { line: 0, character: 5 },
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 0,
+                    character: 5,
+                },
             },
             severity: Some(1),
             message: "err".into(),
@@ -117,8 +126,14 @@ mod tests {
             name: "MyStruct".to_string(),
             kind: 23,
             range: Range {
-                start: Position { line: 5, character: 0 },
-                end: Position { line: 20, character: 1 },
+                start: Position {
+                    line: 5,
+                    character: 0,
+                },
+                end: Position {
+                    line: 20,
+                    character: 1,
+                },
             },
             children: vec![],
         };
@@ -134,8 +149,14 @@ mod tests {
     fn text_edit_roundtrip() {
         let edit = TextEdit {
             range: Range {
-                start: Position { line: 1, character: 0 },
-                end: Position { line: 1, character: 4 },
+                start: Position {
+                    line: 1,
+                    character: 0,
+                },
+                end: Position {
+                    line: 1,
+                    character: 4,
+                },
             },
             new_text: "    ".to_string(),
         };

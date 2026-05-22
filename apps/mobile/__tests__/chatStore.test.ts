@@ -52,6 +52,36 @@ jest.mock('../services/streaming', () => ({
   streamChat: jest.fn(),
 }));
 
+jest.mock('../services/remoteChatGate', () => {
+  class MockRemoteChatDisabledError extends Error {
+    readonly code = 'MOBILE_REMOTE_CHAT_DISABLED';
+  }
+
+  return {
+    getRemoteChatDisabledReason: jest.fn(() => null),
+    RemoteChatDisabledError: MockRemoteChatDisabledError,
+  };
+});
+
+jest.mock('@agiworkforce/local-llm', () => ({
+  localGenerate: jest.fn(),
+  getCapabilities: jest.fn().mockResolvedValue({
+    totalRAMMB: 8192,
+    osVersion: 'test',
+    thermalThrottled: false,
+    tier1Available: false,
+    tier1Runtime: null,
+    tier2Available: true,
+    tier3Available: true,
+  }),
+}));
+
+jest.mock('../storage/installedModels', () => ({
+  listInstalledModels: jest.fn().mockResolvedValue([]),
+  getInstalledModel: jest.fn().mockResolvedValue(null),
+  markInstalledModelUsed: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store, _name) => {
@@ -68,9 +98,27 @@ jest.mock('../lib/mmkv', () => ({
 // Import after mocks are established
 import { useChatStore } from '../stores/chatStore';
 import { streamChat } from '../services/streaming';
+import { getRemoteChatDisabledReason } from '../services/remoteChatGate';
+import { localGenerate } from '@agiworkforce/local-llm';
+import {
+  listInstalledModels,
+  getInstalledModel,
+  markInstalledModelUsed,
+} from '../storage/installedModels';
 import type { StreamCallbacks } from '../services/streaming';
 
 const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
+const mockRemoteDisabledReason = getRemoteChatDisabledReason as jest.MockedFunction<
+  typeof getRemoteChatDisabledReason
+>;
+const mockLocalGenerate = localGenerate as jest.MockedFunction<typeof localGenerate>;
+const mockListInstalledModels = listInstalledModels as jest.MockedFunction<
+  typeof listInstalledModels
+>;
+const mockGetInstalledModel = getInstalledModel as jest.MockedFunction<typeof getInstalledModel>;
+const mockMarkInstalledModelUsed = markInstalledModelUsed as jest.MockedFunction<
+  typeof markInstalledModelUsed
+>;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -98,6 +146,7 @@ function resetStore() {
 
 const CONV_ID = 'test-conv-123';
 const MODEL = 'claude-3-5-sonnet';
+const LOCAL_MODEL = 'qwen3-4b-instruct-2507';
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -107,6 +156,10 @@ describe('chatStore — streaming state', () => {
   beforeEach(() => {
     resetStore();
     jest.clearAllMocks();
+    mockRemoteDisabledReason.mockReturnValue(null);
+    mockListInstalledModels.mockResolvedValue([]);
+    mockGetInstalledModel.mockResolvedValue(null);
+    mockMarkInstalledModelUsed.mockResolvedValue(undefined);
 
     // Seed the store with a conversation and empty message list
     useChatStore.setState({
@@ -196,6 +249,76 @@ describe('chatStore — streaming state', () => {
 
       expect(getState().streamingContent).toBe('');
       expect(getState().streamingReasoning).toBe('');
+    });
+  });
+
+  describe('local LLM path', () => {
+    it('runs the selected installed local model and streams tokens into the assistant message', async () => {
+      useChatStore.setState({
+        messages: {
+          [CONV_ID]: [
+            {
+              id: 'prev-user',
+              conversationId: CONV_ID,
+              role: 'user',
+              content: 'Earlier context',
+              createdAt: new Date().toISOString(),
+            },
+            {
+              id: 'prev-assistant',
+              conversationId: CONV_ID,
+              role: 'assistant',
+              content: 'Earlier response',
+              createdAt: new Date().toISOString(),
+              isStreaming: false,
+            },
+          ],
+        },
+      });
+      mockRemoteDisabledReason.mockReturnValue('mobile-local-only');
+      mockListInstalledModels.mockResolvedValue([
+        {
+          id: LOCAL_MODEL,
+          display_name: 'AGI Lite',
+          runtime: 'local',
+          format: 'pte',
+          size_bytes: 1_181_116_006,
+          sha256: null,
+          local_path: null,
+          installed_at: 1,
+          last_used_at: null,
+          capabilities: null,
+        },
+      ]);
+      mockLocalGenerate.mockImplementation(async (_modelPath, opts) => {
+        opts.onToken?.('Hel');
+        opts.onToken?.('lo');
+        expect(opts.messages).toEqual([
+          { role: 'user', content: 'Earlier context' },
+          { role: 'assistant', content: 'Earlier response' },
+        ]);
+        return { text: 'Hello', runtime: 'executorch', aborted: false };
+      });
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'Use local model', LOCAL_MODEL);
+      });
+
+      expect(mockLocalGenerate).toHaveBeenCalledWith(
+        undefined,
+        expect.objectContaining({ modelId: LOCAL_MODEL, prompt: 'Use local model' }),
+      );
+      expect(mockMarkInstalledModelUsed).toHaveBeenCalledWith(LOCAL_MODEL);
+
+      const msgs = getState().messages[CONV_ID] ?? [];
+      const assistantMsg = [...msgs].reverse().find((m) => m.role === 'assistant');
+      expect(assistantMsg?.content).toBe('Hello');
+      expect(assistantMsg?.isStreaming).toBe(false);
+      expect(assistantMsg?.metadata).toMatchObject({
+        localMode: true,
+        localModelId: LOCAL_MODEL,
+        localRuntime: 'executorch',
+      });
     });
   });
 

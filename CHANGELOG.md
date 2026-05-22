@@ -1,10 +1,385 @@
 # Changelog
 
+Status: Current
+Owner: Platform lead
+Last updated: 2026-05-21
+
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased — autonomous suite transformation, round 10] — 2026-05-21
+
+Round 10 closes the PLAN.md section 5 task "Define project schema" and ships the matching shared `ProjectHeader` primitive in `@agiworkforce/unified-chat`. Types-first cross-surface contract — same pattern as `SendPreviewPresentation` and `GeneratedFilePresentation`.
+
+### Added
+
+- `ProjectRecord` in `@agiworkforce/types/suite-contracts` gains `instructions`, `defaultModelId`, `knowledgeFileCount`, `memberCount`, `lastUsedAt`, `iconEmoji`, `accentColor`, `importedFrom` (all optional — non-breaking).
+- New companion types: `ProjectMember`, `ProjectMemberRole`, `ProjectKnowledgeFile`, `ProjectInstructions`, `ProjectAccentColor` (bounded palette: emerald / sky / amber / rose / violet / zinc), `ProjectImportSource` (claude / openai / manual).
+- `summarizeProjectHeader(input)` derives `ProjectHeaderPresentation` with title, description, icon, accent color (normalized), privacy/provider labels, staysLocal flag, default-model id+label passthrough, denormalized file/member count labels, last-used label, imported-from label, and canonical-order surface chips.
+- Helpers: `normalizeProjectAccentColor()` (falls back to 'zinc' for unknown values), `projectMemberRoleLabel()` (Owner / Editor / Viewer).
+- Shared `ProjectHeader` component in `@agiworkforce/unified-chat`. Consumes `ProjectHeaderPresentation`. Accent palette mapped to deterministic Tailwind classes (no inline `style={{ backgroundColor }}` leakage). Privacy chip carries `data-stays-local`; provider chip carries `data-provider-mode`. Imported-from chip, meta row (knowledge files / members / last used / default model), and canonical-ordered surface chips render conditionally.
+- 26 new vitest tests in total: 15 for `summarizeProjectHeader` (accent palette, canonical surface order, count formatting, imported-from labelling, staysLocal flip, model passthrough) + 11 for `ProjectHeader` component (accent attribute, chip data attributes, imported-from / meta / surface chip surfacing).
+- Desktop `ProjectsView.tsx` adopts `<ProjectHeader />` in the project details header, with a `mapDesktopProjectToHeaderRecord()` helper that bridges the Desktop store's `Project` to a canonical `ProjectRecord` with v1 LOCAL ONLY defaults (privacy=local, provider=Local, surfaces=[web,desktop,mobile], importedFrom=manual). Display-only adoption — the Edit Details / Settings / Open Project action row stays as the canonical action surface.
+- Mobile RN-native `ProjectHeader` mirror in `apps/mobile/src/features/projects/components/ProjectHeader.tsx`, consuming the same `ProjectHeaderPresentation` so all three Local-mode surfaces (Web/Desktop/Mobile) share the project-header contract without sharing JSX. 8 jest tests pin the chip set, imported-from chip, meta row, and canonical surface ordering.
+- Rust mirror of the project schema in `crates/agiworkforce-protocol/src/projects.rs`. `ProjectRecord` + companion enums + `normalize_accent_color()` helper, matching the TS canonical shape via serde camelcase emission. Privacy mode = lowercase wire form (`'local'`/`'byok'`/`'managed'`); provider mode = PascalCase (`'Local'`/`'DirectByok'`/`'ManagedGateway'`/`'ManagedNative'`) to match the TS string-union vocabulary. Optional/denormalized fields use `skip_serializing_if = "Option::is_none"` so minimal payloads stay minimal. 13 Rust unit tests pin serde wire form, camelcase emission, None field omission, and round-trip equivalence. Unlocks CLI / Tauri / future cloud-service code paths that need to consume project metadata against the same wire shape Web/Desktop/Mobile use.
+- VS Code extension `apps/extension-vscode/src/platform/surface.ts` and Chrome extension `apps/extension/src/surface.ts` both declare `SOURCE_SURFACE: SourceSurface = 'vscode' | 'chrome'` with a module-load assertion via `isDeveloperSessionSurface()`. Ensures any future refactor that promotes either surface into the synced-app vocabulary fails extension activation immediately rather than silently producing bad telemetry. 8 vitest tests (4 per surface) lock the literal, classification, and that `assertSurfaceCanSyncChats()` throws the sync-rule violation for each.
+- **Visual-verification debt discharged for Web.** New `apps/web/e2e/visual-verification.spec.ts` captures full + viewport screenshots of `/projects` and `/` against a live Next dev server. Output committed to `docs/visual-verification/web/` (6 PNGs + 2 findings JSON). 4 vitest DOM snapshot tests in `packages/unified-chat/src/components/__tests__/SharedPrimitives.snapshot.test.tsx` lock the rendered HTML structure of ProjectHeader, SendPreview (Local + BYOK), and GeneratedFileCard. `docs/visual-verification/README.md` documents the workflow + records 2026-05-21 findings. Real findings surfaced by the capture: `/projects` has dangerously low text contrast in dark mode (`var(--text-1)`/`var(--text-3)` heading + body copy nearly invisible against black background); `/` home page has CSP violations blocking inline scripts and the open-dyslexic accessibility-font CDN. These are real Stop-hook-blocking accessibility issues the capture pass exists to find.
+
+## [Unreleased — autonomous suite transformation, round 9] — 2026-05-21
+
+Round 9 closes the PLAN.md section 6 task "Add Chrome and VS Code bridge status to connector hub" — making developer-surface transport health a first-class part of the consumer connector hub.
+
+### Added
+
+- `ExtensionStatusDiagnostics` canonical type in `@agiworkforce/api/browserExtension`, re-exported from the package root for ergonomic consumption. `extensionStatus()` is now strongly typed instead of returning `unknown`. The previously-local `ExtensionStatusDiagnosticsPayload` interface in `apps/desktop/src/hooks/useAgenticEvents.ts` is removed; the preflight checker now consumes the canonical shape.
+- Desktop `BridgeStatusCard` in `apps/desktop/src/features/connectors/`. Derives a Chrome row (from `diagnostics.native_connection.state` + `extension_id`) and a VS Code row (from `transport.websocket_port` + overall status). Token-invalid degrades both rows. Color-coded state dot (emerald connected / amber connecting / rose error / zinc disconnected). Refresh button refetches; first diagnostics recommendation surfaces as an amber footer. Best-effort hidden outside Tauri. 8 vitest tests pin every state path.
+- BridgeStatusCard mounted in `ConnectorGallery` above the status filter pills so consumers see bridge health when they open the connector hub.
+
+Round 8 closes the PLAN.md section 5 task "Add visible 'what will be sent' previews for cloud/BYOK turns" — a privacy-critical UX gap that matches Claude/OpenAI parity AND reinforces AGI's local-first stance.
+
+### Added
+
+- `SendPreviewInput` + `SendPreviewPresentation` + `summarizeSendPreview` in `@agiworkforce/types/suite-contracts`. Derives the destination label, privacy short-label, banner copy, and compact body/attachment/context/system-prompt/tools labels from a single input. Privacy-positive banner copy for Local turns ("Stays on this device", "nothing is uploaded"). BYOK turns name the destination host and the API-key path. Managed turns name the gateway and retention call-out. 11 new vitest tests.
+- Shared `SendPreview` web component in `@agiworkforce/unified-chat`. Renders destination + privacy chip row, banner copy, and an expand/collapse details block. Emerald/amber/sky accent class keyed off provider mode. `data-provider-mode` + `data-stays-local` attributes for host wiring. 10 new vitest tests.
+- Mobile RN-native `SendPreview` mirror in `apps/mobile/src/features/chat/components/SendPreview.tsx` consuming the same `SendPreviewPresentation` type. 7 new jest tests pinning destination labelling per provider mode, banner copy, expand/collapse.
+- Three host adoptions: Web `WebChatPage` above the composer, Mobile chat tab above `ChatInput`, Desktop chat shell above `ChatInputArea`. Each maps its own provider taxonomy to `ProviderMode` + `destinationHost` (e.g. `anthropic` → `api.anthropic.com`, `managed_cloud` → `gateway.agiworkforce.com`, `ollama`/`lmstudio` → Local).
+- Web composer attachments stamp per-file privacy chip ("Local" / "BYOK" / "Managed") via new `attachmentPrivacyShortLabel` prop on `ChatComposerNew`. Each image thumbnail and document chip in `AttachmentPreview.tsx` shows a lock-icon chip stating the outbound destination. Matches PLAN section 5 "Add per-file privacy labels".
+- Desktop OAuth token expiry status + refresh UX on `OAuthConnectorCard`. Color-coded badge (green: >24h, amber: <1h, red: expired) backed by `mcp_oauth_status`'s `expiresAt`. `ConnectorGallery` batch-fetches status for each connected provider after `fetchConnected`. When the token is amber/red, an explicit "Refresh token" button appears above Disconnect; `mcp_oauth_refresh` powers it. Matches PLAN section 6 "Add OAuth status and refresh UX".
+
+## [Unreleased — autonomous suite transformation, round 7] — 2026-05-21
+
+Continuation of the parity transition. This round closes round-2 audit P0 #3 entirely (composer drag-drop + paste-image across shared, vscode-ext, and chrome-ext consumers) and round-2 audit P0 #9 entirely (artifact versioning + publish + live preview + edit-in-place).
+
+### Added
+
+- `packages/unified-chat/src/lib/artifact-sandbox.ts` shared CSP + sandbox-attr envelope consumed by both `ArtifactPanel` and `ArtifactRenderer.HtmlArtifact`, eliminating duplication of security-relevant iframe attributes between the two surfaces.
+- `ArtifactPanel` live preview mode for HTML and React artifacts. HTML wraps content with `buildSandboxedHtml`, mounts a sandboxed iframe with `allow-scripts allow-modals` + `no-referrer`, and exposes a pause/run toolbar. React artifacts delegate to the existing `ReactPreview` component.
+- `ArtifactPanel` edit-in-place via the new optional `onSaveEdit` prop. When the host wires the callback, the toolbar gains an Edit button that swaps the code view for an editable textarea with save/discard chips; changing the active artifact id auto-clears the draft.
+- VS Code extension composer drag-drop and paste-image wire. New `attachFiles` zod-validated webview→host protocol entry with 10 MB / 8-file caps, path-separator rejection, and a `data:` URL-only filter. Webview renders attachment chips with uploading/failed states; host writes each file to `globalStorageUri/.attachments/<timestamp>` and calls `agi-workforce.addToContext`.
+- Chrome extension side panel composer drag-drop and paste-image. Image-only `Files` drag highlight on `#sp-composer-shell`; paste handler captures clipboard image kinds; both routes go through a single `acceptIncomingComposerFiles` helper enforcing 10 MB per file / 8 attachments total / image MIME filter.
+- 22 new regression tests across `ArtifactPanel.live-preview.test.tsx`, `webviewAttachFiles.test.ts`, and `sidePanelComposerDragDrop.test.ts` covering sandbox attributes, CSP injection, schema invariants, and the drag-drop filter rules.
+- Shared `GeneratedFileCard` in `packages/unified-chat` for compute-session outputs (PDF / DOCX / XLSX / image / archive / etc.). Status badge selection (running / failed / complete / pending), kind-icon mapping, optional preview thumbnail, action-callback gating, privacy / provider / source-surface chips, and source-session jump. 9 tests pin the surface invariants.
+- Web `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx` adopts the shared `GeneratedFileCard` in the manifest header — the first host-adoption slice for the shared card.
+- Mobile RN-native `GeneratedFileCard` in `apps/mobile/src/features/chat/components/GeneratedFileCard.tsx`, consuming the same `GeneratedFilePresentation` from `@agiworkforce/types` so Web and Mobile keep matching status semantics, chip set, and provenance shape without sharing JSX (React DOM vs React Native). Adopted in `ArtifactFullScreen.tsx`, replacing ~40 lines of inline provenance; 12 tests pin status-badge selection, chip surfacing, local-only note gating, preview-thumbnail / kind-icon fallback, and the source-session callback.
+- Desktop `apps/desktop/src/features/chat/InlineToolResults/InlineDocumentGeneration.tsx` adopts the shared `GeneratedFileCard` in the header, replacing ~50 lines of inline kind-icon / status pill / privacy pill / kind-byte-checksum row markup. Display-only adoption — the Tauri-wired action row (Open / Show in Finder / Save As / Share / Copy Path) stays below the card as the canonical action surface, so no Tauri integration is lost. An `effectiveSummary` memo carries the Tauri-fetched `fileMeta.sizeBytes` fallback into the presentation when the canonical bundle doesn't have a byte count yet. All three Local-mode surfaces (Web / Desktop / Mobile) now share the same generated-file provenance contract.
+
+## [Unreleased — Anthropic Applications parity transition] — 2026-05-20
+
+This entry starts the explicit transition from ad hoc Claude-like improvements to a repo-owned Anthropic Applications parity program across CLI, Desktop, Mobile, Web, VS Code, Chrome, shared packages, and future cloud services.
+
+### Added
+
+- Shared suite chat execution contracts in `@agiworkforce/types`: `ChatExecutionMode`, `ChatIntent`, connector status snapshots, permission decisions, and compact suite tool events. These make Local Mode + Local LLMs, Local Mode + BYOK, and Cloud Managed semantics explicit before more frontend parity work lands.
+- Mobile `remoteChatGate` with regression tests, so v1 Local Mode + Local LLMs has a single guard for blocking remote chat until secure Mobile BYOK key storage or Cloud Managed access is enabled.
+- Mobile v1 Claude-inspired app shell updates: composer-first chat start screen, visible Local Mode + Local LLMs state, Cloud Managed waitlist affordance, drawer-level Artifacts and Code navigation, and locked Mobile BYOK messaging.
+- Mobile local-first model picker backed by `@agiworkforce/local-llm`, with selectable on-device rows, local auto modes, persisted cloud-selection cleanup, and locked Cloud Managed provider rows.
+- Mobile local model preparation state for `react-native-executorch` preset downloads/caches, installed-model manifest recording, ready/downloading/retry/unavailable row states, and device-verified system model readiness.
+- Mobile local runtime resolver in the model-picker feature service, so chat can resolve auto/local model ids into ExecuTorch preset refs, llama.rn file paths, or platform-native system models without duplicating picker policy.
+- Mobile physical-iPhone Release debug path with an embedded JS bundle: a first-party entrypoint now installs required React Native globals before Expo Router loads, development app-env builds bypass the production TLS-pin placeholder launch blocker, and mobile imports consume narrow `@agiworkforce/utils/*` subpaths so Metro does not bundle Node-only helpers.
+- Mobile Artifacts gallery and Code Sessions surfaces. Mobile can preview/share received artifacts and control Desktop or future Cloud Managed code environments, while explicitly avoiding mobile-local heavy compute.
+- Mobile feature ownership READMEs for `artifacts` and `code-sessions`, keeping the new domains visible to repo operability checks and parallel coding agents.
+- `packages/types/src/suite-contracts.ts` as the canonical cross-surface contract layer for `PrivacyMode`, `ProviderMode`, synced Web/Desktop/Mobile app conversations, CLI/VS Code/Chrome developer sessions, explicit handoff drafts, projects, compute sessions, generated files, artifact manifests, remote-control/computer actions, connector/MCP registry records, and agent/subagent event records.
+- Canonical `Local` / `BYOK` / `Managed` privacy-mode display copy and provider-mode label helpers in `@agiworkforce/types`, so surfaces can stop inventing trust-boundary wording independently.
+- Shared Local-to-BYOK handoff preview utilities in `@agiworkforce/utils` that build typed `HandoffDraft` records with redaction findings, redacted payload preview text, checksum evidence, and preview hashes.
+- Developer-session event stream contracts with ordered typed payloads, stream frames, checkpoints, forks, and replay request/result records for CLI, VS Code, Chrome, and future Desktop/Web/Mobile viewers.
+- Managed-compute private-beta gate in `services/api-gateway/src/middleware/managedComputeGate.ts`, wired onto AGI-held-key execution paths for cloud chat send, OpenAI-compatible LLM proxy, and provider streaming.
+- Mobile domain-closure slice for theme and voice ownership: theme tokens/hooks now live under `apps/mobile/src/ui/theme`, and voice playback/presets now live under `apps/mobile/src/features/voice`.
+- Focused CLI slash-resolution tests so the TUI preserves exact `/sessions` behavior while normal aliases still resolve through the registry.
+- `agi doctor --json` as a real CLI subcommand with machine-readable checks for runtime dependencies, auth, sandbox, MCP config, plugins, model access, writable state directories, git stale branches, and transport configuration.
+- CLI custom slash commands from project/user `.agiworkforce/commands`, imported `~/.agiworkforce/prompts/claude`, and compatibility `.claude/commands` roots, with `$ARGUMENTS` and `$1`-`$9` expansion in REPL and the simple TUI.
+- CLI hook matcher and `if:` filters now recognize Claude-style tool names such as `Bash`, `Read`, `Edit`, and `TodoWrite` alongside AGI canonical tool names.
+- CLI `[ui]` config now persists project-local `output_style` and `privacy_mode`, applies them to new REPL/TUI/one-shot sessions, and writes slash-command changes without copying global provider settings into the project file.
+- CLI MCP connections now discover MCP prompts with `prompts/list` and expose them as `/mcp:<server>:<prompt>` dynamic slash commands that resolve through `prompts/get` in REPL and the simple TUI.
+- CLI `/agents` now provides list, show, path, create, and validate management commands, and agent discovery now includes nested imported Claude-agent folders.
+- CLI slash-command coverage tests now prove every registered built-in command and alias has active REPL and TUI runtime coverage; this also fixed TUI `/plugin`/`/marketplace` aliases and REPL `/resume`.
+- CLI tool declarations now carry local owner, permission-class, diagnostic-tag, and Claude-style alias metadata from the central catalog while keeping provider schemas clean.
+- `scripts/generate-surface-file-ledger.mjs`, `pnpm audit:file-ledger`, and `audit/anthropic-apps-parity/per-file-audit-ledger.{md,jsonl}` seed the file-level audit ledger for CLI and shared engine paths.
+- `docs/engineering/service-layer-architecture.md` and `pnpm check:service-layer` to lock action/route orchestration vs reusable operational mechanics, and to prevent new local duplicate definitions of canonical shared contracts.
+- `scripts/check-mobile-hygiene.mjs` and `pnpm check:mobile-hygiene` to keep Mobile feature folders self-describing, freeze root hook/lib growth, block retired theme/voice imports, and catch new direct I/O in UI files.
+- Lane-contract sections in scoped `AGENTS.md` files for CLI, Web, Mobile, Desktop, Chrome, VS Code, services, and provider adapters, enforced by `pnpm check:agent-context`.
+- Shared API gateway UUID validation in `services/api-gateway/src/validations/ids.ts`, used by chat, desktop, and mobile routes.
+- Root `PLAN.md` as the active transition control plane for Anthropic Applications parity. It defines the mission, non-negotiables, source corpus, parity matrix, transition workstreams, phases, and definition of done.
+- Root `TODO.md` as the active transition checklist. It separates exploration, CLI engine work, cross-surface product tasks, cloud-later tasks, and documentation rules.
+- `docs/engineering/naming-conventions.md` as the locked naming policy for product names, CLI commands, root control files, work logs, folders, files, package/module names, branches, commits, versions, release tags, and enforcement.
+- `scripts/check-hooks.mjs` and `pnpm check:hooks` to enforce Husky hook wiring, commitlint policy, and hook documentation.
+- `scripts/check-workspace-scripts.mjs` and `pnpm check:workspace-scripts` to reject package scripts that reference missing concrete pnpm workspace filters.
+- `docs/decisions/2026-05-20-openai-anthropic-application-suite-thesis.md` locking AGI Workforce as an OpenAI/Anthropic-style application suite, not just a chat app or CLI.
+- `docs/plans/pre-release-repo-organization-2026-05-20.md` defining the pre-release repo organization plan for root cleanup, naming, ownership, docs, package boundaries, CI guardrails, and team onboarding.
+- `docs/agent-context/` as the canonical LLM-operability layer for coding agents:
+  - `README.md` - agent read order and rules.
+  - `repo-map.json` - surfaces, owner roles, purposes, and checks.
+  - `risk-map.json` - high-risk owner paths and verification focus.
+  - `commands.json` - canonical commands by surface.
+  - `doc-status.json` - current, historical, working-note, and classification-debt docs.
+  - `known-flaws.md` - repeated bug/stale-claim ledger.
+  - `bug-finding-guide.md` - high-signal bug search workflow.
+- Repo organization guardrail scripts:
+  - `scripts/check-agent-context.mjs`
+  - `scripts/check-repo-organization.mjs`
+  - `scripts/check-boundaries.mjs`
+- `audit/repo-organization/current-monorepo-grade-2026-05-20.md` grading the current monorepo and tracking the concrete path from early cleanup to A+ hiring readiness.
+- Repo organization classification ledgers:
+  - `audit/repo-organization/agentic-development-outlook-2026-05-20.md`
+  - `audit/repo-organization/root-classification-2026-05-20.md`
+  - `audit/repo-organization/tool-folder-classification-2026-05-20.md`
+  - `audit/repo-organization/package-readme-coverage-2026-05-20.md`
+  - `audit/repo-organization/ownership-model-2026-05-20.md`
+  - `audit/repo-organization/docs-status-2026-05-20.md`
+  - `audit/repo-organization/generated-artifact-policy-2026-05-20.md`
+- `docs/agent-context/agent-task-templates.md` with standard exploration, implementation, review, and verification task templates for parallel coding agents.
+- `docs/agent-context/lanes.json` with 18 writer lanes, 4 review/verification lanes, owned write paths, blocked paths, checks, and escalation owners for 15+ parallel agents.
+- `docs/agent-context/shared-files.md` with a collision policy for manifests, lockfiles, root docs, CI, shared schemas, migrations, and native project files.
+- `docs/agent-context/task-manifest.schema.json` for structured agent task assignments.
+- `docs/engineering/parallel-agent-playbook.md` for Claude Code TeamCreate-style, Codex subagent, Cursor, opencode, and future internal-agent work splitting.
+- `docs/engineering/autonomous-software-company-roadmap.md` for the feedback-to-triage-to-patch-to-PR-to-release operating model.
+- `docs/research/agentic-company-research-prompts.md` with 100 delegated research prompts covering agentic product development, support automation, fraud, cloud compute, release automation, and one-person company operations.
+- `scripts/check-lane-ownership.mjs` and `pnpm check:lane-ownership`.
+- `.github/PULL_REQUEST_TEMPLATE/parallel-agent-change.md` for lane-scoped parallel-agent PRs.
+- `docs/marketing/`, `docs/support/`, and `docs/legal/` operator folders with ownership READMEs.
+- Root `ios/README.md` documenting the native iOS project ownership decision.
+- Provisional `.github/CODEOWNERS` so high-risk app, service, contract, migration, and enterprise paths route to founder/platform review until GitHub teams exist.
+- Debt-aware repo-operability checks:
+  - `scripts/check-generated-artifacts.mjs`
+  - `scripts/check-readme-ownership.mjs`
+  - `scripts/check-doc-status.mjs`
+- `scripts/check-structure-conventions.mjs` and `pnpm check:structure-conventions` to enforce Web feature-root ownership, retired docs folders, and invalid backslash-named root entries.
+- Structure-convention enforcement for the primary `agi` CLI command, the `agiworkforce` compatibility alias, and the required npm/Cargo binary mappings.
+- Hook enforcement added to `pnpm check:llm-operability`.
+- `.github/workflows/repo-operability.yml` so docs-only and agent-context changes run `pnpm check:llm-operability`.
+- `reports/root-scratch-archive/2026-05-20/` as the dated home for prior root scratch markdown and design images.
+- `reports/playwright-mcp-archive/2026-05-20/` as the dated home for prior tracked Playwright MCP captures.
+- `docs/reference/` as the durable home for the prior root `REFERENCE_INDEX.md` and `REFERENCE_STRUCTURE.md` catalogs.
+- `docs/archive/2026-05-14-reverse-engineering-campaign/` as the historical home for the prior root `MASTER_PLAN.md` and `AGIWORKFORCE_IMPLEMENTATION_LOG.md`.
+- `.github/pull_request_template.md` plus product/surface, refactor/move, security/privacy, docs/research, and release/infra PR templates.
+- `docs/engineering/` for internal engineering workflow and agent-native development rules, including worktree/session isolation.
+- Path-scoped high-risk `AGENTS.md` files for CLI, Web, Mobile, Desktop, Chrome extension, VS Code extension, services, and provider adapters.
+- P0/P1 ownership READMEs for `apps/web`, `apps/desktop`, `apps/extension`, `services/api-gateway`, `services/signaling-server`, `packages/types`, `packages/runtime`, `packages/providers`, and `packages/unified-chat`.
+- README ownership coverage for every top-level package, every provider leaf package, every top-level Rust crate, and existing app/package/crate READMEs that lacked required ownership markers.
+- `audit/anthropic-apps-parity/` evidence ledger with:
+  - `README.md` - evidence folder contract.
+  - `application-suite-thesis-2026-05-20.md` - official OpenAI/Anthropic suite research and AGI's locked local-first/BYOK/multi-provider/privacy-controlled managed-compute thesis.
+  - `feature-ledger.md` - initial official Anthropic feature baseline and current AGI status.
+  - `file-inventory.md` - initial scoped repo inventory and surface map.
+  - `reference-notes.md` - local reference architecture and license snapshot.
+  - `surface-gap-ledger.md` - cross-surface parity gaps, owner paths, and next closure targets.
+  - `competitive-baseline-2026-05-20.md` - current Anthropic/OpenAI application baseline and AGI chat-sync boundary.
+  - `sdk-strategy-2026-05-20.md` - OpenAI/Anthropic/Vercel SDK strategy, provider-boundary rules, and AGI-owned runtime decision.
+  - `compute-artifacts-2026-05-20.md` - Claude/ChatGPT compute, computer-use, generated-file, preview, and download architecture research with AGI implementation tasks.
+- CLI privacy-boundary foundation:
+  - `PrivacyMode` on `AgentSession`: `Local`, `Byok`, `Managed`.
+  - Send-time block when a Local session would route to a non-local provider.
+  - `/privacy-mode` and `/continue-with-byok` slash commands.
+- `audit/anthropic-apps-parity/team-2026-05-21/` as the current parallel-agent evidence bundle for Claude/OpenAI-style surface parity, with image-side, source-side, reconciliation, synthesis, and executive-summary reports.
+
+### Changed
+
+- Mobile physical-iPhone development builds now use an explicit `ios:device:dev` script that clean-prebuilds with development-safe entitlements, and `ios:device:dev:no-prebuild` for retrying after generated iOS artifacts are already correct.
+- Mobile physical-iPhone development builds now pin generated Xcode signing to the company Apple team `D2PR62RLT4` by default and fail fast if no local `Apple Development` identity is installed.
+- Mobile iOS native-module prebuild wiring now handles Expo SDK 55 Xcode project groups, registers `AppShortcuts.xcstrings` as an app resource, and raises generated iOS deployment targets to 17.0 for AppShortcuts/local-runtime compatibility.
+- Mobile README and architecture docs now document the local iPhone trust step, RN 0.83.6 runtime pin, iOS 17.0 floor, and root `patches/` ownership rule.
+- VS Code sidebar model switching now uses a real inline model popover backed by `modelPickerData` from the extension host, with webview regression coverage for the previously undefined popover variables.
+- Mobile streaming now fails closed through the remote chat gate and Article 50 provider gate before outbound provider/API requests. Local Mode + Local LLM attachments are kept as local references instead of being uploaded first.
+- Mobile Local Mode chat now uses the selected local model when remote chat is disabled, streams local tokens into the assistant message, records installed-model last-use metadata, and shows a setup message instead of silently falling back to cloud when no on-device model is ready.
+- Mobile onboarding, settings, capabilities, drawer, model picker, add-to-chat sheet, task chips, and tool-access copy now consistently separate Local Mode + Local LLMs, locked Mobile BYOK, and Cloud Managed waitlist behavior.
+- Desktop and API native computer-use action/session payloads now use `DesktopComputerAction` and `DesktopComputerUseSession`, reserving canonical `ComputerAction` and `ComputerUseSession` names for suite-level shared contracts.
+- Web v2 AI SDK requests now fail closed unless `providerMode` is explicitly `ManagedGateway` or `ManagedNative`, preventing Local/BYOK requests from reaching the managed Vercel AI SDK/Gateway path.
+- Web AI SDK stream handling now has an adapter that maps AI SDK text, reasoning, tool, usage, error, and stop events into AGI's canonical `StreamChunk` event union.
+- Provider SDK versions are consolidated on OpenAI SDK `6.38.0`, Anthropic SDK `0.91.1`, Vercel AI SDK `6.0.141`, and the current `@ai-sdk/*` package line across Web and provider adapters.
+- OpenAI provider routing now prefers Responses API for native OpenAI catalog-known chat/text models, while preserving Chat Completions for OpenAI-compatible proxies, legacy base URLs, unknown models, and media/audio models.
+- Desktop `hooks_get_stats` now returns live per-hook execution totals, success/failure counts, average duration, and last execution time instead of the previous placeholder `None`.
+- OpenAI Responses translation now has regression coverage proving server-side `store` is omitted by default and only set when explicitly requested.
+- CLI `allowed_tools` schema filtering now accepts Claude-style aliases and pattern-qualified rules such as `Read`, `Bash`, and `Bash(cargo *)` instead of requiring internal tool names.
+- CLI hook matcher alias expansion now reads Claude-style tool aliases from the central tool catalog instead of maintaining a duplicate alias table.
+- CLI `PreToolUse` hook control-flow is now shared by task subagents, parallel read-only tool batches, and sequential tools; hook block/stop decisions and `updated_input` rewrites are honored before any tool execution path runs.
+- CLI legacy tool-call conversion is now compiled only for tests, keeping strict dead-code checks usable for focused subagent harness verification.
+- CLI `/permissions` now supports adding/removing allow, deny, and session command-prefix rules; command approvals match the full command before program fallbacks, reject shell-metachar suffixes on cached prefixes, and keep session approvals in process memory.
+- CLI `allowed_tools` and `disallowed_tools` are now applied to normal one-shot, REPL, and TUI agent sessions; whole-tool deny rules hide schemas and pattern rules reject matching calls before execution.
+- CLI plan-mode mutation gates now read tool permission metadata from the central tool catalog, including team/MCP-facing tools, and approved plans restore the normal mutable tool surface.
+- CLI slash-command composition now reuses the shared `agiworkforce-command-registry` built-in catalog instead of maintaining a second app-local copy; the CLI layer only adds skills, prompts, and plugin commands.
+- CLI REPL and TUI help now render from the shared slash-command registry, so built-ins, aliases, skills, plugin commands, and custom prompts use one metadata path instead of separate hand-written help text.
+- CLI `/doctor`, `/diagnose`, and `/health` now reuse the same diagnostic report collector and text formatter as `agi doctor`, with a live-session appendix for model, privacy, permissions, MCP tools, agents, roots, and attached files.
+- CLI TUI `/hooks` now reuses the shared hook-list formatter, and command-surface docs classify TUI slash-command coverage through direct arms plus the shared Claude-parity fallback instead of a stale unhandled list.
+- CLI tool-filter policy aliases now live in the central tool catalog instead of `tool_filters.rs`, preserving broad Claude-style groups such as `Read`, `Edit`, and `Grep` for allow/deny rules without a second alias table.
+- CLI provider streaming now shares tool schema renderers for Anthropic, OpenAI-compatible, Gemini, Ollama, Copilot, and ChatGPT routes, with regression tests proving local tool metadata is never serialized into provider payloads.
+
+### Fixed
+
+- Mobile v1 local-only no longer dead-ends on a blank screen after Face ID. The `(auth)/login` route now redirects to `(app)` when `FEATURES.auth` is false (previously rendered `null`), the root navigator's auth guard skips the login redirect when auth is feature-gated off, and `services/api.ts` `handleUnrecoverableAuth` silently clears the stale Supabase session instead of firing a Session-Expired alert that the user can't act on in v1.
+- Mobile physical iPhone Debug builds now compile under the installed Xcode/iOS SDK by aligning React Native to Expo SDK 55, removing unused `expo-av`, patching the Expo root-view optional dev-menu mismatch, and updating `AGITranslate` for the current Translation framework API.
+- Mobile notification deep links now target `/(app)/companion/agent/[id]` with the correct `id` route param, restoring Expo typed-route typecheck.
+- Mobile AppShortcuts localization now compiles from the supported root `AppShortcuts.xcstrings` resource path instead of the invalid nested `en.lproj` placement.
+- Mobile local LLM turns no longer include the latest user prompt twice in both `messages` history and `prompt`, preserving prompt budget and response quality for on-device runtimes.
+- Mobile local runtime resolution now rejects stale or non-selectable cloud model ids instead of silently downgrading to the default local model.
+- Mobile OCR fallback now routes through the `AGIVisionOCR` service instead of the Foundation Models/AICore modules, restoring native on-device OCR for vision fallback prompts.
+- Mobile model picker unavailable rows now expose a non-actionable accessibility hint instead of telling VoiceOver/TalkBack users to tap-select a disabled model.
+- CLI `--mcp-config` and `--strict-mcp-config` are now wired into MCP loading for TUI, REPL, one-shot, and `exec` entrypoints; explicit files are required, strict mode excludes project/global/plugin discovery, and repeated explicit files override in order.
+- CLI tool catalog and executor drift is now covered by regression tests: built-in catalog entries must have a local or agent-runtime dispatcher, local dispatch arms must have catalog metadata, and team tool dispatchers must match team tool schemas.
+- Current docs now define suite-level requirements for all six surfaces, cross-surface ownership for projects/chats/sessions/artifacts/memory/teams/billing, and a provider capability matrix for routing/privacy claims.
+- Surface docs now reflect current CLI MCP client transports, Desktop onboarding feature paths, and the VS Code tier-response HMAC verification status.
+- Desktop surface docs now reflect the completed removal of the legacy `src/components/UnifiedAgenticChat` folder and point live Desktop chat work at `src/features/chat`; structure checks guard against reintroducing the stale claim.
+- VS Code and unified chat usage meters no longer invent managed-plan quota/reset values; they now use reported quota fields when available and show explicit unavailable/not-managed states otherwise.
+- Web, Desktop, Mobile, VS Code, and Chrome extension trust-mode labels now consume the canonical `@agiworkforce/types` Local/BYOK/Managed display helpers for primary pricing, provider, account, onboarding, meter, and tier surfaces.
+- Desktop and Web active mode controls now label AGI-managed app mode as `Managed`, Desktop BYOK provider routing as `BYOK`, and Mobile cloud-provider provenance as `BYOK`, leaving only true cloud-storage/marketing prose with cloud wording.
+- The Desktop settings surface now follows the verified latest Claude desktop modal baseline more closely, with a focused centered modal, left-nav search, grouped settings taxonomy, and preserved tab/save semantics.
+- Desktop file previews now use the shared focused dialog shell, matching the verified Claude project-file preview modal pattern instead of a custom full-screen overlay.
+- Desktop chat artifact cards now follow the verified Claude artifact split-pane baseline: cards promote persisted/generated message artifacts into the Tauri artifact store and open the right-side artifact workbench, falling back to the legacy preview sidecar only when content cannot be backed by the artifact panel.
+- Desktop multi-artifact chat responses now show a Claude-style `Download all` action that exports every downloadable generated artifact from the response instead of forcing one-by-one downloads.
+- Desktop artifact workbench toolbar now follows the verified Claude split-pane viewer more closely, with preview/source icon switching, artifact title/type/version context, version history as a toolbar action, and refresh beside copy/download controls.
+- Desktop tool activity now renders as a Claude-style compact event rail with action-specific icons, result/error pills, vertical connectors, running-state auto-expansion, and completed-run summaries such as commands/files/searches instead of bulky per-tool cards.
+- Desktop inline web search results now default to the verified Claude compact source-list pattern with favicon/title/domain rows, result counts, and citation registration preserved, replacing large per-result cards.
+- Desktop connector customization now opens a focused custom remote MCP connector modal with Claude-style beta labeling and collapsed advanced settings, persists HTTP MCP transport configs through the existing MCP config API, and removes the unused duplicate connectors gallery component so the feature has a single owner.
+- Desktop projects now have a focused Claude-style `Edit details` modal for required name and description updates, while the full project settings dialog remains available for deeper configuration.
+- Chrome native messaging now has a bundled `native_messaging_host` build step, Tauri sidecar packaging, runtime `/pair` manifest refresh for unpacked extension IDs, Windows HKCU Chrome/Edge registration, and macOS/Linux/Windows manual installer scripts.
+- Desktop document generation now has generated-file manifest producers for PDF, DOCX, XLSX, and PPTX, returning local `ComputeSession`, `GeneratedFile`, and `ArtifactManifest` metadata with checksum, byte count, MIME type, file URI, and privacy/provider mode.
+- Desktop generated-document sessions now create local compute-session work directories under app data, with `manifest.json`, append-only `audit.jsonl`, session TTL metadata, and checksum evidence while leaving user-generated files at their requested local path.
+- `@agiworkforce/browser-tool` now exposes `computerActionToBrowserAction` and `runComputerAction`, mapping the shared `ComputerAction` protocol onto the safe Playwright browser-action subset while failing closed for native-only actions.
+- `@agiworkforce/types` now exposes generated-file presentation helpers, and Desktop/Web/Mobile artifact/document surfaces render consistent generated-file status, preview/download/share affordances, source, checksum, and Local/BYOK/Managed privacy labels from the shared manifest contract.
+- Web chat now mounts the artifact workbench sidecar in the active route; assistant messages render compact artifact cards that open the sidecar, while detected code artifacts and generated-file manifests sync into one panel store instead of duplicating full previews inline.
+- Web chat assistant messages now render persisted server-tool activity through the compact tool timeline; live Anthropic/OpenAI-compatible tool status events update the timeline during streaming and save completed tool metadata with the assistant message.
+- `@agiworkforce/providers-openai` now includes a Code Interpreter container-file adapter that extracts OpenAI `container_file_citation` annotations, requires materialized file metadata before creating `GeneratedFile` records, and fails closed on privacy/provider/storage-scope mismatches.
+- `@agiworkforce/types` now includes generated-file trust-boundary validation tests proving Local files remain local, BYOK generated-file transfer requires preview and approval evidence, and Managed files carry quota, owner, checksum, retention, TTL, and deletion metadata.
+- Mobile mid-conversation Local-to-BYOK model switches now show a real preview modal backed by the shared handoff scanner instead of the previous placeholder, including redacted payload text, findings, preview-hash evidence, and a confirmed fork that stores only the accepted redacted payload instead of cloning original Local messages into BYOK.
+- Desktop conversations now expose an explicit Local-to-BYOK fork action with redacted payload preview, secret findings, preview-hash evidence, provider-mode handoff to BYOK routing, and source-thread preservation; the existing transfer action now passes the local database id when available.
+- Web chat now intercepts Local-to-Direct-BYOK sends, opens a shared redaction/preview dialog, creates a separate BYOK fork conversation, persists the accepted redacted handoff as a system message with hash evidence, and then sends the outgoing prompt into the fork.
+- Desktop and Web MCP surface types now source the canonical `McpServerConfig` name from `@agiworkforce/mcp`; Desktop-only config requirements use `DesktopMcpServerConfig`.
+- API gateway now mounts `agents` at `/api/agents` and MCP at `/api/mcp`; MCP proxy initialization is lazy on first authenticated route use.
+- Web and Mobile conversation-sync services now import `web_conversations` / `web_messages` compatibility record types from `@agiworkforce/types` instead of redefining `SyncedConversation` and `SyncedMessage` locally.
+- Enterprise contracts now alias the canonical suite `PrivacyMode` and include managed-compute eligibility, reservation, and risk-event records for future quota/fraud/refund/dispute enforcement.
+- Mobile imports that previously targeted retired theme/voice layer-first paths now resolve through the new `src/ui/theme` and `src/features/voice` ownership boundaries.
+- Agent context, engineering docs, command maps, and LLM-operability checks now include the service-layer architecture rule so repeated mechanics move behind explicit service APIs instead of drifting across routes/actions.
+- Root agent read order now treats `AGENTS.md` as the entry point before `docs/agent-context`, removing circular first-read wording.
+- Agent docs now explicitly distinguish canonical `AGENTS.md` source-of-truth content from thin tool-specific adapters such as `CLAUDE.md`; guardrails reject duplicated repo-map/product-lock/command sections in `CLAUDE.md`.
+- CLI executor output truncation now reads per-tool size caps from the central tool catalog instead of maintaining a second hand-written cap table.
+- CLI distribution now treats `agi` as the primary user-facing command and keeps `agiworkforce` as a backward-compatible alias across Cargo, npm, Homebrew, release archives, install script behavior, docs, and user-facing CLI hints.
+- Root audit fire log moved from `AUDIT_LOG.md` to `audit/audit-log.md`; active references now point at the audit folder.
+- Mobile Expo config is now single-source: stale root `app.json` and duplicate `apps/mobile/app.json` were removed, and repo-organization checks enforce `apps/mobile/app.config.js`.
+- Web deployment commands now use the canonical workspace package filter `@agiworkforce/web`; structure checks prevent the old `--filter web` drift.
+- README ownership checks now fail missing required ownership markers instead of allowing them as advisory warnings.
+- The current monorepo grade ledger now records the 2026-05-21 clean checkpoint, scoped commit split, closed Expo/Web filter drift, and remaining A+ blockers.
+- `AGENTS.md`, `CLAUDE.md`, `docs/agent-context/README.md`, and current repo-operability docs now surface naming conventions and hook policy as required agent context.
+  - BYOK continuation draft that redacts obvious sensitive lines and does not send automatically.
+- Slash palette expanded to 83 built-in commands with `privacy-mode` and `continue-with-byok`.
+- Enterprise control-plane foundation:
+  - `packages/types/src/enterprise/` with shared organization, member, admin policy, provider policy, connector policy, retention, identity, SCIM, audit, support, feedback, release-fix, usage-ledger, managed-credit, and provider-cost contracts.
+  - `supabase/migrations/20260521100000_enterprise_control_plane_foundation.sql` with canonical root tables for organizations, SSO, SCIM, admin/provider/connector/retention policies, enterprise audit events, audit exports, usage ledger, provider cost snapshots, managed credit accounts/events, support cases, feedback cases, and release-fix links.
+  - `services/api-gateway/src/routes/enterprise.ts` mounted at `/api/v1/enterprise` for organization listing, policy reads, audit-event reads, usage-ledger reads, and support-case creation behind authenticated organization membership checks.
+  - `apps/web/app/admin` and `apps/web/features/admin/` as the first operational admin readiness surface.
+  - `docs/enterprise/` for profit-first enterprise readiness and control-plane ownership.
+- `docs/agent-context/lanes.json`, `repo-map.json`, and `risk-map.json` entries for enterprise admin/control-plane parallel-agent work.
+- `docs/engineering/agent-harness-rollout.md` locking Claude Code at-scale harness lessons into AGI's agent-native repo rules: lean context files, deterministic hooks, on-demand skills, distributable plugins, LSP/MCP integrations, subagents, rollout phases, and harness ownership.
+- CLI subagent v2 runtime snapshots expose subagent id, model, status, creation time, max-turn budget, and system-prompt presence for future visual agent-manager and orchestration surfaces.
+- `.opencode/instructions/INSTRUCTIONS.md` and first-class `.opencode/commands/*.md` templates so opencode uses the same canonical repo context and command vocabulary as the other agent harnesses.
+- Contract READMEs for tracked hidden tool folders (`.claude`, `.codex`, `.cursor`, `.opencode`, `.agents`, `.minimax`, `.superpowers`) plus missing `SKILL.md` metadata for tracked `.agents/skills` entries.
+- `docs/current/` as the compact current docs layer:
+  - `README.md` for read order and archive rule.
+  - `product-suite.md` for product thesis, surfaces, trust modes, and sync boundary.
+  - `technical-architecture.md` for monorepo shape, contracts, provider strategy, generated files, and enterprise control plane.
+  - `commercial-and-launch.md` for Local/BYOK/Managed posture, waitlist, payment, and enterprise gates.
+  - `agent-and-repo-operability.md` for A+ docs, repo organization, and parallel-agent workflow.
+
+### Changed
+
+- `PLAN.md`, `TODO.md`, and `docs/decisions/CURRENT_DECISIONS.md` now treat OpenAI/Anthropic-style application-suite parity as the product baseline, with local-first, explicit BYOK, multi-provider routing, and privacy-controlled managed compute as the locked differentiation.
+- `PLAN.md` and `TODO.md` now include pre-release repo organization as a first-class workstream before broad hiring or release operations.
+- `AGENTS.md` is now the canonical tool-neutral coding-agent entry point; `CLAUDE.md` is a Claude-specific mirror.
+- README, Claude agent profiles, Codex agent profiles, and opencode config now separate human/product context from coding-agent context: humans start at `AGI_WORKFORCE.md`, coding agents start at `AGENTS.md` plus scoped agent context.
+- Root `opencode.json` is retired in favor of `.opencode/opencode.json`, and `pnpm check:agent-context` now validates opencode instruction paths, `{file:...}` command/prompt references, and stale tool-agent phrases.
+- `pnpm check:lane-ownership` now enforces lane `blockedPaths`, supports wildcard path patterns such as `scripts/check-*.mjs` and `.env.*`, and accepts `--changed-file` for lane preflight without staging files.
+- Root docs scripts no longer reference the nonexistent `@agiworkforce/docs` workspace; `build:docs` now runs the canonical docs validation gate.
+- `apps/web/pnpm-workspace.yaml` is now documented as a web-subdirectory install adapter, and repo-organization checks require that documentation if the nested workspace file exists.
+- Root `package.json` now exposes `check:agent-context`, `check:repo-organization`, `check:boundaries`, and `check:llm-operability`.
+- `scripts/check-repo-organization.mjs` now ignores git-ignored local/build output while warning on known root cleanup debt.
+- `docs/README.md` now points maintainers to root `PLAN.md` and `TODO.md` immediately after `AGI_WORKFORCE.md`.
+- CLI parity commands continue moving into shared `apps/cli/src/claude_parity.rs` so TUI and REPL behavior does not drift.
+- `PLAN.md`, `TODO.md`, and the evidence ledgers now include the first parallel-explorer findings for AGI surfaces and local reference architecture.
+- `PLAN.md`, `TODO.md`, and `docs/README.md` now treat enterprise control-plane readiness and managed-compute commercial gates as first-class launch blockers before public managed credits.
+- `PLAN.md` now treats agent-native development as a first-class repo design requirement: human-directed, agent-executed, evidence-backed, review-gated work.
+- `docs/agent-context/commands.json` and `package.json` now include generated-artifact, README ownership, doc-status, and full LLM-operability checks.
+- `docs/agent-context/commands.json` and `package.json` now include the structure-conventions check in `pnpm check:llm-operability`.
+- `scripts/check-agent-context.mjs` now validates the known-flaws table shape and the expanded repo-wide command map.
+- `scripts/check-agent-context.mjs` now enforces the agent-native engineering workflow and PR template set.
+- `scripts/check-agent-context.mjs` now enforces the path-scoped high-risk agent rule files.
+- `scripts/check-node-version.sh` now prints the actionable too-old-Node error instead of exiting early under `set -e`.
+- Root scratch markdown, design image files, and the root `downloads/` scratch artifact have been moved out of the repo root with `git mv`, and the root organization/generated-artifact checks now treat the archive path as classified evidence.
+- Historical reverse-engineering campaign docs and reference catalogs have been moved out of the repo root, and active references now point to their archived/reference paths.
+- Raw `reference-index/` generated ownership catalogs have moved to `audit/repo-organization/reference-index/` as historical evidence.
+- `docs/planning/cli-modernization-spec.md` has moved to `docs/archive/2026-05-20-planning/`.
+- `pnpm check:readme-ownership` now runs strict coverage for apps, packages, provider leaf packages, crates, and services instead of allowing known README debt.
+- `pnpm check:generated-artifacts` now runs strict for tracked local/generated artifact debt after untracking local-only files and ignoring future `.playwright-mcp/` captures.
+- Current source-of-truth docs now carry `Status`, `Owner`, and `Last updated` metadata, and `pnpm check:doc-status` is strict instead of debt-warning mode.
+- `CONTRIBUTING.md` now points internal contributors to repo-tracked `PLAN.md`, `TODO.md`, `BUILD.md`, `AGENTS.md`, and `docs/agent-context/` instead of local `~/.claude/plans`.
+- `CONTRIBUTING.md` is now a real internal workflow guide covering context gathering, work rules, branch/change shape, verification, and PR expectations.
+- `AGENTS.md`, `docs/README.md`, `PLAN.md`, and `docs/agent-context/agent-task-templates.md` now point to the agent-native engineering workflow.
+- `audit/anthropic-apps-parity/reference-notes.md` now records a full 1902-file read pass over `/Users/siddhartha/Desktop/reference/src`, including scope counts, architecture lessons, AGI implementation targets, study-first files, and copying cautions.
+- `PLAN.md` now locks normal chat sync to Web, Mobile, and Desktop only. CLI, VS Code, and Chrome stay local/workspace/task scoped unless an explicit preview/redaction handoff is implemented.
+- `PLAN.md` and `TODO.md` now record that OpenAI, Anthropic, and Vercel SDKs are adapter/UI-edge dependencies only. AGI owns runtime schemas, event streams, privacy modes, provider routing, and usage accounting.
+- `PLAN.md`, `TODO.md`, and `feature-ledger.md` now include compute sessions, computer use, generated-file manifests, and artifact-preview/download flows as first-class parity workstreams.
+- Mobile generated-file strategy now matches the Claude/ChatGPT evidence: mobile must support request, status, preview, download, and share, while local on-device heavy compute remains deferred behind Desktop/local-host or future Managed compute.
+- `AGENTS.md`, `docs/agent-context/README.md`, `docs/engineering/agent-native-development.md`, `PLAN.md`, and `TODO.md` now treat lane ownership and shared-file routing as required for large parallel-agent work.
+- `pnpm check:llm-operability` now includes lane ownership validation.
+- Mobile/iOS docs now treat root `ios/` as the canonical tracked Xcode-consumed project and `apps/mobile/native/ios` as custom native module source.
+- Web product-domain implementations for analytics, media, projects, schedules, support, and teams have been consolidated under canonical `apps/web/features`; the stale `apps/web/src/features` split and deprecated re-export shims were removed.
+- Mobile waitlist callers now import from canonical `apps/mobile/src/features/waitlist`; the old temporary waitlist barrels under `components/`, `services/`, and `stores/` were removed and guarded by `pnpm check:structure-conventions`.
+- Mobile projects now has a canonical `apps/mobile/src/features/projects` barrel, with `ProjectCard` moved out of legacy `components/projects`.
+- Mobile billing now has a canonical `apps/mobile/src/features/billing` barrel, with `UpsellCard` moved out of legacy `components/billing`.
+- Mobile schedules now has a canonical `apps/mobile/src/features/schedules` domain containing schedule components, API calls, state, and public barrel; old schedule component/service/store paths are removed and guarded.
+- Package boundary checks now reject workspace package deep imports unless the subpath is explicitly exported by that package; `@agiworkforce/runtime/state` and `@agiworkforce/runtime/queue` are now formal exports.
+- Web, Mobile, and Desktop feature roots now require local ownership READMEs for every top-level feature folder.
+- CLI release automation now uses the single canonical `.github/workflows/release-cli.yml`, removes the duplicate workflow, restores linux-arm64 release coverage, uses stable GitHub archive names expected by the installer/Homebrew tap, and guards CI against the old Web filter drift.
+- Supabase migration split is now guarded: root `supabase/migrations` remains canonical, legacy `apps/web/supabase/migrations` is frozen by `pnpm check:supabase-migrations`, and new legacy SQL files fail operability checks.
+- Report retention is now explicit: `reports/` and `audit/reports/` have owner/purpose/retention READMEs, loose audit scan outputs moved under `audit/reports/legacy-scans-2026-05-20/`, and `pnpm check:report-retention` rejects loose report files or unowned report collections.
+- CI and ownership guardrails now run through `pnpm check:ci-guardrails` and `pnpm check:codeowners`, covering repo-operability CI, lint/typecheck/test/audit/release baselines, explicit Semgrep advisory debt, and provisional CODEOWNERS coverage until real GitHub teams exist.
+- Mobile billing is now internally domain-first: the portal-session service moved from `apps/mobile/services/billing.ts` to `apps/mobile/src/features/billing/service.ts`, and callers import through the billing feature barrel.
+- Mobile component-heavy domains now live under `apps/mobile/src/features`: agents, auth, chat, companion, connectors, drawer, edge cases, image, integrations, messaging, model picker, onboarding, paywall, settings, sidebar, and voice. The old feature-component paths are removed, the remaining legacy `apps/mobile/components` root is documented as UI-primitives-only, and structure checks guard against old imports returning.
+- Mobile voice and messaging service/state ownership is now domain-first: voice STT/TTS helpers moved under `apps/mobile/src/features/voice/services`, messaging API/state moved under `apps/mobile/src/features/messaging`, and each new Mobile feature domain has an ownership README and import barrel.
+- Mobile model-picker state, model catalog loading, and provider-switch guard logic now live under `apps/mobile/src/features/model-picker`; structure checks guard the retired `services/modelCatalog.ts`, `services/tierGuard.ts`, and `stores/modelStore.ts` paths.
+- Mobile project state now lives under `apps/mobile/src/features/projects/store.ts`; structure checks guard the retired `stores/projectStore.ts` path.
+- Mobile integration state, device permission helpers, health-context access, and HealthKit helpers now live under `apps/mobile/src/features/integrations`; structure checks guard the retired integration service/store paths.
+- Mobile image generation, OCR, and vision routing helpers now live under `apps/mobile/src/features/image/services`; structure checks guard the retired image service paths.
+- Mobile auth state, age-gate helpers, and biometric gate hooks now live under `apps/mobile/src/features/auth`; structure checks guard the retired auth hook/service/store paths.
+- Mobile subscription tier state now lives under `apps/mobile/src/features/billing/store.ts`; structure checks guard the retired `stores/tierStore.ts` path.
+- Mobile memory state, cloud-memory API helpers, import parsers, context budgeting, compaction, RAG chunking, and RAG indexing now live under `apps/mobile/src/features/memory`; structure checks guard the retired memory service/store paths.
+- Mobile skills catalog access and installed-skill state now live under `apps/mobile/src/features/skills`; structure checks guard the retired skills service/store paths.
+- Desktop small feature domains moved out of layer-first `src/components` into `apps/desktop/src/features`: quick query, voice, simple mode, subscription, pricing, planning, reminders, messaging, mobile companion, teams, terminal, tools, vision, and workflows. Temporary Desktop feature shims were removed and guarded.
+- Desktop Settings and MCP moved out of layer-first `src/components` into `apps/desktop/src/features/settings` and `apps/desktop/src/features/mcp`, with ownership READMEs, Settings/MCP imports rewritten, and structure checks guarding the old domains.
+- Desktop Unified Agentic Chat moved out of `apps/desktop/src/components/UnifiedAgenticChat` into `apps/desktop/src/features/chat`, with external imports rewritten to the chat feature domain and the old chat component domain guarded.
+- Desktop execution, execution sidecar, memory, memory panel, and tool-calling domains moved into `apps/desktop/src/features`, with chat/settings imports rewritten and old component-domain paths guarded.
+- Desktop artifacts, browser, canvas, computer-use, connectors, marketplace, research, and skill-marketplace domains moved into `apps/desktop/src/features`, with connector catalog imports and chat/settings side-panel imports rewritten.
+- Desktop component-domain migration is complete: AGI, agent, auth, automation, background tasks, calendar, cloud, code, cowork, custom instructions, database, document(s), dynamic canvas, editor, error handling, file upload, filesystem, floating chat, git, governance, images, media, outcomes, overlay, productivity, ROI dashboard, scheduler, schedules, screen capture, editing, and v3 shell moved into `apps/desktop/src/features`; `apps/desktop/src/components` is now shared UI primitives only.
+- Former top-level PRD, mobile PRD, appendices, vision, roadmap, pricing, architecture, hosting, scaling, performance, ownership, handoff, strategy, and CLI binary-size docs have moved to `docs/archive/2026-05-21-docs-consolidation/`.
+- The oversized root `AGI_WORKFORCE.md` has been reduced to an LLM-readable current entry point, with the legacy long version archived in the same docs-consolidation folder.
+- `README.md`, `ONBOARDING.md`, surface docs, enterprise/engineering/marketing docs, data-layer docs, and active design/launch/research docs now point at `docs/current` or the dated archive instead of retired top-level docs.
+- `scripts/check-agent-context.mjs`, `docs/agent-context/doc-status.json`, and `scripts/check-structure-conventions.mjs` now enforce the compact current-doc layer and prevent retired top-level docs or links from reappearing in active docs.
+
+### Documented Gaps
+
+- Cross-surface data ownership is not yet unified for projects, artifacts, memory, teams, and billing.
+- API gateway `agents` and `mcp` route files exist but need a mount/initialization decision.
+- Desktop hook stats, some memory analytics, VS Code managed usage, Chrome native-host install coverage, and docs drift remain open.
+- Current exploration is targeted and file-backed; full line-by-line completion for all 6118 scoped files is not yet claimed.
+- Full coverage is claimed only for `/Users/siddhartha/Desktop/reference/src`: 1902 of 1902 scoped files read through the parallel explorer pass.
+
+### Verified
+
+- `pnpm --filter @agiworkforce/types test -- enterprise`
+- `pnpm --filter @agiworkforce/types build`
+- `pnpm --filter @agiworkforce/api-gateway test -- enterprise`
+- `pnpm --filter @agiworkforce/api-gateway build`
+- `pnpm --filter @agiworkforce/web typecheck`
+- `pnpm check:structure-conventions`
+- `pnpm --filter @agiworkforce/mobile typecheck`
+- `pnpm --filter @agiworkforce/mobile test -- waitlist`
+- `pnpm check:llm-operability`
+- Browser smoke: temporary Next dev server on `localhost:3100`; `/admin` loads and redirects unauthenticated users to `/login?next=/admin`. Existing dev-console warnings remain for CSP `eval()` and `AgiMark` hydration precision.
+- `cargo fmt -p agiworkforce-cli -p agiworkforce-command-registry`
+- `cargo test -p agiworkforce-cli claude_parity --lib`
+- `cargo test -p agiworkforce-cli privacy --lib`
+- `cargo test -p agiworkforce-command-registry --test slash_palette_golden`
+- `cargo check -p agiworkforce-cli`
+- `python3 scripts/audit_cli_command_parity.py --check`
 
 ## [Unreleased — apps/web security audit batch] — 2026-05-19
 
-Four-PR batch closing WEB-13 through WEB-32 on `apps/web`: 15 fresh audit findings + verification of 14 pre-existing SEV-WEB-* pentest items (5 confirmed already-closed, 2 still-present and now closed, 4 deferred operational). Audit fire at `AUDIT_LOG.md` 2026-05-19T05:00Z. PRs #367 → #368 → #369 → #370.
+Four-PR batch closing WEB-13 through WEB-32 on `apps/web`: 15 fresh audit findings + verification of 14 pre-existing SEV-WEB-\* pentest items (5 confirmed already-closed, 2 still-present and now closed, 4 deferred operational). Audit fire at `audit/audit-log.md` 2026-05-19T05:00Z. PRs #367 → #368 → #369 → #370.
 
 ### Security
 
@@ -33,7 +408,7 @@ Four-PR batch closing WEB-13 through WEB-32 on `apps/web`: 15 fresh audit findin
 
 ## [Unreleased — wave 5 v1 complete] — 2026-05-16
 
-**16 commits** (`b96197ecd..d914b26f8` on `claude/refine-local-plan-yhjFU`). Wave 5 closes v1 across all 6 surfaces: flips `DESKTOP_CHAT_V3` default-on (`b90d26003`), replaces all v3 seed data with real-store wiring across 26 components, ships the v3 UI in full on every surface (web / mobile / Chrome ext / VS Code ext — not just colors), wires Stripe checkout + Pause / Downgrade / Cancel flows, adds MCP install/uninstall + `useGlobalSearch`, and lands i18n + a11y + Playwright `@smoke` + `@reachability` suites. Plan SSOT: `~/.claude/plans/v1-complete-wave5.md`. Audit fire at `AUDIT_LOG.md` 2026-05-16T18:18Z.
+**16 commits** (`b96197ecd..d914b26f8` on `claude/refine-local-plan-yhjFU`). Wave 5 closes v1 across all 6 surfaces: flips `DESKTOP_CHAT_V3` default-on (`b90d26003`), replaces all v3 seed data with real-store wiring across 26 components, ships the v3 UI in full on every surface (web / mobile / Chrome ext / VS Code ext — not just colors), wires Stripe checkout + Pause / Downgrade / Cancel flows, adds MCP install/uninstall + `useGlobalSearch`, and lands i18n + a11y + Playwright `@smoke` + `@reachability` suites. Plan SSOT: `~/.claude/plans/v1-complete-wave5.md`. Audit fire at `audit/audit-log.md` 2026-05-16T18:18Z.
 
 ### Commit map (Wave 5)
 
@@ -113,14 +488,14 @@ Documented as out-of-scope for v1 per `~/.claude/plans/v1-complete-wave5.md:103-
 
 - Plan: `~/.claude/plans/v1-complete-wave5.md`
 - Branch: `claude/refine-local-plan-yhjFU`
-- Audit fire: `AUDIT_LOG.md` 2026-05-16T18:18Z
+- Audit fire: `audit/audit-log.md` 2026-05-16T18:18Z
 - Predecessor: Wave 4 frontend rebuild entry below
 
 ---
 
 ## [Unreleased — wave 4 frontend rebuild] — 2026-05-16
 
-**20 commits** (`ea104d1b3..6af5e3004` on `claude/refine-local-plan-yhjFU`, landing as PR #366) shipping the v3 desktop chat shell, cross-surface design-token parity, the v3 Pricing UI, and a brand-locked design system. Plan SSOT: `~/.claude/plans/robust-whistling-crane.md` (replaces the 9 pre-v3 plans archived under `docs/archive/2026-05-16-pre-v3/`). Audit fire at `AUDIT_LOG.md` 2026-05-16T08:49Z.
+**20 commits** (`ea104d1b3..6af5e3004` on `claude/refine-local-plan-yhjFU`, landing as PR #366) shipping the v3 desktop chat shell, cross-surface design-token parity, the v3 Pricing UI, and a brand-locked design system. Plan SSOT: `~/.claude/plans/robust-whistling-crane.md` (replaces the 9 pre-v3 plans archived under `docs/archive/2026-05-16-pre-v3/`). Audit fire at `audit/audit-log.md` 2026-05-16T08:49Z.
 
 ### Added
 
@@ -188,7 +563,7 @@ Documented as out-of-scope for v1 per `~/.claude/plans/v1-complete-wave5.md:103-
 
 ## [Unreleased — launch-readiness wave 3 + strategy lock] — 2026-05-15
 
-**27 commits** (`98ed9ef1c..01e56f2a3`) covering wave 3 (8 parallel agents) + self-audit fixes + voice slot reopening + doc reconciliation + brand mark proposals. Audit fire at `AUDIT_LOG.md` 2026-05-15T22:00Z.
+**27 commits** (`98ed9ef1c..01e56f2a3`) covering wave 3 (8 parallel agents) + self-audit fixes + voice slot reopening + doc reconciliation + brand mark proposals. Audit fire at `audit/audit-log.md` 2026-05-15T22:00Z.
 
 ### Added
 
@@ -248,7 +623,7 @@ Documented as out-of-scope for v1 per `~/.claude/plans/v1-complete-wave5.md:103-
 
 ## [Unreleased — launch-readiness wave 2] — 2026-05-15
 
-**25 commits** in a single parallel wave (`0fa1c7190..74b7f0255`) implementing `docs/design/design-spec-2026-05-15.md` across all 6 surfaces. Plan at `tasks/launch-readiness-wave2-plan.md`. Audit fire at `AUDIT_LOG.md` 2026-05-15T15:08Z.
+**25 commits** in a single parallel wave (`0fa1c7190..74b7f0255`) implementing `docs/design/design-spec-2026-05-15.md` across all 6 surfaces. Plan at `tasks/launch-readiness-wave2-plan.md`. Audit fire at `audit/audit-log.md` 2026-05-15T15:08Z.
 
 ### Added
 
@@ -301,7 +676,7 @@ Documented as out-of-scope for v1 per `~/.claude/plans/v1-complete-wave5.md:103-
 
 ## [Unreleased — launch-readiness wave 1] — 2026-05-15
 
-**31 commits** in a single parallel wave (`079ae721f..759f6a977`) addressing user's launch-readiness mandate: zero dead code, zero half-done features, no onboarding friction, design parity with `~/Desktop/reference/`. Net **−1,879 LOC** across 86 files / all 6 surfaces. Plan at `tasks/launch-readiness-2026-05-15.md`. Audit fire entry at `AUDIT_LOG.md` 2026-05-15T14:50Z.
+**31 commits** in a single parallel wave (`079ae721f..759f6a977`) addressing user's launch-readiness mandate: zero dead code, zero half-done features, no onboarding friction, design parity with `~/Desktop/reference/`. Net **−1,879 LOC** across 86 files / all 6 surfaces. Plan at `tasks/launch-readiness-2026-05-15.md`. Audit fire entry at `audit/audit-log.md` 2026-05-15T14:50Z.
 
 ### Added
 
@@ -378,7 +753,7 @@ Cross-surface campaign fire #1 through fire #12+ per `MASTER_PLAN.md` §10. **11
 - **CLI** `apps/cli/src/main.rs` 2,385 LOC → 7-LOC entry + `lib.rs` (89 KB) (`8cd6f740f`). Canonical codex-rs `exec/src/main.rs:1-46` 42-LOC pattern.
 - **CLI** `apps/cli/src/a2a.rs` 1,856 LOC → `a2a/{mod,protocol,registry,security,server,client,jsonrpc}.rs` 7 files (`dd34923db`). Pure move refactor, 1326/1326 tests preserved.
 - **VS Code** `apps/extension-vscode/src/extension.ts` 1,629 LOC → 255 LOC + `lifecycle/{chatSetup,commandSetup,providerSetup}.ts` (`e11dc7ea1`, commit subject mislabeled by lint-staged race). 512/512 tests preserved.
-- **Desktop** `apps/desktop/src/hooks/useAgenticEvents.ts` -86 LOC dedup against `agenticEventUtils.ts` (`1bc2be696`). Full per-event-hook split blocked by shared singletons (E1 documented in `AUDIT_LOG.md`).
+- **Desktop** `apps/desktop/src/hooks/useAgenticEvents.ts` -86 LOC dedup against `agenticEventUtils.ts` (`1bc2be696`). Full per-event-hook split blocked by shared singletons (E1 documented in `audit/audit-log.md`).
 
 ### Removed
 
@@ -398,13 +773,13 @@ Cross-surface campaign fire #1 through fire #12+ per `MASTER_PLAN.md` §10. **11
 
 - New `MASTER_PLAN.md` §10 live status tracker + §10.1 surface health snapshot + §10.2 escalation closure log.
 - New `AGENTS.md` + `.codex/agents/*.toml` — Codex CLI agent definitions mirroring `.claude/agents/` (`76a4d8e88`).
-- `AUDIT_LOG.md` entries for fires #1 through #6 with full structured findings + 2 escalation points (E1 + E2; E2 now closed).
+- `audit/audit-log.md` entries for fires #1 through #6 with full structured findings + 2 escalation points (E1 + E2; E2 now closed).
 - `apps/web/docs/light-theme.md` — light-mode strategy note.
 
 ### Escalations
 
 - **E2 closed** — Desktop bridge `POST /pair` endpoint shipped; chrome ext pairing is now end-to-end functional.
-- **E1 open** — Desktop `useAgenticEvents.ts` full per-event-hook split blocked by 7 module-level mutable singletons. Requires `SharedListenerContext` refactor (~300 LOC structural change). Documented in `AUDIT_LOG.md` for next-fire pickup.
+- **E1 open** — Desktop `useAgenticEvents.ts` full per-event-hook split blocked by 7 module-level mutable singletons. Requires `SharedListenerContext` refactor (~300 LOC structural change). Documented in `audit/audit-log.md` for next-fire pickup.
 
 ### Refactored (Phase B marathon — god-file decomposition, waves 5-12)
 

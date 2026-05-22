@@ -77,7 +77,7 @@ jest.mock('../services/streaming', () => ({
 // Imports after mocks
 // ---------------------------------------------------------------------------
 
-import { ToolAccessSelector } from '../components/chat/ToolAccessSelector';
+import { ToolAccessSelector } from '../src/features/chat/components/ToolAccessSelector';
 import { useChatStore } from '../stores/chatStore';
 
 // ---------------------------------------------------------------------------
@@ -109,9 +109,9 @@ describe('ToolAccessSelector', () => {
   it('shows descriptions for each option', () => {
     const { getByText } = render(<ToolAccessSelector />);
 
-    expect(getByText('AI chooses for you')).toBeTruthy();
-    expect(getByText('Load when needed. More messages, lower accuracy')).toBeTruthy();
-    expect(getByText('All tools loaded')).toBeTruthy();
+    expect(getByText('AI chooses from available local tools')).toBeTruthy();
+    expect(getByText('Load local tools when needed')).toBeTruthy();
+    expect(getByText('Keep available local tools loaded')).toBeTruthy();
   });
 
   it('has Auto selected by default', () => {

@@ -161,8 +161,13 @@ impl CostLedger {
         cache_read_tokens: u32,
         cache_write_tokens: u32,
     ) -> f64 {
-        let delta =
-            dollars_for(model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens);
+        let delta = dollars_for(
+            model,
+            input_tokens,
+            output_tokens,
+            cache_read_tokens,
+            cache_write_tokens,
+        );
         self.total_usd += delta;
         *self.by_model.entry(model.to_string()).or_insert(0.0) += delta;
         self.turns += 1;

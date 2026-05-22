@@ -6,10 +6,10 @@ import type GorhomBottomSheet from '@gorhom/bottom-sheet';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { ArrowLeft, MessageCircle } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { PlatformCard } from '@/components/messaging/PlatformCard';
-import { PlatformSetupSheet } from '@/components/messaging/PlatformSetupSheet';
-import { useMessagingStore, type MessagingPlatform } from '@/stores/messagingStore';
-import { useThemeColors } from '@/hooks/useTheme';
+import { PlatformCard } from '@/src/features/messaging/components/PlatformCard';
+import { PlatformSetupSheet } from '@/src/features/messaging/components/PlatformSetupSheet';
+import { useMessagingStore, type MessagingPlatform } from '@/src/features/messaging/store';
+import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
 export default function MessagingScreen() {

@@ -4,6 +4,7 @@
   "description": "AGI Workforce CLI — multi-model AI agent for your terminal. BYOK, 10+ Providers including local Ollama, MCP support, computer use.",
   "license": "Proprietary",
   "bin": {
+    "agi": "bin/agi.js",
     "agiworkforce": "bin/agiworkforce.js"
   },
   "type": "module",

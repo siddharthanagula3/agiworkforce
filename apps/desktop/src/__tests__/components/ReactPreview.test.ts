@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildReactPreviewDocument } from '../../components/UnifiedAgenticChat/artifact-components/ReactPreview';
+import { buildReactPreviewDocument } from '../../features/chat/artifact-components/ReactPreview';
 
 describe('buildReactPreviewDocument', () => {
   it('removes wildcard postMessage targets and dynamic Function execution', () => {

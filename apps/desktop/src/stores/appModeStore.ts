@@ -10,6 +10,7 @@
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { toast } from 'sonner';
+import { formatChatExecutionModeLabel } from '@agiworkforce/types';
 import { storageFallback } from '../lib/storageFallback';
 import { isTauri } from '../lib/tauri-mock';
 import { useAuthStore } from './auth';
@@ -57,11 +58,13 @@ export const useAppModeStore = create<AppModeState>()(
             toast.error('Finish the current response before switching modes');
             return;
           }
-          // Cloud mode requires authentication
+          // Managed mode requires authentication
           if (mode === 'cloud') {
             const isAuthenticated = useAuthStore.getState().isAuthenticated;
             if (!isAuthenticated) {
-              toast.error('Sign in to use Cloud mode');
+              toast.error(
+                `Sign in to join the ${formatChatExecutionModeLabel('cloud_managed')} waitlist`,
+              );
               return;
             }
             set({ mode }, undefined, 'appMode/setMode');

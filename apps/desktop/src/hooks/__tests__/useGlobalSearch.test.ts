@@ -113,7 +113,7 @@ vi.mock('../../stores/connectorsStore', () => ({
   useConnectorsStore: vi.fn((selector) => selector({ connectedIds: ['gmail'] })),
 }));
 
-vi.mock('../../components/Connectors/connectorDefinitions', () => ({
+vi.mock('../../features/connectors/connectorDefinitions', () => ({
   CONNECTORS: [
     { id: 'gmail', name: 'Gmail', description: 'Email integration', provider: 'google' },
     { id: 'notion', name: 'Notion', description: 'Workspace integration', provider: 'notion' },

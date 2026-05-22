@@ -43,18 +43,81 @@ pub fn allowed_syscalls(preset: LinuxSandboxPreset) -> Vec<&'static str> {
     }
     // Common safe syscalls: process / time / mmap / signals / fd / read.
     let mut allow: Vec<&'static str> = vec![
-        "read", "write", "close", "fstat", "lseek", "mmap", "mprotect", "munmap",
-        "brk", "rt_sigaction", "rt_sigprocmask", "rt_sigreturn", "ioctl",
-        "access", "pipe", "select", "sched_yield", "mremap", "msync", "mincore",
-        "madvise", "shmget", "shmat", "shmctl", "dup", "dup2", "pause", "nanosleep",
-        "getpid", "sendfile", "exit", "exit_group", "wait4", "kill", "uname",
-        "fcntl", "flock", "fsync", "fdatasync", "truncate", "ftruncate", "getdents",
-        "getcwd", "readlink", "fchdir", "chdir", "stat", "lstat", "open", "openat",
-        "getuid", "getgid", "geteuid", "getegid", "setpgid", "getppid", "getpgrp",
-        "rt_sigpending", "rt_sigtimedwait", "sigaltstack", "futex", "set_tid_address",
-        "epoll_create", "epoll_wait", "epoll_ctl", "tgkill", "clock_gettime",
-        "clock_getres", "clock_nanosleep", "exit", "wait4", "set_robust_list",
-        "prlimit64", "newfstatat", "statx",
+        "read",
+        "write",
+        "close",
+        "fstat",
+        "lseek",
+        "mmap",
+        "mprotect",
+        "munmap",
+        "brk",
+        "rt_sigaction",
+        "rt_sigprocmask",
+        "rt_sigreturn",
+        "ioctl",
+        "access",
+        "pipe",
+        "select",
+        "sched_yield",
+        "mremap",
+        "msync",
+        "mincore",
+        "madvise",
+        "shmget",
+        "shmat",
+        "shmctl",
+        "dup",
+        "dup2",
+        "pause",
+        "nanosleep",
+        "getpid",
+        "sendfile",
+        "exit",
+        "exit_group",
+        "wait4",
+        "kill",
+        "uname",
+        "fcntl",
+        "flock",
+        "fsync",
+        "fdatasync",
+        "truncate",
+        "ftruncate",
+        "getdents",
+        "getcwd",
+        "readlink",
+        "fchdir",
+        "chdir",
+        "stat",
+        "lstat",
+        "open",
+        "openat",
+        "getuid",
+        "getgid",
+        "geteuid",
+        "getegid",
+        "setpgid",
+        "getppid",
+        "getpgrp",
+        "rt_sigpending",
+        "rt_sigtimedwait",
+        "sigaltstack",
+        "futex",
+        "set_tid_address",
+        "epoll_create",
+        "epoll_wait",
+        "epoll_ctl",
+        "tgkill",
+        "clock_gettime",
+        "clock_getres",
+        "clock_nanosleep",
+        "exit",
+        "wait4",
+        "set_robust_list",
+        "prlimit64",
+        "newfstatat",
+        "statx",
     ];
     if !matches!(preset, LinuxSandboxPreset::ReadOnly) {
         // Contained: also allow writes + process spawn for /tmp + workspace.
@@ -62,8 +125,15 @@ pub fn allowed_syscalls(preset: LinuxSandboxPreset) -> Vec<&'static str> {
         // the wrapping permission layer — seccomp only filters syscalls, not
         // paths.)
         allow.extend([
-            "execve", "clone", "fork", "vfork", "wait4", "rt_sigsuspend",
-            "rt_sigreturn", "pipe2", "socketpair",
+            "execve",
+            "clone",
+            "fork",
+            "vfork",
+            "wait4",
+            "rt_sigsuspend",
+            "rt_sigreturn",
+            "pipe2",
+            "socketpair",
         ]);
     }
     if !matches!(preset, LinuxSandboxPreset::ReadOnly) {
@@ -132,7 +202,10 @@ pub fn install_filter(opts: &LinuxSandboxOptions) -> anyhow::Result<()> {
     use seccompiler::apply_filter;
     let rc = unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) };
     if rc != 0 {
-        anyhow::bail!("prctl(PR_SET_NO_NEW_PRIVS) failed: {}", std::io::Error::last_os_error());
+        anyhow::bail!(
+            "prctl(PR_SET_NO_NEW_PRIVS) failed: {}",
+            std::io::Error::last_os_error()
+        );
     }
     let program = compile_bpf(opts)?;
     apply_filter(&program).map_err(|e| anyhow::anyhow!("seccomp apply_filter failed: {e}"))?;
@@ -234,7 +307,10 @@ mod tests {
 
     #[test]
     fn describe_filter_includes_preset_and_network_state() {
-        let opts = LinuxSandboxOptions { preset: LinuxSandboxPreset::Contained, allow_network: true };
+        let opts = LinuxSandboxOptions {
+            preset: LinuxSandboxPreset::Contained,
+            allow_network: true,
+        };
         let desc = describe_filter(&opts);
         assert!(desc.contains("Contained"));
         assert!(desc.contains("network=yes"));

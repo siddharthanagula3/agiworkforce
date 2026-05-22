@@ -58,6 +58,7 @@ vite.config.*.timestamp-*
 
 # --- Tauri specific ---
 apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/binaries/native_messaging_host-*
 apps/desktop/src-tauri/gen/
 apps/desktop/src-tauri/WixTools/
 apps/desktop/src-tauri/tauri-info.json
@@ -81,6 +82,7 @@ Cargo.lock
 
 # --- Testing ---
 .vitest/
+.playwright-mcp/
 playwright-report/
 test-results/
 playwright/.cache/
@@ -144,7 +146,7 @@ package-lock.json
 yarn.lock
 
 # --- Debug files ---
-debug/
+/debug/
 *.pdb
 
 # --- Certificates and keys ---
@@ -196,6 +198,7 @@ ms-playwright/
 .claude/*
 # but track project-scoped subagent definitions + commands + rules so the
 # whole team / AI sessions get the same orchestration baseline
+!.claude/README.md
 !.claude/agents/
 !.claude/commands/
 !.claude/rules/

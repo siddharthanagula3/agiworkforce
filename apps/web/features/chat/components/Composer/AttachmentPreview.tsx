@@ -9,7 +9,7 @@
  */
 
 import { memo } from 'react';
-import { X, FileText, FileSpreadsheet, FileCode, File as FileIcon } from 'lucide-react';
+import { X, FileText, FileSpreadsheet, FileCode, File as FileIcon, Lock } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@shared/lib/utils';
 import type { AttachmentPreview as AttachmentPreviewData } from '@features/chat/hooks/use-attachments';
@@ -20,6 +20,13 @@ interface AttachmentPreviewProps {
   previews: AttachmentPreviewData[];
   onRemove: (index: number) => void;
   className?: string;
+  /**
+   * Per-file privacy label rendered as a chip on each attachment thumbnail.
+   * Surfaces the outbound destination ("Local" / "BYOK" / "Managed") so the
+   * user can see whether sending will leave the device. PLAN.md section 5:
+   * "Add file inclusion policy and per-file privacy labels".
+   */
+  privacyShortLabel?: string;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -80,14 +87,28 @@ function RemoveButton({ onClick, label }: { onClick: () => void; label: string }
 
 // ─── Image Thumbnail ─────────────────────────────────────────────────────────
 
+function PrivacyChip({ label }: { label: string }) {
+  return (
+    <div
+      className="absolute -bottom-1 left-1 z-10 flex items-center gap-0.5 rounded-full border border-border bg-background/90 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-foreground shadow-sm"
+      aria-label={`Outbound destination: ${label}`}
+    >
+      <Lock className="h-2.5 w-2.5" />
+      {label}
+    </div>
+  );
+}
+
 function ImageThumbnail({
   preview,
   index,
   onRemove,
+  privacyShortLabel,
 }: {
   preview: AttachmentPreviewData;
   index: number;
   onRemove: (index: number) => void;
+  privacyShortLabel?: string;
 }) {
   return (
     <motion.div
@@ -100,6 +121,7 @@ function ImageThumbnail({
       className="relative flex-shrink-0"
     >
       <RemoveButton onClick={() => onRemove(index)} label={`Remove ${preview.file.name}`} />
+      {privacyShortLabel ? <PrivacyChip label={privacyShortLabel} /> : null}
       <div className="h-14 w-14 overflow-hidden rounded-lg border border-border/50 bg-muted/30">
         <img
           src={preview.url}
@@ -118,10 +140,12 @@ function DocumentChip({
   preview,
   index,
   onRemove,
+  privacyShortLabel,
 }: {
   preview: AttachmentPreviewData;
   index: number;
   onRemove: (index: number) => void;
+  privacyShortLabel?: string;
 }) {
   const Icon = getDocIcon(preview.file.type);
   const name = preview.file.name;
@@ -149,7 +173,20 @@ function DocumentChip({
           <div className="truncate text-xs font-medium text-foreground" title={name}>
             {displayName}
           </div>
-          <div className="text-[10px] text-muted-foreground">{formatSize(preview.file.size)}</div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-muted-foreground">
+              {formatSize(preview.file.size)}
+            </span>
+            {privacyShortLabel ? (
+              <span
+                className="inline-flex items-center gap-0.5 rounded-full border border-border/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground"
+                aria-label={`Outbound destination: ${privacyShortLabel}`}
+              >
+                <Lock className="h-2.5 w-2.5" />
+                {privacyShortLabel}
+              </span>
+            ) : null}
+          </div>
         </div>
       </div>
     </motion.div>
@@ -158,7 +195,12 @@ function DocumentChip({
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-function AttachmentPreviewComponent({ previews, onRemove, className }: AttachmentPreviewProps) {
+function AttachmentPreviewComponent({
+  previews,
+  onRemove,
+  className,
+  privacyShortLabel,
+}: AttachmentPreviewProps) {
   if (previews.length === 0) return null;
 
   return (
@@ -171,6 +213,7 @@ function AttachmentPreviewComponent({ previews, onRemove, className }: Attachmen
               preview={preview}
               index={index}
               onRemove={onRemove}
+              privacyShortLabel={privacyShortLabel}
             />
           ) : (
             <DocumentChip
@@ -178,6 +221,7 @@ function AttachmentPreviewComponent({ previews, onRemove, className }: Attachmen
               preview={preview}
               index={index}
               onRemove={onRemove}
+              privacyShortLabel={privacyShortLabel}
             />
           ),
         )}

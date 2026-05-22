@@ -12,6 +12,6 @@ set -e
 cd ../..
 
 echo "Building Next.js..."
-pnpm --filter web build:next-only
+pnpm --filter @agiworkforce/web build:next-only
 
 echo "Build complete!"

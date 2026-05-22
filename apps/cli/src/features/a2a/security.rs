@@ -58,15 +58,15 @@ pub fn is_private_ip(ip: &IpAddr) -> bool {
         IpAddr::V4(v4) => {
             let octets = v4.octets();
             octets[0] == 127
-            || octets[0] == 10
-            || (octets[0] == 172 && (16..=31).contains(&octets[1]))
-            || (octets[0] == 192 && octets[1] == 168)
-            || (octets[0] == 169 && octets[1] == 254)
+                || octets[0] == 10
+                || (octets[0] == 172 && (16..=31).contains(&octets[1]))
+                || (octets[0] == 192 && octets[1] == 168)
+                || (octets[0] == 169 && octets[1] == 254)
         }
         IpAddr::V6(v6) => {
             v6.is_loopback()
-            || (v6.segments()[0] & 0xffc0) == 0xfe80
-            || (v6.segments()[0] & 0xfe00) == 0xfc00
+                || (v6.segments()[0] & 0xffc0) == 0xfe80
+                || (v6.segments()[0] & 0xfe00) == 0xfc00
         }
     }
 }
@@ -100,4 +100,3 @@ pub fn generate_random_token(byte_length: usize) -> String {
     let hex: String = hash.iter().map(|b| format!("{:02x}", b)).collect();
     hex[..std::cmp::min(byte_length * 2, hex.len())].to_string()
 }
-

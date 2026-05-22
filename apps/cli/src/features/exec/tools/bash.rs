@@ -7,7 +7,9 @@ use tokio::process::Command;
 
 use crate::safety::{classify_command, CommandSafety};
 
-use super::common::{describe_command, print_tool_status, truncate_output_with_save, COMMAND_TIMEOUT};
+use super::common::{
+    describe_command, print_tool_status, truncate_output_with_save, COMMAND_TIMEOUT,
+};
 use super::ToolResult;
 
 pub(super) async fn execute_run_command(
@@ -30,14 +32,9 @@ pub(super) async fn execute_run_command(
     if require_confirmation {
         let safety = classify_command(command);
         if !matches!(safety, CommandSafety::Safe) {
-            let raw_base = command.split_whitespace().next().unwrap_or(command);
-            let base_cmd = std::path::Path::new(raw_base)
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or(raw_base);
             let perms = crate::permissions::PermissionStore::load().unwrap_or_default();
 
-            match perms.check(base_cmd) {
+            match perms.check_command(command) {
                 Some(true) => {
                     // Previously allowed — skip prompt
                 }
@@ -46,8 +43,8 @@ pub(super) async fn execute_run_command(
                         tool_name: "run_command".to_string(),
                         success: false,
                         output: format!(
-                            "Command '{}' is permanently denied. Use /permissions reset to clear.",
-                            base_cmd
+                            "Command '{}' is denied by saved permissions. Use /permissions reset to clear.",
+                            command
                         ),
                     });
                 }
@@ -86,15 +83,14 @@ pub(super) async fn execute_run_command(
                     }
 
                     let mut perms = crate::permissions::PermissionStore::load().unwrap_or_default();
-                    perms.allow_session(base_cmd);
+                    perms.allow_session_for_process(command);
                 }
             }
         }
     }
 
     let sandbox_supported = cfg!(any(target_os = "macos", target_os = "linux"));
-    let use_sandbox =
-        sandbox_supported && std::env::var("AGIWORKFORCE_NO_SANDBOX").is_err();
+    let use_sandbox = sandbox_supported && std::env::var("AGIWORKFORCE_NO_SANDBOX").is_err();
 
     let result: std::result::Result<
         std::result::Result<std::process::Output, std::io::Error>,

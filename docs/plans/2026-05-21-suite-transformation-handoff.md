@@ -1,0 +1,297 @@
+# 2026-05-21 — Application-suite transformation handoff
+
+Status: Current
+Owner: Next session lead
+Last updated: 2026-05-21 (extended through round 10, project-schema lane)
+Branch: `fix/extension-typecheck-and-c02-sync-2026-05-20`
+Head pushed: `6d7045146` (round-8 boundary) → rounds 9-10 in progress this session
+
+## Round 10 additions (after Round 9 wrap at `e3e5d85f8`)
+
+Round 10 closes the PLAN.md section 5 task "Define project schema" and ships the matching `ProjectHeader` shared primitive. Types-first cross-surface contract — same pattern as SendPreviewPresentation / GeneratedFilePresentation: hosts adopt in later slices.
+
+- `feat(types): project schema + project header presentation` (`9b8694b00`)
+  - `ProjectRecord` extended with `instructions`, `defaultModelId`, `knowledgeFileCount`, `memberCount`, `lastUsedAt`, `iconEmoji`, `accentColor`, `importedFrom` (all optional — non-breaking).
+  - New companion types: `ProjectMember`, `ProjectMemberRole`, `ProjectKnowledgeFile`, `ProjectInstructions`, `ProjectAccentColor` (bounded palette emerald/sky/amber/rose/violet/zinc), `ProjectImportSource` (claude/openai/manual).
+  - `summarizeProjectHeader()` derives `ProjectHeaderPresentation` with title, description, icon, normalized accent, privacy/provider labels, staysLocal flag, default-model passthrough, denormalized file/member counts, last-used label, imported-from label, and canonical-order surface chips.
+  - Helpers: `normalizeProjectAccentColor()`, `projectMemberRoleLabel()`.
+  - 15 new vitest tests.
+- `feat(unified-chat): shared projectheader card consuming projectheaderpresentation` (`98749e432`)
+  - `packages/unified-chat/src/components/ProjectHeader.tsx`. Accent palette mapped to deterministic Tailwind classes (no inline-style leakage). Privacy chip carries `data-stays-local`; provider chip carries `data-provider-mode`. Imported-from chip + meta row + surface chips render conditionally.
+  - 11 new vitest tests.
+
+### Round 10 — open paths for next session
+
+1. **First host adoption** — Desktop `ProjectsView.tsx` or Web `/projects` page adopts `<ProjectHeader />` to render the project header from `summarizeProjectHeader()`. This needs a small mapper in each host because the surface-local Project store types lack `defaultPrivacyMode` / `defaultProviderMode` / `allowedSurfaces` fields (sensible defaults: `local` / `Local` / `[surface]`).
+2. **Project knowledge files DB schema** — Supabase migration for `project_knowledge_files` table + canonical migration in `supabase/migrations/`.
+3. **MCP prompts as slash commands** — see Round 9 open paths note about the missing Tauri `mcp_list_prompts` command.
+
+## Round 9 additions (after Round 8 wrap at `6d7045146`)
+
+Round 9 closes the PLAN.md section 6 task: "Add Chrome and VS Code bridge status to connector hub." Both developer-surface transports (Chrome via native messaging, VS Code via the websocket bridge on port 8787) now have first-class visibility inside the consumer connector hub.
+
+- `feat(api,desktop): bridge status card for chrome + vs code in connector hub` —
+  - Promoted `ExtensionStatusDiagnosticsPayload` (previously local in `apps/desktop/src/hooks/useAgenticEvents.ts`) to `@agiworkforce/api`'s canonical `ExtensionStatusDiagnostics` type with a direct re-export from the package root. `extensionStatus()` is now strongly typed.
+  - New `apps/desktop/src/features/connectors/BridgeStatusCard.tsx`. Derives a Chrome row from `diagnostics.native_connection.state` + `extension_id`, and a VS Code row from `transport.websocket_port` + overall status. Token-invalid degrades both rows since they share `.ipc_token`. Color-coded state dot (emerald connected / amber connecting / rose error / zinc disconnected). Refresh button refetches. First diagnostics recommendation surfaces as an amber footer. Best-effort hidden outside Tauri.
+  - Mounted above the status filter pills in `ConnectorGallery`. 8 vitest tests pin every state path.
+
+### Round 9 — open paths for next session
+
+1. **Per-client VS Code bridge tracking** — currently the VS Code row uses overall transport status + websocket port presence as a proxy. A future enhancement would have the desktop Rust backend track active WebSocket clients per extension (Chrome vs VS Code vs CLI) and expose them as part of `extension_status`.
+2. **PLAN.md section 6 remaining tasks** — "Unify Desktop/CLI MCP server registry", "Add MCP prompts as slash commands", "Add connector install/uninstall across Desktop/Web/CLI". Note: MCP prompts as slash commands requires a new Tauri `mcp_list_prompts` command first (the `PromptsListResult` protocol type exists at `apps/desktop/src-tauri/src/core/mcp/protocol.rs:243` but no command implementation does).
+3. **PLAN.md section 7** — Visual agent manager, queryable subagent runtime snapshots, per-agent tool/model restrictions.
+4. **PLAN.md section 5 remaining tasks** — "Define project schema", "Support project-level memory", "Add project export/import bundle".
+
+### Visual verification debt — Rounds 7-9 [PARTIAL DISCHARGE 2026-05-21]
+
+**Web debt discharged** via the Round-10 visual-verification slice (`5a70bd734`). New playwright spec at `apps/web/e2e/visual-verification.spec.ts` captures full + viewport screenshots of `/projects` and `/`. Output committed to `docs/visual-verification/web/`. 4 vitest DOM snapshot tests lock the rendered HTML structure of the shared primitives. Real findings surfaced:
+
+- `/projects` dark-mode text contrast is dangerously low — accessibility blocker.
+- `/` home page has CSP violations blocking inline scripts and open-dyslexic font CDN.
+
+Remaining visual-verification debt:
+
+Per the /goal checklist, "Screenshots confirming UI parity against Claude/OpenAI references" is required for completion. Rounds 7-9 shipped 14+ UI-touching commits with **zero visual verification** — typecheck + lint + unit tests + llm-operability all pass, which confirms code correctness but not pixel/layout correctness. Items pending a visual pass:
+
+| Surface | Component                                               | Round | Risk                                                                                                                     |
+| ------- | ------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------ |
+| Web     | `ArtifactPreview` adopting `GeneratedFileCard`          | 7     | Status pill, kind icon, source-session chip placement                                                                    |
+| Web     | `WebChatPage` `SendPreview` above composer              | 8     | Banner copy width, expand/collapse interaction, accent color across emerald/amber/sky variants                           |
+| Web     | `AttachmentPreview` per-file privacy chip               | 8     | Lock-icon chip overlay on image thumbnails (`.absolute -bottom-1 left-1`) — could clip remove button on small thumbnails |
+| Desktop | `InlineDocumentGeneration` adopting `GeneratedFileCard` | 7     | Header card spacing vs the action row below                                                                              |
+| Desktop | `ChatInputArea` `SendPreview` above composer            | 8     | Spacing in dense composer layout                                                                                         |
+| Desktop | `AttachmentPreview` per-file privacy chip               | 8     | Same as Web — absolute-positioned chip on images                                                                         |
+| Desktop | `OAuthConnectorCard` expiry badge + Refresh button      | 8     | Color-coded badge (emerald >24h / amber <1h / red expired) — confirm contrast in dark + light themes                     |
+| Desktop | `BridgeStatusCard` in `ConnectorGallery`                | 9     | Card layout, state dot colors, refresh button affordance                                                                 |
+| Mobile  | `ArtifactFullScreen` adopting `GeneratedFileCard`       | 7     | RN spacing/typography fidelity vs Web sibling                                                                            |
+| Mobile  | Chat tab `SendPreview` above `ChatInput`                | 8     | Padding integration with project selector bar                                                                            |
+| Mobile  | `AttachmentPreview` per-file privacy chip               | 8     | RN absolute-positioned chip placement on thumbnails                                                                      |
+
+**Recommended next visual-verification slice**: dedicated playwright + RN screenshot pass. Or, until that lands, document each new UI slice as visually-unverified in CHANGELOG entries. The current approach of relying on type/unit/lint gates is fine for refactors and contracts but not for net-new UI.
+
+The advisor (Round 9 pre-flight) explicitly flagged this risk: "You cannot honestly claim the /goal 'production-grade frontend parity' completion criterion is satisfied for any surface until somebody (you, an agent, or playwright) actually looks at the rendered output."
+
+## Round 8 additions (after Round 7 wrap at `55305313e`)
+
+Round 8 closes the PLAN.md section 5 task: "Add visible 'what will be sent' previews for cloud/BYOK turns." A privacy-critical UX gap that matches Claude/OpenAI parity AND reinforces AGI's local-first stance. 5 commits, all gates green, branch pushed (`55305313e..f9dd7900f`).
+
+- `dd419e5b4` `feat(types,unified-chat): sendpreview primitive for cloud/byok turns` — `SendPreviewInput`, `SendPreviewPresentation`, `summarizeSendPreview` in `@agiworkforce/types`. Shared `SendPreview` web component in `@agiworkforce/unified-chat`. Privacy-positive banner copy for Local turns ("Stays on this device", "nothing is uploaded"). BYOK turns name the destination host and API-key path. Managed turns name the gateway and retention call-out. 21 new tests (11 types + 10 unified-chat).
+- `885523e87` `feat(web): adopt sendpreview disclosure above the chat composer` — Web `WebChatPage` computes presentation from `selectedModel.providerKey` → `ProviderMode` mapping + canonical destination hosts (`api.anthropic.com`, `api.openai.com`, `generativelanguage.googleapis.com`, `gateway.agiworkforce.com`).
+- `c103d72a9` `feat(mobile): rn-native sendpreview mirror + chat tab adoption` — RN-native `SendPreview` sibling consuming the same presentation. Mounted above ChatInput in the chat tab. 7 new RN tests.
+- `3625a68af` `feat(desktop): adopt sendpreview disclosure above chat input area` — Desktop chat shell maps its provider taxonomy (`ollama`/`lmstudio` → Local, `managed_cloud` → ManagedGateway, others → DirectByok).
+- `f9dd7900f` `docs(control-files): record round-8 sendpreview lane closure` — PLAN.md / TODO.md / CHANGELOG.md updates.
+
+All three Local-mode surfaces (Web/Mobile/Desktop) now share the same `SendPreviewPresentation` contract for the privacy-disclosure banner. The pattern is the same as the GeneratedFileCard adoption (types shared, JSX/RN-native diverges).
+
+### Round 8 — open paths for next session
+
+1. **Extend SendPreview to live-update with composer state** — currently the presentation is computed from steady-state (provider + model). Wiring it to the composer's current input string would let it show real-time body chars / attachment count / context-budget estimate. Requires plumbing composer state into the host's memoization.
+2. **PLAN.md section 5 remaining tasks** — "Define project schema", "Support project-level memory", "Add file inclusion policy and per-file privacy labels", "Add project export/import bundle".
+3. **PLAN.md section 6** — OAuth status + refresh UX on connectors, MCP prompts as slash commands, connector install/uninstall across Desktop/Web/CLI.
+4. **PLAN.md section 7** — Visual agent manager, queryable subagent runtime snapshots.
+
+## Round 7 additions (after `b1c2bb428`)
+
+After the round-6 boundary, an additional autonomous loop shipped 13 commits closing two top-10 P0 gaps end-to-end at the shared-package level, plus three host-adoption slices (Web + Mobile + Desktop now all share the same generated-file provenance contract):
+
+- `fe22c59cb` `feat(unified-chat): artifact panel live preview for html and react` — extracted `lib/artifact-sandbox.ts` (shared CSP envelope), wired `ArtifactPanel`'s HTML preview to a sandboxed iframe with `allow-scripts allow-modals` + run/stop control, delegated React artifacts to `ReactPreview`, refactored `ArtifactRenderer.HtmlArtifact` to consume the same helper. Round-2 P0 #9 live-preview quadrant.
+- `b0578ce9f` `feat(vscode-ext): composer drag-drop and paste-image wire` — new `attachFiles` webview→host protocol with zod-validated payloads (≤10 MB / ≤8 files / `data:` URLs only, path-separator rejection), webview drag/drop/paste handlers with attachment chips, host writes to `globalStorageUri/.attachments/<timestamp>` and routes through `agi-workforce.addToContext`. Round-2 P0 #3 vscode-ext side.
+- `8fec8a0b5` `feat(extension): composer drag-drop and paste-image attachments` — chrome side panel image-only drag-drop + paste handler, single `acceptIncomingComposerFiles` helper with same 10 MB / 8-attachment caps. Round-2 P0 #3 chrome-ext side.
+- `d1d8bbc2f` `feat(unified-chat): artifact panel edit-in-place` — `onSaveEdit` prop on `ArtifactPanel`, Edit/Save/Discard toolbar, draft buffer auto-clears on artifact swap. Round-2 P0 #9 final quadrant.
+- `8b183c60a` `docs(control-files): record round 7 autonomous suite-transformation slices` — CHANGELOG + TODO entries.
+- `faa457419` `feat(unified-chat): shared generated-file card for compute-session outputs` — new `GeneratedFileCard` consumes `GeneratedFilePresentation` (already exposed by `@agiworkforce/types`) with status badge / metadata / privacy chips / preview thumbnail / action callbacks; opens the path to close the "Add Web/Mobile/Desktop generated-file UI" TODO.
+- `044e94d1e` `docs(plans): record round 7 + flag consumer-adoption gap honestly` — handoff doc round-7 section + honest gap table.
+- `d8c65c795` `feat(web): adopt shared generatedfilecard in artifactpreview header` — first host-adoption of a round-7 primitive. Web's `ArtifactPreview` replaces its inline kind/byte/checksum label row with the shared card, picking up preview thumbnails, status badges, and consistent action UI for compute-session-backed artifacts.
+- `62896edf0` + `98d72a5bd` doc updates recording the Web adoption.
+- `01caaf77d` `feat(mobile): rn-native generatedfilecard adopted in artifactfullscreen` — Mobile mirrors the shared web `GeneratedFileCard` with an RN-native sibling consuming the same `GeneratedFilePresentation`. Drops ~40 LOC of inline provenance in `ArtifactFullScreen.tsx`. Web and Mobile now show matching status-badge semantics, chips, and provenance shape without sharing JSX (React DOM vs React Native).
+- `95080f6ef` `docs(control-files): record round-7 mobile generatedfilecard adoption` + `23af9ff9a` `docs(plans): bump round-7 head pointer to 95080f6ef` — control-file updates.
+- `9409e954e` `feat(desktop): adopt shared generatedfilecard in inlinedocumentgeneration` — Desktop's `InlineDocumentGeneration.tsx` drops ~50 LOC of inline header markup in favor of `<GeneratedFileCard>`. Display-only adoption: the Desktop-specific bigger action row (Open / Show in Finder / Save As / Share / Copy Path) stays below as the action surface. An `effectiveSummary` memo merges the Tauri-fetched `fileMeta.sizeBytes` fallback into the presentation.
+
+34 new regression tests across `ArtifactPanel.live-preview.test.tsx`, `webviewAttachFiles.test.ts`, `sidePanelComposerDragDrop.test.ts`, `GeneratedFileCard.test.tsx` (web), and `generated-file-card.test.tsx` (mobile). Repo guardrails (`pnpm check:llm-operability`, repo typecheck, lint) clean on every commit. Branch pushed (`3dcc4933b..9409e954e`).
+
+**CSS-var dependency verified (round 7).** The shared web `GeneratedFileCard` consumes `var(--chat-border)`, `var(--chat-radius-md)`, `var(--chat-surface-elevated)`, `var(--chat-surface-hover)`, `var(--chat-surface-overlay)`, `var(--chat-text-muted)`, `var(--chat-text-primary)`, and `var(--chat-text-secondary)`. All 8 vars are defined in `packages/design-tokens/src/chat.css` (under both light/dark blocks) and both `apps/desktop/src/styles/globals.css` and `apps/web/app/globals.css` `@import '@agiworkforce/design-tokens/chat.css';` on line 2. The Mobile mirror does not need this check — it consumes `colors.X` directly from `@agiworkforce/design-tokens` via the Mobile theme indirection. Without this check, a "silent visual regression" — card with transparent background and no border — would have shipped undetected.
+
+### Round 7 — known consumer-adoption gap
+
+The round-2 audit estimates for P0 #9 (Artifacts: 186h) and the new generated-file TODO included **host consumer adoption**, not only the shared primitive. Round 7 closed the shared-package work; remaining host adoption is intentionally scoped:
+
+| Shared primitive shipped this round     | Host consumers using it                                                                       |
+| --------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `ArtifactPanel` live preview            | none yet                                                                                      |
+| `ArtifactPanel` edit-in-place           | none yet                                                                                      |
+| `GeneratedFileCard` (web JSX)           | 2 — `apps/web` (`ArtifactPreview` header), `apps/desktop` (`InlineDocumentGeneration` header) |
+| `GeneratedFileCard` (mobile RN mirror)  | 1 — `apps/mobile` (`ArtifactFullScreen` provenance block)                                     |
+| VS Code webview drag-drop / paste       | ✅ shipped to users                                                                           |
+| Chrome ext side-panel drag-drop / paste | ✅ shipped to users                                                                           |
+
+`packages/unified-chat` is React-DOM + Tailwind; Mobile (React Native) cannot import the web JSX directly. The Mobile mirror in `apps/mobile/src/features/chat/components/GeneratedFileCard.tsx` is the explicit pattern: surfaces share **types**, not JSX. All three host surfaces (Web / Desktop / Mobile) now consume `GeneratedFilePresentation` from `@agiworkforce/types`, so the visual treatment, chips, status semantics, and provenance shape stay aligned. Desktop's adoption is display-only — the Tauri-wired action row (`open_file_location`, `file_copy`, `file_open_with_default_app`) stays below the card as the canonical action surface, so no Tauri integration was lost.
+
+Remaining open paths for next session:
+
+1. **Wedge the shared `ArtifactPanel` into Web's chat shell** as the panel wrapper while keeping `ArtifactPreview` as the body. Adapter ~30 LOC (web's `ArtifactData` already carries `type`; only `version` defaults to 1). Trade-off: the host then has two artifact panels, which doubles maintenance until one consolidates. Web also already does live preview via cross-origin `sandbox.agiworkforce.com`, which is a stronger model than the shared in-page srcDoc + CSP. Wedge the shared panel only if you also plan to retire the cross-origin sandbox.
+2. **Mobile `InlineArtifactCard` adoption of a compact `GeneratedFileChips` mini-component** (only the inline chip strip, not the full card). Inline cards still render a smaller chip set in `InlineArtifactCard.tsx`; a compact sibling of `GeneratedFileCard` (`GeneratedFileChips`?) would unify that too.
+3. **Reconcile**: keep the shared primitives available as the canonical path for future surfaces (chrome ext sidebar artifact viewer, future mobile detail screens), and migrate hosts opportunistically when they next touch their viewers.
+
+Whichever path the next session picks, record it in this handoff before writing code so the trade-off is durable.
+
+## Previous session head (round 6)
+
+The state below describes the round-6 boundary at `b1c2bb428`. Everything above is round-7 additions.
+
+## Round 5 + 6 additions (after 5630924d7)
+
+After the user explicitly authorized continuous autonomous work past the round-4 boundary, the session shipped six more atomic commits closing further gaps:
+
+- `34f33169e` `feat(web): /projects route mounting shared ProjectGallery` — top-level Projects hub on web, mounting the unified-chat ProjectGallery and deep-linking selection into `/chat?project=<id>`.
+- `3c9f57d48` `feat(types): runtime guard for cross-surface chat-sync rule` — `assertSurfaceCanSyncChats` in `@agiworkforce/types/suite-contracts` that throws on any developer-session surface (cli/vscode/chrome) reaching synced-app chat code. Codifies the goal's hard sync rule as runtime enforcement, not just typing.
+- `1b8617b13` `test(types): cover assert-surface-can-sync-chats runtime guard` — locks the runtime guard behavior so the contract cannot regress.
+- `b1c2bb428` `feat(unified-chat): artifact publish copies portable snapshot` — closes the no-op `handlePublish` on `ArtifactPanel`. Serializes the artifact into a self-contained markdown snapshot, copies to clipboard with the existing copied-state feedback, falls back to a download in insecure contexts.
+
+Session totals at HEAD `b1c2bb428`: **24 commits, ~165h shipped of the ~3,778h audit budget (~4.4%)**, all verification green every commit (typecheck/lint/tests/guardrails), branch pushed.
+
+## Mission (from the active goal)
+
+Transform AGI Workforce into a production-grade Claude/OpenAI-style application suite across Web, Desktop, Mobile, CLI, VS Code, and Chrome. Preserve the AGI differentiators: Local Mode with local LLMs, Local Mode with BYOK, Cloud Managed waitlist, privacy-controlled handoff, multi-provider routing, local-first Desktop/Mobile behavior. Chat sync stays Web/Desktop/Mobile only; CLI, VS Code, Chrome keep separate developer-session histories.
+
+The total remaining parity budget per `audit/anthropic-apps-parity/team-2026-05-21/EXEC-SUMMARY-r2.md` is **~3,778 engineering hours**; this session shipped roughly **~110 hours of those across all six surfaces** (the original ~50h slice plus an extended slice covering Web Settings depth, two architecture decision docs, and the shared Projects gallery primitive).
+
+## What shipped this session (9 commits, all on the branch and pushed)
+
+All commits passed lint-staged + Husky pre-commit (`structure-conventions`, `agent-context`) and pre-push (`check:llm-operability`).
+
+| SHA         | Subject                                                                    | Surface(s)                   | Audit reference                                                  |
+| ----------- | -------------------------------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------- |
+| `f6d6eeac8` | `fix(mobile): unblock v1 local-only blank screen after session-expired`    | mobile                       | Operational fix for the previous agent's physical-iPhone session |
+| `a84fae8a3` | `feat(unified-chat): alias shadcn tokens to canonical chat palette`        | shared package → 6 consumers | EXEC-SUMMARY-r2 P0 #2 (alias path)                               |
+| `669f342e5` | `feat(unified-chat): composer drag-drop + paste-image + thumbnail strip`   | shared package → 6 consumers | EXEC-SUMMARY-r2 P0 #3 (shared part)                              |
+| `aa3edc0e2` | `feat(extension): site allowlist management ui in popup`                   | chrome ext                   | EXEC-SUMMARY-r2 P0 #5                                            |
+| `84a7cb417` | `feat(types,unified-chat): attachment validation + signed-upload contract` | types + shared package       | EXEC-SUMMARY-r2 P0 #4                                            |
+| `385623d6b` | `feat(unified-chat): settings shell + memory editor primitives`            | shared package → 4 consumers | EXEC-SUMMARY-r2 P0 #6 + P0 #8                                    |
+| `9ca923385` | `feat(web): /settings/memory page using shared MemoryEditor`               | web                          | EXEC-SUMMARY-r2 P0 #8 (web consumer wire)                        |
+| `a6d4fe04d` | `feat(desktop): memory tab in settings dialog using shared editor`         | desktop                      | EXEC-SUMMARY-r2 P0 #8 (desktop consumer wire)                    |
+| `58938d12d` | `feat(vscode-ext): memory quickpick command for local facts`               | vscode ext                   | EXEC-SUMMARY-r2 P0 #8 (vscode consumer wire)                     |
+
+Surface direct-touch coverage this session:
+
+- **Web** ✓ `/settings/memory` page + nav link
+- **Desktop** ✓ Memory tab in settings dialog + Brain icon in left nav
+- **Mobile** ✓ blank-screen launch fix (P0 boot bug); existing 320-LOC `app/(app)/settings/memory.tsx` already covers the editor pattern
+- **CLI** ✓ existing `/memory` (hierarchy memory) preserved unchanged
+- **VS Code extension** ✓ `agi-workforce.memory` QuickPick command (add/list/clear)
+- **Chrome extension** ✓ Site allowlist popup section (P0 #5) + sharpens the misleading `background.ts` error string
+
+## Verification status (final, this session)
+
+| Check            | Command                                                                                                                  | Result                   |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------ |
+| Rust workspace   | `cargo check -p agiworkforce-cli`                                                                                        | ✓ exit 0                 |
+| Repo typecheck   | `pnpm typecheck:all`                                                                                                     | ✓ exit 0                 |
+| Repo lint        | `pnpm lint`                                                                                                              | ✓ exit 0                 |
+| Affected tests   | `pnpm --filter types --filter unified-chat --filter extension --filter web --filter agi-workforce --filter desktop test` | ✓ exit 0                 |
+| Repo guardrails  | `pnpm check:llm-operability`                                                                                             | ✓ exit 0                 |
+| Pre-commit hooks | structure-conventions + agent-context (every commit)                                                                     | ✓ all green              |
+| Pre-push hook    | `pnpm check:llm-operability` + diff checks                                                                               | ✓ exit 0                 |
+| Branch push      | `git push` to `github.com:siddharthanagula3/agiworkforce.git`                                                            | ✓ `2c17e1256..58938d12d` |
+
+Not yet run (deferred to next session — see Known blockers):
+
+- Mobile physical-device validation (requires user-side rebuild + observation; the previous agent's session-expired blocker is fixed in `f6d6eeac8` and the user needs to run `expo run:ios --configuration Release --device "Siddhartha iPhone 13 Pro Max" --no-bundler` to load the patched bundle)
+- Browser/desktop screenshots (Playwright not run this session; left for the next slice when one of the visual-parity P0s actually lands a new screen)
+- Web/Desktop/Mobile chat-sync smoke (no chat-runtime changes this session; sync semantics unchanged)
+
+## Outstanding parity scope from EXEC-SUMMARY-r2
+
+| #   | Gap                                                                                               | Surfaces                       | Hours r2                              | Status                                                                                                                                                                                                                                          |
+| --- | ------------------------------------------------------------------------------------------------- | ------------------------------ | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Mobile StoreKit IAP wire                                                                          | mobile                         | 24                                    | open — App Store submission blocker                                                                                                                                                                                                             |
+| 2   | Token-system unification alias path                                                               | shared                         | 3                                     | ✅ shipped (`a84fae8a3`)                                                                                                                                                                                                                        |
+| 3   | Composer drag-drop + paste-image + thumbnail                                                      | shared (multi)                 | 8 shared + 14 chrome + 17 vscode = 39 | ✅ shared part shipped (`669f342e5`); chrome-ext + vscode-ext wires open                                                                                                                                                                        |
+| 4   | Web Attachments signed uploads + MIME accept (P0)                                                 | web                            | 12                                    | ✅ validation + contract shipped (`84a7cb417`); signed-upload server side open                                                                                                                                                                  |
+| 5   | Chrome ext Allowlist UI (P0)                                                                      | chrome ext                     | 8                                     | ✅ shipped (`aa3edc0e2`)                                                                                                                                                                                                                        |
+| 6   | Shared Settings shell                                                                             | shared (6 consumers)           | 40                                    | ✅ scaffold shipped (`385623d6b`); host consumers can adopt incrementally                                                                                                                                                                       |
+| 7   | Web Settings depth (Profile / Connections / Privacy / Memory / Notifications + theme persistence) | web                            | 36                                    | ⚠ partial — Memory page shipped (`9ca923385`); Profile editor / Connections / Privacy / Notifications + `next-themes` persistence still open                                                                                                    |
+| 8   | Memory editor surface                                                                             | shared + web + vscode + chrome | 72                                    | ✅ shared + web + desktop + vscode + (mobile pre-existed) shipped; chrome-ext side-panel wire deferred (popup got allowlist instead)                                                                                                            |
+| 9   | Artifacts versioning + live preview + publish + edit-in-place                                     | shared + web + desktop         | 186                                   | open — biggest single shared gap                                                                                                                                                                                                                |
+| 10  | CLI slash-command palette (~63 unique core)                                                       | cli                            | ~406                                  | open — existing `/memory` left untouched; the rest of `/init`, `/permissions`, `/mcp`, `/agents`, `/skills`, `/plugin`, `/plan`, `/tasks`, `/context`, `/rewind`, `/branch`, `/clear`, `/compact`, `/recap` still need v1-relevant subset wires |
+
+Hours shipped this session: roughly **~125h** out of **3,778h** total (~3.3%). The biggest remaining hours sit in CLI palette (~280h), Artifacts overhaul (186h), Mobile StoreKit (24h), composer drag-drop wires for vscode-ext (~17h, chrome-ext attachment-wire now closed), and the in-flight Web Settings depth (Profile theme-persistence still uses localStorage — wire `next-themes` when a major theme refactor lands).
+
+## Extended round 2 additions (after the first handoff at b49192bbe)
+
+- **Web settings depth — 4 new pages.** `/settings/profile` (display name + avatar gradient placeholder, localStorage-persisted), `/settings/connections` (OAuth connector list in waitlist state per Cloud Managed contract), `/settings/privacy` (3 toggles: rememberChats, telemetry, managed-only training opt-in), `/settings/notifications` (4 prefs with managed-only flags). Layout nav extended from 5 → 9 entries. Cloud-Managed-only items render `disabled` + waitlist callout.
+- **`packages/unified-chat` Projects primitives.** `ProjectCard` (star toggle, conversation count, relative-updated timestamp) + `ProjectGallery` (searchable list/grid with starred-first sort, inline "+ New project" form, empty state, host-overridable `onCreate`). Backed by the existing `useProjectStore`.
+- **2 architecture decisions locked.** `docs/decisions/2026-05-21-unified-chat-as-suite-spine.md` (rationale for `packages/unified-chat` being the cross-surface spine) and `docs/decisions/2026-05-21-signed-upload-contract-pre-managed.md` (rationale for landing `SignedUploadRequest` / `SignedUploadResponse` before Cloud Managed ships).
+- **8 strict-mode (noUncheckedIndexedAccess) regressions fixed** in earlier commits — the incremental tsbuildinfo cache had hidden them until ProjectGallery's new exports invalidated it. ChatInput attachment loops + thumbnail loop + SettingsShell activeId memo all now guard `undefined` array reads.
+
+## Extended round 3 additions (after b81cc377d)
+
+- **Chrome ext attachments now actually reach the model.** Commit `38034fedb` closes the round-2 P0 #3 correctness bug. Both `CHAT_MESSAGE` send sites in `apps/extension/src/side_panel.ts` previously cleared `pendingAttachments.length = 0` _before_ constructing the wire payload, so paste-image and file-picker attachments rendered an attachment preview but were silently dropped on send. The fix:
+  - `ChatMessageMessage` in `apps/extension/src/types.ts` gains a typed `attachments?: string[]` field (alongside the previously-untyped `extendedThinking?: boolean`).
+  - Both send sites snapshot `pendingAttachments.slice()` _before_ clearing and forward the snapshot as `attachments: snapshot.length > 0 ? snapshot : undefined`.
+  - `background.handleChatMessage` destructures `attachments` and, when present, appends a nonce-fenced `<attachments_<nonce>>...</attachments_<nonce>>` annotation to the user content (mirroring the existing pageContext fence pattern) so the model is at least aware the attachments exist. Full multi-modal provider-stream wire-up (Anthropic image blocks, OpenAI image_url parts) remains a follow-up.
+
+## Recommended next-session priorities (in order)
+
+1. **Mobile StoreKit IAP wire** (24h, P0 #1) — App Store submission blocker; touches `apps/mobile/src/features/paywall/components/ProPlusPaywall.tsx:78-84` (current `openExternalUrl(PRICING_URL)` redirect). Replace with `@expo/store-kit` or `react-native-iap`; wire restore-purchase + receipt validation. Existing Restore + Manage rows live at `apps/mobile/app/(app)/usage.tsx:500-507` so only the IAP call itself is new.
+2. **Web Settings depth** (~30h remaining of 36h) — Profile editor (avatar/name) + Connections + Privacy/Data Controls + Notifications + `next-themes` theme persistence. Match Claude desktop settings IA. Wire to existing Supabase auth + the new shared `useMemoryStore` for memory.
+3. **Artifacts versioning + live preview + publish** (~92h on shared; ~30h on web on top) — biggest cross-surface item still open. Add version stepper toolbar to `packages/unified-chat/src/components/ArtifactPanel.tsx`, enable sandboxed `allow-scripts` iframe for live React/HTML preview, wire `handlePublish` to a share-link service in `packages/services` (new), add inline editor mode.
+4. **CLI palette breadth** (~280h for the v1-relevant subset) — focus on `/init`, `/permissions`, `/mcp`, `/agents`, `/skills`, `/plugin`, `/plan`, `/tasks`, `/context`+`/rewind`, `/branch`, `/clear`, `/compact`, `/recap`. Most heavy lift is `/agents` (~50h), `/skills` (~40h), `/plugin` (~40h), `/mcp` (~40h).
+5. **Shared Projects component** (referenced in EXEC-SUMMARY-r2 §"Recommendations" as the highest-leverage shared-package investment) — closes the Projects gap across web + desktop + mobile + 2 extensions simultaneously. ~32h.
+6. **Composer drag-drop wires for chrome-ext + vscode-ext** (~14h + ~17h) — finish the work started in `669f342e5`. The shared primitive lives in `packages/unified-chat`; consumer-side wire makes drag-drop / paste-image work across all surfaces. Chrome ext has a correctness bug: `pendingAttachments` never forwarded in `CHAT_MESSAGE` (per round-1 src-5 report).
+
+## Architecture decisions implicit in this session's commits
+
+Two design choices warrant noting in `docs/decisions/` before they ossify (deferred this session — recommend writing them in the next):
+
+1. **Shared package as the spine.** `packages/unified-chat` is the single source for chat composer, settings shell, memory editor, attachment validation, and the shadcn token alias surface. Every consumer (web, desktop, chrome ext, vscode ext) inherits behavior from one place. Surface-specific overrides are opt-in via props (e.g. `SettingsShell sections={...}`). This pattern should be applied to the next shared primitives (Projects, Artifacts version stepper, Memory editor cloud-sync layer when Cloud Managed opens).
+2. **`SignedUploadRequest` / `SignedUploadResponse` defined before Cloud Managed.** The contract lives in `packages/types/src/chat.ts` so consumer surfaces can compile against it pre-Cloud Managed. v1 attachments stay inline; the signed-upload path activates when the waitlist opens. Keeps the eventual flip a wire-up, not a redesign.
+
+Both decisions belong in `docs/decisions/2026-05-21-*.md` files matching the existing pattern (e.g. the `2026-05-09-*` series). Suggested filenames:
+
+- `docs/decisions/2026-05-21-unified-chat-as-suite-spine.md`
+- `docs/decisions/2026-05-21-signed-upload-contract-pre-managed.md`
+
+## Known blockers and gotchas
+
+- **Mobile physical-device retest pending.** The user must rebuild on their machine with `APP_ENV=development EXPO_PUBLIC_APP_ENV=development EXPO_DISABLE_PRODUCTION_IOS_ENTITLEMENTS=1 AGI_IOS_DEVELOPMENT_TEAM=D2PR62RLT4 EXPO_IOS_DEVELOPMENT_TEAM=D2PR62RLT4 pnpm --dir apps/mobile exec expo run:ios --configuration Release --device "Siddhartha iPhone 13 Pro Max" --no-bundler` to validate the v1-blank-screen fix (`f6d6eeac8`). Expected: Face ID → directly to `(app)` shell with no Session-Expired alert.
+- **Commitlint `subject-case=lower`** — Commits with uppercase tokens in the subject (e.g. "MemoryEditor", "UI") get rejected. Use lowercase throughout the subject line; capitalize freely in body and trailers.
+- **Pre-push runs `pnpm check:llm-operability`** which is ~12 sub-checks; budget ~15-25s per push.
+- **`packages/unified-chat` typecheck takes ~12s; tests another ~8s.** The package is now wider — adding more components will keep growing this.
+- **CLI `/memory` already exists** (workspace memory hierarchy). Do NOT add a parallel `/memory` for cross-conversation facts under the same name — pick a different command name (e.g. `/memfact` or `/remember`) if a CLI-side fact store is needed. The audit's MemoryEditor primitive in `packages/unified-chat` covers the cross-conversation-fact case for non-CLI surfaces.
+- **VS Code parity test** at `apps/extension-vscode/src/__tests__/commandParity.test.ts` asserts every `contributes.commands[].command` in `package.json` has a runtime handler. New commands must be registered in either `commandSetup.ts` or the `REGISTRY_COMMANDS` in `core/commands.ts`.
+
+## Commands you'll need next session
+
+```bash
+# Orient
+cat docs/plans/2026-05-21-suite-transformation-handoff.md  # this file
+cat audit/anthropic-apps-parity/team-2026-05-21/EXEC-SUMMARY-r2.md
+git log --oneline 2c17e1256..HEAD  # this session's commits
+git status
+
+# Per-surface dev loop
+pnpm --filter @agiworkforce/web dev
+pnpm --filter @agiworkforce/desktop dev
+pnpm --filter @agiworkforce/mobile dev
+cargo run -p agiworkforce-cli --bin agi
+
+# Verification (after a slice)
+pnpm typecheck:all
+pnpm lint
+pnpm --filter @agiworkforce/<pkg> test
+pnpm check:llm-operability
+cargo check --workspace
+
+# Push
+git push
+```
+
+## Files to read first in the next session
+
+1. `audit/anthropic-apps-parity/team-2026-05-21/EXEC-SUMMARY-r2.md` — the parity scoreboard.
+2. `audit/anthropic-apps-parity/team-2026-05-21/SYNTHESIS-r2.md` — the row-by-row gap matrix.
+3. `packages/unified-chat/src/index.ts` — new exports landed this session.
+4. `packages/unified-chat/src/components/SettingsShell.tsx` + `MemoryEditor.tsx` — pattern to mirror for next shared primitives.
+5. `packages/types/src/chat.ts` — attachment-validation contract added this session; pattern for the next typed cross-surface contract.
+
+End of handoff.

@@ -114,8 +114,12 @@ pub fn wrap_command(opts: &SandboxOptions, inner: Command) -> Result<Command, Sa
     }
     for (k, v) in inner.get_envs() {
         match v {
-            Some(val) => { cmd.env(k, val); }
-            None => { cmd.env_remove(k); }
+            Some(val) => {
+                cmd.env(k, val);
+            }
+            None => {
+                cmd.env_remove(k);
+            }
         }
     }
     if let Some(cwd) = inner.get_current_dir() {
@@ -158,13 +162,17 @@ mod tests {
         let p = build_profile(&opts(SandboxPreset::ReadOnly)).unwrap();
         assert!(p.contains("(deny default)"));
         assert!(p.contains("file-read*"));
-        assert!(!p.contains(&format!("(allow file-write* (subpath \"/Users/test/work\"))")));
+        assert!(!p.contains(&format!(
+            "(allow file-write* (subpath \"/Users/test/work\"))"
+        )));
     }
 
     #[test]
     fn contained_allows_workspace_writes() {
         let p = build_profile(&opts(SandboxPreset::Contained)).unwrap();
-        assert!(p.contains(&format!("(allow file-write* (subpath \"/Users/test/work\"))")));
+        assert!(p.contains(&format!(
+            "(allow file-write* (subpath \"/Users/test/work\"))"
+        )));
     }
 
     #[test]
@@ -184,7 +192,8 @@ mod tests {
     #[test]
     fn extra_allowed_paths_appear_in_profile() {
         let mut o = opts(SandboxPreset::ReadOnly);
-        o.extra_allowed_paths.push(PathBuf::from("/Users/test/shared"));
+        o.extra_allowed_paths
+            .push(PathBuf::from("/Users/test/shared"));
         let p = build_profile(&o).unwrap();
         assert!(p.contains("/Users/test/shared"));
     }

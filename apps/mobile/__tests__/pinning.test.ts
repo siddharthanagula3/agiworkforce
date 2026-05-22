@@ -62,8 +62,10 @@ describe('placeholder guard', () => {
       pins: ReadonlyArray<string>,
       isDev: boolean,
       isTest: boolean,
+      appEnv?: string,
     ): void => {
       if (isDev || isTest) return;
+      if (appEnv === 'development') return;
       if (enforced && pins.some((h) => h.includes('PLACEHOLDER_REPLACE_BEFORE_LAUNCH_'))) {
         throw new Error('TLS pinning not provisioned');
       }
@@ -81,8 +83,10 @@ describe('placeholder guard', () => {
       pins: ReadonlyArray<string>,
       isDev: boolean,
       isTest: boolean,
+      appEnv?: string,
     ): void => {
       if (isDev || isTest) return;
+      if (appEnv === 'development') return;
       if (enforced && pins.some((h) => h.includes('PLACEHOLDER_REPLACE_BEFORE_LAUNCH_'))) {
         throw new Error('TLS pinning not provisioned');
       }
@@ -91,6 +95,25 @@ describe('placeholder guard', () => {
     expect(() =>
       guardFn(true, ['sha256/realhash1=', 'sha256/realhash2='], false, false),
     ).not.toThrow();
+  });
+
+  it('development-app release builds can run on a physical device before production pins exist', () => {
+    const guardFn = (
+      enforced: boolean,
+      pins: ReadonlyArray<string>,
+      isDev: boolean,
+      isTest: boolean,
+      appEnv?: string,
+    ): void => {
+      if (isDev || isTest) return;
+      if (appEnv === 'development') return;
+      if (enforced && pins.some((h) => h.includes('PLACEHOLDER_REPLACE_BEFORE_LAUNCH_'))) {
+        throw new Error('TLS pinning not provisioned');
+      }
+    };
+
+    const allPlaceholderPins = Object.values(PINS_BY_HOST).flat();
+    expect(() => guardFn(true, allPlaceholderPins, false, false, 'development')).not.toThrow();
   });
 });
 

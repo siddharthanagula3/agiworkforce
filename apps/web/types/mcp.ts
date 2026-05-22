@@ -3,6 +3,10 @@
  * Mirrors the desktop app's MCP types for type safety
  */
 
+import type { McpServerConfig } from '@agiworkforce/mcp';
+
+export type { McpServerConfig } from '@agiworkforce/mcp';
+
 export interface McpServerInfo {
   name: string;
   enabled: boolean;
@@ -20,14 +24,7 @@ export interface McpToolInfo {
 }
 
 export interface McpServersConfig {
-  mcpServers: Record<string, McpServerConfig>;
-}
-
-export interface McpServerConfig {
-  command: string;
-  args: string[];
-  env: Record<string, string>;
-  enabled: boolean;
+  mcpServers: Record<string, McpServerConfig & { enabled?: boolean }>;
 }
 
 export interface McpToolResult {

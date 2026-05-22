@@ -49,7 +49,7 @@ jest.mock('@/lib/biometricFlagStore', () => ({
   hydrateBiometricFlag: jest.fn().mockResolvedValue(undefined),
 }));
 
-import { useBiometricGate } from '../hooks/useBiometricGate';
+import { useBiometricGate } from '../src/features/auth/hooks/useBiometricGate';
 
 beforeEach(() => {
   jest.clearAllMocks();

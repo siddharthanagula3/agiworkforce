@@ -39,7 +39,7 @@ Read-write only inside `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/`. R
 
 ## Conventions
 
-- LOCKED: **No testing mid-stream**. Don't write new tests. Existing tests must still pass.
+- Run focused tests while implementing behavior changes; run the listed verification gates before handoff.
 - LOCKED: Rust full edit access; no permission prompts inside `apps/desktop/src-tauri/`.
 - Commit format: lowercase, ≤100 chars, Conventional Commits, `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` footer
 - One PR-style commit per logical task

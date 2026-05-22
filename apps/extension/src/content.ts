@@ -327,9 +327,7 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
       return handleGetRecordedActions();
 
     case 'SET_RECORDING_VALUE_CAPTURE' as ExtensionMessage['type']:
-      return handleSetRecordingValueCapture(
-        message as unknown as { enabled?: unknown },
-      );
+      return handleSetRecordingValueCapture(message as unknown as { enabled?: unknown });
 
     case 'WEBMCP_DISCOVER_TOOLS':
       return handleWebMCPDiscoverTools();
@@ -1631,7 +1629,10 @@ const REC_REDACTION_PATTERNS: ReadonlyArray<{ pattern: RegExp; replacement: stri
   { pattern: /AIzaSy[a-zA-Z0-9_-]{33}/g, replacement: '[REDACTED_GOOGLE_KEY]' },
   { pattern: /AKIA[A-Z0-9]{16}/g, replacement: '[REDACTED_AWS_KEY]' },
   { pattern: /gh[ps]_[a-zA-Z0-9]{36,}/g, replacement: '[REDACTED_GITHUB_TOKEN]' },
-  { pattern: /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, replacement: '[REDACTED_JWT]' },
+  {
+    pattern: /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g,
+    replacement: '[REDACTED_JWT]',
+  },
 ];
 
 /**

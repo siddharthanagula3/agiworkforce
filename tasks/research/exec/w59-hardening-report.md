@@ -23,12 +23,12 @@ runbook in §5.
 
 ## 2. Files
 
-| File | Purpose |
-|---|---|
-| `supabase/migrations/20260506232038_create_api_keys_with_prefix.sql` | RECONSTRUCTED from prod introspection. Lives at the prod-applied version so `db push` to a fresh project replays the same schema in the same order. |
-| `supabase/migrations/20260509000006_account_sessions.sql` | Authors the `public.account_sessions` ledger that the api-gateway Trusted-Device gate reads. Minimal schema; writer side is a follow-up. |
+| File                                                                     | Purpose                                                                                                                                                                                            |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `supabase/migrations/20260506232038_create_api_keys_with_prefix.sql`     | RECONSTRUCTED from prod introspection. Lives at the prod-applied version so `db push` to a fresh project replays the same schema in the same order.                                                |
+| `supabase/migrations/20260509000006_account_sessions.sql`                | Authors the `public.account_sessions` ledger that the api-gateway Trusted-Device gate reads. Minimal schema; writer side is a follow-up.                                                           |
 | `supabase/migrations/20260509000007_drop_authrole_compound_policies.sql` | DO-block sweep over the 2 known HIGH-1 holdouts. ALTERs in place; refuses to touch any policy whose qual no longer matches the known antipattern; final-assert that 0 antipattern policies remain. |
-| `tasks/research/exec/w59-hardening-report.md` | This report. |
+| `tasks/research/exec/w59-hardening-report.md`                            | This report.                                                                                                                                                                                       |
 
 No edits to existing SQL. No prod-state changes.
 
@@ -112,10 +112,10 @@ SELECT schemaname, tablename, policyname, cmd, roles, qual, with_check
 
 Returns exactly 2 rows:
 
-| schema | table | policy | cmd | roles | qual / with_check |
-|---|---|---|---|---|---|
-| public | beta_invites | Service role can manage invites | ALL | `{service_role}` | `(( SELECT auth.role() AS role) = 'service_role'::text)` |
-| public | waitlist | Service role can manage waitlist | ALL | `{service_role}` | `(( SELECT auth.role() AS role) = 'service_role'::text)` |
+| schema | table        | policy                           | cmd | roles            | qual / with_check                                        |
+| ------ | ------------ | -------------------------------- | --- | ---------------- | -------------------------------------------------------- |
+| public | beta_invites | Service role can manage invites  | ALL | `{service_role}` | `(( SELECT auth.role() AS role) = 'service_role'::text)` |
+| public | waitlist     | Service role can manage waitlist | ALL | `{service_role}` | `(( SELECT auth.role() AS role) = 'service_role'::text)` |
 
 These are NOT truly compound (no AND/OR/NOT). The only reason
 `20260505000003_replace_authrole_with_role_grant.sql` SKIPPED them is that
@@ -179,10 +179,11 @@ better for live tables.
 `mcp__supabase__list_migrations` shows:
 
 ```json
-{"version":"20260506232038","name":"create_api_keys_with_prefix"}
+{ "version": "20260506232038", "name": "create_api_keys_with_prefix" }
 ```
 
 — but this version is missing from BOTH:
+
 - `supabase/migrations/` (canonical)
 - `apps/web/supabase/migrations/` (legacy)
 
@@ -226,6 +227,7 @@ SELECT trigger_name, ... FROM information_schema.triggers
 ```
 
 Reconstructed schema:
+
 - 9 columns: `id, user_id, name, key_hash, scopes, last_used_at, expires_at, created_at, key_prefix`
 - PK: `(id)` — uses `uuid_generate_v4()` default (uuid-ossp installed at `extensions` schema)
 - FK: `user_id` → `public.profiles(id) ON DELETE CASCADE`
@@ -265,12 +267,12 @@ should retighten this to `TO authenticated`.
 
 ## 6. Acceptance Criteria
 
-| Criterion | Status |
-|---|---|
-| Issue 1: account_sessions resolved with migration | **DONE** — `20260509000006_account_sessions.sql` |
-| Issue 2: 2 HIGH-1 compound policies fixed with migration | **DONE** — `20260509000007_drop_authrole_compound_policies.sql`. Final assertion in the migration RAISEs EXCEPTION if any antipattern policy remains anywhere. |
-| Issue 3: orphan migration reconstructed in canonical | **DONE** — `20260506232038_create_api_keys_with_prefix.sql` written under the prod-applied version. |
-| Findings written to `tasks/research/exec/w59-hardening-report.md` | **DONE** — this file. |
+| Criterion                                                         | Status                                                                                                                                                         |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Issue 1: account_sessions resolved with migration                 | **DONE** — `20260509000006_account_sessions.sql`                                                                                                               |
+| Issue 2: 2 HIGH-1 compound policies fixed with migration          | **DONE** — `20260509000007_drop_authrole_compound_policies.sql`. Final assertion in the migration RAISEs EXCEPTION if any antipattern policy remains anywhere. |
+| Issue 3: orphan migration reconstructed in canonical              | **DONE** — `20260506232038_create_api_keys_with_prefix.sql` written under the prod-applied version.                                                            |
+| Findings written to `tasks/research/exec/w59-hardening-report.md` | **DONE** — this file.                                                                                                                                          |
 
 ---
 

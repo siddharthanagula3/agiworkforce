@@ -15,7 +15,7 @@
   <body>
     <div class="header">
       <h1>AGI</h1>
-      <p>Browser Automation Extension</p>
+      <p>Browser control plane</p>
     </div>
 
     <div class="content">
@@ -33,10 +33,22 @@
 
       <!-- Quick Actions -->
       <div class="actions">
-        <button class="action-btn primary" id="sidePanelBtn">💬 Open Chat</button>
-        <button class="action-btn primary" id="captureBtn">📸 Capture</button>
-        <button class="action-btn" id="refreshBtn">🔄 Refresh</button>
-        <button class="action-btn" id="groupBtn">📂 Group Tab</button>
+        <button class="action-btn primary" id="sidePanelBtn">
+          <span class="btn-icon btn-icon-chat" aria-hidden="true"></span>
+          <span class="btn-label">Open Chat</span>
+        </button>
+        <button class="action-btn primary" id="captureBtn">
+          <span class="btn-icon btn-icon-camera" aria-hidden="true"></span>
+          <span class="btn-label">Capture</span>
+        </button>
+        <button class="action-btn" id="refreshBtn">
+          <span class="btn-icon btn-icon-refresh" aria-hidden="true"></span>
+          <span class="btn-label">Refresh</span>
+        </button>
+        <button class="action-btn" id="groupBtn">
+          <span class="btn-icon btn-icon-folder" aria-hidden="true"></span>
+          <span class="btn-label">Group Tab</span>
+        </button>
       </div>
 
       <!-- Statistics -->
@@ -67,6 +79,25 @@
             <span class="toggle-slider"></span>
           </label>
         </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Site Allowlist — manage which origins can drive automation.
+           Fixes the misleading background.ts error string "Add it from the
+           extension popup" that referred to a UI that did not exist. -->
+      <div class="info-section allowlist-section">
+        <div class="section-title">Site allowlist</div>
+        <p class="allowlist-help">
+          Pages on these origins can run AGI automation in their tab. Add the current site, then
+          reload it.
+        </p>
+        <div class="allowlist-current-row">
+          <span class="allowlist-current-origin" id="allowlistCurrentOrigin">—</span>
+          <button class="allowlist-toggle-btn" id="allowlistToggleBtn" disabled>Add</button>
+        </div>
+        <ul class="allowlist-list" id="allowlistList" aria-label="Allowlisted origins"></ul>
+        <p class="allowlist-empty" id="allowlistEmpty" hidden>No sites allowlisted yet.</p>
       </div>
 
       <div class="divider"></div>

@@ -1,0 +1,18 @@
+diff --git a/ios/AppDelegates/ExpoReactNativeFactory.swift b/ios/AppDelegates/ExpoReactNativeFactory.swift
+index 925e0f9a44cf160543b76967a094b2cc3221da7c..2e596d5cf60e4635027d386e4ae008197faf567b 100644
+--- a/ios/AppDelegates/ExpoReactNativeFactory.swift
++++ b/ios/AppDelegates/ExpoReactNativeFactory.swift
+@@ -129,11 +129,12 @@ public class ExpoReactNativeFactory: ExpoReactNativeFactoryObjC, ExpoReactNative
+ #endif
+     } else {
+ #if os(iOS) || os(tvOS)
++      let devMenuConfiguration = self.devMenuConfiguration ?? RCTDevMenuConfiguration.default()
+       rootView = rootViewFactory.view(
+         withModuleName: moduleName ?? defaultModuleName,
+         initialProperties: initialProps,
+         launchOptions: launchOptions,
+-        devMenuConfiguration: self.devMenuConfiguration
++        devMenuConfiguration: devMenuConfiguration
+       )
+ #else
+       rootView = rootViewFactory.view(

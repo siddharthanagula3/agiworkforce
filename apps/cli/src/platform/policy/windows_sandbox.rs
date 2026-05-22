@@ -54,7 +54,10 @@ pub fn describe_filter(opts: &WindowsSandboxOptions) -> String {
     let net = if opts.allow_network { "yes" } else { "no" };
     format!(
         "windows-appcontainer preset={:?} container={} capabilities={} network={}",
-        opts.preset, opts.container_name, caps.len(), net
+        opts.preset,
+        opts.container_name,
+        caps.len(),
+        net
     )
 }
 

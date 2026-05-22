@@ -18,12 +18,17 @@ pub(super) async fn execute_enter_worktree(args: &HashMap<String, String>) -> Re
     let base = args.get("base").cloned();
     let target_dir = args.get("target_dir").map(std::path::PathBuf::from);
     let repo = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let opts = crate::runtime::worktree::WorktreeOptions { branch, base, target_dir };
+    let opts = crate::runtime::worktree::WorktreeOptions {
+        branch,
+        base,
+        target_dir,
+    };
     match crate::runtime::worktree::enter_worktree(&repo, opts) {
         Ok(wt) => Ok(ToolResult {
             tool_name: "enter_worktree".into(),
             success: true,
-            output: serde_json::json!({"branch": wt.branch, "path": wt.path.display().to_string()}).to_string(),
+            output: serde_json::json!({"branch": wt.branch, "path": wt.path.display().to_string()})
+                .to_string(),
         }),
         Err(e) => Ok(ToolResult {
             tool_name: "enter_worktree".into(),

@@ -89,8 +89,7 @@ pub(super) fn is_private_or_internal_ip(ip: &std::net::IpAddr) -> bool {
                 || (segments[0] & 0xffc0 == 0xfe80)
                 || (segments[0] & 0xfe00 == 0xfc00)
                 || {
-                    let is_v4_mapped =
-                        segments[0..5] == [0, 0, 0, 0, 0] && segments[5] == 0xffff;
+                    let is_v4_mapped = segments[0..5] == [0, 0, 0, 0, 0] && segments[5] == 0xffff;
                     if is_v4_mapped {
                         let mapped = std::net::Ipv4Addr::new(
                             (segments[6] >> 8) as u8,
@@ -304,7 +303,10 @@ pub(super) async fn execute_web_fetch(args: &HashMap<String, String>) -> Result<
             let text = strip_html_tags(&body);
             let truncated = truncate_output_with_save("web_fetch", text);
             // AUDIT-FIX: H-8 — flag network-sourced content so the model does not treat it as trusted instructions.
-            let safe_url = url.replace('"', "%22").replace('<', "%3C").replace('>', "%3E");
+            let safe_url = url
+                .replace('"', "%22")
+                .replace('<', "%3C")
+                .replace('>', "%3E");
             let output = format!(
                 "<web_fetch_result untrusted=\"true\" url=\"{}\">{}</web_fetch_result>",
                 safe_url, truncated

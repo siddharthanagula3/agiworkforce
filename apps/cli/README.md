@@ -1,11 +1,19 @@
 # AGI Workforce CLI
 
+Status: Current
+Owner role: CLI lead
+Last updated: 2026-05-20
+Kind: app
+Criticality: high
+
+## Purpose
+
 > Beyond one model. Beyond one surface. AGI in your hands.
 
 The terminal-native AI coding agent that doesn't surprise you.
 
 ```
-$ agiworkforce
+$ agi
                     ┌──────────────────── ▮ in 1.2k · out 0 · $0.011 · ctx 4% ┐
  AGI Workforce v1.0.0 │ claude-sonnet-4-6 │ anthropic │  main │ 4% ctx
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -36,15 +44,17 @@ the ecosystem expects it.
 ## Install
 
 ```bash
-cargo install --path apps/cli --bin agiworkforce
+cargo install --path apps/cli --bin agi
 ```
 
 Then sign in with your provider:
 
 ```bash
-agiworkforce login        # device-code OAuth or API key
-agiworkforce auth-status  # confirm
+agi login        # device-code OAuth or API key
+agi auth-status  # confirm
 ```
+
+`agi` is the primary command. `agiworkforce` remains available as a backward-compatible alias.
 
 ### Add a custom provider
 
@@ -76,7 +86,7 @@ Color-shifts grey → orange (≥70 % ctx) → red (≥90 % ctx). Pricing comes 
 hardcoded.
 
 ```bash
-agiworkforce        # interactive TUI; HUD lives top-right
+agi        # interactive TUI; HUD lives top-right
 ```
 
 ### 2. Typed JSON event stream
@@ -88,7 +98,7 @@ machine-readable `kind` (`api_rate_limit`, `auth_expired`, `network`, …) and
 a runbook hint.
 
 ```bash
-agiworkforce exec --json-events "explain main.rs" | jq '.[]'
+agi exec --json-events "explain main.rs" | jq '.[]'
 ```
 
 ### 3. Multi-model fallback chain
@@ -98,13 +108,13 @@ network, 5xx, or stream-disconnect, the next model takes over — provider
 auto-switched, banner flashed, JSON event emitted.
 
 ```bash
-agiworkforce -m claude-opus-4-6,gpt-5.4,llama3.1:8b "refactor main.rs"
+agi -m claude-opus-4-6,gpt-5.4,llama3.1:8b "refactor main.rs"
 ```
 
 Pair with `--demo` to see the rotation fire deterministically:
 
 ```bash
-agiworkforce --demo --json-events exec -m claude-sonnet-4-6,gpt-5.4 "hi"
+agi --demo --json-events exec -m claude-sonnet-4-6,gpt-5.4 "hi"
 # → {"event":"fallback_triggered","from":"claude-sonnet-4-6","to":"gpt-5.4","reason":"api_rate_limit"}
 ```
 
@@ -114,10 +124,10 @@ Every session is persisted under `~/.agiworkforce/managed_sessions/`.
 List, inspect, and fork from any turn:
 
 ```bash
-agiworkforce session list
-agiworkforce session show <id>
-agiworkforce session fork <id> --at-turn 2 --as refactor-alt
-agiworkforce --resume refactor-alt
+agi session list
+agi session show <id>
+agi session fork <id> --at-turn 2 --as refactor-alt
+agi --resume refactor-alt
 ```
 
 ## Output styles
@@ -130,6 +140,10 @@ from `~/.agiworkforce/output-styles/<name>.md`:
 /output-style explanatory    # switch on the fly
 ```
 
+When changed from the CLI, `output_style` and `privacy_mode` are persisted in
+the project `.agiworkforce/config.toml` under `[ui]`, so the boundary and style
+load automatically in later sessions for that repo.
+
 ## Slash commands (selected)
 
 ```
@@ -141,14 +155,30 @@ from `~/.agiworkforce/output-styles/<name>.md`:
 /model <id>     Switch model
 /status         Session info (model, tokens, mode)
 /context        Context window usage
+/doctor        Show local diagnostics inside the current session
 /clear          Clear conversation, keep system prompt
 /exit           Quit
 ```
 
+Custom commands can be added as markdown files under `.agiworkforce/commands`
+or `~/.agiworkforce/commands`. Nested files become namespaced commands, so
+`.agiworkforce/commands/review/security.md` runs as `/review:security`.
+Command bodies support `$ARGUMENTS` and `$1` through `$9`; imported Claude
+commands under `~/.agiworkforce/prompts/claude` and compatibility
+`.claude/commands` roots are also recognized.
+
+Connected MCP servers that support prompts expose them as
+`/mcp:<server>:<prompt>`. Arguments can be passed as `name=value` pairs; if a
+prompt has one required argument, plain trailing text is assigned to it.
+
+Agent definitions live in `.agiworkforce/agents/` and `~/.agiworkforce/agents/`.
+Use `/agents`, `/agents show <name>`, `/agents create <name> [--global]`, and
+`/agents validate` to manage them from either REPL or TUI mode.
+
 ## Demo flow (90 seconds)
 
 ```
-agiworkforce --demo --json-events exec \
+agi --demo --json-events exec \
   -m claude-sonnet-4-6,gpt-5.4 "refactor main.rs"
 # 1. spawning + ready_for_prompt events
 # 2. demo synthesizes 429
@@ -157,27 +187,32 @@ agiworkforce --demo --json-events exec \
 # 5. fresh model answers
 # 6. turn_usage + finished events
 
-agiworkforce session list
-agiworkforce session fork <id> --at-turn 0 --as refactor-alt
+agi session list
+agi session fork <id> --at-turn 0 --as refactor-alt
 ```
 
 ## Subcommands
 
 ```
-agiworkforce help
+agi help
 ```
 
-Lists all 22 subcommands: `exec`, `review`, `apply`, `sandbox`, `mcp-server`,
+Lists subcommands including `exec`, `review`, `apply`, `sandbox`, `mcp-server`,
 `app-server`, `resume`, `fork`, `session`, `history`, `login`, `logout`,
-`auth-status`, `init`, `onboarding`, `features`, `execpolicy`, plus
+`auth-status`, `doctor`, `init`, `onboarding`, `features`, `execpolicy`, plus
 deferred-to-Phase-2 surfaces (`cloud`, `plugin`, `sync`, `marketplace`,
 `ecosystem`) currently dispatched to gated stubs — these surfaces will be
 wired or removed per `~/.claude/plans/cli-competitive-floor.md` Sprint A2.
 
+```bash
+agi doctor
+agi doctor --json
+```
+
 ## Architecture
 
 - Pure Rust workspace (12 utility crates + `apps/cli` + `apps/desktop/src-tauri`).
-  `cargo build --release -p agiworkforce-cli` produces a 5.7 MB binary.
+  `cargo build --release -p agiworkforce-cli --bin agi` produces the primary 5.7 MB binary.
 - TUI: ratatui + crossterm. 195 source files; 125 TUI files (~155 K LOC incl.
   snapshot tests). 914+ `#[test]` / `#[tokio::test]` cases.
 - Sandboxing: Linux (bubblewrap), macOS (Seatbelt) shipped; Windows + Linux

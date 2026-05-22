@@ -3,7 +3,7 @@
 > Single source of truth for new contributors. Maps the **195-file / 155K-LOC** codebase to its 14 subsystems.
 > Last refresh: 2026-05-03 (post Sprint B5 — hooks canonical vocabulary, OpenAI-compatible adapter, license flip to Proprietary).
 
-This is a Rust monolithic binary (`agiworkforce`) compiled from `apps/cli/src/main.rs`. The workspace declares 115 crates in `crates/`, but **110 are excluded** (Sprint 5 FIX-022; codex-rs port preserved at `~/Desktop/reference/codex-cli/`). The CLI links only two path crates: `agiworkforce-protocol` and `agiworkforce-sandbox-policy`.
+This is a Rust monolithic binary (`agi`) compiled from `apps/cli/src/main.rs`. The `agiworkforce` binary name is retained as a compatibility alias. The workspace declares 115 crates in `crates/`, but **110 are excluded** (Sprint 5 FIX-022; codex-rs port preserved at `~/Desktop/reference/codex-cli/`). The CLI links only two path crates: `agiworkforce-protocol` and `agiworkforce-sandbox-policy`.
 
 **License**: Proprietary (the whole AGI Workforce platform is proprietary; the CLI inherits the platform license).
 
@@ -11,7 +11,7 @@ This is a Rust monolithic binary (`agiworkforce`) compiled from `apps/cli/src/ma
 
 ```
                             ┌──────────────────────────────────────┐
-                            │ bin/agiworkforce (Rust binary)       │
+                            │ bin/agi (Rust binary)                │
                             │ entry: apps/cli/src/main.rs (~2.2K) │
                             └───────────────┬──────────────────────┘
                                             │ #[tokio::main] async fn main()
@@ -76,8 +76,9 @@ This is a Rust monolithic binary (`agiworkforce`) compiled from `apps/cli/src/ma
 
 **Distribution**: dual-channel.
 
-- Native: `cargo install --path apps/cli` → `~/.cargo/bin/agiworkforce`
-- npm: `@agiworkforce/cli` is a thin Node wrapper at `apps/cli/npm/bin/agiworkforce.js` (97 LOC) that resolves the right platform package (6 platforms: darwin-arm64/x64, linux-arm64/x64, win32-arm64/x64) and `spawn`s the native binary with `stdio: 'inherit'`.
+- Native: `cargo install --path apps/cli --bin agi` → `~/.cargo/bin/agi`
+- Compatibility: `cargo install --path apps/cli --bin agiworkforce` remains available for old scripts.
+- npm: `@agiworkforce/cli` is a thin Node wrapper at `apps/cli/npm/bin/agi.js` that resolves the right platform package (6 platforms: darwin-arm64/x64, linux-arm64/x64, win32-arm64/x64) and `spawn`s the native binary with `stdio: 'inherit'`. `bin/agiworkforce.js` delegates to it as a compatibility alias.
 
 ---
 
@@ -204,7 +205,7 @@ pub struct ToolDefinition {
 **MCP**: The CLI is both a client and a server.
 
 - As client ([mcp.rs](src/mcp.rs)): JSON-RPC 2.0 over **3 transports** — stdio, SSE, and Streamable HTTP (with optional OAuth on the HTTP transport). Configs from `.mcp.json` (project) + `~/.agiworkforce/.mcp.json` (global). Auto-reconnect with exponential backoff. Tools namespaced as `mcp_<server>_<tool>`.
-- As server: `agiworkforce mcp-server` exposes own tools over MCP stdio. `agiworkforce app-server` is broader: JSON-RPC for IDE integration with `tools/list`, `initialize`, `shutdown`.
+- As server: `agi mcp-server` exposes own tools over MCP stdio. `agi app-server` is broader: JSON-RPC for IDE integration with `tools/list`, `initialize`, `shutdown`.
 
 **[tool_search.rs](src/tool_search.rs)** (95 lines): scoring search across discoverable tools. Exact name +10, substring +5, description +2. Feature-flagged.
 
@@ -225,7 +226,7 @@ pub struct ToolDefinition {
 
 **Sandbox** ([sandbox.rs](src/sandbox.rs), 174 LOC): `SandboxType::detect()` at runtime — macOS Seatbelt, Linux Bubblewrap, Linux Landlock, Windows Restricted Token. Workspace policy at [crates/sandbox-policy/src/lib.rs](../../crates/sandbox-policy/src/lib.rs) defines `SandboxPolicy::{DangerFullAccess, ReadOnly, WorkspaceWrite{writable_roots}, ExternalSandbox}`.
 
-`agiworkforce sandbox <cmd>` exposes raw access for debugging.
+`agi sandbox <cmd>` exposes raw access for debugging.
 
 ---
 
@@ -310,7 +311,7 @@ Subscription paths for GitHub Copilot (`~/.copilot/token.json`) and ChatGPT Plus
 **FallbackChain** ([routing/fallback.rs](src/routing/fallback.rs)):
 
 ```bash
-agiworkforce -m "claude-opus-4-6,gpt-5.4,llama3.1:8b"
+agi -m "claude-opus-4-6,gpt-5.4,llama3.1:8b"
 ```
 
 - Comma-separated, parsed by `FallbackChain::parse()`
@@ -474,7 +475,7 @@ pub enum SandboxType {
 
 - macOS profile: deny-by-default; allow process-exec, process-fork, sysctls, mach-lookup, network-outbound; RO `/usr /bin /sbin /Library /System`; RW workspace + `/tmp`
 - Linux Bubblewrap: `--unshare-pid --unshare-uts --die-with-parent --ro-bind / / --bind <workspace> <workspace> --tmpfs /tmp`
-- `agiworkforce sandbox` subcommand exposes raw access for debugging
+- `agi sandbox` subcommand exposes raw access for debugging
 
 ---
 
@@ -508,7 +509,7 @@ Whisper STT (OpenAI API or local binary). `cpal` 16 kHz mono PCM, `hound` WAV en
 
 ### Cross-device sync ([sync.rs](src/sync.rs), 705 LOC)
 
-`agiworkforce sync export/import` bundles `config.toml`, `mcp.json`, `memories/raw_memories.md`, `projects.json`, `INSTRUCTIONS.md`. Excludes session history + shell snapshots + plugin caches.
+`agi sync export/import` bundles `config.toml`, `mcp.json`, `memories/raw_memories.md`, `projects.json`, `INSTRUCTIONS.md`. Excludes session history + shell snapshots + plugin caches.
 
 ---
 

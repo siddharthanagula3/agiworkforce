@@ -306,7 +306,7 @@ pub fn verify_with_clock(
 
     // Timestamp window: |now - ts| <= MAX_MESSAGE_AGE_MS
     let age = now_ms - ts;
-    if age > MAX_MESSAGE_AGE_MS || age < -MAX_MESSAGE_AGE_MS {
+    if !(-MAX_MESSAGE_AGE_MS..=MAX_MESSAGE_AGE_MS).contains(&age) {
         return Err(VerifyError::TimestampExpired(MAX_MESSAGE_AGE_MS));
     }
 

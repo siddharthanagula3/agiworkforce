@@ -284,7 +284,7 @@ supabase/migrations/20260505000007_stripe_webhook_idempotency.sql
 - **Severity:** P2
 - **Surface(s):** docs
 - **Category:** docs
-- **Location:** `README.md:11`, `README.md:130`, `CHANGELOG.md:216`, `AUDIT_LOG.md:262`
+- **Location:** `README.md:11`, `README.md:130`, `CHANGELOG.md:216`, `audit/audit-log.md:262`
 - **Evidence:**
 
 ```md
@@ -297,7 +297,7 @@ Launch-readiness wave 1+2 complete (2026-05-15): all surfaces verified green
 
 - **Reproduction:** Compare the docs claims to Tooling Run Log T4-T10; clippy, cargo audit, pnpm audit, web build, and extension package all fail on the audited HEAD.
 - **Impact:** Launch coordination will make decisions from stale claims instead of the source and tool outputs.
-- **Recommendation:** Commit `docs: mark launch readiness no-go until gates pass`; update README, CHANGELOG, AUDIT_LOG, and MASTER_PLAN with the exact failing gates and new test/build counts.
+- **Recommendation:** Commit `docs: mark launch readiness no-go until gates pass`; update README, CHANGELOG, audit log, and MASTER_PLAN with the exact failing gates and new test/build counts.
 - **Effort:** S
 - **References:** Tooling Run Log T4-T10.
 
@@ -321,7 +321,7 @@ Launch-readiness wave 1+2 complete (2026-05-15): all surfaces verified green
 
 - `README.md` says all six surfaces are launch-ready and verified green -> reality: clippy, cargo audit, pnpm audit, web build, and Chrome extension package fail -> required update: `README.md` launch-readiness banner and launch-readiness section.
 - `CHANGELOG.md` claims `>=13,744 tests green` -> reality: this audit did not reproduce that number and found skipped tests plus failing gates -> required update: `CHANGELOG.md` latest release verification table.
-- `AUDIT_LOG.md` claims post-fire platform totals and green verification -> reality: audited HEAD fails F1-F4 -> required update: `AUDIT_LOG.md` latest audit section.
+- `audit/audit-log.md` claims post-fire platform totals and green verification -> reality: audited HEAD fails F1-F4 -> required update: `audit/audit-log.md` latest audit section.
 - `MASTER_PLAN.md` says every surface compiles and paid tiers are wired end-to-end -> reality: web and Chrome extension release builds fail, and `UserProfile` still renders stub usage data -> required update: `MASTER_PLAN.md` executive/current-state sections.
 - `AGENTS.md` says canonical migrations are under `supabase/migrations/` and legacy migrations still exist -> reality: both trees remain active-looking and include overlapping Stripe idempotency SQL -> required update: either archive legacy SQL or add explicit deploy guard documentation.
 - `MEMORY.md` was requested but does not exist at audited HEAD -> required update: remove MEMORY.md references from future audit prompts or add the file.

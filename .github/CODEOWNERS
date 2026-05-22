@@ -1,0 +1,43 @@
+# Provisional CODEOWNERS for pre-release AGI Workforce.
+#
+# Replace @siddhartha with GitHub teams when the company/org structure exists.
+# Until then, this file routes high-risk changes to the founder/platform lead.
+
+* @siddhartha
+
+# Root strategy, agent context, and repo-operability guardrails.
+/AGENTS.md @siddhartha
+/CLAUDE.md @siddhartha
+/PLAN.md @siddhartha
+/TODO.md @siddhartha
+/CHANGELOG.md @siddhartha
+/CONTRIBUTING.md @siddhartha
+/docs/agent-context/ @siddhartha
+/docs/engineering/ @siddhartha
+/audit/repo-organization/ @siddhartha
+/scripts/check-*.mjs @siddhartha
+
+# Product surfaces.
+/apps/cli/ @siddhartha
+/apps/desktop/ @siddhartha
+/apps/web/ @siddhartha
+/apps/mobile/ @siddhartha
+/ios/ @siddhartha
+/apps/extension/ @siddhartha
+/apps/extension-vscode/ @siddhartha
+
+# Shared runtime, contracts, providers, and database.
+/packages/types/ @siddhartha
+/packages/providers/ @siddhartha
+/packages/llm-runtime/ @siddhartha
+/packages/runtime/ @siddhartha
+/packages/unified-chat/ @siddhartha
+/crates/ @siddhartha
+/services/ @siddhartha
+/supabase/migrations/ @siddhartha
+
+# Enterprise/security/compliance claims.
+/docs/enterprise/ @siddhartha
+/docs/security/ @siddhartha
+/docs/legal/ @siddhartha
+/packages/compliance/ @siddhartha

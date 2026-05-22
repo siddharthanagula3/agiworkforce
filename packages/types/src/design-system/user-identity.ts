@@ -11,8 +11,8 @@
 export type UIPlanTier = 'local' | 'byok' | 'hobby' | 'pro' | 'pro_plus' | 'max';
 
 export const PLAN_LABEL: Readonly<Record<UIPlanTier, string>> = Object.freeze({
-  local: 'Local',
-  byok: 'BYOK',
+  local: 'Local Mode',
+  byok: 'Local Mode + BYOK',
   hobby: 'Hobby',
   pro: 'Pro',
   pro_plus: 'Pro+',
@@ -20,9 +20,9 @@ export const PLAN_LABEL: Readonly<Record<UIPlanTier, string>> = Object.freeze({
 });
 
 export const PLAN_DESCRIPTION: Readonly<Record<UIPlanTier, string>> = Object.freeze({
-  local: 'Local-only — Ollama / LMStudio',
-  byok: 'Bring your own keys',
-  hobby: 'Managed cloud, basic models',
+  local: 'Local LLMs — Ollama / LM Studio',
+  byok: 'Local app with your own provider keys',
+  hobby: 'Cloud Managed, basic models',
   pro: 'Pro — coming soon',
   pro_plus: 'Pro+ — multi-provider chat, every flagship',
   max: 'Max — coming soon',
@@ -67,6 +67,10 @@ export interface UsageMeter {
   remaining: number | null;
   /** ISO timestamp of next quota reset. Null when unbounded. */
   resetsAt: string | null;
+  /** Tokens used in the active billing window when reported by the source. */
+  usedTokens?: number;
+  /** Token allowance for the active billing window when reported by the source. */
+  limitTokens?: number;
   /** Whose limit this is — affects framing in the UI. */
   source: 'managed-plan' | 'user-api-key' | 'unbounded';
 }

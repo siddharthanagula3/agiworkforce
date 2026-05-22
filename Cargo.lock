@@ -321,6 +321,7 @@ dependencies = [
  "which 6.0.3",
  "whisper-rs",
  "windows 0.56.0",
+ "winreg 0.55.0",
  "xcap",
  "zeroize",
  "zip 1.1.4",

@@ -14,6 +14,66 @@ export { isCloudWeb, isTauri } from './runtimeEnvironment';
 
 const CLOUD_WEB_FALLTHROUGH = Symbol('CLOUD_WEB_FALLTHROUGH');
 
+function mockDocumentCreationResult(args: Record<string, unknown> | undefined, format: string) {
+  const path = String(args?.['outputPath'] ?? '/tmp/mock-document');
+  const fileName = path.split(/[\\/]/).pop() || 'mock-document';
+  const now = new Date(0).toISOString();
+  const checksumSha256 = '0'.repeat(64);
+  const computeSessionId = 'local-compute-session-mock';
+  const generatedFileId = 'generated-file-mock';
+
+  return {
+    path,
+    file_path: path,
+    filePath: path,
+    format,
+    status: 'created',
+    success: true,
+    computeSession: {
+      id: computeSessionId,
+      ownerUserId: 'local-device',
+      sourceSurface: 'desktop',
+      privacyMode: 'local',
+      providerMode: 'Local',
+      status: 'completed',
+      workdirUri: 'file:///tmp',
+      createdAt: now,
+      updatedAt: now,
+      completedAt: now,
+    },
+    generatedFile: {
+      id: generatedFileId,
+      computeSessionId,
+      ownerUserId: 'local-device',
+      sourceSurface: 'desktop',
+      privacyMode: 'local',
+      providerMode: 'Local',
+      kind: format,
+      fileName,
+      mimeType: 'application/octet-stream',
+      uri: `file://${path}`,
+      byteCount: 0,
+      checksumSha256,
+      previewDerivatives: [],
+      createdAt: now,
+    },
+    artifactManifest: {
+      id: 'artifact-manifest-mock',
+      artifactId: 'artifact-mock',
+      type: 'generated_file_bundle',
+      title: fileName,
+      computeSessionId,
+      generatedFileIds: [generatedFileId],
+      privacyMode: 'local',
+      providerMode: 'Local',
+      storageScope: 'local_device',
+      checksumSha256,
+      createdAt: now,
+      updatedAt: now,
+    },
+  };
+}
+
 async function handleCloudWebCommand<T>(
   command: string,
   args?: Record<string, unknown>,
@@ -246,6 +306,15 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'document_create_word_simple':
     case 'document_create_excel_simple':
       return (args?.['outputPath'] ?? '/tmp/mock-document') as T;
+    case 'document_create_pdf_simple_manifest':
+      return mockDocumentCreationResult(args, 'pdf') as T;
+    case 'document_create_word_simple_manifest':
+      return mockDocumentCreationResult(args, 'docx') as T;
+    case 'document_create_excel_simple_manifest':
+    case 'document_create_excel_numbers_manifest':
+      return mockDocumentCreationResult(args, 'xlsx') as T;
+    case 'document_create_powerpoint_simple_manifest':
+      return mockDocumentCreationResult(args, 'pptx') as T;
 
     // Sandboxed code execution
     case 'execute_code':

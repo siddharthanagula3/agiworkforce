@@ -123,6 +123,158 @@ export interface ChatAttachment {
 }
 
 // ============================================================================
+// Attachment validation
+// ============================================================================
+
+/**
+ * Hard cap on per-attachment size accepted by the composer. Above this, the
+ * payload bloats the prompt budget on local providers and triggers gateway
+ * 413s on cloud providers. Round-2 audit P0 #4 (2026-05-21).
+ */
+export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024; // 25 MiB
+
+/**
+ * Explicit MIME prefixes accepted as inline attachments. Anything outside
+ * this set is rejected at the composer before it ever reaches a provider.
+ */
+export const ALLOWED_ATTACHMENT_MIME_PREFIXES: readonly string[] = [
+  'image/',
+  'application/pdf',
+  'text/',
+  'application/json',
+  'application/xml',
+];
+
+/**
+ * File-extension fallback for files whose MIME type the browser reports as
+ * an empty string (rare on macOS Drag from Finder). Mirrors the existing
+ * `<input accept>` list.
+ */
+export const ALLOWED_ATTACHMENT_EXTENSIONS: readonly string[] = [
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'webp',
+  'heic',
+  'pdf',
+  'txt',
+  'md',
+  'csv',
+  'json',
+  'xml',
+  'js',
+  'jsx',
+  'ts',
+  'tsx',
+  'py',
+  'rs',
+  'go',
+  'java',
+  'html',
+  'css',
+];
+
+/**
+ * Single source of truth for the `<input accept="...">` value used by every
+ * file-picker in the composer. Keeps the picker, drag-drop, and paste paths
+ * accepting exactly the same set.
+ */
+export const ALLOWED_ATTACHMENT_ACCEPT =
+  'image/*,application/pdf,text/*,application/json,application/xml,' +
+  ALLOWED_ATTACHMENT_EXTENSIONS.map((ext) => `.${ext}`).join(',');
+
+/**
+ * Result of validating a candidate attachment file. Composers should surface
+ * the `reason` to the user when `ok` is false.
+ */
+export type AttachmentValidation =
+  | { ok: true }
+  | { ok: false; reason: 'too-large' | 'unsupported-type' | 'empty'; message: string };
+
+function fileExtension(name: string): string {
+  const dot = name.lastIndexOf('.');
+  return dot >= 0 ? name.slice(dot + 1).toLowerCase() : '';
+}
+
+/**
+ * Validate a candidate File against the attachment contract. Returns
+ * `{ ok: true }` when the file is accepted; otherwise a structured rejection
+ * with a user-presentable message.
+ *
+ * Validation order is fixed (empty → too-large → unsupported) so callers can
+ * rely on the first-failure being the most-actionable for the user.
+ */
+export function validateAttachmentFile(file: File): AttachmentValidation {
+  if (file.size === 0) {
+    return {
+      ok: false,
+      reason: 'empty',
+      message: `${file.name} is empty.`,
+    };
+  }
+  if (file.size > MAX_ATTACHMENT_BYTES) {
+    const limitMb = Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024));
+    return {
+      ok: false,
+      reason: 'too-large',
+      message: `${file.name} is larger than the ${limitMb} MiB attachment limit.`,
+    };
+  }
+  const mime = (file.type ?? '').toLowerCase();
+  const mimeAllowed =
+    mime.length > 0 && ALLOWED_ATTACHMENT_MIME_PREFIXES.some((prefix) => mime.startsWith(prefix));
+  const extAllowed = ALLOWED_ATTACHMENT_EXTENSIONS.includes(fileExtension(file.name));
+  if (!mimeAllowed && !extAllowed) {
+    return {
+      ok: false,
+      reason: 'unsupported-type',
+      message: `${file.name} (${mime || 'unknown type'}) is not an accepted attachment type.`,
+    };
+  }
+  return { ok: true };
+}
+
+// ============================================================================
+// Signed-URL upload contract (Cloud Managed only — waitlist-gated in v1)
+// ============================================================================
+
+/**
+ * Request a server-signed upload URL for an attachment. Used when AGI's
+ * Cloud Managed plan is active so large attachments don't traverse the
+ * websocket/http chat request body. v1 Local-only does NOT use this path —
+ * the contract is defined here so consumer surfaces can compile against it
+ * before the Cloud Managed waitlist opens.
+ */
+export interface SignedUploadRequest {
+  /** Filename as it should be presented in the UI (not the storage key). */
+  name: string;
+  /** Browser-reported MIME type. */
+  mimeType: string;
+  /** Byte size, must be <= MAX_ATTACHMENT_BYTES. */
+  size: number;
+  /** Optional SHA-256 hex digest for end-to-end integrity verification. */
+  sha256?: string;
+}
+
+/**
+ * Server response carrying a one-shot signed upload URL plus the canonical
+ * attachment id the client should reference after the upload completes.
+ */
+export interface SignedUploadResponse {
+  /** Canonical attachment id; round-trip with subsequent chat messages. */
+  attachmentId: string;
+  /** Pre-signed PUT (or POST) URL the client uses to upload the bytes. */
+  uploadUrl: string;
+  /** HTTP method to use against `uploadUrl` (usually `"PUT"`). */
+  uploadMethod: 'PUT' | 'POST';
+  /** Optional headers the server requires (`Content-Type`, x-amz-* etc). */
+  uploadHeaders?: Record<string, string>;
+  /** Wall-clock expiry, ISO 8601 — clients should not retry past this. */
+  expiresAt: string;
+}
+
+// ============================================================================
 // Conversation
 // ============================================================================
 

@@ -1,10 +1,3 @@
-// AUDIT-FIX: storage layer is half-shipped from the mobile reorg. This index
-// only re-exports the modules that currently exist. The missing sibling
-// modules (`./conversations`, `./messages`, `./providerKeys`,
-// `./customInstructions`, `./settingsDb`, `./telemetry`) are tracked as a
-// follow-up to the mobile-restructure work — once those land, restore the
-// matching `export *` lines below.
-
 export { getDb, closeDb, rekeyDb } from './db';
 export type {
   Conversation,
@@ -19,6 +12,12 @@ export type {
   ModelRuntime,
   ModelFormat,
 } from './types';
+export * from './conversations';
+export * from './messages';
 export * from './memory';
 export * from './installedModels';
+export * from './providerKeys';
+export * from './customInstructions';
+export * from './settingsDb';
+export * from './telemetry';
 export * from './docChunks';

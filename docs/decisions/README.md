@@ -1,5 +1,7 @@
 # Architecture Decision Records
 
+Start with [CURRENT_DECISIONS.md](CURRENT_DECISIONS.md) for the latest cross-doc decision index and mobile-v1 launch clarifications.
+
 This directory holds ADRs for AGI Workforce, formatted per Michael Nygard. Each ADR has Status / Context / Decision / Consequences. Once accepted, an ADR is immutable — supersede it with a new ADR rather than editing.
 
 For higher-level architectural narrative, see `docs/architecture/foundation-2026.md`. ADRs deliberately stay narrow and decision-focused; the architecture doc connects them.
@@ -21,8 +23,9 @@ For higher-level architectural narrative, see `docs/architecture/foundation-2026
 - [2026-05-09-try-with-rust-context.md](2026-05-09-try-with-rust-context.md) — Rust `try_with` over `with` for incremental `tokio::task_local!` adoption.
 - [2026-05-09-zoom-unsupported-until-tabs-permission.md](2026-05-09-zoom-unsupported-until-tabs-permission.md) — `browser-tool` `zoom` action emits `unsupported` step until `tabs` permission lands.
 
-### Strategic ADRs (5)
+### Strategic ADRs (6)
 
+- [2026-05-20-openai-anthropic-application-suite-thesis.md](2026-05-20-openai-anthropic-application-suite-thesis.md) — AGI Workforce is an OpenAI/Anthropic-style application suite, differentiated by local-first privacy, explicit BYOK, multi-provider routing, and privacy-controlled managed compute.
 - [2026-05-09-strategic-maximalist-surface-coverage.md](2026-05-09-strategic-maximalist-surface-coverage.md) — ship six surfaces concurrently rather than consolidate.
 - [2026-05-09-strategic-3-vm-parallel.md](2026-05-09-strategic-3-vm-parallel.md) — Foundation Sprint runs 7 branches concurrently across 3 worktrees.
 - [2026-05-09-strategic-foundation-first-sprint.md](2026-05-09-strategic-foundation-first-sprint.md) — primitives land before any feature work that depends on them.

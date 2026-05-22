@@ -19,10 +19,10 @@
  * The codebase couples to Supabase today. This package introduces the seam to
  * swap Supabase for Neon, RDS, S3, Auth0, etc. without rewriting feature code.
  *
- * - Read `docs/ARCHITECTURE.md` for the system map.
- * - Read `docs/SCALING.md` for migration playbooks.
- * - Read `docs/HOSTING.md` for multi-cloud deployment.
- * - Read `docs/PERFORMANCE.md` for heavy-traffic patterns.
+ * - Read `docs/current/technical-architecture.md` for the system map.
+ * - Read `docs/archive/2026-05-21-docs-consolidation/SCALING.md`
+ *   for legacy migration playbooks.
+ * - Read `docs/current/commercial-and-launch.md` for managed-compute gates.
  */
 
 // Interfaces — the contract feature code depends on.

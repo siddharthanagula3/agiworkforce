@@ -200,7 +200,7 @@ Desktop always sees mobile as 0.1.0. Violates "read versions from `package.json`
 
 ## [SEV-MOB-16] LOW — Android `READ_EXTERNAL_STORAGE` deprecated for Android 13+
 
-**File**: `apps/mobile/app.json:61`
+**File**: `apps/mobile/app.config.js`
 
 Deprecated in API 33; ignored. Play Store requires `READ_MEDIA_IMAGES`.
 

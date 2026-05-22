@@ -5,6 +5,8 @@
 
 use crate::sys::security::tool_guard::RiskLevel;
 use crate::sys::security::{ToolConfirmationRequest, ToolConfirmationResponse, ToolExecutionGuard};
+use base64::engine::general_purpose::{STANDARD, URL_SAFE, URL_SAFE_NO_PAD};
+use base64::Engine as _;
 use parking_lot::Mutex;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -263,7 +265,7 @@ impl ToolConfirmationState {
     /// this parser the trailing segment is `read_file_but_exfiltrate`,
     /// which is *not* in `READ_ONLY_MCP_TOOLS`, so the gate falls through
     /// to user confirmation.
-    fn parse_mcp_envelope(tool_name: &str) -> Option<(&str, &str)> {
+    fn parse_mcp_envelope(tool_name: &str) -> Option<(String, String)> {
         let rest = tool_name.strip_prefix("mcp__")?;
         // The remainder must be exactly `<server>__<tool>` with no further
         // `__` separators. We reject overly-long inputs defensively to
@@ -281,6 +283,8 @@ impl ToolConfirmationState {
         if server.contains("__") || tool.contains("__") {
             return None;
         }
+        let server = Self::decode_mcp_segment(server)?;
+        let tool = Self::decode_mcp_segment(tool)?;
         // Canonical charset: alphanumerics, underscore, hyphen, dot. This
         // matches the MCP spec convention and forbids path-traversal /
         // shell-metacharacter shenanigans in the tool identifier.
@@ -289,10 +293,34 @@ impl ToolConfirmationState {
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
         };
-        if !charset_ok(server) || !charset_ok(tool) {
+        if !charset_ok(&server) || !charset_ok(&tool) {
             return None;
         }
         Some((server, tool))
+    }
+
+    fn decode_mcp_segment(segment: &str) -> Option<String> {
+        let bytes = if let Some(encoded) = segment.strip_prefix("b64_") {
+            URL_SAFE_NO_PAD
+                .decode(encoded)
+                .or_else(|_| URL_SAFE.decode(encoded))
+                .or_else(|_| STANDARD.decode(encoded))
+                .ok()?
+        } else if let Some(encoded) = segment.strip_prefix("b64:") {
+            URL_SAFE_NO_PAD
+                .decode(encoded)
+                .or_else(|_| URL_SAFE.decode(encoded))
+                .or_else(|_| STANDARD.decode(encoded))
+                .ok()?
+        } else if let Some(encoded) = segment.strip_prefix("hex_") {
+            hex::decode(encoded).ok()?
+        } else if let Some(encoded) = segment.strip_prefix("hex:") {
+            hex::decode(encoded).ok()?
+        } else {
+            return Some(segment.to_string());
+        };
+
+        String::from_utf8(bytes).ok()
     }
 
     /// Check whether a tool is permitted under the given agent mode.
@@ -313,7 +341,7 @@ impl ToolConfirmationState {
                 }
                 // MCP tools: strict envelope parse + exact-name match.
                 if let Some((_, tool)) = Self::parse_mcp_envelope(tool_name) {
-                    return Self::READ_ONLY_MCP_TOOLS.contains(&tool);
+                    return Self::READ_ONLY_MCP_TOOLS.contains(&tool.as_str());
                 }
                 false
             }
@@ -1882,6 +1910,22 @@ mod mcp_envelope_parser_tests {
         assert!(ToolConfirmationState::is_tool_permitted_for_mode(
             "mcp__git__git_diff",
             AgentMode::Plan,
+        ));
+    }
+
+    #[test]
+    fn mcp_encoded_read_tool_is_permitted_in_plan_mode() {
+        // Live MCP tool IDs are URL-safe base64 encoded to survive provider
+        // function-name restrictions. Decode before checking the read-only
+        // tool allowlist, otherwise legitimate filesystem reads prompt in
+        // Plan/Safe mode.
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "mcp__b64_ZmlsZXN5c3RlbQ__b64_cmVhZF9maWxl",
+            AgentMode::Plan,
+        ));
+        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
+            "mcp__b64_Z2l0__b64_Z2l0X3N0YXR1cw",
+            AgentMode::Safe,
         ));
     }
 

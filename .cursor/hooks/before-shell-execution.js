@@ -3,16 +3,22 @@ const { readStdin, hookEnabled } = require('./adapter');
 const { splitShellSegments } = require('./shell-split');
 
 readStdin()
-  .then(raw => {
+  .then((raw) => {
     try {
       const input = JSON.parse(raw || '{}');
       const cmd = String(input.command || input.args?.command || '');
 
-      if (hookEnabled('pre:bash:dev-server-block', ['standard', 'strict']) && process.platform !== 'win32') {
+      if (
+        hookEnabled('pre:bash:dev-server-block', ['standard', 'strict']) &&
+        process.platform !== 'win32'
+      ) {
         const segments = splitShellSegments(cmd);
         const tmuxLauncher = /^\s*tmux\s+(new|new-session|new-window|split-window)\b/;
-        const devPattern = /\b(npm\s+run\s+dev|pnpm(?:\s+run)?\s+dev|yarn\s+dev|bun\s+run\s+dev|pnpm\s+tauri\s+dev)\b/;
-        const hasBlockedDev = segments.some(segment => devPattern.test(segment) && !tmuxLauncher.test(segment));
+        const devPattern =
+          /\b(npm\s+run\s+dev|pnpm(?:\s+run)?\s+dev|yarn\s+dev|bun\s+run\s+dev|pnpm\s+tauri\s+dev)\b/;
+        const hasBlockedDev = segments.some(
+          (segment) => devPattern.test(segment) && !tmuxLauncher.test(segment),
+        );
         if (hasBlockedDev) {
           console.error('[AGI] BLOCKED: Dev server must run in tmux for log access');
           console.error('[AGI] Use: tmux new-session -d -s dev "pnpm dev"');
@@ -24,7 +30,9 @@ readStdin()
         hookEnabled('pre:bash:tmux-reminder', ['strict']) &&
         process.platform !== 'win32' &&
         !process.env.TMUX &&
-        /(npm (install|test)|pnpm (install|test)|yarn (install|test)?|bun (install|test)|cargo (build|test|check|clippy)|make\b|docker\b|pytest|vitest|playwright)/.test(cmd)
+        /(npm (install|test)|pnpm (install|test)|yarn (install|test)?|bun (install|test)|cargo (build|test|check|clippy)|make\b|docker\b|pytest|vitest|playwright)/.test(
+          cmd,
+        )
       ) {
         console.error('[AGI] Consider running in tmux for session persistence');
       }

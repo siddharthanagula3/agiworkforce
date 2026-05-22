@@ -1,6 +1,6 @@
 import React from 'react';
 import { NativeModules, Platform } from 'react-native';
-import { recognizeText } from '../services/ocr';
+import { recognizeText } from '../src/features/image/services/ocr';
 
 // ── OCR service unit tests ────────────────────────────────────────────────
 
@@ -47,7 +47,7 @@ describe('recognizeText', () => {
 describe('TaskChipType includes scan', () => {
   it('exports scan as a valid chip type', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { TaskChips } = require('../components/chat/TaskChips');
+    const { TaskChips } = require('../src/features/chat/components/TaskChips');
     expect(TaskChips).toBeDefined();
   });
 });

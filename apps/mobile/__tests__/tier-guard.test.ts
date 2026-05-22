@@ -6,7 +6,7 @@
  * user's subscription tier.
  */
 
-import { guardProviderSwitch } from '../services/tierGuard';
+import { guardProviderSwitch } from '../src/features/model-picker/tierGuard';
 
 // ---------------------------------------------------------------------------
 // Helpers

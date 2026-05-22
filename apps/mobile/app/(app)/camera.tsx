@@ -15,10 +15,10 @@ import { CameraView, useCameraPermissions, type FlashMode } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import { X, Zap, ZapOff, Send, RotateCcw, Camera } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { useChatStore } from '@/stores/chatStore';
-import { useModelStore } from '@/stores/modelStore';
-import type { Attachment } from '@/components/chat/AttachmentPreview';
+import { useModelStore } from '@/src/features/model-picker/store';
+import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 
 /**
  * CameraScreen — Full-screen camera capture screen for vision AI analysis.

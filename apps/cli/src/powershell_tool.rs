@@ -23,8 +23,12 @@ pub struct PowerShellRequest {
     pub safe_mode: bool,
 }
 
-fn default_timeout() -> u64 { 30 }
-fn default_safe_mode() -> bool { true }
+fn default_timeout() -> u64 {
+    30
+}
+fn default_safe_mode() -> bool {
+    true
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PowerShellResult {
@@ -38,16 +42,29 @@ pub struct PowerShellResult {
 /// Verbs that are destructive or registry-touching. Caller is warned (or
 /// blocked in safe_mode).
 pub const DESTRUCTIVE_VERBS: &[&str] = &[
-    "Remove-", "Stop-", "Restart-", "Reset-", "Disable-", "Uninstall-",
-    "Clear-", "Format-", "Stop-Process", "Restart-Service",
-    "Remove-Item", "Remove-ItemProperty", "Set-Acl",
+    "Remove-",
+    "Stop-",
+    "Restart-",
+    "Reset-",
+    "Disable-",
+    "Uninstall-",
+    "Clear-",
+    "Format-",
+    "Stop-Process",
+    "Restart-Service",
+    "Remove-Item",
+    "Remove-ItemProperty",
+    "Set-Acl",
     "New-PSDrive", // can map external drives
 ];
 
 /// Cmdlets that touch the Windows registry — warn even when not safe_mode.
 pub const REGISTRY_CMDLETS: &[&str] = &[
-    "Get-ItemProperty", "Set-ItemProperty", "New-ItemProperty",
-    "Remove-ItemProperty", "Get-ChildItem", // when path starts with HKLM:/HKCU:
+    "Get-ItemProperty",
+    "Set-ItemProperty",
+    "New-ItemProperty",
+    "Remove-ItemProperty",
+    "Get-ChildItem", // when path starts with HKLM:/HKCU:
 ];
 
 /// Inspect a PowerShell command for safety concerns. Returns the list of
@@ -79,7 +96,11 @@ pub fn safety_check(command: &str) -> Vec<String> {
         // `iex` is the canonical alias. Catch the bare token by checking
         // for word boundaries via the space, parenthesis, semicolon, or
         // end-of-input forms.
-        "iex ", "iex	", "iex(", ";iex", " iex",
+        "iex ",
+        "iex	",
+        "iex(",
+        ";iex",
+        " iex",
         // `Invoke-Command -ScriptBlock { ... }` evaluates an arbitrary
         // string-as-script.
         "invoke-command",
@@ -148,14 +169,21 @@ pub fn execute(req: &PowerShellRequest) -> Result<PowerShellResult> {
             );
         }
     }
-    let interpreter = find_interpreter()
-        .ok_or_else(|| anyhow::anyhow!("no PowerShell interpreter found on PATH (tried: pwsh, powershell.exe, powershell)"))?;
+    let interpreter = find_interpreter().ok_or_else(|| {
+        anyhow::anyhow!(
+            "no PowerShell interpreter found on PATH (tried: pwsh, powershell.exe, powershell)"
+        )
+    })?;
     let mut cmd = std::process::Command::new(&interpreter);
-    cmd.arg("-NoProfile").arg("-NonInteractive").arg("-Command").arg(&req.command);
+    cmd.arg("-NoProfile")
+        .arg("-NonInteractive")
+        .arg("-Command")
+        .arg(&req.command);
     if let Some(wd) = &req.working_dir {
         cmd.current_dir(wd);
     }
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .with_context(|| format!("invoke {interpreter}"))?;
     Ok(PowerShellResult {
         exit_code: output.status.code().unwrap_or(-1),
@@ -198,7 +226,9 @@ mod tests {
     #[test]
     fn safety_check_execution_policy_bypass_warns() {
         let warnings = safety_check("powershell -ExecutionPolicy Bypass -File foo.ps1");
-        assert!(warnings.iter().any(|w| w.contains("ExecutionPolicy Bypass")));
+        assert!(warnings
+            .iter()
+            .any(|w| w.contains("ExecutionPolicy Bypass")));
     }
 
     #[test]

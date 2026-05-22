@@ -3,6 +3,7 @@ use std::hash::{Hash, Hasher};
 
 use serde::{Deserialize, Serialize};
 
+#[cfg(test)]
 use crate::models::ToolCallResponse;
 
 /// Maximum agentic loop iterations to prevent infinite loops.
@@ -28,6 +29,7 @@ pub struct ToolCall {
 }
 
 /// Convert a ToolCallResponse (from native API) to the legacy ToolCall struct.
+#[cfg(test)]
 pub(super) fn tool_call_to_legacy(tc: &ToolCallResponse) -> ToolCall {
     ToolCall {
         name: tc.name.clone(),

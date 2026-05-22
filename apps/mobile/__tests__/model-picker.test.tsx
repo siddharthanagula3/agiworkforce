@@ -2,28 +2,27 @@
  * Tests for ModelPickerSheet component.
  *
  * Covers:
- *  - Renders 3 auto modes (Economy, Balanced, Best) at top
- *  - Renders flat model list without provider group headers
- *  - Shows checkmark on selected model
- *  - Shows "New" badge on new models
- *  - Tapping a model selects it
- *  - Tapping selected model expands thinking toggle
- *  - Per-model thinking toggle works
+ *  - Local auto modes
+ *  - On-device model rows from @agiworkforce/local-llm
+ *  - Locked Cloud Managed rows
+ *  - Local selection behavior
+ *  - Fail-closed cloud selection behavior
  */
 
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 // ---------------------------------------------------------------------------
-// Mocks — avoid React.createElement(RN.*) inside factories to prevent
+// Mocks - avoid React.createElement(RN.*) inside factories to prevent
 // NativeWind's CSSInterop Babel transform from injecting out-of-scope vars.
 // ---------------------------------------------------------------------------
 
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store, _name) => {
-    if (store && store.persist && typeof store.persist.rehydrate === 'function')
+    if (store && store.persist && typeof store.persist.rehydrate === 'function') {
       store.persist.rehydrate();
+    }
   }),
   mmkvStorage: {
     getItem: jest.fn().mockReturnValue(null),
@@ -37,9 +36,15 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-jest.mock('../services/modelCatalog', () => ({
-  fetchModelCatalog: jest.fn().mockResolvedValue([]),
-}));
+jest.mock('../src/features/model-picker/service', () => {
+  const actual = jest.requireActual(
+    '../src/features/model-picker/service',
+  ) as typeof import('../src/features/model-picker/service');
+  return {
+    ...actual,
+    fetchModelCatalog: jest.fn(() => new Promise(() => {})),
+  };
+});
 
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(),
@@ -61,7 +66,6 @@ jest.mock('expo-secure-store', () => ({
   WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'AfterFirstUnlockThisDeviceOnly',
 }));
 
-// Mock @gorhom/bottom-sheet — pass through children
 jest.mock('@gorhom/bottom-sheet', () => {
   const mockBottomSheet = jest.fn().mockImplementation(({ children }) => children);
   return {
@@ -78,11 +82,14 @@ jest.mock('lucide-react-native', () => ({
   Check: jest.fn().mockReturnValue(null),
   Star: jest.fn().mockReturnValue(null),
   Brain: jest.fn().mockReturnValue(null),
+  Cpu: jest.fn().mockReturnValue(null),
+  Download: jest.fn().mockReturnValue(null),
+  Lock: jest.fn().mockReturnValue(null),
+  CloudOff: jest.fn().mockReturnValue(null),
   ArrowUpCircle: jest.fn().mockReturnValue(null),
   Shuffle: jest.fn().mockReturnValue(null),
 }));
 
-// Mock react-native-reanimated for ModelRow's Animated.View
 jest.mock('react-native-reanimated', () => ({
   __esModule: true,
   default: {
@@ -91,60 +98,46 @@ jest.mock('react-native-reanimated', () => ({
   },
   FadeIn: { duration: jest.fn().mockReturnValue({}) },
   FadeOut: { duration: jest.fn().mockReturnValue({}) },
-}));
-
-// Mock tierStore — default to 'free' tier with no conversation provider set.
-// Tests that exercise the guard set these explicitly via useTierStore.setState.
-jest.mock('../stores/tierStore', () => ({
-  useTierStore: jest.fn((selector: (s: unknown) => unknown) =>
-    selector({
-      tier: 'free',
-      isRefreshing: false,
-      lastRefreshedAt: null,
-      currentConversationProvider: null,
-      refreshTier: jest.fn(),
-      setTier: jest.fn(),
-      setCurrentConversationProvider: jest.fn(),
-    }),
-  ),
-}));
-
-// Mock tierGuard — default to 'allow' so existing tests are unaffected.
-jest.mock('../services/tierGuard', () => ({
-  guardProviderSwitch: jest.fn().mockReturnValue('allow'),
-}));
-
-// Mock ProPlusPaywall so it does not try to render BottomSheet inside a test.
-// Use jest.fn() rather than require('react').forwardRef to avoid the no-require-imports rule.
-jest.mock('../components/Paywall/ProPlusPaywall', () => ({
-  ProPlusPaywall: jest.fn().mockReturnValue(null),
+  useReducedMotion: jest.fn().mockReturnValue(false),
 }));
 
 // ---------------------------------------------------------------------------
 // Import modules under test AFTER mocks
 // ---------------------------------------------------------------------------
 
-import { ModelPickerSheet } from '../components/model-picker/ModelPickerSheet';
-import { useModelStore } from '../stores/modelStore';
-import { AUTO_MODES, MODEL_LIST } from '../lib/models';
+import { ModelPickerSheet } from '../src/features/model-picker/components/ModelPickerSheet';
+import { useModelInstallStore } from '../src/features/model-picker/installStore';
+import { useModelStore } from '../src/features/model-picker/store';
+import {
+  AUTO_MODES,
+  DEFAULT_LOCAL_MODEL_ID,
+  LOCKED_CLOUD_MODELS,
+  MODEL_LIST,
+} from '../src/features/model-picker/service';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function resetModelStore() {
+  const hydrateInstalledModels = jest.fn<Promise<void>, []>(async () => undefined);
   useModelStore.setState({
-    selectedModel: 'auto-balanced',
-    selectedProvider: 'managed_cloud',
+    selectedModel: DEFAULT_LOCAL_MODEL_ID,
+    selectedProvider: 'local',
     favorites: [],
     recentModels: [],
     thinkingModeEnabled: false,
     thinkingEnabledPerModel: {},
   });
+  useModelInstallStore.setState({
+    installedModelIds: [DEFAULT_LOCAL_MODEL_ID, 'llama-3.2-1b-instruct-spinquant'],
+    readySystemModelIds: [],
+    jobs: {},
+    hydrateInstalledModels,
+  });
 }
 
 const mockSheetRef = { current: { close: jest.fn(), snapToIndex: jest.fn() } };
-
 function renderPicker(overrides?: { onSelect?: (id: string) => void }) {
   return render(
     <ModelPickerSheet sheetRef={mockSheetRef as never} onSelect={overrides?.onSelect} />,
@@ -161,175 +154,143 @@ describe('ModelPickerSheet', () => {
     resetModelStore();
   });
 
-  // ---- Auto modes ----
-
-  it('renders all 3 auto mode cards', () => {
+  it('renders all local auto mode cards', () => {
     const { getAllByText } = renderPicker();
 
-    // Auto-mode names ('Economy', 'Balanced', 'Best') may also appear as
-    // tier labels on individual model rows after the catalog refresh, so
-    // we assert at least one match per mode rather than a unique match.
     for (const mode of AUTO_MODES) {
       expect(getAllByText(mode.name).length).toBeGreaterThanOrEqual(1);
     }
   });
 
-  it('renders auto mode descriptions', () => {
+  it('renders local auto mode descriptions', () => {
     const { getAllByText } = renderPicker();
 
-    // Auto-mode descriptions can appear in multiple places (card +
-    // tier-row labels), so use getAllByText for >=1 match.
-    expect(getAllByText('Best for cost').length).toBeGreaterThanOrEqual(1);
-    expect(getAllByText('Best value').length).toBeGreaterThanOrEqual(1);
-    expect(getAllByText('Most capable').length).toBeGreaterThanOrEqual(1);
+    expect(getAllByText('Best local model for this device').length).toBeGreaterThanOrEqual(1);
+    expect(getAllByText('Small local model when battery matters').length).toBeGreaterThanOrEqual(1);
+    expect(getAllByText('On-device vision when available').length).toBeGreaterThanOrEqual(1);
   });
 
   it('marks the selected auto mode as selected', () => {
     useModelStore.setState({ selectedModel: 'auto-economy' });
     const { getByLabelText } = renderPicker();
 
-    const economyCard = getByLabelText('Economy: Best for cost');
+    const economyCard = getByLabelText('Lite: Small local model when battery matters');
     expect(economyCard.props.accessibilityState.selected).toBe(true);
   });
 
-  // ---- Model list ----
-
-  it('renders model names from the flat model list', () => {
+  it('renders on-device model names from the local catalog', () => {
     const { getByText } = renderPicker();
 
-    // Check a few representative models
-    expect(getByText('GPT-5.4')).toBeTruthy();
-    expect(getByText('Claude 4.7 Opus')).toBeTruthy();
-    expect(getByText('Gemini 3.1 Pro')).toBeTruthy();
+    expect(getByText('AGI Standard')).toBeTruthy();
+    expect(getByText('AGI Lite')).toBeTruthy();
+    expect(getByText('Apple Intelligence')).toBeTruthy();
   });
 
-  it('renders models as a flat list without provider group headers', () => {
-    const { queryByText } = renderPicker();
+  it('renders local and locked cloud hierarchy immediately', () => {
+    const { getByText, getAllByText } = renderPicker();
 
-    // Provider names should NOT appear as section headers
-    // With no favorites, neither heading should appear
-    expect(queryByText('Favorites')).toBeNull();
-    expect(queryByText('All Models')).toBeNull();
+    expect(getByText('On device')).toBeTruthy();
+    expect(getByText('Cloud Managed (locked)')).toBeTruthy();
+    expect(getAllByText('Locked').length).toBeGreaterThan(0);
   });
 
-  // ---- Selected model checkmark ----
-
-  it('marks the selected model row as selected via accessibilityState', () => {
-    useModelStore.setState({ selectedModel: 'claude-opus-4.7' });
+  it('marks the selected local model row as selected via accessibilityState', () => {
+    useModelStore.setState({ selectedModel: DEFAULT_LOCAL_MODEL_ID });
     const { getByLabelText } = renderPicker();
 
-    const opusRow = getByLabelText('Claude 4.7 Opus, selected');
-    expect(opusRow.props.accessibilityState.selected).toBe(true);
+    const standardRow = getByLabelText('AGI Standard, selected');
+    expect(standardRow.props.accessibilityState.selected).toBe(true);
   });
 
-  // ---- New badge ----
-
-  it('shows "New" badge text on models with isNew flag', () => {
-    // FIXME(mobile): isNew wiring is currently dropped at apps/mobile/lib/models.ts:87-96
-    // — the mapping from getPickerModels() to MODEL_LIST does not propagate isNew, so
-    // ModelRow.tsx:122 never renders a badge. PickerModelView in
-    // packages/types/src/model-catalog.ts:204-214 only exposes `released` (date string),
-    // not a derived isNew flag. When the feature is restored, switch back to
-    // getAllByText('New') and assert non-zero length.
-    const { queryAllByText } = renderPicker();
-    const newBadges = queryAllByText('New');
-    const newModels = MODEL_LIST.filter((m) => m.isNew);
-    expect(newBadges.length).toBe(newModels.length);
-  });
-
-  // ---- Model selection ----
-
-  it('selects a model when tapped', () => {
+  it('marks cloud rows as locked and disabled', () => {
+    const lockedModel = LOCKED_CLOUD_MODELS[0]!;
     const { getByLabelText } = renderPicker();
 
-    fireEvent.press(getByLabelText(/Claude 4\.7 Opus/));
+    const lockedRow = getByLabelText(
+      `${lockedModel.name}, locked, Cloud Managed and BYOK are disabled in Mobile v1`,
+    );
+    expect(lockedRow.props.accessibilityState.disabled).toBe(true);
+  });
 
-    expect(useModelStore.getState().selectedModel).toBe('claude-opus-4.7');
+  it('selects a local model when tapped', () => {
+    const { getByLabelText } = renderPicker();
+
+    fireEvent.press(getByLabelText(/AGI Lite/));
+
+    expect(useModelStore.getState().selectedModel).toBe('llama-3.2-1b-instruct-spinquant');
+  });
+
+  it('does not select an unprepared downloaded model until preparation finishes', async () => {
+    useModelInstallStore.setState({
+      installedModelIds: [DEFAULT_LOCAL_MODEL_ID],
+      readySystemModelIds: [],
+      jobs: {},
+    });
+    const { getByLabelText } = renderPicker();
+
+    fireEvent.press(getByLabelText(/AGI Lite/));
+
+    await waitFor(() => {
+      expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
+    });
   });
 
   it('calls onSelect callback instead of store when provided', () => {
     const onSelect = jest.fn();
     const { getByLabelText } = renderPicker({ onSelect });
 
-    fireEvent.press(getByLabelText(/Claude 4\.7 Opus/));
+    fireEvent.press(getByLabelText(/AGI Lite/));
 
-    expect(onSelect).toHaveBeenCalledWith('claude-opus-4.7');
-    // Store should NOT have been updated
-    expect(useModelStore.getState().selectedModel).toBe('auto-balanced');
+    expect(onSelect).toHaveBeenCalledWith('llama-3.2-1b-instruct-spinquant');
+    expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
   });
 
-  it('closes the sheet after selecting a model', () => {
+  it('closes the sheet after selecting a local model', () => {
     const { getByLabelText } = renderPicker();
 
-    fireEvent.press(getByLabelText(/Claude 4\.7 Opus/));
+    fireEvent.press(getByLabelText(/AGI Lite/));
 
     expect(mockSheetRef.current.close).toHaveBeenCalled();
   });
 
-  it('selects an auto mode when tapped', () => {
+  it('does not select or close for locked cloud rows', () => {
+    const lockedModel = LOCKED_CLOUD_MODELS[0]!;
     const { getByLabelText } = renderPicker();
 
-    fireEvent.press(getByLabelText('Economy: Best for cost'));
+    fireEvent.press(
+      getByLabelText(
+        `${lockedModel.name}, locked, Cloud Managed and BYOK are disabled in Mobile v1`,
+      ),
+    );
+
+    expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
+    expect(mockSheetRef.current.close).not.toHaveBeenCalled();
+  });
+
+  it('selects a local auto mode when tapped', () => {
+    const { getByLabelText } = renderPicker();
+
+    fireEvent.press(getByLabelText('Lite: Small local model when battery matters'));
 
     expect(useModelStore.getState().selectedModel).toBe('auto-economy');
-  });
-
-  // ---- Expanded thinking toggle ----
-
-  it('expands thinking toggle when tapping the already-selected model', () => {
-    // First select claude-opus-4.7
-    useModelStore.setState({ selectedModel: 'claude-opus-4.7' });
-
-    const { getByLabelText, queryByText } = renderPicker();
-
-    // Tap the already-selected model to expand
-    fireEvent.press(getByLabelText('Claude 4.7 Opus, selected'));
-
-    // The thinking toggle row should now be visible
-    expect(queryByText('With thinking')).toBeTruthy();
-  });
-
-  it('collapses thinking toggle when tapping the expanded model again', () => {
-    useModelStore.setState({ selectedModel: 'claude-opus-4.7' });
-
-    const { getByLabelText, queryByText } = renderPicker();
-
-    // First tap to expand
-    fireEvent.press(getByLabelText('Claude 4.7 Opus, selected'));
-    expect(queryByText('With thinking')).toBeTruthy();
-
-    // Second tap to collapse
-    fireEvent.press(getByLabelText('Claude 4.7 Opus, selected'));
-    expect(queryByText('With thinking')).toBeNull();
   });
 
   it('does not expand thinking for auto modes', () => {
     useModelStore.setState({ selectedModel: 'auto-balanced' });
     const { getByLabelText, queryByText } = renderPicker();
 
-    // Tapping the selected auto mode should NOT expand thinking
-    fireEvent.press(getByLabelText('Balanced: Best value'));
+    fireEvent.press(getByLabelText('Best: Best local model for this device'));
+
     expect(queryByText('With thinking')).toBeNull();
   });
 
-  // ---- Per-model thinking toggle ----
+  it('does not render thinking controls for local v1 models', () => {
+    const { getByLabelText, queryByLabelText } = renderPicker();
 
-  it('toggles thinking for a specific model via the switch', () => {
-    useModelStore.setState({ selectedModel: 'claude-opus-4.7' });
+    fireEvent.press(getByLabelText('AGI Standard, selected'));
 
-    const { getByLabelText } = renderPicker();
-
-    // Expand the thinking toggle
-    fireEvent.press(getByLabelText('Claude 4.7 Opus, selected'));
-
-    // Find and toggle the switch
-    const thinkingSwitch = getByLabelText('Thinking mode for Claude 4.7 Opus');
-    fireEvent(thinkingSwitch, 'valueChange', true);
-
-    expect(useModelStore.getState().thinkingEnabledPerModel['claude-opus-4.7']).toBe(true);
+    expect(queryByLabelText('Thinking mode for AGI Standard')).toBeNull();
   });
-
-  // ---- Header ----
 
   it('renders the Models heading', () => {
     const { getByText } = renderPicker();
@@ -344,5 +305,37 @@ describe('ModelPickerSheet', () => {
   it('renders a search input', () => {
     const { getByLabelText } = renderPicker();
     expect(getByLabelText('Search models')).toBeTruthy();
+  });
+
+  it('provides a non-actionable hint for unavailable local models', () => {
+    const unavailableModel = MODEL_LIST.find((model) => model.surface === 'local');
+    expect(unavailableModel).toBeDefined();
+
+    if (!unavailableModel) {
+      throw new Error(
+        'Expected at least one local model in MODEL_LIST for accessibility hint test.',
+      );
+    }
+
+    useModelInstallStore.setState((state) => ({
+      ...state,
+      jobs: {
+        ...state.jobs,
+        [unavailableModel.id]: {
+          status: 'unavailable',
+          progress: 0,
+          error: 'This model package is not available on this device yet.',
+        },
+      },
+    }));
+
+    const { getByLabelText } = renderPicker();
+
+    const unavailableRow = getByLabelText(new RegExp(`${unavailableModel.name}, .*unavailable`));
+    expect(unavailableRow.props.accessibilityState.disabled).toBe(true);
+    expect(unavailableRow.props.accessibilityHint).toBe(
+      'This model package is not available on this device yet.',
+    );
+    expect(unavailableRow.props.accessibilityHint).not.toContain('Tap to select');
   });
 });

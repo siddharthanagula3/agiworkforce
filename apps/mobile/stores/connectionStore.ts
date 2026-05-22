@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
-import { SignalingClient } from '@agiworkforce/utils';
+import { SignalingClient } from '@agiworkforce/utils/signaling';
 import type { SignalingEvent, SignalKind } from '@agiworkforce/types';
 import { RTCPeerConnection, RTCSessionDescription, RTCIceCandidate } from 'react-native-webrtc';
 import * as Crypto from 'expo-crypto';

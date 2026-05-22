@@ -1,14 +1,49 @@
-import { useState } from 'react';
-import { Eye, Code2, Copy, ChevronDown, RotateCcw, X, Download, Globe } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Code2,
+  Copy,
+  Download,
+  Eye,
+  Globe,
+  Pause,
+  Pencil,
+  Play,
+  RotateCcw,
+  X,
+} from 'lucide-react';
 import { cn } from '../lib/utils';
+import { ARTIFACT_SANDBOX_ATTR, buildSandboxedHtml } from '../lib/artifact-sandbox';
 import { Button } from './ui/Button';
 import type { Artifact } from '../lib/types';
+import { ReactPreview } from './artifact-components/ReactPreview';
 
 export interface ArtifactPanelProps {
   artifact: Artifact | null;
   viewMode: 'preview' | 'code';
   onViewModeChange: (mode: 'preview' | 'code') => void;
   onClose: () => void;
+  /**
+   * Optional version history for the current artifact. When provided with
+   * more than one entry, the header renders a prev/next stepper so the user
+   * can navigate edits. Round-2 audit P0 #9 (Artifacts versioning,
+   * 2026-05-21). Host apps build this from the artifactStore by grouping
+   * artifacts that share a `title` (or a stable group id) per conversation.
+   */
+  versions?: Artifact[];
+  /** Called when the user picks a different version from the stepper. */
+  onSelectVersion?: (artifact: Artifact) => void;
+  /**
+   * Optional edit-in-place callback. When supplied, the toolbar shows an
+   * Edit button alongside the existing Code/Preview toggles. The host is
+   * responsible for either mutating the existing artifact in-place or
+   * persisting a new version — the panel only forwards the edited content.
+   * Round-2 audit P0 #9 (Artifacts edit-in-place, 2026-05-21 final quadrant).
+   */
+  onSaveEdit?: (artifactId: string, content: string) => void | Promise<void>;
 }
 
 function getTypeLabel(artifact: Artifact): string {
@@ -183,8 +218,54 @@ export function ArtifactPanel({
   viewMode,
   onViewModeChange,
   onClose,
+  versions,
+  onSelectVersion,
+  onSaveEdit,
 }: ArtifactPanelProps) {
   const [headerCopied, setHeaderCopied] = useState(false);
+  // Run/Stop control for HTML preview. Defaults to running; pausing strips
+  // the iframe and re-mounts on resume. The toggle only appears when the
+  // current artifact is HTML — React previews own their own reload UX, and
+  // layout-only artifact types (markdown, document, svg, image) never run
+  // scripts so a pause control would be misleading.
+  const [htmlPreviewRunning, setHtmlPreviewRunning] = useState(true);
+  // Edit-in-place state. `isEditing` toggles between CodeView and an
+  // editable textarea. `editDraft` holds the working copy; the source of
+  // truth remains the supplied artifact until Save fires onSaveEdit. We
+  // also auto-exit edit mode when the active artifact changes so the user
+  // doesn't accidentally save text from another artifact's body.
+  const [isEditing, setIsEditing] = useState(false);
+  const [editDraft, setEditDraft] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  useEffect(() => {
+    setIsEditing(false);
+    setEditDraft('');
+    setIsSavingEdit(false);
+  }, [artifact?.id]);
+
+  // The host supplies versions ordered oldest-first; the stepper trusts
+  // that ordering and maps array indices to "v1 / v2 / ..." labels. When
+  // the host omits versions or supplies only one entry, the stepper hides.
+  const sortedVersions = useMemo<Artifact[]>(() => {
+    if (!versions || versions.length === 0) return [];
+    return versions;
+  }, [versions]);
+
+  const currentVersionIndex = useMemo(() => {
+    if (!artifact || sortedVersions.length === 0) return -1;
+    return sortedVersions.findIndex((v) => v.id === artifact.id);
+  }, [artifact, sortedVersions]);
+
+  const hasPreviousVersion = currentVersionIndex > 0;
+  const hasNextVersion =
+    currentVersionIndex >= 0 && currentVersionIndex < sortedVersions.length - 1;
+
+  function goToVersion(index: number): void {
+    if (index < 0 || index >= sortedVersions.length) return;
+    const next = sortedVersions[index];
+    if (next) onSelectVersion?.(next);
+  }
 
   async function handleCopyContent() {
     if (!artifact) return;
@@ -194,6 +275,29 @@ export function ArtifactPanel({
       setTimeout(() => setHeaderCopied(false), 1500);
     } catch {
       // clipboard write failed silently
+    }
+  }
+
+  function enterEditMode() {
+    if (!artifact) return;
+    setEditDraft(artifact.content);
+    setIsEditing(true);
+  }
+
+  function discardEdit() {
+    setIsEditing(false);
+    setEditDraft('');
+  }
+
+  async function saveEdit() {
+    if (!artifact || !onSaveEdit) return;
+    setIsSavingEdit(true);
+    try {
+      await onSaveEdit(artifact.id, editDraft);
+      setIsEditing(false);
+      setEditDraft('');
+    } finally {
+      setIsSavingEdit(false);
     }
   }
 
@@ -222,8 +326,37 @@ export function ArtifactPanel({
     URL.revokeObjectURL(url);
   }
 
-  function handlePublish() {
-    // Publish is a future feature — no-op for now
+  async function handlePublish() {
+    // Round-2 audit P0 #9 (2026-05-21). Cloud-side artifact publishing
+    // arrives with Cloud Managed; until then "Publish" copies a portable
+    // self-contained snapshot to the clipboard so the user can paste it
+    // into a doc, chat thread, or GitHub gist as a fallback.
+    if (!artifact) return;
+    const snapshot = [
+      `# ${artifact.title ?? 'Untitled artifact'}`,
+      `Type: ${getTypeLabel(artifact)}${artifact.language ? ` (${artifact.language})` : ''}`,
+      '',
+      '```' + (artifact.language ?? ''),
+      artifact.content,
+      '```',
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(snapshot);
+      // Reuse the existing copied-state feedback channel so the toolbar
+      // briefly shows the check.
+      setHeaderCopied(true);
+      setTimeout(() => setHeaderCopied(false), 1500);
+    } catch {
+      // Clipboard write may fail (insecure context, denied permission) —
+      // fall back to a data-URL download so the user still gets the bytes.
+      const blob = new Blob([snapshot], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(artifact.title ?? 'artifact').replace(/\s+/g, '-').toLowerCase()}-snapshot.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
   }
 
   const canPreview =
@@ -233,6 +366,17 @@ export function ArtifactPanel({
     artifact?.type === 'markdown' ||
     artifact?.type === 'document' ||
     artifact?.type === 'image';
+
+  // Pre-build the sandboxed HTML once per artifact swap. Empty when paused.
+  const sandboxedHtmlSrcDoc = useMemo<string>(() => {
+    if (!artifact || artifact.type !== 'html') return '';
+    if (!htmlPreviewRunning) return '';
+    try {
+      return buildSandboxedHtml(artifact.content);
+    } catch {
+      return '';
+    }
+  }, [artifact, htmlPreviewRunning]);
 
   return (
     <div className="flex h-full flex-col bg-[var(--chat-surface-base)]">
@@ -290,6 +434,48 @@ export function ArtifactPanel({
           )}
         </div>
 
+        {/* Version stepper — only when host supplies a version history */}
+        {sortedVersions.length > 1 && artifact ? (
+          <div
+            className="flex items-center gap-0.5 shrink-0 rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-1"
+            aria-label="Artifact version stepper"
+          >
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Previous version"
+              disabled={!hasPreviousVersion}
+              onClick={() => goToVersion(currentVersionIndex - 1)}
+              className={cn(
+                'h-6 w-6',
+                hasPreviousVersion
+                  ? 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]'
+                  : 'text-[var(--chat-text-muted)] opacity-40 cursor-not-allowed',
+              )}
+            >
+              <ChevronLeft size={13} />
+            </Button>
+            <span className="px-1 text-[11px] font-mono tabular-nums text-[var(--chat-text-secondary)]">
+              v{currentVersionIndex + 1}/{sortedVersions.length}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Next version"
+              disabled={!hasNextVersion}
+              onClick={() => goToVersion(currentVersionIndex + 1)}
+              className={cn(
+                'h-6 w-6',
+                hasNextVersion
+                  ? 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]'
+                  : 'text-[var(--chat-text-muted)] opacity-40 cursor-not-allowed',
+              )}
+            >
+              <ChevronRight size={13} />
+            </Button>
+          </div>
+        ) : null}
+
         {/* Right: actions */}
         <div className="flex items-center gap-0.5 shrink-0">
           <Button
@@ -308,6 +494,43 @@ export function ArtifactPanel({
           </Button>
 
           <DropdownMenu onDownload={handleDownload} onPublish={handlePublish} />
+
+          {onSaveEdit && !isEditing ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Edit artifact"
+              disabled={!artifact}
+              onClick={enterEditMode}
+              className="h-7 w-7 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
+            >
+              <Pencil size={13} />
+            </Button>
+          ) : null}
+          {onSaveEdit && isEditing ? (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Save edit"
+                disabled={!artifact || isSavingEdit}
+                onClick={saveEdit}
+                className="h-7 w-7 text-[var(--chat-accent-secondary)] hover:bg-[var(--chat-surface-hover)]"
+              >
+                <Check size={14} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Discard edit"
+                disabled={!artifact || isSavingEdit}
+                onClick={discardEdit}
+                className="h-7 w-7 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
+              >
+                <X size={14} />
+              </Button>
+            </>
+          ) : null}
 
           <Button
             variant="ghost"
@@ -337,6 +560,20 @@ export function ArtifactPanel({
           <div className="flex h-full items-center justify-center text-sm text-[var(--chat-text-muted)]">
             No artifact selected
           </div>
+        ) : isEditing ? (
+          // Edit-in-place: show a plain textarea bound to the draft buffer.
+          // We deliberately keep the editor minimal — host apps that want a
+          // real code editor (Monaco, CodeMirror) can swap onSaveEdit for
+          // their own modal flow. Round-2 audit P0 #9 final quadrant.
+          <div className="flex h-full flex-col" data-testid="artifact-panel-edit-mode">
+            <textarea
+              value={editDraft}
+              onChange={(e) => setEditDraft(e.target.value)}
+              spellCheck={false}
+              className="h-full w-full resize-none bg-[var(--chat-surface-overlay)] px-4 py-3 font-mono text-[13px] leading-relaxed text-[var(--chat-text-primary)] outline-none"
+              aria-label="Edit artifact content"
+            />
+          </div>
         ) : viewMode === 'preview' && artifact.type === 'svg' ? (
           // SVG: render as <img> to prevent script execution — no allow-scripts
           <div className="flex h-full items-center justify-center overflow-auto p-4 bg-white">
@@ -361,11 +598,56 @@ export function ArtifactPanel({
               {artifact.content}
             </article>
           </div>
+        ) : viewMode === 'preview' && artifact.type === 'react' ? (
+          // React: delegate to the in-package ReactPreview, which spins up a
+          // sandboxed iframe with Babel + React from CDN and posts back ready/
+          // error events. Round-2 audit P0 #9 live React preview.
+          <ReactPreview code={artifact.content} className="h-full" />
+        ) : viewMode === 'preview' && artifact.type === 'html' ? (
+          // HTML: sandboxed iframe with CSP meta injection + Run/Stop control.
+          // Uses the shared `buildSandboxedHtml` so the security envelope cannot
+          // drift between ArtifactPanel and ArtifactRenderer.HtmlArtifact.
+          <div className="flex h-full flex-col" data-testid="artifact-panel-html-preview">
+            <div className="flex items-center gap-2 border-b border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-3 py-1.5">
+              <Globe size={12} className="text-[var(--chat-text-muted)]" />
+              <span className="text-[11px] text-[var(--chat-text-muted)]">HTML preview</span>
+              <div className="flex-1" />
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={htmlPreviewRunning ? 'Stop preview' : 'Run preview'}
+                onClick={() => setHtmlPreviewRunning((prev) => !prev)}
+                className="h-6 w-6 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
+              >
+                {htmlPreviewRunning ? <Pause size={12} /> : <Play size={12} />}
+              </Button>
+            </div>
+            {htmlPreviewRunning && sandboxedHtmlSrcDoc ? (
+              <iframe
+                srcDoc={sandboxedHtmlSrcDoc}
+                sandbox={ARTIFACT_SANDBOX_ATTR}
+                referrerPolicy="no-referrer"
+                className="flex-1 w-full border-0 bg-white"
+                title={artifact.title ?? 'Artifact preview'}
+              />
+            ) : (
+              <div className="flex flex-1 items-center justify-center text-sm text-[var(--chat-text-muted)]">
+                <button
+                  type="button"
+                  onClick={() => setHtmlPreviewRunning(true)}
+                  className="rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-3 py-1.5 text-xs text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] transition-colors"
+                >
+                  Run preview
+                </button>
+              </div>
+            )}
+          </div>
         ) : viewMode === 'preview' && canPreview ? (
-          // HTML/React: sandboxed iframe without allow-scripts is safe for layout-only preview
+          // Fallback for any future preview-able artifact types not handled
+          // above. Layout-only sandbox: no scripts, no modals, no forms.
           <iframe
             srcDoc={artifact.content}
-            sandbox="allow-forms"
+            sandbox=""
             className="h-full w-full border-0 bg-white"
             title={artifact.title ?? 'Artifact preview'}
           />

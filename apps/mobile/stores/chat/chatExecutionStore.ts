@@ -1,14 +1,21 @@
 import { Alert } from 'react-native';
 import { create } from 'zustand';
 import { QueueFullError } from '@agiworkforce/runtime';
+import { localGenerate } from '@agiworkforce/local-llm';
 import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
 import { streamChat, type StreamDelta } from '@/services/streaming';
-import { useProjectStore } from '@/stores/projectStore';
-import { retrieveMemoryContext } from '@/stores/memoryStore';
+import { getRemoteChatDisabledReason, RemoteChatDisabledError } from '@/services/remoteChatGate';
+import {
+  markLocalModelRefUsed,
+  resolveLocalModelRef,
+} from '@/src/features/model-picker/localModelRuntime';
+import { useProjectStore } from '@/src/features/projects/store';
+import { retrieveMemoryContext } from '@/src/features/memory/store';
 import type { ChatMessage, MessageAttachment } from '@/types/chat';
-import type { Attachment } from '@/components/chat/AttachmentPreview';
+import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import type { UploadFileInput, UploadFileResult } from '@/services/api';
+import type { ChatMessage as LocalLlmMessage } from '@agiworkforce/local-llm';
 
 /** Paywall error state captured when the API returns a tier-cap paywall response. */
 export interface PaywallErrorState {
@@ -50,6 +57,48 @@ const MAX_UPLOAD_RETRIES = 2;
 
 function generateId(): string {
   return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function createLocalAttachmentReferences(
+  attachments?: Attachment[],
+): MessageAttachment[] | undefined {
+  if (!attachments || attachments.length === 0) return undefined;
+  return attachments.map((attachment) => ({
+    url: attachment.uri,
+    mimeType: attachment.mimeType,
+    fileName: attachment.fileName,
+  }));
+}
+
+function normalizeLocalMessageContent(
+  content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>,
+): string {
+  if (typeof content === 'string') return content;
+  return content
+    .map((part) => {
+      if (part.type === 'text') return part.text ?? '';
+      if (part.type === 'image_url') return '[image attachment]';
+      return `[${part.type}]`;
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
+function localSetupMessage(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  if (
+    raw.includes('No model path') ||
+    raw.includes('No local runtime') ||
+    raw.includes('Download a model') ||
+    raw.includes('not downloaded') ||
+    raw.includes('not available on this device')
+  ) {
+    return 'Local Mode + Local LLMs is active, but no on-device model is ready yet. Download a local model from Models or join the Cloud Managed waitlist for hosted compute.';
+  }
+  return (
+    raw ||
+    'Local inference failed. Check device storage, thermal state, and installed model status.'
+  );
 }
 
 async function uploadWithRetry(
@@ -126,7 +175,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     cancelledBeforeStream.delete(conversationId);
 
     let uploadedAttachments: MessageAttachment[] | undefined;
-    if (attachments && attachments.length > 0) {
+    const remoteDisabledReason = getRemoteChatDisabledReason();
+    if (remoteDisabledReason && attachments && attachments.length > 0) {
+      uploadedAttachments = createLocalAttachmentReferences(attachments);
+    } else if (attachments && attachments.length > 0) {
       try {
         const uploadResults = await Promise.all(
           attachments.map((a) =>
@@ -282,6 +334,107 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     streamingConversations.add(conversationId);
 
     try {
+      if (remoteDisabledReason) {
+        const localMessages: LocalLlmMessage[] = historyMessages.slice(0, -1).map((message) => ({
+          role:
+            message.role === 'assistant' || message.role === 'system' || message.role === 'user'
+              ? message.role
+              : 'user',
+          content: normalizeLocalMessageContent(message.content),
+        }));
+        const localRef = await resolveLocalModelRef(model);
+        let localStreamingContent = '';
+        const updateLocalStream = (nextContent: string) => {
+          const currentMsgStore = getMsgStore();
+          const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
+          const updatedMsgs = msgs.map((m) =>
+            m.id === assistantMessageId
+              ? {
+                  ...m,
+                  content: nextContent,
+                  isStreaming: true,
+                  metadata: {
+                    ...m.metadata,
+                    localMode: true,
+                    localModelId: localRef.modelId,
+                  },
+                }
+              : m,
+          );
+
+          set({ streamingContent: nextContent });
+          currentMsgStore.setState((s) => ({
+            messages: { ...s.messages, [conversationId]: updatedMsgs },
+          }));
+        };
+
+        const result = await localGenerate(localRef.modelPath, {
+          modelId: localRef.modelId,
+          prompt: messageContent,
+          messages: localMessages,
+          requestId: assistantMessageId,
+          onToken: (token) => {
+            if (controller.signal.aborted) return;
+            localStreamingContent += token;
+            updateLocalStream(localStreamingContent);
+          },
+        });
+        if (controller.signal.aborted) {
+          abortControllers.delete(conversationId);
+          streamingConversations.delete(conversationId);
+          return;
+        }
+        const finalContent =
+          result.text.trim() ||
+          localStreamingContent.trim() ||
+          'The local model returned an empty response. Try again with a shorter prompt.';
+
+        const currentMsgStore = getMsgStore();
+        const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
+        const updatedMsgs = msgs.map((m) =>
+          m.id === assistantMessageId
+            ? {
+                ...m,
+                content: finalContent,
+                isStreaming: false,
+                metadata: {
+                  ...m.metadata,
+                  localRuntime: result.runtime,
+                  localMode: true,
+                  localModelId: localRef.modelId,
+                  localModelName: localRef.displayName,
+                },
+              }
+            : m,
+        );
+
+        void markLocalModelRefUsed(localRef);
+
+        abortControllers.delete(conversationId);
+        streamingConversations.delete(conversationId);
+        currentMsgStore.setState((s) => ({
+          messages: { ...s.messages, [conversationId]: updatedMsgs },
+          conversations: s.conversations.map((c) =>
+            c.id === conversationId
+              ? {
+                  ...c,
+                  lastMessage: finalContent.slice(0, 100),
+                  messageCount: (c.messageCount ?? 0) + 2,
+                  updatedAt: new Date().toISOString(),
+                }
+              : c,
+          ),
+        }));
+        set({
+          isStreaming: streamingConversations.size > 0,
+          streamingContent: '',
+          streamingReasoning: '',
+          error: null,
+          paywallError: null,
+        });
+        return;
+      }
+
       await streamChat(
         { model, messages: historyMessages, stream: true, thinking: true },
         {
@@ -427,6 +580,24 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
       const currentContent = get().streamingContent;
 
+      if (remoteDisabledReason) {
+        const message = localSetupMessage(caughtErr);
+        const updatedMsgs = msgs.map((m) =>
+          m.id === assistantMessageId ? { ...m, content: message, isStreaming: false } : m,
+        );
+        currentMsgStore.setState((s) => ({
+          messages: { ...s.messages, [conversationId]: updatedMsgs },
+        }));
+        set({
+          isStreaming: streamingConversations.size > 0,
+          streamingContent: '',
+          streamingReasoning: '',
+          error: message,
+          paywallError: null,
+        });
+        return;
+      }
+
       if (caughtErr instanceof ApiPaywallError) {
         const updatedMsgs = msgs.map((m) =>
           m.id === assistantMessageId
@@ -445,6 +616,25 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             requiredTier: caughtErr.requiredTier,
             reason: caughtErr.reason,
           },
+        });
+        return;
+      }
+
+      if (caughtErr instanceof RemoteChatDisabledError) {
+        const updatedMsgs = msgs.map((m) =>
+          m.id === assistantMessageId
+            ? { ...m, content: caughtErr.message, isStreaming: false }
+            : m,
+        );
+        currentMsgStore.setState((s) => ({
+          messages: { ...s.messages, [conversationId]: updatedMsgs },
+        }));
+        set({
+          isStreaming: streamingConversations.size > 0,
+          streamingContent: '',
+          streamingReasoning: '',
+          error: caughtErr.message,
+          paywallError: null,
         });
         return;
       }

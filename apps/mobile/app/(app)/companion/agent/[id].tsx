@@ -39,10 +39,10 @@ import {
   ProgressBar,
   getTimeElapsed,
   estimateTimeRemaining,
-} from '@/components/companion/AgentDashboard';
+} from '@/src/features/companion/components/AgentDashboard';
 import { useAgentStore } from '@/stores/agentStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { sendAgentCommand, requestAgentRefresh } from '@/services/companion';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 

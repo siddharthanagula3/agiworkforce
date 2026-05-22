@@ -2,8 +2,16 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
 import { api } from '@/services/api';
-import { useProjectStore } from '@/stores/projectStore';
+import { useProjectStore } from '@/src/features/projects/store';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
+import type { LocalToByokHandoffPreview } from '@agiworkforce/utils/privacy-handoff';
+
+export interface ForkConversationOptions {
+  title?: string;
+  model?: string;
+  handoffPreview?: LocalToByokHandoffPreview;
+  handoffAcceptedAt?: string;
+}
 
 interface MessageState {
   conversations: ConversationSummary[];
@@ -15,6 +23,10 @@ interface MessageState {
   setCurrentConversationId: (id: string | null) => void;
   loadConversations: () => Promise<void>;
   createConversation: (title?: string, projectId?: string) => Promise<string>;
+  forkConversation: (
+    sourceConversationId: string,
+    options?: ForkConversationOptions,
+  ) => Promise<string>;
   deleteConversation: (id: string) => Promise<void>;
   loadMessages: (conversationId: string) => Promise<void>;
   renameConversation: (id: string, title: string) => Promise<void>;
@@ -91,6 +103,54 @@ export const useChatMessageStore = create<MessageState>()(
           }));
           return localId;
         }
+      },
+
+      forkConversation: async (sourceConversationId, options) => {
+        const sourceConversation = get().conversations.find((c) => c.id === sourceConversationId);
+        const sourceMessages = get().messages[sourceConversationId] ?? [];
+        const forkTitle =
+          options?.title ??
+          `${sourceConversation?.title ?? 'Chat'} (${options?.model ? 'model' : 'BYOK'} fork)`;
+        const handoffPreview = options?.handoffPreview;
+        if (handoffPreview) {
+          assertLocalToByokHandoffPreview(handoffPreview);
+        }
+        const forkId = await get().createConversation(forkTitle, sourceConversation?.projectId);
+        const now = Date.now();
+        const forkedMessages = handoffPreview
+          ? [buildAcceptedHandoffMessage(forkId, handoffPreview, options, now)]
+          : sourceMessages.map((message, index) => {
+              const {
+                isStreaming: _isStreaming,
+                isQueued: _isQueued,
+                offlineQueueId: _offlineQueueId,
+                ...safeMessage
+              } = message;
+
+              return {
+                ...safeMessage,
+                id: `${message.id}_fork_${now}_${index}`,
+                conversationId: forkId,
+                model: options?.model ?? message.model,
+              };
+            });
+
+        set((state) => ({
+          conversations: state.conversations.map((conversation) =>
+            conversation.id === forkId
+              ? {
+                  ...conversation,
+                  messageCount: forkedMessages.length,
+                  model: options?.model ?? conversation.model,
+                  updatedAt: new Date(now).toISOString(),
+                }
+              : conversation,
+          ),
+          messages: { ...state.messages, [forkId]: forkedMessages },
+          currentConversationId: forkId,
+        }));
+
+        return forkId;
       },
 
       deleteConversation: async (id) => {
@@ -260,3 +320,55 @@ export const useChatMessageStore = create<MessageState>()(
 whenMmkvReady(() => {
   useChatMessageStore.persist.rehydrate();
 });
+
+function assertLocalToByokHandoffPreview(preview: LocalToByokHandoffPreview): void {
+  if (preview.redactionReport.blocked || preview.draft.redactionReport.blocked) {
+    throw new Error('Blocked Local to BYOK handoff preview cannot be forked.');
+  }
+  if (preview.draft.targetPrivacyMode !== 'byok') {
+    throw new Error('Local to BYOK fork requires a BYOK handoff draft.');
+  }
+  if (preview.draft.targetProviderMode !== 'DirectByok') {
+    throw new Error('Local to BYOK fork requires direct BYOK provider mode.');
+  }
+  if (!preview.draft.previewHashSha256 || preview.draft.previewHashSha256.length < 16) {
+    throw new Error('Local to BYOK fork requires preview hash evidence.');
+  }
+
+  const idHashPrefix = preview.draft.id.replace(/^handoff-/, '');
+  if (!preview.draft.previewHashSha256.startsWith(idHashPrefix)) {
+    throw new Error('Local to BYOK handoff draft hash does not match its id.');
+  }
+}
+
+function buildAcceptedHandoffMessage(
+  forkId: string,
+  preview: LocalToByokHandoffPreview,
+  options: ForkConversationOptions | undefined,
+  now: number,
+): ChatMessage {
+  const acceptedAt = options?.handoffAcceptedAt ?? new Date(now).toISOString();
+  const draft = { ...preview.draft, consentedAt: acceptedAt };
+
+  return {
+    id: `${preview.draft.id}_accepted_${now}`,
+    conversationId: forkId,
+    role: 'system',
+    content: [
+      'Local to BYOK handoff accepted.',
+      'Only this redacted preview payload is available in the BYOK fork. The original Local thread remains on device and is not copied into this conversation.',
+      preview.redactedPayload,
+    ].join('\n\n'),
+    createdAt: acceptedAt,
+    model: options?.model,
+    metadata: {
+      kind: 'local_to_byok_handoff',
+      sourceSessionId: preview.draft.sourceSessionId,
+      handoffDraft: draft,
+      previewHashSha256: preview.draft.previewHashSha256,
+      redactionReport: preview.redactionReport,
+      selectedContext: preview.draft.selectedContext,
+      sourceMessagePolicy: 'redacted_preview_only',
+    },
+  };
+}

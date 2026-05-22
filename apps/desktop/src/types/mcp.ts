@@ -1,3 +1,7 @@
+import type { McpServerConfig } from '@agiworkforce/mcp';
+
+export type { McpServerConfig } from '@agiworkforce/mcp';
+
 export interface McpServerInfo {
   name: string;
   enabled: boolean;
@@ -15,14 +19,33 @@ export interface McpToolInfo {
 }
 
 export interface McpServersConfig {
-  mcpServers: Record<string, McpServerConfig>;
+  mcpServers: Record<string, DesktopMcpServerConfig>;
 }
 
-export interface McpServerConfig {
+export interface DesktopMcpHttpTransportConfig {
+  type: 'http';
+  url: string;
+  api_key?: string | null;
+  bearer_token?: string | null;
+  headers?: Record<string, string>;
+  timeout_secs?: number;
+  verify_ssl?: boolean;
+}
+
+export interface DesktopMcpStdioTransportConfig {
+  type: 'stdio';
+}
+
+export type DesktopMcpTransportConfig =
+  | DesktopMcpHttpTransportConfig
+  | DesktopMcpStdioTransportConfig;
+
+export interface DesktopMcpServerConfig extends Omit<McpServerConfig, 'env' | 'transport'> {
   command: string;
   args: string[];
   env: Record<string, string>;
   enabled: boolean;
+  transport?: DesktopMcpTransportConfig;
 }
 
 export interface McpConfigLocation {
@@ -237,7 +260,7 @@ export interface McpBundle {
   githubUrl?: string;
   documentationUrl?: string;
   tools: BundleTool[];
-  configTemplate: McpServerConfig;
+  configTemplate: DesktopMcpServerConfig;
   requiredCredentials: RequiredCredential[];
   rating: number;
   downloads: number;

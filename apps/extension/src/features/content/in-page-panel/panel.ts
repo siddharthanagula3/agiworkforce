@@ -20,6 +20,16 @@
 import { getPageActions, truncatePageText, redactSensitiveText } from './pageActions';
 import type { PageAction } from './pageActions';
 import { buildPanelStyles } from './panelStyles';
+import {
+  ArrowUp,
+  Clock,
+  FileEdit,
+  FileText,
+  Globe,
+  MessageSquare,
+  Search,
+  renderIcon,
+} from '../../../assets/icons';
 
 // ─── DOM builder ────────────────────────────────────────────────────────────────
 
@@ -48,11 +58,11 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
 
   const logo = document.createElement('span');
   logo.className = 'agi-logo';
-  logo.textContent = 'AGI Workforce';
+  logo.textContent = 'AGI';
 
   const providerLabel = document.createElement('span');
   providerLabel.className = 'agi-provider-pill';
-  providerLabel.textContent = 'Default';
+  providerLabel.textContent = 'Auto';
 
   const closeBtn = document.createElement('button');
   closeBtn.className = 'agi-close-btn';
@@ -89,7 +99,7 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
   submitBtn.className = 'agi-submit-btn';
   submitBtn.setAttribute('type', 'button');
   submitBtn.setAttribute('aria-label', 'Send message');
-  submitBtn.textContent = '↑';
+  submitBtn.appendChild(renderIcon(ArrowUp, 16));
 
   composer.appendChild(textarea);
   composer.appendChild(submitBtn);
@@ -195,11 +205,21 @@ function buildActionChips(
     chip.className = 'agi-action-chip';
     chip.setAttribute('type', 'button');
     chip.setAttribute('aria-label', action.label);
-    chip.textContent = `${action.icon} ${action.label}`;
+    chip.appendChild(renderIcon(getActionIcon(action.id), 14));
+    chip.appendChild(document.createTextNode(action.label));
     chip.dataset['actionId'] = action.id;
     chip.addEventListener('click', () => onChipClick(action));
     actionsRow.appendChild(chip);
   }
+}
+
+function getActionIcon(actionId: string): string {
+  if (actionId.includes('timestamps')) return Clock;
+  if (actionId.includes('review')) return FileEdit;
+  if (actionId.includes('translate')) return Globe;
+  if (actionId.includes('qa')) return MessageSquare;
+  if (actionId.includes('explain')) return Search;
+  return FileText;
 }
 
 // ─── Provider label ────────────────────────────────────────────────────────────

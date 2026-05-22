@@ -48,11 +48,11 @@ fn slash_palette_matches_golden() {
 }
 
 #[test]
-fn slash_palette_has_58_commands() {
+fn slash_palette_has_83_commands() {
     let count = builtin_slash_registry_commands().len();
     assert_eq!(
-        count, 58,
-        "Expected 58 built-in slash commands (50 from M11 + 8 new from M22: /focus /background /advisor /team-onboarding /terminal-setup /reload-plugins /extra-usage /remote-env); got {count}"
+        count, 83,
+        "Expected 83 built-in slash commands after adding Local/BYOK privacy-boundary commands; got {count}"
     );
 }
 
@@ -119,8 +119,7 @@ fn m22_targeted_commands_are_all_registered() {
 #[test]
 fn no_canonical_name_collides_with_an_alias_of_another_command() {
     let commands = builtin_slash_registry_commands();
-    let names: std::collections::HashSet<&str> =
-        commands.iter().map(|c| c.name.as_str()).collect();
+    let names: std::collections::HashSet<&str> = commands.iter().map(|c| c.name.as_str()).collect();
     for cmd in &commands {
         for alias in &cmd.aliases {
             assert!(

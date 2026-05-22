@@ -23,7 +23,7 @@ Read-write only inside `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/`. R
 - **Tagline**: "Beyond one model. Beyond one surface. AGI in your hands."
 - **Bridge port** (Chrome ext + VSCode ext talk to desktop): **8787**
 - **Onboarding**: ONE flow only — `OnboardingWizard.tsx`. (`ModeSelectionDialog.tsx` was deleted.)
-- Models in code: each provider's official format (`Codex-sonnet-4-6` hyphens, `gpt-5.5` dots, `gemini-3.1-pro-preview` dots+preview)
+- Models in code: each provider's official format (`claude-sonnet-4-6` hyphens, `gpt-5.5` dots, `gemini-3.1-pro-preview` dots+preview)
 - Models in marketing copy: just provider names, no version numbers
 
 ## Verification gates (run before commit)
@@ -34,7 +34,7 @@ Read-write only inside `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/`. R
 
 ## Conventions
 
-- LOCKED: **No testing mid-stream**. Don't write new tests. Existing tests must still pass.
+- Run focused tests while implementing behavior changes; run the listed verification gates before handoff.
 - LOCKED: Rust full edit access; no permission prompts inside `apps/desktop/src-tauri/`.
 - Commit format: lowercase, ≤100 chars, Conventional Commits, `Co-Authored-By: Codex Opus 4.7 (1M context) <noreply@anthropic.com>` footer
 - One PR-style commit per logical task

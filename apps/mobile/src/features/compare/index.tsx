@@ -13,12 +13,12 @@ import { ArrowLeft, Trophy, Zap, Hash, Clock } from 'lucide-react-native';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
-import { ChatInput } from '@/components/chat/ChatInput';
-import { ModelPickerSheet } from '@/components/model-picker/ModelPickerSheet';
+import { ChatInput } from '@/src/features/chat/components/ChatInput';
+import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import { streamChat, type StreamDelta } from '@/services/streaming';
 import { getModelById, getProviderById, getDisplayName } from '@/lib/models';
 import { getProviderDefaultModel } from '@agiworkforce/types';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 
 // ---------------------------------------------------------------------------
 // Types

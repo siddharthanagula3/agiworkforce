@@ -1,4 +1,30 @@
 use super::*;
+use crate::features::document::{build_generated_document_manifest, GeneratedDocumentKind};
+
+fn created_document_tool_result(
+    path: String,
+    format: &'static str,
+    kind: GeneratedDocumentKind,
+    tool_id: &str,
+) -> Result<ToolResult> {
+    let bundle = build_generated_document_manifest(&path, kind)?;
+
+    Ok(ToolResult {
+        success: true,
+        data: json!({
+            "file_path": path.clone(),
+            "filePath": path,
+            "format": format,
+            "status": "created",
+            "success": true,
+            "computeSession": bundle.compute_session,
+            "generatedFile": bundle.generated_file,
+            "artifactManifest": bundle.artifact_manifest
+        }),
+        error: None,
+        metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+    })
+}
 
 impl ToolExecutor {
     pub(crate) async fn execute_document_read_tool(
@@ -126,18 +152,9 @@ impl ToolExecutor {
 
             match document_create_word_simple(output_path.clone(), title, author, paragraphs).await
             {
-                Ok(path) => Ok(ToolResult {
-                    success: true,
-                    data: json!({
-                        "file_path": path,
-                        "filePath": path,
-                        "format": "docx",
-                        "status": "created",
-                        "success": true
-                    }),
-                    error: None,
-                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
-                }),
+                Ok(path) => {
+                    created_document_tool_result(path, "docx", GeneratedDocumentKind::Docx, tool_id)
+                }
                 Err(e) => Ok(ToolResult {
                     success: false,
                     data: json!({ "error": format!("Failed to create Word document: {}", e), "success": false }),
@@ -187,18 +204,9 @@ impl ToolExecutor {
 
             match document_create_excel_simple(output_path.clone(), sheet_name, headers, rows).await
             {
-                Ok(path) => Ok(ToolResult {
-                    success: true,
-                    data: json!({
-                        "file_path": path,
-                        "filePath": path,
-                        "format": "xlsx",
-                        "status": "created",
-                        "success": true
-                    }),
-                    error: None,
-                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
-                }),
+                Ok(path) => {
+                    created_document_tool_result(path, "xlsx", GeneratedDocumentKind::Xlsx, tool_id)
+                }
                 Err(e) => Ok(ToolResult {
                     success: false,
                     data: json!({ "error": format!("Failed to create Excel document: {}", e), "success": false }),
@@ -246,18 +254,9 @@ impl ToolExecutor {
                 .unwrap_or_default();
 
             match document_create_pdf_simple(output_path.clone(), title, author, paragraphs).await {
-                Ok(path) => Ok(ToolResult {
-                    success: true,
-                    data: json!({
-                        "file_path": path,
-                        "filePath": path,
-                        "format": "pdf",
-                        "status": "created",
-                        "success": true
-                    }),
-                    error: None,
-                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
-                }),
+                Ok(path) => {
+                    created_document_tool_result(path, "pdf", GeneratedDocumentKind::Pdf, tool_id)
+                }
                 Err(e) => Ok(ToolResult {
                     success: false,
                     data: json!({ "error": format!("Failed to create PDF document: {}", e), "success": false }),

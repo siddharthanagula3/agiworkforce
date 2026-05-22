@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use once_cell::sync::Lazy;
 
@@ -18,57 +18,7 @@ pub(super) const MAX_LINE_LENGTH: usize = 2_000;
 pub(super) const COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 pub(super) fn validate_file_path(path_str: &str) -> std::result::Result<PathBuf, String> {
-    let path = Path::new(path_str);
-
-    if path_str.contains('\0') {
-        return Err("Path contains null bytes".to_string());
-    }
-
-    let absolute = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        std::env::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join(path)
-    };
-
-    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let cwd_canonical = cwd.canonicalize().unwrap_or(cwd);
-
-    if absolute.exists() {
-        let canonical = absolute
-            .canonicalize()
-            .map_err(|e| format!("Cannot resolve path: {}", e))?;
-        if !canonical.starts_with(&cwd_canonical) {
-            return Err(format!(
-                "Path escapes project directory: {} (resolved to {})",
-                path_str,
-                canonical.display()
-            ));
-        }
-        return Ok(canonical);
-    }
-
-    let mut check = cwd_canonical.clone();
-    for component in path.components() {
-        match component {
-            std::path::Component::ParentDir => {
-                check.pop();
-                if !check.starts_with(&cwd_canonical) {
-                    return Err(format!(
-                        "Path traversal detected: {} escapes project root",
-                        path_str
-                    ));
-                }
-            }
-            std::path::Component::Normal(c) => {
-                check.push(c);
-            }
-            _ => {}
-        }
-    }
-
-    Ok(absolute)
+    crate::path_security::validate_workspace_path(path_str)
 }
 
 pub(super) fn print_tool_status(tool_name: &str, display: &str) {
@@ -125,7 +75,10 @@ pub(super) fn describe_command(command: &str) -> String {
         }
         "chmod" => format!("Change permissions: {}", cap_chars(trimmed, 200)),
         "chown" | "chgrp" => format!("Change ownership: {}", cap_chars(trimmed, 200)),
-        "sudo" => format!("Run as root: {}", cap_chars(skip_chars(trimmed, 5).trim(), 200)), // AUDIT-FIX: H-6
+        "sudo" => format!(
+            "Run as root: {}",
+            cap_chars(skip_chars(trimmed, 5).trim(), 200)
+        ), // AUDIT-FIX: H-6
         "kill" | "killall" | "pkill" => {
             format!("Send signal to processes: {}", cap_chars(trimmed, 200))
         }
@@ -165,14 +118,7 @@ pub(super) fn is_dangerous_command(command: &str) -> bool {
 }
 
 pub(super) fn tool_size_cap(tool_name: &str) -> usize {
-    match tool_name {
-        "read_file" | "web_search" => 100_000,
-        "web_fetch" => 200_000,
-        "search_files" | "grep_files" | "run_command" => 50_000,
-        "list_directory" | "tool_search" => 20_000,
-        "write_file" | "edit_file" | "apply_patch" => 5_000,
-        _ => MAX_OUTPUT_BYTES,
-    }
+    crate::runtime::tool_catalog::tool_result_size_cap(tool_name).unwrap_or(MAX_OUTPUT_BYTES)
 }
 
 pub(super) fn truncate_output_with_save(tool_name: &str, output: String) -> String {

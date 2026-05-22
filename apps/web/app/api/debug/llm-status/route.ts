@@ -49,9 +49,12 @@ async function handleGetLlmStatus(request: NextRequest) {
     { name: 'perplexity', envKey: 'PERPLEXITY_API_KEY', baseUrlKey: 'PERPLEXITY_BASE_URL' },
   ];
 
-  const status: Record<string, {
-    configured: boolean;
-  }> = {};
+  const status: Record<
+    string,
+    {
+      configured: boolean;
+    }
+  > = {};
 
   for (const provider of providers) {
     const apiKey = getOptionalEnv(provider.envKey);
@@ -76,8 +79,12 @@ async function handleGetLlmStatus(request: NextRequest) {
     environment: envInfo,
     providers: status,
     summary: {
-      configured: Object.entries(status).filter(([, s]) => s.configured).map(([name]) => name),
-      notConfigured: Object.entries(status).filter(([, s]) => !s.configured).map(([name]) => name),
+      configured: Object.entries(status)
+        .filter(([, s]) => s.configured)
+        .map(([name]) => name),
+      notConfigured: Object.entries(status)
+        .filter(([, s]) => !s.configured)
+        .map(([name]) => name),
     },
   });
 }

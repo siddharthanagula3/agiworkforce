@@ -1,5 +1,13 @@
 # agiworkforce-utils-template
 
+Status: Current
+Owner role: Rust platform
+Last updated: 2026-05-20
+Kind: rust-crate
+Criticality: medium
+
+## Purpose
+
 Small, strict string templating for prompt and text assets.
 
 Supported syntax:

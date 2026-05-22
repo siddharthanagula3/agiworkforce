@@ -47,8 +47,8 @@
     <style>
       :root {
         color-scheme: light dark;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-          'Helvetica Neue', Arial, sans-serif;
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
       }
       html,
       body {
@@ -163,11 +163,14 @@
           rootEl.innerHTML =
             '<div id="react-root"></div>' +
             '<script src="https://unpkg.com/react@18/umd/react.production.min.js"' +
-            ' crossorigin></' + 'script>' +
+            ' crossorigin></' +
+            'script>' +
             '<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"' +
-            ' crossorigin></' + 'script>' +
+            ' crossorigin></' +
+            'script>' +
             '<script src="https://unpkg.com/@babel/standalone/babel.min.js"' +
-            ' crossorigin></' + 'script>' +
+            ' crossorigin></' +
+            'script>' +
             '<script type="text/babel" data-presets="env,react">' +
             source +
             '\n; try { var App = (typeof App !== "undefined" && App) ||' +
@@ -175,7 +178,8 @@
             ' if (App) { ReactDOM.createRoot(document.getElementById("react-root"))' +
             '.render(React.createElement(App)); } } catch (e) {' +
             ' document.getElementById("react-root").innerText = String(e); }' +
-            '</' + 'script>';
+            '</' +
+            'script>';
           // The script tags above need re-injection to execute (see renderHtml).
           rootEl.querySelectorAll('script').forEach((oldScript) => {
             const s = document.createElement('script');
@@ -200,16 +204,18 @@
         }
 
         function renderMermaid(payload) {
-          rootEl.innerHTML = '<pre class="mermaid">' +
+          rootEl.innerHTML =
+            '<pre class="mermaid">' +
             String(payload.code || '').replace(/[&<>]/g, function (c) {
-              return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c];
+              return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c];
             }) +
             '</pre>' +
             '<script type="module">' +
             'import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";' +
             'mermaid.initialize({ startOnLoad: false, securityLevel: "strict" });' +
             'mermaid.run({ querySelector: ".mermaid" });' +
-            '</' + 'script>';
+            '</' +
+            'script>';
           rootEl.querySelectorAll('script').forEach((oldScript) => {
             const s = document.createElement('script');
             for (const attr of oldScript.attributes) {
@@ -225,8 +231,7 @@
           pre.style.padding = '16px';
           pre.style.margin = '0';
           pre.style.whiteSpace = 'pre-wrap';
-          pre.style.fontFamily =
-            'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+          pre.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
           pre.style.fontSize = '13px';
           pre.textContent = String(payload.text || payload.code || '');
           rootEl.innerHTML = '';

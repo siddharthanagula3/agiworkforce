@@ -17,7 +17,7 @@ import { View, TextInput, Pressable, Alert, ActivityIndicator } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Text } from '@/components/ui/text';
-import { useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@/src/ui/theme';
 import { supabase } from '@/services/supabase';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 

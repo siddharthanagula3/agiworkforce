@@ -230,8 +230,10 @@ pub fn run() {
                 data_dir: app_data_dir.clone(),
             });
 
-            // Install native messaging manifest
-            if let Err(e) = crate::integrations::native_messaging::manifest::install_manifests(Some("bblfoadbknbnmbchfjpgcefpkccpdnfc")) {
+            // Install native messaging manifest for packaged production IDs.
+            // Dev/unpacked extension IDs are added during the HTTP /pair handshake.
+            if let Err(e) = crate::integrations::native_messaging::manifest::install_manifests(None)
+            {
                 tracing::warn!("Failed to install native messaging manifest: {}", e);
             } else {
                 tracing::info!("Native messaging manifest installed/updated");
@@ -1741,14 +1743,23 @@ pub fn run() {
             crate::sys::commands::document_search,
             crate::sys::commands::document_detect_type,
             crate::sys::commands::document_create_word,
+            crate::sys::commands::document_create_word_manifest,
             crate::sys::commands::document_create_word_simple,
+            crate::sys::commands::document_create_word_simple_manifest,
             crate::sys::commands::document_create_excel,
+            crate::sys::commands::document_create_excel_manifest,
             crate::sys::commands::document_create_excel_simple,
+            crate::sys::commands::document_create_excel_simple_manifest,
             crate::sys::commands::document_create_excel_numbers,
+            crate::sys::commands::document_create_excel_numbers_manifest,
             crate::sys::commands::document_create_pdf,
+            crate::sys::commands::document_create_pdf_manifest,
             crate::sys::commands::document_create_pdf_simple,
+            crate::sys::commands::document_create_pdf_simple_manifest,
             crate::sys::commands::document_create_powerpoint,
+            crate::sys::commands::document_create_powerpoint_manifest,
             crate::sys::commands::document_create_powerpoint_simple,
+            crate::sys::commands::document_create_powerpoint_simple_manifest,
             // Memory commands (persistent cross-session memory)
             crate::sys::commands::memory_remember,
             crate::sys::commands::memory_recall,

@@ -372,6 +372,11 @@
         "command": "agi-workforce.setAgentEffort",
         "title": "AGI Workforce: Set Reasoning Effort",
         "icon": "$(brain)"
+      },
+      {
+        "command": "agi-workforce.memory",
+        "title": "AGI Workforce: Memory",
+        "icon": "$(book)"
       }
     ],
     "chatParticipants": [
@@ -849,10 +854,11 @@
   "dependencies": {
     "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/runtime": "workspace:*",
+    "@agiworkforce/types": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
     "dompurify": "^3.4.0",
     "markdown-it": "^14.1.0",
-    "ws": "^8.20.0",
+    "ws": "^8.20.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {

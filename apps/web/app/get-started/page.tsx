@@ -1,10 +1,14 @@
 'use client';
 
 import Link from 'next/link';
+import { formatPrivacyModeLabel } from '@agiworkforce/types';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export default function GetStartedPage() {
+  const localLabel = formatPrivacyModeLabel('local');
+  const byokLabel = formatPrivacyModeLabel('byok');
+
   return (
     <div data-design="agi">
       <main className="agi-shell">
@@ -43,14 +47,14 @@ export default function GetStartedPage() {
           <p className="agi-section-eyebrow">02 / Pick a mode</p>
           <ul className="agi-reasons">
             <li className="agi-reason">
-              <h3 className="agi-reason-h">Local — free forever</h3>
+              <h3 className="agi-reason-h">{localLabel} — free forever</h3>
               <p className="agi-reason-p">
                 <code>agiworkforce --provider ollama</code> after installing Ollama. No keys, no
                 quotas, fully offline.
               </p>
             </li>
             <li className="agi-reason">
-              <h3 className="agi-reason-h">BYOK — free forever</h3>
+              <h3 className="agi-reason-h">{byokLabel} — free forever</h3>
               <p className="agi-reason-p">
                 <code>agiworkforce login</code>. Paste your provider key. Encrypted on device.
               </p>

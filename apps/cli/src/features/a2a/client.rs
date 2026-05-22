@@ -6,9 +6,7 @@ use anyhow::{bail, Context, Result};
 
 use crate::models::Message;
 
-use super::protocol::{
-    AgentCard, HandoffRequest, TaskRequest, TaskResponse, TaskResponseStatus,
-};
+use super::protocol::{AgentCard, HandoffRequest, TaskRequest, TaskResponse, TaskResponseStatus};
 use super::security::validate_a2a_endpoint;
 use super::server::DEFAULT_TASK_TIMEOUT_SECONDS;
 

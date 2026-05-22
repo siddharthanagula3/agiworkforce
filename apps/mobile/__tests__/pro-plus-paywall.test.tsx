@@ -46,7 +46,7 @@ jest.mock('@/lib/safeOpenURL', () => ({
   isAllowedExternalUrl: jest.fn().mockReturnValue(true),
 }));
 
-jest.mock('../lib/theme', () => ({
+jest.mock('../src/ui/theme', () => ({
   colors: {
     surfaceElevated: '#1e2025',
     textPrimary: '#ffffff',
@@ -95,7 +95,7 @@ jest.mock('../components/ui/text', () => {
 // Imports
 // ---------------------------------------------------------------------------
 
-import { ProPlusPaywall } from '../components/Paywall/ProPlusPaywall';
+import { ProPlusPaywall } from '../src/features/paywall/components/ProPlusPaywall';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 
 const mockOpenExternalUrl = openExternalUrl as jest.Mock;

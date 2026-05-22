@@ -168,7 +168,11 @@ impl MessageQueue {
         priority: QueuePriority,
     ) -> Result<QueuedCommand, QueueError> {
         let mut inner = self.inner.lock().expect("queue mutex poisoned");
-        let lane_count = inner.items.iter().filter(|c| c.priority == priority).count();
+        let lane_count = inner
+            .items
+            .iter()
+            .filter(|c| c.priority == priority)
+            .count();
         if lane_count >= self.lane_cap {
             return Err(QueueError::Full {
                 lane: priority,
@@ -191,7 +195,11 @@ impl MessageQueue {
 
     /// Convenience: enqueue a notification (defaults priority to `Later`).
     pub fn enqueue_notification(&self, value: String) -> Result<QueuedCommand, QueueError> {
-        self.enqueue(value, PromptInputMode::TaskNotification, QueuePriority::Later)
+        self.enqueue(
+            value,
+            PromptInputMode::TaskNotification,
+            QueuePriority::Later,
+        )
     }
 
     /// Remove and return the highest-priority command. Returns `None` if empty.
@@ -335,8 +343,12 @@ mod tests {
     fn fifo_within_lane() {
         let q = MessageQueue::new();
         for v in &["a", "b", "c"] {
-            q.enqueue((*v).to_string(), PromptInputMode::Prompt, QueuePriority::Next)
-                .unwrap();
+            q.enqueue(
+                (*v).to_string(),
+                PromptInputMode::Prompt,
+                QueuePriority::Next,
+            )
+            .unwrap();
         }
         assert_eq!(q.dequeue().unwrap().value, "a");
         assert_eq!(q.dequeue().unwrap().value, "b");
@@ -346,12 +358,24 @@ mod tests {
     #[test]
     fn priority_order_now_next_later() {
         let q = MessageQueue::new();
-        q.enqueue("later".to_string(), PromptInputMode::Prompt, QueuePriority::Later)
-            .unwrap();
-        q.enqueue("next".to_string(), PromptInputMode::Prompt, QueuePriority::Next)
-            .unwrap();
-        q.enqueue("now".to_string(), PromptInputMode::Prompt, QueuePriority::Now)
-            .unwrap();
+        q.enqueue(
+            "later".to_string(),
+            PromptInputMode::Prompt,
+            QueuePriority::Later,
+        )
+        .unwrap();
+        q.enqueue(
+            "next".to_string(),
+            PromptInputMode::Prompt,
+            QueuePriority::Next,
+        )
+        .unwrap();
+        q.enqueue(
+            "now".to_string(),
+            PromptInputMode::Prompt,
+            QueuePriority::Now,
+        )
+        .unwrap();
         assert_eq!(q.dequeue().unwrap().value, "now");
         assert_eq!(q.dequeue().unwrap().value, "next");
         assert_eq!(q.dequeue().unwrap().value, "later");
@@ -379,8 +403,11 @@ mod tests {
     #[test]
     fn dequeue_if_succeeds_for_head() {
         let q = MessageQueue::new();
-        let a = q.enqueue("a".into(), PromptInputMode::Prompt, QueuePriority::Next).unwrap();
-        q.enqueue("b".into(), PromptInputMode::Prompt, QueuePriority::Next).unwrap();
+        let a = q
+            .enqueue("a".into(), PromptInputMode::Prompt, QueuePriority::Next)
+            .unwrap();
+        q.enqueue("b".into(), PromptInputMode::Prompt, QueuePriority::Next)
+            .unwrap();
         let taken = q.dequeue_if(&a.id).unwrap();
         assert_eq!(taken.value, "a");
     }
@@ -388,8 +415,11 @@ mod tests {
     #[test]
     fn dequeue_if_races_when_head_changes() {
         let q = MessageQueue::new();
-        let a = q.enqueue("a".into(), PromptInputMode::Prompt, QueuePriority::Next).unwrap();
-        q.enqueue("urgent".into(), PromptInputMode::Prompt, QueuePriority::Now).unwrap();
+        let a = q
+            .enqueue("a".into(), PromptInputMode::Prompt, QueuePriority::Next)
+            .unwrap();
+        q.enqueue("urgent".into(), PromptInputMode::Prompt, QueuePriority::Now)
+            .unwrap();
         let err = q.dequeue_if(&a.id).unwrap_err();
         assert!(matches!(err, QueueError::Race { .. }));
     }
@@ -397,8 +427,14 @@ mod tests {
     #[test]
     fn pop_all_editable_combines_with_input() {
         let q = MessageQueue::new();
-        q.enqueue("first".into(), PromptInputMode::Prompt, QueuePriority::Next).unwrap();
-        q.enqueue("second".into(), PromptInputMode::Prompt, QueuePriority::Next).unwrap();
+        q.enqueue("first".into(), PromptInputMode::Prompt, QueuePriority::Next)
+            .unwrap();
+        q.enqueue(
+            "second".into(),
+            PromptInputMode::Prompt,
+            QueuePriority::Next,
+        )
+        .unwrap();
         let r = q.pop_all_editable("typing", 7).unwrap();
         assert_eq!(r.text, "first\nsecond\ntyping");
         // cursor_offset = "first\nsecond".len() + 1 + 7 = 12 + 1 + 7
@@ -409,7 +445,12 @@ mod tests {
     #[test]
     fn pop_all_editable_leaves_non_editable() {
         let q = MessageQueue::new();
-        q.enqueue("editable".into(), PromptInputMode::Prompt, QueuePriority::Next).unwrap();
+        q.enqueue(
+            "editable".into(),
+            PromptInputMode::Prompt,
+            QueuePriority::Next,
+        )
+        .unwrap();
         q.enqueue(
             "note".into(),
             PromptInputMode::TaskNotification,
@@ -425,9 +466,12 @@ mod tests {
     #[test]
     fn lane_size_tracks_independently() {
         let q = MessageQueue::new();
-        q.enqueue("1".into(), PromptInputMode::Prompt, QueuePriority::Now).unwrap();
-        q.enqueue("2".into(), PromptInputMode::Prompt, QueuePriority::Now).unwrap();
-        q.enqueue("3".into(), PromptInputMode::Prompt, QueuePriority::Next).unwrap();
+        q.enqueue("1".into(), PromptInputMode::Prompt, QueuePriority::Now)
+            .unwrap();
+        q.enqueue("2".into(), PromptInputMode::Prompt, QueuePriority::Now)
+            .unwrap();
+        q.enqueue("3".into(), PromptInputMode::Prompt, QueuePriority::Next)
+            .unwrap();
         assert_eq!(q.lane_size(QueuePriority::Now), 2);
         assert_eq!(q.lane_size(QueuePriority::Next), 1);
         assert_eq!(q.lane_size(QueuePriority::Later), 0);
@@ -440,7 +484,11 @@ mod tests {
         // fixed seed so the test is reproducible.
         let q = MessageQueue::with_cap(2_000);
         let mut seed: u64 = 0xDEAD_BEEF_CAFE_BABE;
-        let lanes = [QueuePriority::Now, QueuePriority::Next, QueuePriority::Later];
+        let lanes = [
+            QueuePriority::Now,
+            QueuePriority::Next,
+            QueuePriority::Later,
+        ];
         let mut inserted: HashMap<String, (QueuePriority, usize)> = HashMap::new();
 
         for i in 0..1000usize {
@@ -487,8 +535,10 @@ mod tests {
     #[test]
     fn clear_empties() {
         let q = MessageQueue::new();
-        q.enqueue("a".into(), PromptInputMode::Prompt, QueuePriority::Next).unwrap();
-        q.enqueue("b".into(), PromptInputMode::Prompt, QueuePriority::Next).unwrap();
+        q.enqueue("a".into(), PromptInputMode::Prompt, QueuePriority::Next)
+            .unwrap();
+        q.enqueue("b".into(), PromptInputMode::Prompt, QueuePriority::Next)
+            .unwrap();
         q.clear();
         assert_eq!(q.size(), 0);
     }

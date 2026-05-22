@@ -16,7 +16,7 @@ import { invoke, isTauri, listen } from '../../lib/tauri-mock';
 import { toast } from 'sonner';
 import { storageFallback } from '../../utils/localStorage';
 import type { ContextItem } from '@agiworkforce/types';
-import type { ToolLabelEntry } from '../../components/UnifiedAgenticChat/ToolLabel';
+import type { ToolLabelEntry } from '../../features/chat/ToolLabel';
 import {
   buildRunningToolTimelineEntry,
   buildTerminalToolTimelineUpdate,
