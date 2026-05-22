@@ -137,7 +137,7 @@ export function BridgeStatusCard({ fetcher, isTauriHost = isTauri }: BridgeStatu
         setLoading(false);
       }
     }
-  }, [effectiveFetcher]);
+  }, [effectiveFetcher, mountedRef]);
 
   useEffect(() => {
     if (!isTauriHost) return;

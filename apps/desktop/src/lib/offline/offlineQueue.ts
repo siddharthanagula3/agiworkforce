@@ -32,10 +32,11 @@ const queue = createOfflineQueue({
       typeof messageOrMeta === 'string'
         ? console.warn(messageOrMeta)
         : console.warn('[OfflineQueue]', message ?? '', messageOrMeta),
+    // eslint forbids console.info in this surface; route through debug instead
     info: (messageOrMeta, message) =>
       typeof messageOrMeta === 'string'
-        ? console.info(messageOrMeta)
-        : console.info('[OfflineQueue]', message ?? '', messageOrMeta),
+        ? console.debug(messageOrMeta)
+        : console.debug('[OfflineQueue]', message ?? '', messageOrMeta),
   },
   storageKey: OFFLINE_QUEUE_KEY,
   onStorageChange: (storageKey, callback) => {

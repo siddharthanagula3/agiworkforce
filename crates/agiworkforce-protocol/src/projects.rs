@@ -20,7 +20,10 @@ use ts_rs::TS;
 
 /// Bounded accent color palette for project visual identity. Mirrors
 /// `ProjectAccentColor` in `packages/types/src/suite-contracts.ts`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+/// Default is `Zinc`, mirroring the TS `PROJECT_ACCENT_FALLBACK`.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS,
+)]
 #[serde(rename_all = "lowercase")]
 #[ts(rename_all = "lowercase")]
 pub enum ProjectAccentColor {
@@ -29,14 +32,8 @@ pub enum ProjectAccentColor {
     Amber,
     Rose,
     Violet,
+    #[default]
     Zinc,
-}
-
-impl Default for ProjectAccentColor {
-    fn default() -> Self {
-        // Mirrors `PROJECT_ACCENT_FALLBACK` on the TS side.
-        ProjectAccentColor::Zinc
-    }
 }
 
 /// Provenance for imported projects.

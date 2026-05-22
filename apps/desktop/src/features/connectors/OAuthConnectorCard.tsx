@@ -89,7 +89,7 @@ export function OAuthConnectorCard({
         setRevoking(false);
       }
     }
-  }, [connector.id, connector.name, onDisconnect]);
+  }, [connector.id, connector.name, onDisconnect, mountedRef]);
 
   const handleRefresh = useCallback(async () => {
     if (!onRefresh) return;
@@ -105,7 +105,7 @@ export function OAuthConnectorCard({
         setRefreshing(false);
       }
     }
-  }, [connector.name, onRefresh]);
+  }, [connector.name, onRefresh, mountedRef]);
 
   const isLoading = loading || revoking || refreshing;
   const expiresLabel =
