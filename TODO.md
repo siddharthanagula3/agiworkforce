@@ -6,9 +6,9 @@ Last updated: 2026-05-21 (post round-7 suite-transformation session, integration
 
 This is the active checklist for the transition described in `PLAN.md`. Keep it short enough to operate from daily; move evidence and long analysis to `audit/anthropic-apps-parity/`.
 
-## 2026-05-21 Suite Transformation Session — Round 7 (~40h, 9 commits)
+## 2026-05-21 Suite Transformation Session — Round 7 (~46h, 10 commits)
 
-After the round-6 handoff at `b1c2bb428`, an additional autonomous loop closed two top-10 P0 gaps end-to-end and shipped the first host-adoption of a new shared primitive. HEAD `62896edf0`.
+After the round-6 handoff at `b1c2bb428`, an additional autonomous loop closed two top-10 P0 gaps end-to-end and shipped two host-adoption slices for a new shared primitive. HEAD `01caaf77d`.
 
 - [x] ArtifactPanel live preview (HTML sandboxed iframe + React delegation + run/stop) — `fe22c59cb`
 - [x] VS Code extension composer drag-drop + paste-image wire — `b0578ce9f`
@@ -16,8 +16,9 @@ After the round-6 handoff at `b1c2bb428`, an additional autonomous loop closed t
 - [x] ArtifactPanel edit-in-place via onSaveEdit callback — `d1d8bbc2f`
 - [x] Shared GeneratedFileCard component for compute-session outputs — `faa457419`
 - [x] Web ArtifactPreview adopts shared GeneratedFileCard — `d8c65c795`
+- [x] Mobile RN-native GeneratedFileCard + ArtifactFullScreen adoption — `01caaf77d`
 
-EXEC-SUMMARY-r2 P0 #3 (composer drag-drop, 39h) and P0 #9 (Artifacts: versioning + publish + live preview + edit-in-place, 186h) are now fully shipped at the shared-package level. ArtifactPanel and ArtifactPanel edit-in-place have zero host consumers yet; GeneratedFileCard has one (Web). Desktop and Mobile artifact viewers remain on their own surface-specific implementations.
+EXEC-SUMMARY-r2 P0 #3 (composer drag-drop, 39h) and P0 #9 (Artifacts: versioning + publish + live preview + edit-in-place, 186h) are now fully shipped at the shared-package level. ArtifactPanel and ArtifactPanel edit-in-place have zero host consumers yet; GeneratedFileCard now has two (Web ArtifactPreview header + Mobile ArtifactFullScreen). Desktop artifact viewers remain on their own Tauri-integrated InlineDocumentGeneration implementation.
 
 ## 2026-05-21 Suite Transformation Session — Shipped (~165h, 25 commits)
 

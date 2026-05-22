@@ -8,7 +8,7 @@ Head pushed: `d8c65c795`
 
 ## Round 7 additions (after `b1c2bb428`)
 
-After the round-6 boundary, an additional autonomous loop shipped 8 commits closing two top-10 P0 gaps end-to-end at the shared-package level, plus a first host-adoption slice:
+After the round-6 boundary, an additional autonomous loop shipped 10 commits closing two top-10 P0 gaps end-to-end at the shared-package level, plus two host-adoption slices:
 
 - `fe22c59cb` `feat(unified-chat): artifact panel live preview for html and react` — extracted `lib/artifact-sandbox.ts` (shared CSP envelope), wired `ArtifactPanel`'s HTML preview to a sandboxed iframe with `allow-scripts allow-modals` + run/stop control, delegated React artifacts to `ReactPreview`, refactored `ArtifactRenderer.HtmlArtifact` to consume the same helper. Round-2 P0 #9 live-preview quadrant.
 - `b0578ce9f` `feat(vscode-ext): composer drag-drop and paste-image wire` — new `attachFiles` webview→host protocol with zod-validated payloads (≤10 MB / ≤8 files / `data:` URLs only, path-separator rejection), webview drag/drop/paste handlers with attachment chips, host writes to `globalStorageUri/.attachments/<timestamp>` and routes through `agi-workforce.addToContext`. Round-2 P0 #3 vscode-ext side.
@@ -18,26 +18,29 @@ After the round-6 boundary, an additional autonomous loop shipped 8 commits clos
 - `faa457419` `feat(unified-chat): shared generated-file card for compute-session outputs` — new `GeneratedFileCard` consumes `GeneratedFilePresentation` (already exposed by `@agiworkforce/types`) with status badge / metadata / privacy chips / preview thumbnail / action callbacks; opens the path to close the "Add Web/Mobile/Desktop generated-file UI" TODO.
 - `044e94d1e` `docs(plans): record round 7 + flag consumer-adoption gap honestly` — handoff doc round-7 section + honest gap table.
 - `d8c65c795` `feat(web): adopt shared generatedfilecard in artifactpreview header` — first host-adoption of a round-7 primitive. Web's `ArtifactPreview` replaces its inline kind/byte/checksum label row with the shared card, picking up preview thumbnails, status badges, and consistent action UI for compute-session-backed artifacts.
+- `62896edf0` + `98d72a5bd` doc updates recording the Web adoption.
+- `01caaf77d` `feat(mobile): rn-native generatedfilecard adopted in artifactfullscreen` — Mobile mirrors the shared web `GeneratedFileCard` with an RN-native sibling consuming the same `GeneratedFilePresentation`. Drops ~40 LOC of inline provenance in `ArtifactFullScreen.tsx`. Web and Mobile now show matching status-badge semantics, chips, and provenance shape without sharing JSX (React DOM vs React Native).
 
-22 new regression tests across `ArtifactPanel.live-preview.test.tsx`, `webviewAttachFiles.test.ts`, `sidePanelComposerDragDrop.test.ts`, and `GeneratedFileCard.test.tsx`. Repo guardrails (`pnpm check:llm-operability`, repo typecheck, lint) clean on every commit. Branch pushed (`3dcc4933b..d8c65c795`).
+34 new regression tests across `ArtifactPanel.live-preview.test.tsx`, `webviewAttachFiles.test.ts`, `sidePanelComposerDragDrop.test.ts`, `GeneratedFileCard.test.tsx` (web), and `generated-file-card.test.tsx` (mobile). Repo guardrails (`pnpm check:llm-operability`, repo typecheck, lint) clean on every commit. Branch pushed (`3dcc4933b..01caaf77d`).
 
 ### Round 7 — known consumer-adoption gap
 
-The round-2 audit estimates for P0 #9 (Artifacts: 186h) and the new generated-file TODO included **host consumer adoption**, not only the shared primitive. Round 7 closed the shared-package work; host adoption remains open:
+The round-2 audit estimates for P0 #9 (Artifacts: 186h) and the new generated-file TODO included **host consumer adoption**, not only the shared primitive. Round 7 closed the shared-package work; remaining host adoption is intentionally scoped:
 
-| Shared primitive shipped this round     | Host consumers using it                   |
-| --------------------------------------- | ----------------------------------------- |
-| `ArtifactPanel` live preview            | none yet                                  |
-| `ArtifactPanel` edit-in-place           | none yet                                  |
-| `GeneratedFileCard`                     | 1 — `apps/web` (`ArtifactPreview` header) |
-| VS Code webview drag-drop / paste       | ✅ shipped to users                       |
-| Chrome ext side-panel drag-drop / paste | ✅ shipped to users                       |
+| Shared primitive shipped this round     | Host consumers using it                                   |
+| --------------------------------------- | --------------------------------------------------------- |
+| `ArtifactPanel` live preview            | none yet                                                  |
+| `ArtifactPanel` edit-in-place           | none yet                                                  |
+| `GeneratedFileCard` (web JSX)           | 1 — `apps/web` (`ArtifactPreview` header)                 |
+| `GeneratedFileCard` (mobile RN mirror)  | 1 — `apps/mobile` (`ArtifactFullScreen` provenance block) |
+| VS Code webview drag-drop / paste       | ✅ shipped to users                                       |
+| Chrome ext side-panel drag-drop / paste | ✅ shipped to users                                       |
 
-The two drag-drop wires are real user-facing changes. The three artifact primitives are exported and tested but not yet mounted in Web/Desktop/Mobile, both of which carry their own pre-existing artifact UIs (`apps/web/features/chat/components/artifacts/ArtifactPreview.tsx` and `apps/desktop/src/features/artifacts/ArtifactPanel.tsx`). Next session has three honest paths:
+`packages/unified-chat` is React-DOM + Tailwind; Mobile (React Native) cannot import the web JSX directly. The Mobile mirror in `apps/mobile/src/features/chat/components/GeneratedFileCard.tsx` is the explicit pattern: surfaces share **types**, not JSX. Both consume `GeneratedFilePresentation` from `@agiworkforce/types`, so the visual treatment, chips, status semantics, and provenance shape stay aligned. Desktop's `InlineDocumentGeneration` keeps Tauri-specific `open_file_location` / `file_copy` integrations and is not a fit for the shared card without losing those affordances. Next session has three honest paths:
 
-1. **Wedge the shared `ArtifactPanel` into Web's chat shell** as the panel wrapper while keeping `ArtifactPreview` as the body. Adapter ~30 LOC (web's `ArtifactData` already carries `type`; only `version` defaults to 1). Trade-off: the host then has two artifact panels, which doubles maintenance until one consolidates.
-2. **Drop `GeneratedFileCard` into Web's `ArtifactPreview` header** as the compute-session summary block (replaces the inline status + privacy chip pair the file already renders inline). Smaller blast radius than option 1.
-3. **Reconcile**: keep the shared primitives available as the canonical path for future surfaces (chrome ext sidebar artifact viewer, mobile artifact details), and migrate Web/Desktop opportunistically when they next touch their viewers.
+1. **Wedge the shared `ArtifactPanel` into Web's chat shell** as the panel wrapper while keeping `ArtifactPreview` as the body. Adapter ~30 LOC (web's `ArtifactData` already carries `type`; only `version` defaults to 1). Trade-off: the host then has two artifact panels, which doubles maintenance until one consolidates. Web also already does live preview via cross-origin `sandbox.agiworkforce.com`, which is a stronger model than the shared in-page srcDoc + CSP. Wedge the shared panel only if you also plan to retire the cross-origin sandbox.
+2. **Mobile `InlineArtifactCard` adoption of a compact `GeneratedFileChips` mini-component** (only the inline chip strip, not the full card). Inline cards still render a smaller chip set in `InlineArtifactCard.tsx`; a compact sibling of `GeneratedFileCard` (`GeneratedFileChips`?) would unify that too.
+3. **Reconcile**: keep the shared primitives available as the canonical path for future surfaces (chrome ext sidebar artifact viewer, future mobile detail screens), and migrate hosts opportunistically when they next touch their viewers.
 
 Whichever path the next session picks, record it in this handoff before writing code so the trade-off is durable.
 
