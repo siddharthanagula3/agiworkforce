@@ -156,7 +156,11 @@ pub struct ProjectKnowledgeFile {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
     pub source_surface: ProjectSourceSurface,
-    pub added_by_user_id: String,
+    /// Original uploader. Nullable because the migration uses
+    /// `ON DELETE SET NULL` — when the auth user is deleted, the file row
+    /// survives with a tombstoned audit trail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub added_by_user_id: Option<String>,
     pub added_at: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub retention_expires_at: Option<String>,
@@ -343,7 +347,7 @@ mod tests {
             checksum_sha256: "abc".to_string(),
             summary: Some("Project spec.".to_string()),
             source_surface: ProjectSourceSurface::Desktop,
-            added_by_user_id: "user_1".to_string(),
+            added_by_user_id: Some("user_1".to_string()),
             added_at: "2026-05-20T00:00:00Z".to_string(),
             retention_expires_at: None,
             deleted_at: None,

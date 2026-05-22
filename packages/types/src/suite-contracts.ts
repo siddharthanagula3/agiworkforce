@@ -576,7 +576,13 @@ export interface ProjectKnowledgeFile {
   /** Optional short summary (for tooltips / search). */
   summary?: string | null;
   sourceSurface: SourceSurface;
-  addedByUserId: string;
+  /**
+   * Original uploader. Nullable because the FK uses `ON DELETE SET NULL`
+   * (migration `20260521130000_fix_project_knowledge_files_fk.sql`) — when
+   * the auth user is deleted, the file row survives with a tombstoned
+   * audit trail. Hosts render "Uploaded by a deleted user" when null.
+   */
+  addedByUserId: string | null;
   addedAt: string;
   /** Retention timestamp if any (mirrors generated-file retention). */
   retentionExpiresAt?: string | null;
