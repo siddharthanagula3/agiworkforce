@@ -14,6 +14,7 @@ import { AlertCircle, Check, ChevronDown, FileJson, Import, Upload, X } from 'lu
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/Button';
+import { useIsMounted } from '@/hooks/useIsMounted';
 import {
   Dialog,
   DialogContent,
@@ -269,6 +270,8 @@ export function MemoryImport({ open, onOpenChange }: MemoryImportProps) {
   const [parseError, setParseError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  // Import dialog can close mid-import; guard post-await setState.
+  const isMounted = useIsMounted();
   const [pasteText, setPasteText] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -429,25 +432,31 @@ export function MemoryImport({ open, onOpenChange }: MemoryImportProps) {
           })),
         });
         const result = await importJsonString(jsonPayload, 'merge');
+        if (!isMounted.current) return;
         setImportedCount(result.memories_imported);
       } else {
         // Custom plain-text: store one at a time
         let count = 0;
         for (const m of parsedMemories) {
           await storeMemory(m.category, m.topic, m.content, m.importance, m.source);
+          if (!isMounted.current) return;
           count++;
         }
         setImportedCount(count);
       }
 
-      setCurrentStep('success');
+      if (isMounted.current) {
+        setCurrentStep('success');
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(`Import failed: ${msg}`);
     } finally {
-      setIsImporting(false);
+      if (isMounted.current) {
+        setIsImporting(false);
+      }
     }
-  }, [parsedMemories, selectedSource, importJsonString, storeMemory]);
+  }, [parsedMemories, selectedSource, importJsonString, storeMemory, isMounted]);
 
   // ------------------------------------------------------------------
   // Render helpers
