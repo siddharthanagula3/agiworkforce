@@ -68,21 +68,21 @@ export function WebSearchCard({
         <Globe
           size={13}
           strokeWidth={2}
-          className="shrink-0 text-[color:var(--text-muted)]"
+          className="shrink-0 text-[color:var(--chat-text-muted,#8b8680)]"
           aria-hidden="true"
         />
-        <span className="flex-1 min-w-0 truncate text-sm text-[color:var(--text-secondary,inherit)]">
+        <span className="flex-1 min-w-0 truncate text-sm text-[color:var(--chat-text-secondary,inherit)]">
           {query}
         </span>
         {/* Result count badge */}
-        <span className="web-search-card__count shrink-0 text-[11px] text-[color:var(--text-muted)] tabular-nums">
+        <span className="web-search-card__count shrink-0 text-[11px] text-[color:var(--chat-text-muted,#8b8680)] tabular-nums">
           {resultCount} {resultCount === 1 ? 'result' : 'results'}
         </span>
         <ChevronDown
           size={13}
           strokeWidth={2}
           className={cn(
-            'shrink-0 text-[color:var(--text-muted)]',
+            'shrink-0 text-[color:var(--chat-text-muted,#8b8680)]',
             'transition-transform duration-150',
             open && 'rotate-180',
           )}
@@ -129,16 +129,16 @@ export function WebSearchCard({
                 <Globe
                   size={14}
                   strokeWidth={1.5}
-                  className="shrink-0 text-[color:var(--text-muted)]"
+                  className="shrink-0 text-[color:var(--chat-text-muted,#8b8680)]"
                   aria-hidden="true"
                 />
               )}
               {/* Title */}
-              <span className="flex-1 min-w-0 truncate text-[13px] text-[color:var(--text-secondary,inherit)]">
+              <span className="flex-1 min-w-0 truncate text-[13px] text-[color:var(--chat-text-secondary,inherit)]">
                 {result.title}
               </span>
               {/* Domain */}
-              <span className="shrink-0 text-[11px] text-[color:var(--text-muted)] truncate max-w-[120px]">
+              <span className="shrink-0 text-[11px] text-[color:var(--chat-text-muted,#8b8680)] truncate max-w-[120px]">
                 {result.domain}
               </span>
             </button>
@@ -149,7 +149,7 @@ export function WebSearchCard({
             <button
               type="button"
               onClick={() => setShowAll(true)}
-              className="web-search-card__show-more w-full px-3 py-2 text-left text-[12px] text-[color:var(--text-muted)] hover:text-[color:var(--text-secondary,inherit)] transition-colors duration-100"
+              className="web-search-card__show-more w-full px-3 py-2 text-left text-[12px] text-[color:var(--chat-text-muted,#8b8680)] hover:text-[color:var(--chat-text-secondary,inherit)] transition-colors duration-100"
             >
               Show more ({hiddenCount} more)
             </button>
