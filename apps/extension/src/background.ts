@@ -1108,6 +1108,13 @@ async function handleMessageAsync(
       return { success: true } as ExtensionResponse;
     }
 
+    case 'OPEN_IN_DESKTOP': {
+      // Forward to desktop via native bridge — lets the side panel hand off the
+      // current session to the desktop app (Claude/Comet parity feature).
+      void sendNativeMessage({ type: 'OPEN_IN_DESKTOP' });
+      return { success: true } as ExtensionResponse;
+    }
+
     case 'CAPTURE_SCREENSHOT': {
       // SECURITY (H-09 audit 2026-05-19): only capture the sender's own tab.
       // The previous implementation fell back to `chrome.tabs.query({active:
