@@ -1,8 +1,8 @@
 {
-  "route": "/",
+  "route": "/providers",
   "pageErrors": [],
   "consoleErrors": [
-    "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-N2JjNTBjYTQtNTAyYi00YzNiLWFmM2UtYjJkYTZhOTI1NjU0' https://js.stripe.com https://challenges.cloudflare.com https://www.googletagmanager.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-n46vPwSWuMC0W703pBofImv82Z26xo4LXymv0E9caPk='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.",
+    "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-Y2U5OGRmZTEtNTgyNS00YTQ0LTljYWMtOTQ2ZTRhMmU5M2Nj' https://js.stripe.com https://challenges.cloudflare.com https://www.googletagmanager.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-n46vPwSWuMC0W703pBofImv82Z26xo4LXymv0E9caPk='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.",
     "Loading the font 'https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/woff/OpenDyslexic-Regular.woff' violates the following Content Security Policy directive: \"font-src 'self' https://fonts.gstatic.com https://js.stripe.com data:\". The action has been blocked.",
     "Loading the font 'https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/woff/OpenDyslexic-Bold.woff' violates the following Content Security Policy directive: \"font-src 'self' https://fonts.gstatic.com https://js.stripe.com data:\". The action has been blocked."
   ]

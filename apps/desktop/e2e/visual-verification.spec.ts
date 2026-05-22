@@ -56,9 +56,33 @@ async function captureRoute(
 }
 
 test.describe('visual verification — desktop cloud-web bundle', () => {
-  test('desktop root renders and captures a screenshot', async ({ page }) => {
+  test('desktop root (sign-in) renders and captures a screenshot', async ({ page }) => {
     const capture = await captureRoute(page, '/', 'desktop-root');
     mkdirSync(SCREENSHOT_DIR, { recursive: true });
     writeFileSync(`${SCREENSHOT_DIR}/desktop-root-findings.json`, JSON.stringify(capture, null, 2));
+  });
+
+  test('desktop /sign-up renders and captures a screenshot', async ({ page }) => {
+    const capture = await captureRoute(page, '/sign-up', 'desktop-signup');
+    writeFileSync(
+      `${SCREENSHOT_DIR}/desktop-signup-findings.json`,
+      JSON.stringify(capture, null, 2),
+    );
+  });
+
+  test('desktop /providers renders and captures a screenshot', async ({ page }) => {
+    const capture = await captureRoute(page, '/providers', 'desktop-providers');
+    writeFileSync(
+      `${SCREENSHOT_DIR}/desktop-providers-findings.json`,
+      JSON.stringify(capture, null, 2),
+    );
+  });
+
+  test('desktop /pricing renders and captures a screenshot', async ({ page }) => {
+    const capture = await captureRoute(page, '/pricing', 'desktop-pricing');
+    writeFileSync(
+      `${SCREENSHOT_DIR}/desktop-pricing-findings.json`,
+      JSON.stringify(capture, null, 2),
+    );
   });
 });
