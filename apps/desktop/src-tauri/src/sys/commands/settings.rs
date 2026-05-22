@@ -46,7 +46,7 @@ pub struct WindowPreferences {
     pub dock_on_startup: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatPreferences {
     #[serde(default = "default_prompt_completion_enabled")]
@@ -68,6 +68,23 @@ pub struct ChatPreferences {
     /// `"cloud"` — SQLite + best-effort Supabase sync on every save.
     #[serde(default = "default_chat_storage_mode")]
     pub chat_storage_mode: String,
+}
+
+impl Default for ChatPreferences {
+    fn default() -> Self {
+        Self {
+            prompt_completion_enabled: default_prompt_completion_enabled(),
+            show_timestamps: false,
+            always_use_agent_mode: false,
+            compact_mode: default_compact_mode(),
+            auto_approve_tools: false,
+            auto_inject_skills: default_auto_inject_skills(),
+            auto_save_memories: false,
+            // IMPORTANT: must match default_chat_storage_mode() — cloud sync is
+            // OFF by default (v1 LOCAL ONLY, ADR 2026-05-22-cross-surface-sync-v1-stance).
+            chat_storage_mode: default_chat_storage_mode(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -202,6 +219,29 @@ fn default_allowed_directories() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// R23 gate: cloud sync must be OFF in v1 LOCAL ONLY mode.
+    /// `chat_storage_mode` defaults to "local", so `cloud_sync_enabled` is
+    /// `false` unless the user explicitly opts in (which requires Cloud Managed).
+    #[test]
+    fn chat_storage_mode_defaults_to_local() {
+        assert_eq!(
+            default_chat_storage_mode(),
+            "local",
+            "cloud sync must be disabled by default (v1 LOCAL ONLY)"
+        );
+        let prefs = ChatPreferences::default();
+        assert_eq!(
+            prefs.chat_storage_mode, "local",
+            "ChatPreferences::default() must have chat_storage_mode=local"
+        );
+        // Derive the same boolean the send_message command uses
+        let cloud_sync_enabled = prefs.chat_storage_mode.as_str() == "cloud";
+        assert!(
+            !cloud_sync_enabled,
+            "cloud_sync_enabled must be false with default settings"
+        );
+    }
 
     #[test]
     fn default_allowed_directories_excludes_home_directory() {
