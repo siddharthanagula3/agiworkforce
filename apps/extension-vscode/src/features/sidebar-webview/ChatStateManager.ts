@@ -70,6 +70,8 @@ export type WebviewToExtMessage =
   | { type: 'selectModel'; payload: { modelId: string } }
   | { type: 'proposeDiff'; payload: { code: string; language: string } }
   | { type: 'openFilePicker' }
+  | { type: 'openHistory' }
+  | { type: 'newChat' }
   | {
       type: 'attachFiles';
       payload: {
@@ -322,6 +324,18 @@ export class ChatStateManager {
 
       case 'openActionSheet': {
         await vscode.commands.executeCommand('agi-workforce.openActionSheet');
+        break;
+      }
+
+      case 'openHistory': {
+        await vscode.commands.executeCommand('agi-workforce.showSessionsHistory');
+        break;
+      }
+
+      case 'newChat': {
+        this._conversationHistory = [];
+        this._currentCancelSource?.cancel();
+        this._post({ type: 'conversationCleared' });
         break;
       }
 
