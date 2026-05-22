@@ -1682,7 +1682,11 @@ export const UnifiedAgenticChat: React.FC<{
                 <SendPreview presentation={sendPreviewPresentation} />
               </div>
 
-              <ChatInputArea onSend={handleSendMessage} onStopGeneration={handleStopGeneration} />
+              <ChatInputArea
+                onSend={handleSendMessage}
+                onStopGeneration={handleStopGeneration}
+                attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
+              />
             </>
           ) : activeView === 'projects' ? (
             <ProjectsView />

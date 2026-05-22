@@ -1,6 +1,6 @@
 import { View, Pressable, ScrollView } from 'react-native';
 import { Image } from 'expo-image';
-import { X, FileText } from 'lucide-react-native';
+import { Lock, X, FileText } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, FadeOut, Layout } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
@@ -34,6 +34,12 @@ interface AttachmentPreviewProps {
   attachments: Attachment[];
   /** Called when user removes an attachment */
   onRemove: (id: string) => void;
+  /**
+   * Per-file privacy label rendered as a chip on each thumbnail
+   * (e.g. "Local"). Sourced from the host's SendPreviewPresentation.
+   * PLAN.md section 5: "Add per-file privacy labels".
+   */
+  privacyShortLabel?: string;
 }
 
 /** Format file size to human-readable string */
@@ -51,9 +57,11 @@ function isImage(mimeType: string): boolean {
 function AttachmentThumbnail({
   attachment,
   onRemove,
+  privacyShortLabel,
 }: {
   attachment: Attachment;
   onRemove: (id: string) => void;
+  privacyShortLabel?: string;
 }) {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
@@ -126,11 +134,49 @@ function AttachmentThumbnail({
       >
         <X size={10} color={colors.textSecondary} />
       </Pressable>
+
+      {/* Privacy chip — outbound destination per attachment */}
+      {privacyShortLabel ? (
+        <View
+          accessibilityLabel={`Outbound destination: ${privacyShortLabel}`}
+          style={{
+            position: 'absolute',
+            bottom: -4,
+            left: 2,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 2,
+            paddingHorizontal: 5,
+            paddingVertical: 1,
+            borderRadius: 9999,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
+        >
+          <Lock size={8} color={colors.textPrimary} />
+          <Text
+            style={{
+              fontSize: 8,
+              fontWeight: '700',
+              color: colors.textPrimary,
+              textTransform: 'uppercase',
+              letterSpacing: 0.4,
+            }}
+          >
+            {privacyShortLabel}
+          </Text>
+        </View>
+      ) : null}
     </Animated.View>
   );
 }
 
-export function AttachmentPreview({ attachments, onRemove }: AttachmentPreviewProps) {
+export function AttachmentPreview({
+  attachments,
+  onRemove,
+  privacyShortLabel,
+}: AttachmentPreviewProps) {
   if (attachments.length === 0) return null;
 
   return (
@@ -147,7 +193,12 @@ export function AttachmentPreview({ attachments, onRemove }: AttachmentPreviewPr
           accessibilityLabel="Attached files"
         >
           {attachments.map((attachment) => (
-            <AttachmentThumbnail key={attachment.id} attachment={attachment} onRemove={onRemove} />
+            <AttachmentThumbnail
+              key={attachment.id}
+              attachment={attachment}
+              onRemove={onRemove}
+              privacyShortLabel={privacyShortLabel}
+            />
           ))}
         </ScrollView>
 

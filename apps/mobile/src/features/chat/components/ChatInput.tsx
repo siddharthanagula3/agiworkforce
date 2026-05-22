@@ -32,6 +32,12 @@ interface ChatInputProps {
   queueSize?: number;
   /** Ref to imperatively add attachments from outside (e.g. AddToChatSheet pickers) */
   attachRef?: React.RefObject<{ addAttachments: (items: Attachment[]) => void } | null>;
+  /**
+   * Per-file privacy label rendered as a chip on attachment thumbnails.
+   * Sourced from the host's SendPreviewPresentation. PLAN.md section 5:
+   * "Add per-file privacy labels".
+   */
+  attachmentPrivacyShortLabel?: string;
 }
 
 export function ChatInput({
@@ -45,6 +51,7 @@ export function ChatInput({
   isOnline = true,
   queueSize = 0,
   attachRef,
+  attachmentPrivacyShortLabel,
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -240,7 +247,11 @@ export function ChatInput({
       />
 
       {/* Attachment preview strip */}
-      <AttachmentPreview attachments={attachments} onRemove={handleRemoveAttachment} />
+      <AttachmentPreview
+        attachments={attachments}
+        onRemove={handleRemoveAttachment}
+        privacyShortLabel={attachmentPrivacyShortLabel}
+      />
 
       {/* Command palette -- shown when input starts with "/" */}
       <CommandPalette

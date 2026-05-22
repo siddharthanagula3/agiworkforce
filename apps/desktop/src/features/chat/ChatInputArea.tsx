@@ -101,6 +101,12 @@ export interface ChatInputAreaProps {
   maxLength?: number;
   enableAttachments?: boolean;
   className?: string;
+  /**
+   * Per-file privacy label rendered as a chip on each attachment. Sourced
+   * from the host's SendPreviewPresentation. PLAN.md section 5: "Add
+   * per-file privacy labels".
+   */
+  attachmentPrivacyShortLabel?: string;
 }
 
 const MAX_ROWS = 10;
@@ -114,6 +120,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   maxLength = DEFAULT_CHAT_MAX_LENGTH,
   enableAttachments = true,
   className = '',
+  attachmentPrivacyShortLabel,
 }) => {
   // Core input state
   const [content, setContent] = useState('');
@@ -1335,6 +1342,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               onRemove={handleAttachmentRemove}
               visionSupported={visionSupported}
               disableRemove={isSending}
+              privacyShortLabel={attachmentPrivacyShortLabel}
             />
 
             {/* Error display */}
