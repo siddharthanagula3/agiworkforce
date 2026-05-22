@@ -4,7 +4,7 @@ Status: Current
 Owner: Next session lead
 Last updated: 2026-05-21 (extended through round 7, integration pass)
 Branch: `fix/extension-typecheck-and-c02-sync-2026-05-20`
-Head pushed: `d8c65c795`
+Head pushed: `95080f6ef`
 
 ## Round 7 additions (after `b1c2bb428`)
 
