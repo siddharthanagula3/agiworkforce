@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Check, Code2, Globe, Loader2, RefreshCw, ShieldOff } from 'lucide-react';
 import { browserExtension, type ExtensionStatusDiagnostics } from '@agiworkforce/api';
 import { cn } from '@/lib/utils';
 import { isTauri } from '@/lib/tauri-mock';
+import { useIsMounted } from '@/hooks/useIsMounted';
 
 type BridgeState = 'connected' | 'connecting' | 'disconnected' | 'error' | 'unknown';
 
@@ -110,19 +111,12 @@ export function BridgeStatusCard({ fetcher, isTauriHost = isTauri }: BridgeStatu
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Cancellation flag — when the component unmounts (StrictMode double-mount
-  // in dev, fast nav, etc.) any in-flight fetcher promise must NOT call
-  // setState on the unmounted component. Without this guard React emits
-  // "Can't perform a React state update on an unmounted component"
-  // warnings and we'd potentially overwrite fresher state from the new
-  // mount with stale resolved values from the previous one.
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+  // Unmount guard — see hooks/useIsMounted for rationale. Without this,
+  // an in-flight fetcher promise that resolves after the card unmounts
+  // (StrictMode double-mount in dev, fast nav, etc.) triggers a React
+  // warning AND would overwrite fresher state from a new mount with
+  // stale resolved values from the previous one.
+  const mountedRef = useIsMounted();
 
   const effectiveFetcher = fetcher ?? browserExtension.extensionStatus;
 

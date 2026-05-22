@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { AlertCircle, Check, ExternalLink, Loader2, LogOut, RefreshCw, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { McpClient } from '@/api/mcp';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/Tooltip';
+import { useIsMounted } from '@/hooks/useIsMounted';
 import type { ConnectorDef } from './connectorDefinitions';
 
 interface OAuthConnectorCardProps {
@@ -67,19 +68,12 @@ export function OAuthConnectorCard({
   const [revoking, setRevoking] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Unmount guard — handleDisconnect calls onDisconnect() which often
-  // removes this card from the parent's list (the card unmounts mid-
-  // promise). The finally-block setState would then fire on an
-  // unmounted component, triggering React's "Can't perform a state
-  // update on an unmounted component" warning. Same defensive
-  // pattern applied to handleRefresh.
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+  // Unmount guard — see hooks/useIsMounted for rationale. handleDisconnect
+  // calls onDisconnect() which often removes this card from the parent's
+  // list (the card unmounts mid-promise). The finally-block setState
+  // would then fire on an unmounted component. Same applies to
+  // handleRefresh's onRefresh() callback path.
+  const mountedRef = useIsMounted();
 
   const handleDisconnect = useCallback(async () => {
     setRevoking(true);
