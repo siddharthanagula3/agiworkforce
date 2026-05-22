@@ -10,6 +10,20 @@
  * 2. Builds a system prompt that includes that context
  * 3. Streams from the AGI Workforce API (or falls back to vscode.lm)
  * 4. Writes streamed tokens back to the VS Code ChatResponseStream
+ *
+ * ── SYNC-RULE COMPLIANCE (locked 2026-05-22) ─────────────────────────────────
+ * /goal rule: "CLI, VS Code, and Chrome must not sync consumer chat history."
+ *
+ * How this surface complies:
+ *   • Completed conversations are written ONLY to vscode.ExtensionContext.globalState
+ *     via ConversationStore (apps/extension-vscode/src/data/conversationStore.ts).
+ *   • No Supabase/postgres client is imported or instantiated here or anywhere in
+ *     this surface. No writes to chat_messages / conversations / user_projects.
+ *   • ConversationSyncService and MobileConversationSyncService are never referenced.
+ *   • platform/surface.ts throws at extension activation if SOURCE_SURFACE ("vscode")
+ *     is ever reclassified as a SyncedAppSurface (isDeveloperSessionSurface assertion).
+ *   • __tests__/surface.test.ts locks assertSurfaceCanSyncChats('vscode') → throws.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import * as vscode from 'vscode';
