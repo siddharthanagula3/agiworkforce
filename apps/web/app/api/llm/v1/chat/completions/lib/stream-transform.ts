@@ -7,6 +7,7 @@ import { CreditService } from '@/lib/services/credit-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { reconcileUsage } from '@/lib/assert-quota';
+import { recordModelUsage } from '@/lib/cost-tracker';
 import type { ProcessedRequest } from './request-processor';
 // ProcessedRequest carries quotaFeature, isFlagshipRequest, etc. — no extra imports needed
 
@@ -39,6 +40,8 @@ export async function buildStreamResponse(
 
   let inputTokens = 0;
   let outputTokens = 0;
+  let cacheReadInputTokens: number | undefined;
+  let cacheCreationInputTokens: number | undefined;
   let buffer = '';
   const encoder = new TextEncoder();
   const streamStartedAt = Date.now();
@@ -277,6 +280,13 @@ export async function buildStreamResponse(
             }
             if (event.type === 'message_start' && event.message?.usage) {
               inputTokens = Math.max(inputTokens, event.message.usage.input_tokens || 0);
+              // Anthropic streams cache token counts in message_start.message.usage
+              if (event.message.usage.cache_read_input_tokens != null) {
+                cacheReadInputTokens = event.message.usage.cache_read_input_tokens;
+              }
+              if (event.message.usage.cache_creation_input_tokens != null) {
+                cacheCreationInputTokens = event.message.usage.cache_creation_input_tokens;
+              }
             }
             if (event.usage) {
               inputTokens = Math.max(inputTokens, event.usage.prompt_tokens || 0);
@@ -427,6 +437,18 @@ export async function buildStreamResponse(
             '[reconcileUsage] streaming counter update failed',
           );
         });
+      }
+
+      // Fire-and-forget cost tracking (must not block the stream flush).
+      try {
+        recordModelUsage(userId, modelUsed, {
+          inputTokens,
+          outputTokens,
+          cacheReadInputTokens,
+          cacheCreationInputTokens,
+        });
+      } catch (trackingError) {
+        logger.warn({ error: trackingError, userId, requestId }, 'Stream cost tracking failed');
       }
     },
   });
