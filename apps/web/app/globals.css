@@ -2,24 +2,23 @@
 @import '@agiworkforce/design-tokens/chat.css';
 @plugin "tailwindcss-animate";
 
-/* OpenDyslexic font for accessibility */
-@font-face {
-  font-family: 'OpenDyslexic';
-  src: url('https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/woff/OpenDyslexic-Regular.woff')
-    format('woff');
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'OpenDyslexic';
-  src: url('https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/woff/OpenDyslexic-Bold.woff')
-    format('woff');
-  font-weight: bold;
-  font-style: normal;
-  font-display: swap;
-}
+/* OpenDyslexic font for accessibility — DISABLED 2026-05-21.
+ *
+ * The @font-face declarations referenced
+ * https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/woff/*.woff which
+ * the production CSP at apps/web/proxy.ts blocks (font-src is 'self'
+ * + fonts.gstatic.com + js.stripe.com only — third-party CDNs are
+ * intentionally excluded). The font therefore never actually loaded
+ * and the "Dyslexic Friendly" setting in features/settings fell
+ * silently back to the next entry in --font-chat (system-ui).
+ *
+ * The right fix is to self-host the OFL-licensed font binaries
+ * under apps/web/public/fonts/ + change the @font-face src to
+ * '/fonts/OpenDyslexic-Regular.woff' (same-origin, no CSP change
+ * needed). Tracked as follow-up; removing the broken rules now so
+ * the CSP violation stops appearing in browser consoles and our
+ * visual-verification findings JSON.
+ */
 
 /* Tailwind v4 CSS-based configuration */
 @theme {

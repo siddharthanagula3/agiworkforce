@@ -84,6 +84,10 @@ pub(crate) struct FooterProps {
     /// When both this label and the configured status line are available, they are rendered on the
     /// same row separated by ` · `.
     pub(crate) active_agent_label: Option<String>,
+    /// Current reasoning-effort label shown on the right side of the plan-mode banner,
+    /// e.g. "high". When set with plan mode active, the right side renders `● {label} · /effort`
+    /// instead of the context-window indicator.
+    pub(crate) plan_mode_effort_label: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -106,7 +110,7 @@ impl CollaborationModeIndicator {
             String::new()
         };
         match self {
-            CollaborationModeIndicator::Plan => format!("Plan mode{suffix}"),
+            CollaborationModeIndicator::Plan => format!("⏸ plan mode on{suffix}"),
             CollaborationModeIndicator::PairProgramming => {
                 format!("Pair Programming mode{suffix}")
             }
@@ -857,6 +861,15 @@ pub(crate) fn context_window_line(percent: Option<i64>, used_tokens: Option<i64>
     }
 
     Line::from(vec![Span::from("100% context left").dim()])
+}
+
+/// Build the right-side effort indicator shown in plan mode: `● {label} · /effort`.
+pub(crate) fn plan_mode_effort_right_line(label: &str) -> Line<'static> {
+    Line::from(vec![
+        Span::from("● ").magenta(),
+        Span::from(label.to_string()).magenta(),
+        Span::from(" · /effort").dim(),
+    ])
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1690,7 +1703,7 @@ mod tests {
             render_footer_with_mode_indicator(80, &props, Some(CollaborationModeIndicator::Plan));
         let collapsed = screen.split_whitespace().collect::<Vec<_>>().join(" ");
         assert!(
-            collapsed.contains("Plan mode"),
+            collapsed.contains("plan mode on"),
             "mode indicator should remain visible"
         );
         assert!(
@@ -1738,5 +1751,31 @@ mod tests {
             .key;
 
         assert_eq!(actual_key, expected_key);
+    }
+
+    #[test]
+    fn plan_mode_banner_contains_pause_icon_and_on_suffix() {
+        let indicator = CollaborationModeIndicator::Plan;
+        let with_hint = indicator.label(true);
+        let without_hint = indicator.label(false);
+        assert!(
+            with_hint.starts_with("⏸ plan mode on"),
+            "plan mode label should start with '⏸ plan mode on', got: {with_hint}"
+        );
+        assert!(
+            without_hint == "⏸ plan mode on",
+            "plan mode label without cycle hint should be '⏸ plan mode on', got: {without_hint}"
+        );
+        assert!(
+            with_hint.contains("shift+tab to cycle"),
+            "plan mode label with cycle hint should contain cycle hint, got: {with_hint}"
+        );
+    }
+
+    #[test]
+    fn plan_mode_effort_right_line_format() {
+        let line = plan_mode_effort_right_line("high");
+        let text: String = line.spans.iter().map(|s| s.content.as_ref()).collect();
+        assert_eq!(text, "● high · /effort");
     }
 }

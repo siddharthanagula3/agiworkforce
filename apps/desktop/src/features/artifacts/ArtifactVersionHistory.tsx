@@ -12,6 +12,7 @@ import { Check, ChevronRight, GitBranch, Loader2, RotateCcw } from 'lucide-react
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useIsMounted } from '@/hooks/useIsMounted';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ScrollArea } from '@/components/ui/ScrollArea';
@@ -45,6 +46,8 @@ export function ArtifactVersionHistory({
   const [diff, setDiff] = useState<VersionDiff | null>(null);
   const [isDiffLoading, setIsDiffLoading] = useState(false);
   const [isRollingBack, setIsRollingBack] = useState(false);
+  // Version history modal/panel may close while rollback is in flight.
+  const isMounted = useIsMounted();
 
   useEffect(() => {
     if (!artifactId) return;
@@ -99,16 +102,20 @@ export function ArtifactVersionHistory({
       const ok = await rollbackArtifact(artifactId, selected);
       if (ok) {
         toast.success(`Rolled back to v${selected}`);
-        setSelected(null);
-        setDiff(null);
+        if (isMounted.current) {
+          setSelected(null);
+          setDiff(null);
+        }
         onRollbackSuccess?.();
       } else toast.error('Rollback failed');
     } catch {
       toast.error('Rollback failed');
     } finally {
-      setIsRollingBack(false);
+      if (isMounted.current) {
+        setIsRollingBack(false);
+      }
     }
-  }, [artifactId, selected, isRollingBack, rollbackArtifact, onRollbackSuccess]);
+  }, [artifactId, selected, isRollingBack, rollbackArtifact, onRollbackSuccess, isMounted]);
 
   if (isLoading)
     return (

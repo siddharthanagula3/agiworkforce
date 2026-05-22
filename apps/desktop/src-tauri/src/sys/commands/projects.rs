@@ -38,6 +38,9 @@ pub struct Project {
     pub is_archived: bool,
     pub created_at: String,
     pub updated_at: String,
+    pub icon_emoji: Option<String>,
+    pub accent_color: Option<String>,
+    pub default_privacy_mode: Option<String>,
 }
 
 /// Project settings that can be customized per project
@@ -63,6 +66,9 @@ pub struct ProjectUpdate {
     pub icon: Option<String>,
     pub is_archived: Option<bool>,
     pub updated_at: Option<String>,
+    pub icon_emoji: Option<String>,
+    pub accent_color: Option<String>,
+    pub default_privacy_mode: Option<String>,
 }
 
 /// Create a new project
@@ -81,8 +87,9 @@ pub async fn project_create(
     conn.execute(
         "INSERT INTO projects (
             id, name, description, custom_instructions, files, conversation_ids,
-            color, icon, is_archived, created_at, updated_at
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            color, icon, is_archived, created_at, updated_at,
+            icon_emoji, accent_color, default_privacy_mode
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         params![
             project.id,
             project.name,
@@ -95,6 +102,9 @@ pub async fn project_create(
             project.is_archived,
             project.created_at,
             project.updated_at,
+            project.icon_emoji,
+            project.accent_color,
+            project.default_privacy_mode,
         ],
     )
     .map_err(|e| format!("Failed to create project: {}", e))?;
@@ -110,7 +120,8 @@ pub async fn project_list(db: State<'_, AppDatabase>) -> Result<Vec<Project>, St
     let mut stmt = conn
         .prepare(
             "SELECT id, name, description, custom_instructions, files, conversation_ids,
-                    color, icon, is_archived, created_at, updated_at
+                    color, icon, is_archived, created_at, updated_at,
+                    icon_emoji, accent_color, default_privacy_mode
              FROM projects
              ORDER BY updated_at DESC",
         )
@@ -137,6 +148,9 @@ pub async fn project_list(db: State<'_, AppDatabase>) -> Result<Vec<Project>, St
                 is_archived: row.get(8)?,
                 created_at: row.get(9)?,
                 updated_at: row.get(10)?,
+                icon_emoji: row.get(11)?,
+                accent_color: row.get(12)?,
+                default_privacy_mode: row.get(13)?,
             })
         })
         .map_err(|e| format!("Failed to query projects: {}", e))?
@@ -157,7 +171,8 @@ pub async fn project_get(
     let mut stmt = conn
         .prepare(
             "SELECT id, name, description, custom_instructions, files, conversation_ids,
-                    color, icon, is_archived, created_at, updated_at
+                    color, icon, is_archived, created_at, updated_at,
+                    icon_emoji, accent_color, default_privacy_mode
              FROM projects
              WHERE id = ?1",
         )
@@ -184,6 +199,9 @@ pub async fn project_get(
                 is_archived: row.get(8)?,
                 created_at: row.get(9)?,
                 updated_at: row.get(10)?,
+                icon_emoji: row.get(11)?,
+                accent_color: row.get(12)?,
+                default_privacy_mode: row.get(13)?,
             })
         })
         .optional()
@@ -243,6 +261,18 @@ pub async fn project_update(
     if let Some(updated_at) = &updates.updated_at {
         set_clauses.push("updated_at = ?");
         values.push(Box::new(updated_at.clone()));
+    }
+    if let Some(icon_emoji) = &updates.icon_emoji {
+        set_clauses.push("icon_emoji = ?");
+        values.push(Box::new(icon_emoji.clone()));
+    }
+    if let Some(accent_color) = &updates.accent_color {
+        set_clauses.push("accent_color = ?");
+        values.push(Box::new(accent_color.clone()));
+    }
+    if let Some(default_privacy_mode) = &updates.default_privacy_mode {
+        set_clauses.push("default_privacy_mode = ?");
+        values.push(Box::new(default_privacy_mode.clone()));
     }
 
     if set_clauses.is_empty() {

@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { invoke } from '@/lib/tauri-mock';
+import { useIsMounted } from '@/hooks/useIsMounted';
 import { WEB_APP_URL } from '@/api/config';
 
 interface ShareConversationDialogProps {
@@ -38,6 +39,8 @@ export function ShareConversationDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // Share dialog can close mid-fetch; guard post-await setState.
+  const isMounted = useIsMounted();
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -74,7 +77,7 @@ export function ShareConversationDialog({
       }
 
       const data = (await response.json()) as { url: string };
-      setShareUrl(data.url);
+      if (isMounted.current) setShareUrl(data.url);
     } catch (err) {
       const message =
         err instanceof DOMException && err.name === 'AbortError'
@@ -82,26 +85,29 @@ export function ShareConversationDialog({
           : err instanceof Error
             ? err.message
             : 'Failed to create share link';
-      setError(message);
+      if (isMounted.current) setError(message);
       toast.error('Failed to create share link');
     } finally {
       clearTimeout(timeoutId);
-      setIsLoading(false);
+      if (isMounted.current) setIsLoading(false);
     }
-  }, [conversationId]);
+  }, [conversationId, isMounted]);
 
   const handleCopy = useCallback(async () => {
     if (!shareUrl) return;
     try {
       await navigator.clipboard.writeText(shareUrl);
+      if (!isMounted.current) return;
       setCopied(true);
       toast.success('Link copied to clipboard');
       if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
-      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+      copiedTimerRef.current = setTimeout(() => {
+        if (isMounted.current) setCopied(false);
+      }, 2000);
     } catch {
       toast.error('Failed to copy link');
     }
-  }, [shareUrl]);
+  }, [shareUrl, isMounted]);
 
   const handleClose = useCallback(() => {
     // Reset state when dialog closes so it is fresh on next open

@@ -1,0 +1,361 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Mobile SendPreview snapshots locks the BYOK turn rendered tree 1`] = `
+<View
+  style={
+    {
+      "backgroundColor": "rgba(245, 158, 11, 0.06)",
+      "borderColor": "rgba(245, 158, 11, 0.3)",
+      "borderRadius": 8,
+      "borderWidth": 1,
+      "gap": 6,
+      "padding": 10,
+    }
+  }
+  testID="send-preview"
+>
+  <View
+    style={
+      {
+        "alignItems": "center",
+        "flexDirection": "row",
+        "gap": 8,
+      }
+    }
+  >
+    <View
+      color="#f59e0b"
+      size={14}
+      testID="icon-key-round"
+    />
+    <Text
+      numberOfLines={1}
+      style={
+        {
+          "color": "#fff",
+          "flex": 1,
+          "fontSize": 12,
+          "fontWeight": "600",
+        }
+      }
+    >
+      Sent to api.anthropic.com
+    </Text>
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "backgroundColor": "rgba(255, 255, 255, 0.04)",
+          "borderColor": "#333",
+          "borderRadius": 9999,
+          "borderWidth": 1,
+          "flexDirection": "row",
+          "gap": 3,
+          "paddingHorizontal": 6,
+          "paddingVertical": 2,
+        }
+      }
+    >
+      <View
+        color="#aaa"
+        size={10}
+        testID="icon-lock"
+      />
+      <Text
+        style={
+          {
+            "color": "#aaa",
+            "fontSize": 9,
+            "fontWeight": "700",
+            "letterSpacing": 0.5,
+            "textTransform": "uppercase",
+          }
+        }
+      >
+        BYOK
+      </Text>
+    </View>
+  </View>
+  <Text
+    style={
+      {
+        "color": "#777",
+        "fontSize": 10,
+      }
+    }
+  >
+    Claude Sonnet 4.6
+  </Text>
+  <Text
+    style={
+      {
+        "color": "#aaa",
+        "fontSize": 11,
+        "lineHeight": 15,
+      }
+    }
+  >
+    BYOK turn. The request, attachments, and system prompt go directly to api.anthropic.com via your API key. AGI does not receive a copy of the payload.
+  </Text>
+</View>
+`;
+
+exports[`Mobile SendPreview snapshots locks the Local turn rendered tree 1`] = `
+<View
+  style={
+    {
+      "backgroundColor": "rgba(16, 185, 129, 0.06)",
+      "borderColor": "rgba(16, 185, 129, 0.3)",
+      "borderRadius": 8,
+      "borderWidth": 1,
+      "gap": 6,
+      "padding": 10,
+    }
+  }
+  testID="send-preview"
+>
+  <View
+    style={
+      {
+        "alignItems": "center",
+        "flexDirection": "row",
+        "gap": 8,
+      }
+    }
+  >
+    <View
+      color="#10b981"
+      size={14}
+      testID="icon-hard-drive"
+    />
+    <Text
+      numberOfLines={1}
+      style={
+        {
+          "color": "#fff",
+          "flex": 1,
+          "fontSize": 12,
+          "fontWeight": "600",
+        }
+      }
+    >
+      Stays on this device
+    </Text>
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "backgroundColor": "rgba(255, 255, 255, 0.04)",
+          "borderColor": "#333",
+          "borderRadius": 9999,
+          "borderWidth": 1,
+          "flexDirection": "row",
+          "gap": 3,
+          "paddingHorizontal": 6,
+          "paddingVertical": 2,
+        }
+      }
+    >
+      <View
+        color="#aaa"
+        size={10}
+        testID="icon-lock"
+      />
+      <Text
+        style={
+          {
+            "color": "#aaa",
+            "fontSize": 9,
+            "fontWeight": "700",
+            "letterSpacing": 0.5,
+            "textTransform": "uppercase",
+          }
+        }
+      >
+        Local
+      </Text>
+    </View>
+  </View>
+  <Text
+    style={
+      {
+        "color": "#777",
+        "fontSize": 10,
+      }
+    }
+  >
+    Llama 3.2 8B
+  </Text>
+  <Text
+    style={
+      {
+        "color": "#aaa",
+        "fontSize": 11,
+        "lineHeight": 15,
+      }
+    }
+  >
+    Local turn. The model runs on your device and nothing is uploaded to AGI cloud or third-party providers.
+  </Text>
+  <View
+    accessibilityLabel="Show send details"
+    accessibilityRole="button"
+    accessibilityState={
+      {
+        "busy": undefined,
+        "checked": undefined,
+        "disabled": undefined,
+        "expanded": undefined,
+        "selected": undefined,
+      }
+    }
+    accessibilityValue={
+      {
+        "max": undefined,
+        "min": undefined,
+        "now": undefined,
+        "text": undefined,
+      }
+    }
+    accessible={true}
+    collapsable={false}
+    focusable={true}
+    onBlur={[Function]}
+    onClick={[Function]}
+    onFocus={[Function]}
+    onResponderGrant={[Function]}
+    onResponderMove={[Function]}
+    onResponderRelease={[Function]}
+    onResponderTerminate={[Function]}
+    onResponderTerminationRequest={[Function]}
+    onStartShouldSetResponder={[Function]}
+    style={
+      {
+        "alignItems": "center",
+        "alignSelf": "flex-start",
+        "flexDirection": "row",
+        "gap": 4,
+      }
+    }
+  >
+    <View
+      color="#777"
+      size={12}
+      testID="icon-chevron-down"
+    />
+    <Text
+      style={
+        {
+          "color": "#777",
+          "fontSize": 9,
+          "fontWeight": "700",
+          "letterSpacing": 0.5,
+          "textTransform": "uppercase",
+        }
+      }
+    >
+      Show details
+    </Text>
+  </View>
+</View>
+`;
+
+exports[`Mobile SendPreview snapshots locks the Managed turn rendered tree 1`] = `
+<View
+  style={
+    {
+      "backgroundColor": "rgba(56, 189, 248, 0.06)",
+      "borderColor": "rgba(56, 189, 248, 0.3)",
+      "borderRadius": 8,
+      "borderWidth": 1,
+      "gap": 6,
+      "padding": 10,
+    }
+  }
+  testID="send-preview"
+>
+  <View
+    style={
+      {
+        "alignItems": "center",
+        "flexDirection": "row",
+        "gap": 8,
+      }
+    }
+  >
+    <View
+      color="#7dd3fc"
+      size={14}
+      testID="icon-cloud"
+    />
+    <Text
+      numberOfLines={1}
+      style={
+        {
+          "color": "#fff",
+          "flex": 1,
+          "fontSize": 12,
+          "fontWeight": "600",
+        }
+      }
+    >
+      Sent to gateway.agiworkforce.com
+    </Text>
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "backgroundColor": "rgba(255, 255, 255, 0.04)",
+          "borderColor": "#333",
+          "borderRadius": 9999,
+          "borderWidth": 1,
+          "flexDirection": "row",
+          "gap": 3,
+          "paddingHorizontal": 6,
+          "paddingVertical": 2,
+        }
+      }
+    >
+      <View
+        color="#aaa"
+        size={10}
+        testID="icon-lock"
+      />
+      <Text
+        style={
+          {
+            "color": "#aaa",
+            "fontSize": 9,
+            "fontWeight": "700",
+            "letterSpacing": 0.5,
+            "textTransform": "uppercase",
+          }
+        }
+      >
+        Managed
+      </Text>
+    </View>
+  </View>
+  <Text
+    style={
+      {
+        "color": "#777",
+        "fontSize": 10,
+      }
+    }
+  >
+    AGI Pro
+  </Text>
+  <Text
+    style={
+      {
+        "color": "#aaa",
+        "fontSize": 11,
+        "lineHeight": 15,
+      }
+    }
+  >
+    Managed turn. The request, attachments, and system prompt go through gateway.agiworkforce.com subject to the managed-mode retention and access controls.
+  </Text>
+</View>
+`;

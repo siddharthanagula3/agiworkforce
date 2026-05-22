@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { useAgentTaskStore } from '../../stores/agentTaskStore';
+import { useIsMounted } from '../../hooks/useIsMounted';
 
 type ExecutionMode = 'auto' | 'sequential' | 'parallel' | 'swarm';
 
@@ -20,6 +21,9 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
   const [maxIterations, setMaxIterations] = useState(10);
   const [executionMode, setExecutionMode] = useState<ExecutionMode>('auto');
   const [submitting, setSubmitting] = useState(false);
+  // Task creator panel may close mid-submit (user closes the panel or
+  // parent re-renders); guard finally setState.
+  const isMounted = useIsMounted();
   const [swarmRecommended, setSwarmRecommended] = useState(false);
 
   // Check if swarm is recommended when goal changes
@@ -65,16 +69,17 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
           break;
       }
       toast.success('Task launched successfully');
-      setGoal('');
+      if (isMounted.current) setGoal('');
       onTaskCreated?.();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to submit task';
       toast.error(message);
     } finally {
-      setSubmitting(false);
+      if (isMounted.current) setSubmitting(false);
     }
   }, [
     goal,
+    isMounted,
     maxIterations,
     executionMode,
     submitGoal,

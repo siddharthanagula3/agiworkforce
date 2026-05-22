@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { cn } from '@/lib/utils';
+import { useIsMounted } from '@/hooks/useIsMounted';
 import type { MemoryCategory, MemoryEntry } from '@/stores/memoryStore';
 import { useMemoryStore } from '@/stores/memoryStore';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -170,6 +171,10 @@ export const MemoryCard = memo(function MemoryCard({
   const [isEditingImportance, setIsEditingImportance] = useState(false);
 
   const { forget, remember } = useMemoryStore();
+  // Parent often removes the card from the list when a memory is forgotten
+  // (the card unmounts before the finally block runs). Guard the
+  // post-await setState to avoid React's unmounted-component warning.
+  const isMounted = useIsMounted();
 
   const categoryColors = CATEGORY_COLORS[memory.category];
   const categoryLabel = CATEGORY_LABELS[memory.category];
@@ -186,10 +191,12 @@ export const MemoryCard = memo(function MemoryCard({
     } catch {
       // Error is already handled by the store with toast
     } finally {
-      setIsDeleting(false);
-      setShowDeleteConfirm(false);
+      if (isMounted.current) {
+        setIsDeleting(false);
+        setShowDeleteConfirm(false);
+      }
     }
-  }, [forget, memory.category, memory.topic]);
+  }, [forget, memory.category, memory.topic, isMounted]);
 
   const handleImportanceChange = useCallback(
     async (newImportance: number) => {

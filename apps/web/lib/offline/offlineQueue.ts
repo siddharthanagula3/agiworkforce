@@ -1,233 +1,50 @@
 /**
- * Offline Queue
+ * Offline Queue (Web wrapper)
  *
- * Manages a queue of messages and actions sent while offline.
- * Persists to localStorage and syncs when connectivity is restored.
+ * Web-surface binding of the shared `@agiworkforce/runtime/offline-queue`
+ * factory. Provides browser-localStorage storage, the pino-style logger
+ * from `@/lib/logger`, an `/api/health` HEAD probe, and a
+ * `window.addEventListener('storage')` change subscriber.
  *
- * Features:
- * - Queue messages while offline
- * - Queue tool execution requests
- * - Persist queue to localStorage
- * - Retry with exponential backoff
- * - Clear successful items after sync
+ * The previous standalone implementation lived in this file and was
+ * copy-ported to `apps/desktop/src/lib/offline/offlineQueue.ts`. Both
+ * surfaces now share the canonical factory; only the adapters differ.
  */
 
+import { createOfflineQueue } from '@agiworkforce/runtime/offline-queue';
 import { safeGetJSON, safeSetJSON } from '@/utils/localStorage';
 import { logger } from '@/lib/logger';
-import type {
-  QueuedMessage,
-  QueuedToolExecution,
-  OfflineQueueState,
-  SyncCallbacks,
-  SyncSummary,
-} from '@agiworkforce/types';
 
-// Re-export for backward compatibility
-export type { QueuedMessage, QueuedToolExecution, OfflineQueueState, SyncCallbacks, SyncSummary };
-
-// Storage key
 const OFFLINE_QUEUE_KEY = 'agi_offline_queue';
 
-// Retry configuration
-const MAX_RETRIES = 3;
-const INITIAL_BACKOFF_MS = 1000; // 1 second
-const MAX_BACKOFF_MS = 30000; // 30 seconds
-
-/**
- * Calculate exponential backoff delay
- */
-function getBackoffDelay(retryCount: number): number {
-  const delay = INITIAL_BACKOFF_MS * Math.pow(2, retryCount);
-  return Math.min(delay, MAX_BACKOFF_MS);
-}
-
-/**
- * Load queue from localStorage
- */
-function loadQueue(): OfflineQueueState {
-  try {
-    const data = safeGetJSON<OfflineQueueState>(OFFLINE_QUEUE_KEY, {
-      messages: [],
-      toolExecutions: [],
-    });
-    return data || { messages: [], toolExecutions: [] };
-  } catch (error) {
-    logger.error({ err: error }, '[OfflineQueue] Failed to load queue');
-    return { messages: [], toolExecutions: [] };
-  }
-}
-
-/**
- * Save queue to localStorage
- */
-function saveQueue(queue: OfflineQueueState): void {
-  try {
-    safeSetJSON(OFFLINE_QUEUE_KEY, queue);
-  } catch (error) {
-    logger.error({ err: error }, '[OfflineQueue] Failed to save queue');
-  }
-}
-
-/**
- * Add a message to the offline queue
- */
-export function queueMessage(sessionId: string, content: string): string {
-  try {
-    // WEB-13: Math.random is intentional — local-only client queue ID; never used as an auth token.
-
-    const id = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const queue = loadQueue();
-
-    const message: QueuedMessage = {
-      id,
-      sessionId,
-      content,
-      timestamp: new Date().toISOString(),
-      retryCount: 0,
-      addedAt: new Date().toISOString(),
-    };
-
-    queue.messages.push(message);
-    saveQueue(queue);
-
-    return id;
-  } catch (error) {
-    logger.error({ err: error }, '[OfflineQueue] Failed to queue message');
-    throw error;
-  }
-}
-
-/**
- * Add a tool execution request to the offline queue
- */
-export function queueToolExecution(
-  sessionId: string,
-  toolName: string,
-  toolInput: Record<string, unknown>,
-): string {
-  try {
-    // WEB-13: Math.random is intentional — local-only client queue ID; never used as an auth token.
-
-    const id = `tool_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const queue = loadQueue();
-
-    const execution: QueuedToolExecution = {
-      id,
-      sessionId,
-      toolName,
-      toolInput,
-      timestamp: new Date().toISOString(),
-      retryCount: 0,
-      addedAt: new Date().toISOString(),
-    };
-
-    queue.toolExecutions.push(execution);
-    saveQueue(queue);
-
-    return id;
-  } catch (error) {
-    logger.error({ err: error }, '[OfflineQueue] Failed to queue tool execution');
-    throw error;
-  }
-}
-
-/**
- * Get all queued items (for UI display)
- */
-export function getQueuedItems(): {
-  messages: QueuedMessage[];
-  toolExecutions: QueuedToolExecution[];
-} {
-  const queue = loadQueue();
-  return {
-    messages: queue.messages,
-    toolExecutions: queue.toolExecutions,
-  };
-}
-
-/**
- * Get count of queued items
- */
-export function getQueuedItemCount(): number {
-  const queue = loadQueue();
-  return queue.messages.length + queue.toolExecutions.length;
-}
-
-/**
- * Clear a specific message from queue (after successful sync)
- */
-export function clearQueuedMessage(messageId: string): void {
-  try {
-    const queue = loadQueue();
-    queue.messages = queue.messages.filter((m) => m.id !== messageId);
-    saveQueue(queue);
-  } catch (error) {
-    logger.error({ err: error }, '[OfflineQueue] Failed to clear message');
-  }
-}
-
-/**
- * Clear a specific tool execution from queue (after successful sync)
- */
-export function clearQueuedToolExecution(toolId: string): void {
-  try {
-    const queue = loadQueue();
-    queue.toolExecutions = queue.toolExecutions.filter((t) => t.id !== toolId);
-    saveQueue(queue);
-  } catch (error) {
-    logger.error({ err: error }, '[OfflineQueue] Failed to clear tool execution');
-  }
-}
-
-/**
- * Clear all queued items
- */
-export function clearAllQueued(): void {
-  try {
-    localStorage.removeItem(OFFLINE_QUEUE_KEY);
-  } catch (error) {
-    logger.error({ err: error }, '[OfflineQueue] Failed to clear all queued items');
-  }
-}
-
-/**
- * Increment retry count for a message
- */
-function incrementMessageRetry(messageId: string): void {
-  const queue = loadQueue();
-  const message = queue.messages.find((m) => m.id === messageId);
-  if (message) {
-    message.retryCount++;
-    saveQueue(queue);
-  }
-}
-
-/**
- * Increment retry count for a tool execution
- */
-function incrementToolRetry(toolId: string): void {
-  const queue = loadQueue();
-  const tool = queue.toolExecutions.find((t) => t.id === toolId);
-  if (tool) {
-    tool.retryCount++;
-    saveQueue(queue);
-  }
-}
-
-/**
- * Check if online by testing server connectivity
- */
-async function isOnline(): Promise<boolean> {
-  try {
-    // Check navigator.onLine first (quick check)
-    if (!navigator.onLine) {
-      return false;
-    }
-
-    // Verify with a lightweight server health check
+const queue = createOfflineQueue({
+  storage: {
+    getJSON: safeGetJSON,
+    setJSON: safeSetJSON,
+    remove: (key) => {
+      try {
+        localStorage.removeItem(key);
+      } catch (error) {
+        logger.error({ err: error }, '[OfflineQueue] failed to remove storage key');
+      }
+    },
+  },
+  logger: {
+    error: (meta, message) => logger.error(meta, message ?? ''),
+    warn: (messageOrMeta, message) =>
+      typeof messageOrMeta === 'string'
+        ? logger.warn(messageOrMeta)
+        : logger.warn(messageOrMeta as Record<string, unknown>, message ?? ''),
+    info: (messageOrMeta, message) =>
+      typeof messageOrMeta === 'string'
+        ? logger.info(messageOrMeta)
+        : logger.info(messageOrMeta as Record<string, unknown>, message ?? ''),
+  },
+  storageKey: OFFLINE_QUEUE_KEY,
+  probeOnline: async () => {
+    if (!navigator.onLine) return false;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
     try {
       const response = await fetch('/api/health', {
         method: 'HEAD',
@@ -235,171 +52,36 @@ async function isOnline(): Promise<boolean> {
       });
       clearTimeout(timeoutId);
       return response.ok;
-    } catch (error) {
+    } catch {
       clearTimeout(timeoutId);
       return false;
     }
-  } catch (error) {
-    logger.error({ err: error }, '[OfflineQueue] Failed to check online status');
-    return navigator.onLine;
-  }
-}
+  },
+  onStorageChange: (storageKey, callback) => {
+    const handler = (event: StorageEvent) => {
+      if (event.key === storageKey) callback();
+    };
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  },
+});
 
-/**
- * Sync offline queue with server
- * Attempts to send all queued messages and tool executions
- */
-export async function syncOfflineQueue(callbacks?: SyncCallbacks): Promise<SyncSummary> {
-  const startTime = Date.now();
-  const summary: SyncSummary = {
-    messagesSynced: 0,
-    messagesFailed: 0,
-    toolsSynced: 0,
-    toolsFailed: 0,
-    totalTime: 0,
-  };
+export const queueMessage = queue.queueMessage;
+export const queueToolExecution = queue.queueToolExecution;
+export const getQueuedItems = queue.getQueuedItems;
+export const getQueuedItemCount = queue.getQueuedItemCount;
+export const clearQueuedMessage = queue.clearQueuedMessage;
+export const clearQueuedToolExecution = queue.clearQueuedToolExecution;
+export const clearAllQueued = queue.clearAllQueued;
+export const syncOfflineQueue = queue.syncOfflineQueue;
+export const getLastSyncTime = queue.getLastSyncTime;
+export const getMessageRetryStatus = queue.getMessageRetryStatus;
+export const subscribeToQueueChanges = queue.subscribeToQueueChanges;
 
-  try {
-    // Check connectivity first
-    const online = await isOnline();
-    if (!online) {
-      logger.info('[OfflineQueue] Still offline, skipping sync');
-      callbacks?.onSyncComplete?.(false, summary);
-      return summary;
-    }
-
-    const queue = loadQueue();
-
-    // Sync messages
-    for (const message of queue.messages) {
-      try {
-        // Check if max retries exceeded
-        if (message.retryCount >= MAX_RETRIES) {
-          logger.warn(`[OfflineQueue] Max retries exceeded for message ${message.id}`);
-          summary.messagesFailed++;
-          clearQueuedMessage(message.id);
-          continue;
-        }
-
-        if (callbacks?.onMessageSync) {
-          await callbacks.onMessageSync(message);
-          summary.messagesSynced++;
-          clearQueuedMessage(message.id);
-        }
-      } catch (error) {
-        logger.error(
-          { err: error, messageId: message.id },
-          '[OfflineQueue] Failed to sync message',
-        );
-        incrementMessageRetry(message.id);
-        summary.messagesFailed++;
-
-        // Re-throw if we should stop processing (e.g., auth error)
-        if (error instanceof Error && error.message.includes('401')) {
-          throw error;
-        }
-      }
-    }
-
-    // Sync tool executions
-    for (const tool of queue.toolExecutions) {
-      try {
-        // Check if max retries exceeded
-        if (tool.retryCount >= MAX_RETRIES) {
-          logger.warn(`[OfflineQueue] Max retries exceeded for tool ${tool.id}`);
-          summary.toolsFailed++;
-          clearQueuedToolExecution(tool.id);
-          continue;
-        }
-
-        if (callbacks?.onToolSync) {
-          await callbacks.onToolSync(tool);
-          summary.toolsSynced++;
-          clearQueuedToolExecution(tool.id);
-        }
-      } catch (error) {
-        logger.error({ err: error, toolId: tool.id }, '[OfflineQueue] Failed to sync tool');
-        incrementToolRetry(tool.id);
-        summary.toolsFailed++;
-
-        // Re-throw if we should stop processing
-        if (error instanceof Error && error.message.includes('401')) {
-          throw error;
-        }
-      }
-    }
-
-    // Update last sync time
-    const updatedQueue = loadQueue();
-    updatedQueue.lastSyncTime = new Date().toISOString();
-    saveQueue(updatedQueue);
-
-    summary.totalTime = Date.now() - startTime;
-    callbacks?.onSyncComplete?.(true, summary);
-
-    return summary;
-  } catch (error) {
-    logger.error({ err: error }, '[OfflineQueue] Sync failed with fatal error');
-    summary.totalTime = Date.now() - startTime;
-    callbacks?.onSyncComplete?.(false, summary);
-    throw error;
-  }
-}
-
-/**
- * Get last successful sync time
- */
-export function getLastSyncTime(): Date | null {
-  try {
-    const queue = loadQueue();
-    return queue.lastSyncTime ? new Date(queue.lastSyncTime) : null;
-  } catch (error) {
-    logger.error({ err: error }, '[OfflineQueue] Failed to get last sync time');
-    return null;
-  }
-}
-
-/**
- * Get details about retry status for a message
- */
-export function getMessageRetryStatus(messageId: string): {
-  retryCount: number;
-  maxRetries: number;
-  canRetry: boolean;
-  nextRetryIn?: number;
-} | null {
-  const queue = loadQueue();
-  const message = queue.messages.find((m) => m.id === messageId);
-
-  if (!message) {
-    return null;
-  }
-
-  const canRetry = message.retryCount < MAX_RETRIES;
-  const nextRetryIn = canRetry ? getBackoffDelay(message.retryCount) : undefined;
-
-  return {
-    retryCount: message.retryCount,
-    maxRetries: MAX_RETRIES,
-    canRetry,
-    nextRetryIn,
-  };
-}
-
-/**
- * Subscribe to offline queue changes (for reactive UI updates)
- * Returns unsubscribe function
- */
-export function subscribeToQueueChanges(callback: () => void): () => void {
-  const handleStorageChange = (event: StorageEvent) => {
-    if (event.key === OFFLINE_QUEUE_KEY) {
-      callback();
-    }
-  };
-
-  window.addEventListener('storage', handleStorageChange);
-
-  return () => {
-    window.removeEventListener('storage', handleStorageChange);
-  };
-}
+export type {
+  QueuedMessage,
+  QueuedToolExecution,
+  OfflineQueueState,
+  SyncCallbacks,
+  SyncSummary,
+} from '@agiworkforce/types';

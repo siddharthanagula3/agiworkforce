@@ -14,6 +14,7 @@ import { AppState, type AppStateStatus } from 'react-native';
 import { supabase, getCurrentUser } from './supabase';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { assertSurfaceCanSyncChats } from '@agiworkforce/types';
 import type {
   LegacyWebSyncEvent as SyncEvent,
   LegacyWebSyncOrigin as SyncOrigin,
@@ -47,6 +48,17 @@ export class MobileConversationSyncService {
   private statusListeners: Set<(status: SyncStatus) => void> = new Set();
   private lastSyncAt: Date | null = null;
   private onSyncCallback: ((conversations: SyncedConversation[]) => void) | null = null;
+
+  constructor() {
+    // /goal sync-rule enforcement: consumer chat sync is Web/Desktop/
+    // Mobile only. If a future refactor accidentally constructs this
+    // service from a developer surface (CLI/VS Code/Chrome) via shared
+    // code reuse, the assertion fails fast at construction rather than
+    // silently enrolling the surface into the consumer chat-history
+    // realtime channel. See `assertSurfaceCanSyncChats` in
+    // packages/types/src/suite-contracts.ts.
+    assertSurfaceCanSyncChats(this.origin);
+  }
 
   /** Current sync status. */
   get status(): SyncStatus {

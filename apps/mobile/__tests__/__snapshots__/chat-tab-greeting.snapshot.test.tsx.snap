@@ -1,0 +1,17 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Chat tab — time-of-day greeting locks greeting component tree at hour 19 (evening) 1`] = `
+<Text
+  style={
+    {
+      "color": "#fff",
+      "fontSize": 28,
+      "fontWeight": "500",
+      "lineHeight": 34,
+      "textAlign": "center",
+    }
+  }
+>
+  How can I help you this evening?
+</Text>
+`;

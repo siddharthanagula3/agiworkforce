@@ -1,0 +1,251 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Composer — voice scaffolding snapshots RecordingOverlay locks recording overlay tree when visible=true at 3.2s 1`] = `
+<View
+  accessibilityLabel="Recording in progress"
+  accessibilityRole="alert"
+  className="absolute inset-x-0 bottom-0 px-4 pb-4 pt-3"
+  entering={{}}
+  exiting={{}}
+  style={
+    {
+      "backgroundColor": "rgba(15, 15, 15, 0.95)",
+    }
+  }
+>
+  <View
+    className="flex-row items-center justify-center gap-2 mb-3"
+  >
+    <View
+      style={
+        [
+          {
+            "backgroundColor": "#ef4444",
+            "borderRadius": 5,
+            "height": 10,
+            "width": 10,
+          },
+          {
+            "opacity": 1,
+          },
+        ]
+      }
+    />
+    <Text
+      className="text-red-400 text-sm font-medium"
+    >
+      Recording
+    </Text>
+    <Text
+      className="text-white/50 text-sm font-mono ml-2"
+    >
+      00:03
+    </Text>
+  </View>
+  <View
+    className="items-center mb-4"
+  >
+    <View
+      active={true}
+      audioLevel={0.6}
+      barCount={7}
+      barWidth={3}
+      color="#ef4444"
+      gap={3}
+      maxHeight={32}
+      minHeight={4}
+      testID="waveform"
+    />
+  </View>
+  <View
+    className="flex-row items-center justify-center gap-8"
+  >
+    <View
+      accessibilityLabel="Cancel recording"
+      accessibilityRole="button"
+      accessibilityState={
+        {
+          "busy": undefined,
+          "checked": undefined,
+          "disabled": undefined,
+          "expanded": undefined,
+          "selected": undefined,
+        }
+      }
+      accessibilityValue={
+        {
+          "max": undefined,
+          "min": undefined,
+          "now": undefined,
+          "text": undefined,
+        }
+      }
+      accessible={true}
+      className="w-12 h-12 rounded-full bg-white/10 items-center justify-center active:bg-white/20"
+      collapsable={false}
+      focusable={true}
+      onBlur={[Function]}
+      onClick={[Function]}
+      onFocus={[Function]}
+      onResponderGrant={[Function]}
+      onResponderMove={[Function]}
+      onResponderRelease={[Function]}
+      onResponderTerminate={[Function]}
+      onResponderTerminationRequest={[Function]}
+      onStartShouldSetResponder={[Function]}
+    >
+      <View
+        color="#aaa"
+        size={22}
+        testID="icon-x"
+      />
+    </View>
+    <View
+      accessibilityLabel="Send recording"
+      accessibilityRole="button"
+      accessibilityState={
+        {
+          "busy": undefined,
+          "checked": undefined,
+          "disabled": undefined,
+          "expanded": undefined,
+          "selected": undefined,
+        }
+      }
+      accessibilityValue={
+        {
+          "max": undefined,
+          "min": undefined,
+          "now": undefined,
+          "text": undefined,
+        }
+      }
+      accessible={true}
+      className="w-14 h-14 rounded-full items-center justify-center active:opacity-80"
+      collapsable={false}
+      focusable={true}
+      onBlur={[Function]}
+      onClick={[Function]}
+      onFocus={[Function]}
+      onResponderGrant={[Function]}
+      onResponderMove={[Function]}
+      onResponderRelease={[Function]}
+      onResponderTerminate={[Function]}
+      onResponderTerminationRequest={[Function]}
+      onStartShouldSetResponder={[Function]}
+      style={
+        {
+          "backgroundColor": "#c0513a",
+        }
+      }
+    >
+      <View
+        color="#ffffff"
+        size={24}
+        testID="icon-check"
+      />
+    </View>
+  </View>
+</View>
+`;
+
+exports[`Composer — voice scaffolding snapshots VoiceInputButton locks disabled mic button tree (during streaming) 1`] = `
+<View
+  className="relative items-center justify-center"
+>
+  <View
+    accessibilityHint="Tap to start or stop recording. Hold for instant push-to-talk. Long press for voice conversation mode."
+    accessibilityLabel="Tap to record, hold for push-to-talk"
+    accessibilityRole="button"
+    accessibilityState={
+      {
+        "busy": false,
+        "checked": undefined,
+        "disabled": true,
+        "expanded": undefined,
+        "selected": undefined,
+      }
+    }
+    accessibilityValue={
+      {
+        "max": undefined,
+        "min": undefined,
+        "now": undefined,
+        "text": undefined,
+      }
+    }
+    accessible={true}
+    className="p-1.5 rounded-lg active:bg-white/5 z-10"
+    collapsable={false}
+    focusable={true}
+    onBlur={[Function]}
+    onClick={[Function]}
+    onFocus={[Function]}
+    onResponderGrant={[Function]}
+    onResponderMove={[Function]}
+    onResponderRelease={[Function]}
+    onResponderTerminate={[Function]}
+    onResponderTerminationRequest={[Function]}
+    onStartShouldSetResponder={[Function]}
+    style={
+      {
+        "opacity": 0.5,
+      }
+    }
+  >
+    <View
+      color="#777"
+      size={20}
+      testID="icon-mic"
+    />
+  </View>
+</View>
+`;
+
+exports[`Composer — voice scaffolding snapshots VoiceInputButton locks idle mic button tree 1`] = `
+<View
+  className="relative items-center justify-center"
+>
+  <View
+    accessibilityHint="Tap to start or stop recording. Hold for instant push-to-talk. Long press for voice conversation mode."
+    accessibilityLabel="Tap to record, hold for push-to-talk"
+    accessibilityRole="button"
+    accessibilityState={
+      {
+        "busy": false,
+        "checked": undefined,
+        "disabled": false,
+        "expanded": undefined,
+        "selected": undefined,
+      }
+    }
+    accessibilityValue={
+      {
+        "max": undefined,
+        "min": undefined,
+        "now": undefined,
+        "text": undefined,
+      }
+    }
+    accessible={true}
+    className="p-1.5 rounded-lg active:bg-white/5 z-10"
+    collapsable={false}
+    focusable={true}
+    onBlur={[Function]}
+    onClick={[Function]}
+    onFocus={[Function]}
+    onResponderGrant={[Function]}
+    onResponderMove={[Function]}
+    onResponderRelease={[Function]}
+    onResponderTerminate={[Function]}
+    onResponderTerminationRequest={[Function]}
+    onStartShouldSetResponder={[Function]}
+  >
+    <View
+      color="#777"
+      size={20}
+      testID="icon-mic"
+    />
+  </View>
+</View>
+`;

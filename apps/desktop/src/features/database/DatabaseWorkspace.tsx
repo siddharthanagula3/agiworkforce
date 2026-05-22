@@ -15,6 +15,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
+import { useIsMounted } from '../../hooks/useIsMounted';
 import {
   useDatabaseStore,
   type ConnectionConfig,
@@ -785,6 +786,8 @@ function SchemaExplorer({
   const [tableSchema, setTableSchema] = useState<TableSchemaResult | null>(null);
   const [loadingTables, setLoadingTables] = useState(false);
   const [loadingSchema, setLoadingSchema] = useState(false);
+  // SchemaExplorer may unmount mid-query when user changes connections.
+  const isMounted = useIsMounted();
 
   // WRK-001 fix: Use generic query execution with DB-specific SQL
   // WRK-006 fix: Add pagination to prevent crashes with large databases
@@ -810,14 +813,14 @@ function SchemaExplorer({
         toast.info(`Showing first ${DEFAULT_TABLE_LIMIT} tables. Database may have more tables.`);
       }
 
-      setTables(tableNames);
+      if (isMounted.current) setTables(tableNames);
     } catch (error) {
       console.error('[DatabaseWorkspace] Failed to load tables:', error);
       toast.error('Failed to load tables. Check your connection and try again.');
     } finally {
-      setLoadingTables(false);
+      if (isMounted.current) setLoadingTables(false);
     }
-  }, [activeConnection]);
+  }, [activeConnection, isMounted]);
 
   useEffect(() => {
     if (activeConnection && activeConnection.type === 'SQL') {
@@ -834,12 +837,12 @@ function SchemaExplorer({
       const sql = getDescribeTableQuery(tableName, dbType);
 
       const result = await dbExecuteQuery(activeConnection!.id, sql);
-      setTableSchema(result as unknown as TableSchemaResult);
+      if (isMounted.current) setTableSchema(result as unknown as TableSchemaResult);
     } catch (error) {
       console.error('[DatabaseWorkspace] Failed to describe table:', error);
       toast.error('Failed to load table schema. Please try again.');
     } finally {
-      setLoadingSchema(false);
+      if (isMounted.current) setLoadingSchema(false);
     }
   };
 

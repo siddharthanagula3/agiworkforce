@@ -5,6 +5,7 @@ use crate::bottom_pane::footer::FooterMode;
 use crate::bottom_pane::footer::SummaryLeft;
 use crate::bottom_pane::footer::can_show_left_with_context;
 use crate::bottom_pane::footer::context_window_line;
+use crate::bottom_pane::footer::plan_mode_effort_right_line;
 use crate::bottom_pane::footer::footer_height;
 use crate::bottom_pane::footer::footer_hint_items_width;
 use crate::bottom_pane::footer::footer_line_width;
@@ -197,6 +198,13 @@ impl ChatComposer {
                     } else {
                         compact
                     }
+                } else if let Some(label) = footer_props.plan_mode_effort_label.as_deref()
+                    && matches!(
+                        self.collaboration_mode_indicator,
+                        Some(CollaborationModeIndicator::Plan)
+                    )
+                {
+                    Some(plan_mode_effort_right_line(label))
                 } else {
                     Some(context_window_line(
                         footer_props.context_window_percent,

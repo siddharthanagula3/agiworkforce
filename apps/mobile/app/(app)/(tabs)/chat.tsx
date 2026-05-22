@@ -20,6 +20,14 @@ import { useModelStore } from '@/src/features/model-picker/store';
 import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
+function getTimeOfDayGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'How can I help you this morning?';
+  if (hour < 17) return 'How can I help you this afternoon?';
+  if (hour < 21) return 'How can I help you this evening?';
+  return 'How can I help you tonight?';
+}
+
 /**
  * Chat tab -- Claude-style composer-first new chat surface.
  * Recents live in the drawer; this screen stays focused on starting work.
@@ -286,14 +294,14 @@ export default function ChatTabScreen() {
         </View>
         <Text
           style={{
-            fontSize: 30,
-            lineHeight: 36,
+            fontSize: 28,
+            lineHeight: 34,
             fontWeight: '500',
             color: c.textPrimary,
             textAlign: 'center',
           }}
         >
-          What can I help with?
+          {getTimeOfDayGreeting()}
         </Text>
         <Text
           style={{

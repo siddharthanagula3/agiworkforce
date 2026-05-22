@@ -160,7 +160,7 @@ export function getWebviewContent(
 
     .header-actions {
       display: flex;
-      gap: 6px;
+      gap: 4px;
     }
 
     .icon-btn {
@@ -925,7 +925,15 @@ export function getWebviewContent(
       </span>
     </div>
     <div class="header-actions">
-      <button class="icon-btn" id="actionsBtn" title="Actions">≡</button>
+      <button class="icon-btn" id="historyBtn" title="Chat history" aria-label="Chat history">
+        <span class="codicon codicon-history" aria-hidden="true"></span>
+      </button>
+      <button class="icon-btn" id="newChatBtn" title="New chat" aria-label="New chat">
+        <span class="codicon codicon-add" aria-hidden="true"></span>
+      </button>
+      <button class="icon-btn" id="actionsBtn" title="Actions" aria-label="Actions">
+        <span class="codicon codicon-ellipsis" aria-hidden="true"></span>
+      </button>
     </div>
   </div>
 
@@ -962,11 +970,12 @@ export function getWebviewContent(
   <!-- ── Messages ── -->
   <div id="messages">
     <div class="empty-state" id="emptyState">
-      <div class="empty-state-headline">Ask about your code</div>
+      <div class="empty-state-headline">What to do first? Ask about<br/>this codebase or we can<br/>start writing code.</div>
       <div class="prompt-chips">
-        <button class="prompt-chip" data-prompt="/explain selected code">&lt;/&gt; Explain</button>
-        <button class="prompt-chip" data-prompt="/fix ">&gt;_ Fix</button>
-        <button class="prompt-chip" data-prompt="/tests ">&#10003; Tests</button>
+        <button class="prompt-chip" data-prompt="/explain ">/explain</button>
+        <button class="prompt-chip" data-prompt="/fix ">/fix</button>
+        <button class="prompt-chip" data-prompt="/tests ">/tests</button>
+        <button class="prompt-chip" data-prompt="/docs ">/docs</button>
       </div>
     </div>
   </div>
@@ -979,12 +988,12 @@ export function getWebviewContent(
     </select>
 
     <!-- Plus-menu popover -->
-    <div class="plus-menu" id="plusMenu" role="menu" aria-label="Attach or use tools">
+    <div class="plus-menu" id="plusMenu" role="menu" aria-label="Attach or add context">
       <div class="plus-menu-item" id="plusMenuUpload" role="menuitem" tabindex="0">
-        <span class="pm-icon codicon codicon-file-add" aria-hidden="true"></span>&nbsp;Add file or image
+        <span class="pm-icon codicon codicon-cloud-upload" aria-hidden="true"></span>&nbsp;Upload from computer
       </div>
       <div class="plus-menu-item" id="plusMenuPlanMode" role="menuitem" tabindex="0">
-        <span class="pm-icon codicon codicon-checklist" aria-hidden="true"></span>&nbsp;Plan mode
+        <span class="pm-icon codicon codicon-list-tree" aria-hidden="true"></span>&nbsp;Add context
       </div>
     </div>
 
@@ -1037,6 +1046,8 @@ export function getWebviewContent(
     const apiKeyInput = document.getElementById('apiKeyInput');
     const saveKeyBtn = document.getElementById('saveKeyBtn');
     const actionsBtn = document.getElementById('actionsBtn');
+    const historyBtn = document.getElementById('historyBtn');
+    const newChatBtn = document.getElementById('newChatBtn');
     const mentionDropdown = document.getElementById('mentionDropdown');
     const providerBadgeEl = document.getElementById('providerBadge');
     const providerBadgeDotEl = document.getElementById('providerBadgeDot');
@@ -1404,6 +1415,18 @@ export function getWebviewContent(
       vscode.postMessage({ type: 'openActionSheet' });
     });
 
+    if (historyBtn) {
+      historyBtn.addEventListener('click', () => {
+        vscode.postMessage({ type: 'openHistory' });
+      });
+    }
+
+    if (newChatBtn) {
+      newChatBtn.addEventListener('click', () => {
+        vscode.postMessage({ type: 'newChat' });
+      });
+    }
+
     // ── Plus-menu toggle ──────────────────────────────────────────────────────
     if (plusBtn && plusMenu) {
       plusBtn.addEventListener('click', (e) => {
@@ -1715,11 +1738,12 @@ export function getWebviewContent(
         var freshEmpty = document.createElement('div');
         freshEmpty.className = 'empty-state';
         freshEmpty.id = 'emptyState';
-        freshEmpty.innerHTML = '<div class="empty-state-headline">Ask about your code</div>' +
+        freshEmpty.innerHTML = '<div class="empty-state-headline">What to do first? Ask about<br/>this codebase or we can<br/>start writing code.</div>' +
           '<div class="prompt-chips">' +
-          '<button class="prompt-chip" data-prompt="/explain selected code">&lt;/&gt; Explain</button>' +
-          '<button class="prompt-chip" data-prompt="/fix ">&gt;_ Fix</button>' +
-          '<button class="prompt-chip" data-prompt="/tests ">&#10003; Tests</button>' +
+          '<button class="prompt-chip" data-prompt="/explain ">/explain</button>' +
+          '<button class="prompt-chip" data-prompt="/fix ">/fix</button>' +
+          '<button class="prompt-chip" data-prompt="/tests ">/tests</button>' +
+          '<button class="prompt-chip" data-prompt="/docs ">/docs</button>' +
           '</div>';
         freshEmpty.querySelectorAll('.prompt-chip').forEach(function(chip) {
           chip.addEventListener('click', function() {

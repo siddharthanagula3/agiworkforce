@@ -14,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/Tooltip
 import { useShallow } from 'zustand/react/shallow';
 import { useArtifactStore, type ArtifactType } from '@/stores/artifactStore';
 import { shareArtifact } from '@/services/artifactSharing';
+import { useIsMounted } from '@/hooks/useIsMounted';
 
 interface ArtifactToolbarProps {
   artifactId: string;
@@ -35,6 +36,10 @@ export function ArtifactToolbar({
   );
   const [copied, setCopied] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+  // Toolbar may unmount mid-promise when the artifact panel closes or
+  // the active artifact swaps. Guard the post-await setState in
+  // handleCopy + handleShare.
+  const isMounted = useIsMounted();
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -45,11 +50,14 @@ export function ArtifactToolbar({
 
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(content);
+    if (!isMounted.current) return;
     setCopied(true);
     toast.success('Copied to clipboard');
     if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
-    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
-  }, [content]);
+    copiedTimerRef.current = setTimeout(() => {
+      if (isMounted.current) setCopied(false);
+    }, 2000);
+  }, [content, isMounted]);
 
   const handleDownload = useCallback(() => {
     const blob = new Blob([content], { type: 'text/plain' });
@@ -94,9 +102,11 @@ export function ArtifactToolbar({
         description: err instanceof Error ? err.message : 'Unknown error',
       });
     } finally {
-      setIsSharing(false);
+      if (isMounted.current) {
+        setIsSharing(false);
+      }
     }
-  }, [artifactId, title, artifactType, content, isSharing]);
+  }, [artifactId, title, artifactType, content, isSharing, isMounted]);
 
   return (
     <div

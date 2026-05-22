@@ -154,16 +154,17 @@ describe('AnthropicProvider', () => {
       expect(models).not.toContain('claude-haiku-4.5');
     });
 
-    it('should return model aliases', () => {
+    it('should return model aliases derived from the canonical catalog', () => {
       const aliases = AnthropicProvider.getModelAliases();
 
-      // Catalog redirects retired model ids to current canonical successors:
-      // claude-sonnet-4-5 / claude-sonnet-4.5 → claude-sonnet-4.6 (current generation).
+      // api-model-id mirrors map to their canonical dot-form ids
       expect(aliases['claude-opus-4-6']).toBe('claude-opus-4.6');
       expect(aliases['claude-sonnet-4-6']).toBe('claude-sonnet-4.6');
-      expect(aliases['claude-opus-4-5']).toBe('claude-opus-4-5');
-      expect(aliases['claude-sonnet-4-5']).toBe('claude-sonnet-4.6');
       expect(aliases['claude-haiku-4-5']).toBe('claude-haiku-4.5');
+
+      // canonicalization redirects retired model ids forward to the current
+      // generation (anthropic.canonicalization in models.json)
+      expect(aliases['claude-sonnet-4-5']).toBe('claude-sonnet-4.6');
     });
   });
 

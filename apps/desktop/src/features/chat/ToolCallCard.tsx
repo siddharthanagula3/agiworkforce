@@ -1,7 +1,17 @@
 // apps/desktop/src/features/chat/ToolCallCard.tsx
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, CheckCircle2, XCircle, ChevronDown, Wrench, Box, Globe } from 'lucide-react';
+import {
+  Loader2,
+  CheckCircle2,
+  XCircle,
+  ChevronDown,
+  Wrench,
+  Box,
+  Globe,
+  Copy,
+  Check,
+} from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export type ToolCallStatus = 'pending' | 'running' | 'complete' | 'error';
@@ -47,7 +57,6 @@ function getSourceBadge(
 ): { label: string; BadgeIcon: React.ElementType } | null {
   const id = toolCallId.toLowerCase();
   const name = toolName.toLowerCase();
-  // Check raw IDs for MCP prefix (when available)
   if (
     id.startsWith('mcp__') ||
     id.startsWith('mcp_') ||
@@ -56,7 +65,6 @@ function getSourceBadge(
   ) {
     return { label: 'MCP', BadgeIcon: Box };
   }
-  // Check display names for browser tools
   if (BROWSER_DISPLAY_NAMES.has(name)) {
     return { label: 'Browser', BadgeIcon: Globe };
   }
@@ -68,80 +76,134 @@ function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
-function ArgsBlock({ args }: { args?: Record<string, unknown> }) {
-  if (!args || Object.keys(args).length === 0) return null;
-
-  const json = JSON.stringify(args, null, 2);
-  // Clamp to roughly 3 visible lines
-  const lines = json.split('\n');
-  const clamped = lines.slice(0, 3).join('\n') + (lines.length > 3 ? '\n  …' : '');
-
-  return (
-    <pre className="mt-1.5 text-[10px] text-muted-foreground/80 font-mono bg-background/40 rounded px-2 py-1.5 overflow-hidden leading-snug">
-      {clamped}
-    </pre>
-  );
+/** One-line summary extracted from the result string. */
+function extractResultSummary(result: string): string {
+  const trimmed = result.trim();
+  const firstLine = trimmed.split('\n')[0] ?? '';
+  return firstLine.length > 80 ? firstLine.slice(0, 77) + '…' : firstLine;
 }
 
-function CollapsibleSection({
-  label,
-  content,
-  defaultOpen = false,
-  contentClassName,
-  // BUG-TCC-001: Accept a unique sectionId so Framer Motion uses a stable, unique key per card
-  sectionId,
-}: {
-  label: string;
-  content: string;
-  defaultOpen?: boolean;
-  contentClassName?: string;
-  sectionId: string;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
+/** Attempt to parse a string as JSON; return the original string on failure. */
+function tryParseJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+}
+
+/** Syntax-colored JSON renderer — no external dep, uses simple token coloring. */
+function JsonBlock({ value, copyLabel }: { value: unknown; copyLabel: string }) {
+  const [copied, setCopied] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const json = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+
+  const handleCopy = useCallback(async () => {
+    await navigator.clipboard.writeText(json);
+    setCopied(true);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setCopied(false), 2000);
+  }, [json]);
+
+  useEffect(
+    () => () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    },
+    [],
+  );
+
+  const coloredLines = json.split('\n').map((line, i) => {
+    // Simple token pass: strings, numbers, booleans, null, keys
+    const colored = line
+      .replace(
+        /("(?:[^"\\]|\\.)*")(\s*:)/g,
+        '<span class="text-blue-300">$1</span><span class="text-muted-foreground">$2</span>',
+      )
+      .replace(/:\s*("(?:[^"\\]|\\.)*")/g, ': <span class="text-emerald-300">$1</span>')
+      .replace(
+        /:\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,
+        ': <span class="text-amber-300">$1</span>',
+      )
+      .replace(/:\s*(true|false|null)/g, ': <span class="text-violet-300">$1</span>');
+    return { colored, key: i };
+  });
 
   return (
-    <div className="mt-1.5">
+    <div className="relative rounded bg-black/50 border border-white/10 overflow-hidden">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+        onClick={handleCopy}
+        title={`Copy ${copyLabel}`}
+        aria-label={`Copy ${copyLabel}`}
+        className="absolute top-1.5 right-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-muted-foreground hover:text-foreground bg-black/40 hover:bg-black/60 transition-colors"
       >
-        <motion.div animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.15 }}>
-          <ChevronDown className="w-3 h-3" />
-        </motion.div>
-        {label}
-      </button>
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            key={`section-body-${sectionId}`}
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{
-              height: { duration: 0.2, ease: 'easeInOut' },
-              opacity: { duration: 0.15 },
-            }}
-            className="overflow-hidden"
-          >
-            <pre
-              className={cn(
-                'mt-1 text-[10px] font-mono leading-snug whitespace-pre-wrap px-2 py-1.5 rounded bg-background/40',
-                contentClassName,
-              )}
-            >
-              {content}
-            </pre>
-          </motion.div>
+        {copied ? (
+          <Check className="w-2.5 h-2.5 text-emerald-400" />
+        ) : (
+          <Copy className="w-2.5 h-2.5" />
         )}
-      </AnimatePresence>
+        {copied ? 'Copied' : 'Copy'}
+      </button>
+      <div className="overflow-x-auto max-h-48 overflow-y-auto">
+        <pre className="font-mono text-[10px] leading-snug p-2 pr-14 select-text">
+          {coloredLines.map(({ colored, key }) => (
+            <div
+              key={key}
+              className="text-foreground/80"
+              dangerouslySetInnerHTML={{ __html: colored }}
+            />
+          ))}
+        </pre>
+      </div>
     </div>
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Status-specific decorations
-// ────────────────────────────────────────────────────────────────────────────
+/** Expanded detail panel: labeled Request + Response sections with JSON + copy. */
+function ExpandedDetail({
+  args,
+  result,
+  error,
+  status,
+}: {
+  args?: Record<string, unknown>;
+  result?: string;
+  error?: string;
+  status: ToolCallStatus;
+}) {
+  const hasRequest = args && Object.keys(args).length > 0;
+  const responseContent = status === 'error' ? error : result;
+  const hasResponse = Boolean(responseContent);
+
+  if (!hasRequest && !hasResponse) return null;
+
+  return (
+    <div className="mt-2 space-y-2">
+      {hasRequest && (
+        <div>
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1">
+            Request
+          </p>
+          <JsonBlock value={args} copyLabel="request" />
+        </div>
+      )}
+      {hasResponse && responseContent && (
+        <div>
+          <p
+            className={cn(
+              'text-[10px] font-medium uppercase tracking-wide mb-1',
+              status === 'error' ? 'text-red-400' : 'text-muted-foreground',
+            )}
+          >
+            Response
+          </p>
+          <JsonBlock value={tryParseJson(responseContent)} copyLabel="response" />
+        </div>
+      )}
+    </div>
+  );
+}
 
 function StatusIcon({ status }: { status: ToolCallStatus }) {
   switch (status) {
@@ -174,10 +236,6 @@ function borderForStatus(status: ToolCallStatus): string {
   }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Main component
-// ────────────────────────────────────────────────────────────────────────────
-
 export function ToolCallCard({
   toolCallId,
   toolName,
@@ -188,19 +246,15 @@ export function ToolCallCard({
   elapsedMs,
   startedAt,
 }: ToolCallCardProps) {
-  // Live elapsed timer for 'running' state
+  const [expanded, setExpanded] = useState(false);
   const [liveElapsed, setLiveElapsed] = useState<number>(0);
   // BUG-TCC-002: Use a ref for startTime so it can be reset when status flips back to 'running'
   const timerStartRef = useRef<number>(startedAt ?? Date.now());
 
   useEffect(() => {
-    // BUG-315: Don't start interval when startedAt is undefined — the displayDuration
-    // logic won't show anything anyway, so avoid wasted ticks.
+    // BUG-315: Don't start interval when startedAt is undefined
     if (status !== 'running' || startedAt == null) return;
-
-    // BUG-TCC-002: Reset the timer start whenever we enter 'running' state
     timerStartRef.current = startedAt;
-
     const tick = () => setLiveElapsed(Date.now() - timerStartRef.current);
     tick();
     const id = setInterval(tick, 100);
@@ -216,20 +270,51 @@ export function ToolCallCard({
 
   const sourceBadge = getSourceBadge(toolCallId, toolName);
 
+  const resultSummary = status === 'complete' && result ? extractResultSummary(result) : undefined;
+  const errorSummary = status === 'error' && error ? extractResultSummary(error) : undefined;
+  const briefSummary = resultSummary ?? errorSummary;
+
+  const hasExpandableDetail =
+    (args && Object.keys(args).length > 0) || Boolean(result) || Boolean(error);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      className={cn('bg-muted/50 rounded-lg p-3 text-sm border', borderForStatus(status))}
+      className={cn('bg-muted/50 rounded-lg text-sm border', borderForStatus(status))}
     >
-      {/* Header row */}
-      <div className="flex items-center gap-2">
+      {/* Collapsed row — always visible */}
+      <button
+        type="button"
+        onClick={() => hasExpandableDetail && setExpanded((v) => !v)}
+        disabled={!hasExpandableDetail}
+        aria-expanded={expanded}
+        aria-label={expanded ? 'Collapse tool details' : 'Expand tool details'}
+        className={cn(
+          'w-full flex items-center gap-2 px-3 py-2.5 text-left',
+          hasExpandableDetail && 'hover:bg-white/[0.03] transition-colors cursor-pointer',
+          !hasExpandableDetail && 'cursor-default',
+        )}
+      >
         <StatusIcon status={status} />
         <Wrench className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-        <span className="font-mono text-xs text-foreground font-medium truncate flex-1 min-w-0">
+        <span className="font-mono text-xs text-foreground font-medium truncate min-w-0 flex-1">
           {toolName}
         </span>
+
+        {/* Brief result summary in collapsed state */}
+        {!expanded && briefSummary && (
+          <span
+            className={cn(
+              'text-[10px] font-mono truncate max-w-[180px] shrink-0',
+              status === 'error' ? 'text-red-400/70' : 'text-muted-foreground/70',
+            )}
+          >
+            {briefSummary}
+          </span>
+        )}
+
         {sourceBadge && (
           <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-accent/60 text-foreground shrink-0">
             <sourceBadge.BadgeIcon className="w-2.5 h-2.5" />
@@ -246,32 +331,37 @@ export function ToolCallCard({
             {displayDuration}
           </span>
         )}
-      </div>
+        {hasExpandableDetail && (
+          <motion.div
+            animate={{ rotate: expanded ? 180 : 0 }}
+            transition={{ duration: 0.15 }}
+            className="shrink-0"
+          >
+            <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+          </motion.div>
+        )}
+      </button>
 
-      {/* Args preview */}
-      <ArgsBlock args={args} />
-
-      {/* Result (complete) — collapsible, default collapsed */}
-      {status === 'complete' && result && (
-        <CollapsibleSection
-          label="Result"
-          content={result}
-          defaultOpen={false}
-          contentClassName="text-foreground/80"
-          sectionId={`${toolCallId}-result`}
-        />
-      )}
-
-      {/* Error (error) — collapsible, default collapsed */}
-      {status === 'error' && error && (
-        <CollapsibleSection
-          label="Error detail"
-          content={error}
-          defaultOpen={false}
-          contentClassName="text-red-400/80"
-          sectionId={`${toolCallId}-error`}
-        />
-      )}
+      {/* Expanded JSON request/response detail */}
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            key={`detail-${toolCallId}`}
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{
+              height: { duration: 0.2, ease: 'easeInOut' },
+              opacity: { duration: 0.15 },
+            }}
+            className="overflow-hidden"
+          >
+            <div className="px-3 pb-3 border-t border-white/5">
+              <ExpandedDetail args={args} result={result} error={error} status={status} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

@@ -17,6 +17,7 @@ import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { invoke, isTauri } from '../lib/tauri-mock';
 import { storageFallback } from '../lib/storageFallback';
+import type { ProjectAccentColor, PrivacyMode } from '@agiworkforce/types';
 
 export interface ProjectFile {
   id: string;
@@ -53,6 +54,12 @@ export interface Project {
   updatedAt: string;
   /** Knowledge base files with extracted content for context injection */
   knowledgeBaseFiles?: KnowledgeBaseFile[];
+  /** Single grapheme emoji displayed as the project icon in UI */
+  iconEmoji?: string | null;
+  /** Canonical accent color from the design system palette */
+  accentColor?: ProjectAccentColor | null;
+  /** Default privacy mode for new conversations in this project */
+  defaultPrivacyMode?: PrivacyMode | null;
 }
 
 export interface ProjectSettings {

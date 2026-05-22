@@ -389,6 +389,8 @@ pub(crate) struct ChatComposerState {
     pub(crate) status_line_enabled: bool,
     // Agent label injected into the footer's contextual row when multi-agent mode is active.
     pub(crate) active_agent_label: Option<String>,
+    // Reasoning-effort label shown on the right side of the plan-mode footer banner.
+    pub(crate) plan_mode_effort_label: Option<String>,
 }
 
 /// Thin newtype wrapper around [`ChatComposerState`].
@@ -533,6 +535,7 @@ impl ChatComposer {
             status_line_value: None,
             status_line_enabled: false,
             active_agent_label: None,
+            plan_mode_effort_label: None,
         };
         let mut this = Self(state);
         // Apply configuration via the setter to keep side-effects centralized.
@@ -573,6 +576,7 @@ impl ChatComposer {
             status_line_value: self.status_line_value.clone(),
             status_line_enabled: self.status_line_enabled,
             active_agent_label: self.active_agent_label.clone(),
+            plan_mode_effort_label: self.plan_mode_effort_label.clone(),
         }
     }
 

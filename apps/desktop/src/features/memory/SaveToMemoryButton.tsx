@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
 import { useMemoryStore } from '@/stores/memoryStore';
+import { useIsMounted } from '@/hooks/useIsMounted';
 
 export interface SaveToMemoryButtonProps {
   /** The text content to save */
@@ -34,6 +35,10 @@ export const SaveToMemoryButton = memo(function SaveToMemoryButton({
   const remember = useMemoryStore((s) => s.remember);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Parent may clear the conversation while a save is in flight, unmounting
+  // this button mid-promise. Without the guard setSaved/setSaving below
+  // would fire on an unmounted component.
+  const isMounted = useIsMounted();
 
   const handleSave = useCallback(async () => {
     if (saved || saving || !content.trim()) return;
@@ -42,6 +47,7 @@ export const SaveToMemoryButton = memo(function SaveToMemoryButton({
       // Use 'context' category and derive a short topic from the first sentence
       const firstSentence = content.split(/[.!?\n]/)[0]?.slice(0, 80) ?? 'Conversation excerpt';
       await remember('context', firstSentence, content.trim(), 6);
+      if (!isMounted.current) return;
       setSaved(true);
       toast.success('Saved to memory', {
         description: 'This message will be remembered in future conversations.',
@@ -50,9 +56,11 @@ export const SaveToMemoryButton = memo(function SaveToMemoryButton({
     } catch {
       toast.error('Failed to save memory. Please try again.');
     } finally {
-      setSaving(false);
+      if (isMounted.current) {
+        setSaving(false);
+      }
     }
-  }, [content, remember, saved, saving]);
+  }, [content, remember, saved, saving, isMounted]);
 
   return (
     <button

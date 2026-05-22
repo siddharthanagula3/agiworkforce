@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { AlertCircle, ChevronLeft, Loader2, Shield, Puzzle } from 'lucide-react';
+import { useIsMounted } from '@/hooks/useIsMounted';
 import {
   Select,
   SelectContent,
@@ -135,6 +136,8 @@ export function ConnectorDetailView({ connector, tools, onBack }: ConnectorDetai
   // Map: toolName → permission level
   const [permissions, setPermissions] = useState<Record<string, ConnectorPermissionLevel>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
+  // View may unmount when user clicks Back mid-permission-save.
+  const isMounted = useIsMounted();
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -189,14 +192,18 @@ export function ConnectorDetailView({ connector, tools, onBack }: ConnectorDetai
         await store.set(connector.id, tool.name, level, tool.destructive);
       } catch (err) {
         // Rollback on failure
-        const previous = permissions[tool.name] ?? defaultPermissionForTool(tool.destructive);
-        setPermissions((prev) => ({ ...prev, [tool.name]: previous }));
+        if (isMounted.current) {
+          const previous = permissions[tool.name] ?? defaultPermissionForTool(tool.destructive);
+          setPermissions((prev) => ({ ...prev, [tool.name]: previous }));
+        }
         console.error('[ConnectorDetailView] save failed:', err);
       } finally {
-        setSaving((prev) => ({ ...prev, [tool.name]: false }));
+        if (isMounted.current) {
+          setSaving((prev) => ({ ...prev, [tool.name]: false }));
+        }
       }
     },
-    [connector.id, permissions, store],
+    [connector.id, permissions, store, isMounted],
   );
 
   const [logoFailed, setLogoFailed] = useState(false);

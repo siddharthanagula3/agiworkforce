@@ -229,6 +229,13 @@ impl ChatWidget {
     fn update_collaboration_mode_indicator(&mut self) {
         let indicator = self.collaboration_mode_indicator();
         self.bottom_pane.set_collaboration_mode_indicator(indicator);
+        let effort_label = if matches!(indicator, Some(CollaborationModeIndicator::Plan)) {
+            let effort = self.effective_reasoning_effort();
+            Some(Self::status_line_reasoning_effort_label(effort).to_string())
+        } else {
+            None
+        };
+        self.bottom_pane.set_plan_mode_effort_label(effort_label);
     }
 
     fn personality_label(personality: Personality) -> &'static str {

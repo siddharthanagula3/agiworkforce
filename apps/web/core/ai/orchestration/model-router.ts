@@ -5,7 +5,12 @@
  */
 
 import type { LLMProvider } from '@core/ai/llm/unified-language-model';
-import { getModelMetadataById, getTaskModelForProvider, type Provider } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  getProviderDefaultModel,
+  getTaskModelForProvider,
+  type Provider,
+} from '@agiworkforce/types';
 
 export type TaskCategory =
   | 'coding'
@@ -284,10 +289,12 @@ export class ModelRouter {
     });
 
     if (suitableModels.length === 0) {
-      // Fallback to the current balanced general-purpose core model.
+      // Fallback chain — all entries derive from `packages/types/src/models.json`,
+      // so a new generation lands here automatically when the catalog updates.
+      const openaiDefault = getProviderDefaultModel('openai');
       const fallback =
         AVAILABLE_MODELS.find((m) => m.model === DEFAULT_ROUTER_MODEL) ||
-        AVAILABLE_MODELS.find((m) => m.model === 'gpt-5.4') ||
+        (openaiDefault ? AVAILABLE_MODELS.find((m) => m.model === openaiDefault) : undefined) ||
         AVAILABLE_MODELS[0];
       return {
         provider: fallback?.provider ?? 'anthropic',

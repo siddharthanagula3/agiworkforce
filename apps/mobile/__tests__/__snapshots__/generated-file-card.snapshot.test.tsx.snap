@@ -1,0 +1,1031 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1`] = `
+<View
+  style={
+    {
+      "backgroundColor": "rgba(255, 255, 255, 0.04)",
+      "borderColor": "#333",
+      "borderRadius": 8,
+      "borderWidth": 1,
+      "gap": 8,
+      "padding": 12,
+    }
+  }
+  testID="generated-file-card"
+>
+  <View
+    style={
+      {
+        "alignItems": "flex-start",
+        "flexDirection": "row",
+        "gap": 12,
+      }
+    }
+  >
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "backgroundColor": "rgba(255, 255, 255, 0.04)",
+          "borderRadius": 6,
+          "height": 48,
+          "justifyContent": "center",
+          "width": 48,
+        }
+      }
+    >
+      <View
+        color="#fb7185"
+        size={16}
+        testID="icon-file-text"
+      />
+    </View>
+    <View
+      style={
+        {
+          "flex": 1,
+          "gap": 4,
+        }
+      }
+    >
+      <View
+        style={
+          {
+            "alignItems": "center",
+            "flexDirection": "row",
+            "gap": 8,
+          }
+        }
+      >
+        <Text
+          numberOfLines={1}
+          style={
+            {
+              "color": "#fff",
+              "flex": 1,
+              "fontSize": 13,
+              "fontWeight": "600",
+            }
+          }
+        >
+          design.pdf
+        </Text>
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "backgroundColor": "rgba(16, 185, 129, 0.16)",
+              "borderRadius": 9999,
+              "flexDirection": "row",
+              "gap": 4,
+              "paddingHorizontal": 6,
+              "paddingVertical": 2,
+            }
+          }
+          testID="generated-file-status-badge"
+        >
+          <View
+            color="#10b981"
+            size={10}
+            testID="icon-shield-check"
+          />
+          <Text
+            style={
+              {
+                "color": "#10b981",
+                "fontSize": 10,
+                "fontWeight": "600",
+                "letterSpacing": 0.5,
+                "textTransform": "uppercase",
+              }
+            }
+          >
+            Completed
+          </Text>
+        </View>
+      </View>
+      <View
+        style={
+          {
+            "flexDirection": "row",
+            "flexWrap": "wrap",
+            "gap": 6,
+          }
+        }
+      >
+        <Text
+          style={
+            {
+              "color": "#aaa",
+              "fontSize": 11,
+            }
+          }
+        >
+          PDF document
+        </Text>
+        <Text
+          style={
+            {
+              "color": "#aaa",
+              "fontSize": 11,
+            }
+          }
+        >
+          · 
+          128 KB
+        </Text>
+        <Text
+          accessibilityLabel="SHA-256 abcdef012345"
+          style={
+            {
+              "color": "#777",
+              "fontSize": 11,
+            }
+          }
+        >
+          · 
+          abcdef012345
+        </Text>
+      </View>
+      <View
+        style={
+          {
+            "flexDirection": "row",
+            "flexWrap": "wrap",
+            "gap": 6,
+            "paddingTop": 2,
+          }
+        }
+      >
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "backgroundColor": "rgba(255, 255, 255, 0.04)",
+              "borderColor": "#333",
+              "borderRadius": 9999,
+              "borderWidth": 1,
+              "flexDirection": "row",
+              "gap": 4,
+              "paddingHorizontal": 6,
+              "paddingVertical": 3,
+            }
+          }
+        >
+          <View
+            color="#aaa"
+            size={10}
+            testID="icon-lock"
+          />
+          <Text
+            style={
+              {
+                "color": "#aaa",
+                "fontSize": 10,
+                "fontWeight": "600",
+              }
+            }
+          >
+            Local
+          </Text>
+        </View>
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "backgroundColor": "rgba(255, 255, 255, 0.04)",
+              "borderColor": "#333",
+              "borderRadius": 9999,
+              "borderWidth": 1,
+              "flexDirection": "row",
+              "gap": 4,
+              "paddingHorizontal": 6,
+              "paddingVertical": 3,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#aaa",
+                "fontSize": 10,
+                "fontWeight": "600",
+              }
+            }
+          >
+            Local model
+          </Text>
+        </View>
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "backgroundColor": "rgba(255, 255, 255, 0.04)",
+              "borderColor": "#333",
+              "borderRadius": 9999,
+              "borderWidth": 1,
+              "flexDirection": "row",
+              "gap": 4,
+              "paddingHorizontal": 6,
+              "paddingVertical": 3,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#aaa",
+                "fontSize": 10,
+                "fontWeight": "600",
+              }
+            }
+          >
+            Mobile
+          </Text>
+        </View>
+      </View>
+    </View>
+  </View>
+  <Text
+    style={
+      {
+        "color": "#777",
+        "fontSize": 11,
+      }
+    }
+  >
+    Local file. Sharing uses the native sheet and does not upload it to AGI cloud.
+  </Text>
+</View>
+`;
+
+exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
+<View
+  style={
+    {
+      "backgroundColor": "rgba(255, 255, 255, 0.04)",
+      "borderColor": "#333",
+      "borderRadius": 8,
+      "borderWidth": 1,
+      "gap": 8,
+      "padding": 12,
+    }
+  }
+  testID="generated-file-card"
+>
+  <View
+    style={
+      {
+        "alignItems": "flex-start",
+        "flexDirection": "row",
+        "gap": 12,
+      }
+    }
+  >
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "backgroundColor": "rgba(255, 255, 255, 0.04)",
+          "borderRadius": 6,
+          "height": 48,
+          "justifyContent": "center",
+          "width": 48,
+        }
+      }
+    >
+      <View
+        color="#fb7185"
+        size={16}
+        testID="icon-file-text"
+      />
+    </View>
+    <View
+      style={
+        {
+          "flex": 1,
+          "gap": 4,
+        }
+      }
+    >
+      <View
+        style={
+          {
+            "alignItems": "center",
+            "flexDirection": "row",
+            "gap": 8,
+          }
+        }
+      >
+        <Text
+          numberOfLines={1}
+          style={
+            {
+              "color": "#fff",
+              "flex": 1,
+              "fontSize": 13,
+              "fontWeight": "600",
+            }
+          }
+        >
+          design.pdf
+        </Text>
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "backgroundColor": "rgba(239, 68, 68, 0.16)",
+              "borderRadius": 9999,
+              "flexDirection": "row",
+              "gap": 4,
+              "paddingHorizontal": 6,
+              "paddingVertical": 2,
+            }
+          }
+          testID="generated-file-status-badge"
+        >
+          <View
+            color="#ef4444"
+            size={10}
+            testID="icon-alert-triangle"
+          />
+          <Text
+            style={
+              {
+                "color": "#ef4444",
+                "fontSize": 10,
+                "fontWeight": "600",
+                "letterSpacing": 0.5,
+                "textTransform": "uppercase",
+              }
+            }
+          >
+            Failed
+          </Text>
+        </View>
+      </View>
+      <View
+        style={
+          {
+            "flexDirection": "row",
+            "flexWrap": "wrap",
+            "gap": 6,
+          }
+        }
+      >
+        <Text
+          style={
+            {
+              "color": "#aaa",
+              "fontSize": 11,
+            }
+          }
+        >
+          PDF document
+        </Text>
+        <Text
+          style={
+            {
+              "color": "#aaa",
+              "fontSize": 11,
+            }
+          }
+        >
+          · 
+          128 KB
+        </Text>
+        <Text
+          accessibilityLabel="SHA-256 abcdef012345"
+          style={
+            {
+              "color": "#777",
+              "fontSize": 11,
+            }
+          }
+        >
+          · 
+          abcdef012345
+        </Text>
+      </View>
+      <View
+        style={
+          {
+            "flexDirection": "row",
+            "flexWrap": "wrap",
+            "gap": 6,
+            "paddingTop": 2,
+          }
+        }
+      >
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "backgroundColor": "rgba(255, 255, 255, 0.04)",
+              "borderColor": "#333",
+              "borderRadius": 9999,
+              "borderWidth": 1,
+              "flexDirection": "row",
+              "gap": 4,
+              "paddingHorizontal": 6,
+              "paddingVertical": 3,
+            }
+          }
+        >
+          <View
+            color="#aaa"
+            size={10}
+            testID="icon-lock"
+          />
+          <Text
+            style={
+              {
+                "color": "#aaa",
+                "fontSize": 10,
+                "fontWeight": "600",
+              }
+            }
+          >
+            Local
+          </Text>
+        </View>
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "backgroundColor": "rgba(255, 255, 255, 0.04)",
+              "borderColor": "#333",
+              "borderRadius": 9999,
+              "borderWidth": 1,
+              "flexDirection": "row",
+              "gap": 4,
+              "paddingHorizontal": 6,
+              "paddingVertical": 3,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#aaa",
+                "fontSize": 10,
+                "fontWeight": "600",
+              }
+            }
+          >
+            Local model
+          </Text>
+        </View>
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "backgroundColor": "rgba(255, 255, 255, 0.04)",
+              "borderColor": "#333",
+              "borderRadius": 9999,
+              "borderWidth": 1,
+              "flexDirection": "row",
+              "gap": 4,
+              "paddingHorizontal": 6,
+              "paddingVertical": 3,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#aaa",
+                "fontSize": 10,
+                "fontWeight": "600",
+              }
+            }
+          >
+            Mobile
+          </Text>
+        </View>
+      </View>
+    </View>
+  </View>
+  <Text
+    style={
+      {
+        "color": "#777",
+        "fontSize": 11,
+      }
+    }
+  >
+    Local file. Sharing uses the native sheet and does not upload it to AGI cloud.
+  </Text>
+</View>
+`;
+
+exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
+<View
+  style={
+    {
+      "backgroundColor": "rgba(255, 255, 255, 0.04)",
+      "borderColor": "#333",
+      "borderRadius": 8,
+      "borderWidth": 1,
+      "gap": 8,
+      "padding": 12,
+    }
+  }
+  testID="generated-file-card"
+>
+  <View
+    style={
+      {
+        "alignItems": "flex-start",
+        "flexDirection": "row",
+        "gap": 12,
+      }
+    }
+  >
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "backgroundColor": "rgba(255, 255, 255, 0.04)",
+          "borderRadius": 6,
+          "height": 48,
+          "justifyContent": "center",
+          "width": 48,
+        }
+      }
+    >
+      <View
+        color="#fb7185"
+        size={16}
+        testID="icon-file-text"
+      />
+    </View>
+    <View
+      style={
+        {
+          "flex": 1,
+          "gap": 4,
+        }
+      }
+    >
+      <View
+        style={
+          {
+            "alignItems": "center",
+            "flexDirection": "row",
+            "gap": 8,
+          }
+        }
+      >
+        <Text
+          numberOfLines={1}
+          style={
+            {
+              "color": "#fff",
+              "flex": 1,
+              "fontSize": 13,
+              "fontWeight": "600",
+            }
+          }
+        >
+          design.pdf
+        </Text>
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "backgroundColor": "rgba(16, 185, 129, 0.16)",
+              "borderRadius": 9999,
+              "flexDirection": "row",
+              "gap": 4,
+              "paddingHorizontal": 6,
+              "paddingVertical": 2,
+            }
+          }
+          testID="generated-file-status-badge"
+        >
+          <View
+            color="#10b981"
+            size={10}
+            testID="icon-shield-check"
+          />
+          <Text
+            style={
+              {
+                "color": "#10b981",
+                "fontSize": 10,
+                "fontWeight": "600",
+                "letterSpacing": 0.5,
+                "textTransform": "uppercase",
+              }
+            }
+          >
+            Completed
+          </Text>
+        </View>
+      </View>
+      <View
+        style={
+          {
+            "flexDirection": "row",
+            "flexWrap": "wrap",
+            "gap": 6,
+          }
+        }
+      >
+        <Text
+          style={
+            {
+              "color": "#aaa",
+              "fontSize": 11,
+            }
+          }
+        >
+          PDF document
+        </Text>
+        <Text
+          style={
+            {
+              "color": "#aaa",
+              "fontSize": 11,
+            }
+          }
+        >
+          · 
+          128 KB
+        </Text>
+        <Text
+          accessibilityLabel="SHA-256 abcdef012345"
+          style={
+            {
+              "color": "#777",
+              "fontSize": 11,
+            }
+          }
+        >
+          · 
+          abcdef012345
+        </Text>
+      </View>
+      <View
+        style={
+          {
+            "flexDirection": "row",
+            "flexWrap": "wrap",
+            "gap": 6,
+            "paddingTop": 2,
+          }
+        }
+      >
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "backgroundColor": "rgba(255, 255, 255, 0.04)",
+              "borderColor": "#333",
+              "borderRadius": 9999,
+              "borderWidth": 1,
+              "flexDirection": "row",
+              "gap": 4,
+              "paddingHorizontal": 6,
+              "paddingVertical": 3,
+            }
+          }
+        >
+          <View
+            color="#aaa"
+            size={10}
+            testID="icon-lock"
+          />
+          <Text
+            style={
+              {
+                "color": "#aaa",
+                "fontSize": 10,
+                "fontWeight": "600",
+              }
+            }
+          >
+            Managed
+          </Text>
+        </View>
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "backgroundColor": "rgba(255, 255, 255, 0.04)",
+              "borderColor": "#333",
+              "borderRadius": 9999,
+              "borderWidth": 1,
+              "flexDirection": "row",
+              "gap": 4,
+              "paddingHorizontal": 6,
+              "paddingVertical": 3,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#aaa",
+                "fontSize": 10,
+                "fontWeight": "600",
+              }
+            }
+          >
+            AGI Managed
+          </Text>
+        </View>
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "backgroundColor": "rgba(255, 255, 255, 0.04)",
+              "borderColor": "#333",
+              "borderRadius": 9999,
+              "borderWidth": 1,
+              "flexDirection": "row",
+              "gap": 4,
+              "paddingHorizontal": 6,
+              "paddingVertical": 3,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#aaa",
+                "fontSize": 10,
+                "fontWeight": "600",
+              }
+            }
+          >
+            Mobile
+          </Text>
+        </View>
+      </View>
+    </View>
+  </View>
+</View>
+`;
+
+exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
+<View
+  style={
+    {
+      "backgroundColor": "rgba(255, 255, 255, 0.04)",
+      "borderColor": "#333",
+      "borderRadius": 8,
+      "borderWidth": 1,
+      "gap": 8,
+      "padding": 12,
+    }
+  }
+  testID="generated-file-card"
+>
+  <View
+    style={
+      {
+        "alignItems": "flex-start",
+        "flexDirection": "row",
+        "gap": 12,
+      }
+    }
+  >
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "backgroundColor": "rgba(255, 255, 255, 0.04)",
+          "borderRadius": 6,
+          "height": 48,
+          "justifyContent": "center",
+          "width": 48,
+        }
+      }
+    >
+      <View
+        color="#fb7185"
+        size={16}
+        testID="icon-file-text"
+      />
+    </View>
+    <View
+      style={
+        {
+          "flex": 1,
+          "gap": 4,
+        }
+      }
+    >
+      <View
+        style={
+          {
+            "alignItems": "center",
+            "flexDirection": "row",
+            "gap": 8,
+          }
+        }
+      >
+        <Text
+          numberOfLines={1}
+          style={
+            {
+              "color": "#fff",
+              "flex": 1,
+              "fontSize": 13,
+              "fontWeight": "600",
+            }
+          }
+        >
+          design.pdf
+        </Text>
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "backgroundColor": "rgba(245, 158, 11, 0.16)",
+              "borderRadius": 9999,
+              "flexDirection": "row",
+              "gap": 4,
+              "paddingHorizontal": 6,
+              "paddingVertical": 2,
+            }
+          }
+          testID="generated-file-status-badge"
+        >
+          <View
+            color="#f59e0b"
+            size={10}
+            testID="icon-loader"
+          />
+          <Text
+            style={
+              {
+                "color": "#f59e0b",
+                "fontSize": 10,
+                "fontWeight": "600",
+                "letterSpacing": 0.5,
+                "textTransform": "uppercase",
+              }
+            }
+          >
+            Generating…
+          </Text>
+        </View>
+      </View>
+      <View
+        style={
+          {
+            "flexDirection": "row",
+            "flexWrap": "wrap",
+            "gap": 6,
+          }
+        }
+      >
+        <Text
+          style={
+            {
+              "color": "#aaa",
+              "fontSize": 11,
+            }
+          }
+        >
+          PDF document
+        </Text>
+        <Text
+          style={
+            {
+              "color": "#aaa",
+              "fontSize": 11,
+            }
+          }
+        >
+          · 
+          128 KB
+        </Text>
+        <Text
+          accessibilityLabel="SHA-256 abcdef012345"
+          style={
+            {
+              "color": "#777",
+              "fontSize": 11,
+            }
+          }
+        >
+          · 
+          abcdef012345
+        </Text>
+      </View>
+      <View
+        style={
+          {
+            "flexDirection": "row",
+            "flexWrap": "wrap",
+            "gap": 6,
+            "paddingTop": 2,
+          }
+        }
+      >
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "backgroundColor": "rgba(255, 255, 255, 0.04)",
+              "borderColor": "#333",
+              "borderRadius": 9999,
+              "borderWidth": 1,
+              "flexDirection": "row",
+              "gap": 4,
+              "paddingHorizontal": 6,
+              "paddingVertical": 3,
+            }
+          }
+        >
+          <View
+            color="#aaa"
+            size={10}
+            testID="icon-lock"
+          />
+          <Text
+            style={
+              {
+                "color": "#aaa",
+                "fontSize": 10,
+                "fontWeight": "600",
+              }
+            }
+          >
+            Local
+          </Text>
+        </View>
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "backgroundColor": "rgba(255, 255, 255, 0.04)",
+              "borderColor": "#333",
+              "borderRadius": 9999,
+              "borderWidth": 1,
+              "flexDirection": "row",
+              "gap": 4,
+              "paddingHorizontal": 6,
+              "paddingVertical": 3,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#aaa",
+                "fontSize": 10,
+                "fontWeight": "600",
+              }
+            }
+          >
+            Local model
+          </Text>
+        </View>
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "backgroundColor": "rgba(255, 255, 255, 0.04)",
+              "borderColor": "#333",
+              "borderRadius": 9999,
+              "borderWidth": 1,
+              "flexDirection": "row",
+              "gap": 4,
+              "paddingHorizontal": 6,
+              "paddingVertical": 3,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#aaa",
+                "fontSize": 10,
+                "fontWeight": "600",
+              }
+            }
+          >
+            Mobile
+          </Text>
+        </View>
+      </View>
+    </View>
+  </View>
+  <Text
+    style={
+      {
+        "color": "#777",
+        "fontSize": 11,
+      }
+    }
+  >
+    Local file. Sharing uses the native sheet and does not upload it to AGI cloud.
+  </Text>
+</View>
+`;

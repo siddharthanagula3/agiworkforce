@@ -37,6 +37,7 @@
  */
 
 import type { SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
+import { assertSurfaceCanSyncChats } from '@agiworkforce/types';
 import type {
   LegacyWebSyncEvent as SyncEvent,
   LegacyWebSyncOrigin as SyncOrigin,
@@ -69,6 +70,14 @@ export class ConversationSyncService {
   private statusListeners: Set<(status: SyncStatus) => void> = new Set();
 
   constructor(supabase: SupabaseClient, origin: SyncOrigin = 'web') {
+    // /goal sync-rule enforcement: consumer chat sync is Web/Desktop/
+    // Mobile only. If a future refactor accidentally constructs this
+    // service from a developer surface (CLI/VS Code/Chrome), the
+    // assertion fails fast at construction rather than silently
+    // enrolling that surface into the consumer chat-history realtime
+    // channel. See `assertSurfaceCanSyncChats` in
+    // packages/types/src/suite-contracts.ts.
+    assertSurfaceCanSyncChats(origin);
     this.supabase = supabase;
     this.origin = origin;
   }

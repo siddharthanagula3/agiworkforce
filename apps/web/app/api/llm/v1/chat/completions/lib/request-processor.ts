@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
+import { MAX_MESSAGE_LENGTH } from '@/lib/validations/llm';
 import { logger } from '@/lib/logger';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
@@ -238,7 +239,6 @@ export function handleCreditError(_deductResult: {
 }
 
 const MAX_BODY_BYTES = 2_000_000;
-const MAX_MESSAGE_LENGTH = 100000;
 const MAX_TOTAL_LENGTH = 1000000;
 
 export async function processRequest(

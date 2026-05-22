@@ -26,6 +26,7 @@ export type NativeMessageType =
   | 'QUEUE_MESSAGE'
   | 'CHAT_MESSAGE'
   | 'OPEN_SIDE_PANEL'
+  | 'OPEN_IN_DESKTOP'
   | 'GET_COOKIES'
   | 'SET_COOKIE'
   | 'CLEAR_COOKIES'
@@ -494,6 +495,11 @@ export interface OpenSidePanelMessage extends BaseMessage {
   type: 'OPEN_SIDE_PANEL';
 }
 
+// Open in desktop — forwarded to the desktop app via native bridge (Claude/Comet parity)
+export interface OpenInDesktopMessage extends BaseMessage {
+  type: 'OPEN_IN_DESKTOP';
+}
+
 export interface GetCookiesMessage extends BaseMessage {
   type: 'GET_COOKIES';
   url: string;
@@ -893,6 +899,7 @@ export type ExtensionMessage =
   | QueueMessageMessage
   | ChatMessageMessage
   | OpenSidePanelMessage
+  | OpenInDesktopMessage
   | GetCookiesMessage
   | SetCookieMessage
   | ClearCookiesMessage

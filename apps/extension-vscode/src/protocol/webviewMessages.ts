@@ -55,6 +55,8 @@ const restoreUsageMeter = z.object({ type: z.literal('restoreUsageMeter') });
 const upgradeClicked = z.object({ type: z.literal('upgradeClicked') });
 const openModelPopover = z.object({ type: z.literal('openModelPopover') });
 const openFilePicker = z.object({ type: z.literal('openFilePicker') });
+const openHistory = z.object({ type: z.literal('openHistory') });
+const newChat = z.object({ type: z.literal('newChat') });
 
 /**
  * `attachFiles` carries dropped or pasted file payloads from the webview
@@ -149,6 +151,8 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   selectModel,
   proposeDiff,
   openFilePicker,
+  openHistory,
+  newChat,
   attachFiles,
 ]);
 

@@ -14,40 +14,38 @@
   </head>
   <body>
     <div class="header">
-      <h1>AGI</h1>
-      <p>Browser control plane</p>
+      <div class="header-brand">
+        <h1>AGI</h1>
+        <p>Browser control plane</p>
+      </div>
+      <!-- Compact status pill replaces the verbose status-card (Claude/Comet parity) -->
+      <div class="status-pill" id="statusCard">
+        <div class="status-dot" id="statusDot"></div>
+        <span class="status-pill-label" id="statusTitle">Connecting…</span>
+        <button class="reconnect-btn" id="reconnectBtn" title="Reconnect to desktop app">
+          &#8635;
+        </button>
+      </div>
     </div>
 
     <div class="content">
-      <!-- Connection Status -->
-      <div class="status-card" id="statusCard">
-        <div class="status-icon">
-          <div class="status-dot" id="statusDot"></div>
-        </div>
-        <div class="status-info">
-          <div class="status-title" id="statusTitle">Checking connection...</div>
-          <div class="status-subtitle" id="statusSubtitle">Connecting to desktop app</div>
-          <button class="reconnect-btn" id="reconnectBtn">Reconnect</button>
-        </div>
-      </div>
-
-      <!-- Quick Actions -->
+      <!-- Quick Actions — icon-first compact grid with hover tooltips (Claude/Comet parity) -->
       <div class="actions">
-        <button class="action-btn primary" id="sidePanelBtn">
+        <button class="action-btn primary" id="sidePanelBtn" title="Open side-panel chat">
           <span class="btn-icon btn-icon-chat" aria-hidden="true"></span>
-          <span class="btn-label">Open Chat</span>
+          <span class="btn-label">Chat</span>
         </button>
-        <button class="action-btn primary" id="captureBtn">
+        <button class="action-btn primary" id="captureBtn" title="Capture page screenshot">
           <span class="btn-icon btn-icon-camera" aria-hidden="true"></span>
           <span class="btn-label">Capture</span>
         </button>
-        <button class="action-btn" id="refreshBtn">
+        <button class="action-btn" id="refreshBtn" title="Refresh current tab">
           <span class="btn-icon btn-icon-refresh" aria-hidden="true"></span>
           <span class="btn-label">Refresh</span>
         </button>
-        <button class="action-btn" id="groupBtn">
+        <button class="action-btn" id="groupBtn" title="Group tab with similar tabs">
           <span class="btn-icon btn-icon-folder" aria-hidden="true"></span>
-          <span class="btn-label">Group Tab</span>
+          <span class="btn-label">Group</span>
         </button>
       </div>
 

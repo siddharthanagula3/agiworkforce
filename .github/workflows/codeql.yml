@@ -56,6 +56,21 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Seed native messaging host sidecar placeholder
+        # Tauri's `bundle.externalBin` validation in agiworkforce-desktop's
+        # build script requires the sidecar binary at
+        # `apps/desktop/src-tauri/binaries/native_messaging_host-<triple>`.
+        # Building the real binary here would more than triple the job
+        # runtime (separate cargo build + target dir). Clippy only needs
+        # the path to exist so Tauri's build script `assert_files_exist`
+        # check passes. Matches the macOS/Windows pattern already in
+        # `.github/workflows/ci.yml`.
+        run: |
+          triple="$(rustc -vV | awk '/^host: / {print $2}')"
+          mkdir -p apps/desktop/src-tauri/binaries
+          printf '#!/usr/bin/env sh\nexit 1\n' > "apps/desktop/src-tauri/binaries/native_messaging_host-${triple}"
+          chmod +x "apps/desktop/src-tauri/binaries/native_messaging_host-${triple}"
+
       - name: Run cargo clippy (lint as errors)
         # Scope clippy to the binaries we actually ship. The ported codex-rs
         # crates under crates/* legitimately use unsafe (PTY, exec policy via

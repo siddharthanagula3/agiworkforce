@@ -3,6 +3,7 @@ import { AlertTriangle, Check, Code2, Globe, Loader2, RefreshCw, ShieldOff } fro
 import { browserExtension, type ExtensionStatusDiagnostics } from '@agiworkforce/api';
 import { cn } from '@/lib/utils';
 import { isTauri } from '@/lib/tauri-mock';
+import { useIsMounted } from '@/hooks/useIsMounted';
 
 type BridgeState = 'connected' | 'connecting' | 'disconnected' | 'error' | 'unknown';
 
@@ -110,21 +111,33 @@ export function BridgeStatusCard({ fetcher, isTauriHost = isTauri }: BridgeStatu
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Unmount guard — see hooks/useIsMounted for rationale. Without this,
+  // an in-flight fetcher promise that resolves after the card unmounts
+  // (StrictMode double-mount in dev, fast nav, etc.) triggers a React
+  // warning AND would overwrite fresher state from a new mount with
+  // stale resolved values from the previous one.
+  const mountedRef = useIsMounted();
+
   const effectiveFetcher = fetcher ?? browserExtension.extensionStatus;
 
   const load = useCallback(async () => {
+    if (!mountedRef.current) return;
     setLoading(true);
     setError(null);
     try {
       const next = await effectiveFetcher();
+      if (!mountedRef.current) return;
       setPayload(next);
     } catch (err) {
+      if (!mountedRef.current) return;
       setError(err instanceof Error ? err.message : 'Failed to read bridge status');
       setPayload(null);
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
-  }, [effectiveFetcher]);
+  }, [effectiveFetcher, mountedRef]);
 
   useEffect(() => {
     if (!isTauriHost) return;

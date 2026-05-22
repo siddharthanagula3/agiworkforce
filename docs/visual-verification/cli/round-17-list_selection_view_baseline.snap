@@ -1,0 +1,11 @@
+---
+source: apps/cli/src/tui/widgets/snapshot_smoke.rs
+expression: rendered
+---
+┌─ Choose item ──────────────────────────────────────────────┐
+│  ❯ alpha                                                   │
+│    beta                                                    │
+│    gamma                                                   │
+│                                                            │
+│  ↑↓ navigate   Enter select   Esc cancel                  │
+└────────────────────────────────────────────────────────────┘
