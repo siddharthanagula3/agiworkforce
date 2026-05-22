@@ -23,26 +23,16 @@ Read root `AGENTS.md`, then this file, then `apps/cli/README.md`.
 - Do not weaken approvals or expand filesystem/network access without an explicit security/privacy review.
 - Do not panic in production paths; prefer typed errors and user-actionable diagnostics.
 
-## Orphan Module Tree (pre-existing, do NOT silently delete)
+## TUI Module Ownership
 
-`apps/cli/src/tui/mod.rs` declares only 8 live submodules:
+`apps/cli/src/tui/mod.rs` declares exactly 8 live submodules:
 `color`, `cost_hud`, `icons`, `shimmer`, `terminal_palette`, `markdown_renderer`, `tui_app`, `widgets`.
 
-Everything else inside `apps/cli/src/tui/` exists on disk but is **never compiled** by `cargo`:
+The actual live ratatui implementation is `tui_app.rs`. All other TUI features are implemented within `widgets/`.
 
-| Path                     | .rs files | Notes                                                                               |
-| ------------------------ | --------- | ----------------------------------------------------------------------------------- |
-| `tui/*.rs` (loose files) | ~57       | includes `app.rs`, `chatwidget.rs`, `app_event.rs`, etc.                            |
-| `tui/bottom_pane/`       | 40        | full `BottomPane` implementation with `StatusLineItem`, `StatusLineSetupView`, etc. |
-| `tui/chatwidget/`        | 21        | `ChatWidget` with streaming, exec, plan, agent submodules                           |
+**Rule:** Any new `.rs` file added under `apps/cli/src/tui/` MUST have a corresponding `mod` declaration in `tui/mod.rs` in the same commit. Files without a declaration are never compiled — `cargo check` will not catch the error.
 
-**Why `cargo check` passes:** Rust never parses files that have no `mod` declaration pointing to them.
-
-**History:** The orphan tree predates commit `2ee09d98f` by 20+ commits. That commit added `CachedInputTokens` and `ReasoningOutputTokens` variants to `status_line_setup.rs` — a pre-existing orphaned file. It did not create the orphan tree.
-
-**Decision (2026-05-22):** Do not delete (would remove ~118 files including a 6,852-line chatwidget.rs). Do not wire silently (wiring `bottom_pane/` and `chatwidget/` into `tui/mod.rs` is multi-day work — they use `crate::bottom_pane::*` import paths inconsistent with being nested under `tui`). **Escalate to team-lead for a deliberate re-integration or removal decision.**
-
-See `docs/agent-context/known-flaws.md` row `CLI-TUI-ORPHAN-01` for the tracked entry.
+**History:** A pre-existing orphan tree of ~370 files (~108K LOC) was removed in commit `e3a316d39` (2026-05-22). The orphan files used `crate::bottom_pane::*` import paths incompatible with `tui` submodule nesting — they were paste-from-upstream-Codex code never adapted for this codebase. See `docs/agent-context/known-flaws.md` row `CLI-TUI-ORPHAN-01`.
 
 ## Verification
 
