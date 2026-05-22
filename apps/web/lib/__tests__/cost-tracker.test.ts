@@ -21,6 +21,8 @@ import {
   getSessionTotalCostUsd,
   resetModelUsage,
   resetAllSessions,
+  toOtelAttributes,
+  inferGenAiSystem,
 } from '../cost-tracker';
 
 const SESSION_A = 'session-a';
@@ -214,5 +216,174 @@ describe('resetAllSessions', () => {
 
     expect(getModelUsageReport(SESSION_A).size).toBe(0);
     expect(getModelUsageReport(SESSION_B).size).toBe(0);
+  });
+});
+
+describe('reasoningOutputTokens', () => {
+  it('accumulates reasoningOutputTokens across calls', () => {
+    recordModelUsage(SESSION_A, 'gpt-5.5', {
+      inputTokens: 1000,
+      outputTokens: 500,
+      reasoningOutputTokens: 200,
+    });
+    recordModelUsage(SESSION_A, 'gpt-5.5', {
+      inputTokens: 100,
+      outputTokens: 50,
+      reasoningOutputTokens: 80,
+    });
+
+    const report = getModelUsageReport(SESSION_A);
+    const usage = report.get('gpt-5.5')!;
+    expect(usage.reasoningOutputTokens).toBe(280);
+  });
+
+  it('initializes reasoningOutputTokens to 0 when absent', () => {
+    recordModelUsage(SESSION_A, 'claude-sonnet-4-6', { inputTokens: 100, outputTokens: 50 });
+
+    const report = getModelUsageReport(SESSION_A);
+    const usage = report.get('claude-sonnet-4-6')!;
+    expect(usage.reasoningOutputTokens).toBe(0);
+  });
+
+  it('charges reasoning tokens at the output token rate', () => {
+    // gpt-5.5: outputCost=$30/M
+    // 1M reasoning tokens = $30
+    recordModelUsage(SESSION_A, 'gpt-5.5', {
+      inputTokens: 0,
+      outputTokens: 0,
+      reasoningOutputTokens: 1_000_000,
+    });
+
+    const report = getModelUsageReport(SESSION_A);
+    const cost = report.get('gpt-5.5')!.costUsd;
+    expect(cost).toBeCloseTo(30.0, 4);
+  });
+
+  it('adds reasoning cost on top of input + output cost', () => {
+    // gpt-5.5: input=$5/M, output=$30/M
+    // 1M input + 1M output + 500k reasoning = $5 + $30 + $15 = $50
+    recordModelUsage(SESSION_A, 'gpt-5.5', {
+      inputTokens: 1_000_000,
+      outputTokens: 1_000_000,
+      reasoningOutputTokens: 500_000,
+    });
+
+    const report = getModelUsageReport(SESSION_A);
+    const cost = report.get('gpt-5.5')!.costUsd;
+    expect(cost).toBeCloseTo(50.0, 4);
+  });
+});
+
+describe('inferGenAiSystem', () => {
+  it.each([
+    ['anthropic', 'anthropic'],
+    ['openai', 'openai'],
+    ['google', 'google_ai_studio'],
+    ['xai', 'xai'],
+    ['deepseek', 'deepseek'],
+    ['perplexity', 'perplexity'],
+    ['openrouter', 'openrouter'],
+    ['ollama', 'ollama'],
+    ['lmstudio', 'lmstudio'],
+  ])('maps %s -> %s', (input, expected) => {
+    expect(inferGenAiSystem(input)).toBe(expected);
+  });
+
+  it('returns lowercase raw provider for unknown providers', () => {
+    expect(inferGenAiSystem('MyCustomProvider')).toBe('mycustomprovider');
+  });
+});
+
+describe('toOtelAttributes', () => {
+  it('includes standard GenAI semantic convention fields', () => {
+    const attrs = toOtelAttributes('openai', 'gpt-5.5', {
+      inputTokens: 1000,
+      outputTokens: 500,
+    });
+
+    expect(attrs['gen_ai.system']).toBe('openai');
+    expect(attrs['gen_ai.request.model']).toBe('gpt-5.5');
+    expect(attrs['gen_ai.usage.input_tokens']).toBe(1000);
+    expect(attrs['gen_ai.usage.output_tokens']).toBe(500);
+  });
+
+  it('includes cache_read attribute when cacheReadInputTokens is provided', () => {
+    const attrs = toOtelAttributes('anthropic', 'claude-sonnet-4-6', {
+      inputTokens: 2000,
+      outputTokens: 300,
+      cacheReadInputTokens: 800,
+    });
+
+    expect(attrs['gen_ai.usage.cache_read.input_tokens']).toBe(800);
+  });
+
+  it('omits cache_read attribute when cacheReadInputTokens is absent', () => {
+    const attrs = toOtelAttributes('openai', 'gpt-5.5', {
+      inputTokens: 100,
+      outputTokens: 50,
+    });
+
+    expect(attrs['gen_ai.usage.cache_read.input_tokens']).toBeUndefined();
+  });
+
+  it('includes codex.usage.cache_creation_input_tokens when provided', () => {
+    const attrs = toOtelAttributes('anthropic', 'claude-sonnet-4-6', {
+      inputTokens: 2000,
+      outputTokens: 300,
+      cacheCreationInputTokens: 1200,
+    });
+
+    expect(attrs['codex.usage.cache_creation_input_tokens']).toBe(1200);
+  });
+
+  it('includes codex.usage.reasoning_output_tokens when provided', () => {
+    const attrs = toOtelAttributes('openai', 'gpt-5.5', {
+      inputTokens: 1000,
+      outputTokens: 500,
+      reasoningOutputTokens: 256,
+    });
+
+    expect(attrs['codex.usage.reasoning_output_tokens']).toBe(256);
+  });
+
+  it('omits codex.usage.reasoning_output_tokens when absent', () => {
+    const attrs = toOtelAttributes('openai', 'gpt-5.5', {
+      inputTokens: 1000,
+      outputTokens: 500,
+    });
+
+    expect(attrs['codex.usage.reasoning_output_tokens']).toBeUndefined();
+  });
+
+  it('computes total_tokens as input + output + reasoning + cache_creation', () => {
+    const attrs = toOtelAttributes('openai', 'gpt-5.5', {
+      inputTokens: 1000,
+      outputTokens: 500,
+      reasoningOutputTokens: 200,
+      cacheCreationInputTokens: 300,
+    });
+
+    // total = 1000 + 500 + 200 + 300 = 2000
+    expect(attrs['codex.usage.total_tokens']).toBe(2000);
+  });
+
+  it('total_tokens excludes cache_read (reads are not net-new tokens)', () => {
+    const attrs = toOtelAttributes('anthropic', 'claude-sonnet-4-6', {
+      inputTokens: 1000,
+      outputTokens: 500,
+      cacheReadInputTokens: 800, // not counted in total
+    });
+
+    // total = 1000 + 500 = 1500 (cache reads excluded)
+    expect(attrs['codex.usage.total_tokens']).toBe(1500);
+  });
+
+  it('uses inferGenAiSystem to map provider to gen_ai.system', () => {
+    const attrs = toOtelAttributes('google', 'gemini-2.0-flash', {
+      inputTokens: 100,
+      outputTokens: 50,
+    });
+
+    expect(attrs['gen_ai.system']).toBe('google_ai_studio');
   });
 });

@@ -90,6 +90,51 @@ describe('OpenAIProvider cache behavior', () => {
       expect(result.cachedInputTokens).toBe(512);
     });
 
+    it('reads cached_tokens from input_tokens_details (Responses API shape)', async () => {
+      // Responses API uses input_tokens_details instead of prompt_tokens_details.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'Response', tool_calls: null }, finish_reason: 'stop' }],
+          model: 'gpt-5.5',
+          usage: {
+            prompt_tokens: 100,
+            completion_tokens: 50,
+            total_tokens: 150,
+            input_tokens_details: { cached_tokens: 72 },
+          },
+        }),
+        headers: { get: () => null },
+      });
+
+      const result = await provider.sendRequest(makeRequest());
+
+      expect(result.cachedInputTokens).toBe(72);
+    });
+
+    it('prefers prompt_tokens_details over input_tokens_details when both present', async () => {
+      // Chat Completions shape takes precedence in the fallback chain.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'Response', tool_calls: null }, finish_reason: 'stop' }],
+          model: 'gpt-5.5',
+          usage: {
+            prompt_tokens: 100,
+            completion_tokens: 50,
+            total_tokens: 150,
+            prompt_tokens_details: { cached_tokens: 300 },
+            input_tokens_details: { cached_tokens: 999 },
+          },
+        }),
+        headers: { get: () => null },
+      });
+
+      const result = await provider.sendRequest(makeRequest());
+
+      expect(result.cachedInputTokens).toBe(300);
+    });
+
     it('returns undefined cachedInputTokens when prompt_tokens_details is absent', async () => {
       mockFetch.mockResolvedValueOnce(okOpenAiJson());
 
@@ -115,6 +160,58 @@ describe('OpenAIProvider cache behavior', () => {
 
       // OpenAI does not expose a separate cache-write counter.
       expect(result.cacheCreationInputTokens).toBeUndefined();
+    });
+  });
+
+  describe('sendRequest — reasoningOutputTokens', () => {
+    it('reads reasoning_tokens from completion_tokens_details (Chat Completions shape)', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'Response', tool_calls: null }, finish_reason: 'stop' }],
+          model: 'gpt-5.5',
+          usage: {
+            prompt_tokens: 100,
+            completion_tokens: 500,
+            total_tokens: 600,
+            completion_tokens_details: { reasoning_tokens: 350 },
+          },
+        }),
+        headers: { get: () => null },
+      });
+
+      const result = await provider.sendRequest(makeRequest());
+
+      expect(result.reasoningOutputTokens).toBe(350);
+    });
+
+    it('reads reasoning_tokens from output_tokens_details (Responses API shape)', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'Response', tool_calls: null }, finish_reason: 'stop' }],
+          model: 'gpt-5.5',
+          usage: {
+            prompt_tokens: 100,
+            completion_tokens: 500,
+            total_tokens: 600,
+            output_tokens_details: { reasoning_tokens: 128 },
+          },
+        }),
+        headers: { get: () => null },
+      });
+
+      const result = await provider.sendRequest(makeRequest());
+
+      expect(result.reasoningOutputTokens).toBe(128);
+    });
+
+    it('returns undefined reasoningOutputTokens when neither details field is present', async () => {
+      mockFetch.mockResolvedValueOnce(okOpenAiJson());
+
+      const result = await provider.sendRequest(makeRequest());
+
+      expect(result.reasoningOutputTokens).toBeUndefined();
     });
   });
 
