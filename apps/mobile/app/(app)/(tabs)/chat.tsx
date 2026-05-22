@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, useEffect } from 'react';
+import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { View, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useNavigation } from 'expo-router';
@@ -7,9 +7,11 @@ import { Cpu, Plus, Menu } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
+import { summarizeSendPreview, type ProviderMode } from '@agiworkforce/types';
 import { ChatInput } from '@/src/features/chat/components/ChatInput';
 import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
 import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelectorBar';
+import { SendPreview } from '@/src/features/chat/components/SendPreview';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import { VoiceConversationScreen } from '@/src/features/voice/components/VoiceConversationScreen';
 import { Text } from '@/components/ui/text';
@@ -41,6 +43,24 @@ export default function ChatTabScreen() {
   const sendMessage = useChatStore((s) => s.sendMessage);
   const currentConversationId = useChatStore((s) => s.currentConversationId);
   const selectedModel = useModelStore((s) => s.selectedModel);
+  const selectedProvider = useModelStore((s) => s.selectedProvider);
+
+  // SendPreview disclosure — Mobile is local-only in v1 (per locks), so the
+  // typical render is the "Stays on this device" Local banner. The mapping
+  // still respects future BYOK/Managed unlocking via `selectedProvider`.
+  const sendPreviewPresentation = useMemo(() => {
+    const providerMode: ProviderMode =
+      selectedProvider === 'local' || !selectedProvider
+        ? 'Local'
+        : selectedProvider === 'managed_cloud'
+          ? 'ManagedGateway'
+          : 'DirectByok';
+    return summarizeSendPreview({
+      providerMode,
+      modelLabel: selectedModel,
+      modelId: selectedModel,
+    });
+  }, [selectedModel, selectedProvider]);
 
   useEffect(() => {
     loadConversations();
@@ -291,6 +311,10 @@ export default function ChatTabScreen() {
       </View>
 
       <ProjectSelectorBar />
+
+      <View style={{ paddingHorizontal: 16, paddingBottom: 6 }}>
+        <SendPreview presentation={sendPreviewPresentation} />
+      </View>
 
       <ChatInput
         onSend={handleSend}
