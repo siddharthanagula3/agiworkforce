@@ -4,7 +4,7 @@ import { cn } from '../lib/utils';
 import { Button } from './ui/Button';
 import { ActionBar } from './ActionBar';
 import { ThinkingBlock } from './ThinkingBlock';
-import { WebSearchCard } from './WebSearchCard';
+import { LegacyWebSearchCard } from './WebSearchCard';
 import { CitationPill } from './CitationPill';
 import { DownloadCard } from './DownloadCard';
 import type { ChatMessage, Artifact, ToolCall } from '../lib/types';
@@ -472,7 +472,7 @@ export function MessageBubble({ message, isLast, onRetry, onArtifactClick }: Mes
 
       {/* Web search results — rendered above text content */}
       {message.webSearchResults?.map((search) => (
-        <WebSearchCard key={search.id} search={search} />
+        <LegacyWebSearchCard key={search.id} search={search} />
       ))}
 
       <div className="text-[15px] leading-relaxed text-[var(--chat-text-primary)] break-words">
