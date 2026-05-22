@@ -8,7 +8,7 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
 
 ## [Unreleased — autonomous suite transformation, round 10] — 2026-05-21
 
-Round 10 closes the PLAN.md section 5 task "Define project schema" — the first cross-surface contract slice for the Projects feature. Types-first, same pattern as `SendPreviewPresentation` and `GeneratedFilePresentation`: shared TYPES, no host wiring yet.
+Round 10 closes the PLAN.md section 5 task "Define project schema" and ships the matching shared `ProjectHeader` primitive in `@agiworkforce/unified-chat`. Types-first cross-surface contract — same pattern as `SendPreviewPresentation` and `GeneratedFilePresentation`.
 
 ### Added
 
@@ -16,7 +16,8 @@ Round 10 closes the PLAN.md section 5 task "Define project schema" — the first
 - New companion types: `ProjectMember`, `ProjectMemberRole`, `ProjectKnowledgeFile`, `ProjectInstructions`, `ProjectAccentColor` (bounded palette: emerald / sky / amber / rose / violet / zinc), `ProjectImportSource` (claude / openai / manual).
 - `summarizeProjectHeader(input)` derives `ProjectHeaderPresentation` with title, description, icon, accent color (normalized), privacy/provider labels, staysLocal flag, default-model id+label passthrough, denormalized file/member count labels, last-used label, imported-from label, and canonical-order surface chips.
 - Helpers: `normalizeProjectAccentColor()` (falls back to 'zinc' for unknown values), `projectMemberRoleLabel()` (Owner / Editor / Viewer).
-- 15 new vitest tests pin accent palette, canonical surface chip order regardless of input order, singular/plural count formatting, imported-from labelling, staysLocal flip across local/byok/managed, and default-model passthrough.
+- Shared `ProjectHeader` component in `@agiworkforce/unified-chat`. Consumes `ProjectHeaderPresentation`. Accent palette mapped to deterministic Tailwind classes (no inline `style={{ backgroundColor }}` leakage). Privacy chip carries `data-stays-local`; provider chip carries `data-provider-mode`. Imported-from chip, meta row (knowledge files / members / last used / default model), and canonical-ordered surface chips render conditionally.
+- 26 new vitest tests in total: 15 for `summarizeProjectHeader` (accent palette, canonical surface order, count formatting, imported-from labelling, staysLocal flip, model passthrough) + 11 for `ProjectHeader` component (accent attribute, chip data attributes, imported-from / meta / surface chip surfacing).
 
 ## [Unreleased — autonomous suite transformation, round 9] — 2026-05-21
 

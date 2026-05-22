@@ -8,18 +8,21 @@ Head pushed: `6d7045146` (round-8 boundary) → rounds 9-10 in progress this ses
 
 ## Round 10 additions (after Round 9 wrap at `e3e5d85f8`)
 
-Round 10 closes the PLAN.md section 5 task "Define project schema." Types-first cross-surface contract — same pattern as SendPreviewPresentation / GeneratedFilePresentation: hosts adopt in later slices.
+Round 10 closes the PLAN.md section 5 task "Define project schema" and ships the matching `ProjectHeader` shared primitive. Types-first cross-surface contract — same pattern as SendPreviewPresentation / GeneratedFilePresentation: hosts adopt in later slices.
 
-- `feat(types): project schema + project header presentation`
+- `feat(types): project schema + project header presentation` (`9b8694b00`)
   - `ProjectRecord` extended with `instructions`, `defaultModelId`, `knowledgeFileCount`, `memberCount`, `lastUsedAt`, `iconEmoji`, `accentColor`, `importedFrom` (all optional — non-breaking).
   - New companion types: `ProjectMember`, `ProjectMemberRole`, `ProjectKnowledgeFile`, `ProjectInstructions`, `ProjectAccentColor` (bounded palette emerald/sky/amber/rose/violet/zinc), `ProjectImportSource` (claude/openai/manual).
   - `summarizeProjectHeader()` derives `ProjectHeaderPresentation` with title, description, icon, normalized accent, privacy/provider labels, staysLocal flag, default-model passthrough, denormalized file/member counts, last-used label, imported-from label, and canonical-order surface chips.
   - Helpers: `normalizeProjectAccentColor()`, `projectMemberRoleLabel()`.
   - 15 new vitest tests.
+- `feat(unified-chat): shared projectheader card consuming projectheaderpresentation` (`98749e432`)
+  - `packages/unified-chat/src/components/ProjectHeader.tsx`. Accent palette mapped to deterministic Tailwind classes (no inline-style leakage). Privacy chip carries `data-stays-local`; provider chip carries `data-provider-mode`. Imported-from chip + meta row + surface chips render conditionally.
+  - 11 new vitest tests.
 
 ### Round 10 — open paths for next session
 
-1. **First host adoption** — Desktop project view or Web sidebar adopts `summarizeProjectHeader()` to render the project header. This unlocks a verified end-to-end view of the new schema fields.
+1. **First host adoption** — Desktop `ProjectsView.tsx` or Web `/projects` page adopts `<ProjectHeader />` to render the project header from `summarizeProjectHeader()`. This needs a small mapper in each host because the surface-local Project store types lack `defaultPrivacyMode` / `defaultProviderMode` / `allowedSurfaces` fields (sensible defaults: `local` / `Local` / `[surface]`).
 2. **Project knowledge files DB schema** — Supabase migration for `project_knowledge_files` table + canonical migration in `supabase/migrations/`.
 3. **MCP prompts as slash commands** — see Round 9 open paths note about the missing Tauri `mcp_list_prompts` command.
 

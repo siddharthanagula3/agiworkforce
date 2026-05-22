@@ -13,7 +13,8 @@ Closes the PLAN.md section 5 task "Define project schema." Types-first cross-sur
 - [x] Extend `ProjectRecord` with instructions, defaultModelId, knowledgeFileCount, memberCount, lastUsedAt, iconEmoji, accentColor, importedFrom (all optional, non-breaking)
 - [x] Add companion types: ProjectMember, ProjectMemberRole, ProjectKnowledgeFile, ProjectInstructions, ProjectAccentColor, ProjectImportSource
 - [x] Add `summarizeProjectHeader()` + `normalizeProjectAccentColor()` + `projectMemberRoleLabel()` helpers
-- [x] 15 new vitest tests pin accent palette, canonical surface order, count formatting, imported-from labelling, staysLocal flip, model passthrough
+- [x] Shared `ProjectHeader` component in `@agiworkforce/unified-chat` consuming `ProjectHeaderPresentation` — `98749e432`
+- [x] 26 new tests across types (15) + unified-chat (11)
 
 ## 2026-05-21 Suite Transformation Session — Round 9 (in progress)
 
