@@ -13,7 +13,10 @@ interface Props {
 
 type FormState = 'idle' | 'submitting' | 'success' | 'error';
 
-export function WaitlistForm({ source = 'byok', ctaLabel = 'Join Cloud Managed waitlist' }: Props) {
+export function WaitlistForm({
+  source = 'byok',
+  ctaLabel = 'Join Cloud Managed waitlist →',
+}: Props) {
   const [email, setEmail] = useState('');
   const [state, setState] = useState<FormState>('idle');
   const [errorMsg, setErrorMsg] = useState('');

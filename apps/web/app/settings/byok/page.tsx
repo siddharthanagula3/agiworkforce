@@ -133,7 +133,7 @@ export default function ByokSettingsPage() {
             Currently only env-based keys are supported in v1. UI key entry, OS-keychain storage,
             and revoke-all are launching in Cloud Managed private beta.
           </p>
-          <WaitlistForm source="byok" ctaLabel="Join Cloud Managed waitlist" />
+          <WaitlistForm source="byok" ctaLabel="Join Cloud Managed waitlist →" />
         </div>
       </section>
     </div>

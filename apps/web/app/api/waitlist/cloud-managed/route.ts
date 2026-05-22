@@ -72,8 +72,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     if (error) {
       // Table may not exist yet (migration pending) — stub to console and succeed
       if (error.code === '42P01') {
-        console.info('[waitlist/cloud-managed] Table not yet migrated. Stub entry:', {
-          email,
+        console.warn('[waitlist/cloud-managed] Table not yet migrated; queuing entry stub.', {
           source,
         });
         return NextResponse.json({ ok: true, queued: true });
@@ -83,7 +82,9 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   } catch (err) {
     // Non-Supabase error (e.g. network) — re-throw
     if (err && typeof err === 'object' && 'status' in err) throw err;
-    console.info('[waitlist/cloud-managed] Stub fallback:', { email, source }, err);
+    console.warn('[waitlist/cloud-managed] Supabase unreachable; returning queued stub.', {
+      source,
+    });
     return NextResponse.json({ ok: true, queued: true });
   }
 
