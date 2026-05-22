@@ -46,6 +46,8 @@ import { TimelinePhase, TimelineStep } from '../Timeline';
 import { InlinePanelList } from './InlinePanelList';
 import { WidgetList, WidgetData } from './WidgetList';
 import { getMessageWidgets } from './messageRuntime';
+import { ArtifactThumbnailRow } from './ArtifactThumbnailCard';
+import { PastedBadge, isPastedMessage } from './PastedBadge';
 
 // Hooks
 import { useMessageActions } from './useMessageActions';
@@ -977,6 +979,11 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           {/* Inline status trail for any assistant/system message activity */}
           {!isUser && <MessageRuntimeInlineActivity messageId={message.id} className="mb-3" />}
 
+          {/* Pasted-content badge — shown above user message body when content came from clipboard */}
+          {isUser && isPastedMessage(message.metadata as Record<string, unknown> | null) && (
+            <PastedBadge />
+          )}
+
           {/* Edit mode for user messages */}
           {isUser && isEditing ? (
             <EditableMessage
@@ -992,6 +999,11 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               isStreaming={Boolean(message.metadata?.streaming)}
               isLastMessage={isLastMessage}
             />
+          )}
+
+          {/* Inline artifact thumbnail cards — shown for assistant messages with generated artifacts */}
+          {isAssistant && Array.isArray(message.artifacts) && message.artifacts.length > 0 && (
+            <ArtifactThumbnailRow artifacts={message.artifacts} />
           )}
 
           {/* Attachments */}
