@@ -171,7 +171,7 @@ export function createOfflineSyncManager(opts: OfflineSyncOptions): OfflineSyncM
 
       managerState.lastSyncTime = new Date();
       managerState.lastSyncSummary = summary;
-      managerState.error = undefined;
+      delete managerState.error;
       retryCount = 0;
 
       updateQueuedCount();
