@@ -24,6 +24,7 @@ const NAV_SECTIONS: NavSection[] = [
     links: [
       { href: '/settings/capabilities', label: 'Capabilities' },
       { href: '/settings/voice', label: 'Voice' },
+      { href: '/settings/byok', label: 'API keys' },
     ],
   },
   {
@@ -40,6 +41,10 @@ const NAV_SECTIONS: NavSection[] = [
   {
     heading: 'Integrations',
     links: [{ href: '/settings/connections', label: 'Connections' }],
+  },
+  {
+    heading: 'Cloud',
+    links: [{ href: '/settings/sync', label: 'Sync' }],
   },
 ];
 
