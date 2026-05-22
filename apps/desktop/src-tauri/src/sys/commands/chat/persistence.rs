@@ -134,3 +134,78 @@ pub(super) fn compute_or_skip_stats(
         compute_conversation_stats(db, conversation_id)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::data::db::{repository, Database};
+    use crate::data::supabase_sync::test_take_spawn_count;
+    use std::sync::Arc;
+
+    fn make_test_db() -> (Database, AppDatabase) {
+        let db_inner = Database::in_memory().expect("in-memory db must open");
+        let app_db = AppDatabase {
+            conn: Arc::clone(&db_inner.get_connection()),
+        };
+        (db_inner, app_db)
+    }
+
+    /// R25-V5: This test exists to enforce v1-LOCAL-ONLY sync gating.
+    /// Default ChatPreferences must have chatStorageMode=local, meaning
+    /// cloud_sync_enabled=false, meaning supabase_sync spawn functions must
+    /// never be called on a normal message save.
+    #[test]
+    fn supabase_sync_never_fires_with_cloud_sync_disabled() {
+        let (_db_inner, db) = make_test_db();
+        let conn = db.connection().expect("connection");
+        let conv_id =
+            repository::create_conversation(&conn, "test-conv".to_string(), "user1".to_string())
+                .expect("create conversation");
+        drop(conn);
+
+        let _ = test_take_spawn_count(); // reset counter
+
+        save_assistant_message(
+            &db, conv_id, "user1", "hello world",
+            Some(10), Some(0.001), Some("openai"), "gpt-4",
+            false, // cloud_sync_enabled = false (default ChatPreferences)
+        )
+        .expect("save should succeed");
+
+        assert_eq!(
+            test_take_spawn_count(),
+            0,
+            "supabase_sync must not fire when cloud_sync_enabled=false (default ChatPreferences)"
+        );
+    }
+
+    /// Positive control: confirms the spawn counter and code path actually fire
+    /// when cloud_sync=true. Without this, a broken counter silently passes the
+    /// negative test above.
+    #[tokio::test]
+    async fn supabase_sync_fires_when_cloud_sync_enabled() {
+        let (_db_inner, db) = make_test_db();
+        let conn = db.connection().expect("connection");
+        let conv_id = repository::create_conversation(
+            &conn, "test-conv-cloud".to_string(), "user2".to_string(),
+        )
+        .expect("create conversation");
+        drop(conn);
+
+        let _ = test_take_spawn_count();
+
+        // SupabaseSyncClient::new() returns None in test (SUPABASE_URL not set),
+        // but the spawn itself must still be counted.
+        save_assistant_message(
+            &db, conv_id, "user2", "cloud test",
+            None, None, None, "gpt-4",
+            true, // cloud_sync_enabled = true
+        )
+        .expect("save should succeed");
+
+        assert!(
+            test_take_spawn_count() > 0,
+            "supabase_sync spawn must be called when cloud_sync_enabled=true"
+        );
+    }
+}
