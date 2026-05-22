@@ -140,17 +140,12 @@ function writeNotif(key: NotifKey, value: boolean): void {
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function NotificationsSettingsPage() {
-  const allKeys = CHANNEL_GROUPS.flatMap((g) => g.items).map((s) => s.id);
-
   const [state, setState] = useState<Record<NotifKey, boolean>>(() =>
     CHANNEL_GROUPS.flatMap((g) => g.items).reduce(
       (acc, t) => ({ ...acc, [t.id]: readNotif(t.id, t.defaultValue) }),
       {} as Record<NotifKey, boolean>,
     ),
   );
-
-  // Keep TS happy
-  void allKeys;
 
   function toggle(key: NotifKey, disabled?: boolean) {
     if (disabled) return;
