@@ -10,7 +10,7 @@ import { logger, storageUtils } from './utils';
 import { loadPairingState, requestPairing, unpair } from './features/native-bridge/pairing';
 import type { PairingState } from './features/native-bridge/pairing';
 import type { MemoryItem } from './background/memory-bridge';
-import { isMemoryItem } from './background/memory-bridge';
+import { isMemoryItem, MEMORY_STORAGE_KEY } from './background/memory-bridge';
 
 // UI feedback durations
 const UI_FEEDBACK_DURATION_MS = 2000;
@@ -817,8 +817,7 @@ async function initAllowlistUI(): Promise<void> {
 /** Milliseconds the delete-confirm button stays red before reverting. */
 const DELETE_CONFIRM_MS = 3000;
 
-/** Storage key — must match memory-bridge.ts MEMORY_STORAGE_KEY. */
-const MEMORY_STORAGE_KEY = 'agi_memories';
+// MEMORY_STORAGE_KEY is imported from ./background/memory-bridge
 
 type MemoryMessageType = 'LIST_MEMORIES' | 'ADD_MEMORY' | 'UPDATE_MEMORY' | 'DELETE_MEMORY';
 
