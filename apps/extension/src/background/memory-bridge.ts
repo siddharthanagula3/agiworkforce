@@ -4,28 +4,28 @@
  * Persistence: chrome.storage.local ONLY — device-scoped, never synced.
  * v1 LOCAL ONLY rule: no cloud sync, no writes to consumer chat tables.
  *
- * Schema mirrors the subset of packages/types/src/memory.ts::Memory that is
- * meaningful on this surface (no embeddings, no userId, no expiry).
- * Using a flat local shape avoids importing @agiworkforce/types in background.ts
- * and keeps the bundle footprint small.
+ * Schema: structural subtype of packages/types/src/memory.ts::Memory.
+ * MemoryItem = Pick<Memory, 'id'|'content'|'createdAt'> & { updatedAt: string }
+ * — uses the canonical field names and semantics from @agiworkforce/types.
+ * — updatedAt is required (canonical Memory has it optional); enforced at write.
+ * — Omits fields irrelevant to the local popup surface (embedding, userId, etc.).
  *
  * Storage key: `agi_memories` → MemoryItem[]
  * Max entries: 200 (guard against unbounded growth in local storage)
  */
 
-export interface MemoryItem {
-  /** UUID v4 generated at creation time. */
-  id: string;
+import type { Memory } from '@agiworkforce/types';
 
-  /** Plain text fact / preference / pattern. Max 2000 chars enforced at write. */
-  content: string;
-
-  /** ISO 8601 creation timestamp. */
-  createdAt: string;
-
-  /** ISO 8601 last-updated timestamp. */
-  updatedAt: string;
-}
+/**
+ * Device-scoped memory entry stored in chrome.storage.local.
+ *
+ * Structural subtype of the canonical Memory from @agiworkforce/types:
+ *   Pick<Memory, 'id' | 'content' | 'createdAt'> & { updatedAt: string }
+ *
+ * updatedAt is required here (canonical Memory has it optional) because every
+ * write path in this bridge sets it explicitly.
+ */
+export type MemoryItem = Pick<Memory, 'id' | 'content' | 'createdAt'> & { updatedAt: string };
 
 const MEMORY_STORAGE_KEY = 'agi_memories';
 const MAX_MEMORY_ITEMS = 200;
@@ -107,7 +107,7 @@ export async function memoryDelete(id: string): Promise<boolean> {
 }
 
 /** Type guard for raw storage values. */
-function isMemoryItem(v: unknown): v is MemoryItem {
+export function isMemoryItem(v: unknown): v is MemoryItem {
   if (!v || typeof v !== 'object') return false;
   const o = v as Record<string, unknown>;
   return (
