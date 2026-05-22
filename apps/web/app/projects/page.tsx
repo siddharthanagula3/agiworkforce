@@ -19,12 +19,20 @@ import { useRouter } from 'next/navigation';
 export default function ProjectsPage() {
   const router = useRouter();
 
+  // The hub is rendered against the warm-dark site background by design
+  // (matches the marketing/app shell). Tokens are hardcoded against the dark
+  // palette so this page reads correctly even when the `.dark` class isn't
+  // applied to <html> — which is the case for the cloud-web build that lands
+  // on /projects from marketing links. Round-10 visual-verification fix
+  // (2026-05-21): the earlier code referenced undefined `--text-1` /
+  // `--text-3` tokens and rendered as near-black-on-black.
   return (
     <main
       style={{
         minHeight: '100vh',
-        background: 'var(--bg-base, #09090b)',
+        background: '#0d0c0a',
         padding: '48px 32px',
+        color: '#e8e4db',
       }}
     >
       <div
@@ -42,13 +50,21 @@ export default function ProjectsPage() {
               fontFamily: 'var(--serif)',
               fontSize: 28,
               fontWeight: 500,
-              color: 'var(--text-1)',
+              color: '#e8e4db',
               margin: 0,
             }}
           >
             Projects
           </h1>
-          <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0, maxWidth: 640 }}>
+          <p
+            style={{
+              fontSize: 14,
+              color: '#b3aea4',
+              margin: 0,
+              maxWidth: 640,
+              lineHeight: 1.55,
+            }}
+          >
             Group related conversations under a shared project. Each project can carry its own
             files, instructions, and chat history. Stored on this device in v1; cloud sync arrives
             with Cloud Managed.
@@ -57,9 +73,9 @@ export default function ProjectsPage() {
 
         <section
           style={{
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-lg)',
-            background: 'var(--bg-elev)',
+            border: '1px solid rgba(255, 235, 205, 0.08)',
+            borderRadius: 16,
+            background: '#1a1915',
             padding: '20px 24px',
             minHeight: 480,
           }}
