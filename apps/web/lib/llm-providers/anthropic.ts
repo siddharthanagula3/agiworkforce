@@ -9,6 +9,11 @@ import {
   RETRYABLE_HTTP_STATUS_CODES,
 } from './base';
 import { logger } from '@/lib/logger';
+import {
+  buildAnthropicCacheControl,
+  resolveCacheRetention,
+  type CacheRetention,
+} from './cache-retention';
 
 /**
  * Transform tools from OpenAI format to Anthropic format.
@@ -141,10 +146,20 @@ export class AnthropicProvider extends BaseLLMProvider {
   async sendRequest(request: LLMProviderRequest): Promise<LLMProviderResponse> {
     const url = `${this.baseUrl}/messages`;
 
+    // Resolve cache retention once per request (stability rule: do not re-evaluate
+    // mid-session based on dynamic conditions like token counts or agent state).
+    // Reference: openclaw bootstrap/state.ts:223.
+    const effectiveRetention: CacheRetention | undefined = request.usePromptCache
+      ? (request.cacheRetention ??
+        resolveCacheRetention(undefined, 'anthropic', request.model) ??
+        'short')
+      : undefined;
+    const cacheControl = buildAnthropicCacheControl(effectiveRetention);
+
     // Convert messages format for Anthropic, preserving tool_use/tool_result blocks
     const messages = mapMessagesToAnthropic(
       request.messages.filter((msg) => msg.role !== 'system'),
-      request.usePromptCache,
+      cacheControl,
     );
 
     const systemMessage = request.messages.find((msg) => msg.role === 'system');
@@ -152,12 +167,12 @@ export class AnthropicProvider extends BaseLLMProvider {
     // Build system content with cache_control if caching is enabled
     let systemContent: unknown = undefined;
     if (systemMessage) {
-      if (request.usePromptCache) {
+      if (cacheControl) {
         systemContent = [
           {
             type: 'text',
             text: systemMessage.content,
-            cache_control: { type: 'ephemeral' },
+            cache_control: cacheControl,
           },
         ];
       } else {
@@ -313,11 +328,19 @@ export class AnthropicProvider extends BaseLLMProvider {
   async streamRequest(request: LLMProviderRequest): Promise<ReadableStream> {
     const url = `${this.baseUrl}/messages`;
 
+    // Resolve cache retention (same logic as sendRequest; must be stable across
+    // the session — do not change based on dynamic conditions).
+    const effectiveRetentionStream: CacheRetention | undefined = request.usePromptCache
+      ? (request.cacheRetention ??
+        resolveCacheRetention(undefined, 'anthropic', request.model) ??
+        'short')
+      : undefined;
+    const cacheControlStream = buildAnthropicCacheControl(effectiveRetentionStream);
+
     // Convert messages to Anthropic format, preserving tool_use/tool_result blocks
-    // Pass usePromptCache so message-body cache_control is applied (matching sendRequest)
     const messages = mapMessagesToAnthropic(
       request.messages.filter((msg) => msg.role !== 'system'),
-      request.usePromptCache,
+      cacheControlStream,
     );
 
     const systemMessage = request.messages.find((msg) => msg.role === 'system');
@@ -340,12 +363,12 @@ export class AnthropicProvider extends BaseLLMProvider {
 
     // Apply prompt cache on system message (matching sendRequest behavior)
     if (systemMessage) {
-      if (request.usePromptCache) {
+      if (cacheControlStream) {
         body['system'] = [
           {
             type: 'text',
             text: systemMessage.content,
-            cache_control: { type: 'ephemeral' },
+            cache_control: cacheControlStream,
           },
         ];
       } else {
@@ -454,7 +477,9 @@ function mapMessagesToAnthropic(
     tool_calls?: unknown[];
     tool_call_id?: string;
   }>,
-  usePromptCache?: boolean,
+  // Accept the resolved cache_control object (null = no caching).
+  // Callers compute this once before the loop so retention is stable.
+  cacheControl: { type: 'ephemeral'; ttl?: '5m' | '1h' } | null = null,
 ): Array<Record<string, unknown>> {
   const result: Array<Record<string, unknown>> = [];
 
@@ -484,10 +509,10 @@ function mapMessagesToAnthropic(
         // isLast was computed before the inner while-loop, so it can be wrong
         // when a conversation ends with tool-result messages.
         const batchIsLast = j === messages.length;
-        if (batchIsLast && usePromptCache && toolResults.length > 0) {
-          // Apply cache_control to the last tool_result block in the batch
+        if (batchIsLast && cacheControl && toolResults.length > 0) {
+          // Apply cache_control to the last tool_result block in the batch.
           const lastResult = toolResults[toolResults.length - 1]!;
-          (lastResult as Record<string, unknown>)['cache_control'] = { type: 'ephemeral' };
+          (lastResult as Record<string, unknown>)['cache_control'] = cacheControl;
         }
         result.push({
           role: 'user',
@@ -543,13 +568,13 @@ function mapMessagesToAnthropic(
       // Build Anthropic content blocks from multimodal parts
       const blocks = buildAnthropicContentBlocks(msg.content, multimodalParts);
       contentValue =
-        usePromptCache && isLast
+        cacheControl && isLast
           ? blocks.map((b, idx) =>
-              idx === blocks.length - 1 ? { ...b, cache_control: { type: 'ephemeral' } } : b,
+              idx === blocks.length - 1 ? { ...b, cache_control: cacheControl } : b,
             )
           : blocks;
-    } else if (usePromptCache && isLast) {
-      contentValue = [{ type: 'text', text: msg.content, cache_control: { type: 'ephemeral' } }];
+    } else if (cacheControl && isLast) {
+      contentValue = [{ type: 'text', text: msg.content, cache_control: cacheControl }];
     } else {
       contentValue = msg.content;
     }
