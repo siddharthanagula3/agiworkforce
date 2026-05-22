@@ -14,6 +14,7 @@ Closes the PLAN.md section 5 task "Define project schema." Types-first cross-sur
 - [x] Add companion types: ProjectMember, ProjectMemberRole, ProjectKnowledgeFile, ProjectInstructions, ProjectAccentColor, ProjectImportSource
 - [x] Add `summarizeProjectHeader()` + `normalizeProjectAccentColor()` + `projectMemberRoleLabel()` helpers
 - [x] Shared `ProjectHeader` component in `@agiworkforce/unified-chat` consuming `ProjectHeaderPresentation` — `98749e432`
+- [x] Desktop `ProjectsView.tsx` adopts `<ProjectHeader />` (first host adoption) — `dbc87d8cc`
 - [x] 26 new tests across types (15) + unified-chat (11)
 
 ## 2026-05-21 Suite Transformation Session — Round 9 (in progress)

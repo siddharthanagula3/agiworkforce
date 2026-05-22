@@ -18,6 +18,7 @@ Round 10 closes the PLAN.md section 5 task "Define project schema" and ships the
 - Helpers: `normalizeProjectAccentColor()` (falls back to 'zinc' for unknown values), `projectMemberRoleLabel()` (Owner / Editor / Viewer).
 - Shared `ProjectHeader` component in `@agiworkforce/unified-chat`. Consumes `ProjectHeaderPresentation`. Accent palette mapped to deterministic Tailwind classes (no inline `style={{ backgroundColor }}` leakage). Privacy chip carries `data-stays-local`; provider chip carries `data-provider-mode`. Imported-from chip, meta row (knowledge files / members / last used / default model), and canonical-ordered surface chips render conditionally.
 - 26 new vitest tests in total: 15 for `summarizeProjectHeader` (accent palette, canonical surface order, count formatting, imported-from labelling, staysLocal flip, model passthrough) + 11 for `ProjectHeader` component (accent attribute, chip data attributes, imported-from / meta / surface chip surfacing).
+- Desktop `ProjectsView.tsx` adopts `<ProjectHeader />` in the project details header, with a `mapDesktopProjectToHeaderRecord()` helper that bridges the Desktop store's `Project` to a canonical `ProjectRecord` with v1 LOCAL ONLY defaults (privacy=local, provider=Local, surfaces=[web,desktop,mobile], importedFrom=manual). Display-only adoption — the Edit Details / Settings / Open Project action row stays as the canonical action surface.
 
 ## [Unreleased — autonomous suite transformation, round 9] — 2026-05-21
 
