@@ -38,7 +38,7 @@ export class OpenAIProvider extends BaseLLMProvider {
 
     const body: Record<string, unknown> = {
       model: request.model,
-      messages: request.messages.map((msg, index, array) => {
+      messages: request.messages.map((msg) => {
         const messageObj: Record<string, unknown> = {
           role: msg.role,
           content: msg.content,
@@ -50,10 +50,10 @@ export class OpenAIProvider extends BaseLLMProvider {
           messageObj['tool_call_id'] = msg.tool_call_id;
         }
 
-        // Add cache_control to last message if prompt caching is enabled
-        if (request.usePromptCache && index === array.length - 1 && msg.role === 'user') {
-          messageObj['cache_control'] = { type: 'ephemeral' };
-        }
+        // NOTE: OpenAI does NOT support message-level cache_control markers.
+        // Prompt caching on OpenAI is automatic for prefixes >= 1024 tokens on
+        // supported models (gpt-4o+, gpt-5 series). Cache hits are reported via
+        // usage.prompt_tokens_details.cached_tokens in the response — see below.
 
         return messageObj;
       }),
@@ -184,6 +184,15 @@ export class OpenAIProvider extends BaseLLMProvider {
         );
       }
 
+      // OpenAI exposes cache hits via usage.prompt_tokens_details.cached_tokens
+      // (Chat Completions) or usage.input_tokens_details.cached_tokens (Responses API).
+      // OpenAI does NOT expose a separate cache_creation counter; report as 0.
+      // Reference: openclaw prompt-caching.md "OpenAI direct API" section.
+      const openAiCachedTokens =
+        data.usage?.prompt_tokens_details?.cached_tokens ??
+        data.usage?.input_tokens_details?.cached_tokens ??
+        undefined;
+
       return {
         content: message?.content || '',
         model: data.model || request.model,
@@ -191,8 +200,8 @@ export class OpenAIProvider extends BaseLLMProvider {
         completionTokens: data.usage?.completion_tokens || 0,
         totalTokens: data.usage?.total_tokens || 0,
         finishReason,
-        cacheCreationInputTokens: data.usage?.cache_creation_input_tokens,
-        cachedInputTokens: data.usage?.cache_read_input_tokens,
+        // cacheCreationInputTokens intentionally omitted for OpenAI (not exposed).
+        cachedInputTokens: openAiCachedTokens,
         tool_calls: message?.tool_calls, // Include tool calls if present
       };
     } catch (error) {
