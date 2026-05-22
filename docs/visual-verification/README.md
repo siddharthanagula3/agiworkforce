@@ -11,8 +11,8 @@ This directory holds the visual-verification deliverables for the AGI Workforce 
 Each surface has its own subdirectory:
 
 - `web/` — Next.js dev server screenshots, captured by `apps/web/e2e/visual-verification.spec.ts` via playwright (chromium 1920×1080).
-- `desktop/` — Tauri dev screenshots, future slice.
-- `mobile/` — RN simulator screenshots, future slice.
+- `desktop/` — Desktop cloud-web bundle (`VITE_BUILD_TARGET=web`) screenshots, captured by `apps/desktop/e2e/visual-verification.spec.ts` via playwright (project name `visual-verification`). Runs against `vite` (not Tauri) so capture works in CI without native window managers.
+- `mobile/` — RN structural snapshots in `apps/mobile/__tests__/shared-primitives.snapshot.test.tsx` (no PNG capture yet — would need a simulator).
 
 To recapture web:
 
@@ -22,7 +22,15 @@ pnpm dev &      # in a separate shell, or use playwright's webServer
 npx playwright test e2e/visual-verification.spec.ts
 ```
 
-Output overwrites the existing PNGs in `docs/visual-verification/web/`. `git diff` exposes the delta.
+To recapture desktop:
+
+```bash
+cd apps/desktop
+VITE_BUILD_TARGET=web VITE_DEV_PORT=5175 pnpm dev:vite &
+npx playwright test --project visual-verification
+```
+
+Output overwrites the existing PNGs in `docs/visual-verification/{web,desktop}/`. `git diff` exposes the delta.
 
 ## How to use
 
@@ -41,7 +49,13 @@ Output overwrites the existing PNGs in `docs/visual-verification/web/`. `git dif
 | /         | `web/home-route-viewport.png`      | Renders. 1 pageError on hydration nonce mismatch (dev-mode only); 5 consoleErrors including CSP violations on inline scripts + open-dyslexic font CDN. CSP violations need real fixes — they would block accessibility-font users in production.           | Medium — CSP scope            |
 | /projects | `web/projects-route-findings.json` | 0 pageErrors. 5 consoleErrors, all CSP/dev-mode noise.                                                                                                                                                                                                     | Informational                 |
 
-These findings discharge part of the Stop hook visual-verification debt that the round-7..9 commits accumulated. Remaining surfaces (Desktop / Mobile / VS Code / Chrome) require dedicated capture infrastructure documented in the relevant surface READMEs.
+These findings discharge part of the Stop hook visual-verification debt that the round-7..9 commits accumulated. Remaining surfaces (VS Code / Chrome) require dedicated capture infrastructure documented in the relevant surface READMEs. Mobile uses RN snapshot tests (`apps/mobile/__tests__/shared-primitives.snapshot.test.tsx`) for structural verification.
+
+### Desktop
+
+| Route         | Screenshot                          | Finding                                                                                                                                                                                                                                                                                | Severity      |
+| ------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| / (cloud-web) | `desktop/desktop-root-viewport.png` | Sign-in screen renders cleanly. agi.workforce branding, navigation chrome (Providers / Pricing / Compare / About / Sign in / Install), accessible form labels (EMAIL / PASSWORD), and OAuth options (Continue with Google / GitHub) all visible. Production-quality light-mode layout. | Informational |
 
 ## Why not pixel-diff snapshots?
 
