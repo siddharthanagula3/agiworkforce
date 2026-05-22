@@ -14,7 +14,7 @@
 //
 // Read-only on app code — this is the only new mount we add for the smoke test.
 
-'use client';
+import { notFound } from 'next/navigation';
 
 import {
   InlineToolCall,
@@ -22,6 +22,11 @@ import {
   WebSearchCard,
   type WebSearchResultItem,
 } from '@agiworkforce/unified-chat';
+
+// Gate the demo route behind NODE_ENV — never ship to production.
+if (process.env.NODE_ENV === 'production') {
+  notFound();
+}
 
 const FILESYSTEM_RESULTS: WebSearchResultItem[] = [
   {

@@ -81,9 +81,9 @@ export function InlineToolCallGroup({
           'transition-colors duration-100',
         )}
       >
-        <span className="text-sm text-[color:var(--text-muted)] font-normal">
+        <span className="text-sm text-[color:var(--chat-text-muted,#8b8680)] font-normal">
           Used{' '}
-          <span className="font-medium text-[color:var(--text-secondary,inherit)]">
+          <span className="font-medium text-[color:var(--chat-text-secondary,inherit)]">
             {integrationName}
           </span>{' '}
           integration, {summary}
@@ -92,7 +92,7 @@ export function InlineToolCallGroup({
           size={13}
           strokeWidth={2}
           className={cn(
-            'inline-tool-call-group__chevron shrink-0 text-[color:var(--text-muted)]',
+            'inline-tool-call-group__chevron shrink-0 text-[color:var(--chat-text-muted,#8b8680)]',
             'transition-transform duration-150',
             open && 'rotate-180',
           )}
