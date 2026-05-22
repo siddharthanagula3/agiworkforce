@@ -426,7 +426,7 @@ Goal: Claude connectors parity through MCP and browser/IDE bridges.
 Tasks:
 
 - Unify Desktop/CLI MCP server registry.
-- Add OAuth status and refresh UX.
+- [x] Add OAuth status and refresh UX. (Round 8 — Desktop `OAuthConnectorCard` accepts an optional `expiresAt` unix timestamp and renders a colored "Expires in X" / "Expired" badge. When `onRefresh` is supplied AND the badge is amber/red, an explicit "Refresh token" button appears above Disconnect. `ConnectorGallery` batch-fetches `mcp_oauth_status` for each connected provider after `fetchConnected` resolves; `mcp_oauth_refresh` powers the refresh action and updates the local expiry map.)
 - Add MCP prompts as slash commands.
 - Add connector install/uninstall across Desktop/Web/CLI.
 - Keep connector customization modal-first: browse in the connector gallery, add custom remote MCP servers through a focused modal, and escalate to settings only for deep MCP/server management.

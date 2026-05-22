@@ -6,7 +6,7 @@ Last updated: 2026-05-21 (post round-7 suite-transformation session, integration
 
 This is the active checklist for the transition described in `PLAN.md`. Keep it short enough to operate from daily; move evidence and long analysis to `audit/anthropic-apps-parity/`.
 
-## 2026-05-21 Suite Transformation Session — Round 8 (~25h, 4 commits)
+## 2026-05-21 Suite Transformation Session — Round 8 (~50h, 10 commits)
 
 Closes the PLAN.md section 5 task: "Add visible 'what will be sent' previews for cloud/BYOK turns." A privacy-critical UX gap that matches Claude/OpenAI parity AND reinforces AGI's local-first stance. HEAD `3625a68af`.
 
@@ -15,8 +15,10 @@ Closes the PLAN.md section 5 task: "Add visible 'what will be sent' previews for
 - [x] Web `WebChatPage` adopts SendPreview above composer — `885523e87`
 - [x] Mobile RN-native `SendPreview` mirror + chat tab adoption — `c103d72a9`
 - [x] Desktop chat shell adopts SendPreview above `ChatInputArea` — `3625a68af`
+- [x] Web composer attachments stamp per-file privacy chip (PLAN section 5 partial) — `44ab9d0c4`
+- [x] Desktop OAuth token expiry + refresh UX (PLAN section 6) — `e98fcda68`
 
-All three Local-mode surfaces (Web/Mobile/Desktop) now share the same `SendPreviewPresentation` contract, mapping their respective provider taxonomies to `ProviderMode` + canonical `destinationHost`. 28 new tests (11 types + 10 unified-chat + 7 mobile).
+All three Local-mode surfaces (Web/Mobile/Desktop) now share the same `SendPreviewPresentation` contract. 28 new tests (11 types + 10 unified-chat + 7 mobile). Per-file privacy chip threaded from `SendPreviewPresentation` into Web's `ChatComposerNew` via new `attachmentPrivacyShortLabel` prop. Desktop `OAuthConnectorCard` shows token expiry with color-coded badge + optional explicit refresh button.
 
 ## 2026-05-21 Suite Transformation Session — Round 7 (~50h, 13 commits)
 
