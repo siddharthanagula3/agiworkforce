@@ -80,6 +80,19 @@ The /goal calls for "screenshots confirming UI parity against Claude/OpenAI refe
 
 These are **product decisions, not regressions**. The current AGI design is internally consistent. If AGI wants to widen the visitor-to-signup funnel, copy Claude's structural template; otherwise keep the current "compact app shell + nav" approach. Tracked separately.
 
+### Gemini home empty-state reference
+
+Captured for breadth (AGI doesn't have a directly comparable signed-in empty-state route yet — `/chat` is for active sessions and `/` is marketing). Reference: `_reference-comparisons/ref-gemini-home-empty-state.png`.
+
+Notable Gemini patterns AGI could borrow when building a signed-in empty-state route:
+
+- Personal greeting ("✨ Hi {firstName}") + open-ended composer headline ("What should we do today?") — replaces the generic "Welcome back" framing on AGI's Desktop sign-in.
+- Composer-first layout: prompt input is the largest interactive element; model selector ("Pro" badge) and tools button live INSIDE the input chrome.
+- Quick-action chip row below the composer: "For you", "Create image", "Create music", "Create video", "Write anything", "Boost my day". AGI's SendPreview surfaces privacy/destination but doesn't pre-suggest action prompts — these chips are upsell + onboarding rolled into one.
+- Persistent promo card top-right ("Bring your memories with you") — dismissible, non-modal, drives an import flow.
+
+Tracked as a product-decision item, not a regression. AGI's design language deliberately diverges (newsreader serif, warm-dark palette, no per-feature chip taxonomy yet). Documenting the pattern so future signed-in-empty-state design decisions have a captured reference.
+
 ### What this comparison concludes
 
 - AGI's `/projects` hub layout and Round-10 contrast fix are production-quality at the structural level (correct chrome, search input, empty state, CTA placement, dark mode legible after `651b4e016`).
