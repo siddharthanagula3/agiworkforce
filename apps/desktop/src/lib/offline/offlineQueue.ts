@@ -36,7 +36,8 @@ function loadQueue(): OfflineQueueState {
       toolExecutions: [],
     });
     return data || { messages: [], toolExecutions: [] };
-  } catch {
+  } catch (error) {
+    console.warn('[OfflineQueue] failed to load queue', error);
     return { messages: [], toolExecutions: [] };
   }
 }
@@ -44,8 +45,8 @@ function loadQueue(): OfflineQueueState {
 function saveQueue(queue: OfflineQueueState): void {
   try {
     safeSetJSON(OFFLINE_QUEUE_KEY, queue);
-  } catch {
-    // Queue persistence failed — items may be lost on reload
+  } catch (error) {
+    console.warn('[OfflineQueue] failed to save queue — items may be lost on reload', error);
   }
 }
 
@@ -128,8 +129,8 @@ export function clearQueuedMessage(messageId: string): void {
       messages: queue.messages.filter((m) => m.id !== messageId),
     };
     saveQueue(updated);
-  } catch {
-    // Message removal failed silently
+  } catch (error) {
+    console.warn('[OfflineQueue] failed to clear queued message', { messageId, error });
   }
 }
 
@@ -141,16 +142,16 @@ export function clearQueuedToolExecution(toolId: string): void {
       toolExecutions: queue.toolExecutions.filter((t) => t.id !== toolId),
     };
     saveQueue(updated);
-  } catch {
-    // Tool execution removal failed silently
+  } catch (error) {
+    console.warn('[OfflineQueue] failed to clear queued tool execution', { toolId, error });
   }
 }
 
 export function clearAllQueued(): void {
   try {
     localStorage.removeItem(OFFLINE_QUEUE_KEY);
-  } catch {
-    // Queue clear failed silently
+  } catch (error) {
+    console.warn('[OfflineQueue] failed to clear all queued items', error);
   }
 }
 
@@ -258,7 +259,8 @@ export function getLastSyncTime(): Date | null {
   try {
     const queue = loadQueue();
     return queue.lastSyncTime ? new Date(queue.lastSyncTime) : null;
-  } catch {
+  } catch (error) {
+    console.warn('[OfflineQueue] failed to read last sync time', error);
     return null;
   }
 }
