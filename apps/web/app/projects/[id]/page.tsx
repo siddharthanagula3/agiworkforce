@@ -42,6 +42,19 @@ function normalizeAccent(value: string | undefined): ProjectAccentColor | null {
     : null;
 }
 
+/**
+ * Format a conversation id as a readable label. The project store only
+ * tracks ids — titles live in the chat store and aren't joined here in
+ * v1 LOCAL ONLY. Show a short, human-friendly form so users see
+ * "Conversation 01h8x9…" instead of an opaque 36-character UUID.
+ */
+function conversationLabel(conversationId: string): string {
+  const trimmed = conversationId.trim();
+  if (!trimmed) return 'Untitled conversation';
+  const head = trimmed.slice(0, 8);
+  return `Conversation ${head}${trimmed.length > 8 ? '…' : ''}`;
+}
+
 export default function ProjectDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -241,6 +254,7 @@ export default function ProjectDetailPage() {
                           `/chat?project=${encodeURIComponent(project.id)}&conversation=${encodeURIComponent(conversationId)}`,
                         );
                       }}
+                      title={conversationId}
                       style={{
                         background: 'transparent',
                         border: 0,
@@ -250,7 +264,7 @@ export default function ProjectDetailPage() {
                         cursor: 'pointer',
                       }}
                     >
-                      {conversationId}
+                      {conversationLabel(conversationId)}
                     </button>
                   </li>
                 ))}
