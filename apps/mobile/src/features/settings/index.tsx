@@ -641,6 +641,14 @@ export default function SettingsTabScreen() {
       title: 'Privacy',
       data: [
         {
+          key: 'permissions',
+          icon: Shield,
+          label: 'Permissions',
+          type: 'navigation',
+          description: 'Microphone, camera, location, photos, notifications, contacts.',
+          onPress: push('/(app)/settings/permissions'),
+        },
+        {
           key: 'privacy-policy',
           icon: Lock,
           label: 'Privacy Policy',

@@ -204,6 +204,14 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
         {
           "data": [
             {
+              "description": "Microphone, camera, location, photos, notifications, contacts.",
+              "icon": [Function],
+              "key": "permissions",
+              "label": "Permissions",
+              "onPress": [Function],
+              "type": "navigation",
+            },
+            {
               "description": "Local-first privacy terms for Mobile v1.",
               "icon": [Function],
               "key": "privacy-policy",

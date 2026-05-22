@@ -1,0 +1,1191 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`PermissionDetailScreen — location (4-level) locks the location detail with all 4 applicable levels (undetermined state) 1`] = `
+<View
+  className="flex-1"
+  style={
+    {
+      "backgroundColor": "#0e0e0e",
+    }
+  }
+>
+  <View
+    className="flex-row items-center px-3 h-12"
+  >
+    <View
+      accessibilityLabel="Go back"
+      accessibilityRole="button"
+      accessibilityState={
+        {
+          "busy": undefined,
+          "checked": undefined,
+          "disabled": undefined,
+          "expanded": undefined,
+          "selected": undefined,
+        }
+      }
+      accessibilityValue={
+        {
+          "max": undefined,
+          "min": undefined,
+          "now": undefined,
+          "text": undefined,
+        }
+      }
+      accessible={true}
+      className="p-2 rounded-lg active:bg-white/5"
+      collapsable={false}
+      focusable={true}
+      onBlur={[Function]}
+      onClick={[Function]}
+      onFocus={[Function]}
+      onResponderGrant={[Function]}
+      onResponderMove={[Function]}
+      onResponderRelease={[Function]}
+      onResponderTerminate={[Function]}
+      onResponderTerminationRequest={[Function]}
+      onStartShouldSetResponder={[Function]}
+    >
+      <View
+        color="#aaa"
+        size={20}
+        testID="icon-ArrowLeft"
+      />
+    </View>
+    <Text
+      className="ml-2 flex-1"
+      style={
+        {
+          "color": "#fff",
+        }
+      }
+      variant="subheading"
+    >
+      Location
+    </Text>
+  </View>
+  <RCTScrollView
+    className="flex-1 px-4"
+    contentContainerStyle={
+      {
+        "paddingBottom": 40,
+      }
+    }
+    showsVerticalScrollIndicator={false}
+  >
+    <View>
+      <View
+        className="mt-3 p-4 rounded-xl flex-row items-center gap-4"
+        style={
+          {
+            "backgroundColor": "#77710",
+            "borderColor": "#333",
+            "borderWidth": 1,
+          }
+        }
+      >
+        <View
+          className="w-12 h-12 rounded-2xl items-center justify-center"
+          style={
+            {
+              "backgroundColor": "#77718",
+            }
+          }
+        >
+          <View
+            color="#777"
+            size={24}
+            testID="icon-MapPin"
+          />
+        </View>
+        <View
+          className="flex-1"
+        >
+          <Text
+            className="text-[13px] font-semibold"
+            style={
+              {
+                "color": "#777",
+              }
+            }
+          >
+            Access Denied
+          </Text>
+          <Text
+            className="text-[11px] mt-1 leading-4"
+            style={
+              {
+                "color": "#aaa",
+              }
+            }
+          >
+            Used for location-aware queries and context.
+          </Text>
+        </View>
+      </View>
+      <View
+        className="mt-5 mb-2"
+      >
+        <Text
+          className="text-[11px] uppercase tracking-wider"
+          style={
+            {
+              "color": "#777",
+            }
+          }
+        >
+          Access Level
+        </Text>
+      </View>
+      <View
+        style={
+          {
+            "backgroundColor": "#1a1a1a",
+            "borderColor": "#333",
+            "borderRadius": 14,
+            "borderWidth": 1,
+            "overflow": "hidden",
+            "paddingHorizontal": 12,
+          }
+        }
+      >
+        <View>
+          <View
+            accessibilityLabel="Never. App cannot access this permission."
+            accessibilityRole="radio"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": true,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            className="flex-row items-center px-1 py-3.5 active:bg-white/5 rounded-lg"
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+          >
+            <View
+              className="w-5 h-5 rounded-full items-center justify-center mr-3"
+              style={
+                {
+                  "backgroundColor": "#2dd4bf",
+                  "borderColor": "#333",
+                  "borderWidth": 0,
+                }
+              }
+            >
+              <View
+                color="#fff"
+                fill="#fff"
+                size={14}
+                testID="icon-CheckCircle"
+              />
+            </View>
+            <View
+              className="flex-1"
+            >
+              <Text
+                className="text-sm font-medium"
+                style={
+                  {
+                    "color": "#fff",
+                  }
+                }
+              >
+                Never
+              </Text>
+              <Text
+                className="text-[11px] mt-0.5"
+                style={
+                  {
+                    "color": "#777",
+                  }
+                }
+              >
+                App cannot access this permission.
+              </Text>
+            </View>
+          </View>
+          <View
+            testID="separator"
+          />
+        </View>
+        <View>
+          <View
+            accessibilityLabel="Ask each time. The OS will ask each time the app needs access."
+            accessibilityRole="radio"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": false,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            className="flex-row items-center px-1 py-3.5 active:bg-white/5 rounded-lg"
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+          >
+            <View
+              className="w-5 h-5 rounded-full items-center justify-center mr-3"
+              style={
+                {
+                  "backgroundColor": "transparent",
+                  "borderColor": "#333",
+                  "borderWidth": 1.5,
+                }
+              }
+            />
+            <View
+              className="flex-1"
+            >
+              <Text
+                className="text-sm font-medium"
+                style={
+                  {
+                    "color": "#fff",
+                  }
+                }
+              >
+                Ask each time
+              </Text>
+              <Text
+                className="text-[11px] mt-0.5"
+                style={
+                  {
+                    "color": "#777",
+                  }
+                }
+              >
+                The OS will ask each time the app needs access.
+              </Text>
+            </View>
+          </View>
+          <View
+            testID="separator"
+          />
+        </View>
+        <View>
+          <View
+            accessibilityLabel="While using the app. Access is granted only while the app is in the foreground."
+            accessibilityRole="radio"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": false,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            className="flex-row items-center px-1 py-3.5 active:bg-white/5 rounded-lg"
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+          >
+            <View
+              className="w-5 h-5 rounded-full items-center justify-center mr-3"
+              style={
+                {
+                  "backgroundColor": "transparent",
+                  "borderColor": "#333",
+                  "borderWidth": 1.5,
+                }
+              }
+            />
+            <View
+              className="flex-1"
+            >
+              <Text
+                className="text-sm font-medium"
+                style={
+                  {
+                    "color": "#fff",
+                  }
+                }
+              >
+                While using the app
+              </Text>
+              <Text
+                className="text-[11px] mt-0.5"
+                style={
+                  {
+                    "color": "#777",
+                  }
+                }
+              >
+                Access is granted only while the app is in the foreground.
+              </Text>
+            </View>
+          </View>
+          <View
+            testID="separator"
+          />
+        </View>
+        <View>
+          <View
+            accessibilityLabel="Always. Access is granted in foreground and background."
+            accessibilityRole="radio"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": false,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            className="flex-row items-center px-1 py-3.5 active:bg-white/5 rounded-lg"
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+          >
+            <View
+              className="w-5 h-5 rounded-full items-center justify-center mr-3"
+              style={
+                {
+                  "backgroundColor": "transparent",
+                  "borderColor": "#333",
+                  "borderWidth": 1.5,
+                }
+              }
+            />
+            <View
+              className="flex-1"
+            >
+              <Text
+                className="text-sm font-medium"
+                style={
+                  {
+                    "color": "#fff",
+                  }
+                }
+              >
+                Always
+              </Text>
+              <Text
+                className="text-[11px] mt-0.5"
+                style={
+                  {
+                    "color": "#777",
+                  }
+                }
+              >
+                Access is granted in foreground and background.
+              </Text>
+            </View>
+          </View>
+        </View>
+      </View>
+      <View
+        className="mt-4 px-3 py-2.5 rounded-xl"
+        style={
+          {
+            "backgroundColor": "rgba(255,255,255,0.04)",
+          }
+        }
+      >
+        <Text
+          className="text-[11px] leading-4"
+          style={
+            {
+              "color": "#777",
+            }
+          }
+        >
+          Changing access levels that require OS-level changes will open your device Settings app. AGI cannot revoke or grant OS permissions directly.
+        </Text>
+      </View>
+    </View>
+  </RCTScrollView>
+</View>
+`;
+
+exports[`PermissionsScreen — index locks the permission list card (6 rows, undetermined state) 1`] = `
+<View
+  className="flex-1"
+  style={
+    {
+      "backgroundColor": "#0e0e0e",
+    }
+  }
+>
+  <View
+    className="flex-row items-center px-3 h-12"
+  >
+    <View
+      accessibilityLabel="Go back"
+      accessibilityRole="button"
+      accessibilityState={
+        {
+          "busy": undefined,
+          "checked": undefined,
+          "disabled": undefined,
+          "expanded": undefined,
+          "selected": undefined,
+        }
+      }
+      accessibilityValue={
+        {
+          "max": undefined,
+          "min": undefined,
+          "now": undefined,
+          "text": undefined,
+        }
+      }
+      accessible={true}
+      className="p-2 rounded-lg active:bg-white/5"
+      collapsable={false}
+      focusable={true}
+      onBlur={[Function]}
+      onClick={[Function]}
+      onFocus={[Function]}
+      onResponderGrant={[Function]}
+      onResponderMove={[Function]}
+      onResponderRelease={[Function]}
+      onResponderTerminate={[Function]}
+      onResponderTerminationRequest={[Function]}
+      onStartShouldSetResponder={[Function]}
+    >
+      <View
+        color="#aaa"
+        size={20}
+        testID="icon-ArrowLeft"
+      />
+    </View>
+    <Text
+      className="ml-2 flex-1"
+      style={
+        {
+          "color": "#fff",
+        }
+      }
+      variant="subheading"
+    >
+      Permissions
+    </Text>
+  </View>
+  <RCTScrollView
+    className="flex-1 px-4"
+    contentContainerStyle={
+      {
+        "paddingBottom": 40,
+      }
+    }
+    showsVerticalScrollIndicator={false}
+  >
+    <View>
+      <View
+        className="mt-3 mb-2"
+      >
+        <Text
+          className="text-[11px] uppercase tracking-wider mb-3"
+          style={
+            {
+              "color": "#777",
+            }
+          }
+        >
+          App Permissions
+        </Text>
+      </View>
+      <View
+        style={
+          {
+            "backgroundColor": "#1a1a1a",
+            "borderColor": "#333",
+            "borderRadius": 14,
+            "borderWidth": 1,
+            "overflow": "hidden",
+            "paddingHorizontal": 12,
+          }
+        }
+      >
+        <View>
+          <View
+            accessibilityLabel="Microphone permission. Currently denied. Tap to manage."
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            className="flex-row items-center px-1 py-3.5 active:bg-white/5 rounded-lg"
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+          >
+            <View
+              className="w-9 h-9 rounded-[9px] items-center justify-center mr-3"
+              style={
+                {
+                  "backgroundColor": "#77718",
+                }
+              }
+            >
+              <View
+                color="#777"
+                size={18}
+                testID="icon-Mic"
+              />
+            </View>
+            <View
+              className="flex-1 mr-2"
+            >
+              <Text
+                className="text-sm font-medium"
+                style={
+                  {
+                    "color": "#fff",
+                  }
+                }
+              >
+                Microphone
+              </Text>
+              <Text
+                className="text-[11px] mt-0.5"
+                style={
+                  {
+                    "color": "#777",
+                  }
+                }
+              >
+                Used for voice input and audio recording.
+              </Text>
+            </View>
+            <View
+              className="mr-2"
+            >
+              <RCTSwitch
+                accessibilityRole="switch"
+                onChange={[Function]}
+                onResponderTerminationRequest={[Function]}
+                onStartShouldSetResponder={[Function]}
+                style={
+                  {
+                    "alignSelf": "flex-start",
+                  }
+                }
+                value={false}
+              />
+            </View>
+            <View
+              color="#777"
+              size={14}
+              testID="icon-ChevronRight"
+            />
+          </View>
+          <View
+            testID="separator"
+          />
+        </View>
+        <View>
+          <View
+            accessibilityLabel="Camera permission. Currently denied. Tap to manage."
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            className="flex-row items-center px-1 py-3.5 active:bg-white/5 rounded-lg"
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+          >
+            <View
+              className="w-9 h-9 rounded-[9px] items-center justify-center mr-3"
+              style={
+                {
+                  "backgroundColor": "#77718",
+                }
+              }
+            >
+              <View
+                color="#777"
+                size={18}
+                testID="icon-Camera"
+              />
+            </View>
+            <View
+              className="flex-1 mr-2"
+            >
+              <Text
+                className="text-sm font-medium"
+                style={
+                  {
+                    "color": "#fff",
+                  }
+                }
+              >
+                Camera
+              </Text>
+              <Text
+                className="text-[11px] mt-0.5"
+                style={
+                  {
+                    "color": "#777",
+                  }
+                }
+              >
+                Used for photo capture and document scanning.
+              </Text>
+            </View>
+            <View
+              className="mr-2"
+            >
+              <RCTSwitch
+                accessibilityRole="switch"
+                onChange={[Function]}
+                onResponderTerminationRequest={[Function]}
+                onStartShouldSetResponder={[Function]}
+                style={
+                  {
+                    "alignSelf": "flex-start",
+                  }
+                }
+                value={false}
+              />
+            </View>
+            <View
+              color="#777"
+              size={14}
+              testID="icon-ChevronRight"
+            />
+          </View>
+          <View
+            testID="separator"
+          />
+        </View>
+        <View>
+          <View
+            accessibilityLabel="Location permission. Currently denied. Tap to manage."
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            className="flex-row items-center px-1 py-3.5 active:bg-white/5 rounded-lg"
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+          >
+            <View
+              className="w-9 h-9 rounded-[9px] items-center justify-center mr-3"
+              style={
+                {
+                  "backgroundColor": "#77718",
+                }
+              }
+            >
+              <View
+                color="#777"
+                size={18}
+                testID="icon-MapPin"
+              />
+            </View>
+            <View
+              className="flex-1 mr-2"
+            >
+              <Text
+                className="text-sm font-medium"
+                style={
+                  {
+                    "color": "#fff",
+                  }
+                }
+              >
+                Location
+              </Text>
+              <Text
+                className="text-[11px] mt-0.5"
+                style={
+                  {
+                    "color": "#777",
+                  }
+                }
+              >
+                Used for location-aware queries and context.
+              </Text>
+            </View>
+            <View
+              className="mr-2"
+            >
+              <RCTSwitch
+                accessibilityRole="switch"
+                onChange={[Function]}
+                onResponderTerminationRequest={[Function]}
+                onStartShouldSetResponder={[Function]}
+                style={
+                  {
+                    "alignSelf": "flex-start",
+                  }
+                }
+                value={false}
+              />
+            </View>
+            <View
+              color="#777"
+              size={14}
+              testID="icon-ChevronRight"
+            />
+          </View>
+          <View
+            testID="separator"
+          />
+        </View>
+        <View>
+          <View
+            accessibilityLabel="Photos & Files permission. Currently denied. Tap to manage."
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            className="flex-row items-center px-1 py-3.5 active:bg-white/5 rounded-lg"
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+          >
+            <View
+              className="w-9 h-9 rounded-[9px] items-center justify-center mr-3"
+              style={
+                {
+                  "backgroundColor": "#77718",
+                }
+              }
+            >
+              <View
+                color="#777"
+                size={18}
+                testID="icon-Image"
+              />
+            </View>
+            <View
+              className="flex-1 mr-2"
+            >
+              <Text
+                className="text-sm font-medium"
+                style={
+                  {
+                    "color": "#fff",
+                  }
+                }
+              >
+                Photos & Files
+              </Text>
+              <Text
+                className="text-[11px] mt-0.5"
+                style={
+                  {
+                    "color": "#777",
+                  }
+                }
+              >
+                Used to attach images and documents from your library.
+              </Text>
+            </View>
+            <View
+              className="mr-2"
+            >
+              <RCTSwitch
+                accessibilityRole="switch"
+                onChange={[Function]}
+                onResponderTerminationRequest={[Function]}
+                onStartShouldSetResponder={[Function]}
+                style={
+                  {
+                    "alignSelf": "flex-start",
+                  }
+                }
+                value={false}
+              />
+            </View>
+            <View
+              color="#777"
+              size={14}
+              testID="icon-ChevronRight"
+            />
+          </View>
+          <View
+            testID="separator"
+          />
+        </View>
+        <View>
+          <View
+            accessibilityLabel="Notifications permission. Currently denied. Tap to manage."
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            className="flex-row items-center px-1 py-3.5 active:bg-white/5 rounded-lg"
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+          >
+            <View
+              className="w-9 h-9 rounded-[9px] items-center justify-center mr-3"
+              style={
+                {
+                  "backgroundColor": "#77718",
+                }
+              }
+            >
+              <View
+                color="#777"
+                size={18}
+                testID="icon-Bell"
+              />
+            </View>
+            <View
+              className="flex-1 mr-2"
+            >
+              <Text
+                className="text-sm font-medium"
+                style={
+                  {
+                    "color": "#fff",
+                  }
+                }
+              >
+                Notifications
+              </Text>
+              <Text
+                className="text-[11px] mt-0.5"
+                style={
+                  {
+                    "color": "#777",
+                  }
+                }
+              >
+                Used for agent status, approvals, and task alerts.
+              </Text>
+            </View>
+            <View
+              className="mr-2"
+            >
+              <RCTSwitch
+                accessibilityRole="switch"
+                onChange={[Function]}
+                onResponderTerminationRequest={[Function]}
+                onStartShouldSetResponder={[Function]}
+                style={
+                  {
+                    "alignSelf": "flex-start",
+                  }
+                }
+                value={false}
+              />
+            </View>
+            <View
+              color="#777"
+              size={14}
+              testID="icon-ChevronRight"
+            />
+          </View>
+          <View
+            testID="separator"
+          />
+        </View>
+        <View>
+          <View
+            accessibilityLabel="Contacts permission. Currently denied. Tap to manage."
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            className="flex-row items-center px-1 py-3.5 active:bg-white/5 rounded-lg"
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+          >
+            <View
+              className="w-9 h-9 rounded-[9px] items-center justify-center mr-3"
+              style={
+                {
+                  "backgroundColor": "#77718",
+                }
+              }
+            >
+              <View
+                color="#777"
+                size={18}
+                testID="icon-Users"
+              />
+            </View>
+            <View
+              className="flex-1 mr-2"
+            >
+              <Text
+                className="text-sm font-medium"
+                style={
+                  {
+                    "color": "#fff",
+                  }
+                }
+              >
+                Contacts
+              </Text>
+              <Text
+                className="text-[11px] mt-0.5"
+                style={
+                  {
+                    "color": "#777",
+                  }
+                }
+              >
+                Used for contact lookup in agent tasks.
+              </Text>
+            </View>
+            <View
+              className="mr-2"
+            >
+              <RCTSwitch
+                accessibilityRole="switch"
+                onChange={[Function]}
+                onResponderTerminationRequest={[Function]}
+                onStartShouldSetResponder={[Function]}
+                style={
+                  {
+                    "alignSelf": "flex-start",
+                  }
+                }
+                value={false}
+              />
+            </View>
+            <View
+              color="#777"
+              size={14}
+              testID="icon-ChevronRight"
+            />
+          </View>
+        </View>
+      </View>
+      <View
+        className="mt-4 px-3 py-2.5 rounded-xl"
+        style={
+          {
+            "backgroundColor": "rgba(255,255,255,0.04)",
+          }
+        }
+      >
+        <Text
+          className="text-[11px] leading-4"
+          style={
+            {
+              "color": "#777",
+            }
+          }
+        >
+          Permissions are managed by your device OS. Toggling a permission may open your device Settings app.
+        </Text>
+      </View>
+    </View>
+  </RCTScrollView>
+</View>
+`;
