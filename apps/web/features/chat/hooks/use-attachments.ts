@@ -7,16 +7,27 @@
  * - State: attachments (File[]) and previews ({file, url, type}[])
  * - addFiles / removeFile / clearAll actions
  * - Preview URLs via URL.createObjectURL
- * - Validation: max 20 files, max 30MB per file, allowed MIME types
+ * - Validation: max 20 files, max 25 MiB per file (canonical, see
+ *   `@agiworkforce/types`'s MAX_ATTACHMENT_BYTES), allowed MIME types
  * - Auto-cleanup of object URLs on unmount
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const MAX_FILE_COUNT = 20;
-const MAX_FILE_SIZE_BYTES = 30 * 1024 * 1024; // 30MB
+/**
+ * Per-file size cap. Sourced from `@agiworkforce/types` so Web matches the
+ * canonical limit that Mobile + Desktop + unified-chat already enforce.
+ *
+ * Previously hardcoded to 30 MB here — files between 25 MiB (canonical)
+ * and 30 MB (web) passed local validation but consistently failed at the
+ * Anthropic/OpenAI provider gateways, surfacing as opaque 413s late in
+ * the request flow. 2026-05-22 ultrathink audit.
+ */
+const MAX_FILE_SIZE_BYTES = MAX_ATTACHMENT_BYTES;
 
 const ALLOWED_MIME_TYPES = new Set([
   // Images
@@ -56,7 +67,7 @@ export interface AttachmentPreview {
 export interface UseAttachmentsOptions {
   /** Maximum number of files allowed (default: 20) */
   maxFiles?: number;
-  /** Maximum file size in bytes (default: 30MB) */
+  /** Maximum file size in bytes (default: 25 MiB — canonical, see `@agiworkforce/types` MAX_ATTACHMENT_BYTES). */
   maxFileSize?: number;
   /** Callback fired when a validation error occurs */
   onError?: (message: string) => void;
