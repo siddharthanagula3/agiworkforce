@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check,
   ChevronDown,
@@ -13,6 +13,7 @@ import {
   Pencil,
   Play,
   RotateCcw,
+  Share2,
   X,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -20,6 +21,34 @@ import { ARTIFACT_SANDBOX_ATTR, buildSandboxedHtml } from '../lib/artifact-sandb
 import { Button } from './ui/Button';
 import type { Artifact } from '../lib/types';
 import { ReactPreview } from './artifact-components/ReactPreview';
+
+// ---------------------------------------------------------------------------
+// Publish result contract
+//
+// Mirrors the discriminated union in @agiworkforce/services/src/artifacts.ts.
+// Defined inline so this panel has no hard dep on the services package — the
+// host injects the concrete implementation via `publishArtifact` prop (DI).
+// Update both files if the contract shape changes.
+// ---------------------------------------------------------------------------
+
+/** Publish succeeded locally — file:// URL is available immediately. */
+export interface ArtifactLocalPublishResult {
+  kind: 'local';
+  shareUrl: string;
+  shareToken: string;
+  publishedAt: string;
+  waitlistGated: false;
+}
+
+/** Cloud publish is waitlist-gated in v1 (v1-local-only-cloud-waitlist-2026-05-18). */
+export interface ArtifactWaitlistPublishResult {
+  kind: 'waitlist';
+  shareUrl: null;
+  waitlistGated: true;
+}
+
+/** Discriminated union of possible publish outcomes. */
+export type ArtifactPublishResult = ArtifactLocalPublishResult | ArtifactWaitlistPublishResult;
 
 export interface ArtifactPanelProps {
   artifact: Artifact | null;
@@ -44,6 +73,20 @@ export interface ArtifactPanelProps {
    * Round-2 audit P0 #9 (Artifacts edit-in-place, 2026-05-21 final quadrant).
    */
   onSaveEdit?: (artifactId: string, content: string) => void | Promise<void>;
+  /**
+   * Optional publish callback. Injected by the host (e.g. Desktop adapter
+   * using @agiworkforce/services publishArtifact). When omitted the panel
+   * falls back to the clipboard markdown snapshot.
+   *
+   * R20 lane 2: artifact-publish service wiring. Versioning + inline editor
+   * deferred (TODO: EXEC-SUMMARY-r2 hours).
+   */
+  publishArtifact?: () => Promise<ArtifactPublishResult>;
+  /**
+   * Optional URL to the cloud waitlist sign-up page. Shown in the
+   * waitlist-gated toast CTA. Defaults to the AGI marketing waitlist URL.
+   */
+  cloudWaitlistUrl?: string;
 }
 
 function getTypeLabel(artifact: Artifact): string {
@@ -213,6 +256,8 @@ function DropdownMenu({
   );
 }
 
+const CLOUD_WAITLIST_DEFAULT_URL = 'https://agi.engineer/waitlist';
+
 export function ArtifactPanel({
   artifact,
   viewMode,
@@ -221,6 +266,8 @@ export function ArtifactPanel({
   versions,
   onSelectVersion,
   onSaveEdit,
+  publishArtifact: publishArtifactProp,
+  cloudWaitlistUrl = CLOUD_WAITLIST_DEFAULT_URL,
 }: ArtifactPanelProps) {
   const [headerCopied, setHeaderCopied] = useState(false);
   // Run/Stop control for HTML preview. Defaults to running; pausing strips
@@ -237,12 +284,32 @@ export function ArtifactPanel({
   const [isEditing, setIsEditing] = useState(false);
   const [editDraft, setEditDraft] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  // Publish state — tracks in-flight publish and the last result so the
+  // panel can show the share-URL toast / waitlist CTA without a sonner dep.
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishResult, setPublishResult] = useState<ArtifactPublishResult | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  // Ref for the share-URL copy button feedback (avoids extra useState).
+  const shareUrlCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [shareUrlCopied, setShareUrlCopied] = useState(false);
 
   useEffect(() => {
     setIsEditing(false);
     setEditDraft('');
     setIsSavingEdit(false);
+    // Reset publish state when the artifact changes so stale results don't
+    // show for the wrong artifact.
+    setPublishResult(null);
+    setPublishError(null);
+    setShareUrlCopied(false);
   }, [artifact?.id]);
+
+  // Cleanup share-URL copy timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (shareUrlCopiedTimerRef.current) clearTimeout(shareUrlCopiedTimerRef.current);
+    };
+  }, []);
 
   // The host supplies versions ordered oldest-first; the stepper trusts
   // that ordering and maps array indices to "v1 / v2 / ..." labels. When
@@ -326,12 +393,29 @@ export function ArtifactPanel({
     URL.revokeObjectURL(url);
   }
 
-  async function handlePublish() {
+  const handlePublish = useCallback(async () => {
+    if (!artifact) return;
+    setPublishError(null);
+
+    // --- Service path: host injected publishArtifact ---
+    if (publishArtifactProp) {
+      setIsPublishing(true);
+      try {
+        const result = await publishArtifactProp();
+        setPublishResult(result);
+      } catch (err) {
+        setPublishError(err instanceof Error ? err.message : 'Failed to publish artifact');
+      } finally {
+        setIsPublishing(false);
+      }
+      return;
+    }
+
+    // --- Fallback: clipboard markdown snapshot (no host adapter) ---
     // Round-2 audit P0 #9 (2026-05-21). Cloud-side artifact publishing
     // arrives with Cloud Managed; until then "Publish" copies a portable
     // self-contained snapshot to the clipboard so the user can paste it
     // into a doc, chat thread, or GitHub gist as a fallback.
-    if (!artifact) return;
     const snapshot = [
       `# ${artifact.title ?? 'Untitled artifact'}`,
       `Type: ${getTypeLabel(artifact)}${artifact.language ? ` (${artifact.language})` : ''}`,
@@ -357,7 +441,19 @@ export function ArtifactPanel({
       a.click();
       URL.revokeObjectURL(url);
     }
-  }
+  }, [artifact, publishArtifactProp]);
+
+  const handleCopyShareUrl = useCallback(async () => {
+    if (!publishResult || publishResult.kind !== 'local') return;
+    try {
+      await navigator.clipboard.writeText(publishResult.shareUrl);
+      setShareUrlCopied(true);
+      if (shareUrlCopiedTimerRef.current) clearTimeout(shareUrlCopiedTimerRef.current);
+      shareUrlCopiedTimerRef.current = setTimeout(() => setShareUrlCopied(false), 2000);
+    } catch {
+      // clipboard write failed silently
+    }
+  }, [publishResult]);
 
   const canPreview =
     artifact?.type === 'html' ||
@@ -655,6 +751,77 @@ export function ArtifactPanel({
           <CodeView content={artifact.content} />
         )}
       </div>
+
+      {/* Publish notification bar — shown after a publish call resolves */}
+      {(isPublishing || publishResult || publishError) && (
+        <div
+          className={cn(
+            'shrink-0 border-t border-[var(--chat-border)] px-3 py-2',
+            'bg-[var(--chat-surface-overlay)] text-xs',
+            'flex items-center gap-2',
+          )}
+          data-testid="artifact-publish-bar"
+        >
+          {isPublishing && <span className="text-[var(--chat-text-muted)]">Publishing…</span>}
+
+          {!isPublishing && publishResult?.kind === 'local' && (
+            <>
+              <Share2 size={11} className="shrink-0 text-[var(--chat-accent-secondary)]" />
+              <span className="min-w-0 truncate text-[var(--chat-text-secondary)]">
+                {publishResult.shareUrl}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={shareUrlCopied ? 'Copied' : 'Copy share URL'}
+                onClick={() => void handleCopyShareUrl()}
+                className={cn(
+                  'ml-auto h-6 w-6 shrink-0',
+                  'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
+                  shareUrlCopied && 'text-[var(--chat-accent-secondary)]',
+                )}
+              >
+                {shareUrlCopied ? <Check size={11} /> : <Copy size={11} />}
+              </Button>
+            </>
+          )}
+
+          {!isPublishing && publishResult?.kind === 'waitlist' && (
+            <>
+              <Globe size={11} className="shrink-0 text-[var(--chat-text-muted)]" />
+              <span className="text-[var(--chat-text-secondary)]">Cloud publish is coming.</span>
+              <a
+                href={cloudWaitlistUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={cn(
+                  'ml-auto shrink-0 rounded border border-[var(--chat-border)]',
+                  'px-2 py-0.5 text-[11px] font-medium',
+                  'text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)]',
+                  'hover:bg-[var(--chat-surface-hover)] transition-colors',
+                )}
+              >
+                Join waitlist
+              </a>
+            </>
+          )}
+
+          {!isPublishing && publishError && (
+            <>
+              <span className="text-red-400">{publishError}</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Dismiss error"
+                onClick={() => setPublishError(null)}
+                className="ml-auto h-6 w-6 shrink-0 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)]"
+              >
+                <X size={11} />
+              </Button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

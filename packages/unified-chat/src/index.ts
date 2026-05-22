@@ -91,7 +91,12 @@ export type { ProvenanceFooterProps } from './components/ProvenanceFooter';
 
 // Artifact and media components
 export { ArtifactPanel } from './components/ArtifactPanel';
-export type { ArtifactPanelProps } from './components/ArtifactPanel';
+export type {
+  ArtifactPanelProps,
+  ArtifactPublishResult,
+  ArtifactLocalPublishResult,
+  ArtifactWaitlistPublishResult,
+} from './components/ArtifactPanel';
 export { DownloadCard } from './components/DownloadCard';
 export type { DownloadCardProps } from './components/DownloadCard';
 export { GeneratedFileCard } from './components/GeneratedFileCard';
