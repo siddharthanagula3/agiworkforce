@@ -10,6 +10,7 @@ export interface LLMProviderResponse {
   completionTokens: number;
   totalTokens: number;
   finishReason?: string;
+  reasoningOutputTokens?: number; // Thinking/reasoning tokens (OpenAI o-series, Anthropic extended thinking)
   cacheCreationInputTokens?: number;
   cachedInputTokens?: number;
   tool_calls?: unknown[]; // Tool calls if the model used function calling
