@@ -132,6 +132,8 @@ struct TuiApp {
     show_slash_popup: bool,
     slash_filter: String,
     slash_selected: usize,
+    // Agent picker popup
+    agent_picker: super::widgets::agent_picker::AgentPickerState,
     // Model picker popup (new widget-based state)
     model_picker: super::widgets::model_picker::ModelPickerState,
     // Effort picker popup
@@ -272,6 +274,7 @@ impl TuiApp {
             show_slash_popup: false,
             slash_filter: String::new(),
             slash_selected: 0,
+            agent_picker: super::widgets::agent_picker::AgentPickerState::default(),
             model_picker: super::widgets::model_picker::ModelPickerState::default(),
             effort_picker: super::widgets::effort_picker::EffortPickerState::default(),
             effort: crate::design_system::Effort::Medium,
@@ -467,7 +470,9 @@ fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &TuiApp) -> Re
             super::widgets::theme_picker::render(frame, chunks[1], &app.theme_picker);
         }
 
-        if app.model_picker.visible {
+        if app.agent_picker.visible {
+            super::widgets::agent_picker::render(frame, chunks[1], &app.agent_picker);
+        } else if app.model_picker.visible {
             super::widgets::model_picker::render(
                 frame,
                 chunks[1],
@@ -979,6 +984,11 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         return InputAction::None;
     }
 
+    // Agent picker mode
+    if app.agent_picker.visible {
+        return handle_agent_picker_key(app, key);
+    }
+
     // Model picker mode
     if app.model_picker.visible {
         return handle_model_picker_key(app, key);
@@ -1180,6 +1190,47 @@ fn handle_slash_popup_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             InputAction::None
         }
         _ => InputAction::None,
+    }
+}
+
+fn handle_agent_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
+    use super::widgets::agent_picker::{handle_key, AgentPickerAction};
+
+    let action = handle_key(&mut app.agent_picker, key);
+
+    match action {
+        AgentPickerAction::Nothing => InputAction::None,
+        AgentPickerAction::Close => {
+            app.input.clear();
+            app.cursor = 0;
+            InputAction::None
+        }
+        AgentPickerAction::Invoke(agent_name) => {
+            app.input.clear();
+            app.cursor = 0;
+            match crate::agents::find_agent(&agent_name) {
+                Some(def) => {
+                    def.apply_to_session(&mut app.session);
+                    app.sync_stats();
+                    let model_note = if def.model.is_some() {
+                        format!(" (model: {})", app.session.model)
+                    } else {
+                        String::new()
+                    };
+                    app.chat_messages.push(ChatMessage {
+                        role: ChatRole::System,
+                        text: format!("Agent `{}` activated{}", agent_name, model_note),
+                    });
+                }
+                None => {
+                    app.chat_messages.push(ChatMessage {
+                        role: ChatRole::System,
+                        text: format!("Agent `{}` not found.", agent_name),
+                    });
+                }
+            }
+            InputAction::None
+        }
     }
 }
 
@@ -1727,7 +1778,39 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/agents" => {
-            SlashResult::SystemMessage(crate::agents::render_agents_command(arg))
+            // No arg → open interactive picker; simple name → quick-invoke;
+            // management subcommands (list/show/create/validate/help) → text output.
+            let is_management_subcommand = matches!(
+                arg.split_whitespace().next().unwrap_or(""),
+                "" | "list" | "ls" | "show" | "view" | "inspect" | "path" | "where"
+                    | "new" | "create" | "init" | "validate" | "doctor" | "check"
+                    | "help" | "-h" | "--help"
+            );
+            if arg.is_empty() {
+                // Open interactive agent picker overlay
+                app.agent_picker.open();
+                SlashResult::SystemMessage(String::new())
+            } else if is_management_subcommand {
+                SlashResult::SystemMessage(crate::agents::render_agents_command(arg))
+            } else {
+                // Treat as quick-invoke: /agents <name>
+                match crate::agents::find_agent(arg) {
+                    Some(def) => {
+                        def.apply_to_session(&mut app.session);
+                        app.sync_stats();
+                        let model_note = if def.model.is_some() {
+                            format!(" (model: {})", app.session.model)
+                        } else {
+                            String::new()
+                        };
+                        SlashResult::SystemMessage(format!(
+                            "Agent `{}` activated{}",
+                            arg, model_note
+                        ))
+                    }
+                    None => SlashResult::SystemMessage(crate::agents::render_agents_command(arg)),
+                }
+            }
         }
 
         "/init" => {
