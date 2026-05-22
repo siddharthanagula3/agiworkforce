@@ -8,7 +8,17 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./test/setup.ts'],
     include: ['**/*.{test,spec}.{ts,tsx}'],
-    exclude: ['node_modules/', '.next/', 'dist/', 'playwright.config.ts'],
+    exclude: [
+      'node_modules/',
+      '.next/',
+      'dist/',
+      'playwright.config.ts',
+      // Playwright specs live in e2e/. They share the .spec.ts extension
+      // with vitest tests; vitest's include pattern would otherwise pick
+      // them up and crash on test.describe() — playwright's runner owns
+      // those files via `pnpm test:e2e`.
+      'e2e/**',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
