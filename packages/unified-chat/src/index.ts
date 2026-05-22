@@ -113,6 +113,8 @@ export { ProjectCard } from './components/ProjectCard';
 export type { ProjectCardProps } from './components/ProjectCard';
 export { ProjectGallery } from './components/ProjectGallery';
 export type { ProjectGalleryProps } from './components/ProjectGallery';
+export { ProjectHeader } from './components/ProjectHeader';
+export type { ProjectHeaderProps } from './components/ProjectHeader';
 export { useMemoryStore, selectMemoryFacts, selectMemoryCount } from './stores/memoryStore';
 export type { MemoryFact } from './stores/memoryStore';
 export { CommandPalette } from './components/CommandPalette';
