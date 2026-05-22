@@ -20,6 +20,8 @@ export interface ToolResultProps {
   /** Raw result payload from the tool execution */
   result: {
     data?: unknown;
+    /** Typed result kind; 'web-search-results' forces InlineSearchResults renderer */
+    type?: string;
     status?: ToolResultStatus;
     error?: string;
   };
@@ -162,7 +164,9 @@ interface InlineToolResultProps {
 }
 
 export function InlineToolResult({ toolName, result, status }: InlineToolResultProps) {
-  const Renderer = getToolRenderer(toolName);
+  // Result typed as web-search-results forces the search renderer regardless of tool name
+  const effectiveToolName = result?.type === 'web-search-results' ? 'web_search' : toolName;
+  const Renderer = getToolRenderer(effectiveToolName);
 
   return (
     <Suspense

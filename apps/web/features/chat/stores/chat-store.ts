@@ -94,6 +94,18 @@ export interface ChatMessage {
     /** Persisted user reaction (loaded from Supabase messages.metadata on conversation load) */
     reaction?: 'thumbsUp' | 'thumbsDown' | null;
     /**
+     * A/B comparison options for a message. When present, the message slot renders
+     * ComparisonResponse instead of the standard MarkdownContent.
+     * TODO: LLM-side A/B generation not yet wired; UI ready for when it lands.
+     * See apps/web/features/chat/services/chat-ai-service.ts for the call site.
+     */
+    comparisonOptions?: {
+      a: { label?: string; content: string };
+      b: { label?: string; content: string };
+    };
+    /** Which comparison option the user selected ('a' | 'b'). Null means not yet chosen. */
+    comparisonChoice?: 'a' | 'b';
+    /**
      * Paywall gate payload — set when the API returns { kind: 'paywall', ... }
      * with HTTP 402. When present, the message slot renders InlinePaywallCard
      * instead of MessageBubble.
@@ -157,6 +169,8 @@ interface ChatActions {
   deleteMessage: (sessionId: string, messageId: string) => void;
   setStreaming: (sessionId: string, messageId: string, streaming: boolean) => void;
   appendToMessage: (sessionId: string, messageId: string, chunk: string) => void;
+  /** Record the user's A/B comparison choice for a message */
+  setComparisonChoice: (sessionId: string, messageId: string, choice: 'a' | 'b') => void;
   /** Mark thinking as started for a message, recording the start timestamp */
   startThinking: (sessionId: string, messageId: string) => void;
   /** Append a thinking content delta to the specified message */
@@ -385,6 +399,19 @@ export const useChatStore = create<ChatState & ChatActions>()(
             const msg = msgs.find((m) => m.id === messageId);
             if (msg) {
               msg.content += chunk;
+            }
+          }
+        });
+      },
+
+      setComparisonChoice: (sessionId, messageId, choice) => {
+        set((state) => {
+          const msgs = state.messages[sessionId];
+          if (msgs) {
+            const msg = msgs.find((m) => m.id === messageId);
+            if (msg) {
+              if (!msg.metadata) msg.metadata = {};
+              msg.metadata.comparisonChoice = choice;
             }
           }
         });

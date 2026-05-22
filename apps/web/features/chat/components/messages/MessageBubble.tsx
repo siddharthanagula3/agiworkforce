@@ -62,6 +62,8 @@ import type { GeneratedDocument } from '../../services/document-generation-servi
 import { ThinkingBlock } from '../ThinkingBlock';
 import { ArtifactBlock } from '../ArtifactBlock';
 import { CitationFooter } from './InlineCitation';
+import { ComparisonResponse } from './ComparisonResponse';
+import { useChatStore } from '../../stores/chat-store';
 
 /**
  * Framer-motion variants for message bubble entrance animations.
@@ -103,6 +105,7 @@ interface Attachment {
 
 interface Message {
   id: string;
+  sessionId?: string;
   content: string;
   role: 'user' | 'assistant';
   timestamp: Date;
@@ -171,6 +174,13 @@ interface Message {
       title?: string;
       url?: string;
     }>;
+    /** A/B comparison options; when present renders ComparisonResponse instead of plain content */
+    comparisonOptions?: {
+      a: { label?: string; content: string };
+      b: { label?: string; content: string };
+    };
+    /** Which A/B option the user selected */
+    comparisonChoice?: 'a' | 'b';
   };
 }
 
@@ -229,6 +239,7 @@ const MessageBubbleComponent = function MessageBubble({
 
   const { addArtifact, getMessageArtifacts } = useArtifactStore();
   const upsertPanelArtifact = useChatArtifactsStore((state) => state.upsertArtifact);
+  const setComparisonChoice = useChatStore((state) => state.setComparisonChoice);
 
   // Artifact handling
   const existingArtifacts = getMessageArtifacts(message.id);
@@ -391,12 +402,28 @@ const MessageBubbleComponent = function MessageBubble({
             </div>
           )}
 
+          {/* A/B comparison response — shown instead of main content when options are present */}
+          {!isUser && message.metadata?.comparisonOptions && (
+            <ComparisonResponse
+              optionA={message.metadata.comparisonOptions.a}
+              optionB={message.metadata.comparisonOptions.b}
+              choice={message.metadata.comparisonChoice}
+              isStreaming={message.isStreaming}
+              onChoose={(side) => {
+                if (message.sessionId) {
+                  setComparisonChoice(message.sessionId, message.id, side);
+                }
+              }}
+            />
+          )}
+
           {/* Message Content — 15 px body matching desktop .message-text */}
           <div
             className={cn(
               'prose dark:prose-invert max-w-none',
               'message-text', // 15 px / 1.6 lh (defined in globals.css .message-text)
               'break-words overflow-wrap-anywhere text-left',
+              !isUser && message.metadata?.comparisonOptions && 'hidden',
             )}
           >
             {message.isStreaming && !cleanedContent.trim() ? (
