@@ -9,6 +9,7 @@ import {
   type ProjectRecord,
   type ProjectAccentColor,
 } from '@agiworkforce/types';
+import { KnowledgeFilesPanel } from '@/features/projects/components/KnowledgeFilesPanel';
 
 /**
  * /projects/[id] — per-project detail view on web.
@@ -272,10 +273,7 @@ export default function ProjectDetailPage() {
               </ul>
             )
           ) : (
-            <EmptyState
-              title="Sources arrive with Cloud Managed"
-              detail="Project knowledge files (PDFs, docs, links) sync via the project_knowledge_files schema. v1 is LOCAL ONLY — sources are scoped per device."
-            />
+            <KnowledgeFilesPanel projectId={project.id} />
           )}
         </section>
       </div>

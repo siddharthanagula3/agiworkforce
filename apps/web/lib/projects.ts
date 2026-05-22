@@ -29,6 +29,7 @@ import {
   type ProviderMode,
   type ProjectAccentColor,
   type ProjectImportSource,
+  type ProjectKnowledgeFile,
   type SourceSurface,
 } from '@agiworkforce/types';
 
@@ -113,6 +114,25 @@ function asMetadata(value: unknown): Record<string, unknown> | null {
     return value as Record<string, unknown>;
   }
   return null;
+}
+
+export function mapKnowledgeFileRow(row: Record<string, unknown>): ProjectKnowledgeFile {
+  return {
+    id: String(row['id'] ?? ''),
+    projectId: String(row['project_id'] ?? ''),
+    fileName: String(row['file_name'] ?? ''),
+    mimeType: String(row['mime_type'] ?? ''),
+    byteCount: typeof row['byte_count'] === 'number' ? row['byte_count'] : 0,
+    checksumSha256: String(row['checksum_sha256'] ?? ''),
+    summary: asString(row['summary']),
+    sourceSurface:
+      typeof row['source_surface'] === 'string' ? (row['source_surface'] as SourceSurface) : 'web',
+    addedByUserId: asString(row['added_by_user_id']),
+    addedAt: String(row['added_at'] ?? ''),
+    retentionExpiresAt: asString(row['retention_expires_at']),
+    deletedAt: asString(row['deleted_at']),
+    storageUri: String(row['storage_uri'] ?? ''),
+  };
 }
 
 /**
