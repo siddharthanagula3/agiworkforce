@@ -6388,6 +6388,7 @@ impl ChatWidget {
             // Plan reasoning is controlled by the Plan preset and Plan-only override updates.
             mask.reasoning_effort = Some(effort);
         }
+        self.update_collaboration_mode_indicator();
     }
 
     /// Set the personality in the widget's config copy.
