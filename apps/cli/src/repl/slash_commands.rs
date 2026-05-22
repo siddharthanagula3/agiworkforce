@@ -33,6 +33,8 @@ pub(super) enum SlashResult {
     Sync(String),
     /// Re-run onboarding wizard.
     Onboarding,
+    /// Invoke an agent by name — applies its overrides to the current session.
+    AgentInvoke(String),
 }
 
 pub(super) fn handle_slash_command(
@@ -130,6 +132,21 @@ pub(super) fn handle_slash_command(
         "/skills" => {
             let all = crate::skills::discover_skills();
             eprintln!("{}", crate::skills::format_skill_list(&all));
+        }
+        "/agents" | "/agent" => {
+            // Quick-invoke: /agents <name> — apply agent overrides to current session.
+            // Management subcommands and bare /agents — display text output.
+            let is_quick_invoke = !arg.is_empty()
+                && !matches!(
+                    arg.split_whitespace().next().unwrap_or(""),
+                    "list" | "ls" | "show" | "view" | "inspect" | "path" | "where"
+                        | "new" | "create" | "init" | "validate" | "doctor" | "check"
+                        | "help" | "-h" | "--help"
+                );
+            if is_quick_invoke {
+                return SlashResult::AgentInvoke(arg.to_string());
+            }
+            eprintln!("{}", crate::agents::render_agents_command(arg));
         }
         "/hooks" => {
             let hcfg = crate::hooks::load_hooks().unwrap_or_default();
@@ -411,6 +428,8 @@ fn repl_runtime_command_names() -> std::collections::BTreeSet<&'static str> {
             .copied(),
     );
     names.extend([
+        "agents",
+        "agent",
         "exit",
         "quit",
         "q",

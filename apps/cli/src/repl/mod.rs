@@ -365,6 +365,31 @@ pub async fn run_repl(
                                 Err(e) => output::print_error(&format!("MCP prompt failed: {e:#}")),
                             }
                         }
+                        SlashResult::AgentInvoke(agent_name) => {
+                            match crate::agents::find_agent(&agent_name) {
+                                Some(def) => {
+                                    let had_model = def.model.is_some();
+                                    def.apply_to_session(&mut session);
+                                    if had_model {
+                                        output::print_info(&format!(
+                                            "Agent `{}` activated (model: {})",
+                                            agent_name, session.model
+                                        ));
+                                    } else {
+                                        output::print_info(&format!(
+                                            "Agent `{}` activated",
+                                            agent_name
+                                        ));
+                                    }
+                                }
+                                None => {
+                                    output::print_warn(&format!(
+                                        "Agent `{}` not found. Use `/agents` to list available agents.",
+                                        agent_name
+                                    ));
+                                }
+                            }
+                        }
                         SlashResult::Handled => {}
                     }
                     continue;
