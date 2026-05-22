@@ -1048,6 +1048,30 @@ export function validateGeneratedFileTrustBoundary(
   return violations;
 }
 
+/**
+ * Throw-variant of `validateGeneratedFileTrustBoundary`. Use at persistence
+ * boundaries (anywhere a GeneratedFile record is written to durable
+ * storage, replicated across surfaces, or transferred between trust
+ * boundaries). Parallels `assertSurfaceCanSyncChats` — fail fast rather
+ * than silently persist a record that violates the trust contract.
+ *
+ * The thrown Error includes every violation code so the call site can
+ * choose to log, telemetry-emit, or rethrow as an http 422 / tauri
+ * command error. Callers that want graceful degradation should call the
+ * `validateGeneratedFileTrustBoundary` non-throw variant directly.
+ *
+ * Round-11 (2026-05-22) ultrathink slice — wires a defined-but-unused
+ * defensive utility into a fail-fast boundary helper. Mirror of the
+ * sync-rule guard pattern.
+ */
+export function assertGeneratedFileTrustBoundary(input: GeneratedFileTrustBoundaryInput): void {
+  const violations = validateGeneratedFileTrustBoundary(input);
+  if (violations.length === 0) return;
+  const codes = violations.map((v) => v.code).join(', ');
+  const messages = violations.map((v) => `- ${v.code}: ${v.message}`).join('\n');
+  throw new Error(`AGI generated-file trust-boundary violation [${codes}]:\n${messages}`);
+}
+
 // ============================================================================
 // Remote Control, Computer Use, And Dispatch Payloads
 // ============================================================================
