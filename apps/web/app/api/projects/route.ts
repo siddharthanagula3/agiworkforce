@@ -12,6 +12,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { mapProjectRow } from '@/lib/projects';
 
 async function handleGetProjects(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
@@ -28,9 +29,7 @@ async function handleGetProjects(request: NextRequest) {
 
   const { data, error } = await supabase
     .from('user_projects')
-    .select(
-      'id, name, description, instructions, color, is_archived, metadata, created_at, updated_at',
-    )
+    .select('*')
     .eq('user_id', user.id)
     .order('updated_at', { ascending: false })
     .range(offset, offset + limit - 1);
@@ -41,17 +40,7 @@ async function handleGetProjects(request: NextRequest) {
   }
 
   return NextResponse.json({
-    projects: (data || []).map((p) => ({
-      id: p.id,
-      name: p.name,
-      description: p.description,
-      instructions: p.instructions,
-      color: p.color,
-      isArchived: p.is_archived,
-      metadata: p.metadata,
-      createdAt: p.created_at,
-      updatedAt: p.updated_at,
-    })),
+    projects: (data || []).map((p) => mapProjectRow(p as Record<string, unknown>)),
   });
 }
 
@@ -103,7 +92,7 @@ async function handleCreateProject(request: NextRequest) {
       instructions: body.instructions?.trim() ?? '',
       color: body.color?.trim() || '#3b82f6',
     })
-    .select()
+    .select('*')
     .single();
 
   if (error) {
@@ -112,19 +101,7 @@ async function handleCreateProject(request: NextRequest) {
   }
 
   return NextResponse.json(
-    {
-      project: {
-        id: data.id,
-        name: data.name,
-        description: data.description,
-        instructions: data.instructions,
-        color: data.color,
-        isArchived: data.is_archived,
-        metadata: data.metadata,
-        createdAt: data.created_at,
-        updatedAt: data.updated_at,
-      },
-    },
+    { project: mapProjectRow(data as Record<string, unknown>) },
     { status: 201 },
   );
 }

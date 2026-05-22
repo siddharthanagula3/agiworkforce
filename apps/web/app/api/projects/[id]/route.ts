@@ -13,6 +13,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { mapProjectRow } from '@/lib/projects';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -26,9 +27,7 @@ async function handleGetProject(request: NextRequest, context: RouteContext) {
 
   const { data, error } = await supabase
     .from('user_projects')
-    .select(
-      'id, name, description, instructions, color, is_archived, metadata, created_at, updated_at',
-    )
+    .select('*')
     .eq('id', id)
     .eq('user_id', user.id)
     .single();
@@ -38,17 +37,7 @@ async function handleGetProject(request: NextRequest, context: RouteContext) {
   }
 
   return NextResponse.json({
-    project: {
-      id: data.id,
-      name: data.name,
-      description: data.description,
-      instructions: data.instructions,
-      color: data.color,
-      isArchived: data.is_archived,
-      metadata: data.metadata,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
-    },
+    project: mapProjectRow(data as Record<string, unknown>),
   });
 }
 
@@ -107,7 +96,7 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
     .update(updates)
     .eq('id', id)
     .eq('user_id', user.id)
-    .select()
+    .select('*')
     .single();
 
   if (error || !data) {
@@ -115,17 +104,7 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
   }
 
   return NextResponse.json({
-    project: {
-      id: data['id'],
-      name: data['name'],
-      description: data['description'],
-      instructions: data['instructions'],
-      color: data['color'],
-      isArchived: data['is_archived'],
-      metadata: data['metadata'],
-      createdAt: data['created_at'],
-      updatedAt: data['updated_at'],
-    },
+    project: mapProjectRow(data as Record<string, unknown>),
   });
 }
 
