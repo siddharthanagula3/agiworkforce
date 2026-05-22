@@ -2,9 +2,279 @@
 
 Status: Current
 Owner: Next session lead
-Last updated: 2026-05-21 (extended through round 10, project-schema lane)
+Last updated: 2026-05-22 (extended through round 18: 7-lane Claude-parity sprint + main rebase resolution)
 Branch: `fix/extension-typecheck-and-c02-sync-2026-05-20`
-Head pushed: `6d7045146` (round-8 boundary) → rounds 9-10 in progress this session
+Head pushed: `f8b77ac66` (round-18 boundary at session end)
+PR: [#378 — feat: suite transformation rounds 12-18](https://github.com/siddharthanagula3/agiworkforce/pull/378) (open, MERGEABLE)
+
+## Round 18 — Claude-parity sprint across all 6 surfaces (2026-05-22)
+
+User set a session-scoped goal: "Autonomously complete the remaining AGI Workforce frontend across all six surfaces… using the newest Claude UI reference images available under /Users/siddhartha/Desktop/reference/ui." Team `round-18-claude-parity` spawned 7 parallel agents, each pulling 2-3 highest-impact items from a specific `reference/ui/{surface}/claude*/` directory. All 7 tasks completed.
+
+- `feat(vscode-ext): claude/cursor parity - sidebar polish + slash command samplerequest` (`6df4f2b52`, agent: **vscode-claude**)
+  - Sidebar webview: history + new-chat header icon buttons, "What to do first?" empty-state headline, `/slash` prompt chips, "Upload from computer" + "Add context" menu labels. New `openHistory` + `newChat` Zod messages wired through `webviewMessages.ts` → `ChatStateManager` → `chatParticipant.ts`.
+  - All 6 slash commands (`/explain`, `/fix`, `/refactor`, `/tests`, `/docs`, `/model`) gained `sampleRequest` for VS Code's hover + autocomplete suggestions.
+  - 528/528 tests pass, 3 webview snapshots updated, sync-rule compliance comment preserved.
+
+- `feat(mobile): claude ios parity — settings inset-grouped cards + time greeting` (`028434625`, agent: **mobile-claude**)
+  - Settings: inset-grouped card layout matching Claude iOS image 10 (rounded surfaceElevated containers, per-side borders + corner radii on first/last items, icon-offset separator).
+  - Chat tab greeting: `getTimeOfDayGreeting()` returns "How can I help you this morning/afternoon/evening/tonight?" per device hour. 28/34 font tuned to Claude iOS serif treatment.
+  - 5 new RN snapshot tests (settings tree + 4 time-boundary unit tests).
+
+- `feat(chrome-ext): popup status pill + side-panel open-in-desktop parity` (`e0c9b5c7c`, agent: **chrome-claude**)
+  - Popup: 500px verbose status-card collapsed to a compact inline status pill (dot + label + reconnect glyph) in the header bar. Quick-action buttons gained title tooltips and shorter labels ("Chat" / "Group") matching Comet's compact grid.
+  - Side panel: "Open in desktop" icon button wired through `OPEN_IN_DESKTOP` message → `background.ts` → `sendNativeMessage` to desktop bridge port 8787.
+  - 775/775 tests pass, static HTML snapshot updated, sync-rule preserved (chrome.storage.local + bridge only).
+
+- `feat(web): claude-style settings nav + connector hub parity` (`41f1cc114`, agents: **web-settings** + **desktop-toolcall** co-staged)
+  - Web settings: sectioned nav (Account / Models / Privacy / Notifications / Integrations) with uppercase group headers, new `SettingsNavActive` client component for active-state highlighting via `usePathname`.
+  - Web connectors: `connectedAt` timestamp surfaced as "Connected Xd ago" recent-activity label.
+  - Em-dash sweep across `privacy/page.tsx`, `connections/page.tsx`, `ConnectorsPage.tsx`.
+  - Playwright `round-18-visual-verification.spec.ts` + 2 captured PNGs under `docs/visual-verification/web/round-18-*`.
+  - **Bonus: desktop-toolcall's work co-staged in this commit** — `ToolCallCard.tsx` collapsed-row + expanded JSON request/response with per-panel copy buttons + status-color borders, `ThinkingBlock.tsx` clock-icon + live elapsed timer + multi-block "Thought N" labels + new `ThinkingBlockFlow` connector, `ToolTimeline` left unchanged (existing pattern already matched references). 31 new tests; 134 desktop chat tests pass.
+
+- `test(desktop): land orphan artifact-sidebar + scroll-to-bottom tests` (`e5421d92a`, recovered from **desktop-artifact**)
+  - desktop-artifact pushed an empty commit (`ff63bd368`) — staged-without-add bug. Recovered the 4 test files (2 specs + 2 snapshots, 5 tests) post-hoc. `ArtifactSidebarParity.test.tsx` locks the panel empty-state + header-buttons assertion; `ScrollToBottomButton.test.tsx` covers hidden/visible states + click handler at >200px scroll threshold.
+  - Note: the existing `ArtifactPanel` in `AppLayout.tsx` (lines 422-457) already had Copy/Refresh/Close/Maximize parity; the scroll-to-bottom button already existed in `ChatStream.tsx`. The agent's research correctly identified the gap as test coverage, not implementation.
+
+- `feat(cli/tui): claude-code parity — plan-mode banner + effort indicator` (`f8b77ac66`, agent: **cli-claude-code**)
+  - Plan-mode banner: `"Plan mode"` → `"⏸ plan mode on"` (U+23F8 pause icon, East Asian Width N = 1 col).
+  - Plan-mode footer right-side: when plan mode is active, context-window percentage replaced by `● <effort> · /effort` (magenta bullet + label + dim shortcut hint). Wired through `effective_reasoning_effort()` → `update_collaboration_mode_indicator()` → `BottomPane::set_plan_mode_effort_label()` → `ChatComposerState` → `FooterProps` → `plan_mode_effort_right_line()`. Refreshes on `set_reasoning_effort()` while plan mode active.
+  - 1452 CLI tests pass (2 new + 15 snapshots updated), sync-rule preserved.
+
+### Round 18 — meta-lesson
+
+Parallel sprint produced 6 production commits + 1 recovered orphan commit across all six surfaces in ~15 minutes wall-clock. Two coordination findings worth surfacing:
+
+1. **Co-staging conflict** — when two agents touch overlapping or adjacent files and commit simultaneously, the second commit grabs both sets of changes. Round 16 saw this with web-r10-put + desktop-r10-ui; Round 18 saw it again with web-settings + desktop-toolcall. Not a bug, but commit attribution gets confused. Future team prompts should explicitly call out file-path ownership AND request that agents `git fetch + rebase` before committing.
+2. **Empty-commit bug** — desktop-artifact pushed `ff63bd368` without staging files first. The commit message landed but no diff. Recovery was straightforward (the working tree retained the files), but agents should `git status` between staging and committing.
+
+## Round 17.5 — main-rebase resolution (2026-05-22, between rounds 17 and 18)
+
+PR #378 was `CONFLICTING` with main after rounds 12-17 (24 conflicts: doc + canonical types + runtime exports + desktop UI + sync services + visual-verification PNGs). Resolved via merge-into-branch (preserves history, no force-push needed):
+
+- `chore: merge main into branch, resolve round-17 conflicts` (`b202ef593`)
+  - All 24 conflicts resolved by keeping HEAD where my work was the better version: round-13 `assertGeneratedFileTrustBoundary` throw-variant, round-16 Rust `SYNCED_APP_SURFACES` + `DEVELOPER_SESSION_SURFACES` helpers, round-14 `./offline-queue` + `./offline-sync` runtime exports, round-12 useIsMounted migrations, round-13 `assertSurfaceCanSyncChats` wiring, round-15.1 canonical surface arrays consolidation, projects warm-dark fix, KB/artifact/voice scaffolds, 6-surface visual-verification captures.
+  - Picked up from main: PR #377 cost_calculator canonicalization fix.
+  - Verification: types/runtime/web/desktop typecheck pass, 18 Rust protocol projects tests pass.
+  - PR went from `CONFLICTING` → `MERGEABLE` without force-push.
+
+## Round 16 — parallel team sprint via TeamCreate (2026-05-22)
+
+User directed: "use parallel sub agents" + "use TeamCreate" + "Use all the tools you have to speed up the process." Team `round-16-parity-sprint` spawned 7 parallel agents across non-overlapping lanes. Results landed in ~5 minutes of wall clock (vs ~1 hour serial).
+
+- `feat(protocol): rust mirror for synced_app_surfaces + developer_session_surfaces` (`ea9340941`)
+  - Round-15 to round-16 setup: Rust mirror in `crates/agiworkforce-protocol/src/projects.rs` gained `SYNCED_APP_SURFACES` + `DEVELOPER_SESSION_SURFACES` const arrays + `is_synced_app_surface()` + `is_developer_session_surface()` methods. 5 new tests pin canonical-set equality, surface acceptance, and mutual exclusivity. All 18 projects tests pass.
+
+- `docs(vscode-ext): add sync-rule compliance block to chat participant` (`14ad28e27`, agent: **vscode-sync-audit**)
+  - Audited 30 source files; no supabase client; chat history via `vscode.ExtensionContext.globalState` only; existing `assertSurfaceCanSyncChats('vscode')` test confirmed locked. Added compliance comment block. 528/528 tests pass.
+
+- `docs(extension): add sync-rule compliance block to background service worker` (`610fc67e0`, agent: **chrome-sync-audit**)
+  - Audited Chrome MV3; `chrome.storage.local` device-scoped only; bridge to desktop:8787 is the legitimate persistence path; no consumer-chat writes. Compliance block at `apps/extension/src/background.ts`. 775/775 tests pass.
+
+- `test(cli): assert cli surface is developer-session-only per sync rule` (`86907d442`, agent: **cli-sync-audit**)
+  - Audited ~195 Rust files; no supabase client; conversations under `~/.agiworkforce/conversations/` (local-file) only; no `ProjectSourceSurface::Web|Desktop|Mobile` construction. Added compliance comment to `apps/cli/src/sessions.rs` + Rust unit test asserting CLI surface is developer-session-only.
+
+- `feat(mobile): add projects detail screen with canonical project header` (`0cca242f3`, `a576cdc4a`, agent: **mobile-projects**)
+  - New `apps/mobile/app/(app)/projects/[id].tsx` consuming canonical `summarizeProjectHeader`. v1 LOCAL ONLY: `FEATURES.auth=off` short-circuits to a `LocalOnlyFallback` with "Join Cloud waitlist" CTA; auth-on path fetches `/api/projects/[id]` and maps through canonical. Active-project chip added to `chat/[id].tsx` header for navigation. New `apps/mobile/src/features/projects/service.ts` thin fetch wrapper (extracted to satisfy pre-push service-layer hook). 3 RN snapshot tests. Typecheck PASS.
+
+- `feat(web/api): wire round-10 project fields in put and post handlers` (`f9aba1747`, agent: **web-r10-put**, also adopted task #2 desktop UI work)
+  - PUT `/api/projects/[id]` and POST `/api/projects` accept iconEmoji, accentColor, defaultPrivacyMode, defaultProviderMode, allowedSurfaces, defaultModelId, importedFrom. Enum validation against canonical `@agiworkforce/types` constants with 400 + field-name error message. allowedSurfaces filtered to known values rather than rejected. Pre-migration safe: try/catch on PG error `42703` (undefined_column) retries without round-10 fields. 9 new vitest tests in `app/api/projects/__tests__/round10-fields.test.ts`.
+  - Also (out-of-lane but useful): added `apps/desktop/src/features/chat/ProjectSettingsDialog.tsx` (new, 140 lines), extended desktop `projectStore` with accentColor + defaultPrivacyMode, wired round-10 columns into desktop SQLite migration `apps/desktop/src-tauri/src/data/db/migrations.rs` and Tauri command `apps/desktop/src-tauri/src/sys/commands/projects.rs`. ACCENT_COLOR_CLASS rendering in `ProjectsView.tsx`.
+
+PR #378 opened by **pr-opener** with full round 12-16 summary, ~46 new tests called out, sync-rule verification block, and test plan checklist.
+
+### Round 16 — meta-lesson
+
+Parallel team sprint converted ~6 hours of marginal-cleanup work into ~5 minutes of wall-clock by parallelizing across non-overlapping lanes. Web-r10-put expanded scope into desktop files which created task-#2 overlap — this is a coordination cost worth flagging in the team prompt template (be more explicit about file-path ownership). Three sync-rule audits returned "CLEAN, confirmed compliance" which is a meaningful verification result, not just busywork. The mobile detail screen + web PUT wiring together close the projects round-10 end-to-end loop modulo the unapplied migration.
+
+Open paths still on the board:
+
+1. Apply the round-10 migration (`20260521120000` + fix-ups). Web PUT/POST now use a 42703-retry shim so production is safe pre-migration; once applied, all round-10 fields persist by default.
+2. ~~Trust-boundary production wiring~~ — no canonical composition site exists yet; deferred until artifact-publish service lands.
+3. Mobile PNG capture infrastructure (still needs expo-web build pipeline; heavy).
+
+## Round 15.1 — canonical surface-array consolidation (2026-05-22)
+
+- `fix(web,desktop): replace inline surface arrays with canonical synced_app_surfaces` (`7418575d6`)
+  - Four call sites inlined `['web', 'desktop', 'mobile']` as the default allowed-surfaces value. All now spread from `SYNCED_APP_SURFACES` + `DEVELOPER_SESSION_SURFACES` (the canonical /goal sync-rule sources of truth). `apps/web/lib/projects.ts` also pulls `PRIVACY_MODES` + `PROVIDER_MODES` from canonical instead of redeclaring locally.
+
+### Diminishing-returns observation (round 15.1)
+
+After 25+ commits and ~5.5 hours of autonomous canonical-derivation / dedup work, the patch yield per audit-pass is dropping. Remaining work to actual Claude/OpenAI-class production parity is **product work, not cleanup**:
+
+- Apply the round-10 supabase migration (needs user authorization)
+- Real connected backend wiring: `/api/projects/[id]` mutations end-to-end, cloud-managed billing UI ↔ Stripe webhooks (waitlist-gated), artifact-publish service for the trust-boundary guard
+- Per-surface feature parity gaps: mobile voice + vision composer, computer-use production polish, mobile artifact live-edit, full Slash-Command + Skills marketplace, project knowledge-file ingestion + retrieval, real-time multi-tab conversation sync
+- Native distribution: signed installers (macOS/Windows/Linux), App Store + Play Store, web-extension store reviews
+- Evals + safety: red-team suite, prompt-injection guards in computer-use, A/B harness, content moderation, first-run flow polish, i18n
+- Verified screenshots + perf across all six surfaces
+
+Calendar estimate (single focused engineer): 3-6 months. Autonomous loop in current mode: 6-12 months of incremental cleanup. The product-work bucket needs user-product decisions and external accounts (Stripe, App Store, prod Supabase auth) that this loop can't autonomously execute.
+
+## Round 15 additions (offline-sync extract + model-router fallback fix, 2026-05-22)
+
+Continued the cross-surface duplication / catalog-drift pattern after Stop-hook continuation.
+
+- `feat(runtime): extract offline-sync manager + migrate web and desktop wrappers` (`a9e69d0ae`)
+  - Mirrors the round-14 offline-queue extract. Web + desktop had ~280 lines of copy-pasted state-machine + retry + debounce logic. Both now consume `createOfflineSyncManager` from `@agiworkforce/runtime/offline-sync` with DI for queue adapter, network event subscriber, and initial-online probe.
+  - Closing the extract also fixed three real defects that drifted into the web copy: (1) `window` event handlers were never removed in cleanup because the listeners were anonymous arrow functions, (2) retry backoff was static at 40s instead of exponential (`5000 * 2^3`, never incremented retryCount), (3) a ternary returned `ONLINE` in both branches.
+  - 13 vitest tests cover initialize/cleanup idempotency, debounced sync, error+retry, retrySync, queue-subscription updates, network event flips, status message/severity, and state-change snapshots.
+  - Closes open-path #4 from previous handoff.
+
+- `fix(web): derive model-router fallback chain from canonical catalog` (`87686898e`)
+  - `ModelRouter`'s `suitableModels.length === 0` fallback hardcoded `'gpt-5.4'` as a second-chance lookup after `DEFAULT_ROUTER_MODEL` fails to resolve. Now uses `getProviderDefaultModel('openai')` so a new openai generation lands here automatically when `models.json` updates.
+
+### Round 15 — meta-lesson
+
+Same pattern, same yield. The two duplicated `offlineQueue.ts` + `offlineSync.ts` files were a single source of cross-surface drift; collapsing both into the runtime package took two rounds (14 + 15) but eliminated ~1,500 LOC of copy-paste and surfaced three latent defects that only manifested in the web copy.
+
+Open paths still on the board:
+
+1. Apply the round-10 migration (`20260521120000` + `20260521130000` + `20260521140000` + `20260521150000`) once production Supabase is authorized.
+2. ~~Extract `@agiworkforce/runtime/offline-queue`~~ — closed at `69057d557` (round 14).
+3. Sweep `assertGeneratedFileTrustBoundary` into real call sites — currently the throw variant has tests but zero production wiring (and no canonical `{ComputeSession, GeneratedFile, ArtifactManifest}` composition site exists yet to wire it into).
+4. ~~Mobile PNG capture infrastructure~~ — still on the board, needs expo-web build pipeline (heavy).
+5. ~~Migrate `apps/desktop/src/lib/offline/offlineSync.ts`~~ — closed at `a9e69d0ae` (round 15).
+
+## Round 14 additions (continued ultrathink pattern, 2026-05-22)
+
+Continued the defined-but-unused / local-constant-drift pattern after resume. Four more checkpoints, each a real bug-class fix.
+
+- `feat(web): map projects api through round-10 schema with safe defaults` (`18cd2e120`)
+  - `/api/projects` and `/api/projects/[id]` were selecting only legacy columns (`id, name, description, instructions, color, is_archived, metadata, created_at, updated_at`) and silently dropping the round-10 fields the migration adds.
+  - Extracted `apps/web/lib/projects.ts` with a tolerant `mapProjectRow` mapper that defaults `defaultPrivacyMode='local'`, `defaultProviderMode='Local'`, `allowedSurfaces=['web','desktop','mobile']` when columns are absent (pre-migration), and passes round-10 fields through once the migration applies.
+  - 5 vitest tests cover pre-migration row defaults, post-migration full row, invalid-enum fallbacks, empty-surface fallback, metadata coercion. All endpoints now use `select('*')` + mapper.
+
+- `fix(desktop): replace silent catches in offline queue with console.warn` (`68c9304b3`)
+  - Desktop port of `offlineQueue` had stripped the logger calls when copied from web — `loadQueue`, `saveQueue`, `clearQueuedMessage`, `clearQueuedToolExecution`, `clearAllQueued`, `getLastSyncTime` all swallowed errors silently. Losing queued offline data with zero observability.
+  - Restored visibility via `console.warn` at each silent-catch site. The full extract of `@agiworkforce/runtime/offline-queue` (sharing the implementation between web + desktop) remains a follow-up.
+
+- `fix(web): derive anthropic model aliases from canonical catalog` (`a62ad9335`)
+  - `AnthropicProvider.getModelAliases()` hardcoded 5 model ids and used `normalizeModelId(alias) ?? alias` — the `?? alias` fallback silently fabricated a phantom alias for `claude-opus-4-5`, a model that doesn't exist in `models.json` at all.
+  - Now filters the canonical `modelIdAliases` map by `getModelIdsForProvider('anthropic', { includeDeprecated: true })`, so new models, canonicalization redirects, and api-model-id mirrors all flow through automatically and bogus ids are excluded.
+  - Test updated to remove the bogus expectation; existing real-alias assertions still pass.
+
+- `fix(web): dedupe max_message_length in chat validation schema` (`2cc3ea623`)
+  - `CreateMessageSchema.content.max()` inlined `100000` alongside its own error string, while canonical `MAX_MESSAGE_LENGTH` already lived in `apps/web/lib/validations/llm.ts` (extracted in Round 13). Now reads from the same constant.
+
+- `fix(desktop): align attachment file-size cap with canonical max_attachment_bytes` (`ea5ffdbe6`)
+  - `apps/desktop/src/features/chat/hooks/useAttachments.ts` defined `ATTACHMENT_LIMITS.MAX_FILE_SIZE = 50 MB` — 2x the canonical `MAX_ATTACHMENT_BYTES = 25 MiB`. Files 25-50 MB passed desktop validation then hit provider gateways with opaque 413s. Mirrors the round-13 web fix (`da70d1af8`); both surfaces now share the canonical.
+
+- `feat(runtime): extract offline-queue factory + migrate web and desktop wrappers` (`69057d557`)
+  - Web + desktop had ~400 lines of identical `offlineQueue.ts` implementation, deliberately copy-ported. Both now consume `createOfflineQueue(opts)` from `@agiworkforce/runtime/offline-queue` with adapter-pattern DI for storage/logger/onStorageChange/probeOnline.
+  - Web wrapper provides pino logger + `/api/health` HEAD probe + `window.addEventListener('storage')` subscriber.
+  - Desktop wrapper provides console logger + no network probe (Tauri webview can't reach web `/api/health`) + the same window subscriber.
+  - 14 vitest tests pin queuing, sync, retry, max-retries, 401 rethrow, probeOnline short-circuit, subscribeToQueueChanges, injected generateId. Closes open-path #2 from previous handoff.
+
+### Round 14 — meta-lesson
+
+The same ultrathink pattern (defined-but-unused defensive utilities + local-constant duplication) keeps producing high-leverage finds. Each turn the grep vector shifts: provider alias maps, validation schemas, db row mappers, attachment caps. Once obvious targets exhaust, the natural next move is structural extracts — the offline-queue dedup converts a copy-paste anti-pattern into a single canonical factory.
+
+Open paths still on the board:
+
+1. Apply the round-10 migration (`20260521120000` + `20260521130000` + `20260521140000` + `20260521150000`) once production Supabase is authorized.
+2. ~~Extract `@agiworkforce/runtime/offline-queue`~~ — **closed** at `69057d557`.
+3. Sweep `assertGeneratedFileTrustBoundary` into real call sites — currently the throw variant has tests but zero production wiring (and no canonical `{ComputeSession, GeneratedFile, ArtifactManifest}` composition site exists yet to wire it into).
+4. Mobile PNG capture infrastructure for visual verification parity (RN tree snapshots are the only signal today).
+5. Migrate `apps/desktop/src/lib/offline/offlineSync.ts` and the equivalent web file through the same shared-factory pattern — they remain copy-ported per-surface even after the queue layer is unified.
+
+## Round 13 additions (ultrathink-mode architecture audit, 2026-05-22)
+
+User invoked "ultrathink continue" — pivoted from the routine useIsMounted migration to deeper architectural audit. Five substantive findings, each closing a defined-but-unused defensive utility OR a local-constant duplication that diverged from canonical.
+
+- `docs(desktop): stop useismounted sweep — react 19 removed the warning` (`a0f0d7051`)
+  - Found via WebFetch of https://github.com/reactwg/react-18/discussions/82: the "Can't perform a React state update on an unmounted component" warning was REMOVED in React 18. React 19 (in use across apps/desktop, apps/web, packages/unified-chat) silently no-ops setState on unmounted components.
+  - Implication: the unmount-race the useIsMounted hook was extracted to handle does NOT actually fire warnings in this codebase. The 14 components migrated so far (Round 12) are harmless but redundant defensive code.
+  - Hook's JSDoc updated with **DO NOT migrate additional components** marker. Sweep halted. 50+ candidate files left alone.
+
+- `fix(web,mobile): runtime-enforce /goal sync-rule at sync-service constructors` (`aa4190781`)
+  - `assertSurfaceCanSyncChats` was defined in `@agiworkforce/types` but never called in production. Sync rule was architecturally implicit, not runtime-enforced.
+  - Wired into `ConversationSyncService` (web) + `MobileConversationSyncService` (mobile) constructors. Throws at construction if a future refactor tries to construct from cli/vscode/chrome origin.
+  - 6 new vitest tests pin every surface's accept/reject behaviour. Closes the /goal verification gap "Confirm Web/Desktop/Mobile sync works and CLI/VS Code/Chrome remain separate" at the runtime enforcement layer.
+
+- `feat(types): assertgeneratedfiletrustboundary throw-variant + tests` (`d310d0fda`)
+  - 80-line `validateGeneratedFileTrustBoundary` existed but had no throw variant for use at persistence boundaries. Mirror of the `assertSurfaceCanSyncChats` pattern.
+  - 3 new vitest tests cover pass-through, single-violation throw, multi-violation throw.
+
+- `fix(web): align use-attachments size cap with canonical max_attachment_bytes` (`da70d1af8`)
+  - Web's local `MAX_FILE_SIZE_BYTES = 30 * 1024 * 1024` diverged from canonical `MAX_ATTACHMENT_BYTES = 25 MiB`. Files 25-30MB passed Web validation but failed at provider gateways with opaque 413s.
+  - Imported canonical, single source of truth across surfaces.
+
+- `fix(web): dedupe max_message_length across llm api gateways` (`724b6b8a3`)
+  - `MAX_MESSAGE_LENGTH = 100000` declared inline in TWO web LLM API routes. DRY violation; if one raised without the other, gateways diverged silently.
+  - Extracted to `apps/web/lib/validations/llm.ts` (where MAX_OUTPUT_TOKENS already lives). Both routes import.
+
+### Round 13 — meta-lesson
+
+**The ultrathink finding about React 19 saved the user 50+ future PRs.** The autonomous loop had been continuing a migration sweep that solved a phantom. Worth pausing to verify assumptions, especially when a pattern starts to feel mechanical.
+
+## Round 12 additions (useIsMounted hook + sweep, 2026-05-22)
+
+Self-audit pattern caught a real bug (unmount-during-fetch setState in `BridgeStatusCard`, `OAuthConnectorCard`), then escalated to a systemic-pattern finding: 67 desktop components had the same shape. Extracted shared hook + migrated 14 consumers before the Round-13 React-19 finding halted the sweep.
+
+- `feat(desktop): extract useismounted hook + migrate connector cards` (`b16b2672b`) — shared hook + 3 vitest tests; bridge + oauth cards switched from inline ref.
+- `fix(desktop): apply useismounted to savetomemorybutton + memorycard` (`2fee29dd1`)
+- `fix(desktop): apply useismounted to toollabel + artifacttoolbar` (`f3ccf66c6`)
+- `fix(desktop): apply useismounted to all 6 privacy datasection handlers` (`622597bf0`)
+- `fix(desktop): apply useismounted to dotfilesettings configeditorsection` (`610aaa7db`)
+- `fix(desktop): apply useismounted to 3 single-handler files` (`1ebfbd924`) — ConnectorDetailView + ArtifactVersionHistory + MemoryImport.
+- `fix(desktop): apply useismounted to 3 more single-handler files` (`87ceb6ab3`) — ShareConversationDialog + AgentTaskCreator + DatabaseWorkspace.SchemaExplorer.
+
+14 components migrated. Halted by Round-13 React-19 finding.
+
+## Round 11 additions (visual-verification discharge + adoptions + supabase, 2026-05-21..05-22)
+
+Round 11 was the most productive single round of the session — 20+ commits across visual verification, host adoptions, backend, parity comparisons, and self-audit bug fixes.
+
+**Visual verification infrastructure — all 6 surfaces now have coverage:**
+
+- Web: `apps/web/e2e/visual-verification.spec.ts` (playwright PNG capture for /, /projects, /projects-create-form, /projects/[id] not-found). Output committed to `docs/visual-verification/web/` (6 PNGs + 4 findings JSON).
+- Desktop: `apps/desktop/e2e/visual-verification.spec.ts` (playwright PNG capture of cloud-web bundle: /, /sign-up, /providers, /pricing). 4 PNGs committed to `docs/visual-verification/desktop/`. Real finding: all non-root routes render the same sign-in screen — the Desktop cloud-web bundle has no internal marketing routes (nav links go externally to agiworkforce.com).
+- Mobile: RN tree snapshots in `apps/mobile/__tests__/{shared-primitives,send-preview,generated-file-card}.snapshot.test.tsx`. 10 jest snapshots locking the rendered RN tree across ProjectHeader / SendPreview / GeneratedFileCard variants.
+- VS Code: `apps/extension-vscode/src/__tests__/webviewContent.snapshot.test.ts` (3 webview HTML snapshots with normalized nonce).
+- Chrome: `apps/extension/__tests__/static-html.snapshot.test.ts` (popup + side-panel static HTML).
+- CLI: no UI; covered by Rust unit tests in `crates/agiworkforce-protocol`.
+
+**Pixel-parity comparisons — 4 reference sources** (docs/visual-verification/README.md):
+
+- ChatGPT projects create modal: **gap closed** (`c0bc1e4ae`) — Web ProjectGallery now has emoji picker + 4 preset chips + Cancel/Create project buttons matching ChatGPT structurally.
+- ChatGPT projects detail view: **gap closed** (`040861527`) — new `/projects/[id]` dynamic route with ProjectHeader + Chats/Sources tabs + not-found state.
+- Claude sign-in: 3 product-decision findings (value-prop headline, product preview illustration, branding size). Not regressions — design-choice questions.
+- Gemini home empty-state: patterns documented for future product use.
+- Perplexity connectors grid: **CLOSE structural match** confirmed. AGI's round-9 BridgeStatusCard is a differentiator vs Perplexity, not a parity gap.
+
+**Visual-verification findings closed end-to-end:**
+
+- /projects dark-mode text contrast (`var(--text-1)` / `var(--text-3)` were undefined CSS vars rendering as near-black-on-black). Fixed in `651b4e016`.
+- /home CSP violation blocking the OpenDyslexic font CDN. Removed broken @font-face rules in `1cab133f1`. Self-host follow-up documented.
+
+**Self-audit pattern shipped 8 real production bug fixes:**
+
+- `fix(supabase,types,protocol): project_knowledge_files added_by_user_id nullability` (`6b72694ea`) — FK with `ON DELETE SET NULL` + `NOT NULL` is incompatible; would block user deletion in Postgres.
+- `fix(supabase): add missing fk index on project_members.invited_by_user_id` (`f88b8b20f`) — cascade delete + filter queries would have been O(N) without it.
+- `fix(web): tighten /api/projects/preview count validation` (`3c0147612`) — endpoint accepted negative/NaN counts, producing nonsense labels.
+- `fix(types,protocol): align ts+rust contracts with postgres source-of-truth` (`c86e44e97`) — 3 schema drifts (storage_uri, isArchived, metadata missing from TS+Rust contracts).
+- `fix(supabase): close two rls gaps surfaced by self-audit` (`f9ea3f6f9`) — soft-deleted knowledge files leaked to project members; non-owner members couldn't see other members.
+- `fix(web): readable conversation labels on /projects/[id]` (`019cc0dab`) — was rendering raw UUIDs as conversation titles.
+- `fix(desktop): bridgestatuscard unmount-during-fetch setstate race` (`166e9e25e`) — pre-Round-13-finding fix, harmless in React 19 but documented.
+- `fix(desktop): oauthconnectorcard unmount race in disconnect + refresh` (`4c5f5f4e9`) — same pattern.
+
+**Backend / service-layer slices:**
+
+- `feat(supabase): project schema round-10 — backend completes contract` (`bf499e57d`) — 292-line Postgres migration extending user_projects + creating project_members + project_knowledge_files + denormalized count triggers. **NOT auto-applied**; apply via `supabase db push` after review.
+- `feat(web): /api/projects/preview server endpoint` (`23f52d185`) — pure-derivation route that exposes `summarizeProjectHeader()` as a stateless API. 7 vitest tests pin minimal validation.
+- `feat(desktop): adopt shared projectheader card in projectsview details` (`dbc87d8cc`) — first host adoption with a v1 LOCAL ONLY ProjectRecord mapper.
+- `feat(mobile): rn-native projectheader mirror for the round-10 contract` (`bd0f487bf`) — mobile sibling consuming same `ProjectHeaderPresentation`.
+- `feat(extension-vscode,extension): anchor source_surface for the sync rule` (`ebc9b2672`) — module-load assertions that vscode/chrome are developer surfaces; would fire if a future refactor promoted either into the synced-app vocabulary.
+
+### Round 11/12/13 — open paths for next session
+
+1. **Apply the Postgres migration** — `supabase db push` then verify the RLS policy tests (need a real DB; mock-based vitest can only verify SQL syntax via the existing `check:supabase-migrations` guard). Requires user authorization for the deploy.
+2. **Sweep `assertGeneratedFileTrustBoundary` into real call sites** — currently the throw variant exists but no production call site wires it. The natural sites are anywhere a `GeneratedFile` is persisted to durable storage or transferred between surfaces.
+3. **Real backend integration for /api/projects/[id]** — currently a pure-derivation preview endpoint. Adding live Supabase-backed CRUD would close the "no service layer" gap the Stop hook keeps flagging.
+4. **Mobile PNG capture infrastructure** — Mobile currently has RN tree snapshots only; adding a Expo-Web build pipeline would unlock Web-style PNG capture.
+5. **Resolve the Web ↔ Desktop offline-queue duplication** — apps/web/lib/offline + apps/desktop/src/lib/offline both have a parallel implementation. Extract to a shared `@agiworkforce/offline-queue` package.
 
 ## Round 10 additions (after Round 9 wrap at `e3e5d85f8`)
 

@@ -96,14 +96,13 @@ vi.mock('../src/utils', () => ({
 function buildPopupDom(): void {
   document.body.innerHTML = `
     <div id="statusCard">
-      <h2 id="statusTitle">--</h2>
-      <p id="statusSubtitle">--</p>
+      <span id="statusTitle">--</span>
+      <button id="reconnectBtn">&#8635;</button>
     </div>
     <button id="captureBtn">Capture Page</button>
     <button id="refreshBtn">Refresh</button>
     <button id="sidePanelBtn">Side Panel</button>
     <button id="groupBtn">Group Tab</button>
-    <button id="reconnectBtn">Reconnect</button>
     <span id="extVersion"></span>
     <span id="tabId"></span>
     <span id="currentUrl"></span>
@@ -177,7 +176,6 @@ describe('updateStatus — connected state', () => {
     await updateStatus();
     expect(document.getElementById('statusCard')!.classList.contains('connected')).toBe(true);
     expect(document.getElementById('statusTitle')!.textContent).toBe('Connected');
-    expect(document.getElementById('statusSubtitle')!.textContent).toBe('Desktop app is active');
   });
 
   it('sets popupState.isConnected to true when connected', async () => {
@@ -196,7 +194,6 @@ describe('updateStatus — disconnected state', () => {
     chromeMock.runtime.sendMessage.mockResolvedValue({ connectionStatus: 'disconnected' });
     await updateStatus();
     expect(document.getElementById('statusTitle')!.textContent).toBe('Disconnected');
-    expect(document.getElementById('statusSubtitle')!.textContent).toBe('Desktop app not detected');
   });
 
   it('makes the reconnect button visible when disconnected', async () => {
@@ -217,10 +214,10 @@ describe('updateStatus — disconnected state', () => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe('updateStatus — connecting/reconnecting state', () => {
-  it('shows "Reconnecting..." title when status is connecting', async () => {
+  it('shows "Connecting…" title when status is connecting', async () => {
     chromeMock.runtime.sendMessage.mockResolvedValue({ connectionStatus: 'connecting' });
     await updateStatus();
-    expect(document.getElementById('statusTitle')!.textContent).toBe('Reconnecting...');
+    expect(document.getElementById('statusTitle')!.textContent).toBe('Connecting…');
   });
 
   it('adds "reconnecting" class to statusCard when connecting', async () => {
@@ -265,11 +262,10 @@ describe('updateStatus — nativeConnected fallback', () => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe('updateStatus — error fallback when sendMessage throws', () => {
-  it('shows "Error" in statusTitle when sendMessage rejects', async () => {
+  it('shows "Disconnected" in statusTitle when sendMessage rejects', async () => {
     chromeMock.runtime.sendMessage.mockRejectedValue(new Error('No connection'));
     await updateStatus();
-    expect(document.getElementById('statusTitle')!.textContent).toBe('Error');
-    expect(document.getElementById('statusSubtitle')!.textContent).toBe('Failed to check status');
+    expect(document.getElementById('statusTitle')!.textContent).toBe('Disconnected');
   });
 });
 

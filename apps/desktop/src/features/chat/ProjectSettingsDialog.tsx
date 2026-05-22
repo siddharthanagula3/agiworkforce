@@ -52,6 +52,7 @@ import {
   type ProjectFile,
   type KnowledgeBaseFile,
 } from '../../stores/projectStore';
+import type { ProjectAccentColor, PrivacyMode } from '@agiworkforce/types';
 import { useChatStore, type ConversationSummary } from '../../stores/chat/chatStore';
 import { invoke, isTauri } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
@@ -85,6 +86,16 @@ const PROJECT_COLORS = [
 // Default values extracted for safe access
 const DEFAULT_COLOR: string = PROJECT_COLORS[0].value;
 const DEFAULT_ICON = 'folder';
+
+// Canonical accent color options (6 values from ProjectAccentColor)
+const ACCENT_COLORS: { label: string; value: ProjectAccentColor; bg: string }[] = [
+  { label: 'Emerald', value: 'emerald', bg: 'bg-emerald-500' },
+  { label: 'Sky', value: 'sky', bg: 'bg-sky-500' },
+  { label: 'Amber', value: 'amber', bg: 'bg-amber-500' },
+  { label: 'Rose', value: 'rose', bg: 'bg-rose-500' },
+  { label: 'Violet', value: 'violet', bg: 'bg-violet-500' },
+  { label: 'Zinc', value: 'zinc', bg: 'bg-zinc-500' },
+];
 
 // Project icon options - defined as const tuple for type safety
 const PROJECT_ICONS = [
@@ -129,6 +140,9 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
   const [customInstructions, setCustomInstructions] = useState('');
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [icon, setIcon] = useState(DEFAULT_ICON);
+  const [iconEmoji, setIconEmoji] = useState('');
+  const [accentColor, setAccentColor] = useState<ProjectAccentColor | null>(null);
+  const [defaultPrivacyMode, setDefaultPrivacyMode] = useState<PrivacyMode>('local');
   const [files, setFiles] = useState<ProjectFile[]>([]);
   const [conversationIds, setConversationIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -153,6 +167,9 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
         setCustomInstructions(project.customInstructions);
         setColor(project.color || DEFAULT_COLOR);
         setIcon(project.icon || DEFAULT_ICON);
+        setIconEmoji(project.iconEmoji ?? '');
+        setAccentColor(project.accentColor ?? null);
+        setDefaultPrivacyMode(project.defaultPrivacyMode ?? 'local');
         setFiles(project.files);
         setConversationIds(project.conversationIds);
         setKnowledgeBaseFiles(project.knowledgeBaseFiles ?? []);
@@ -163,6 +180,9 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
         setCustomInstructions('');
         setColor(DEFAULT_COLOR);
         setIcon(DEFAULT_ICON);
+        setIconEmoji('');
+        setAccentColor(null);
+        setDefaultPrivacyMode('local');
         setFiles([]);
         setConversationIds([]);
         setKnowledgeBaseFiles([]);
@@ -186,6 +206,9 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
           customInstructions: customInstructions.trim(),
           color,
           icon,
+          iconEmoji: iconEmoji.trim() || null,
+          accentColor,
+          defaultPrivacyMode,
           files,
           conversationIds,
           isArchived: false,
@@ -198,6 +221,9 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
           customInstructions: customInstructions.trim(),
           color,
           icon,
+          iconEmoji: iconEmoji.trim() || null,
+          accentColor,
+          defaultPrivacyMode,
           files,
           conversationIds,
           knowledgeBaseFiles,
@@ -461,6 +487,120 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                       </button>
                     );
                   })}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="project-icon-emoji" className="text-foreground">
+                  Emoji Icon
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Single emoji shown on project cards. Overrides the icon above when set.
+                </p>
+                <Input
+                  id="project-icon-emoji"
+                  value={iconEmoji}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (raw === '') {
+                      setIconEmoji('');
+                      return;
+                    }
+                    // Cap to one grapheme cluster
+                    const seg = new Intl.Segmenter();
+                    const [first] = seg.segment(raw);
+                    setIconEmoji(first?.segment ?? '');
+                  }}
+                  placeholder="e.g. 🚀"
+                  className="bg-muted border-border text-foreground w-24 text-2xl text-center"
+                  maxLength={8}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-foreground flex items-center gap-2">
+                  <Palette className="w-4 h-4" />
+                  Accent Color
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Shown as a color dot on project cards.
+                </p>
+                <div className="flex gap-2 flex-wrap items-center">
+                  <button
+                    type="button"
+                    onClick={() => setAccentColor(null)}
+                    className={cn(
+                      'w-8 h-8 rounded-full border-2 border-dashed border-border flex items-center justify-center text-xs text-muted-foreground transition-all',
+                      accentColor === null &&
+                        'ring-2 ring-white ring-offset-2 ring-offset-background',
+                    )}
+                    title="None"
+                  >
+                    —
+                  </button>
+                  {ACCENT_COLORS.map((c) => (
+                    <button
+                      type="button"
+                      key={c.value}
+                      onClick={() => setAccentColor(c.value)}
+                      className={cn(
+                        'w-8 h-8 rounded-full transition-all',
+                        c.bg,
+                        accentColor === c.value &&
+                          'ring-2 ring-white ring-offset-2 ring-offset-background',
+                      )}
+                      title={c.label}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-foreground">Default Privacy Mode</Label>
+                <p className="text-xs text-muted-foreground">
+                  Privacy mode for new conversations in this project.
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="privacy-mode"
+                      value="local"
+                      checked={defaultPrivacyMode === 'local'}
+                      onChange={() => setDefaultPrivacyMode('local')}
+                      className="accent-blue-500"
+                    />
+                    <span className="text-sm text-foreground">Local</span>
+                    <span className="text-xs text-muted-foreground ml-1">
+                      Runs on-device. No data leaves your machine.
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-not-allowed opacity-50">
+                    <input
+                      type="radio"
+                      name="privacy-mode"
+                      value="byok"
+                      disabled
+                      className="accent-blue-500"
+                    />
+                    <span className="text-sm text-foreground">BYOK</span>
+                    <span className="text-xs text-muted-foreground ml-1">
+                      Your API key, provider servers. (Coming soon)
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-not-allowed opacity-50">
+                    <input
+                      type="radio"
+                      name="privacy-mode"
+                      value="managed"
+                      disabled
+                      className="accent-blue-500"
+                    />
+                    <span className="text-sm text-foreground">Cloud Managed</span>
+                    <span className="text-xs text-muted-foreground ml-1">
+                      AGI servers, private beta.
+                    </span>
+                  </label>
                 </div>
               </div>
             </TabsContent>

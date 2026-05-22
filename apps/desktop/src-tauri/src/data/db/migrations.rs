@@ -4,7 +4,7 @@ use sha2::Sha256;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 63;
+const CURRENT_VERSION: i32 = 64;
 const REDACTED_TOKEN_SENTINEL: &str = "[redacted]";
 type HmacSha256 = Hmac<Sha256>;
 
@@ -587,6 +587,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 63 {
         run_migration_in_transaction(conn, 63, apply_migration_v63)?;
+    }
+
+    if current_version < 64 {
+        run_migration_in_transaction(conn, 64, apply_migration_v64)?;
     }
 
     Ok(())
@@ -5354,6 +5358,18 @@ fn apply_migration_v63(conn: &Connection) -> Result<()> {
             [tool_name],
         )?;
     }
+    Ok(())
+}
+
+/// Migration v64: Add round-10 fields to the projects table.
+/// icon_emoji stores a single grapheme emoji; accent_color stores one of the
+/// canonical ProjectAccentColor values; default_privacy_mode stores the
+/// PrivacyMode ('local'|'byok'|'managed'). All columns are nullable and
+/// backward-compatible — existing rows will read as NULL.
+fn apply_migration_v64(conn: &Connection) -> Result<()> {
+    ensure_column(conn, "projects", "icon_emoji", "icon_emoji TEXT")?;
+    ensure_column(conn, "projects", "accent_color", "accent_color TEXT")?;
+    ensure_column(conn, "projects", "default_privacy_mode", "default_privacy_mode TEXT")?;
     Ok(())
 }
 

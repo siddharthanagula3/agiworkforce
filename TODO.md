@@ -26,10 +26,24 @@ Closes the PLAN.md section 5 task "Define project schema." Types-first cross-sur
 
 These need follow-up but were surfaced BY the visual-verification slice, which proves the workflow works:
 
-- [ ] /projects: dark-mode text nearly invisible (`var(--text-1)` heading + `var(--text-3)` description against black background). High severity — accessibility.
-- [ ] / home: CSP violations blocking inline scripts and open-dyslexic CDN font. Medium severity — accessibility regression for users who need the dyslexia-friendly font.
+- [x] /projects: dark-mode text nearly invisible (`var(--text-1)` heading + `var(--text-3)` description against black background). High severity — accessibility. Fixed in `651b4e016`.
+- [x] / home: CSP violations blocking inline scripts and open-dyslexic CDN font. Resolved in `1cab133f1` by removing the broken @font-face rules (the font never actually loaded — CSP blocked it). Self-hosting the OFL-licensed binary under `apps/web/public/fonts/` remains a follow-up for whoever prioritizes the dyslexia-friendly feature; the inline comment in `globals.css` documents the path.
 
-Remaining visual-verification surfaces (Desktop / Mobile / VS Code / Chrome) still need their own capture infrastructure.
+All six surfaces now have visual-verification coverage:
+
+- Web: PNG capture + DOM snapshots (`5a70bd734`, `651b4e016`)
+- Desktop: PNG capture via cloud-web bundle (`b7c0f56ff`)
+- Mobile: RN tree snapshots (`bd0f487bf` + `9528e57ec`)
+- VS Code: webview HTML snapshots (`46fb492cf`)
+- Chrome: static HTML snapshots (`46fb492cf`)
+- CLI: no UI (covered by Rust unit tests)
+
+### Backend round-10 — landed `bf499e57d`
+
+- [x] Supabase migration completes the cross-language project schema (TS + Rust + Postgres now match).
+- [x] `project_members` + `project_knowledge_files` tables with RLS + denormalized count triggers.
+
+Not auto-applied — review migration before `supabase db push`.
 
 ## 2026-05-21 Suite Transformation Session — Round 9 (in progress)
 

@@ -1,0 +1,18 @@
+---
+source: apps/cli/src/tui/widgets/snapshot_smoke.rs
+expression: rendered
+---
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Sandbox
+
+    Mode:    contained
+
+    Allowed: read-only ops + write_file & edit_file (with confirmation), run_command (with confirmation)
+    Blocked: apply_patch without confirmation, raw shell beyond cwd
+
+    Toggle with: --sandbox=<read-only|contained|unrestricted>
+                 or env AGIWORKFORCE_SANDBOX=<mode>
+                 or /sandbox <mode> inline
+    Enforced by: agiworkforce-sandbox-policy
+
+  Esc to close

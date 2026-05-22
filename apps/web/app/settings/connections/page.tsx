@@ -61,8 +61,8 @@ export default function ConnectionsSettingsPage() {
           Connections
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          External services the assistant can read on your behalf. Cloud Managed only — local-mode
-          and BYOK installs use MCP connectors instead (see Capabilities → MCP).
+          External services the assistant can read on your behalf. Cloud Managed only; local-mode
+          and BYOK installs use MCP connectors instead (see Capabilities).
         </p>
       </div>
 
@@ -115,7 +115,7 @@ export default function ConnectionsSettingsPage() {
             <button
               type="button"
               disabled
-              aria-label={`${connector.label} — waitlist required`}
+              aria-label={`${connector.label}: waitlist required`}
               style={{
                 padding: '5px 12px',
                 fontSize: 11,

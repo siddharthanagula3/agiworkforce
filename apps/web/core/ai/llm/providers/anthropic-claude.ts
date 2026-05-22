@@ -60,7 +60,7 @@ import {
   DEFAULT_ANTHROPIC_MODEL,
   type AnthropicModel,
 } from '@shared/config/supported-models';
-import { getModelMetadataById, normalizeModelId } from '@agiworkforce/types';
+import { getModelIdsForProvider, getModelMetadataById, modelIdAliases } from '@agiworkforce/types';
 
 export interface AnthropicConfig {
   model: AnthropicModel;
@@ -658,18 +658,22 @@ export class AnthropicProvider {
   }
 
   /**
-   * Get model aliases for convenience
+   * Get model aliases for convenience. Returns every alias in the canonical
+   * `modelIdAliases` map whose target resolves to an Anthropic model —
+   * including deprecated models, api-model-id mirrors, and provider
+   * canonicalization entries. Sourced from `packages/types/src/models.json`
+   * so new models land here automatically and old ones keep redirecting
+   * to their canonical successors.
    */
   static getModelAliases(): Record<string, string> {
-    const aliases = [
-      'claude-sonnet-4-6',
-      'claude-opus-4-6',
-      'claude-opus-4-5',
-      'claude-sonnet-4-5',
-      'claude-haiku-4-5',
-    ];
-
-    return Object.fromEntries(aliases.map((alias) => [alias, normalizeModelId(alias) ?? alias]));
+    const anthropicCanonicals = new Set<string>(
+      getModelIdsForProvider('anthropic', { includeDeprecated: true }),
+    );
+    return Object.fromEntries(
+      Object.entries(modelIdAliases).filter(([, canonicalId]) =>
+        anthropicCanonicals.has(canonicalId),
+      ),
+    );
   }
 }
 

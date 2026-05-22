@@ -389,27 +389,33 @@
         "commands": [
           {
             "name": "explain",
-            "description": "Explain the selected code or current file"
+            "description": "Explain the selected code or current file",
+            "sampleRequest": "Explain how this function works and why it is written this way"
           },
           {
             "name": "fix",
-            "description": "Find and fix bugs or issues in the selected code"
+            "description": "Find and fix bugs or issues in the selected code",
+            "sampleRequest": "Find and fix any bugs or errors in this code"
           },
           {
             "name": "refactor",
-            "description": "Suggest refactoring improvements for the selected code"
+            "description": "Suggest refactoring improvements for the selected code",
+            "sampleRequest": "Refactor this code to improve readability and maintainability"
           },
           {
             "name": "tests",
-            "description": "Generate unit tests for the selected code"
+            "description": "Generate unit tests for the selected code",
+            "sampleRequest": "Generate comprehensive unit tests covering edge cases and error conditions"
           },
           {
             "name": "docs",
-            "description": "Generate documentation comments for the selected code"
+            "description": "Generate documentation comments for the selected code",
+            "sampleRequest": "Generate JSDoc documentation comments for this code"
           },
           {
             "name": "model",
-            "description": "Switch the active LLM model"
+            "description": "Switch the active LLM model",
+            "sampleRequest": "Switch to a faster model"
           }
         ],
         "disambiguation": [

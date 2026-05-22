@@ -22,6 +22,7 @@ import {
   PROVIDER_MODE_DISPLAY,
   providerSurfaceToProviderMode,
   PROVIDER_MODES,
+  assertGeneratedFileTrustBoundary,
   normalizeProjectAccentColor,
   projectMemberRoleLabel,
   summarizeGeneratedFileBundle,
@@ -1084,5 +1085,94 @@ describe('projectMemberRoleLabel', () => {
     expect(projectMemberRoleLabel('owner')).toBe('Owner');
     expect(projectMemberRoleLabel('editor')).toBe('Editor');
     expect(projectMemberRoleLabel('viewer')).toBe('Viewer');
+  });
+});
+
+describe('assertGeneratedFileTrustBoundary', () => {
+  function buildLocalScenario(): {
+    computeSession: ComputeSession;
+    generatedFile: GeneratedFile;
+    artifactManifest: ArtifactManifest;
+  } {
+    const computeSession: ComputeSession = {
+      id: 'cs_assert',
+      ownerUserId: 'user_1',
+      sourceSurface: 'desktop',
+      privacyMode: 'local',
+      providerMode: 'Local',
+      provider: 'ollama',
+      model: 'llama3.2:8b',
+      status: 'completed',
+      workdirUri: 'file:///tmp/assert',
+      createdAt: '2026-05-22T00:00:00.000Z',
+      updatedAt: '2026-05-22T00:00:30.000Z',
+      completedAt: '2026-05-22T00:00:30.000Z',
+    };
+    const generatedFile: GeneratedFile = {
+      id: 'gf_assert',
+      computeSessionId: 'cs_assert',
+      ownerUserId: 'user_1',
+      sourceSurface: 'desktop',
+      privacyMode: 'local',
+      providerMode: 'Local',
+      kind: 'pdf',
+      fileName: 'assert.pdf',
+      mimeType: 'application/pdf',
+      uri: 'file:///tmp/assert/assert.pdf',
+      byteCount: 1024,
+      checksumSha256: 'abc',
+      previewDerivatives: [],
+      createdAt: '2026-05-22T00:00:30.000Z',
+    };
+    const artifactManifest: ArtifactManifest = {
+      id: 'am_assert',
+      artifactId: 'art_assert',
+      type: 'generated_file_bundle',
+      title: 'Assert demo',
+      computeSessionId: 'cs_assert',
+      generatedFileIds: ['gf_assert'],
+      privacyMode: 'local',
+      providerMode: 'Local',
+      storageScope: 'local_device',
+      createdAt: '2026-05-22T00:00:30.000Z',
+      updatedAt: '2026-05-22T00:00:30.000Z',
+    };
+    return { computeSession, generatedFile, artifactManifest };
+  }
+
+  it('returns void when the trust-boundary checks all pass', () => {
+    const input = buildLocalScenario();
+    expect(() => assertGeneratedFileTrustBoundary(input)).not.toThrow();
+  });
+
+  it('throws with the violation code when a local file has a non-file:// uri', () => {
+    const input = buildLocalScenario();
+    input.generatedFile = {
+      ...input.generatedFile,
+      uri: 'https://leaked.example.com/local.pdf',
+    };
+    expect(() => assertGeneratedFileTrustBoundary(input)).toThrow(/local-file-uploaded/);
+    expect(() => assertGeneratedFileTrustBoundary(input)).toThrow(
+      /generated-file trust-boundary violation/i,
+    );
+  });
+
+  it('throws with multiple codes when more than one check fails', () => {
+    const input = buildLocalScenario();
+    input.generatedFile = {
+      ...input.generatedFile,
+      computeSessionId: 'cs_other', // compute-session-mismatch
+      privacyMode: 'managed', // privacy-mode-mismatch + provider-mode-mismatch
+      providerMode: 'ManagedGateway',
+    };
+    let thrown: Error | undefined;
+    try {
+      assertGeneratedFileTrustBoundary(input);
+    } catch (err) {
+      thrown = err instanceof Error ? err : new Error(String(err));
+    }
+    expect(thrown?.message).toMatch(/compute-session-mismatch/);
+    expect(thrown?.message).toMatch(/privacy-mode-mismatch/);
+    expect(thrown?.message).toMatch(/provider-mode-mismatch/);
   });
 });

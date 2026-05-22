@@ -65,6 +65,11 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
     {
+      name: 'visual-verification',
+      testMatch: '**/visual-verification.spec.ts',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
       name: 'integration',
       testMatch: '**/integration*.spec.ts',
       use: { ...devices['Desktop Chrome'] },

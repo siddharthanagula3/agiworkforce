@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { listCanonicalModels, normalizeModelId, type ModelType } from '@agiworkforce/types';
+import { MAX_MESSAGE_LENGTH } from './llm';
 
 /**
  * Chat validation schemas
@@ -63,12 +64,15 @@ const MESSAGE_ROLES = ['user', 'assistant', 'system'] as const;
 type MessageRole = (typeof MESSAGE_ROLES)[number];
 
 // AUDIT-008-004: Validation schema for message creation
-// Max content length: 100k characters (approximately 25k tokens)
+// Max content length: shared with the llm gateway via MAX_MESSAGE_LENGTH.
 export const CreateMessageSchema = z.object({
   content: z
     .string()
     .min(1, 'Message content is required')
-    .max(100000, 'Message content exceeds maximum length of 100,000 characters')
+    .max(
+      MAX_MESSAGE_LENGTH,
+      `Message content exceeds maximum length of ${MAX_MESSAGE_LENGTH.toLocaleString()} characters`,
+    )
     .refine((val) => val.trim().length > 0, 'Message content cannot be only whitespace'),
   model: z
     .string()

@@ -95,3 +95,33 @@ export type {
   QueuedCommand,
   SyncKvStore,
 } from './queue';
+
+// Shared offline queue + sync manager factories. Mirrored on the
+// universal entry (alongside the dedicated `./offline-queue` and
+// `./offline-sync` subpath exports in package.json) so TypeScript
+// resolution via the package `main`/`types` field — and the desktop
+// vite bundle that aliases the package root to `desktop-index.ts` —
+// can both see these symbols from `'@agiworkforce/runtime'`.
+export { createOfflineQueue } from './offline-queue';
+export type {
+  MessageRetryStatus,
+  OfflineQueueApi,
+  OfflineQueueLogger,
+  OfflineQueueOptions,
+  OfflineQueueState,
+  OfflineQueueStorage,
+  QueuedMessage,
+  QueuedToolExecution,
+  SyncCallbacks,
+  SyncSummary,
+} from './offline-queue';
+
+export { createOfflineSyncManager, SyncState } from './offline-sync';
+export type {
+  OfflineSyncLogger,
+  OfflineSyncManager,
+  OfflineSyncNetworkHandlers,
+  OfflineSyncOptions,
+  OfflineSyncQueueAdapter,
+  SyncManagerState,
+} from './offline-sync';

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { useIsMounted } from '@/hooks/useIsMounted';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,9 @@ function ConfigEditorSection() {
   const [model, setModel] = useState('');
   const [provider, setProvider] = useState('');
   const [approvalMode, setApprovalMode] = useState('');
+  // Section may unmount while config load / save is in flight (user
+  // navigates to a different settings tab). Guards post-await setState.
+  const isMounted = useIsMounted();
 
   useEffect(() => {
     let mounted = true;
@@ -89,9 +93,11 @@ function ConfigEditorSection() {
     } catch (err) {
       toast.error(`Failed to save config: ${String(err)}`);
     } finally {
-      setSaving(false);
+      if (isMounted.current) {
+        setSaving(false);
+      }
     }
-  }, [config, model, provider, approvalMode]);
+  }, [config, model, provider, approvalMode, isMounted]);
 
   if (loading) {
     return (

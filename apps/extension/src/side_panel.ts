@@ -2906,6 +2906,19 @@ function buildUI(): void {
     }
   });
 
+  const openInDesktopBtn = el('button', {
+    class: 'sp-icon-btn',
+    id: 'sp-open-in-desktop-btn',
+    title: 'Open in desktop app',
+  });
+  openInDesktopBtn.appendChild(renderIcon(Monitor, 16));
+  openInDesktopBtn.addEventListener('click', () => {
+    chrome.runtime
+      .sendMessage({ type: 'OPEN_IN_DESKTOP' })
+      .catch((err: unknown) => console.warn('[SidePanel] OPEN_IN_DESKTOP failed:', err));
+  });
+
+  headerRight.appendChild(openInDesktopBtn);
   headerRight.appendChild(consoleToggleBtn);
   headerRight.appendChild(settingsToggleBtn);
   headerRight.appendChild(clearBtn);

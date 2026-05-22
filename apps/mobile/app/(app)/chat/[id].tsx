@@ -43,6 +43,7 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { offlineQueue } from '@/services/offlineQueue';
 import { generateImage } from '@/src/features/image/services/imagegen';
 import { useThemeColors } from '@/src/ui/theme';
+import { useProjectStore } from '@/src/features/projects/store';
 import type { ChatMessage } from '@/types/chat';
 
 /**
@@ -54,6 +55,10 @@ export default function ChatScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   // useLocalSearchParams can return string | string[] -- narrow to string
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const activeProjectId = useProjectStore((s) => s.activeProjectId);
+  const activeProject = useProjectStore((s) =>
+    s.activeProjectId ? s.projects.find((p) => p.id === s.activeProjectId) : undefined,
+  );
   const router = useRouter();
   const navigation = useNavigation();
   const modelPickerRef = useRef<BottomSheet>(null);
@@ -645,6 +650,39 @@ export default function ChatScreen() {
           >
             <Menu size={22} color={colors.textSecondary} />
           </Pressable>
+
+          {/* Active project chip — tappable, navigates to project detail */}
+          {activeProjectId && activeProject ? (
+            <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: '/(app)/projects/[id]' as const,
+                  params: { id: activeProjectId },
+                })
+              }
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                borderRadius: 8,
+                backgroundColor: `${colors.teal}18`,
+                borderWidth: 1,
+                borderColor: `${colors.teal}35`,
+                maxWidth: 120,
+              }}
+              accessibilityLabel={`Active project: ${activeProject.name}. Tap to view details.`}
+              accessibilityRole="button"
+            >
+              <Text
+                numberOfLines={1}
+                style={{ fontSize: 11, color: colors.teal, fontWeight: '500' }}
+              >
+                {activeProject.name}
+              </Text>
+            </Pressable>
+          ) : null}
 
           {/* ModeToggle — flex:1 ensures true center regardless of left/right widths */}
           <View style={{ flex: 1, alignItems: 'center' }}>

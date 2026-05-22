@@ -622,4 +622,12 @@ impl ChatComposer {
         self.active_agent_label = active_agent_label;
         true
     }
+
+    pub(crate) fn set_plan_mode_effort_label(&mut self, label: Option<String>) -> bool {
+        if self.plan_mode_effort_label == label {
+            return false;
+        }
+        self.plan_mode_effort_label = label;
+        true
+    }
 }

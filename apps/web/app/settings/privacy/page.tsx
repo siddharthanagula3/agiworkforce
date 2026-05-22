@@ -37,7 +37,7 @@ const TOGGLES: ReadonlyArray<ToggleSpec> = [
     id: 'improveModelTraining',
     label: 'Help improve AGI models',
     description:
-      'Cloud Managed only — share anonymized conversations to improve future models. Off by default. Local Mode and BYOK conversations are never used regardless of this setting.',
+      'Cloud Managed only: share anonymized conversations to improve future models. Off by default. Local Mode and BYOK conversations are never used regardless of this setting.',
     defaultValue: false,
     managedOnly: true,
   },
@@ -189,7 +189,7 @@ export default function PrivacySettingsPage() {
             cursor: 'not-allowed',
           }}
         >
-          Export — coming soon
+          Export (coming soon)
         </button>
       </section>
     </div>

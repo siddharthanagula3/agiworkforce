@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { McpClient } from '@/api/mcp';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/Tooltip';
+import { useIsMounted } from '@/hooks/useIsMounted';
 import type { ConnectorDef } from './connectorDefinitions';
 
 interface OAuthConnectorCardProps {
@@ -67,6 +68,13 @@ export function OAuthConnectorCard({
   const [revoking, setRevoking] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Unmount guard — see hooks/useIsMounted for rationale. handleDisconnect
+  // calls onDisconnect() which often removes this card from the parent's
+  // list (the card unmounts mid-promise). The finally-block setState
+  // would then fire on an unmounted component. Same applies to
+  // handleRefresh's onRefresh() callback path.
+  const mountedRef = useIsMounted();
+
   const handleDisconnect = useCallback(async () => {
     setRevoking(true);
     try {
@@ -77,9 +85,11 @@ export function OAuthConnectorCard({
       const message = err instanceof Error ? err.message : 'Disconnect failed';
       toast.error(`Failed to disconnect ${connector.name}: ${message}`);
     } finally {
-      setRevoking(false);
+      if (mountedRef.current) {
+        setRevoking(false);
+      }
     }
-  }, [connector.id, connector.name, onDisconnect]);
+  }, [connector.id, connector.name, onDisconnect, mountedRef]);
 
   const handleRefresh = useCallback(async () => {
     if (!onRefresh) return;
@@ -91,9 +101,11 @@ export function OAuthConnectorCard({
       const message = err instanceof Error ? err.message : 'Refresh failed';
       toast.error(`Failed to refresh ${connector.name}: ${message}`);
     } finally {
-      setRefreshing(false);
+      if (mountedRef.current) {
+        setRefreshing(false);
+      }
     }
-  }, [connector.name, onRefresh]);
+  }, [connector.name, onRefresh, mountedRef]);
 
   const isLoading = loading || revoking || refreshing;
   const expiresLabel =

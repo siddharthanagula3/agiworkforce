@@ -1207,6 +1207,12 @@ impl BottomPane {
             self.request_redraw();
         }
     }
+
+    pub(crate) fn set_plan_mode_effort_label(&mut self, label: Option<String>) {
+        if self.composer.set_plan_mode_effort_label(label) {
+            self.request_redraw();
+        }
+    }
 }
 
 #[cfg(not(target_os = "linux"))]

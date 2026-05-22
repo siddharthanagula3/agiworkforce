@@ -439,7 +439,7 @@ const CONNECTORS: Connector[] = [
   {
     id: 'screen-vision',
     name: 'Screen Vision',
-    description: 'OCR, screenshots, and computer use — AI sees and controls your screen.',
+    description: 'OCR, screenshots, and computer use. AI sees and controls your screen.',
     category: 'Exclusive',
     authType: 'pat',
     actionCount: 7,
@@ -452,7 +452,7 @@ const CONNECTORS: Connector[] = [
   {
     id: 'ollama',
     name: 'Local LLMs (Ollama)',
-    description: 'Route tasks to local models — Llama, Mistral, Qwen, and more. Zero cloud cost.',
+    description: 'Route tasks to local models: Llama, Mistral, Qwen, and more. Zero cloud cost.',
     category: 'Exclusive',
     authType: 'pat',
     actionCount: 4,
@@ -678,14 +678,29 @@ interface ConnectorCardProps {
   connector: Connector;
   connected: boolean;
   mutating: boolean;
+  connectedAt?: string | null;
   onConnect: () => void;
   onDisconnect: () => void;
+}
+
+function formatRelativeTime(isoString: string | null | undefined): string {
+  if (!isoString) return 'Never';
+  const diff = Date.now() - new Date(isoString).getTime();
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(isoString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 const ConnectorCard: React.FC<ConnectorCardProps> = ({
   connector,
   connected,
   mutating,
+  connectedAt,
   onConnect,
   onDisconnect,
 }) => {
@@ -735,6 +750,13 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
       <p className="mb-4 flex-1 text-xs leading-relaxed text-muted-foreground/80">
         {connector.description}
       </p>
+
+      {/* Activity timestamp */}
+      {connected && connectedAt && (
+        <p className="mb-3 text-[10px] text-muted-foreground/60">
+          Connected {formatRelativeTime(connectedAt)}
+        </p>
+      )}
 
       {/* Action Row */}
       <div className="flex items-center justify-between">
@@ -821,6 +843,7 @@ export function ConnectorsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<ConnectorCategory | 'All'>('All');
   const [connectedIds, setConnectedIds] = useState<Set<string>>(new Set());
+  const [connectedAtMap, setConnectedAtMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [mutatingIds, setMutatingIds] = useState<Set<string>>(new Set());
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -854,9 +877,16 @@ export function ConnectorsPage() {
           setLoading(false);
           return;
         }
-        const json = (await res.json()) as { connectors: Array<{ connectorId: string }> };
+        const json = (await res.json()) as {
+          connectors: Array<{ connectorId: string; connectedAt?: string }>;
+        };
         if (!cancelled) {
           setConnectedIds(new Set(json.connectors.map((c) => c.connectorId)));
+          const atMap: Record<string, string> = {};
+          for (const c of json.connectors) {
+            if (c.connectedAt) atMap[c.connectorId] = c.connectedAt;
+          }
+          setConnectedAtMap(atMap);
         }
       } catch {
         // Network error — degrade gracefully
@@ -1064,6 +1094,7 @@ export function ConnectorsPage() {
                     connector={connector}
                     connected={true}
                     mutating={mutatingIds.has(connector.id)}
+                    connectedAt={connectedAtMap[connector.id]}
                     onConnect={() => void handleConnect(connector.id)}
                     onDisconnect={() => void handleDisconnect(connector.id)}
                   />
@@ -1080,7 +1111,7 @@ export function ConnectorsPage() {
                   Available
                   {activeCategory === 'All' || activeCategory === 'Exclusive'
                     ? ''
-                    : ` — ${activeCategory}`}
+                    : ` - ${activeCategory}`}
                   <span className="ml-1.5 text-xs font-normal text-muted-foreground">
                     ({availableConnectors.length})
                   </span>
@@ -1137,10 +1168,10 @@ export function ConnectorsPage() {
                 <div className="flex-1">
                   <h3 className="text-sm font-semibold text-foreground">105+ Connectors Planned</h3>
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    We&apos;re rolling out connectors in phases — from core productivity tools to AI
-                    models, marketing platforms, and enterprise apps. Phase 1 (10 core connectors)
-                    ships first, followed by CRM, marketing, finance, and social in subsequent
-                    phases.
+                    We&apos;re rolling out connectors in phases, starting from core productivity
+                    tools to AI models, marketing platforms, and enterprise apps. Phase 1 (10 core
+                    connectors) ships first, followed by CRM, marketing, finance, and social in
+                    subsequent phases.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {[

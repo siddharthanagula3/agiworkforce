@@ -1,0 +1,901 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`SettingsScreen — inset-grouped card layout locks the full settings screen tree (dark mode, Local Active) 1`] = `
+<View
+  className="flex-1"
+  edges={
+    [
+      "top",
+    ]
+  }
+  style={
+    {
+      "backgroundColor": "#0e0e0e",
+    }
+  }
+>
+  <View
+    className="flex-row items-center px-4 h-12"
+  >
+    <Text
+      className="text-lg font-semibold"
+      style={
+        {
+          "color": "#fff",
+        }
+      }
+      variant="subheading"
+    >
+      Settings
+    </Text>
+  </View>
+  <RCTScrollView
+    contentContainerStyle={
+      {
+        "paddingBottom": 40,
+      }
+    }
+    data={
+      [
+        {
+          "data": [
+            {
+              "badge": "Active",
+              "badgeTone": "active",
+              "description": "Active. No account or cloud required.",
+              "icon": [Function],
+              "key": "local-mode",
+              "label": "Local Mode",
+              "type": "status",
+            },
+            {
+              "description": "Runs on-device and works offline.",
+              "icon": [Function],
+              "key": "local-llms",
+              "label": "Local LLMs",
+              "onPress": [Function],
+              "type": "navigation",
+              "value": "llama-3.2-1b",
+            },
+            {
+              "badge": "Waitlist",
+              "badgeTone": "waitlist",
+              "description": "Waitlist only until billing, quota, and provider-cost controls ship.",
+              "icon": [Function],
+              "key": "cloud-managed",
+              "label": "Cloud Managed",
+              "type": "status",
+            },
+          ],
+          "title": "Mode",
+        },
+        {
+          "data": [
+            {
+              "badge": "Locked",
+              "badgeTone": "locked",
+              "description": "Disabled until secure device key storage ships.",
+              "icon": [Function],
+              "key": "mobile-byok",
+              "label": "Mobile BYOK",
+              "type": "status",
+            },
+          ],
+          "title": "Keys",
+        },
+        {
+          "data": [
+            {
+              "description": "Local tools are active. Cloud tools are locked or waitlisted.",
+              "icon": [Function],
+              "key": "capabilities",
+              "label": "Capabilities",
+              "onPress": [Function],
+              "type": "navigation",
+            },
+            {
+              "description": "Local memory facts and import/export controls.",
+              "icon": [Function],
+              "key": "memory",
+              "label": "Memory",
+              "onPress": [Function],
+              "type": "navigation",
+            },
+            {
+              "description": "Downloaded models, local cache, and device data export.",
+              "icon": [Function],
+              "key": "storage",
+              "label": "Storage",
+              "onPress": [Function],
+              "type": "navigation",
+            },
+            {
+              "description": "Benchmark the active local model on this device.",
+              "icon": [Function],
+              "key": "performance",
+              "label": "Performance",
+              "onPress": [Function],
+              "type": "navigation",
+            },
+            {
+              "description": "Approval defaults for local tools.",
+              "icon": [Function],
+              "key": "auto-approve",
+              "label": "Auto-Approve",
+              "onPress": [Function],
+              "type": "navigation",
+            },
+          ],
+          "title": "Local AI",
+        },
+        {
+          "data": [
+            {
+              "badge": "Waitlist",
+              "badgeTone": "waitlist",
+              "description": "Cloud OAuth connectors open with Cloud Managed.",
+              "icon": [Function],
+              "key": "connectors",
+              "label": "Connectors",
+              "type": "status",
+            },
+          ],
+          "title": "Connections",
+        },
+        {
+          "data": [
+            {
+              "icon": [Function],
+              "key": "voice-header",
+              "label": "",
+              "type": "voice-header",
+            },
+            {
+              "icon": [Function],
+              "key": "voice-language",
+              "label": "Voice & Language",
+              "onPress": [Function],
+              "type": "navigation",
+            },
+            {
+              "icon": [Function],
+              "key": "cloud-whisper",
+              "label": "",
+              "type": "cloud-whisper-waitlist",
+            },
+          ],
+          "title": "Voice",
+        },
+        {
+          "data": [
+            {
+              "icon": [Function],
+              "key": "appearance",
+              "label": "Appearance",
+              "type": "theme",
+            },
+            {
+              "description": "Local reminders and device notifications.",
+              "icon": [Function],
+              "key": "notifications",
+              "label": "Notifications",
+              "onPress": [Function],
+              "type": "navigation",
+            },
+            {
+              "description": "Greeting, tone, and response style preferences.",
+              "icon": [Function],
+              "key": "personalization",
+              "label": "Personalization",
+              "onPress": [Function],
+              "type": "navigation",
+            },
+            {
+              "icon": [Function],
+              "key": "haptic-feedback",
+              "label": "Haptic Feedback",
+              "onToggle": [MockFunction],
+              "toggleValue": true,
+              "type": "toggle",
+            },
+          ],
+          "title": "Preferences",
+        },
+        {
+          "data": [
+            {
+              "description": "Local-first privacy terms for Mobile v1.",
+              "icon": [Function],
+              "key": "privacy-policy",
+              "label": "Privacy Policy",
+              "onPress": [Function],
+              "type": "navigation",
+            },
+            {
+              "description": "Product terms and acceptable use.",
+              "icon": [Function],
+              "key": "terms-of-service",
+              "label": "Terms of Service",
+              "onPress": [Function],
+              "type": "navigation",
+            },
+          ],
+          "title": "Privacy",
+        },
+        {
+          "data": [
+            {
+              "icon": [Function],
+              "key": "help-faq",
+              "label": "Help & FAQ",
+              "onPress": [Function],
+              "type": "navigation",
+            },
+            {
+              "icon": [Function],
+              "key": "version",
+              "label": "",
+              "type": "version",
+            },
+          ],
+          "title": "About",
+        },
+      ]
+    }
+    getItem={[Function]}
+    getItemCount={[Function]}
+    keyExtractor={[Function]}
+    onContentSizeChange={[Function]}
+    onLayout={[Function]}
+    onMomentumScrollBegin={[Function]}
+    onMomentumScrollEnd={[Function]}
+    onScroll={[Function]}
+    onScrollBeginDrag={[Function]}
+    onScrollEndDrag={[Function]}
+    renderItem={[Function]}
+    scrollEventThrottle={0.0001}
+    showsVerticalScrollIndicator={false}
+    stickyHeaderIndices={[]}
+    style={
+      {
+        "backgroundColor": "#0e0e0e",
+      }
+    }
+  >
+    <View>
+      <View
+        onFocusCapture={[Function]}
+        onLayout={[Function]}
+        style={null}
+      >
+        <View
+          className="pt-6 pb-1.5 px-4"
+        >
+          <Text
+            className="text-[11px] uppercase tracking-wider font-semibold"
+            style={
+              {
+                "color": "#777",
+              }
+            }
+          >
+            Mode
+          </Text>
+        </View>
+      </View>
+      <View
+        onFocusCapture={[Function]}
+        onLayout={[Function]}
+        style={null}
+      >
+        <View
+          style={
+            {
+              "backgroundColor": "#1a1a1a",
+              "borderBottomLeftRadius": 0,
+              "borderBottomRightRadius": 0,
+              "borderBottomWidth": 0,
+              "borderColor": "#333",
+              "borderLeftWidth": 1,
+              "borderRightWidth": 1,
+              "borderTopLeftRadius": 12,
+              "borderTopRightRadius": 12,
+              "borderTopWidth": 1,
+              "marginHorizontal": 16,
+              "overflow": "hidden",
+            }
+          }
+        >
+          <View
+            accessibilityLabel="Local Mode. Active. No account or cloud required.. Active"
+            accessibilityRole="text"
+            accessibilityState={
+              {
+                "disabled": false,
+              }
+            }
+            accessible={true}
+            className="flex-row items-center justify-between py-3.5 px-4"
+          >
+            <View
+              className="flex-row items-start gap-3 flex-1 mr-3"
+            >
+              <View
+                color="#2dd4bf"
+                size={18}
+                testID="icon-Lock"
+              />
+              <View
+                className="flex-1"
+              >
+                <Text
+                  className="text-[15px]"
+                  numberOfLines={1}
+                  style={
+                    {
+                      "color": "#fff",
+                    }
+                  }
+                >
+                  Local Mode
+                </Text>
+                <Text
+                  className="text-[11px] mt-0.5"
+                  numberOfLines={2}
+                  style={
+                    {
+                      "color": "#777",
+                      "lineHeight": 15,
+                    }
+                  }
+                >
+                  Active. No account or cloud required.
+                </Text>
+              </View>
+            </View>
+            <View
+              style={
+                {
+                  "backgroundColor": "#2dd4bf18",
+                  "borderColor": "#2dd4bf30",
+                  "borderRadius": 6,
+                  "borderWidth": 1,
+                  "paddingHorizontal": 8,
+                  "paddingVertical": 3,
+                }
+              }
+            >
+              <Text
+                style={
+                  {
+                    "color": "#2dd4bf",
+                    "fontSize": 10,
+                    "fontWeight": "600",
+                  }
+                }
+              >
+                Active
+              </Text>
+            </View>
+          </View>
+          <View
+            className="h-px ml-[46px] mr-4"
+            style={
+              {
+                "backgroundColor": "#333",
+              }
+            }
+          />
+        </View>
+      </View>
+      <View
+        onFocusCapture={[Function]}
+        onLayout={[Function]}
+        style={null}
+      >
+        <View
+          style={
+            {
+              "backgroundColor": "#1a1a1a",
+              "borderBottomLeftRadius": 0,
+              "borderBottomRightRadius": 0,
+              "borderBottomWidth": 0,
+              "borderColor": "#333",
+              "borderLeftWidth": 1,
+              "borderRightWidth": 1,
+              "borderTopLeftRadius": 0,
+              "borderTopRightRadius": 0,
+              "borderTopWidth": 0,
+              "marginHorizontal": 16,
+              "overflow": "hidden",
+            }
+          }
+        >
+          <View
+            accessibilityLabel="Local LLMs"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            className="flex-row items-center justify-between py-3.5 px-4 active:bg-white/5"
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+          >
+            <View
+              className="flex-row items-center gap-3 flex-1 mr-3"
+            >
+              <View
+                color="#aaa"
+                size={18}
+                testID="icon-Brain"
+              />
+              <View
+                className="flex-1"
+              >
+                <Text
+                  className="text-[15px]"
+                  numberOfLines={1}
+                  style={
+                    {
+                      "color": "#fff",
+                    }
+                  }
+                >
+                  Local LLMs
+                </Text>
+                <Text
+                  className="text-[11px] mt-0.5"
+                  numberOfLines={2}
+                  style={
+                    {
+                      "color": "#777",
+                      "lineHeight": 15,
+                    }
+                  }
+                >
+                  Runs on-device and works offline.
+                </Text>
+              </View>
+            </View>
+            <View
+              className="flex-row items-center gap-1.5"
+            >
+              <Text
+                className="text-[13px]"
+                numberOfLines={1}
+                style={
+                  {
+                    "color": "#777",
+                  }
+                }
+              >
+                llama-3.2-1b
+              </Text>
+              <View
+                color="#777"
+                size={16}
+                testID="icon-ChevronRight"
+              />
+            </View>
+          </View>
+          <View
+            className="h-px ml-[46px] mr-4"
+            style={
+              {
+                "backgroundColor": "#333",
+              }
+            }
+          />
+        </View>
+      </View>
+      <View
+        onFocusCapture={[Function]}
+        onLayout={[Function]}
+        style={null}
+      >
+        <View
+          style={
+            {
+              "backgroundColor": "#1a1a1a",
+              "borderBottomLeftRadius": 12,
+              "borderBottomRightRadius": 12,
+              "borderBottomWidth": 1,
+              "borderColor": "#333",
+              "borderLeftWidth": 1,
+              "borderRightWidth": 1,
+              "borderTopLeftRadius": 0,
+              "borderTopRightRadius": 0,
+              "borderTopWidth": 0,
+              "marginHorizontal": 16,
+              "overflow": "hidden",
+            }
+          }
+        >
+          <View
+            accessibilityLabel="Cloud Managed. Waitlist only until billing, quota, and provider-cost controls ship.. Waitlist"
+            accessibilityRole="text"
+            accessibilityState={
+              {
+                "disabled": true,
+              }
+            }
+            accessible={true}
+            className="flex-row items-center justify-between py-3.5 px-4"
+          >
+            <View
+              className="flex-row items-start gap-3 flex-1 mr-3"
+            >
+              <View
+                color="#aaa"
+                size={18}
+                testID="icon-Globe"
+              />
+              <View
+                className="flex-1"
+              >
+                <Text
+                  className="text-[15px]"
+                  numberOfLines={1}
+                  style={
+                    {
+                      "color": "#fff",
+                    }
+                  }
+                >
+                  Cloud Managed
+                </Text>
+                <Text
+                  className="text-[11px] mt-0.5"
+                  numberOfLines={2}
+                  style={
+                    {
+                      "color": "#777",
+                      "lineHeight": 15,
+                    }
+                  }
+                >
+                  Waitlist only until billing, quota, and provider-cost controls ship.
+                </Text>
+              </View>
+            </View>
+            <View
+              style={
+                {
+                  "backgroundColor": "#f59e0b14",
+                  "borderColor": "#f59e0b2E",
+                  "borderRadius": 6,
+                  "borderWidth": 1,
+                  "paddingHorizontal": 8,
+                  "paddingVertical": 3,
+                }
+              }
+            >
+              <Text
+                style={
+                  {
+                    "color": "#f59e0b",
+                    "fontSize": 10,
+                    "fontWeight": "600",
+                  }
+                }
+              >
+                Waitlist
+              </Text>
+            </View>
+          </View>
+        </View>
+      </View>
+      <View
+        onFocusCapture={[Function]}
+        onLayout={[Function]}
+        style={null}
+      >
+        <View
+          style={
+            {
+              "height": 4,
+            }
+          }
+        />
+      </View>
+      <View
+        onFocusCapture={[Function]}
+        onLayout={[Function]}
+        style={null}
+      >
+        <View
+          className="pt-6 pb-1.5 px-4"
+        >
+          <Text
+            className="text-[11px] uppercase tracking-wider font-semibold"
+            style={
+              {
+                "color": "#777",
+              }
+            }
+          >
+            Keys
+          </Text>
+        </View>
+      </View>
+      <View
+        onFocusCapture={[Function]}
+        onLayout={[Function]}
+        style={null}
+      >
+        <View
+          style={
+            {
+              "backgroundColor": "#1a1a1a",
+              "borderBottomLeftRadius": 12,
+              "borderBottomRightRadius": 12,
+              "borderBottomWidth": 1,
+              "borderColor": "#333",
+              "borderLeftWidth": 1,
+              "borderRightWidth": 1,
+              "borderTopLeftRadius": 12,
+              "borderTopRightRadius": 12,
+              "borderTopWidth": 1,
+              "marginHorizontal": 16,
+              "overflow": "hidden",
+            }
+          }
+        >
+          <View
+            accessibilityLabel="Mobile BYOK. Disabled until secure device key storage ships.. Locked"
+            accessibilityRole="text"
+            accessibilityState={
+              {
+                "disabled": true,
+              }
+            }
+            accessible={true}
+            className="flex-row items-center justify-between py-3.5 px-4"
+          >
+            <View
+              className="flex-row items-start gap-3 flex-1 mr-3"
+            >
+              <View
+                color="#aaa"
+                size={18}
+                testID="icon-Key"
+              />
+              <View
+                className="flex-1"
+              >
+                <Text
+                  className="text-[15px]"
+                  numberOfLines={1}
+                  style={
+                    {
+                      "color": "#fff",
+                    }
+                  }
+                >
+                  Mobile BYOK
+                </Text>
+                <Text
+                  className="text-[11px] mt-0.5"
+                  numberOfLines={2}
+                  style={
+                    {
+                      "color": "#777",
+                      "lineHeight": 15,
+                    }
+                  }
+                >
+                  Disabled until secure device key storage ships.
+                </Text>
+              </View>
+            </View>
+            <View
+              style={
+                {
+                  "backgroundColor": "#0e0e0e",
+                  "borderColor": "#333",
+                  "borderRadius": 6,
+                  "borderWidth": 1,
+                  "paddingHorizontal": 8,
+                  "paddingVertical": 3,
+                }
+              }
+            >
+              <Text
+                style={
+                  {
+                    "color": "#777",
+                    "fontSize": 10,
+                    "fontWeight": "600",
+                  }
+                }
+              >
+                Locked
+              </Text>
+            </View>
+          </View>
+        </View>
+      </View>
+      <View
+        onFocusCapture={[Function]}
+        onLayout={[Function]}
+        style={null}
+      >
+        <View
+          style={
+            {
+              "height": 4,
+            }
+          }
+        />
+      </View>
+      <View
+        onFocusCapture={[Function]}
+        onLayout={[Function]}
+        style={null}
+      >
+        <View
+          className="pt-6 pb-1.5 px-4"
+        >
+          <Text
+            className="text-[11px] uppercase tracking-wider font-semibold"
+            style={
+              {
+                "color": "#777",
+              }
+            }
+          >
+            Local AI
+          </Text>
+        </View>
+      </View>
+      <View
+        onFocusCapture={[Function]}
+        onLayout={[Function]}
+        style={null}
+      >
+        <View
+          style={
+            {
+              "backgroundColor": "#1a1a1a",
+              "borderBottomLeftRadius": 0,
+              "borderBottomRightRadius": 0,
+              "borderBottomWidth": 0,
+              "borderColor": "#333",
+              "borderLeftWidth": 1,
+              "borderRightWidth": 1,
+              "borderTopLeftRadius": 12,
+              "borderTopRightRadius": 12,
+              "borderTopWidth": 1,
+              "marginHorizontal": 16,
+              "overflow": "hidden",
+            }
+          }
+        >
+          <View
+            accessibilityLabel="Capabilities"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            className="flex-row items-center justify-between py-3.5 px-4 active:bg-white/5"
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+          >
+            <View
+              className="flex-row items-center gap-3 flex-1 mr-3"
+            >
+              <View
+                color="#aaa"
+                size={18}
+                testID="icon-Zap"
+              />
+              <View
+                className="flex-1"
+              >
+                <Text
+                  className="text-[15px]"
+                  numberOfLines={1}
+                  style={
+                    {
+                      "color": "#fff",
+                    }
+                  }
+                >
+                  Capabilities
+                </Text>
+                <Text
+                  className="text-[11px] mt-0.5"
+                  numberOfLines={2}
+                  style={
+                    {
+                      "color": "#777",
+                      "lineHeight": 15,
+                    }
+                  }
+                >
+                  Local tools are active. Cloud tools are locked or waitlisted.
+                </Text>
+              </View>
+            </View>
+            <View
+              className="flex-row items-center gap-1.5"
+            >
+              <View
+                color="#777"
+                size={16}
+                testID="icon-ChevronRight"
+              />
+            </View>
+          </View>
+          <View
+            className="h-px ml-[46px] mr-4"
+            style={
+              {
+                "backgroundColor": "#333",
+              }
+            }
+          />
+        </View>
+      </View>
+      <View
+        style={
+          {
+            "height": 0,
+          }
+        }
+      />
+    </View>
+  </RCTScrollView>
+  <View
+    testID="voice-selector"
+  />
+</View>
+`;

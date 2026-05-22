@@ -2,7 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import { LLMCompletionRequestSchema } from '@/lib/validations/llm';
+import { LLMCompletionRequestSchema, MAX_MESSAGE_LENGTH } from '@/lib/validations/llm';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -232,8 +232,9 @@ async function handleLLMCompletion(request: NextRequest) {
     throw createError.internal('Invalid LLM provider configuration');
   }
 
-  // Validate message length to prevent abuse (max 1MB total content)
-  const MAX_MESSAGE_LENGTH = 100000; // 100k chars per message
+  // Validate message length to prevent abuse (max 1MB total content).
+  // MAX_MESSAGE_LENGTH is the canonical per-message cap shared with the
+  // OpenAI-compat gateway at /api/llm/v1/chat/completions.
   const MAX_TOTAL_LENGTH = 1000000; // 1MB total
   let totalLength = 0;
 

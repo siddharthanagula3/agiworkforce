@@ -7,6 +7,27 @@
 //!
 //! This module preserves the older `sessions::*` surface so existing CLI
 //! commands keep compiling, but it no longer depends on SQLite.
+//!
+//! # Sync-rule isolation
+//!
+//! Per the locked product rule: **Consumer chat sync is only Web, Desktop, and
+//! Mobile.  CLI, VS Code, and Chrome must not sync consumer chat history.**
+//!
+//! The CLI satisfies this rule by design:
+//! - All session data is written to the local filesystem under
+//!   `~/.agiworkforce/managed_sessions/` and
+//!   `~/.agiworkforce/conversations/`.
+//! - No code in `apps/cli/` reads or writes the `chat_messages`,
+//!   `conversations`, or `user_projects` Supabase tables.
+//! - No code in `apps/cli/` constructs `ProjectSourceSurface::Web`,
+//!   `::Desktop`, or `::Mobile`.
+//! - `tier_cache.rs` calls `/api/me` over HTTPS for subscription-tier
+//!   resolution only — it does not touch consumer-chat tables.
+//!
+//! `ProjectSourceSurface::Cli.is_developer_session_surface()` returns `true`
+//! and `is_synced_app_surface()` returns `false`; a unit test below enforces
+//! this at build time.  See `crates/agiworkforce-protocol/src/projects.rs` for
+//! the canonical rule implementation.
 
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Utc};
@@ -860,5 +881,15 @@ mod tests {
         let imported = migrate_json_conversations(&conn, &conversations_dir).unwrap();
         assert_eq!(imported, 1);
         assert_eq!(list_sessions(&conn, 10).unwrap()[0].id, "legacy-session");
+    }
+
+    #[test]
+    fn cli_surface_is_developer_session_not_synced_app() {
+        use agiworkforce_protocol::projects::ProjectSourceSurface;
+        // Locked rule: CLI must not sync consumer chat history.
+        // ProjectSourceSurface::Cli must be a developer-session surface, never
+        // a synced-app surface (Web/Desktop/Mobile).
+        assert!(ProjectSourceSurface::Cli.is_developer_session_surface());
+        assert!(!ProjectSourceSurface::Cli.is_synced_app_surface());
     }
 }
