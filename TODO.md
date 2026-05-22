@@ -16,7 +16,8 @@ Closes the PLAN.md section 5 task "Define project schema." Types-first cross-sur
 - [x] Shared `ProjectHeader` component in `@agiworkforce/unified-chat` consuming `ProjectHeaderPresentation` — `98749e432`
 - [x] Desktop `ProjectsView.tsx` adopts `<ProjectHeader />` (first host adoption) — `dbc87d8cc`
 - [x] Mobile RN-native `ProjectHeader` mirror — `bd0f487bf`
-- [x] 34 new tests across types (15) + unified-chat (11) + mobile (8)
+- [x] Rust mirror of project schema in `crates/agiworkforce-protocol` — `14942c481`
+- [x] 47 new tests across types (15) + unified-chat (11) + mobile (8) + protocol (13)
 
 ## 2026-05-21 Suite Transformation Session — Round 9 (in progress)
 
