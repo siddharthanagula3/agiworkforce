@@ -171,9 +171,11 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     // Insert returns 42P01
     const pgError = { code: '42P01', message: 'relation does not exist' };
     mockSingle.mockResolvedValueOnce({ data: null, error: pgError });
-    mockSelect.mockReturnValue({ single: mockSingle });
-    mockInsert.mockReturnValue({ select: mockSelect });
+    // select() resolves both the project-check (.eq().eq().single()) and the
+    // insert(.select().single()) chains.
     mockEq.mockReturnValue({ eq: mockEq, single: mockSingle });
+    mockSelect.mockReturnValue({ eq: mockEq, single: mockSingle });
+    mockInsert.mockReturnValue({ select: mockSelect });
     mockFrom.mockReturnValue({ select: mockSelect, insert: mockInsert });
 
     const res = await POST(
@@ -199,9 +201,9 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     mockSingle.mockResolvedValueOnce({ data: PROJECT_ROW, error: null });
     // Insert succeeds
     mockSingle.mockResolvedValueOnce({ data: KB_FILE_ROW, error: null });
-    mockSelect.mockReturnValue({ single: mockSingle });
-    mockInsert.mockReturnValue({ select: mockSelect });
     mockEq.mockReturnValue({ eq: mockEq, single: mockSingle });
+    mockSelect.mockReturnValue({ eq: mockEq, single: mockSingle });
+    mockInsert.mockReturnValue({ select: mockSelect });
     mockFrom.mockReturnValue({ select: mockSelect, insert: mockInsert });
 
     const res = await POST(
