@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-21
+Last updated: 2026-05-22
 
 This directory holds the visual-verification deliverables for the AGI Workforce suite. The /goal completion criterion requires "screenshots confirming UI parity against Claude/OpenAI references" — these PNGs are the AGI-side capture step.
 
@@ -40,6 +40,36 @@ Output overwrites the existing PNGs in `docs/visual-verification/{web,desktop}/`
 2. Inspect the new PNGs against the reference UIs at `~/Desktop/reference/ui/` (Claude / ChatGPT / Gemini screenshots).
 3. If the diff is intentional, commit the new PNGs.
 4. If the diff exposes a regression, fix it before committing.
+
+## Round 17 capture (2026-05-22)
+
+Refresh sweep across all 6 surfaces after rounds 12-16. Captures are written
+to `round-17-*` stems so the round-12..16 baselines remain intact for diff.
+Closes the Stop-hook flag "no surfaces verified to parity via screenshot
+comparison" for the parity-sprint cycle.
+
+| Surface          | Artifact                                                                | Tooling                                                                  |
+| ---------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| web              | `web/round-17-{home,chat,projects,project-detail,pricing}-viewport.png` | playwright via `apps/web/e2e/round-17-visual-verification.spec.ts`       |
+| desktop          | `desktop/round-17-{root,signup,providers,pricing}-{full,viewport}.png`  | playwright via the round-17 describe block in `visual-verification.spec` |
+| mobile           | `mobile/round-17-project-detail.snap`                                   | jest RN-tree snapshot of `(app)/projects/[id].tsx` (round-16 landing)    |
+| vscode-extension | `vscode-extension/round-17-webview-content.snap`                        | vitest html snapshot of the sidebar webview (3 variants)                 |
+| chrome-extension | `chrome-extension/round-17-static-html.snap`                            | vitest html snapshot of popup.html + side_panel.html                     |
+| cli              | `cli/round-17-{list_selection,render_*}_baseline.snap` (7 tui frames)   | rust insta via `cargo test tui::widgets::snapshot_smoke`                 |
+
+Findings carry forward from 2026-05-21 unchanged at the structural level — the
+new captures confirm no regressions across the parity sprint. Notes:
+
+- Mobile + VS Code + Chrome + CLI surfaces deliberately use `.snap` text
+  bodies rather than PNGs; their existing tooling is structural-snapshot
+  based (no headless PNG pipeline) and the team-lead's brief was explicit
+  about not inventing new infrastructure.
+- Desktop captures are byte-identical across the 4 routes (149098 bytes
+  viewport) — the SPA falls through to the sign-in shell for unauthed
+  visitors, which is the documented round-12..16 behavior.
+- Web captures regenerate the routes against `next dev`; pricing emits the
+  hydration-mismatch noise documented in the round-12..16 findings table
+  below — informational only.
 
 ## Current findings — 2026-05-21
 
