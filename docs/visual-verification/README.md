@@ -93,6 +93,14 @@ Notable Gemini patterns AGI could borrow when building a signed-in empty-state r
 
 Tracked as a product-decision item, not a regression. AGI's design language deliberately diverges (newsreader serif, warm-dark palette, no per-feature chip taxonomy yet). Documenting the pattern so future signed-in-empty-state design decisions have a captured reference.
 
+### Desktop ConnectorGallery vs Perplexity connectors grid
+
+| AGI surface                                                                            | Reference                                                   | Parity status                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| -------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Desktop `ConnectorGallery` (apps/desktop/src/features/connectors/ConnectorGallery.tsx) | `_reference-comparisons/ref-perplexity-connectors-grid.png` | **CLOSE MATCH**. Both surfaces show: top-bar heading + search input, subtitle copy explaining the integration, All / Connected / Available filter pills, "All categories" dropdown + custom-connector affordance, and a grid of connector cards (logo + name + short description). AGI adds the round-9 BridgeStatusCard (Chrome + VS Code transport health) which Perplexity doesn't have — AGI's developer-surface trust posture is more transparent. No regression flagged. |
+
+This comparison confirms the AGI Desktop ConnectorGallery design is structurally aligned with current competitor patterns. The round-9 BridgeStatusCard is a differentiator, not a parity gap.
+
 ### What this comparison concludes
 
 - AGI's `/projects` hub layout and Round-10 contrast fix are production-quality at the structural level (correct chrome, search input, empty state, CTA placement, dark mode legible after `651b4e016`).
