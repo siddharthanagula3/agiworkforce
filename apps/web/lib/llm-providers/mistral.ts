@@ -43,8 +43,8 @@ function mapMessages(messages: LLMProviderRequest['messages']) {
  * Model IDs are resolved through the canonical models.json catalog:
  *   mistral-large-3  -> apiModelId: mistral-large-2512
  *   mistral-medium-3 -> apiModelId: mistral-medium-2508
- *   mistral-small-3  -> apiModelId: mistral-small-2506
- *   codestral-2      -> apiModelId: codestral-2
+ *   mistral-small-3  -> apiModelId: mistral-small-2603 (Mistral Small 4; 2506 deprecated Apr 2026)
+ *   codestral-2      -> apiModelId: codestral-2508
  *   pixtral-large    -> apiModelId: pixtral-large-latest
  */
 export class MistralProvider extends BaseLLMProvider {

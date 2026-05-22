@@ -9,6 +9,7 @@ import {
   getModelContextLimits,
   getEconomyFallbackModels,
   getModelIdsForProvider,
+  getModelMetadataById,
   getModelVariantPartner,
   getPickerModelTier,
   getPickerModels,
@@ -421,5 +422,63 @@ describe('getDefaultModelFor — tier-aware default model resolution', () => {
     expect(getDefaultModelFor('pro_plus', 'computer-use')).toBe(
       getRoutingSlotModel('computer_use_premium'),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R25-V2: Mistral / Groq / OpenRouter model-id drift verification
+// ---------------------------------------------------------------------------
+describe('R25-V2 model-id drift — known-good IDs resolve; removed IDs return null', () => {
+  it('groq llama-3.3-70b resolves with correct provider and apiModelId', () => {
+    const meta = getModelMetadataById('groq-llama-3.3-70b');
+    expect(meta).not.toBeNull();
+    expect(meta?.provider).toBe('groq');
+    expect(meta?.apiModelId).toBe('llama-3.3-70b-versatile');
+  });
+
+  it('groq llama-3.1-8b resolves with correct apiModelId', () => {
+    const meta = getModelMetadataById('groq-llama-3.1-8b');
+    expect(meta).not.toBeNull();
+    expect(meta?.apiModelId).toBe('llama-3.1-8b-instant');
+  });
+
+  it('mistral-large-3 resolves with correct apiModelId mistral-large-2512', () => {
+    const meta = getModelMetadataById('mistral-large-3');
+    expect(meta).not.toBeNull();
+    expect(meta?.apiModelId).toBe('mistral-large-2512');
+  });
+
+  it('mistral-small-3 apiModelId is updated to mistral-small-2603 (Small 4, not deprecated 2506)', () => {
+    const meta = getModelMetadataById('mistral-small-3');
+    expect(meta).not.toBeNull();
+    expect(meta?.apiModelId).toBe('mistral-small-2603');
+    expect(meta?.apiModelId).not.toBe('mistral-small-2506');
+  });
+
+  it('codestral-2 apiModelId is codestral-2508, not the invalid bare "codestral-2"', () => {
+    const meta = getModelMetadataById('codestral-2');
+    expect(meta).not.toBeNull();
+    expect(meta?.apiModelId).toBe('codestral-2508');
+    expect(meta?.apiModelId).not.toBe('codestral-2');
+  });
+
+  it('openrouter nvidia model is the correct 49B nemotron ID, not the hallucinated 120B ID', () => {
+    const correct = getModelMetadataById('nvidia/llama-3.3-nemotron-super-49b-v1:free');
+    const hallucinated = getModelMetadataById('nvidia/nemotron-3-super-120b-a12b:free');
+    expect(correct).not.toBeNull();
+    expect(correct?.provider).toBe('open_router');
+    expect(hallucinated).toBeNull();
+  });
+
+  it('mistralai openrouter free model has 128K context (not the old 32K)', () => {
+    const meta = getModelMetadataById('mistralai/mistral-small-3.1-24b-instruct:free');
+    expect(meta).not.toBeNull();
+    expect(meta?.contextWindow).toBe(128000);
+  });
+
+  it('unknown model ID returns null gracefully (no throw)', () => {
+    expect(getModelMetadataById('fake-model-that-does-not-exist')).toBeNull();
+    expect(getModelMetadataById(null)).toBeNull();
+    expect(getModelMetadataById(undefined)).toBeNull();
   });
 });
