@@ -4,7 +4,7 @@ import { cn } from '../../lib/utils';
 import type { ToolLabelEntry } from './ToolLabel';
 import { TaskPhaseSection } from './TaskPhaseSection';
 import type { TaskPhase } from './TaskPhaseSection';
-import { ToolCallCard, type ToolCallStatus } from './ToolCallCard';
+import { ToolCallCard } from './MessageBubble/ToolCallCard';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Extended entry type — ToolLabelEntry augmented with optional phase metadata.
@@ -35,24 +35,18 @@ interface TaskPhaseTimelineProps {
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Map ToolLabelEntry status to ToolCallCard status */
-function toToolCallStatus(status: ToolLabelEntry['status']): ToolCallStatus {
+/** Map ToolLabelEntry status to canonical ToolCallCard toolStatus string */
+function toToolCallStatus(status: ToolLabelEntry['status']): string {
   switch (status) {
     case 'running':
       return 'running';
     case 'completed':
-      return 'complete';
+      return 'completed';
     case 'error':
       return 'error';
     default:
       return 'pending';
   }
-}
-
-/** Build a minimal args record from a displayArgs string, if present. */
-function argsFromDisplayArgs(displayArgs: string): Record<string, unknown> | undefined {
-  if (!displayArgs) return undefined;
-  return { input: displayArgs };
 }
 
 /**
@@ -113,12 +107,11 @@ export function TaskPhaseTimeline({
         {entries.map((entry) => (
           <ToolCallCard
             key={entry.id}
-            toolCallId={entry.id}
+            messageId={entry.id}
             toolName={entry.displayName}
-            args={argsFromDisplayArgs(entry.displayArgs)}
-            error={entry.error}
-            status={toToolCallStatus(entry.status)}
-            elapsedMs={entry.durationMs}
+            toolCommand={entry.displayArgs || undefined}
+            toolStatus={toToolCallStatus(entry.status)}
+            requiresApproval={false}
           />
         ))}
       </div>
@@ -161,12 +154,11 @@ export function TaskPhaseTimeline({
       {ungrouped.map((entry) => (
         <ToolCallCard
           key={entry.id}
-          toolCallId={entry.id}
+          messageId={entry.id}
           toolName={entry.displayName}
-          args={argsFromDisplayArgs(entry.displayArgs)}
-          error={entry.error}
-          status={toToolCallStatus(entry.status)}
-          elapsedMs={entry.durationMs}
+          toolCommand={entry.displayArgs || undefined}
+          toolStatus={toToolCallStatus(entry.status)}
+          requiresApproval={false}
         />
       ))}
     </div>
