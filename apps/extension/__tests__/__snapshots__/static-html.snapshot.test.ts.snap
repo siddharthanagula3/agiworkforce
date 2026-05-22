@@ -103,6 +103,40 @@ exports[`Chrome extension static HTML snapshots > locks the popup.html structure
 
       <div class="divider"></div>
 
+      <!-- Memory — cross-conversation facts stored in chrome.storage.local.
+           v1 LOCAL ONLY: no cloud sync, no writes to consumer chat tables.
+           R21 (2026-05-22): host-adopt shared memory primitive. -->
+      <div class="info-section memory-section">
+        <div class="section-title">Memory</div>
+        <p class="memory-help">
+          Saved facts and preferences reused across sessions. Stored on this device only.
+        </p>
+        <button class="memory-add-btn" id="memoryAddBtn">Add memory</button>
+        <div class="memory-editor" id="memoryEditor" hidden>
+          <textarea
+            class="memory-textarea"
+            id="memoryTextarea"
+            placeholder="Enter a fact, preference, or pattern to remember…"
+            rows="3"
+            maxlength="2000"
+          ></textarea>
+          <div class="memory-editor-actions">
+            <button class="memory-save-btn" id="memorySaveBtn">Save</button>
+            <button class="memory-cancel-btn" id="memoryCancelBtn">Cancel</button>
+          </div>
+        </div>
+        <ul class="memory-list" id="memoryList" aria-label="Saved memories"></ul>
+        <div class="memory-empty" id="memoryEmpty" hidden>
+          <p class="memory-empty-text">No saved memories yet.</p>
+          <button class="memory-add-first-btn" id="memoryAddFirstBtn">Add your first memory</button>
+          <p class="memory-empty-hint">
+            Memories let AGI remember facts, preferences, and patterns across sessions.
+          </p>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
       <!-- Desktop Pairing -->
       <div class="info-section pairing-section">
         <div class="section-title">Desktop Pairing</div>

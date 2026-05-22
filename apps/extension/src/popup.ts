@@ -35,8 +35,9 @@ async function initializePopup(): Promise<void> {
     setupEventListeners();
     startSessionTimer();
     await initInPagePanelToggle();
-    await initPairingUI();
     await initAllowlistUI();
+    await initMemoryUI();
+    await initPairingUI();
   } catch (error) {
     logger.error('Failed to initialize popup', error);
   }
@@ -802,6 +803,286 @@ async function initAllowlistUI(): Promise<void> {
   await renderAllowlistUI();
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Memory editor
+//
+// v1 LOCAL ONLY: all reads/writes go through background → chrome.storage.local.
+// No cloud sync. No writes to consumer chat tables.
+// DOM construction uses textContent exclusively — no innerHTML.
+// R21 (2026-05-22): host-adopt shared memory primitive.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Milliseconds the delete-confirm button stays red before reverting. */
+const DELETE_CONFIRM_MS = 3000;
+
+/** Storage key — must match memory-bridge.ts MEMORY_STORAGE_KEY. */
+const MEMORY_STORAGE_KEY = 'agi_memories';
+
+interface MemoryItem {
+  id: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+type MemoryMessageType = 'LIST_MEMORIES' | 'ADD_MEMORY' | 'UPDATE_MEMORY' | 'DELETE_MEMORY';
+
+async function sendMemoryMessage(
+  type: MemoryMessageType,
+  payload: Record<string, unknown> = {},
+): Promise<Record<string, unknown>> {
+  try {
+    const res = (await chrome.runtime.sendMessage({ type, ...payload })) as Record<string, unknown>;
+    return res ?? {};
+  } catch {
+    return { success: false, error: 'Message failed' };
+  }
+}
+
+/** Render a human-readable relative timestamp (e.g. "2 h ago", "just now"). */
+function formatRelativeTime(iso: string): string {
+  try {
+    const diffMs = Date.now() - new Date(iso).getTime();
+    if (diffMs < 60_000) return 'just now';
+    const mins = Math.floor(diffMs / 60_000);
+    if (mins < 60) return `${mins} min ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours} h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days} d ago`;
+  } catch {
+    return '';
+  }
+}
+
+/** isMemoryItem type guard for runtime storage values. */
+function isMemoryItem(v: unknown): v is MemoryItem {
+  if (!v || typeof v !== 'object') return false;
+  const o = v as Record<string, unknown>;
+  return (
+    typeof o['id'] === 'string' &&
+    typeof o['content'] === 'string' &&
+    typeof o['createdAt'] === 'string' &&
+    typeof o['updatedAt'] === 'string'
+  );
+}
+
+/** Render the memory list + empty state. */
+function renderMemoryList(memories: MemoryItem[]): void {
+  const ul = document.getElementById('memoryList') as HTMLUListElement | null;
+  const emptyDiv = document.getElementById('memoryEmpty') as HTMLDivElement | null;
+  if (!ul) return;
+
+  ul.textContent = '';
+
+  if (memories.length === 0) {
+    if (emptyDiv) emptyDiv.hidden = false;
+    return;
+  }
+  if (emptyDiv) emptyDiv.hidden = true;
+
+  for (const item of memories) {
+    ul.appendChild(buildMemoryItem(item));
+  }
+}
+
+/** Build a single <li> for a memory entry (no innerHTML). */
+function buildMemoryItem(item: MemoryItem): HTMLLIElement {
+  const li = document.createElement('li');
+  li.className = 'memory-item';
+  li.dataset['id'] = item.id;
+
+  // Content span (2-line clamp via CSS)
+  const contentEl = document.createElement('span');
+  contentEl.className = 'memory-item-content';
+  contentEl.textContent = item.content;
+  li.appendChild(contentEl);
+
+  // Meta row: timestamp
+  const metaEl = document.createElement('span');
+  metaEl.className = 'memory-item-meta';
+  metaEl.textContent = formatRelativeTime(item.updatedAt || item.createdAt);
+  li.appendChild(metaEl);
+
+  // Action row: edit + delete
+  const actionRow = document.createElement('div');
+  actionRow.className = 'memory-item-row';
+
+  const editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.className = 'memory-item-edit-btn';
+  editBtn.textContent = 'Edit';
+  editBtn.setAttribute('aria-label', 'Edit memory');
+  editBtn.addEventListener('click', () => {
+    startInlineEdit(li, item, contentEl, editBtn, deleteBtn, actionRow);
+  });
+  actionRow.appendChild(editBtn);
+
+  const deleteBtn = document.createElement('button');
+  deleteBtn.type = 'button';
+  deleteBtn.className = 'memory-item-delete-btn';
+  deleteBtn.textContent = 'Delete';
+  deleteBtn.setAttribute('aria-label', 'Delete memory');
+
+  let confirmTimer: ReturnType<typeof setTimeout> | null = null;
+
+  deleteBtn.addEventListener('click', () => {
+    if (deleteBtn.classList.contains('is-confirm')) {
+      // Second tap — execute delete
+      if (confirmTimer !== null) {
+        clearTimeout(confirmTimer);
+        confirmTimer = null;
+      }
+      void executeMemoryDelete(item.id);
+    } else {
+      // First tap — show red confirm for DELETE_CONFIRM_MS
+      deleteBtn.classList.add('is-confirm');
+      deleteBtn.textContent = 'Confirm delete';
+      confirmTimer = setTimeout(() => {
+        deleteBtn.classList.remove('is-confirm');
+        deleteBtn.textContent = 'Delete';
+        confirmTimer = null;
+      }, DELETE_CONFIRM_MS);
+    }
+  });
+  actionRow.appendChild(deleteBtn);
+
+  li.appendChild(actionRow);
+  return li;
+}
+
+/** Replace content + edit button with an inline textarea + save button. */
+function startInlineEdit(
+  li: HTMLLIElement,
+  item: MemoryItem,
+  contentEl: HTMLSpanElement,
+  editBtn: HTMLButtonElement,
+  deleteBtn: HTMLButtonElement,
+  actionRow: HTMLDivElement,
+): void {
+  // Prevent double-open
+  if (li.querySelector('.memory-item-textarea')) return;
+
+  contentEl.classList.add('is-editing');
+  contentEl.hidden = true;
+  editBtn.hidden = true;
+  deleteBtn.hidden = true;
+
+  const textarea = document.createElement('textarea');
+  textarea.className = 'memory-item-textarea';
+  textarea.value = item.content;
+  textarea.rows = 3;
+  textarea.maxLength = 2000;
+
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
+  saveBtn.className = 'memory-item-save-btn';
+  saveBtn.textContent = 'Save';
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'memory-item-edit-btn';
+  cancelBtn.textContent = 'Cancel';
+
+  const inlineRow = document.createElement('div');
+  inlineRow.className = 'memory-editor-actions';
+  inlineRow.appendChild(saveBtn);
+  inlineRow.appendChild(cancelBtn);
+
+  li.insertBefore(textarea, actionRow);
+  li.insertBefore(inlineRow, actionRow);
+
+  textarea.focus();
+
+  saveBtn.addEventListener('click', async () => {
+    const newContent = textarea.value.trim();
+    if (!newContent) return;
+    saveBtn.disabled = true;
+    await executeMemoryUpdate(item.id, newContent);
+  });
+
+  cancelBtn.addEventListener('click', () => {
+    textarea.remove();
+    inlineRow.remove();
+    contentEl.hidden = false;
+    contentEl.classList.remove('is-editing');
+    editBtn.hidden = false;
+    deleteBtn.hidden = false;
+  });
+}
+
+/** Call background to delete, then re-render. */
+async function executeMemoryDelete(id: string): Promise<void> {
+  await sendMemoryMessage('DELETE_MEMORY', { id });
+  await refreshMemoryUI();
+}
+
+/** Call background to update, then re-render. */
+async function executeMemoryUpdate(id: string, content: string): Promise<void> {
+  await sendMemoryMessage('UPDATE_MEMORY', { id, content });
+  await refreshMemoryUI();
+}
+
+/** Read memories from background and re-render. */
+async function refreshMemoryUI(): Promise<void> {
+  const res = await sendMemoryMessage('LIST_MEMORIES');
+  const raw = Array.isArray(res['memories']) ? (res['memories'] as unknown[]) : [];
+  const memories = raw.filter(isMemoryItem);
+  renderMemoryList(memories);
+}
+
+/** Show/hide the Add memory inline editor (top of section). */
+function showAddEditor(show: boolean): void {
+  const editor = document.getElementById('memoryEditor');
+  const textarea = document.getElementById('memoryTextarea') as HTMLTextAreaElement | null;
+  if (!editor) return;
+  editor.hidden = !show;
+  if (show && textarea) {
+    textarea.value = '';
+    textarea.focus();
+  }
+}
+
+export async function initMemoryUI(): Promise<void> {
+  const addBtn = document.getElementById('memoryAddBtn') as HTMLButtonElement | null;
+  const addFirstBtn = document.getElementById('memoryAddFirstBtn') as HTMLButtonElement | null;
+  const saveBtn = document.getElementById('memorySaveBtn') as HTMLButtonElement | null;
+  const cancelBtn = document.getElementById('memoryCancelBtn') as HTMLButtonElement | null;
+  const textarea = document.getElementById('memoryTextarea') as HTMLTextAreaElement | null;
+
+  const openEditor = () => showAddEditor(true);
+
+  if (addBtn) addBtn.addEventListener('click', openEditor);
+  if (addFirstBtn) addFirstBtn.addEventListener('click', openEditor);
+
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', () => showAddEditor(false));
+  }
+
+  if (saveBtn && textarea) {
+    saveBtn.addEventListener('click', async () => {
+      const content = textarea.value.trim();
+      if (!content) return;
+      saveBtn.disabled = true;
+      await sendMemoryMessage('ADD_MEMORY', { content });
+      showAddEditor(false);
+      saveBtn.disabled = false;
+      await refreshMemoryUI();
+    });
+  }
+
+  // Keep popup in sync if another popup window mutates the store
+  if (chrome.storage?.onChanged) {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && changes[MEMORY_STORAGE_KEY]) {
+        void refreshMemoryUI();
+      }
+    });
+  }
+
+  await refreshMemoryUI();
+}
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initializePopup);
 } else {
@@ -823,9 +1104,12 @@ export {
   readAllowlist,
   writeAllowlist,
   applyPairingState,
+  renderMemoryList,
+  refreshMemoryUI,
   TIER_LABELS,
   PAYWALL_FEATURE_LABELS,
   REQUIRED_TIER_LABELS,
   IN_PAGE_PANEL_ENABLED_KEY,
   SITE_ALLOWLIST_KEY,
+  MEMORY_STORAGE_KEY,
 };
