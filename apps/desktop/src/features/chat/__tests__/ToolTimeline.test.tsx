@@ -179,10 +179,13 @@ describe('ToolTimeline', () => {
       const headerButton = screen.getByRole('button');
       await user.click(headerButton);
 
-      // Now each ToolLabel entry should be visible
+      // Now each ToolLabel entry should be visible. Edit renders via the
+      // file-op structured row (basename + extension badge) per round 19;
+      // Read + Bash continue to render their displayName text.
       expect(screen.getByText('Read')).toBeInTheDocument();
       expect(screen.getByText('Bash')).toBeInTheDocument();
-      expect(screen.getByText('Edit')).toBeInTheDocument();
+      expect(screen.getByText('lib.rs')).toBeInTheDocument();
+      expect(screen.getByText('RS')).toBeInTheDocument();
     });
 
     it('collapses again when the header button is clicked a second time', async () => {
@@ -207,9 +210,11 @@ describe('ToolTimeline', () => {
 
       await user.click(screen.getByRole('button'));
 
+      // Edit uses the file-op structured renderer (basename + ext badge);
+      // other tools render their displayName text directly.
       expect(screen.getByText('Read')).toBeInTheDocument();
       expect(screen.getByText('Bash')).toBeInTheDocument();
-      expect(screen.getByText('Edit')).toBeInTheDocument();
+      expect(screen.getByText('lib.rs')).toBeInTheDocument();
     });
 
     it('renders entry display args when expanded', async () => {
