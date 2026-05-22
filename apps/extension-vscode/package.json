@@ -377,6 +377,26 @@
         "command": "agi-workforce.memory",
         "title": "AGI Workforce: Memory",
         "icon": "$(book)"
+      },
+      {
+        "command": "agi-workforce.memory.refresh",
+        "title": "AGI Workforce: Refresh Memory",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "agi-workforce.memory.create",
+        "title": "AGI Workforce: Add Memory Fact",
+        "icon": "$(add)"
+      },
+      {
+        "command": "agi-workforce.memory.edit",
+        "title": "AGI Workforce: Edit Memory Fact",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "agi-workforce.memory.delete",
+        "title": "AGI Workforce: Delete Memory Fact",
+        "icon": "$(trash)"
       }
     ],
     "chatParticipants": [
@@ -470,6 +490,13 @@
           "name": "Context Files",
           "contextualTitle": "AI Context",
           "visibility": "collapsed"
+        },
+        {
+          "type": "tree",
+          "id": "agi-workforce.memory",
+          "name": "Memory",
+          "contextualTitle": "AI Memory",
+          "visibility": "collapsed"
         }
       ]
     },
@@ -499,6 +526,16 @@
           "command": "agi-workforce.mentionFileInChat",
           "when": "view == agi-workforce.contextPanel && viewItem == autoFile",
           "group": "navigation@1"
+        },
+        {
+          "command": "agi-workforce.memory.edit",
+          "when": "view == agi-workforce.memory && viewItem == memoryFact",
+          "group": "inline@1"
+        },
+        {
+          "command": "agi-workforce.memory.delete",
+          "when": "view == agi-workforce.memory && viewItem == memoryFact",
+          "group": "inline@2"
         }
       ],
       "view/title": [
@@ -515,6 +552,16 @@
         {
           "command": "agi-workforce.clearContext",
           "when": "view == agi-workforce.contextPanel",
+          "group": "navigation@2"
+        },
+        {
+          "command": "agi-workforce.memory.refresh",
+          "when": "view == agi-workforce.memory",
+          "group": "navigation@1"
+        },
+        {
+          "command": "agi-workforce.memory.create",
+          "when": "view == agi-workforce.memory",
           "group": "navigation@2"
         }
       ],
