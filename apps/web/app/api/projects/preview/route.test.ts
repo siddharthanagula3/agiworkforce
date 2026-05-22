@@ -89,6 +89,34 @@ describe('POST /api/projects/preview', () => {
     expect(body.presentation['defaultModelLabel']).toBe('Claude Sonnet 4.6');
   });
 
+  it('rejects negative, NaN, and Infinity counts (drops to null)', async () => {
+    const req = makePostRequest({
+      project: {
+        id: 'p_negative',
+        name: 'Bad counts',
+        knowledgeFileCount: -3,
+        memberCount: Number.NaN,
+      },
+    });
+    const res = await POST(req as never);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { presentation: Record<string, unknown> };
+    // Both invalid; summarizer treats null counts as "not denormalized" and
+    // omits the chip rather than rendering "-3 files".
+    expect(body.presentation['knowledgeFileCountLabel']).toBeUndefined();
+    expect(body.presentation['memberCountLabel']).toBeUndefined();
+  });
+
+  it('floors fractional counts (rejects fractional via floor)', async () => {
+    const req = makePostRequest({
+      project: { id: 'p_floor', name: 'Fractional', knowledgeFileCount: 4.7, memberCount: 2.3 },
+    });
+    const res = await POST(req as never);
+    const body = (await res.json()) as { presentation: Record<string, unknown> };
+    expect(body.presentation['knowledgeFileCountLabel']).toBe('4 files');
+    expect(body.presentation['memberCountLabel']).toBe('2 members');
+  });
+
   it('falls back to defaults for unknown enum values', async () => {
     const req = makePostRequest({
       project: {

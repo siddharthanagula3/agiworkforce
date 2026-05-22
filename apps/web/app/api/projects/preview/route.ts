@@ -48,6 +48,18 @@ function isString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
 }
 
+/**
+ * Accept only finite non-negative numbers for denormalized counts.
+ * Rejects NaN, Infinity, and negative values that the summarizer would
+ * format as nonsense labels (e.g. "-3 files").
+ */
+function pickNonNegativeNumber(value: unknown): number | null {
+  if (typeof value !== 'number') return null;
+  if (!Number.isFinite(value)) return null;
+  if (value < 0) return null;
+  return Math.floor(value);
+}
+
 function pickPrivacyMode(value: unknown): PrivacyMode {
   return (PRIVACY_MODES as readonly string[]).includes(value as string)
     ? (value as PrivacyMode)
@@ -99,9 +111,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     allowedSurfaces: pickSurfaces(projectInput.allowedSurfaces),
     instructions: isString(projectInput.instructions) ? projectInput.instructions : null,
     defaultModelId: isString(projectInput.defaultModelId) ? projectInput.defaultModelId : null,
-    knowledgeFileCount:
-      typeof projectInput.knowledgeFileCount === 'number' ? projectInput.knowledgeFileCount : null,
-    memberCount: typeof projectInput.memberCount === 'number' ? projectInput.memberCount : null,
+    knowledgeFileCount: pickNonNegativeNumber(projectInput.knowledgeFileCount),
+    memberCount: pickNonNegativeNumber(projectInput.memberCount),
     lastUsedAt: isString(projectInput.lastUsedAt) ? projectInput.lastUsedAt : null,
     iconEmoji: isString(projectInput.iconEmoji) ? projectInput.iconEmoji : null,
     accentColor:
