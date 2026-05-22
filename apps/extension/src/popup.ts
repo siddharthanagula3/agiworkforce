@@ -9,6 +9,8 @@ import { formatPrivacyModeLabel } from '@agiworkforce/types';
 import { logger, storageUtils } from './utils';
 import { loadPairingState, requestPairing, unpair } from './features/native-bridge/pairing';
 import type { PairingState } from './features/native-bridge/pairing';
+import type { MemoryItem } from './background/memory-bridge';
+import { isMemoryItem } from './background/memory-bridge';
 
 // UI feedback durations
 const UI_FEEDBACK_DURATION_MS = 2000;
@@ -818,13 +820,6 @@ const DELETE_CONFIRM_MS = 3000;
 /** Storage key — must match memory-bridge.ts MEMORY_STORAGE_KEY. */
 const MEMORY_STORAGE_KEY = 'agi_memories';
 
-interface MemoryItem {
-  id: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 type MemoryMessageType = 'LIST_MEMORIES' | 'ADD_MEMORY' | 'UPDATE_MEMORY' | 'DELETE_MEMORY';
 
 async function sendMemoryMessage(
@@ -853,18 +848,6 @@ function formatRelativeTime(iso: string): string {
   } catch {
     return '';
   }
-}
-
-/** isMemoryItem type guard for runtime storage values. */
-function isMemoryItem(v: unknown): v is MemoryItem {
-  if (!v || typeof v !== 'object') return false;
-  const o = v as Record<string, unknown>;
-  return (
-    typeof o['id'] === 'string' &&
-    typeof o['content'] === 'string' &&
-    typeof o['createdAt'] === 'string' &&
-    typeof o['updatedAt'] === 'string'
-  );
 }
 
 /** Render the memory list + empty state. */
