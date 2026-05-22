@@ -26,7 +26,7 @@ Closes the PLAN.md section 5 task "Define project schema." Types-first cross-sur
 
 These need follow-up but were surfaced BY the visual-verification slice, which proves the workflow works:
 
-- [ ] /projects: dark-mode text nearly invisible (`var(--text-1)` heading + `var(--text-3)` description against black background). High severity — accessibility.
+- [x] /projects: dark-mode text nearly invisible (`var(--text-1)` heading + `var(--text-3)` description against black background). High severity — accessibility. Fixed in `651b4e016`.
 - [ ] / home: CSP violations blocking inline scripts and open-dyslexic CDN font. Medium severity — accessibility regression for users who need the dyslexia-friendly font.
 
 Remaining visual-verification surfaces (Desktop / Mobile / VS Code / Chrome) still need their own capture infrastructure.
