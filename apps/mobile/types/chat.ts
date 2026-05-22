@@ -142,6 +142,8 @@ export interface ConversationSummary {
   projectId?: string;
   /** Whether this is a temporary (unsaved) conversation */
   temporary?: boolean;
+  /** True when there are messages newer than the last time the user opened this chat */
+  unread?: boolean;
 }
 
 export type AutoApproveMode = 'ask' | 'smart' | 'full';

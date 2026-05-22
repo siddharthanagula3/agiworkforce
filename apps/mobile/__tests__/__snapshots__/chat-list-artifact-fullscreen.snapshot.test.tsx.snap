@@ -1,0 +1,923 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Refresh button) 1`] = `
+<Modal
+  accessibilityViewIsModal={true}
+  animationType="slide"
+  onRequestClose={[MockFunction]}
+  presentationStyle="overFullScreen"
+  statusBarTranslucent={true}
+  transparent={true}
+  visible={true}
+>
+  <View
+    style={
+      {
+        "backgroundColor": "rgba(0, 0, 0, 0.85)",
+        "flex": 1,
+      }
+    }
+  >
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "backgroundColor": "#111",
+          "borderBottomColor": "#333",
+          "borderBottomWidth": 1,
+          "flexDirection": "row",
+          "gap": 12,
+          "paddingBottom": 12,
+          "paddingHorizontal": 16,
+          "paddingTop": 52,
+        }
+      }
+    >
+      <View
+        color="#aaa"
+        size={18}
+        testID="icon-code2"
+      />
+      <Text
+        numberOfLines={1}
+        style={
+          {
+            "color": "#fff",
+            "flex": 1,
+            "fontSize": 16,
+            "fontWeight": "600",
+          }
+        }
+      >
+        fibonacci.py
+      </Text>
+      <View
+        accessibilityLabel="Regenerate artifact"
+        accessibilityRole="button"
+        accessibilityState={
+          {
+            "busy": undefined,
+            "checked": undefined,
+            "disabled": undefined,
+            "expanded": undefined,
+            "selected": undefined,
+          }
+        }
+        accessibilityValue={
+          {
+            "max": undefined,
+            "min": undefined,
+            "now": undefined,
+            "text": undefined,
+          }
+        }
+        accessible={true}
+        collapsable={false}
+        focusable={true}
+        onBlur={[Function]}
+        onClick={[Function]}
+        onFocus={[Function]}
+        onResponderGrant={[Function]}
+        onResponderMove={[Function]}
+        onResponderRelease={[Function]}
+        onResponderTerminate={[Function]}
+        onResponderTerminationRequest={[Function]}
+        onStartShouldSetResponder={[Function]}
+        style={
+          {
+            "backgroundColor": "rgba(255, 255, 255, 0.05)",
+            "borderRadius": 8,
+            "padding": 8,
+          }
+        }
+      >
+        <View
+          color="#aaa"
+          size={18}
+          testID="icon-refresh-cw"
+        />
+      </View>
+      <View
+        accessibilityLabel="Copy content"
+        accessibilityRole="button"
+        accessibilityState={
+          {
+            "busy": undefined,
+            "checked": undefined,
+            "disabled": undefined,
+            "expanded": undefined,
+            "selected": undefined,
+          }
+        }
+        accessibilityValue={
+          {
+            "max": undefined,
+            "min": undefined,
+            "now": undefined,
+            "text": undefined,
+          }
+        }
+        accessible={true}
+        collapsable={false}
+        focusable={true}
+        onBlur={[Function]}
+        onClick={[Function]}
+        onFocus={[Function]}
+        onResponderGrant={[Function]}
+        onResponderMove={[Function]}
+        onResponderRelease={[Function]}
+        onResponderTerminate={[Function]}
+        onResponderTerminationRequest={[Function]}
+        onStartShouldSetResponder={[Function]}
+        style={
+          {
+            "backgroundColor": "rgba(255, 255, 255, 0.05)",
+            "borderRadius": 8,
+            "padding": 8,
+          }
+        }
+      >
+        <View
+          color="#aaa"
+          size={18}
+          testID="icon-copy"
+        />
+      </View>
+      <View
+        accessibilityLabel="Close"
+        accessibilityRole="button"
+        accessibilityState={
+          {
+            "busy": undefined,
+            "checked": undefined,
+            "disabled": undefined,
+            "expanded": undefined,
+            "selected": undefined,
+          }
+        }
+        accessibilityValue={
+          {
+            "max": undefined,
+            "min": undefined,
+            "now": undefined,
+            "text": undefined,
+          }
+        }
+        accessible={true}
+        collapsable={false}
+        focusable={true}
+        onBlur={[Function]}
+        onClick={[Function]}
+        onFocus={[Function]}
+        onResponderGrant={[Function]}
+        onResponderMove={[Function]}
+        onResponderRelease={[Function]}
+        onResponderTerminate={[Function]}
+        onResponderTerminationRequest={[Function]}
+        onStartShouldSetResponder={[Function]}
+        style={
+          {
+            "backgroundColor": "rgba(255, 255, 255, 0.05)",
+            "borderRadius": 8,
+            "padding": 8,
+          }
+        }
+      >
+        <View
+          color="#aaa"
+          size={18}
+          testID="icon-x"
+        />
+      </View>
+    </View>
+    <RCTScrollView
+      contentContainerStyle={
+        {
+          "padding": 16,
+          "paddingBottom": 58,
+        }
+      }
+      showsVerticalScrollIndicator={true}
+      style={
+        {
+          "flex": 1,
+        }
+      }
+    >
+      <View>
+        <View
+          style={
+            {
+              "backgroundColor": "rgba(0, 0, 0, 0.4)",
+              "borderColor": "#333",
+              "borderRadius": 8,
+              "borderWidth": 1,
+              "padding": 12,
+            }
+          }
+        >
+          <Text
+            selectable={true}
+            style={
+              {
+                "color": "#fff",
+                "fontFamily": "Menlo",
+                "fontSize": 13,
+                "lineHeight": 20,
+              }
+            }
+          >
+            def fib(n):
+    return n if n &lt; 2 else fib(n-1) + fib(n-2)
+          </Text>
+        </View>
+      </View>
+    </RCTScrollView>
+  </View>
+</Modal>
+`;
+
+exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Refresh button) 1`] = `
+<Modal
+  accessibilityViewIsModal={true}
+  animationType="slide"
+  onRequestClose={[MockFunction]}
+  presentationStyle="overFullScreen"
+  statusBarTranslucent={true}
+  transparent={true}
+  visible={true}
+>
+  <View
+    style={
+      {
+        "backgroundColor": "rgba(0, 0, 0, 0.85)",
+        "flex": 1,
+      }
+    }
+  >
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "backgroundColor": "#111",
+          "borderBottomColor": "#333",
+          "borderBottomWidth": 1,
+          "flexDirection": "row",
+          "gap": 12,
+          "paddingBottom": 12,
+          "paddingHorizontal": 16,
+          "paddingTop": 52,
+        }
+      }
+    >
+      <View
+        color="#aaa"
+        size={18}
+        testID="icon-code2"
+      />
+      <Text
+        numberOfLines={1}
+        style={
+          {
+            "color": "#fff",
+            "flex": 1,
+            "fontSize": 16,
+            "fontWeight": "600",
+          }
+        }
+      >
+        fibonacci.py
+      </Text>
+      <View
+        accessibilityLabel="Copy content"
+        accessibilityRole="button"
+        accessibilityState={
+          {
+            "busy": undefined,
+            "checked": undefined,
+            "disabled": undefined,
+            "expanded": undefined,
+            "selected": undefined,
+          }
+        }
+        accessibilityValue={
+          {
+            "max": undefined,
+            "min": undefined,
+            "now": undefined,
+            "text": undefined,
+          }
+        }
+        accessible={true}
+        collapsable={false}
+        focusable={true}
+        onBlur={[Function]}
+        onClick={[Function]}
+        onFocus={[Function]}
+        onResponderGrant={[Function]}
+        onResponderMove={[Function]}
+        onResponderRelease={[Function]}
+        onResponderTerminate={[Function]}
+        onResponderTerminationRequest={[Function]}
+        onStartShouldSetResponder={[Function]}
+        style={
+          {
+            "backgroundColor": "rgba(255, 255, 255, 0.05)",
+            "borderRadius": 8,
+            "padding": 8,
+          }
+        }
+      >
+        <View
+          color="#aaa"
+          size={18}
+          testID="icon-copy"
+        />
+      </View>
+      <View
+        accessibilityLabel="Close"
+        accessibilityRole="button"
+        accessibilityState={
+          {
+            "busy": undefined,
+            "checked": undefined,
+            "disabled": undefined,
+            "expanded": undefined,
+            "selected": undefined,
+          }
+        }
+        accessibilityValue={
+          {
+            "max": undefined,
+            "min": undefined,
+            "now": undefined,
+            "text": undefined,
+          }
+        }
+        accessible={true}
+        collapsable={false}
+        focusable={true}
+        onBlur={[Function]}
+        onClick={[Function]}
+        onFocus={[Function]}
+        onResponderGrant={[Function]}
+        onResponderMove={[Function]}
+        onResponderRelease={[Function]}
+        onResponderTerminate={[Function]}
+        onResponderTerminationRequest={[Function]}
+        onStartShouldSetResponder={[Function]}
+        style={
+          {
+            "backgroundColor": "rgba(255, 255, 255, 0.05)",
+            "borderRadius": 8,
+            "padding": 8,
+          }
+        }
+      >
+        <View
+          color="#aaa"
+          size={18}
+          testID="icon-x"
+        />
+      </View>
+    </View>
+    <RCTScrollView
+      contentContainerStyle={
+        {
+          "padding": 16,
+          "paddingBottom": 58,
+        }
+      }
+      showsVerticalScrollIndicator={true}
+      style={
+        {
+          "flex": 1,
+        }
+      }
+    >
+      <View>
+        <View
+          style={
+            {
+              "backgroundColor": "rgba(0, 0, 0, 0.4)",
+              "borderColor": "#333",
+              "borderRadius": 8,
+              "borderWidth": 1,
+              "padding": 12,
+            }
+          }
+        >
+          <Text
+            selectable={true}
+            style={
+              {
+                "color": "#fff",
+                "fontFamily": "Menlo",
+                "fontSize": 13,
+                "lineHeight": 20,
+              }
+            }
+          >
+            def fib(n):
+    return n if n &lt; 2 else fib(n-1) + fib(n-2)
+          </Text>
+        </View>
+      </View>
+    </RCTScrollView>
+  </View>
+</Modal>
+`;
+
+exports[`ConversationItem snapshots locks the tree for a default (read, inactive) conversation 1`] = `
+<View>
+  <View
+    entering={
+      {
+        "duration": [Function],
+      }
+    }
+  >
+    <View
+      accessibilityLabel="Project Planning"
+      accessibilityRole="button"
+      accessibilityState={
+        {
+          "busy": undefined,
+          "checked": undefined,
+          "disabled": undefined,
+          "expanded": undefined,
+          "selected": undefined,
+        }
+      }
+      accessibilityValue={
+        {
+          "max": undefined,
+          "min": undefined,
+          "now": undefined,
+          "text": undefined,
+        }
+      }
+      accessible={true}
+      collapsable={false}
+      focusable={true}
+      onBlur={[Function]}
+      onClick={[Function]}
+      onFocus={[Function]}
+      onResponderGrant={[Function]}
+      onResponderMove={[Function]}
+      onResponderRelease={[Function]}
+      onResponderTerminate={[Function]}
+      onResponderTerminationRequest={[Function]}
+      onStartShouldSetResponder={[Function]}
+      style={
+        [
+          {
+            "alignItems": "center",
+            "borderRadius": 8,
+            "flexDirection": "row",
+            "gap": 10,
+            "paddingHorizontal": 12,
+            "paddingVertical": 10,
+          },
+          false,
+        ]
+      }
+    >
+      <View
+        style={
+          {
+            "position": "relative",
+          }
+        }
+      >
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "backgroundColor": "rgba(255,255,255,0.08)",
+              "borderRadius": 16,
+              "height": 32,
+              "justifyContent": "center",
+              "width": 32,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "rgba(255,255,255,0.6)",
+                "fontSize": 13,
+                "fontWeight": "600",
+              }
+            }
+          >
+            P
+          </Text>
+        </View>
+      </View>
+      <View
+        style={
+          {
+            "flex": 1,
+            "minWidth": 0,
+          }
+        }
+      >
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "flexDirection": "row",
+              "justifyContent": "space-between",
+            }
+          }
+        >
+          <Text
+            numberOfLines={1}
+            style={
+              {
+                "color": "rgba(255, 255, 255, 0.8)",
+                "flex": 1,
+                "fontSize": 14,
+                "fontWeight": "500",
+              }
+            }
+          >
+            Project Planning
+          </Text>
+        </View>
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "flexDirection": "row",
+              "justifyContent": "space-between",
+              "marginTop": 2,
+            }
+          }
+        >
+          <Text
+            numberOfLines={1}
+            style={
+              {
+                "color": "rgba(255, 255, 255, 0.3)",
+                "flex": 1,
+                "fontSize": 12,
+              }
+            }
+          >
+            5 messages
+          </Text>
+          <Text
+            style={
+              {
+                "color": "rgba(255, 255, 255, 0.2)",
+                "fontSize": 10,
+                "marginLeft": 8,
+              }
+            }
+          >
+            2h ago
+          </Text>
+        </View>
+      </View>
+    </View>
+  </View>
+</View>
+`;
+
+exports[`ConversationItem snapshots locks the tree for an active conversation 1`] = `
+<View>
+  <View
+    entering={
+      {
+        "duration": [Function],
+      }
+    }
+  >
+    <View
+      accessibilityLabel="Project Planning"
+      accessibilityRole="button"
+      accessibilityState={
+        {
+          "busy": undefined,
+          "checked": undefined,
+          "disabled": undefined,
+          "expanded": undefined,
+          "selected": undefined,
+        }
+      }
+      accessibilityValue={
+        {
+          "max": undefined,
+          "min": undefined,
+          "now": undefined,
+          "text": undefined,
+        }
+      }
+      accessible={true}
+      collapsable={false}
+      focusable={true}
+      onBlur={[Function]}
+      onClick={[Function]}
+      onFocus={[Function]}
+      onResponderGrant={[Function]}
+      onResponderMove={[Function]}
+      onResponderRelease={[Function]}
+      onResponderTerminate={[Function]}
+      onResponderTerminationRequest={[Function]}
+      onStartShouldSetResponder={[Function]}
+      style={
+        [
+          {
+            "alignItems": "center",
+            "borderRadius": 8,
+            "flexDirection": "row",
+            "gap": 10,
+            "paddingHorizontal": 12,
+            "paddingVertical": 10,
+          },
+          {
+            "backgroundColor": "rgba(33, 128, 141, 0.1)",
+            "borderLeftColor": "#21808D",
+            "borderLeftWidth": 2,
+          },
+        ]
+      }
+    >
+      <View
+        style={
+          {
+            "position": "relative",
+          }
+        }
+      >
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "backgroundColor": "#21808D",
+              "borderRadius": 16,
+              "height": 32,
+              "justifyContent": "center",
+              "width": 32,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#fff",
+                "fontSize": 13,
+                "fontWeight": "600",
+              }
+            }
+          >
+            P
+          </Text>
+        </View>
+      </View>
+      <View
+        style={
+          {
+            "flex": 1,
+            "minWidth": 0,
+          }
+        }
+      >
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "flexDirection": "row",
+              "justifyContent": "space-between",
+            }
+          }
+        >
+          <Text
+            numberOfLines={1}
+            style={
+              {
+                "color": "#21808D",
+                "flex": 1,
+                "fontSize": 14,
+                "fontWeight": "500",
+              }
+            }
+          >
+            Project Planning
+          </Text>
+        </View>
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "flexDirection": "row",
+              "justifyContent": "space-between",
+              "marginTop": 2,
+            }
+          }
+        >
+          <Text
+            numberOfLines={1}
+            style={
+              {
+                "color": "rgba(255, 255, 255, 0.3)",
+                "flex": 1,
+                "fontSize": 12,
+              }
+            }
+          >
+            5 messages
+          </Text>
+          <Text
+            style={
+              {
+                "color": "rgba(255, 255, 255, 0.2)",
+                "fontSize": 10,
+                "marginLeft": 8,
+              }
+            }
+          >
+            2h ago
+          </Text>
+        </View>
+      </View>
+    </View>
+  </View>
+</View>
+`;
+
+exports[`ConversationItem snapshots locks the tree for an unread conversation 1`] = `
+<View>
+  <View
+    entering={
+      {
+        "duration": [Function],
+      }
+    }
+  >
+    <View
+      accessibilityLabel="Project Planning"
+      accessibilityRole="button"
+      accessibilityState={
+        {
+          "busy": undefined,
+          "checked": undefined,
+          "disabled": undefined,
+          "expanded": undefined,
+          "selected": undefined,
+        }
+      }
+      accessibilityValue={
+        {
+          "max": undefined,
+          "min": undefined,
+          "now": undefined,
+          "text": undefined,
+        }
+      }
+      accessible={true}
+      collapsable={false}
+      focusable={true}
+      onBlur={[Function]}
+      onClick={[Function]}
+      onFocus={[Function]}
+      onResponderGrant={[Function]}
+      onResponderMove={[Function]}
+      onResponderRelease={[Function]}
+      onResponderTerminate={[Function]}
+      onResponderTerminationRequest={[Function]}
+      onStartShouldSetResponder={[Function]}
+      style={
+        [
+          {
+            "alignItems": "center",
+            "borderRadius": 8,
+            "flexDirection": "row",
+            "gap": 10,
+            "paddingHorizontal": 12,
+            "paddingVertical": 10,
+          },
+          false,
+        ]
+      }
+    >
+      <View
+        style={
+          {
+            "position": "relative",
+          }
+        }
+      >
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "backgroundColor": "rgba(255,255,255,0.08)",
+              "borderRadius": 16,
+              "height": 32,
+              "justifyContent": "center",
+              "width": 32,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "rgba(255,255,255,0.6)",
+                "fontSize": 13,
+                "fontWeight": "600",
+              }
+            }
+          >
+            P
+          </Text>
+        </View>
+        <View
+          accessibilityLabel="Unread messages"
+          style={
+            {
+              "backgroundColor": "#21808D",
+              "borderColor": "#111",
+              "borderRadius": 4,
+              "borderWidth": 1.5,
+              "height": 8,
+              "position": "absolute",
+              "right": 0,
+              "top": 0,
+              "width": 8,
+            }
+          }
+        />
+      </View>
+      <View
+        style={
+          {
+            "flex": 1,
+            "minWidth": 0,
+          }
+        }
+      >
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "flexDirection": "row",
+              "justifyContent": "space-between",
+            }
+          }
+        >
+          <Text
+            numberOfLines={1}
+            style={
+              {
+                "color": "rgba(255, 255, 255, 0.8)",
+                "flex": 1,
+                "fontSize": 14,
+                "fontWeight": "600",
+              }
+            }
+          >
+            Project Planning
+          </Text>
+        </View>
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "flexDirection": "row",
+              "justifyContent": "space-between",
+              "marginTop": 2,
+            }
+          }
+        >
+          <Text
+            numberOfLines={1}
+            style={
+              {
+                "color": "rgba(255, 255, 255, 0.3)",
+                "flex": 1,
+                "fontSize": 12,
+              }
+            }
+          >
+            5 messages
+          </Text>
+          <Text
+            style={
+              {
+                "color": "rgba(255, 255, 255, 0.2)",
+                "fontSize": 10,
+                "marginLeft": 8,
+              }
+            }
+          >
+            2h ago
+          </Text>
+        </View>
+      </View>
+    </View>
+  </View>
+</View>
+`;

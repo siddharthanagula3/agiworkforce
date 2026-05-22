@@ -108,6 +108,7 @@ export default function ChatScreen() {
   const paywallError = useChatStore((s) => s.paywallError);
   const clearPaywallError = useChatStore((s) => s.clearPaywallError);
   const enqueueOfflineMessage = useChatStore((s) => s.enqueueOfflineMessage);
+  const markConversationRead = useChatStore((s) => s.markConversationRead);
 
   const selectedModel = useModelStore((s) => s.selectedModel);
   const approveRequest = useAgentStore((s) => s.approveRequest);
@@ -122,11 +123,12 @@ export default function ChatScreen() {
     if (!id) return;
     setCurrentConversationId(id);
     loadMessages(id);
+    markConversationRead(id);
 
     return () => {
       setCurrentConversationId(null);
     };
-  }, [id, setCurrentConversationId, loadMessages]);
+  }, [id, setCurrentConversationId, loadMessages, markConversationRead]);
 
   // ---------------------------------------------------------------------------
   // Voice playback -- speak completed assistant messages aloud.

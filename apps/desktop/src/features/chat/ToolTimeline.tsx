@@ -11,13 +11,16 @@ import {
   Database,
   Edit3,
   FileText,
+  FilePlus,
   FolderOpen,
   GitBranch,
   Globe,
   Image,
   ListTodo,
   Loader2,
+  Minus,
   MousePointerClick,
+  Plus,
   Search,
   Terminal,
   Wrench,
@@ -174,6 +177,44 @@ function statusPill(entry: ToolLabelEntry): string {
   return 'Result';
 }
 
+const FILE_WRITE_NAMES = new Set([
+  'Write',
+  'Edit',
+  'MultiEdit',
+  'ApplyPatch',
+  'Save file',
+  'file_write',
+  'file_edit',
+  'file_create',
+]);
+
+/** Derive extension label from a file path, e.g. "main.rs" → "RS". */
+function fileExtLabel(filePath: string): string {
+  const dot = filePath.lastIndexOf('.');
+  if (dot === -1 || dot === filePath.length - 1) return 'FILE';
+  return filePath
+    .slice(dot + 1)
+    .toUpperCase()
+    .slice(0, 6);
+}
+
+/** Extract basename from a path, falling back to the full string. */
+function basename(filePath: string): string {
+  const slash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+  return slash === -1 ? filePath : filePath.slice(slash + 1);
+}
+
+/** Count diff additions and deletions from a unified diff string. */
+function parseDiffCounts(diff: string): { added: number; removed: number } {
+  let added = 0;
+  let removed = 0;
+  for (const line of diff.split('\n')) {
+    if (line.startsWith('+') && !line.startsWith('+++')) added++;
+    else if (line.startsWith('-') && !line.startsWith('---')) removed++;
+  }
+  return { added, removed };
+}
+
 function ToolTimelineRow({ entry, isLast }: { entry: ToolLabelEntry; isLast: boolean }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const Icon = getToolIcon(entry.displayName);
@@ -181,6 +222,12 @@ function ToolTimelineRow({ entry, isLast }: { entry: ToolLabelEntry; isLast: boo
   const isError = entry.status === 'error';
   const detail = isError ? entry.error : entry.resultPreview;
   const hasDetail = Boolean(detail);
+
+  // File-op structured display — shown for write/edit tools when not an error
+  const isFileOp = !isError && FILE_WRITE_NAMES.has(entry.displayName);
+  const filePath = isFileOp && entry.displayArgs ? entry.displayArgs : null;
+  const diffCounts =
+    isFileOp && entry.resultPreview && !isRunning ? parseDiffCounts(entry.resultPreview) : null;
 
   return (
     <div className="relative flex gap-3">
@@ -199,51 +246,106 @@ function ToolTimelineRow({ entry, isLast }: { entry: ToolLabelEntry; isLast: boo
           <Loader2 className="h-3 w-3 animate-spin" />
         ) : isError ? (
           <AlertCircle className="h-3 w-3" />
+        ) : isFileOp ? (
+          <FilePlus className="h-3 w-3" />
         ) : (
           <Icon className="h-3 w-3" />
         )}
       </div>
 
       <div className="min-w-0 flex-1 pb-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={cn('text-xs', isError ? 'text-red-300' : 'text-foreground/85')}>
-            {entry.displayName}
-          </span>
-          {entry.displayArgs && (
-            <span className="truncate text-xs text-muted-foreground">{entry.displayArgs}</span>
-          )}
-          <button
-            type="button"
-            disabled={!hasDetail}
-            onClick={() => hasDetail && setDetailsOpen((value) => !value)}
-            className={cn(
-              'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors',
-              isError
-                ? 'bg-red-500/15 text-red-300'
-                : isRunning
-                  ? 'bg-amber-500/15 text-amber-300'
-                  : 'bg-muted text-muted-foreground',
-              hasDetail && 'hover:bg-muted/80',
-              !hasDetail && 'cursor-default',
-            )}
-          >
-            {statusPill(entry)}
-            {hasDetail && (
-              <motion.span
-                animate={{ rotate: detailsOpen ? 180 : 0 }}
-                transition={{ duration: 0.15 }}
-                className="inline-flex"
-              >
-                <ChevronDown className="h-2.5 w-2.5" />
-              </motion.span>
-            )}
-          </button>
-          {entry.durationMs !== undefined && entry.durationMs > 0 && (
-            <span className="font-mono text-[10px] text-muted-foreground/60">
-              {formatDuration(entry.durationMs)}
+        {filePath ? (
+          /* Structured file-op row: type badge + filename + diff counts */
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-muted/60 text-muted-foreground font-mono">
+              {fileExtLabel(filePath)}
             </span>
-          )}
-        </div>
+            <button
+              type="button"
+              disabled={!hasDetail}
+              onClick={() => hasDetail && setDetailsOpen((v) => !v)}
+              className={cn(
+                'inline-flex items-center gap-1 font-mono text-[11px] text-foreground/80 truncate max-w-[260px]',
+                hasDetail && 'hover:text-foreground cursor-pointer',
+                !hasDetail && 'cursor-default',
+              )}
+              title={filePath}
+            >
+              {basename(filePath)}
+              {hasDetail && (
+                <motion.span
+                  animate={{ rotate: detailsOpen ? 180 : 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="inline-flex shrink-0"
+                >
+                  <ChevronDown className="h-2.5 w-2.5 text-muted-foreground" />
+                </motion.span>
+              )}
+            </button>
+            {diffCounts && (diffCounts.added > 0 || diffCounts.removed > 0) && (
+              <span className="flex items-center gap-1 shrink-0">
+                {diffCounts.added > 0 && (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-mono font-medium text-emerald-400">
+                    <Plus className="h-2.5 w-2.5" />
+                    {diffCounts.added}
+                  </span>
+                )}
+                {diffCounts.removed > 0 && (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-mono font-medium text-red-400">
+                    <Minus className="h-2.5 w-2.5" />
+                    {diffCounts.removed}
+                  </span>
+                )}
+              </span>
+            )}
+            {entry.durationMs !== undefined && entry.durationMs > 0 && (
+              <span className="font-mono text-[10px] text-muted-foreground/60 ml-auto">
+                {formatDuration(entry.durationMs)}
+              </span>
+            )}
+          </div>
+        ) : (
+          /* Default non-file-op row */
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={cn('text-xs', isError ? 'text-red-300' : 'text-foreground/85')}>
+              {entry.displayName}
+            </span>
+            {entry.displayArgs && (
+              <span className="truncate text-xs text-muted-foreground">{entry.displayArgs}</span>
+            )}
+            <button
+              type="button"
+              disabled={!hasDetail}
+              onClick={() => hasDetail && setDetailsOpen((value) => !value)}
+              className={cn(
+                'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors',
+                isError
+                  ? 'bg-red-500/15 text-red-300'
+                  : isRunning
+                    ? 'bg-amber-500/15 text-amber-300'
+                    : 'bg-muted text-muted-foreground',
+                hasDetail && 'hover:bg-muted/80',
+                !hasDetail && 'cursor-default',
+              )}
+            >
+              {statusPill(entry)}
+              {hasDetail && (
+                <motion.span
+                  animate={{ rotate: detailsOpen ? 180 : 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="inline-flex"
+                >
+                  <ChevronDown className="h-2.5 w-2.5" />
+                </motion.span>
+              )}
+            </button>
+            {entry.durationMs !== undefined && entry.durationMs > 0 && (
+              <span className="font-mono text-[10px] text-muted-foreground/60">
+                {formatDuration(entry.durationMs)}
+              </span>
+            )}
+          </div>
+        )}
 
         <AnimatePresence initial={false}>
           {hasDetail && detailsOpen && (

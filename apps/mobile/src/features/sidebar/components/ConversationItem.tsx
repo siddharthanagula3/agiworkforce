@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { View, Pressable, Alert, Platform, Modal, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MessageSquare, Pin, Trash2 } from 'lucide-react-native';
+import { Pin, Trash2 } from 'lucide-react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -196,7 +196,45 @@ export function ConversationItem({
             accessibilityLabel={conversation.title}
             accessibilityRole="button"
           >
-            <MessageSquare size={16} color={isActive ? colors.teal : colors.textMuted} />
+            {/* Avatar circle with first letter + unread dot */}
+            <View style={{ position: 'relative' }}>
+              <View
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: isActive ? colors.teal : 'rgba(255,255,255,0.08)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: '600',
+                    color: isActive ? '#fff' : 'rgba(255,255,255,0.6)',
+                  }}
+                >
+                  {conversation.title.trim().charAt(0).toUpperCase() || '?'}
+                </Text>
+              </View>
+              {conversation.unread && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    width: 8,
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: colors.teal,
+                    borderWidth: 1.5,
+                    borderColor: colors.surfaceBase,
+                  }}
+                  accessibilityLabel="Unread messages"
+                />
+              )}
+            </View>
 
             <View style={{ flex: 1, minWidth: 0 }}>
               {/* Title row */}
@@ -210,7 +248,7 @@ export function ConversationItem({
                 <Text
                   style={{
                     fontSize: 14,
-                    fontWeight: '500',
+                    fontWeight: conversation.unread ? '600' : '500',
                     color: isActive ? colors.teal : 'rgba(255, 255, 255, 0.8)',
                     flex: 1,
                   }}

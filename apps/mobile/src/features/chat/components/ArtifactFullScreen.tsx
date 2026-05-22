@@ -5,6 +5,7 @@ import {
   Copy,
   Check,
   Share2,
+  RefreshCw,
   Code2,
   Mail,
   BookOpen,
@@ -27,6 +28,8 @@ interface ArtifactFullScreenProps {
   artifact: Artifact | null;
   visible: boolean;
   onClose: () => void;
+  /** When provided, shows a Refresh button that re-generates the artifact. */
+  onRegenerate?: () => void;
 }
 
 const TYPE_ICONS: Record<Artifact['type'], typeof Code2> = {
@@ -42,7 +45,12 @@ const TYPE_ICONS: Record<Artifact['type'], typeof Code2> = {
  * Full-screen modal overlay for viewing expanded artifacts.
  * Close button top-right, copy button for code, scroll view for long content.
  */
-export function ArtifactFullScreen({ artifact, visible, onClose }: ArtifactFullScreenProps) {
+export function ArtifactFullScreen({
+  artifact,
+  visible,
+  onClose,
+  onRegenerate,
+}: ArtifactFullScreenProps) {
   const insets = useSafeAreaInsets();
   const [copied, setCopied] = useState(false);
   const generatedFileSummary = useMemo(
@@ -172,6 +180,25 @@ export function ArtifactFullScreen({ artifact, visible, onClose }: ArtifactFullS
               accessibilityRole="button"
             >
               <Share2 size={18} color={colors.textSecondary} />
+            </Pressable>
+          ) : null}
+
+          {/* Refresh button — re-generate the artifact (only when handler is wired) */}
+          {onRegenerate ? (
+            <Pressable
+              onPress={() => {
+                onRegenerate();
+                onClose();
+              }}
+              style={{
+                padding: 8,
+                borderRadius: 8,
+                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+              }}
+              accessibilityLabel="Regenerate artifact"
+              accessibilityRole="button"
+            >
+              <RefreshCw size={18} color={colors.textSecondary} />
             </Pressable>
           ) : null}
 
