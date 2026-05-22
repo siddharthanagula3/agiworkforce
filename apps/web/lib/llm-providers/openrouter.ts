@@ -221,6 +221,11 @@ export class OpenRouterProvider extends BaseLLMProvider {
       model: request.model,
       messages: mapMessages(request.messages, systemCacheControlStream),
       stream: true,
+      // Request a final usage event before [DONE] so streaming callers can
+      // capture actual token counts. OpenRouter forwards this to underlying
+      // providers; behavior depends on the routed model.
+      // Reference: OpenRouter streaming docs (usage reporting section).
+      stream_options: { include_usage: true },
     };
 
     if (request.temperature !== undefined) body['temperature'] = request.temperature;

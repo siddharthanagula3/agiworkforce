@@ -184,13 +184,23 @@ export class OpenAIProvider extends BaseLLMProvider {
         );
       }
 
-      // OpenAI exposes cache hits via usage.prompt_tokens_details.cached_tokens
-      // (Chat Completions) or usage.input_tokens_details.cached_tokens (Responses API).
-      // OpenAI does NOT expose a separate cache_creation counter; report as 0.
+      // OpenAI exposes cache hits via:
+      //   Chat Completions: usage.prompt_tokens_details.cached_tokens
+      //   Responses API:    usage.input_tokens_details.cached_tokens
+      // OpenAI does NOT expose a separate cache_creation counter.
       // Reference: openclaw prompt-caching.md "OpenAI direct API" section.
       const openAiCachedTokens =
         data.usage?.prompt_tokens_details?.cached_tokens ??
         data.usage?.input_tokens_details?.cached_tokens ??
+        undefined;
+
+      // Reasoning tokens:
+      //   Chat Completions: usage.completion_tokens_details.reasoning_tokens
+      //   Responses API:    usage.output_tokens_details.reasoning_tokens
+      // Billed at output rate; parsed separately from completion_tokens.
+      const reasoningOutputTokens =
+        data.usage?.completion_tokens_details?.reasoning_tokens ??
+        data.usage?.output_tokens_details?.reasoning_tokens ??
         undefined;
 
       return {
@@ -202,6 +212,7 @@ export class OpenAIProvider extends BaseLLMProvider {
         finishReason,
         // cacheCreationInputTokens intentionally omitted for OpenAI (not exposed).
         cachedInputTokens: openAiCachedTokens,
+        reasoningOutputTokens,
         tool_calls: message?.tool_calls, // Include tool calls if present
       };
     } catch (error) {
@@ -221,6 +232,10 @@ export class OpenAIProvider extends BaseLLMProvider {
         ...(msg.tool_call_id && { tool_call_id: msg.tool_call_id }),
       })),
       stream: true,
+      // Request a final usage event before [DONE] so streaming callers can
+      // capture actual token counts including cache hits and reasoning tokens.
+      // Reference: OpenAI Chat Completions streaming usage docs.
+      stream_options: { include_usage: true },
     };
 
     if (request.temperature !== undefined) body['temperature'] = request.temperature;
