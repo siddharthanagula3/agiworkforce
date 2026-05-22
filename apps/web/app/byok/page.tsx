@@ -76,7 +76,7 @@ export default function ByokPage() {
             UI key entry, OS-keychain storage, and revoke-all are launching in Cloud Managed private
             beta. Enter your email and we will notify you the moment it opens.
           </p>
-          <WaitlistForm source="byok" ctaLabel="Join Cloud Managed waitlist" />
+          <WaitlistForm source="byok" ctaLabel="Join Cloud Managed waitlist →" />
         </section>
 
         {/* v1 env-based BYOK explanation */}
