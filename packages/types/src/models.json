@@ -3141,6 +3141,126 @@
       "released": "2025",
       "deprecation_date": null
     },
+    "anthropic/claude-opus-4": {
+      "id": "anthropic/claude-opus-4",
+      "apiModelId": "anthropic/claude-opus-4",
+      "name": "Claude Opus 4 (via OpenRouter)",
+      "provider": "open_router",
+      "modelType": "chat",
+      "contextWindow": 200000,
+      "inputCost": 15.0,
+      "outputCost": 75.0,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": true,
+        "codeExecution": false
+      },
+      "speed": "medium",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Complex Reasoning", "Research", "Agentic Tasks"],
+      "released": "2025",
+      "deprecation_date": null
+    },
+    "openai/gpt-4o": {
+      "id": "openai/gpt-4o",
+      "apiModelId": "openai/gpt-4o",
+      "name": "GPT-4o (via OpenRouter)",
+      "provider": "open_router",
+      "modelType": "chat",
+      "contextWindow": 128000,
+      "inputCost": 2.5,
+      "outputCost": 10.0,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false
+      },
+      "speed": "fast",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Vision Tasks", "Tool Use", "General Chat"],
+      "released": "2024",
+      "deprecation_date": null
+    },
+    "google/gemini-2.5-pro": {
+      "id": "google/gemini-2.5-pro",
+      "apiModelId": "google/gemini-2.5-pro",
+      "name": "Gemini 2.5 Pro (via OpenRouter)",
+      "provider": "open_router",
+      "modelType": "chat",
+      "contextWindow": 1000000,
+      "inputCost": 1.25,
+      "outputCost": 10.0,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": true,
+        "codeExecution": true
+      },
+      "speed": "medium",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Long Context", "Research", "Multimodal"],
+      "released": "2025",
+      "deprecation_date": null
+    },
+    "deepseek/deepseek-r1": {
+      "id": "deepseek/deepseek-r1",
+      "apiModelId": "deepseek/deepseek-r1",
+      "name": "DeepSeek R1 (via OpenRouter)",
+      "provider": "open_router",
+      "modelType": "reasoning",
+      "contextWindow": 163840,
+      "inputCost": 0.55,
+      "outputCost": 2.19,
+      "capabilities": {
+        "streaming": true,
+        "tools": false,
+        "vision": false,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": true,
+        "codeExecution": false
+      },
+      "speed": "medium",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Complex Reasoning", "STEM", "Research"],
+      "released": "2025",
+      "deprecation_date": null
+    },
     "gpt-5.4": {
       "id": "gpt-5.4",
       "apiModelId": "gpt-5.4",
@@ -3612,6 +3732,22 @@
     ],
     "nvidia_nim": [],
     "open_router": [
+      {
+        "value": "anthropic/claude-opus-4",
+        "label": "Claude Opus 4 (via OpenRouter)"
+      },
+      {
+        "value": "openai/gpt-4o",
+        "label": "GPT-4o (via OpenRouter)"
+      },
+      {
+        "value": "google/gemini-2.5-pro",
+        "label": "Gemini 2.5 Pro (via OpenRouter)"
+      },
+      {
+        "value": "deepseek/deepseek-r1",
+        "label": "DeepSeek R1 (via OpenRouter)"
+      },
       {
         "value": "meta-llama/llama-3.3-70b-instruct:free",
         "label": "Llama 3.3 70B (Free)"
