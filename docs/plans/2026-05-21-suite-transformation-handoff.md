@@ -2,10 +2,140 @@
 
 Status: Current
 Owner: Next session lead
-Last updated: 2026-05-22 (extended through round 21: 4-lane sprint + 80% acceptance test PASS all 6 surfaces)
+Last updated: 2026-05-22 (extended through round 22: functional audit + inline tool-call visual parity)
 Branch: `main` (direct-to-main per sprint protocol)
-Head local: `5c3aaadaf` (round-21 boundary at session end, 20 commits ahead of origin/main, NOT pushed — awaits user 22:00-local authorization)
+Head local: `e361da768` (round-22 boundary, 29 commits ahead of origin/main, NOT pushed)
 PR: [#378 — feat: suite transformation rounds 12-18](https://github.com/siddharthanagula3/agiworkforce/pull/378) (merged 2026-05-22 as squash `69f729aaa`)
+
+## Round 22 — Functional audit + inline tool-call visual parity (2026-05-22)
+
+User pushed back on the R21 89% similarity number: _"what about visual
+parity, features, options, working-ness of the features, mcps, tools,
+environment, etc?"_ and _"i want all the things which users sees to be
+done. especially the inline tool calling with icons
+`/Users/siddhartha/Desktop/reference/ui/desktop/claude-artifacts/`"_.
+
+R22 dispatched 2 lanes addressing both halves of that pushback.
+
+### Lane 9 — Functional audit (commit `658118086`)
+
+`docs/visual-verification/functional-audit-2026-05-22.md` — honest
+working-ness matrix across all 6 surfaces. Status legend: ✅ Working E2E
+/ 🟡 UI-shell / 🟨 Partial / ❌ Broken / ⚪ Untested.
+
+**Honest per-surface functional scores** (vs R21's element-checklist):
+
+| Surface | R21 element | R22 functional | Gap                                                |
+| ------- | ----------: | -------------: | -------------------------------------------------- |
+| Web     |         84% |     **50-55%** | element-only counted UI-shells as ✅               |
+| Desktop |         87% |        **70%** | MCP plumbing is real, sync writes to wrong tables  |
+| Mobile  |         84% |        **60%** | local-LLM tiers real, cross-surface sync dead code |
+| CLI     |        100% |        **85%** | developer-session enforcement correct              |
+| VS Code |         93% |        **80%** | developer-session enforcement correct              |
+| Chrome  |         86% |        **80%** | developer-session enforcement correct              |
+
+**Top 5 missing-but-claimed (R21 counted ✅, actually 🟡 or ❌):**
+
+1. **Cross-surface chat sync** — ❌ broken at storage layer. Web writes
+   `web_conversations`/`web_messages`; Desktop writes `conversations`/
+   `messages` (different tables). The headline "chats follow you across
+   devices" feature **does not work**. Mobile sync useEffect is dead code
+   (gated on `session !== null` which is always null under `FEATURES.auth=false`).
+2. **BYOK key entry** — 🟡 `/byok` is static marketing copy.
+   `LLMProviderFactory.getProviderApiKey` reads only `process.env`. No
+   `byok_keys` or `provider_credentials` table exists.
+3. **31 of 32 connectors** — 🟡 `POST /api/connectors` persists
+   `{connector_id, auth_type}` shell rows only. Only **GitHub** has a real
+   OAuth callback handler. Slack/Notion/Gmail/Drive/Calendar/Linear/Jira/
+   etc. are all metadata-only.
+4. **17 advertised providers** — ❌ Mistral / Groq / Together / Fireworks
+   / Cerebras / DeepInfra / Cohere / AI21 / Sambanova / Azure / Bedrock /
+   NVIDIA NIM / OpenRouter / Runway / Managed-Cloud + partial Qwen /
+   Moonshot / Zhipu have **NO adapter** in either `packages/providers/`
+   or `apps/web/lib/llm-providers/`, despite being listed in
+   `packages/types/src/models.json`.
+5. **Artifact publish** (R20 feature) — 🟡 `apps/web/lib/artifact-publisher.ts`
+   throws `ArtifactPersistenceUnavailableError`. The `published_artifacts`
+   table migration is private-beta and absent from `supabase/migrations`.
+   Production click → 503.
+
+**Bonus finding:** Two parallel provider-adapter codebases.
+`apps/web/lib/llm-providers/*` is what the default chat UI uses.
+`packages/providers/*` (with newer cache-control + idle watchdogs + replay
+policy) is reached only by `services/api-gateway` and the non-default
+`/chat-multi` page. R20-R21 polish landed in `packages/providers/` does
+**not** reach the production chat path.
+
+**Biggest production-launch blocker:** cross-surface chat sync at the
+storage layer. Pick one schema (`web_*` tables are RLS-clean and FK to
+`auth.users`), rewrite `apps/desktop/src-tauri/src/data/supabase_sync.rs`
+to upsert into them, and remove the mobile useEffect's `session`-gate; or
+drop the cross-device claim from marketing for v1.
+
+### Lane 11 — Inline tool-call visual parity (commits `9707de324` → `e361da768`)
+
+Closed the gap user explicitly flagged. Studied
+`~/Desktop/reference/ui/desktop/claude-artifacts/` (27 reference shots).
+
+**Shipped:**
+
+- `packages/unified-chat/src/components/InlineToolCall.tsx` — new
+  `iconStyle: 'badge'` branch (now default). 24px round colored badge +
+  28px row height + "Result" sub-label in monospace. `KIND_TO_BADGE` map:
+  `filesystem/read/write/edit → F`, `bash → >`, `web-search → search-glass`,
+  `web-fetch → W`, `image-gen → I`, `browser → B`, `mcp-custom → M`,
+  `thinking → clock`, `done → checkmark`, `unknown → ?`. Lucide line-icon
+  path preserved as `iconStyle: 'lucide'` fallback so pre-existing
+  snapshots are untouched.
+- `packages/unified-chat/src/components/InlineToolCallGroup.tsx` (NEW) —
+  the "Used Filesystem integration, loaded tools ▾" wrapper from
+  reference image 02. Collapsible with `aria-expanded`, chevron rotation,
+  keyboard toggle.
+- `packages/unified-chat/src/components/WebSearchCard.tsx` (refactored
+  to named-props API) — Claude's web-search result card from image 06:
+  favicon + title + domain rows, "Show more" link, `showMoreThreshold=4`.
+  No network calls (v1 LOCAL ONLY).
+- Desktop ToolCallCard hot path (`apps/desktop/src/features/chat/MessageBubble/ToolCallCard.tsx`)
+  now uses `iconStyle="badge"`. The other 2 desktop ToolCallCards
+  (`features/chat/ToolCallCard.tsx`, `features/tool-calling/ToolCallCard.tsx`)
+  consolidated under the shared primitive.
+- Web ToolCallCard (`apps/web/features/chat/components/ToolCallCard.tsx`)
+  switched to `iconStyle="badge"`.
+
+**Tests:** 40 new (18 InlineToolCall badge-mode, 10 InlineToolCallGroup,
+12 InlineWebSearchResults). 455 unified-chat tests pass. 16 desktop
+ToolCallCard tests pass. All typechecks green.
+
+**Caveat:** Browser smoke test NOT run by the agent — this is user-
+visible UI affecting every tool call render in chat streams. Recommend
+running `pnpm dev` in web + `cargo tauri dev` in desktop and triggering
+a tool call to confirm the visual matches before pushing.
+
+### R22 commits
+
+| Commit      | Lane | Purpose                                                             |
+| ----------- | ---- | ------------------------------------------------------------------- |
+| `658118086` | 9    | Functional audit doc (honest matrix)                                |
+| `9707de324` | 11   | InlineToolCall badge icon style + KIND_TO_BADGE map                 |
+| `34d72a1d0` | 11   | InlineToolCallGroup (collapsible "Used X integration" wrapper)      |
+| `7034323f3` | 11   | WebSearchCard refactor (named-props API + show-more + favicon rows) |
+| `e361da768` | 11   | Wire badge mode into desktop + web ToolCallCard host adopters       |
+
+### Round 22 — meta-lesson
+
+The R21 89% similarity was a real measurement of UI element presence —
+but element presence is NOT functional parity. The R22 functional audit
+revealed that on average ~25-35 percentage points of "similarity" was
+UI-shells where the backend wiring is missing or 503s. **For pre-launch
+release planning, the functional score (50-85% range) is the honest
+number, not the element-checklist score (84-100%).**
+
+The biggest gap by far is **cross-surface chat sync at the storage
+layer** — this is the most-marketed feature in the suite and is the
+most thoroughly broken. Either fix the schema mismatch in
+`apps/desktop/src-tauri/src/data/supabase_sync.rs` OR drop the
+cross-device claim from marketing for v1. Decision should land in a
+`docs/decisions/2026-05-22-cross-surface-sync-or-cut.md` ADR.
 
 ## Round 21 — 80% acceptance test PASSED on all 6 surfaces (2026-05-22)
 
