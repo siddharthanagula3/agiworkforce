@@ -6,7 +6,15 @@ Last updated: 2026-05-21
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased — autonomous suite transformation, round 8] — 2026-05-21
+## [Unreleased — autonomous suite transformation, round 9] — 2026-05-21
+
+Round 9 closes the PLAN.md section 6 task "Add Chrome and VS Code bridge status to connector hub" — making developer-surface transport health a first-class part of the consumer connector hub.
+
+### Added
+
+- `ExtensionStatusDiagnostics` canonical type in `@agiworkforce/api/browserExtension`, re-exported from the package root for ergonomic consumption. `extensionStatus()` is now strongly typed instead of returning `unknown`. The previously-local `ExtensionStatusDiagnosticsPayload` interface in `apps/desktop/src/hooks/useAgenticEvents.ts` is removed; the preflight checker now consumes the canonical shape.
+- Desktop `BridgeStatusCard` in `apps/desktop/src/features/connectors/`. Derives a Chrome row (from `diagnostics.native_connection.state` + `extension_id`) and a VS Code row (from `transport.websocket_port` + overall status). Token-invalid degrades both rows. Color-coded state dot (emerald connected / amber connecting / rose error / zinc disconnected). Refresh button refetches; first diagnostics recommendation surfaces as an amber footer. Best-effort hidden outside Tauri. 8 vitest tests pin every state path.
+- BridgeStatusCard mounted in `ConnectorGallery` above the status filter pills so consumers see bridge health when they open the connector hub.
 
 Round 8 closes the PLAN.md section 5 task "Add visible 'what will be sent' previews for cloud/BYOK turns" — a privacy-critical UX gap that matches Claude/OpenAI parity AND reinforces AGI's local-first stance.
 

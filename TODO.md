@@ -2,9 +2,19 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-21 (post round-7 suite-transformation session, integration pass).
+Last updated: 2026-05-21 (post round-9 suite-transformation session, bridge-status lane).
 
 This is the active checklist for the transition described in `PLAN.md`. Keep it short enough to operate from daily; move evidence and long analysis to `audit/anthropic-apps-parity/`.
+
+## 2026-05-21 Suite Transformation Session — Round 9 (in progress)
+
+Closes the PLAN.md section 6 task: "Add Chrome and VS Code bridge status to connector hub." Developer-surface transport health (Chrome native messaging + VS Code websocket bridge) is now first-class inside the consumer connector hub.
+
+- [x] Promote `ExtensionStatusDiagnostics` to `@agiworkforce/api` canonical type
+- [x] Build Desktop `BridgeStatusCard` (Chrome + VS Code rows derived from `extension_status`)
+- [x] Wire `BridgeStatusCard` into `ConnectorGallery` above the status filter pills
+
+8 new vitest tests pin every state path (connected / connecting / error / disconnected / token-invalid / fetch-failure / refetch).
 
 ## 2026-05-21 Suite Transformation Session — Round 8 (~58h, 12 commits)
 

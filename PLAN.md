@@ -430,7 +430,7 @@ Tasks:
 - Add MCP prompts as slash commands.
 - Add connector install/uninstall across Desktop/Web/CLI.
 - Keep connector customization modal-first: browse in the connector gallery, add custom remote MCP servers through a focused modal, and escalate to settings only for deep MCP/server management.
-- Add Chrome and VS Code bridge status to connector hub.
+- [x] Add Chrome and VS Code bridge status to connector hub. (Round 9 — Desktop `BridgeStatusCard` derives Chrome (native-messaging `connection_state`) + VS Code (websocket port 8787) rows from the Tauri `extension_status` payload exposed via `@agiworkforce/api`'s `browserExtension.extensionStatus()`. Token-invalid degrades both rows. Renders above the status filter pills in `ConnectorGallery` with a refresh button + first recommendation surfaced. Diagnostics shape `ExtensionStatusDiagnostics` promoted to the canonical type export.)
 
 ### 7. Agents, Tasks, And Automation
 

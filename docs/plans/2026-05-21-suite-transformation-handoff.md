@@ -2,9 +2,25 @@
 
 Status: Current
 Owner: Next session lead
-Last updated: 2026-05-21 (extended through round 8, sendpreview lane)
+Last updated: 2026-05-21 (extended through round 9, bridge-status lane)
 Branch: `fix/extension-typecheck-and-c02-sync-2026-05-20`
-Head pushed: `f9dd7900f`
+Head pushed: `6d7045146` (round-8 boundary) → round 9 in progress this session
+
+## Round 9 additions (after Round 8 wrap at `6d7045146`)
+
+Round 9 closes the PLAN.md section 6 task: "Add Chrome and VS Code bridge status to connector hub." Both developer-surface transports (Chrome via native messaging, VS Code via the websocket bridge on port 8787) now have first-class visibility inside the consumer connector hub.
+
+- `feat(api,desktop): bridge status card for chrome + vs code in connector hub` —
+  - Promoted `ExtensionStatusDiagnosticsPayload` (previously local in `apps/desktop/src/hooks/useAgenticEvents.ts`) to `@agiworkforce/api`'s canonical `ExtensionStatusDiagnostics` type with a direct re-export from the package root. `extensionStatus()` is now strongly typed.
+  - New `apps/desktop/src/features/connectors/BridgeStatusCard.tsx`. Derives a Chrome row from `diagnostics.native_connection.state` + `extension_id`, and a VS Code row from `transport.websocket_port` + overall status. Token-invalid degrades both rows since they share `.ipc_token`. Color-coded state dot (emerald connected / amber connecting / rose error / zinc disconnected). Refresh button refetches. First diagnostics recommendation surfaces as an amber footer. Best-effort hidden outside Tauri.
+  - Mounted above the status filter pills in `ConnectorGallery`. 8 vitest tests pin every state path.
+
+### Round 9 — open paths for next session
+
+1. **Per-client VS Code bridge tracking** — currently the VS Code row uses overall transport status + websocket port presence as a proxy. A future enhancement would have the desktop Rust backend track active WebSocket clients per extension (Chrome vs VS Code vs CLI) and expose them as part of `extension_status`.
+2. **PLAN.md section 6 remaining tasks** — "Unify Desktop/CLI MCP server registry", "Add MCP prompts as slash commands", "Add connector install/uninstall across Desktop/Web/CLI".
+3. **PLAN.md section 7** — Visual agent manager, queryable subagent runtime snapshots, per-agent tool/model restrictions.
+4. **PLAN.md section 5 remaining tasks** — "Define project schema", "Support project-level memory", "Add project export/import bundle".
 
 ## Round 8 additions (after Round 7 wrap at `55305313e`)
 
