@@ -32,6 +32,10 @@ Round 10 closes the PLAN.md section 5 task "Define project schema" and ships the
 
 - Mobile RN-native ProjectHeader snapshot tests in `apps/mobile/__tests__/shared-primitives.snapshot.test.tsx` lock the rendered RN tree across Local / BYOK / counts+last-used+model variants. Mirrors the unified-chat snapshot pattern so Mobile gains structural visual-verification parity. 3 jest snapshots (1,159 lines of locked tree shape).
 
+### Backend
+
+- `supabase/migrations/20260521120000_project_schema_round_10.sql` completes the cross-language project-schema contract end-to-end (TS + Rust + Postgres). Extends `user_projects` with `default_privacy_mode`, `default_provider_mode`, `allowed_surfaces`, `default_model_id`, `last_used_at`, `icon_emoji`, `accent_color`, `imported_from`, `organization_id`, and denormalized `knowledge_file_count`/`member_count`. Creates `project_members` (owner / editor / viewer roles with RLS — owners write, members read) and `project_knowledge_files` (RLS — owners + editors upload, viewers read only, soft-delete via `deleted_at`). Two AFTER triggers keep the denormalized counts in sync. Owner backfilled into `project_members` from existing `user_projects.user_id` via `ON CONFLICT DO NOTHING`. `pnpm check:supabase-migrations` passes. Not auto-applied — apply via Supabase CLI or `mcp apply_migration` after review.
+
 ## [Unreleased — autonomous suite transformation, round 9] — 2026-05-21
 
 Round 9 closes the PLAN.md section 6 task "Add Chrome and VS Code bridge status to connector hub" — making developer-surface transport health a first-class part of the consumer connector hub.

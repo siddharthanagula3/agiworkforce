@@ -27,9 +27,16 @@ Closes the PLAN.md section 5 task "Define project schema." Types-first cross-sur
 These need follow-up but were surfaced BY the visual-verification slice, which proves the workflow works:
 
 - [x] /projects: dark-mode text nearly invisible (`var(--text-1)` heading + `var(--text-3)` description against black background). High severity — accessibility. Fixed in `651b4e016`.
-- [ ] / home: CSP violations blocking inline scripts and open-dyslexic CDN font. Medium severity — accessibility regression for users who need the dyslexia-friendly font.
+- [ ] / home: CSP violations blocking inline scripts and open-dyslexic CDN font. Medium severity — accessibility regression for users who need the dyslexia-friendly font. **Deferred** — requires a security-policy decision (allow `cdn.jsdelivr.net` in CSP font-src OR self-host the font binary). Not autonomous-loop scope.
 
-Remaining visual-verification surfaces (Desktop / Mobile / VS Code / Chrome) still need their own capture infrastructure.
+Remaining visual-verification surfaces (Desktop / VS Code / Chrome) still need their own capture infrastructure. Mobile gained structural verification via `bd0f487bf` + `9528e57ec`.
+
+### Backend round-10 — landed `bf499e57d`
+
+- [x] Supabase migration completes the cross-language project schema (TS + Rust + Postgres now match).
+- [x] `project_members` + `project_knowledge_files` tables with RLS + denormalized count triggers.
+
+Not auto-applied — review migration before `supabase db push`.
 
 ## 2026-05-21 Suite Transformation Session — Round 9 (in progress)
 
