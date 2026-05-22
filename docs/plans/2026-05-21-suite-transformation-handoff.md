@@ -4,11 +4,11 @@ Status: Current
 Owner: Next session lead
 Last updated: 2026-05-21 (extended through round 7, integration pass)
 Branch: `fix/extension-typecheck-and-c02-sync-2026-05-20`
-Head pushed: `95080f6ef`
+Head pushed: `9409e954e`
 
 ## Round 7 additions (after `b1c2bb428`)
 
-After the round-6 boundary, an additional autonomous loop shipped 10 commits closing two top-10 P0 gaps end-to-end at the shared-package level, plus two host-adoption slices:
+After the round-6 boundary, an additional autonomous loop shipped 13 commits closing two top-10 P0 gaps end-to-end at the shared-package level, plus three host-adoption slices (Web + Mobile + Desktop now all share the same generated-file provenance contract):
 
 - `fe22c59cb` `feat(unified-chat): artifact panel live preview for html and react` — extracted `lib/artifact-sandbox.ts` (shared CSP envelope), wired `ArtifactPanel`'s HTML preview to a sandboxed iframe with `allow-scripts allow-modals` + run/stop control, delegated React artifacts to `ReactPreview`, refactored `ArtifactRenderer.HtmlArtifact` to consume the same helper. Round-2 P0 #9 live-preview quadrant.
 - `b0578ce9f` `feat(vscode-ext): composer drag-drop and paste-image wire` — new `attachFiles` webview→host protocol with zod-validated payloads (≤10 MB / ≤8 files / `data:` URLs only, path-separator rejection), webview drag/drop/paste handlers with attachment chips, host writes to `globalStorageUri/.attachments/<timestamp>` and routes through `agi-workforce.addToContext`. Round-2 P0 #3 vscode-ext side.
@@ -20,23 +20,27 @@ After the round-6 boundary, an additional autonomous loop shipped 10 commits clo
 - `d8c65c795` `feat(web): adopt shared generatedfilecard in artifactpreview header` — first host-adoption of a round-7 primitive. Web's `ArtifactPreview` replaces its inline kind/byte/checksum label row with the shared card, picking up preview thumbnails, status badges, and consistent action UI for compute-session-backed artifacts.
 - `62896edf0` + `98d72a5bd` doc updates recording the Web adoption.
 - `01caaf77d` `feat(mobile): rn-native generatedfilecard adopted in artifactfullscreen` — Mobile mirrors the shared web `GeneratedFileCard` with an RN-native sibling consuming the same `GeneratedFilePresentation`. Drops ~40 LOC of inline provenance in `ArtifactFullScreen.tsx`. Web and Mobile now show matching status-badge semantics, chips, and provenance shape without sharing JSX (React DOM vs React Native).
+- `95080f6ef` `docs(control-files): record round-7 mobile generatedfilecard adoption` + `23af9ff9a` `docs(plans): bump round-7 head pointer to 95080f6ef` — control-file updates.
+- `9409e954e` `feat(desktop): adopt shared generatedfilecard in inlinedocumentgeneration` — Desktop's `InlineDocumentGeneration.tsx` drops ~50 LOC of inline header markup in favor of `<GeneratedFileCard>`. Display-only adoption: the Desktop-specific bigger action row (Open / Show in Finder / Save As / Share / Copy Path) stays below as the action surface. An `effectiveSummary` memo merges the Tauri-fetched `fileMeta.sizeBytes` fallback into the presentation.
 
-34 new regression tests across `ArtifactPanel.live-preview.test.tsx`, `webviewAttachFiles.test.ts`, `sidePanelComposerDragDrop.test.ts`, `GeneratedFileCard.test.tsx` (web), and `generated-file-card.test.tsx` (mobile). Repo guardrails (`pnpm check:llm-operability`, repo typecheck, lint) clean on every commit. Branch pushed (`3dcc4933b..01caaf77d`).
+34 new regression tests across `ArtifactPanel.live-preview.test.tsx`, `webviewAttachFiles.test.ts`, `sidePanelComposerDragDrop.test.ts`, `GeneratedFileCard.test.tsx` (web), and `generated-file-card.test.tsx` (mobile). Repo guardrails (`pnpm check:llm-operability`, repo typecheck, lint) clean on every commit. Branch pushed (`3dcc4933b..9409e954e`).
 
 ### Round 7 — known consumer-adoption gap
 
 The round-2 audit estimates for P0 #9 (Artifacts: 186h) and the new generated-file TODO included **host consumer adoption**, not only the shared primitive. Round 7 closed the shared-package work; remaining host adoption is intentionally scoped:
 
-| Shared primitive shipped this round     | Host consumers using it                                   |
-| --------------------------------------- | --------------------------------------------------------- |
-| `ArtifactPanel` live preview            | none yet                                                  |
-| `ArtifactPanel` edit-in-place           | none yet                                                  |
-| `GeneratedFileCard` (web JSX)           | 1 — `apps/web` (`ArtifactPreview` header)                 |
-| `GeneratedFileCard` (mobile RN mirror)  | 1 — `apps/mobile` (`ArtifactFullScreen` provenance block) |
-| VS Code webview drag-drop / paste       | ✅ shipped to users                                       |
-| Chrome ext side-panel drag-drop / paste | ✅ shipped to users                                       |
+| Shared primitive shipped this round     | Host consumers using it                                                                       |
+| --------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `ArtifactPanel` live preview            | none yet                                                                                      |
+| `ArtifactPanel` edit-in-place           | none yet                                                                                      |
+| `GeneratedFileCard` (web JSX)           | 2 — `apps/web` (`ArtifactPreview` header), `apps/desktop` (`InlineDocumentGeneration` header) |
+| `GeneratedFileCard` (mobile RN mirror)  | 1 — `apps/mobile` (`ArtifactFullScreen` provenance block)                                     |
+| VS Code webview drag-drop / paste       | ✅ shipped to users                                                                           |
+| Chrome ext side-panel drag-drop / paste | ✅ shipped to users                                                                           |
 
-`packages/unified-chat` is React-DOM + Tailwind; Mobile (React Native) cannot import the web JSX directly. The Mobile mirror in `apps/mobile/src/features/chat/components/GeneratedFileCard.tsx` is the explicit pattern: surfaces share **types**, not JSX. Both consume `GeneratedFilePresentation` from `@agiworkforce/types`, so the visual treatment, chips, status semantics, and provenance shape stay aligned. Desktop's `InlineDocumentGeneration` keeps Tauri-specific `open_file_location` / `file_copy` integrations and is not a fit for the shared card without losing those affordances. Next session has three honest paths:
+`packages/unified-chat` is React-DOM + Tailwind; Mobile (React Native) cannot import the web JSX directly. The Mobile mirror in `apps/mobile/src/features/chat/components/GeneratedFileCard.tsx` is the explicit pattern: surfaces share **types**, not JSX. All three host surfaces (Web / Desktop / Mobile) now consume `GeneratedFilePresentation` from `@agiworkforce/types`, so the visual treatment, chips, status semantics, and provenance shape stay aligned. Desktop's adoption is display-only — the Tauri-wired action row (`open_file_location`, `file_copy`, `file_open_with_default_app`) stays below the card as the canonical action surface, so no Tauri integration was lost.
+
+Remaining open paths for next session:
 
 1. **Wedge the shared `ArtifactPanel` into Web's chat shell** as the panel wrapper while keeping `ArtifactPreview` as the body. Adapter ~30 LOC (web's `ArtifactData` already carries `type`; only `version` defaults to 1). Trade-off: the host then has two artifact panels, which doubles maintenance until one consolidates. Web also already does live preview via cross-origin `sandbox.agiworkforce.com`, which is a stronger model than the shared in-page srcDoc + CSP. Wedge the shared panel only if you also plan to retire the cross-origin sandbox.
 2. **Mobile `InlineArtifactCard` adoption of a compact `GeneratedFileChips` mini-component** (only the inline chip strip, not the full card). Inline cards still render a smaller chip set in `InlineArtifactCard.tsx`; a compact sibling of `GeneratedFileCard` (`GeneratedFileChips`?) would unify that too.
