@@ -72,6 +72,12 @@ interface ChatComposerProps {
   onStop?: () => void;
   /** Increment to clear composer state after a parent-owned deferred send. */
   clearSignal?: number;
+  /**
+   * Per-file privacy label rendered as a chip on each attachment thumbnail
+   * (e.g. "Local", "BYOK", "Managed"). Sourced from the host's SendPreview
+   * presentation. PLAN.md section 5: "Add per-file privacy labels".
+   */
+  attachmentPrivacyShortLabel?: string;
 }
 
 const TOOLS = [
@@ -112,6 +118,7 @@ const ChatComposerNewComponent = ({
   onTypingChange,
   onStop,
   clearSignal,
+  attachmentPrivacyShortLabel,
 }: ChatComposerProps) => {
   const [message, setMessage] = useState('');
   const {
@@ -575,7 +582,12 @@ const ChatComposerNewComponent = ({
       )}
 
       {/* Attachments — rich preview with image thumbnails and doc chips */}
-      <AttachmentPreview previews={previews} onRemove={removeFile} className="mb-2" />
+      <AttachmentPreview
+        previews={previews}
+        onRemove={removeFile}
+        className="mb-2"
+        privacyShortLabel={attachmentPrivacyShortLabel}
+      />
 
       {/* Main Input Container */}
       <div

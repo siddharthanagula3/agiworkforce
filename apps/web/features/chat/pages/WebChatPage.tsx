@@ -580,6 +580,7 @@ export default function WebChatPage() {
               prefillText={composerPrefill}
               onPrefillConsumed={() => setComposerPrefill(undefined)}
               clearSignal={composerClearSignal}
+              attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
             />
           </div>
         </div>
