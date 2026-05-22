@@ -64,6 +64,17 @@ jest.mock('lucide-react-native', () => {
     Copy: iconFactory('copy'),
     Check: iconFactory('check'),
     Share2: iconFactory('share'),
+    // icons consumed transitively via GeneratedFileCard rendered inside
+    // ArtifactFullScreen / InlineArtifactCard chains.
+    AlertTriangle: iconFactory('alert-triangle'),
+    Archive: iconFactory('archive'),
+    Clock: iconFactory('clock'),
+    FileSpreadsheet: iconFactory('spreadsheet'),
+    Layers: iconFactory('layers'),
+    Loader: iconFactory('loader'),
+    Lock: iconFactory('lock'),
+    Presentation: iconFactory('presentation'),
+    ShieldCheck: iconFactory('shield-check'),
   };
 });
 

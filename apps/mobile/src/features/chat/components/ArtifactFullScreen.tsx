@@ -21,6 +21,7 @@ import { colors } from '@/src/ui/theme';
 import { copyToClipboard } from '@/lib/clipboard';
 import { shareFile } from '@/services/fileCreation';
 import type { Artifact } from '@/types/chat';
+import { GeneratedFileCard } from './GeneratedFileCard';
 
 interface ArtifactFullScreenProps {
   artifact: Artifact | null;
@@ -218,48 +219,8 @@ export function ArtifactFullScreen({ artifact, visible, onClose }: ArtifactFullS
         >
           {/* Generated-file provenance header */}
           {hasGeneratedFileManifest ? (
-            <View
-              style={{
-                marginBottom: 16,
-                padding: 12,
-                borderRadius: 8,
-                backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                borderWidth: 1,
-                borderColor: colors.border,
-                gap: 4,
-              }}
-            >
-              <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                {generatedFileSummary.statusLabel} · {generatedFileSummary.kindLabel}
-                {generatedFileSummary.byteCountLabel
-                  ? ` · ${generatedFileSummary.byteCountLabel}`
-                  : ''}
-              </Text>
-              {generatedFileSummary.providerLabel ? (
-                <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                  Provider: {generatedFileSummary.providerLabel}
-                </Text>
-              ) : null}
-              {generatedFileSummary.sourceSurfaceLabel ? (
-                <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                  Source: {generatedFileSummary.sourceSurfaceLabel}
-                </Text>
-              ) : null}
-              {generatedFileSummary.sourceSessionLabel ? (
-                <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                  {generatedFileSummary.sourceSessionLabel}
-                </Text>
-              ) : null}
-              {generatedFileSummary.checksumShort ? (
-                <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                  SHA-256: {generatedFileSummary.checksumShort}
-                </Text>
-              ) : null}
-              {generatedFileSummary.localOnly ? (
-                <Text style={{ fontSize: 12, color: colors.textMuted }}>
-                  Local file. Sharing uses the native sheet and does not upload it to AGI cloud.
-                </Text>
-              ) : null}
+            <View style={{ marginBottom: 16 }}>
+              <GeneratedFileCard presentation={generatedFileSummary} />
             </View>
           ) : null}
 
