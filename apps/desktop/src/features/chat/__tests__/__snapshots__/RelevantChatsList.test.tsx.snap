@@ -131,7 +131,7 @@ exports[`RelevantChatsList > matches snapshot with three conversations 1`] = `
                   d="M12 6v6l4 2"
                 />
               </svg>
-              just now
+              2m ago
             </span>
           </div>
           <span
@@ -202,7 +202,7 @@ exports[`RelevantChatsList > matches snapshot with three conversations 1`] = `
                   d="M12 6v6l4 2"
                 />
               </svg>
-              53m ago
+              1h ago
             </span>
           </div>
           <span
@@ -273,7 +273,7 @@ exports[`RelevantChatsList > matches snapshot with three conversations 1`] = `
                   d="M12 6v6l4 2"
                 />
               </svg>
-              13h ago
+              14h ago
             </span>
           </div>
           <span
