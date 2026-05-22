@@ -10,6 +10,11 @@
 //   - states: pending / running / success / error / partial
 //   - multi-step sequences stack with a 1px left guideline (InlineToolCallStack)
 //
+// iconStyle='badge' — Claude-parity mode:
+//   - round 24px badge with single uppercase letter (or glyph) as leading icon
+//   - row height 28px (denser than lucide's 32px)
+//   - "Result" sub-label in small monospace below the row
+//
 // All icons are Lucide React per design-spec §4.6 + §5.
 
 import {
@@ -37,6 +42,7 @@ import {
   CircleSlash,
   Brain,
   Wrench,
+  Clock,
   type LucideProps,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -44,6 +50,14 @@ import { cn } from '../lib/utils';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type InlineToolCallStatus = 'pending' | 'running' | 'success' | 'error' | 'partial';
+
+/**
+ * Icon rendering mode:
+ * - `'lucide'` (legacy/default) — 16px Lucide line-icon, 32px row height.
+ * - `'badge'` (Claude-parity) — 24px round colored badge with single uppercase
+ *   letter inside (or a glyph for web-search / thinking / done), 28px row height.
+ */
+export type InlineToolIconStyle = 'lucide' | 'badge';
 
 /**
  * Canonical tool category keys. Drive both icon mapping (§4.6) and any
@@ -94,6 +108,21 @@ export interface InlineToolCallProps {
   className?: string;
   /** Override icon mapping. Receives the resolved Lucide icon props. */
   iconOverride?: ComponentType<LucideProps>;
+  /**
+   * Icon rendering mode. Defaults to `'lucide'` to preserve existing snapshots.
+   * Set to `'badge'` for Claude-parity round-badge style with sub-label "Result".
+   */
+  iconStyle?: InlineToolIconStyle;
+  /**
+   * Custom badge letter override when `iconStyle === 'badge'`. If omitted,
+   * derives from `kindToBadge` map.
+   */
+  iconLetter?: string;
+  /**
+   * Sub-label rendered below the row when `iconStyle === 'badge'` and
+   * `status === 'success'`. Defaults to "Result".
+   */
+  resultLabel?: string;
 }
 
 // ─── Icon mapping (§4.6) ──────────────────────────────────────────────────────
@@ -112,6 +141,39 @@ const ICON_BY_KIND: Record<Exclude<InlineToolKind, 'auto'>, ComponentType<Lucide
   thinking: Brain,
   done: CircleCheck,
   unknown: Wrench,
+};
+
+// ─── Badge mapping (badge iconStyle) ─────────────────────────────────────────
+
+/**
+ * For kinds that render a Lucide glyph in the badge rather than a letter,
+ * store the ComponentType here. The badge background is always a subtle
+ * surface token so these inherit --text-muted color.
+ */
+type BadgeGlyph = { kind: 'glyph'; Icon: ComponentType<LucideProps> };
+type BadgeLetter = { kind: 'letter'; letter: string };
+type BadgeCheck = { kind: 'check' };
+export type BadgeConfig = BadgeGlyph | BadgeLetter | BadgeCheck;
+
+/**
+ * Maps each concrete InlineToolKind to a badge config.
+ * read / write / edit / fs-list all map to letter "F" (filesystem family).
+ * thinking → clock glyph, done → green check, web-search → search-glass glyph.
+ */
+export const KIND_TO_BADGE: Record<Exclude<InlineToolKind, 'auto'>, BadgeConfig> = {
+  bash: { kind: 'letter', letter: '>' },
+  read: { kind: 'letter', letter: 'F' },
+  write: { kind: 'letter', letter: 'F' },
+  edit: { kind: 'letter', letter: 'F' },
+  'fs-list': { kind: 'letter', letter: 'F' },
+  'web-search': { kind: 'glyph', Icon: Search },
+  'web-fetch': { kind: 'letter', letter: 'W' },
+  'image-gen': { kind: 'letter', letter: 'I' },
+  browser: { kind: 'letter', letter: 'B' },
+  'mcp-custom': { kind: 'letter', letter: 'M' },
+  thinking: { kind: 'glyph', Icon: Clock },
+  done: { kind: 'check' },
+  unknown: { kind: 'letter', letter: '?' },
 };
 
 /** Heuristic mapping when `kind === 'auto'`. Matches by lowercase substring. */
@@ -145,6 +207,55 @@ function resolveIcon(
   if (override) return override;
   const resolved = kind === 'auto' ? inferKindFromLabel(label) : kind;
   return ICON_BY_KIND[resolved] ?? Wrench;
+}
+
+function resolveBadgeConfig(kind: InlineToolKind, label: string, iconLetter?: string): BadgeConfig {
+  const resolved = kind === 'auto' ? inferKindFromLabel(label) : kind;
+  if (iconLetter) return { kind: 'letter', letter: iconLetter };
+  return KIND_TO_BADGE[resolved] ?? { kind: 'letter', letter: '?' };
+}
+
+// ─── Badge icon sub-component ─────────────────────────────────────────────────
+
+function BadgeIcon({ config }: { config: BadgeConfig }) {
+  if (config.kind === 'check') {
+    return (
+      <span
+        className="inline-tool-call__badge inline-flex items-center justify-center w-6 h-6 rounded-full bg-transparent"
+        aria-hidden="true"
+        data-badge-kind="check"
+      >
+        <CircleCheck
+          size={16}
+          strokeWidth={2}
+          className="text-[color:var(--state-success,#22c55e)]"
+        />
+      </span>
+    );
+  }
+  if (config.kind === 'glyph') {
+    const Icon = config.Icon;
+    return (
+      <span
+        className="inline-tool-call__badge inline-flex items-center justify-center w-6 h-6 rounded-full bg-[color:var(--surface-elevated,rgba(0,0,0,0.06))]"
+        aria-hidden="true"
+        data-badge-kind="glyph"
+      >
+        <Icon size={11} strokeWidth={2} className="text-[color:var(--text-muted)]" />
+      </span>
+    );
+  }
+  // letter
+  return (
+    <span
+      className="inline-tool-call__badge inline-flex items-center justify-center w-6 h-6 rounded-full bg-[color:var(--surface-elevated,rgba(0,0,0,0.06))] text-[color:var(--text-muted)] text-[10px] font-semibold select-none"
+      aria-hidden="true"
+      data-badge-kind="letter"
+      data-badge-letter={config.letter}
+    >
+      {config.letter}
+    </span>
+  );
 }
 
 // ─── Status decoration ────────────────────────────────────────────────────────
@@ -231,11 +342,15 @@ export function InlineToolCall({
   defaultOpen = false,
   className,
   iconOverride,
+  iconStyle = 'lucide',
+  iconLetter,
+  resultLabel = 'Result',
 }: InlineToolCallProps) {
   const isControlled = open !== undefined;
   const [internalOpen, setInternalOpen] = useState<boolean>(defaultOpen);
   const effectiveOpen = isControlled ? !!open : internalOpen;
   const isExpandable = body !== undefined && body !== null;
+  const isBadge = iconStyle === 'badge';
 
   const toggle = useCallback(() => {
     if (!isExpandable) return;
@@ -255,10 +370,112 @@ export function InlineToolCall({
     [isExpandable, toggle],
   );
 
-  const Icon = resolveIcon(kind, label, iconOverride);
   const bodyId = `${id}-body`;
   const suffix = labelSuffix(status, errorMessage);
   const colorClass = colorClassForStatus(status);
+
+  if (isBadge) {
+    const badgeConfig = resolveBadgeConfig(kind, label, iconLetter);
+    const showResultLabel = status === 'success' && !body;
+
+    return (
+      <div
+        className={cn(
+          'inline-tool-call inline-tool-call--badge flex flex-col',
+          effectiveOpen && 'inline-tool-call--open',
+          className,
+        )}
+        data-tool-id={id}
+        data-status={status}
+        data-icon-style="badge"
+      >
+        <div
+          role={isExpandable ? 'button' : undefined}
+          tabIndex={isExpandable ? 0 : undefined}
+          aria-expanded={isExpandable ? effectiveOpen : undefined}
+          aria-controls={isExpandable ? bodyId : undefined}
+          aria-label={`${label}${suffix ? ` — ${suffix}` : ''}`}
+          onClick={isExpandable ? toggle : undefined}
+          onKeyDown={onKeyDown}
+          className={cn(
+            'inline-tool-call__bar flex items-center gap-2 select-none',
+            'h-7 px-1 rounded-md',
+            isExpandable && 'cursor-pointer hover:bg-[color:var(--bg-hover,rgba(0,0,0,0.04))]',
+            'transition-colors duration-100',
+          )}
+        >
+          <BadgeIcon config={badgeConfig} />
+          <span className={cn('inline-tool-call__label text-sm font-normal shrink-0', colorClass)}>
+            {label}
+          </span>
+          {argSummary ? (
+            <span
+              className={cn(
+                'inline-tool-call__summary text-xs text-[color:var(--text-muted)]',
+                'whitespace-nowrap overflow-hidden text-ellipsis',
+                'max-w-[360px] min-w-0 flex-1',
+              )}
+              title={argSummary}
+            >
+              {argSummary}
+            </span>
+          ) : (
+            <span className="flex-1 min-w-0" aria-hidden="true" />
+          )}
+          {suffix ? (
+            <span className={cn('inline-tool-call__suffix text-xs shrink-0', colorClass)}>
+              {suffix}
+            </span>
+          ) : null}
+          <StatusIndicator status={status} />
+          {isExpandable ? (
+            <ChevronRight
+              size={14}
+              strokeWidth={2}
+              className={cn(
+                'inline-tool-call__chevron shrink-0 text-[color:var(--text-muted)]',
+                'transition-transform duration-150',
+                effectiveOpen && 'rotate-90',
+              )}
+              aria-hidden="true"
+            />
+          ) : null}
+        </div>
+
+        {/* "Result" sub-label below the bar in badge mode (Claude parity) */}
+        {showResultLabel ? (
+          <span
+            className="inline-tool-call__result-label ml-8 text-[10px] font-mono text-[color:var(--text-muted)] leading-4"
+            data-result-label=""
+          >
+            {resultLabel}
+          </span>
+        ) : null}
+
+        {isExpandable && effectiveOpen ? (
+          <div
+            id={bodyId}
+            role="region"
+            aria-label={`${label} details`}
+            className={cn(
+              'inline-tool-call__body',
+              'bg-[color:var(--bg-code,rgba(0,0,0,0.04))]',
+              'border border-[color:var(--border-subtle,rgba(0,0,0,0.08))]',
+              'rounded-lg p-4',
+              'text-sm font-mono leading-5 text-[color:var(--text-primary,inherit)]',
+              'overflow-x-auto max-h-[480px] overflow-y-auto',
+            )}
+          >
+            {body}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  // ─── lucide (legacy) mode ────────────────────────────────────────────────────
+
+  const Icon = resolveIcon(kind, label, iconOverride);
 
   return (
     <div
