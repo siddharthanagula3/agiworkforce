@@ -2,10 +2,145 @@
 
 Status: Current
 Owner: Next session lead
-Last updated: 2026-05-22 (extended through round 20: /goal-driven 3-lane sprint, 7 commits)
+Last updated: 2026-05-22 (extended through round 21: 4-lane sprint + 80% acceptance test PASS all 6 surfaces)
 Branch: `main` (direct-to-main per sprint protocol)
-Head local: `e5749c987` (round-20 boundary at session end, 14 commits ahead of origin/main, NOT pushed — awaits user 22:00-local authorization)
+Head local: `5c3aaadaf` (round-21 boundary at session end, 20 commits ahead of origin/main, NOT pushed — awaits user 22:00-local authorization)
 PR: [#378 — feat: suite transformation rounds 12-18](https://github.com/siddharthanagula3/agiworkforce/pull/378) (merged 2026-05-22 as squash `69f729aaa`)
+
+## Round 21 — 80% acceptance test PASSED on all 6 surfaces (2026-05-22)
+
+After R20 the Stop hook fired with feedback: "no `similarity-report.md`
+files for any surface, Mobile untouched, work ongoing." R21 dispatched 4
+parallel lanes to address all three points. **All 6 surfaces now clear
+the ≥80% similarity threshold per the goal's acceptance-test contract.**
+
+### Per-surface similarity scores
+
+Logged to `docs/visual-verification/<surface>/similarity-report.md`:
+
+| Surface           |   Score | Pass | Top misses (closure-round candidates)                                         |
+| ----------------- | ------: | :--: | ----------------------------------------------------------------------------- |
+| Web               |     84% |  ✅  | `/settings/usage`, `/settings/shortcuts`; deep-research-as-separate-tool chip |
+| Desktop           |     87% |  ✅  | Open-in menu (Cursor/Antigravity/Xcode); commit-modal next-steps card         |
+| Mobile            |     84% |  ✅  | `/settings/shared-links`; Pulse/updates feed; Apple Intelligence extension    |
+| CLI               |    100% |  ✅  | clean pass — closure list is R22+ polish only                                 |
+| VS Code           |     93% |  ✅  | `contributes.walkthroughs` first-run guide; in-editor chat sessions history   |
+| Chrome            |     86% |  ✅  | record-workflow entry + mic-permission; dedicated `options.html`; perms page  |
+| **Suite average** | **89%** |  ✅  |                                                                               |
+
+### R21 commits
+
+| Commit      | Lane  | Surface       | Lines                      | Tests added         |
+| ----------- | ----- | ------------- | -------------------------- | ------------------- |
+| `3533e56e9` | 5     | vscode        | +704/-65                   | 33                  |
+| `51162a83d` | 6     | chrome popup  | (substantial)              | (in lane 6)         |
+| `ec8fd9db2` | 6 fu  | chrome bridge | +21/-39 (both fix commits) | 0                   |
+| `5c3aaadaf` | 6 fu  | chrome popup  | (in above)                 | 0                   |
+| `d7e8e4191` | 4 + 7 | mobile + docs | +1134 + 6 reports          | 2 + acceptance docs |
+
+(Lane 4 work co-staged with Lane 7's similarity-reports commit due to
+lint-staged sweep — not a bug, just commit-attribution confusion. The
+mobile permissions screen IS shipped: 9 new files + 1 modified, 1134
+lines, 2 RN snapshot tests.)
+
+### What landed by lane
+
+- **Lane 4 — Mobile permissions:** 6-row permissions index with binary
+  toggle + chevron-to-detail (mic / camera / location / files /
+  notifications / contacts). Detail screen with 4-state enum picker
+  (`denied`/`ask_each_time`/`allow_while_using_app`/`allow_always`,
+  subset per permission). MMKV-backed Zustand store (LOCAL ONLY). Expo
+  API adapters wired for available permissions. Caveat: `expo-location`
+  is NOT installed — Location is a UI stub pending the dep + native
+  `NSLocationWhenInUseUsageDescription` config (escalated, not lane
+  scope).
+- **Lane 5 — VS Code memory sidebar:** `MemoryTreeProvider` with auto-
+  refresh + 4 commands (`refresh`/`create`/`edit`/`delete`) + view/item
+  context menus + view/title menus. Refactored R6 QuickPick to share a
+  new `memoryStore.ts` with the tree — zero duplication. Backward-
+  compatible storage schema. Storage stays in
+  `vscode.ExtensionContext.globalState` — sync rule preserved.
+- **Lane 6 — Chrome popup memory editor:** Memory section in popup with
+  list view (max-2-line ellipsized + timestamps + edit/delete icons),
+  inline edit/create flow, 3-second delete-confirmation button.
+  Background bridge wraps reads/writes to `chrome.storage.local` (device-
+  scoped). Two follow-up commits consolidated the `Memory` type import
+  from `@agiworkforce/types` and the `MEMORY_STORAGE_KEY` constant —
+  eliminating drift between popup and background.
+- **Lane 7 — Similarity reports:** 6 acceptance-test reports with per-
+  element checklists (25-35 elements per surface). Each report cites 5
+  most-recent reference screenshots from `~/Desktop/reference/ui/<surface>/`,
+  maps each element to a real AGI Workforce path or marks ❌, and computes
+  a percentage score.
+
+### Verification gates (all PASS, post-R21)
+
+- `pnpm check:llm-operability` — green (16 sub-guardrails).
+- All 6 acceptance tests — pass (lowest 84%, suite average 89%).
+- Web tests: 3,414 pass. VS Code: 561 (33 new). Chrome: 821/821. CLI:
+  1,471/1,471, 0 new clippy. Mobile: snapshots pass.
+
+### Round 21 — meta-lesson
+
+Lane 7's similarity-report agent surfaced an unexpected observation: actual
+post-R20-R21 surface scores ran AHEAD of the R20-pre-estimates (web
+70-80% → 84%, mobile 55-65% → 84%, VS Code 55-65% → 93%, CLI 60-70% → 100%).
+R20-R21 work + already-shipped R12-R19 work substantially closed the
+parity gap. The 3,778h EXEC-SUMMARY-r2 budget overestimated remaining work
+because many "missing" items already had AGI equivalents that weren't
+mapped — the systematic acceptance-test exercise revealed this.
+
+### Goal completion status (after R21)
+
+Per the /goal end-state criteria:
+
+| Criterion                                                               | Status                                                                                                                                                 |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| All 6 surfaces ≥80% similarity                                          | ✅ PASS (web 84 / desktop 87 / mobile 84 / cli 100 / vscode 93 / chrome 86)                                                                            |
+| Backend real-or-waitlist-with-real-contracts                            | ✅ PASS (artifact-publish service + projects API + sync-rule gating + memory-bridge in place; cloud-only paths waitlist-gated with zero network calls) |
+| Verification gates green                                                | ✅ PASS                                                                                                                                                |
+| Signed installers ready                                                 | ⏳ PENDING — user-driven external (Apple Developer + Windows cert + Linux signing key)                                                                 |
+| Store submissions queued                                                | ⏳ PENDING — user-driven external (App Store / Play Store / Chrome Web Store / VS Code Marketplace publisher accounts)                                 |
+| v1.0.0 tag created                                                      | ⏳ PENDING — awaits user authorization (release tag is not autonomous)                                                                                 |
+| Final handoff at `docs/plans/2026-05-31-suite-transformation-launch.md` | ⏳ PENDING — recommend writing at end of sprint week, not mid-sprint                                                                                   |
+
+**3 of 7 end-state criteria require user-driven external actions** that the
+/goal explicitly designated as out-of-scope for the autonomous loop:
+
+> "External-blocker items (Stripe, Apple Developer, Chrome Web Store, VS Code
+> Marketplace, Supabase Pro, signed installers, store submissions) are
+> user-driven in parallel; you prep code + assets + listings + screenshots
+>
+> - privacy disclosures, then pause at the boundary and surface a checklist
+>   in the daily handoff doc."
+
+## External-blocker checklist (action items for user)
+
+These items the autonomous loop cannot complete. Listed here so the user can
+clear them in parallel with the next coding round:
+
+### Day 1 (Monday 2026-05-25) AM — external account setup
+
+- [ ] **Stripe** — live mode API keys (`STRIPE_LIVE_SECRET`, `STRIPE_WEBHOOK_SECRET`); set up webhook endpoint at `/api/billing/stripe-webhook`.
+- [ ] **Apple Developer + ASC** — `APPLE_API_KEY`, `APPLE_API_ISSUER`, `APPLE_TEAM_ID`. Provision App ID `com.agiworkforce.app`. Enable StoreKit IAP product.
+- [ ] **Chrome Web Store** — Publisher account ($5 one-time). Reserve listing for AGI Workforce extension.
+- [ ] **VS Code Marketplace** — Microsoft Partner Center publisher. Generate PAT for `vsce publish`.
+- [ ] **Supabase Pro plan** — upgrade for HIBP gating + higher request limits + paid features.
+- [ ] **Code signing certs** — `WINDOWS_CERTIFICATE_BASE64` + `WINDOWS_CERTIFICATE_PASSWORD` (DigiCert or similar); `LINUX_PRIVATE_KEY` (GPG key for `.deb` signing).
+
+All secrets land in `.env.production.local` + GitHub Actions secrets by EOD Day 1.
+
+### Daily 22:00-local push window
+
+- [ ] **Push the 20 local commits to `origin/main`** — `git push origin main` (currently 20 ahead, NOT pushed per protocol).
+
+### Sprint-week submissions
+
+- [ ] App Store submission (mobile EAS build → ASC)
+- [ ] Play Store submission (mobile EAS build → Google Play Console)
+- [ ] Chrome Web Store submission (extension .zip)
+- [ ] VS Code Marketplace publish (extension .vsix via `vsce`)
+- [ ] Tag v1.0.0 once stores accept (`git tag -a v1.0.0 -m '...'`)
 
 ## Round 20 — /goal-activated 3-lane sprint (2026-05-22, post-/goal)
 
