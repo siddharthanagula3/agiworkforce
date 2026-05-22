@@ -38,6 +38,7 @@ import { IterationProgressPanel } from '@/features/agi';
 import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/ui';
 import { SimpleEmptyState } from './SimpleEmptyState';
 import { AdvancedEmptyState } from './AdvancedEmptyState';
+import { RelevantChatsList } from './RelevantChatsList';
 import { ToolRationaleDisplay } from './ToolRationaleDisplay';
 import { ApprovalRequestCard } from './Cards/ApprovalRequestCard';
 import { MessageRuntimeDecorators } from './MessageRuntimeActivity';
@@ -825,87 +826,90 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
             <AdvancedEmptyState onSuggestionClick={onSuggestionClick} />
           )
         ) : (
-          items.map((message, messageIndex) => {
-            const meta = message.metadata || {};
-            const kind: SidecarMode | undefined =
-              (meta.sidecarType as SidecarMode | undefined) ||
-              (meta.tool === 'terminal'
-                ? 'terminal'
-                : meta.tool === 'browser'
-                  ? 'browser'
-                  : meta.tool === 'code'
-                    ? 'code'
-                    : meta.tool === 'media' || meta.tool === 'video'
-                      ? 'preview'
-                      : meta.tool === 'files'
-                        ? 'code'
-                        : undefined);
+          <>
+            <RelevantChatsList className="mx-4 mt-2" />
+            {items.map((message, messageIndex) => {
+              const meta = message.metadata || {};
+              const kind: SidecarMode | undefined =
+                (meta.sidecarType as SidecarMode | undefined) ||
+                (meta.tool === 'terminal'
+                  ? 'terminal'
+                  : meta.tool === 'browser'
+                    ? 'browser'
+                    : meta.tool === 'code'
+                      ? 'code'
+                      : meta.tool === 'media' || meta.tool === 'video'
+                        ? 'preview'
+                        : meta.tool === 'files'
+                          ? 'code'
+                          : undefined);
 
-            // Check if this message is a search match or keyboard focused
-            const isSearchMatch =
-              deferredSearchQuery && searchMatches.some((m) => m.index === messageIndex);
-            const isCurrentMatch =
-              isSearchMatch && searchMatches[currentMatchIndex]?.index === messageIndex;
-            const isKeyboardFocused = focusedMessageIndex === messageIndex;
+              // Check if this message is a search match or keyboard focused
+              const isSearchMatch =
+                deferredSearchQuery && searchMatches.some((m) => m.index === messageIndex);
+              const isCurrentMatch =
+                isSearchMatch && searchMatches[currentMatchIndex]?.index === messageIndex;
+              const isKeyboardFocused = focusedMessageIndex === messageIndex;
 
-            if (meta.phase === 'thinking' || meta.thinking) {
-              return renderThought(
-                message.id,
-                meta.thinking?.title || 'Planning task...',
-                meta.thinking?.details ||
-                  message.content ||
-                  'The agent is reasoning about this task.',
-              );
-            }
+              if (meta.phase === 'thinking' || meta.thinking) {
+                return renderThought(
+                  message.id,
+                  meta.thinking?.title || 'Planning task...',
+                  meta.thinking?.details ||
+                    message.content ||
+                    'The agent is reasoning about this task.',
+                );
+              }
 
-            if (meta.event === 'action' && kind) {
-              return renderActionCard(
-                message.id,
-                meta.label || 'Action executed',
-                meta.summary || message.content || 'Agent performed an action.',
-                kind,
-                { messageId: message.id, ...meta },
-                meta.toolRationale,
-              );
-            }
+              if (meta.event === 'action' && kind) {
+                return renderActionCard(
+                  message.id,
+                  meta.label || 'Action executed',
+                  meta.summary || message.content || 'Agent performed an action.',
+                  kind,
+                  { messageId: message.id, ...meta },
+                  meta.toolRationale,
+                );
+              }
 
-            if (kind === 'terminal' && meta.command) {
-              return renderActionCard(
-                message.id,
-                `Executed ${meta.command}`,
-                meta.preview || 'Command finished. View output for details.',
-                'terminal',
-                { command: meta.command, messageId: message.id },
-                meta.toolRationale,
-              );
-            }
+              if (kind === 'terminal' && meta.command) {
+                return renderActionCard(
+                  message.id,
+                  `Executed ${meta.command}`,
+                  meta.preview || 'Command finished. View output for details.',
+                  'terminal',
+                  { command: meta.command, messageId: message.id },
+                  meta.toolRationale,
+                );
+              }
 
-            return (
-              <React.Fragment key={message.id}>
-                {message.role === 'assistant' && (
-                  <MessageRuntimeDecorators
-                    messageId={message.id}
-                    isStreaming={Boolean(message.metadata?.streaming) && isStreaming}
-                    className="mx-4 mb-1"
+              return (
+                <React.Fragment key={message.id}>
+                  {message.role === 'assistant' && (
+                    <MessageRuntimeDecorators
+                      messageId={message.id}
+                      isStreaming={Boolean(message.metadata?.streaming) && isStreaming}
+                      className="mx-4 mb-1"
+                    />
+                  )}
+                  <ChatMessageItem
+                    message={message}
+                    messageIndex={messageIndex}
+                    isCurrentMatch={Boolean(isCurrentMatch)}
+                    isSearchMatch={Boolean(isSearchMatch)}
+                    isKeyboardFocused={Boolean(isKeyboardFocused)}
+                    isLastMessage={messageIndex === items.length - 1}
+                    showMessageTimestamps={showMessageTimestamps}
+                    activeConversationDbId={activeConversationDbId}
+                    onOpenSidecar={onOpenSidecar}
+                    onRetry={handleRetry}
+                    onEditSave={handleEditSave}
+                    onSuggestionClick={onSuggestionClick}
                   />
-                )}
-                <ChatMessageItem
-                  message={message}
-                  messageIndex={messageIndex}
-                  isCurrentMatch={Boolean(isCurrentMatch)}
-                  isSearchMatch={Boolean(isSearchMatch)}
-                  isKeyboardFocused={Boolean(isKeyboardFocused)}
-                  isLastMessage={messageIndex === items.length - 1}
-                  showMessageTimestamps={showMessageTimestamps}
-                  activeConversationDbId={activeConversationDbId}
-                  onOpenSidecar={onOpenSidecar}
-                  onRetry={handleRetry}
-                  onEditSave={handleEditSave}
-                  onSuggestionClick={onSuggestionClick}
-                />
-              </React.Fragment>
-            );
-          })
+                </React.Fragment>
+              );
+            })}
+          </>
         )}
         {pendingApprovals.length > 0 && (
           <div className="mx-4 mb-2 space-y-2 rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-3">
