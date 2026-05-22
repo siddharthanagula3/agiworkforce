@@ -2,10 +2,103 @@
 
 Status: Current
 Owner: Next session lead
-Last updated: 2026-05-22 (extended through round 18: 7-lane Claude-parity sprint + main rebase resolution)
-Branch: `fix/extension-typecheck-and-c02-sync-2026-05-20`
-Head pushed: `f8b77ac66` (round-18 boundary at session end)
-PR: [#378 — feat: suite transformation rounds 12-18](https://github.com/siddharthanagula3/agiworkforce/pull/378) (open, MERGEABLE)
+Last updated: 2026-05-22 (extended through round 20: /goal-driven 3-lane sprint, 7 commits)
+Branch: `main` (direct-to-main per sprint protocol)
+Head local: `e5749c987` (round-20 boundary at session end, 14 commits ahead of origin/main, NOT pushed — awaits user 22:00-local authorization)
+PR: [#378 — feat: suite transformation rounds 12-18](https://github.com/siddharthanagula3/agiworkforce/pull/378) (merged 2026-05-22 as squash `69f729aaa`)
+
+## Round 20 — /goal-activated 3-lane sprint (2026-05-22, post-/goal)
+
+User pasted the compressed 3,590-char `/goal` paste-block from
+`~/.claude/plans/agi-workforce-optimized-ullman.md`. Stop hook engaged
+("execution has not begun"). R20 dispatched 3 parallel agents on the three
+highest-leverage codeable lanes from EXEC-SUMMARY-r2 "next-session
+priorities." All 3 returned with green verification gates.
+
+| Commit      | Title                                                                             | Surface | Lines     | Tests added |
+| ----------- | --------------------------------------------------------------------------------- | ------- | --------- | ----------- |
+| `1a2dc8e17` | feat(services): scaffold artifact-publish service with trust-boundary enforcement | shared  | +254      | 12          |
+| `f38184e2d` | feat(unified-chat): wire artifact publish via di prop in artifact panel           | shared  | +172/-3   | 0 (host)    |
+| `9bcf1d4a8` | feat(web): deepen settings pages to >=80% claude desktop parity                   | web     | +797/-178 | (existing)  |
+| `11089e664` | feat(desktop): adopt artifact-publish service with tauri file writer              | desktop | +230/-2   | 0 (smoke)   |
+| `f88ee761e` | fix(web): split profile preferred-name from full-name fields                      | web     | +32/-18   | (existing)  |
+| `70d57f3ab` | feat(cli): implement /agents slash command with tui picker and quick-invoke       | cli     | +884/-10  | 14          |
+| `e5749c987` | docs(services): add readme for new artifact-publish service package               | shared  | +64       | (docs)      |
+
+Total: **7 commits, +2,433 lines, +26 tests, 5 surfaces touched** (shared services,
+shared unified-chat, web, desktop, cli). All committed direct-to-main per
+sprint protocol; 14 commits ahead of origin/main awaiting daily 22:00-local
+push window.
+
+### What landed by lane
+
+- **Lane 1 — Web Settings depth (`9bcf1d4a8` + `f88ee761e`):** Profile page
+  gained 4 Claude-parity fields (Full name, Preferred name with independent
+  `agi.profile.preferredName` localStorage key + Supabase `user_metadata`
+  sync, Work-description 14-option dropdown, 2000-char Instructions
+  textarea). Avatar "Change photo" stub (Cloud Managed waitlist). Inline
+  Appearance section with `next-themes` `useTheme` toggle (dark/light/
+  system). Privacy page added delete-account two-step confirmation (DELETE
+  type-confirm → `/api/user/delete-account` with CSRF). Notifications page
+  reorganized into 3 channel groups (Browser active / Email Cloud Managed-
+  gated / Mobile Cloud Managed-gated). Connections page added icon chips +
+  `formatRelativeTime()` timestamp + disconnect stub.
+- **Lane 2 — Artifact publish service (`1a2dc8e17` + `f38184e2d` +
+  `11089e664` + `e5749c987`):** New `packages/services` package created
+  with `publishArtifact({ artifact, privacyMode, surface, localFileWriter })`
+  returning a `LocalPublishResult | WaitlistPublishResult` discriminated
+  union. Enforces `assertSurfaceCanSyncChats` (CLI/VSCode/Chrome throw) +
+  `assertGeneratedFileTrustBoundary` (privacy boundary). v1 LOCAL ONLY:
+  `byok`/`managed` privacyMode returns waitlist-gated with zero network
+  calls (verified). 12 unit tests cover all variants. `ArtifactPanel`
+  gained DI prop `publishArtifact?: () => Promise<ArtifactPublishResult>`
+  - bottom notification bar (file:// URL + copy, or waitlist CTA, or error).
+    Desktop adapter (`apps/desktop/src/features/artifacts/publishAdapter.ts`)
+    uses Tauri `appDataDir()` + `writeTextFile` to materialize artifacts to
+    `<app_data>/artifacts/` and return a `file://` URL.
+- **Lane 3 — CLI `/agents` slash command (`70d57f3ab`):** Discovery scans
+  5 roots (`.agiworkforce/agents/`, `.claude/agents/`, `~/.agiworkforce/`,
+  `~/.claude/`, plugin paths). TUI picker with incremental search +
+  arrow-key nav + Enter-to-invoke. Quick-invoke via `/agents <name>`.
+  `AgentDefinition::apply_to_session()` applies model override (via
+  `switch_model()`), tool allow/disallow lists, max_turns, permission_mode,
+  - injects fenced `<agent_system_prompt>`. 14 new tests (10 picker, 4
+    agents.rs). CLI maintains developer-session-only invariant — no
+    consumer-chat writes touched.
+
+### Verification gates run (all PASS)
+
+- `pnpm check:llm-operability` — green (after adding `packages/services/README.md` in `e5749c987`)
+- `pnpm --filter @agiworkforce/{services,unified-chat,desktop,web} typecheck` — all green
+- `pnpm --filter @agiworkforce/web test` — 159 files, 3,414 tests pass
+- `cd apps/cli && cargo clippy --all-targets -- -D warnings` — 0 new errors (20 pre-existing unrelated)
+- `cd apps/cli && cargo test --lib` — 1,471 / 1,471 pass
+
+### Round 20 — meta-lesson
+
+3-lane parallel sprint converted ~110 estimated eng-hours of work into ~25
+minutes of wall-clock. The narrower 3-lane spawn (vs R18's 7-lane) reduced
+co-staging conflicts to zero — each lane committed its own commits with no
+cross-lane file overlap. One guardrail miss (the `check:readme-ownership`
+gate failed because the agent created a new package without a README); the
+next round's agent prompts should explicitly include "if you create a new
+package, also add `<pkg>/README.md` per `scripts/check-readme-ownership.mjs`."
+
+### Open paths for R21 (next dispatch)
+
+1. **VS Code memory editor full UI** (~16h) — extend the existing memory
+   QuickPick (`58938d12d`) with list/edit/delete tree view in the sidebar.
+2. **Chrome popup memory editor** (~24h) — host-adopt the shared memory
+   primitive in the popup (R6 deferred this in favor of allowlist).
+3. **Mobile permissions binary toggle + top-6 enums** (~16h) — pared to
+   sprint scope cuts.
+4. **Knowledge file ingestion + retrieval end-to-end** (~64h) — web +
+   desktop adoption.
+5. **Real-time conversation sync via Supabase Realtime** (~40h) — with
+   polling fallback.
+6. **First-run flow polish** (~24h) — shared primitive + 3 host adoptions.
+7. **/permissions, /plan, /tasks, /memory CLI commands** (~96h total) —
+   the remaining v1-scoped palette items beyond /agents.
 
 ## Round 18 — Claude-parity sprint across all 6 surfaces (2026-05-22)
 
