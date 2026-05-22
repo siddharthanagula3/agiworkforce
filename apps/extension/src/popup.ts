@@ -158,27 +158,23 @@ function getActionButtonLabel(button: HTMLButtonElement): string {
 function applyConnectionStatus(status: ConnectionStatus): void {
   const statusCard = document.getElementById('statusCard');
   const statusTitle = document.getElementById('statusTitle');
-  const statusSubtitle = document.getElementById('statusSubtitle');
   const reconnectBtn = document.getElementById('reconnectBtn');
 
-  if (!statusCard || !statusTitle || !statusSubtitle) return;
+  if (!statusCard || !statusTitle) return;
 
-  // Reset all state classes
   statusCard.classList.remove('connected', 'reconnecting');
 
   switch (status) {
     case 'connected':
       statusCard.classList.add('connected');
       statusTitle.textContent = 'Connected';
-      statusSubtitle.textContent = 'Desktop app is active';
       reconnectBtn?.classList.remove('visible');
       popupState.isConnected = true;
       break;
 
     case 'connecting':
       statusCard.classList.add('reconnecting');
-      statusTitle.textContent = 'Reconnecting...';
-      statusSubtitle.textContent = 'Attempting to reach desktop app';
+      statusTitle.textContent = 'Connecting…';
       reconnectBtn?.classList.remove('visible');
       popupState.isConnected = false;
       break;
@@ -187,7 +183,6 @@ function applyConnectionStatus(status: ConnectionStatus): void {
     case 'error':
     default:
       statusTitle.textContent = 'Disconnected';
-      statusSubtitle.textContent = 'Desktop app not detected';
       reconnectBtn?.classList.add('visible');
       popupState.isConnected = false;
       break;
@@ -198,10 +193,7 @@ function applyConnectionStatus(status: ConnectionStatus): void {
 
 async function handleManualReconnect(): Promise<void> {
   const btn = document.getElementById('reconnectBtn') as HTMLButtonElement | null;
-  if (btn) {
-    btn.textContent = 'Connecting...';
-    btn.disabled = true;
-  }
+  if (btn) btn.disabled = true;
   applyConnectionStatus('connecting');
 
   try {
@@ -215,10 +207,7 @@ async function handleManualReconnect(): Promise<void> {
   } catch {
     applyConnectionStatus('disconnected');
   } finally {
-    if (btn) {
-      btn.textContent = 'Reconnect';
-      btn.disabled = false;
-    }
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -233,12 +222,7 @@ async function updateStatus(): Promise<void> {
     applyConnectionStatus(status);
   } catch (error) {
     logger.error('Failed to update status', error);
-
-    const statusTitle = document.getElementById('statusTitle') as HTMLElement | null;
-    const statusSubtitle = document.getElementById('statusSubtitle') as HTMLElement | null;
-
-    if (statusTitle) statusTitle.textContent = 'Error';
-    if (statusSubtitle) statusSubtitle.textContent = 'Failed to check status';
+    applyConnectionStatus('error');
   }
 }
 

@@ -136,6 +136,16 @@ export interface Project {
   starred?: boolean;
   conversationIds?: string[];
   instructions?: string;
+  /**
+   * Single emoji for visual identity. Capped at one grapheme by host.
+   * Mirrors `ProjectRecord.iconEmoji` in `@agiworkforce/types/suite-contracts`.
+   */
+  iconEmoji?: string;
+  /**
+   * Bounded accent color palette ('emerald' | 'sky' | 'amber' | 'rose' |
+   * 'violet' | 'zinc'). Mirrors `ProjectRecord.accentColor`.
+   */
+  accentColor?: string;
 }
 
 // ---------------------------------------------------------------------------

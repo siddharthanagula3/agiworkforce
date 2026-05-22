@@ -68,6 +68,9 @@ export default function AppLayout() {
       {/* Chat detail */}
       <Drawer.Screen name="chat/[id]" options={HIDDEN} />
 
+      {/* Project detail */}
+      <Drawer.Screen name="projects/[id]" options={HIDDEN} />
+
       {/* Agent routes */}
       <Drawer.Screen name="agents/[id]" options={HIDDEN} />
       <Drawer.Screen name="agents/index" options={HIDDEN} />

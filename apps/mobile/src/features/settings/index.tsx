@@ -435,7 +435,7 @@ function CloudWhisperWaitlistRow() {
 
 function RowSeparator() {
   const c = useThemeColors();
-  return <View className="h-px mx-4" style={{ backgroundColor: c.border }} />;
+  return <View className="h-px ml-[46px] mr-4" style={{ backgroundColor: c.border }} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -688,6 +688,7 @@ export default function SettingsTabScreen() {
 
   const renderItem = useCallback(
     ({ item, index, section }: { item: SettingItem; index: number; section: SettingSection }) => {
+      const isFirst = index === 0;
       const isLast = index === section.data.length - 1;
       const showSeparator =
         !isLast &&
@@ -695,10 +696,34 @@ export default function SettingsTabScreen() {
         item.type !== 'voice-header' &&
         item.type !== 'cloud-whisper-waitlist';
 
-      if (item.type === 'version') return <VersionRow />;
+      const topRadius = isFirst ? 12 : 0;
+      const bottomRadius = isLast ? 12 : 0;
+
+      const cardStyle = {
+        marginHorizontal: 16,
+        backgroundColor: c.surfaceElevated,
+        borderLeftWidth: 1,
+        borderRightWidth: 1,
+        borderTopWidth: isFirst ? 1 : 0,
+        borderBottomWidth: isLast ? 1 : 0,
+        borderColor: c.border,
+        borderTopLeftRadius: topRadius,
+        borderTopRightRadius: topRadius,
+        borderBottomLeftRadius: bottomRadius,
+        borderBottomRightRadius: bottomRadius,
+        overflow: 'hidden' as const,
+      };
+
+      if (item.type === 'version') {
+        return (
+          <View style={cardStyle}>
+            <VersionRow />
+          </View>
+        );
+      }
       if (item.type === 'status') {
         return (
-          <>
+          <View style={cardStyle}>
             <StatusRow
               icon={item.icon}
               label={item.label}
@@ -707,14 +732,26 @@ export default function SettingsTabScreen() {
               badgeTone={item.badgeTone}
             />
             {showSeparator && <RowSeparator />}
-          </>
+          </View>
         );
       }
-      if (item.type === 'voice-header') return <VoiceHeaderRow />;
-      if (item.type === 'cloud-whisper-waitlist') return <CloudWhisperWaitlistRow />;
+      if (item.type === 'voice-header') {
+        return (
+          <View style={cardStyle}>
+            <VoiceHeaderRow />
+          </View>
+        );
+      }
+      if (item.type === 'cloud-whisper-waitlist') {
+        return (
+          <View style={cardStyle}>
+            <CloudWhisperWaitlistRow />
+          </View>
+        );
+      }
 
       return (
-        <>
+        <View style={cardStyle}>
           {item.type === 'toggle' && item.onToggle ? (
             <ToggleRow
               icon={item.icon}
@@ -734,15 +771,15 @@ export default function SettingsTabScreen() {
             />
           )}
           {showSeparator && <RowSeparator />}
-        </>
+        </View>
       );
     },
-    [themeMode, setThemeMode],
+    [themeMode, setThemeMode, c],
   );
 
   const renderSectionHeader = useCallback(
     ({ section }: { section: SettingSection }) => (
-      <View className="pt-5 pb-1.5 px-4">
+      <View className="pt-6 pb-1.5 px-4">
         <Text
           className="text-[11px] uppercase tracking-wider font-semibold"
           style={{ color: c.textMuted }}
@@ -754,7 +791,7 @@ export default function SettingsTabScreen() {
     [c],
   );
 
-  const renderSectionFooter = useCallback(() => null, []);
+  const renderSectionFooter = useCallback(() => <View style={{ height: 4 }} />, []);
 
   const keyExtractor = useCallback((item: SettingItem) => item.key, []);
 

@@ -20,7 +20,10 @@ use ts_rs::TS;
 
 /// Bounded accent color palette for project visual identity. Mirrors
 /// `ProjectAccentColor` in `packages/types/src/suite-contracts.ts`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+/// Default is `Zinc`, mirroring the TS `PROJECT_ACCENT_FALLBACK`.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS,
+)]
 #[serde(rename_all = "lowercase")]
 #[ts(rename_all = "lowercase")]
 pub enum ProjectAccentColor {
@@ -29,14 +32,8 @@ pub enum ProjectAccentColor {
     Amber,
     Rose,
     Violet,
+    #[default]
     Zinc,
-}
-
-impl Default for ProjectAccentColor {
-    fn default() -> Self {
-        // Mirrors `PROJECT_ACCENT_FALLBACK` on the TS side.
-        ProjectAccentColor::Zinc
-    }
 }
 
 /// Provenance for imported projects.
@@ -94,6 +91,39 @@ pub enum ProjectSourceSurface {
     Chrome,
 }
 
+/// Consumer chat-sync surfaces per the locked /goal rule. Mirrors the TS
+/// `SYNCED_APP_SURFACES` export in `packages/types/src/suite-contracts.ts`.
+/// Chat history may sync across these surfaces only — see
+/// `assertSurfaceCanSyncChats` on the TS side.
+pub const SYNCED_APP_SURFACES: &[ProjectSourceSurface] = &[
+    ProjectSourceSurface::Web,
+    ProjectSourceSurface::Desktop,
+    ProjectSourceSurface::Mobile,
+];
+
+/// Developer-session surfaces per the locked /goal rule. Mirrors the TS
+/// `DEVELOPER_SESSION_SURFACES` export. These surfaces keep separate
+/// developer-session history and never sync consumer chat.
+pub const DEVELOPER_SESSION_SURFACES: &[ProjectSourceSurface] = &[
+    ProjectSourceSurface::Cli,
+    ProjectSourceSurface::Vscode,
+    ProjectSourceSurface::Chrome,
+];
+
+impl ProjectSourceSurface {
+    /// Returns `true` if this surface participates in consumer chat sync.
+    /// Mirrors the TS `isSyncedAppSurface` helper.
+    pub fn is_synced_app_surface(self) -> bool {
+        matches!(self, Self::Web | Self::Desktop | Self::Mobile)
+    }
+
+    /// Returns `true` if this surface is a developer-session surface
+    /// (CLI / VS Code / Chrome). Mirrors `isDeveloperSessionSurface`.
+    pub fn is_developer_session_surface(self) -> bool {
+        matches!(self, Self::Cli | Self::Vscode | Self::Chrome)
+    }
+}
+
 /// ProjectRecord — canonical Rust mirror of the TS `ProjectRecord`.
 ///
 /// All "denormalized" or display-only fields are optional so backends can
@@ -128,6 +158,12 @@ pub struct ProjectRecord {
     pub accent_color: Option<ProjectAccentColor>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imported_from: Option<ProjectImportSource>,
+    /// Whether the project is archived. Mirrors Postgres `is_archived`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_archived: Option<bool>,
+    /// Free-form jsonb metadata. Mirrors Postgres `metadata` column.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -156,12 +192,21 @@ pub struct ProjectKnowledgeFile {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
     pub source_surface: ProjectSourceSurface,
-    pub added_by_user_id: String,
+    /// Original uploader. Nullable because the migration uses
+    /// `ON DELETE SET NULL` — when the auth user is deleted, the file row
+    /// survives with a tombstoned audit trail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub added_by_user_id: Option<String>,
     pub added_at: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub retention_expires_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deleted_at: Option<String>,
+    /// Storage URI of the underlying binary in Supabase Storage. The
+    /// Postgres column is `storage_uri text NOT NULL`. Consumers should
+    /// not assume this is a public URL — most files require a signed-URL
+    /// fetch via the storage SDK.
+    pub storage_uri: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
@@ -217,6 +262,8 @@ mod tests {
             icon_emoji: None,
             accent_color: None,
             imported_from: Some(ProjectImportSource::Manual),
+            is_archived: None,
+            metadata: None,
             created_at: "2026-05-01T00:00:00Z".to_string(),
             updated_at: "2026-05-20T00:00:00Z".to_string(),
         }
@@ -241,6 +288,68 @@ mod tests {
     fn normalize_accent_color_falls_back_for_unknown_and_none() {
         assert_eq!(normalize_accent_color(Some("teal")), ProjectAccentColor::Zinc);
         assert_eq!(normalize_accent_color(None), ProjectAccentColor::Zinc);
+    }
+
+    #[test]
+    fn synced_app_surfaces_matches_canonical_set() {
+        assert_eq!(
+            SYNCED_APP_SURFACES,
+            &[
+                ProjectSourceSurface::Web,
+                ProjectSourceSurface::Desktop,
+                ProjectSourceSurface::Mobile,
+            ]
+        );
+    }
+
+    #[test]
+    fn developer_session_surfaces_matches_canonical_set() {
+        assert_eq!(
+            DEVELOPER_SESSION_SURFACES,
+            &[
+                ProjectSourceSurface::Cli,
+                ProjectSourceSurface::Vscode,
+                ProjectSourceSurface::Chrome,
+            ]
+        );
+    }
+
+    #[test]
+    fn is_synced_app_surface_accepts_web_desktop_mobile() {
+        assert!(ProjectSourceSurface::Web.is_synced_app_surface());
+        assert!(ProjectSourceSurface::Desktop.is_synced_app_surface());
+        assert!(ProjectSourceSurface::Mobile.is_synced_app_surface());
+        assert!(!ProjectSourceSurface::Cli.is_synced_app_surface());
+        assert!(!ProjectSourceSurface::Vscode.is_synced_app_surface());
+        assert!(!ProjectSourceSurface::Chrome.is_synced_app_surface());
+    }
+
+    #[test]
+    fn is_developer_session_surface_accepts_cli_vscode_chrome() {
+        assert!(ProjectSourceSurface::Cli.is_developer_session_surface());
+        assert!(ProjectSourceSurface::Vscode.is_developer_session_surface());
+        assert!(ProjectSourceSurface::Chrome.is_developer_session_surface());
+        assert!(!ProjectSourceSurface::Web.is_developer_session_surface());
+        assert!(!ProjectSourceSurface::Desktop.is_developer_session_surface());
+        assert!(!ProjectSourceSurface::Mobile.is_developer_session_surface());
+    }
+
+    #[test]
+    fn surface_classifications_are_mutually_exclusive() {
+        for surface in [
+            ProjectSourceSurface::Web,
+            ProjectSourceSurface::Desktop,
+            ProjectSourceSurface::Mobile,
+            ProjectSourceSurface::Cli,
+            ProjectSourceSurface::Vscode,
+            ProjectSourceSurface::Chrome,
+        ] {
+            assert_ne!(
+                surface.is_synced_app_surface(),
+                surface.is_developer_session_surface(),
+                "every surface must be in exactly one classification: {surface:?}"
+            );
+        }
     }
 
     #[test]
@@ -343,10 +452,11 @@ mod tests {
             checksum_sha256: "abc".to_string(),
             summary: Some("Project spec.".to_string()),
             source_surface: ProjectSourceSurface::Desktop,
-            added_by_user_id: "user_1".to_string(),
+            added_by_user_id: Some("user_1".to_string()),
             added_at: "2026-05-20T00:00:00Z".to_string(),
             retention_expires_at: None,
             deleted_at: None,
+            storage_uri: "supabase-storage://projects/proj_1/kf_1".to_string(),
         };
         let json = serde_json::to_string(&file).expect("serialize");
         let back: ProjectKnowledgeFile = serde_json::from_str(&json).expect("deserialize");

@@ -30,6 +30,7 @@ import React, { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { codeEditing } from '@agiworkforce/api';
 import { useToolStore } from '../../stores/chat/toolStore';
+import { useIsMounted } from '../../hooks/useIsMounted';
 
 export type { ToolLabelEntry };
 
@@ -106,6 +107,9 @@ interface DiffViewProps {
 function DiffView({ diff, checkpointId, onRewind }: DiffViewProps) {
   const [showAll, setShowAll] = useState(false);
   const [rewinding, setRewinding] = useState(false);
+  // Conversation may scroll the message off-screen / virtualizer unmounts
+  // this label while the rewind API call is in flight. Guard setRewinding.
+  const isMounted = useIsMounted();
 
   const lines = diff.split('\n');
   const visibleLines = showAll ? lines : lines.slice(0, MAX_DIFF_LINES_INITIAL);
@@ -123,9 +127,11 @@ function DiffView({ diff, checkpointId, onRewind }: DiffViewProps) {
         description: err instanceof Error ? err.message : 'Could not undo this change',
       });
     } finally {
-      setRewinding(false);
+      if (isMounted.current) {
+        setRewinding(false);
+      }
     }
-  }, [checkpointId, onRewind]);
+  }, [checkpointId, onRewind, isMounted]);
 
   return (
     <div className="mt-1.5 w-full">

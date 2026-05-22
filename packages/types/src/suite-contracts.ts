@@ -528,6 +528,13 @@ export type ProjectImportSource = 'claude' | 'openai' | 'manual';
 
 export interface ProjectRecord {
   id: string;
+  /**
+   * Owner user id. Stored as `user_id` in the Postgres `user_projects`
+   * table for historical reasons (the column predates the round-10
+   * schema). The data-layer maps both names; downstream code should
+   * prefer `ownerUserId` because the SQL `user_id` is ambiguous
+   * (project_members also has `user_id` for a different purpose).
+   */
   ownerUserId: string;
   organizationId?: string | null;
   name: string;
@@ -551,6 +558,17 @@ export interface ProjectRecord {
   accentColor?: ProjectAccentColor | null;
   /** Provenance for imported projects (Claude / OpenAI / manual). */
   importedFrom?: ProjectImportSource | null;
+  /**
+   * Whether the project is archived. Mirrors Postgres `is_archived`
+   * column from the original 20260318 migration.
+   */
+  isArchived?: boolean;
+  /**
+   * Free-form jsonb metadata. Mirrors Postgres `metadata` column from
+   * the original 20260318 migration. Reserved for app-specific
+   * extensions that don't deserve a typed field yet.
+   */
+  metadata?: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -576,11 +594,24 @@ export interface ProjectKnowledgeFile {
   /** Optional short summary (for tooltips / search). */
   summary?: string | null;
   sourceSurface: SourceSurface;
-  addedByUserId: string;
+  /**
+   * Original uploader. Nullable because the FK uses `ON DELETE SET NULL`
+   * (migration `20260521130000_fix_project_knowledge_files_fk.sql`) — when
+   * the auth user is deleted, the file row survives with a tombstoned
+   * audit trail. Hosts render "Uploaded by a deleted user" when null.
+   */
+  addedByUserId: string | null;
   addedAt: string;
   /** Retention timestamp if any (mirrors generated-file retention). */
   retentionExpiresAt?: string | null;
   deletedAt?: string | null;
+  /**
+   * Storage URI of the underlying binary in Supabase Storage. The
+   * Postgres column is `storage_uri text NOT NULL`. Consumers should
+   * not assume this is a public URL — most files require a signed-URL
+   * fetch via the storage SDK.
+   */
+  storageUri: string;
 }
 
 export interface ProjectInstructions {
@@ -1015,6 +1046,30 @@ export function validateGeneratedFileTrustBoundary(
   }
 
   return violations;
+}
+
+/**
+ * Throw-variant of `validateGeneratedFileTrustBoundary`. Use at persistence
+ * boundaries (anywhere a GeneratedFile record is written to durable
+ * storage, replicated across surfaces, or transferred between trust
+ * boundaries). Parallels `assertSurfaceCanSyncChats` — fail fast rather
+ * than silently persist a record that violates the trust contract.
+ *
+ * The thrown Error includes every violation code so the call site can
+ * choose to log, telemetry-emit, or rethrow as an http 422 / tauri
+ * command error. Callers that want graceful degradation should call the
+ * `validateGeneratedFileTrustBoundary` non-throw variant directly.
+ *
+ * Round-11 (2026-05-22) ultrathink slice — wires a defined-but-unused
+ * defensive utility into a fail-fast boundary helper. Mirror of the
+ * sync-rule guard pattern.
+ */
+export function assertGeneratedFileTrustBoundary(input: GeneratedFileTrustBoundaryInput): void {
+  const violations = validateGeneratedFileTrustBoundary(input);
+  if (violations.length === 0) return;
+  const codes = violations.map((v) => v.code).join(', ');
+  const messages = violations.map((v) => `- ${v.code}: ${v.message}`).join('\n');
+  throw new Error(`AGI generated-file trust-boundary violation [${codes}]:\n${messages}`);
 }
 
 // ============================================================================

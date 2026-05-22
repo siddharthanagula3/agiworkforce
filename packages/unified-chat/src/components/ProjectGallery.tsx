@@ -1,9 +1,44 @@
 import { useCallback, useMemo, useState, type FormEvent } from 'react';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Smile } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useProjectStore } from '../stores/projectStore';
 import { ProjectCard } from './ProjectCard';
 import type { Project } from '../lib/types';
+
+/**
+ * Project create presets — quick-start options that pre-fill name + emoji
+ * + accent color. Mirrors the ChatGPT create-project modal pattern
+ * (Investing / Homework / Writing) without copying their labels. Tuned for
+ * AGI's developer + research audience.
+ */
+interface ProjectPreset {
+  emoji: string;
+  label: string;
+  accentColor: 'emerald' | 'sky' | 'amber' | 'rose' | 'violet' | 'zinc';
+}
+
+const PROJECT_PRESETS: readonly ProjectPreset[] = [
+  { emoji: '💻', label: 'Coding', accentColor: 'sky' },
+  { emoji: '📝', label: 'Writing', accentColor: 'amber' },
+  { emoji: '🔬', label: 'Research', accentColor: 'emerald' },
+  { emoji: '📚', label: 'Learning', accentColor: 'violet' },
+];
+
+/** Quick-pick emoji palette shown inline when the user opens the picker. */
+const EMOJI_OPTIONS: readonly string[] = [
+  '📁',
+  '💻',
+  '📝',
+  '🔬',
+  '📚',
+  '🎨',
+  '💼',
+  '🏠',
+  '🚀',
+  '⭐️',
+  '🛠️',
+  '🌱',
+];
 
 /**
  * ProjectGallery — shared list/grid surface for project navigation.
@@ -71,7 +106,16 @@ export function ProjectGallery({
   const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
+  const [newEmoji, setNewEmoji] = useState<string>('📁');
+  const [newAccent, setNewAccent] = useState<ProjectPreset['accentColor']>('zinc');
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const applyPreset = useCallback((preset: ProjectPreset) => {
+    setNewName(preset.label);
+    setNewEmoji(preset.emoji);
+    setNewAccent(preset.accentColor);
+  }, []);
 
   const visibleProjects = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -109,17 +153,30 @@ export function ProjectGallery({
         let project: Project;
         if (onCreate) {
           project = await onCreate(trimmed);
+          // Best-effort merge of emoji + accent — when the host's onCreate
+          // doesn't echo them back, layer them on top of the returned
+          // project so the auto-select handoff still carries them.
+          project = {
+            ...project,
+            iconEmoji: project.iconEmoji ?? newEmoji,
+            accentColor: project.accentColor ?? newAccent,
+          };
         } else {
           const now = new Date().toISOString();
           project = {
             id: generateLocalId(),
             name: trimmed,
+            iconEmoji: newEmoji,
+            accentColor: newAccent,
             createdAt: now,
             updatedAt: now,
           };
           addProject(project);
         }
         setNewName('');
+        setNewEmoji('📁');
+        setNewAccent('zinc');
+        setEmojiPickerOpen(false);
         setCreating(false);
         // Auto-select the just-created project so the host can route into it.
         handleSelect(project);
@@ -127,7 +184,7 @@ export function ProjectGallery({
         setSubmitting(false);
       }
     },
-    [newName, onCreate, addProject, handleSelect],
+    [newName, newEmoji, newAccent, onCreate, addProject, handleSelect],
   );
 
   return (
@@ -171,43 +228,119 @@ export function ProjectGallery({
         </button>
       </div>
 
-      {/* Inline create form */}
+      {/* Inline create form — emoji picker + name input + presets */}
       {creating && (
         <form
           onSubmit={handleCreate}
-          className="flex items-center gap-2 rounded-md border bg-[var(--chat-surface-base)] p-2"
+          data-testid="project-create-form"
+          className="flex flex-col gap-2 rounded-md border bg-[var(--chat-surface-base)] p-3"
           style={{ borderColor: 'var(--chat-border)' }}
         >
-          <input
-            autoFocus
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value.slice(0, 80))}
-            placeholder="Project name"
-            className="flex-1 border-0 bg-transparent px-2 py-1 text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)] focus:outline-none"
-          />
-          <button
-            type="button"
-            onClick={() => {
-              setCreating(false);
-              setNewName('');
-            }}
-            className="rounded px-2 py-1 text-xs text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setEmojiPickerOpen((v) => !v)}
+              aria-label="Choose project emoji"
+              aria-expanded={emojiPickerOpen}
+              data-testid="project-create-emoji-trigger"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-[var(--chat-surface-elevated)] text-lg hover:bg-[var(--chat-surface-hover)]"
+              style={{ borderColor: 'var(--chat-border)' }}
+            >
+              {newEmoji ? (
+                <span>{newEmoji}</span>
+              ) : (
+                <Smile size={14} className="text-[var(--chat-text-muted)]" />
+              )}
+            </button>
+            <input
+              autoFocus
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value.slice(0, 80))}
+              placeholder="Project name"
+              data-testid="project-create-name-input"
+              className="flex-1 rounded-md border-0 bg-transparent px-2 py-1 text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-accent-secondary)]"
+            />
+          </div>
+
+          {emojiPickerOpen && (
+            <div
+              role="listbox"
+              aria-label="Project emoji"
+              data-testid="project-create-emoji-picker"
+              className="flex flex-wrap gap-1 rounded-md border bg-[var(--chat-surface-elevated)] p-2"
+              style={{ borderColor: 'var(--chat-border)' }}
+            >
+              {EMOJI_OPTIONS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  role="option"
+                  aria-selected={emoji === newEmoji}
+                  onClick={() => {
+                    setNewEmoji(emoji);
+                    setEmojiPickerOpen(false);
+                  }}
+                  className={cn(
+                    'flex h-8 w-8 items-center justify-center rounded text-base hover:bg-[var(--chat-surface-hover)]',
+                    emoji === newEmoji && 'bg-[var(--chat-surface-hover)]',
+                  )}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div
+            data-testid="project-create-presets"
+            className="flex flex-wrap items-center gap-1.5 pt-1"
           >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={submitting || newName.trim().length === 0}
-            className={cn(
-              'rounded px-2 py-1 text-xs font-medium text-white',
-              submitting || newName.trim().length === 0
-                ? 'cursor-not-allowed bg-[var(--chat-surface-hover)] text-[var(--chat-text-muted)]'
-                : 'bg-[var(--chat-accent-primary)] hover:opacity-90',
-            )}
-          >
-            Create
-          </button>
+            <span className="text-[10px] uppercase tracking-wide text-[var(--chat-text-muted)]">
+              Quick start
+            </span>
+            {PROJECT_PRESETS.map((preset) => (
+              <button
+                key={preset.label}
+                type="button"
+                onClick={() => applyPreset(preset)}
+                data-testid={`project-create-preset-${preset.label.toLowerCase()}`}
+                className="inline-flex items-center gap-1 rounded-full border bg-[var(--chat-surface-elevated)] px-2.5 py-0.5 text-xs text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+                style={{ borderColor: 'var(--chat-border)' }}
+              >
+                <span>{preset.emoji}</span>
+                <span>{preset.label}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setCreating(false);
+                setNewName('');
+                setNewEmoji('📁');
+                setNewAccent('zinc');
+                setEmojiPickerOpen(false);
+              }}
+              className="rounded px-2 py-1 text-xs text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting || newName.trim().length === 0}
+              className={cn(
+                'rounded px-3 py-1 text-xs font-medium text-white',
+                submitting || newName.trim().length === 0
+                  ? 'cursor-not-allowed bg-[var(--chat-surface-hover)] text-[var(--chat-text-muted)]'
+                  : 'bg-[var(--chat-accent-primary)] hover:opacity-90',
+              )}
+            >
+              Create project
+            </button>
+          </div>
         </form>
       )}
 

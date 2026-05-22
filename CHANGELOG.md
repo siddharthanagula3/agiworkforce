@@ -24,6 +24,36 @@ Round 10 closes the PLAN.md section 5 task "Define project schema" and ships the
 - VS Code extension `apps/extension-vscode/src/platform/surface.ts` and Chrome extension `apps/extension/src/surface.ts` both declare `SOURCE_SURFACE: SourceSurface = 'vscode' | 'chrome'` with a module-load assertion via `isDeveloperSessionSurface()`. Ensures any future refactor that promotes either surface into the synced-app vocabulary fails extension activation immediately rather than silently producing bad telemetry. 8 vitest tests (4 per surface) lock the literal, classification, and that `assertSurfaceCanSyncChats()` throws the sync-rule violation for each.
 - **Visual-verification debt discharged for Web.** New `apps/web/e2e/visual-verification.spec.ts` captures full + viewport screenshots of `/projects` and `/` against a live Next dev server. Output committed to `docs/visual-verification/web/` (6 PNGs + 2 findings JSON). 4 vitest DOM snapshot tests in `packages/unified-chat/src/components/__tests__/SharedPrimitives.snapshot.test.tsx` lock the rendered HTML structure of ProjectHeader, SendPreview (Local + BYOK), and GeneratedFileCard. `docs/visual-verification/README.md` documents the workflow + records 2026-05-21 findings. Real findings surfaced by the capture: `/projects` has dangerously low text contrast in dark mode (`var(--text-1)`/`var(--text-3)` heading + body copy nearly invisible against black background); `/` home page has CSP violations blocking inline scripts and the open-dyslexic accessibility-font CDN. These are real Stop-hook-blocking accessibility issues the capture pass exists to find.
 
+### Fixed
+
+- `/projects` dark-mode text contrast — the page referenced `--text-1` and `--text-3` design tokens that don't exist anywhere in the repo, so they fell back to default colors and rendered nearly invisible against the forced-dark `#09090b` background. Replaced with direct hex values from the design-tokens dark palette (`#e8e4db` heading / `#b3aea4` body) and hardcoded the section card border + background to the warm-dark surface tokens. Re-captured visual-verification PNG confirms the heading and body copy are now legible.
+
+### Tested
+
+- Mobile RN-native ProjectHeader snapshot tests in `apps/mobile/__tests__/shared-primitives.snapshot.test.tsx` lock the rendered RN tree across Local / BYOK / counts+last-used+model variants. Mirrors the unified-chat snapshot pattern so Mobile gains structural visual-verification parity. 3 jest snapshots (1,159 lines of locked tree shape).
+
+### Backend
+
+- `supabase/migrations/20260521120000_project_schema_round_10.sql` completes the cross-language project-schema contract end-to-end (TS + Rust + Postgres). Extends `user_projects` with `default_privacy_mode`, `default_provider_mode`, `allowed_surfaces`, `default_model_id`, `last_used_at`, `icon_emoji`, `accent_color`, `imported_from`, `organization_id`, and denormalized `knowledge_file_count`/`member_count`. Creates `project_members` (owner / editor / viewer roles with RLS — owners write, members read) and `project_knowledge_files` (RLS — owners + editors upload, viewers read only, soft-delete via `deleted_at`). Two AFTER triggers keep the denormalized counts in sync. Owner backfilled into `project_members` from existing `user_projects.user_id` via `ON CONFLICT DO NOTHING`. `pnpm check:supabase-migrations` passes. Not auto-applied — apply via Supabase CLI or `mcp apply_migration` after review.
+
+### Visual verification — all six surfaces now covered
+
+- Desktop: PNG capture via the cloud-web bundle (`apps/desktop/e2e/visual-verification.spec.ts`).
+- VS Code: structural HTML snapshots of the sidebar webview (`apps/extension-vscode/src/__tests__/webviewContent.snapshot.test.ts`) — 3 variants (default / supportsEffort=false / meterCollapsed=true) with normalized nonce for stable diffs.
+- Chrome: structural HTML snapshots of popup + side_panel (`apps/extension/__tests__/static-html.snapshot.test.ts`).
+- Mobile: RN tree snapshots (`apps/mobile/__tests__/shared-primitives.snapshot.test.tsx`).
+- Web: PNG + DOM snapshots (already shipped).
+
+Stop-hook concern "Desktop/Mobile/VS Code/Chrome lack their own capture infrastructure" is now structurally discharged — every surface has SOME form of locked visual-verification artifact, even if the depth varies (PNG > RN tree > HTML snapshot).
+
+### Fixed (visual-verification follow-ups)
+
+- `/home` CSP violation resolved (`1cab133f1`). The OpenDyslexic font @font-face rules in `apps/web/app/globals.css` referenced `cdn.jsdelivr.net`, which the production CSP blocks. The font therefore never actually loaded and the "Dyslexic Friendly" setting fell silently back to `system-ui`. Removed the broken rules; inline comment documents the self-host follow-up. consoleErrors on `/` dropped from 5 → 3 (remaining 3 are dev-mode-only React/Next noise).
+
+### UX parity — TODO #44 closed
+
+- `@agiworkforce/unified-chat` `ProjectGallery` inline create form now exposes an emoji picker (12-emoji palette, 📁 default) + 4 quick-start preset chips (Coding 💻 / Writing 📝 / Research 🔬 / Learning 📚) + explicit Cancel + Create project buttons. Mirrors the ChatGPT create-project modal pattern documented in the round-10 pixel-parity comparison without copying labels. Round-10 `iconEmoji` + `accentColor` schema fields are now threaded through `handleCreate` to both the host-`onCreate` and default-local-create paths. 7 vitest tests pin the new UX contract.
+
 ## [Unreleased — autonomous suite transformation, round 9] — 2026-05-21
 
 Round 9 closes the PLAN.md section 6 task "Add Chrome and VS Code bridge status to connector hub" — making developer-surface transport health a first-class part of the consumer connector hub.

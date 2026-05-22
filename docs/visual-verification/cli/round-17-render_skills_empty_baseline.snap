@@ -1,0 +1,11 @@
+---
+source: apps/cli/src/tui/widgets/snapshot_smoke.rs
+expression: rendered
+---
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Skills
+
+  No skills found.
+  Create skills in .agiworkforce/skills/, .claude/skills/, or ~/.claude/skills/.
+
+  ↑↓ navigate · Enter select · Esc close

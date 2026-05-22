@@ -39,6 +39,7 @@ import { errorTracking } from '../../../services/errorTracking';
 import { useAuthStore } from '../../../stores/auth';
 import { Button } from '@/components/ui/Button';
 import { Switch } from '@/components/ui/Switch';
+import { useIsMounted } from '@/hooks/useIsMounted';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -77,6 +78,12 @@ function formatPurgeDate(iso: string | null): string {
 export function DataSection() {
   const userId = useAuthStore((state) => state.user?.id ?? null);
 
+  // Settings panels often unmount while async work is in flight — user
+  // navigates to a different settings tab, closes the dialog, or signs
+  // out. Guard every post-await setState below to avoid React's
+  // unmounted-component warning.
+  const isMounted = useIsMounted();
+
   // ── Export ──────────────────────────────────────────────────────────────
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -105,18 +112,25 @@ export function DataSection() {
 
       if (savePath) {
         await writeTextFile(savePath, json);
+        if (!isMounted.current) return;
         setExportSuccess(true);
         if (exportSuccessTimer.current) window.clearTimeout(exportSuccessTimer.current);
-        exportSuccessTimer.current = window.setTimeout(() => setExportSuccess(false), 5000);
+        exportSuccessTimer.current = window.setTimeout(() => {
+          if (isMounted.current) setExportSuccess(false);
+        }, 5000);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      setExportError(msg);
+      if (isMounted.current) {
+        setExportError(msg);
+      }
       toast.error('Export failed', { description: msg });
     } finally {
-      setExporting(false);
+      if (isMounted.current) {
+        setExporting(false);
+      }
     }
-  }, []);
+  }, [isMounted]);
 
   // ── Pending deletion status ─────────────────────────────────────────────
   const [pendingStatus, setPendingStatus] = useState<PendingDeletionStatus | null>(null);
@@ -126,20 +140,25 @@ export function DataSection() {
     setStatusLoading(true);
     try {
       const status = await invoke<PendingDeletionStatus>('privacy_get_pending_deletion');
+      if (!isMounted.current) return;
       setPendingStatus(status);
     } catch (err) {
       // Soft fail: assume no pending deletion. Surface log only.
       console.warn('[DataSection] privacy_get_pending_deletion failed', err);
-      setPendingStatus({
-        pending: false,
-        requestedAt: null,
-        purgeAt: null,
-        daysRemaining: null,
-      });
+      if (isMounted.current) {
+        setPendingStatus({
+          pending: false,
+          requestedAt: null,
+          purgeAt: null,
+          daysRemaining: null,
+        });
+      }
     } finally {
-      setStatusLoading(false);
+      if (isMounted.current) {
+        setStatusLoading(false);
+      }
     }
-  }, []);
+  }, [isMounted]);
 
   useEffect(() => {
     void refreshPendingStatus();
@@ -165,9 +184,11 @@ export function DataSection() {
       const status = await invoke<PendingDeletionStatus>('privacy_request_account_deletion', {
         userId,
       });
-      setPendingStatus(status);
-      setConfirm2Open(false);
-      setConfirmText('');
+      if (isMounted.current) {
+        setPendingStatus(status);
+        setConfirm2Open(false);
+        setConfirmText('');
+      }
       toast.success('Account marked for deletion', {
         description: `Reversible until ${formatPurgeDate(status.purgeAt)}.`,
       });
@@ -175,9 +196,11 @@ export function DataSection() {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error('Failed to mark account for deletion', { description: msg });
     } finally {
-      setSubmittingDelete(false);
+      if (isMounted.current) {
+        setSubmittingDelete(false);
+      }
     }
-  }, [confirmText, userId]);
+  }, [confirmText, userId, isMounted]);
 
   const handleCancelDeletion = useCallback(async () => {
     setCancellingDelete(true);
@@ -189,9 +212,11 @@ export function DataSection() {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error('Failed to cancel deletion', { description: msg });
     } finally {
-      setCancellingDelete(false);
+      if (isMounted.current) {
+        setCancellingDelete(false);
+      }
     }
-  }, [refreshPendingStatus]);
+  }, [refreshPendingStatus, isMounted]);
 
   // ── Sentry telemetry toggle ─────────────────────────────────────────────
   const [sentryEnabled, setSentryEnabled] = useState<boolean>(() => {
@@ -220,25 +245,32 @@ export function DataSection() {
     };
   }, []);
 
-  const handleToggleSentry = useCallback(async (enabled: boolean) => {
-    setSavingSentry(true);
-    try {
-      await onboarding.setUserPreference(
-        PREF_KEY_SENTRY,
-        enabled.toString(),
-        'privacy',
-        'boolean',
-        'Send anonymized error stack traces to Sentry',
-      );
-      errorTracking.updateConfig({ enabled });
-      setSentryEnabled(enabled);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      toast.error('Failed to update telemetry preference', { description: msg });
-    } finally {
-      setSavingSentry(false);
-    }
-  }, []);
+  const handleToggleSentry = useCallback(
+    async (enabled: boolean) => {
+      setSavingSentry(true);
+      try {
+        await onboarding.setUserPreference(
+          PREF_KEY_SENTRY,
+          enabled.toString(),
+          'privacy',
+          'boolean',
+          'Send anonymized error stack traces to Sentry',
+        );
+        errorTracking.updateConfig({ enabled });
+        if (isMounted.current) {
+          setSentryEnabled(enabled);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        toast.error('Failed to update telemetry preference', { description: msg });
+      } finally {
+        if (isMounted.current) {
+          setSavingSentry(false);
+        }
+      }
+    },
+    [isMounted],
+  );
 
   // ── Web analytics toggle ────────────────────────────────────────────────
   const [webAnalyticsEnabled, setWebAnalyticsEnabled] = useState<boolean>(true);
@@ -263,24 +295,31 @@ export function DataSection() {
     };
   }, []);
 
-  const handleToggleWebAnalytics = useCallback(async (enabled: boolean) => {
-    setSavingWebAnalytics(true);
-    try {
-      await onboarding.setUserPreference(
-        PREF_KEY_WEB_ANALYTICS,
-        enabled.toString(),
-        'privacy',
-        'boolean',
-        'Allow Google Tag Manager to collect pageviews and clicks in the web app',
-      );
-      setWebAnalyticsEnabled(enabled);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      toast.error('Failed to update analytics preference', { description: msg });
-    } finally {
-      setSavingWebAnalytics(false);
-    }
-  }, []);
+  const handleToggleWebAnalytics = useCallback(
+    async (enabled: boolean) => {
+      setSavingWebAnalytics(true);
+      try {
+        await onboarding.setUserPreference(
+          PREF_KEY_WEB_ANALYTICS,
+          enabled.toString(),
+          'privacy',
+          'boolean',
+          'Allow Google Tag Manager to collect pageviews and clicks in the web app',
+        );
+        if (isMounted.current) {
+          setWebAnalyticsEnabled(enabled);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        toast.error('Failed to update analytics preference', { description: msg });
+      } finally {
+        if (isMounted.current) {
+          setSavingWebAnalytics(false);
+        }
+      }
+    },
+    [isMounted],
+  );
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
