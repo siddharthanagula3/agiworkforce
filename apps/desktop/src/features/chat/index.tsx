@@ -11,7 +11,7 @@
  */
 import { isTauri } from '../../lib/tauri-mock';
 import { invoke as ipcInvoke } from '../../utils/ipc';
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useCallback } from 'react';
 import { EyeOff, Loader2 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -103,6 +103,8 @@ import { AppLayout } from './AppLayout';
 import { AgentProgressFooter } from './AgentProgressFooter';
 import { BudgetAlertsPanel } from './BudgetAlertsPanel';
 import { ChatInputArea, type SendOptions } from './ChatInputArea';
+import { SendPreview } from '@agiworkforce/unified-chat';
+import { summarizeSendPreview, type ProviderMode } from '@agiworkforce/types';
 import { ChatStream } from './ChatStream';
 import { ProjectsView } from './ProjectsView';
 // import { TasksView } from './TasksView';
@@ -337,6 +339,40 @@ export const UnifiedAgenticChat: React.FC<{
       selectedModel: state.selectedModel,
     })),
   );
+
+  // SendPreview disclosure — privacy-respecting "what will be sent" banner
+  // rendered above the chat input. Maps Desktop's model-store provider
+  // taxonomy to the canonical ProviderMode + destinationHost shape so the
+  // shared web SendPreview can render the destination call-out + banner.
+  const sendPreviewPresentation = useMemo(() => {
+    const providerKey = selectedProvider ?? undefined;
+    const isLocalRuntime = providerKey === 'ollama' || providerKey === 'lmstudio';
+    const providerMode: ProviderMode = !providerKey
+      ? 'Local'
+      : isLocalRuntime
+        ? 'Local'
+        : providerKey === 'managed_cloud'
+          ? 'ManagedGateway'
+          : 'DirectByok';
+    const destinationHost =
+      providerMode === 'Local'
+        ? undefined
+        : providerKey === 'anthropic'
+          ? 'api.anthropic.com'
+          : providerKey === 'openai'
+            ? 'api.openai.com'
+            : providerKey === 'google'
+              ? 'generativelanguage.googleapis.com'
+              : providerKey === 'managed_cloud'
+                ? 'gateway.agiworkforce.com'
+                : undefined;
+    return summarizeSendPreview({
+      providerMode,
+      modelLabel: selectedModel ?? undefined,
+      modelId: selectedModel ?? undefined,
+      destinationHost,
+    });
+  }, [selectedProvider, selectedModel]);
 
   // CHT-008 fix: Consolidated billing store selectors
   const { loadCostOverview: loadOverview } = useBillingUsageStore(
@@ -1641,6 +1677,10 @@ export const UnifiedAgenticChat: React.FC<{
               )}
 
               {/* ChatInputToolbar removed — model selector is in ChatInputArea, other toggles move to settings/Cmd+K */}
+
+              <div className="mx-auto w-full max-w-3xl px-4 pb-2">
+                <SendPreview presentation={sendPreviewPresentation} />
+              </div>
 
               <ChatInputArea onSend={handleSendMessage} onStopGeneration={handleStopGeneration} />
             </>
