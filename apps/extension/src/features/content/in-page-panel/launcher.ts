@@ -97,12 +97,12 @@ export function createLauncher(onOpen: () => void): {
     :host { display:block; }
     .agi-launcher-btn {
       width:48px; height:48px;
-      background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);
+      background:#21808d;
       border-radius:50%;
       border:none;
       cursor:pointer;
       display:flex; align-items:center; justify-content:center;
-      box-shadow:0 4px 16px rgba(99,102,241,0.55);
+      box-shadow:0 4px 16px rgba(33,128,141,0.32);
       pointer-events:all;
       transition:transform 0.18s,box-shadow 0.18s;
       color:#fff;
@@ -113,7 +113,7 @@ export function createLauncher(onOpen: () => void): {
     }
     .agi-launcher-btn:hover {
       transform:scale(1.1);
-      box-shadow:0 6px 24px rgba(99,102,241,0.75);
+      box-shadow:0 6px 24px rgba(33,128,141,0.42);
     }
     .agi-launcher-btn:active {
       transform:scale(0.95);
@@ -134,15 +134,14 @@ export function createLauncher(onOpen: () => void): {
   // ── Button ─────────────────────────────────────────────────────────────────
   const button = document.createElement('button');
   button.className = 'agi-launcher-btn';
-  button.setAttribute('aria-label', 'Open AGI Workforce chat');
+  button.setAttribute('aria-label', 'Open AGI');
   button.setAttribute('type', 'button');
-  // Use text-based icon (no external asset fetch — CSP-safe)
-  button.textContent = '⚡';
+  button.textContent = 'A';
 
   // ── Tooltip ────────────────────────────────────────────────────────────────
   const tooltip = document.createElement('div');
   tooltip.className = 'agi-tooltip';
-  tooltip.textContent = 'Ask AGI Workforce';
+  tooltip.textContent = 'Ask AGI';
 
   button.addEventListener('click', onOpen);
 

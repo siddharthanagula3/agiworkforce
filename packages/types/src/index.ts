@@ -120,6 +120,9 @@ export * from './dispatch';
 // Workspace analytics types (enterprise usage tracking)
 export * from './workspace-analytics';
 
+// Enterprise admin, compliance, identity, support, and managed-credit contracts
+export * from './enterprise';
+
 // Command capability types (runtime-aware dispatch)
 export * from './command-capabilities';
 
@@ -131,3 +134,6 @@ export * from './design-system';
 
 // On-device model catalog types (Path C architecture — local LLM type system)
 export * from './on-device-models';
+
+// Cross-surface application-suite contracts
+export * from './suite-contracts';

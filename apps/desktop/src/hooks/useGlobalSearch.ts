@@ -4,7 +4,7 @@ import { useChatStore } from '../stores/chat/chatStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useSkillMarketplaceStore } from '../stores/skillMarketplaceStore';
 import { useConnectorsStore } from '../stores/connectorsStore';
-import { CONNECTORS } from '../components/Connectors/connectorDefinitions';
+import { CONNECTORS } from '../features/connectors/connectorDefinitions';
 
 export interface SearchResultItem {
   id: string;

@@ -1,6 +1,6 @@
 import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { combineAbortSignals } from '@/lib/abortSignal';
-import { AbortError } from '@agiworkforce/utils';
+import { AbortError } from '@agiworkforce/utils/async';
 import {
   streamFromProvider,
   type ProviderStreamProvider,
@@ -9,6 +9,8 @@ import {
 import { supabase } from './supabase';
 import { secureFetch } from './secureFetch';
 import { ApiPaywallError } from './api';
+import { ensureLlmGateOpen } from './llmGate';
+import { assertRemoteChatAllowed } from './remoteChatGate';
 
 export interface StreamDelta {
   content?: string;
@@ -318,6 +320,9 @@ export async function streamChat(
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
+  assertRemoteChatAllowed();
+  ensureLlmGateOpen(inferProviderFromModel(body.model));
+
   // Per-attempt timeout — each stream attempt gets a fresh timeout so backoff
   // waits don't eat into the next attempt's time budget.
   let timeoutController = new AbortController();

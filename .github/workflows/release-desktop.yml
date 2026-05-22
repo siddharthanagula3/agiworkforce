@@ -315,6 +315,9 @@ jobs:
         # H27: --max-old-space-size=8192 is intentional; ubuntu-22.04 runners have 7 GB RAM
         run: echo "NODE_OPTIONS=--max-old-space-size=8192" >> $GITHUB_ENV && pnpm --filter @agiworkforce/desktop run build:web
 
+      - name: Build native messaging host sidecar
+        run: pnpm --filter @agiworkforce/desktop run build:native-host
+
       - name: Build Tauri app
         # H28: Pinned to @v0 major-version tag (commit 73fb865 = v0.6.1); avoids floating SHA
         # C1: Signing keys are masked above; passed via env: (tauri-action reads TAURI_SIGNING_* from env)

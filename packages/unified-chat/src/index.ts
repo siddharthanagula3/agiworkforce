@@ -5,6 +5,7 @@ export * from './lib/runtime';
 export * from './lib/hostBridge';
 export * from './lib/utils';
 export * from './lib/greetings';
+export { buildSandboxedHtml, ARTIFACT_SANDBOX_ATTR } from './lib/artifact-sandbox';
 export { getConnectorPermissionStore } from './lib/connectorPermissionStore';
 export type { ConnectorPermissionStore } from './lib/connectorPermissionStore';
 export { classifyPrompt, buildRoutingDecision, TASK_LABEL } from './lib/promptClassifier';
@@ -52,7 +53,7 @@ export { ScrollArea } from './components/ui/ScrollArea';
 // rather than this top-level component. The export is preserved for
 // downstream consumers that haven't migrated yet — once they have, this
 // re-export and the underlying `components/ChatInterface.tsx` should be
-// removed in lockstep. See `docs/SCALING.md` for the migration plan.
+// removed in lockstep. See `docs/current/technical-architecture.md` for the migration plan.
 export { ChatInterface, useRuntime } from './components/ChatInterface';
 export type { ChatInterfaceProps } from './components/ChatInterface';
 
@@ -93,6 +94,10 @@ export { ArtifactPanel } from './components/ArtifactPanel';
 export type { ArtifactPanelProps } from './components/ArtifactPanel';
 export { DownloadCard } from './components/DownloadCard';
 export type { DownloadCardProps } from './components/DownloadCard';
+export { GeneratedFileCard } from './components/GeneratedFileCard';
+export type { GeneratedFileCardProps } from './components/GeneratedFileCard';
+export { SendPreview } from './components/SendPreview';
+export type { SendPreviewProps } from './components/SendPreview';
 export { ImageGenCard } from './components/ImageGenCard';
 export type { ImageGenCardProps } from './components/ImageGenCard';
 export { VideoGenCard } from './components/VideoGenCard';
@@ -100,6 +105,18 @@ export type { VideoGenCardProps } from './components/VideoGenCard';
 
 // Modal overlays
 export { SettingsModal } from './components/SettingsModal';
+export { SettingsShell, DEFAULT_SETTINGS_SECTIONS } from './components/SettingsShell';
+export type { SettingsSection, SettingsShellProps } from './components/SettingsShell';
+export { MemoryEditor } from './components/MemoryEditor';
+export type { MemoryEditorProps } from './components/MemoryEditor';
+export { ProjectCard } from './components/ProjectCard';
+export type { ProjectCardProps } from './components/ProjectCard';
+export { ProjectGallery } from './components/ProjectGallery';
+export type { ProjectGalleryProps } from './components/ProjectGallery';
+export { ProjectHeader } from './components/ProjectHeader';
+export type { ProjectHeaderProps } from './components/ProjectHeader';
+export { useMemoryStore, selectMemoryFacts, selectMemoryCount } from './stores/memoryStore';
+export type { MemoryFact } from './stores/memoryStore';
 export { CommandPalette } from './components/CommandPalette';
 
 // Phase A Slice 1 — Budget + agentic-loop status (ported from UAC)

@@ -10,7 +10,7 @@ export const MIGRATION_SQL: Migration[] = [
       CREATE TABLE IF NOT EXISTS conversations (
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL DEFAULT 'New chat',
-        default_mode TEXT NOT NULL CHECK (default_mode IN ('local','cloud')),
+        default_mode TEXT NOT NULL CHECK (default_mode IN ('chat','agent','voice')),
         default_provider TEXT,
         default_model TEXT,
         created_at INTEGER NOT NULL,
@@ -24,7 +24,7 @@ export const MIGRATION_SQL: Migration[] = [
         conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
         role TEXT NOT NULL CHECK (role IN ('user','assistant','tool','system')),
         content TEXT NOT NULL,
-        mode TEXT NOT NULL CHECK (mode IN ('local','cloud')),
+        mode TEXT NOT NULL CHECK (mode IN ('chat','agent','voice')),
         provider TEXT,
         model TEXT,
         runtime TEXT,

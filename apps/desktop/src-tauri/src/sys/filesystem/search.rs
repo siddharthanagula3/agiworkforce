@@ -23,7 +23,7 @@ const MAX_ENTRIES_VISITED: usize = 100_000;
 fn search_root() -> Result<PathBuf, String> {
     if let Ok(cwd) = std::env::current_dir() {
         // Trust cwd only if it isn't the filesystem root.
-        if cwd.parent().is_some() && cwd != PathBuf::from("/") {
+        if cwd.parent().is_some() && cwd != Path::new("/") {
             return Ok(cwd);
         }
     }
@@ -55,19 +55,18 @@ pub async fn fs_search_folders(query: String, limit: usize) -> Result<Vec<String
 
 fn search_files_blocking(root: &Path, query: &str, limit: usize) -> Result<Vec<String>, String> {
     let mut results = Vec::new();
-    let mut entries_visited: usize = 0;
     let query_lower = query.to_lowercase();
 
-    for entry in WalkDir::new(root)
+    for (entries_visited, entry) in WalkDir::new(root)
         .max_depth(5)
         .follow_links(false)
         .into_iter()
         .filter_entry(|e| !is_hidden(e.path()) && !is_ignored(e.path()))
+        .enumerate()
     {
         if results.len() >= limit || entries_visited >= MAX_ENTRIES_VISITED {
             break;
         }
-        entries_visited += 1;
 
         let entry = entry.map_err(|e| format!("Walk error: {}", e))?;
 
@@ -120,19 +119,18 @@ fn search_files_blocking(root: &Path, query: &str, limit: usize) -> Result<Vec<S
 
 fn search_folders_blocking(root: &Path, query: &str, limit: usize) -> Result<Vec<String>, String> {
     let mut results = Vec::new();
-    let mut entries_visited: usize = 0;
     let query_lower = query.to_lowercase();
 
-    for entry in WalkDir::new(root)
+    for (entries_visited, entry) in WalkDir::new(root)
         .max_depth(5)
         .follow_links(false)
         .into_iter()
         .filter_entry(|e| !is_hidden(e.path()) && !is_ignored(e.path()))
+        .enumerate()
     {
         if results.len() >= limit || entries_visited >= MAX_ENTRIES_VISITED {
             break;
         }
-        entries_visited += 1;
 
         let entry = entry.map_err(|e| format!("Walk error: {}", e))?;
 

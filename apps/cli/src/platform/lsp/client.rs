@@ -5,8 +5,8 @@
 use anyhow::{Context, Result};
 use serde_json::Value;
 use std::path::Path;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::RwLock;
@@ -23,11 +23,18 @@ pub struct DiagnosticsBuffer {
 }
 
 impl DiagnosticsBuffer {
-    pub fn new() -> Self { Self::default() }
-    pub fn handle(&self) -> Arc<RwLock<Vec<(String, Vec<Diagnostic>)>>> { self.inner.clone() }
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn handle(&self) -> Arc<RwLock<Vec<(String, Vec<Diagnostic>)>>> {
+        self.inner.clone()
+    }
     pub async fn for_uri(&self, uri: &str) -> Vec<Diagnostic> {
         let r = self.inner.read().await;
-        r.iter().find(|(u, _)| u == uri).map(|(_, d)| d.clone()).unwrap_or_default()
+        r.iter()
+            .find(|(u, _)| u == uri)
+            .map(|(_, d)| d.clone())
+            .unwrap_or_default()
     }
     pub async fn replace(&self, uri: String, diags: Vec<Diagnostic>) {
         let mut w = self.inner.write().await;

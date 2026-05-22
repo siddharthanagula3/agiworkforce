@@ -59,7 +59,7 @@ It's free forever for local + BYOK. There's a Hobby tier (managed cloud)
 coming for users who don't want to deal with API keys. Pro / Max are
 waitlist until I clear the security audit (see docs/audit/).
 
-Vision: <https://github.com/siddharthanagula3/agiworkforce/blob/main/docs/VISION.md>
+Vision: <https://github.com/siddharthanagula3/agiworkforce/blob/main/docs/current/product-suite.md>
 
 Happy to answer anything. The Rust source is 200 files / ~155K LOC, the
 agentic loop and provider dispatch are in apps/cli/src/{agent,models}.rs

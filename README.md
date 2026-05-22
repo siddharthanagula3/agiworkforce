@@ -1,5 +1,9 @@
 # AGI
 
+Status: Current
+Owner: Founder + platform lead
+Last updated: 2026-05-20
+
 > **All the AIs you already pay for, in one place. Beyond one model. Beyond one surface.**
 >
 > _(Public brand: **AGI** — repo path + internal packages remain `agiworkforce`. Brand simplified 2026-05-15.)_
@@ -20,7 +24,8 @@ Multi-provider, local-first AI agent platform. One Tauri desktop app, one Next.j
 >
 > **Foundation Sprint shipped** at tag [`v0.7.0-foundation`](https://github.com/siddharthanagula3/agiworkforce/releases/tag/v0.7.0-foundation) (2026-05-13): central state pattern, message-queue priority lane, `packages/llm-runtime`, outbound-worker direction inversion, HKDF dispatch-key rotation, Stripe webhook idempotency RPC live in prod. Stripe wired but **dormant during waitlist period** — flips live Aug 1.
 >
-> **For contributors and AI agents:** [AGI_WORKFORCE.md](AGI_WORKFORCE.md) is the single source of truth.
+> **For contributors:** [AGI_WORKFORCE.md](AGI_WORKFORCE.md) is the product entry point and [docs/README.md](docs/README.md) gives the organized docs map.
+> **For coding agents:** read [AGENTS.md](AGENTS.md) first, then the relevant scoped `AGENTS.md` and [docs/agent-context/](docs/agent-context/).
 > **For builds and deployment:** [BUILD.md](BUILD.md).
 > **For PR conventions:** [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -51,7 +56,7 @@ The unique slice: **multi-provider + BYOK + local LLM all in one app, on every s
 | Max (highest caps, computer use, voice unlimited)                                    | $299.99       | 📝 Waitlist — graduates Aug 1, 2026 |
 | Enterprise (SSO, SCIM, custom retention)                                             | Contact sales | Contact sales                       |
 
-**Why waitlist?** We're collecting 60-90 days of real BYOK telemetry before committing to per-tier caps. No subscription is sold during the waitlist period — pay your AI providers directly with your own keys. See [docs/PRICING.md](docs/PRICING.md) for the full capability matrix.
+**Why waitlist?** We're collecting 60-90 days of real BYOK telemetry before committing to per-tier caps. No subscription is sold during the waitlist period — pay your AI providers directly with your own keys. See [docs/current/commercial-and-launch.md](docs/current/commercial-and-launch.md) for the current commercial posture.
 
 ## Quick start
 
@@ -62,7 +67,7 @@ The unique slice: **multi-provider + BYOK + local LLM all in one app, on every s
 brew install siddharthanagula3/tap/agiworkforce
 
 # cargo (any platform)
-cargo install agiworkforce-cli
+cargo install agiworkforce-cli --bin agi
 
 # Universal installer (macOS, Linux, WSL)
 curl -fsSL https://agiworkforce.com/install.sh | bash
@@ -74,10 +79,12 @@ curl -fsSL https://agiworkforce.com/install.sh | bash
 Then:
 
 ```bash
-agiworkforce login            # OAuth via Anthropic / OpenAI / Google, or BYOK
-agiworkforce exec "hello"     # one-shot
-agiworkforce                  # interactive TUI
+agi login            # OAuth via Anthropic / OpenAI / Google, or BYOK
+agi exec "hello"     # one-shot
+agi                  # interactive TUI
 ```
+
+`agi` is the primary command. `agiworkforce` remains installed as a backward-compatible alias.
 
 ### Use the desktop app
 
@@ -109,18 +116,21 @@ cd agiworkforce
 nvm use && corepack enable && pnpm install
 pnpm dev:desktop                  # Tauri dev mode
 # Or:
-cargo run -p agiworkforce-cli -- exec "hello"
+cargo run -p agiworkforce-cli --bin agi -- exec "hello"
 ```
 
 ## Documentation
 
-- [AGI_WORKFORCE.md](AGI_WORKFORCE.md) — single source of truth (start here)
-- [docs/VISION.md](docs/VISION.md) — product vision (ONE chat layout, multi-provider)
-- [docs/ROADMAP.md](docs/ROADMAP.md) — live wave/sprint status
-- [docs/DESIGN.md](docs/DESIGN.md) — UI principles (Claude Desktop as north star)
+- [docs/current/](docs/current/) — compact current product, architecture, commercial, and repo-operability docs
+- [docs/current/product-suite.md](docs/current/product-suite.md) — product thesis, surfaces, trust modes, and sync boundary
+- [docs/current/technical-architecture.md](docs/current/technical-architecture.md) — monorepo shape, runtime boundaries, providers, generated files, and enterprise control plane
+- [docs/current/commercial-and-launch.md](docs/current/commercial-and-launch.md) — waitlist, BYOK, managed-compute, payments, and enterprise launch rules
+- [docs/current/agent-and-repo-operability.md](docs/current/agent-and-repo-operability.md) — repo organization, agent workflow, and A+ docs rules
+- [docs/decisions/CURRENT_DECISIONS.md](docs/decisions/CURRENT_DECISIONS.md) — locked decision index and conflict rules
+- [AGI_WORKFORCE.md](AGI_WORKFORCE.md) — product source of truth for humans and high-level context
+- [AGENTS.md](AGENTS.md) — coding-agent source of truth (start here for Codex, Claude Code, Cursor, opencode, VS Code agents, and future agents)
+- [docs/README.md](docs/README.md) — organized documentation map
 - [docs/design/design-spec-2026-05-15.md](docs/design/design-spec-2026-05-15.md) — canonical 2026-05-15 design spec (composer, sidebar, inline tool-call, icons) shipped across all 6 surfaces
-- [docs/PRICING.md](docs/PRICING.md) — tier model
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — cross-surface architecture
 - [apps/cli/ARCHITECTURE.md](apps/cli/ARCHITECTURE.md) — CLI deep-dive
 - [docs/audit/](docs/audit/) — security audits (P0/P1 status)
 - [docs/plans/](docs/plans/) — active sprint plans
@@ -134,4 +144,4 @@ This is proprietary software. © 2026 AGI Workforce. All rights reserved.
 
 Active development. Pre-v1.0 MVP. CI on `main` should always be green; if it isn't, that's the highest-priority bug.
 
-Launch-readiness wave 1+2 complete (2026-05-15): all six surfaces (CLI, Desktop, Web, Mobile, Chrome ext, VS Code ext) verified green via `scripts/launch-verify.sh`. See [MASTER_PLAN.md §10.4–§10.6](MASTER_PLAN.md#104-launch-readiness-wave-1-2026-05-15-31-commits-range-079ae721f759f6a977) for the wave-level audit closure.
+Launch-readiness wave 1+2 complete (2026-05-15): all six surfaces (CLI, Desktop, Web, Mobile, Chrome ext, VS Code ext) verified green via `scripts/launch-verify.sh`. See [archived master plan §10.4–§10.6](docs/archive/2026-05-14-reverse-engineering-campaign/MASTER_PLAN.md#104-launch-readiness-wave-1-2026-05-15-31-commits-range-079ae721f759f6a977) for the wave-level audit closure.

@@ -7,6 +7,13 @@
  * @packageDocumentation
  */
 
+// ---- Cross-cutting shared types ----
+// These types are also reachable via the namespace exports below, but are
+// re-exported directly for ergonomic consumption (e.g. BridgeStatusCard
+// imports the diagnostics shape without round-tripping through the
+// `browserExtension` namespace).
+export type { ExtensionStatusDiagnostics } from './browserExtension';
+
 // ---- Wave 1: Settings, Auth, LLM, Window ----
 export * as settings from './settings';
 export * as auth from './auth';

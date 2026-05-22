@@ -20,13 +20,8 @@ fn atomic_write_session(target: &Path, contents: &[u8]) -> Result<()> {
         .with_context(|| format!("Failed to create tempfile in {}", dir.display()))?;
     fs::write(tmp.path(), contents)
         .with_context(|| format!("Failed to write tempfile {}", tmp.path().display()))?;
-    tmp.persist(target).map_err(|e| {
-        anyhow::anyhow!(
-            "Failed to rename tempfile to {}: {}",
-            target.display(),
-            e
-        )
-    })?;
+    tmp.persist(target)
+        .map_err(|e| anyhow::anyhow!("Failed to rename tempfile to {}: {}", target.display(), e))?;
     Ok(())
 }
 
@@ -164,9 +159,9 @@ impl ManagedSession {
                     format!("Failed to serialize JSONL session {}", path.display())
                 })?;
             }
-            writer.flush().with_context(|| {
-                format!("Failed to flush session buffer {}", path.display())
-            })?;
+            writer
+                .flush()
+                .with_context(|| format!("Failed to flush session buffer {}", path.display()))?;
         }
 
         atomic_write_session(path, &buf)

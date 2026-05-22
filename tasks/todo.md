@@ -1,3 +1,22 @@
+# Documentation Reorganization — 2026-05-20
+
+## Scope
+
+- [x] Inventory `docs/` Markdown and non-Markdown documentation assets.
+- [x] Locate Claude Code memory decision files and check the memory MCP graph.
+- [x] Identify duplicate/generated delete candidates with byte-level evidence.
+- [x] Write current decision index from PRD + Claude memory lock evidence.
+- [x] Rewrite `docs/README.md` into canonical/current/archive reading order.
+- [x] Remove duplicate/generated stale files only.
+- [x] Record mobile-v1 source-of-truth drift and founder clarification.
+- [x] Run formatting/link sanity checks for changed docs.
+
+## Key Finding
+
+Founder clarified on 2026-05-20 that the mobile launch should avoid AGI-managed cloud risk, not user-paid BYOK. Mobile v1 is Local + explicit BYOK: Local is the default trust boundary, BYOK is a separate provider trust boundary, Local -> BYOK creates a new fork, and Managed Cloud / AGI Compute Credits stay waitlisted or private beta.
+
+---
+
 # Auto-Routing Spec Implementation — 2026-05-07
 
 ## TaskList: Phase 1 Week 1 Engineering Scope (per `tasks/auto-routing-spec.md` §10)

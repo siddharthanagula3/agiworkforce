@@ -247,11 +247,7 @@ function encodeText(text: string): string {
 function encodeHref(url: string): string {
   // Mirrors the percent-encode step added to renderMarkdown in side_panel/markdown.ts
   // for C-04 (audit 2026-05-19).
-  return url
-    .replace(/"/g, '%22')
-    .replace(/'/g, '%27')
-    .replace(/</g, '%3C')
-    .replace(/>/g, '%3E');
+  return url.replace(/"/g, '%22').replace(/'/g, '%27').replace(/</g, '%3C').replace(/>/g, '%3E');
 }
 
 function renderLinkMarkdown(text: string, url: string): string {

@@ -20,78 +20,80 @@ Three features migrated to the canonical layer-map. All single-feature, low-risk
 
 #### Migration 1 — waitlist (commit `c18f16d74`)
 
-| Action  | Old path                                                  | New path                                                       |
-| ------- | --------------------------------------------------------- | -------------------------------------------------------------- |
-| move    | `apps/mobile/services/waitlist.ts`                        | `apps/mobile/src/features/waitlist/service.ts`                 |
-| move    | `apps/mobile/stores/waitlistStore.ts`                     | `apps/mobile/src/features/waitlist/store.ts`                   |
-| move    | `apps/mobile/components/waitlist/CloudWaitlistSheet.tsx`  | `apps/mobile/src/features/waitlist/CloudWaitlistSheet.tsx`     |
-| barrel  | `apps/mobile/services/waitlist.ts`                        | `export * from '@/src/features/waitlist/service'`              |
-| barrel  | `apps/mobile/stores/waitlistStore.ts`                     | `export * from '@/src/features/waitlist/store'`                |
-| barrel  | `apps/mobile/components/waitlist/CloudWaitlistSheet.tsx`  | `export * from '@/src/features/waitlist/CloudWaitlistSheet'`   |
-| add     | `apps/mobile/src/features/waitlist/index.ts`              | public feature barrel                                          |
+| Action | Old path                                                 | New path                                                     |
+| ------ | -------------------------------------------------------- | ------------------------------------------------------------ |
+| move   | `apps/mobile/services/waitlist.ts`                       | `apps/mobile/src/features/waitlist/service.ts`               |
+| move   | `apps/mobile/stores/waitlistStore.ts`                    | `apps/mobile/src/features/waitlist/store.ts`                 |
+| move   | `apps/mobile/components/waitlist/CloudWaitlistSheet.tsx` | `apps/mobile/src/features/waitlist/CloudWaitlistSheet.tsx`   |
+| barrel | `apps/mobile/services/waitlist.ts`                       | `export * from '@/src/features/waitlist/service'`            |
+| barrel | `apps/mobile/stores/waitlistStore.ts`                    | `export * from '@/src/features/waitlist/store'`              |
+| barrel | `apps/mobile/components/waitlist/CloudWaitlistSheet.tsx` | `export * from '@/src/features/waitlist/CloudWaitlistSheet'` |
+| add    | `apps/mobile/src/features/waitlist/index.ts`             | public feature barrel                                        |
 
 Internal-import normalization on moved files:
+
 - `service.ts` line 1: `from './supabase'` → `from '@/services/supabase'`
 - `store.ts` line 4: `from '@/services/waitlist'` → `from './service'`
 
 #### Migration 2 — feedback (commit `4a6aeb810`)
 
-| Action     | Old path                                | New path                                       |
-| ---------- | --------------------------------------- | ---------------------------------------------- |
-| move       | `apps/mobile/app/(app)/feedback.tsx`    | `apps/mobile/src/features/feedback/index.tsx`  |
-| wrapper    | `apps/mobile/app/(app)/feedback.tsx`    | `export { default } from '@/src/features/feedback'` |
+| Action  | Old path                             | New path                                            |
+| ------- | ------------------------------------ | --------------------------------------------------- |
+| move    | `apps/mobile/app/(app)/feedback.tsx` | `apps/mobile/src/features/feedback/index.tsx`       |
+| wrapper | `apps/mobile/app/(app)/feedback.tsx` | `export { default } from '@/src/features/feedback'` |
 
 #### Migration 3 — compare (commit `d156c53d9`)
 
-| Action     | Old path                                | New path                                       |
-| ---------- | --------------------------------------- | ---------------------------------------------- |
-| move       | `apps/mobile/app/(app)/compare.tsx`     | `apps/mobile/src/features/compare/index.tsx`   |
-| wrapper    | `apps/mobile/app/(app)/compare.tsx`     | `export { default } from '@/src/features/compare'` |
+| Action  | Old path                            | New path                                           |
+| ------- | ----------------------------------- | -------------------------------------------------- |
+| move    | `apps/mobile/app/(app)/compare.tsx` | `apps/mobile/src/features/compare/index.tsx`       |
+| wrapper | `apps/mobile/app/(app)/compare.tsx` | `export { default } from '@/src/features/compare'` |
 
 Plus the bootstrap scaffolding for `apps/mobile/src/{entry,core,features,platform,integrations,storage,ui}/` from commit `f37a29a3f`.
 
 ## Active-edit zones we are AVOIDING (per founder directive)
 
 We did NOT touch any of:
+
 - `apps/mobile/components/chat/**`
 - `apps/mobile/components/vision/**`
 - `apps/mobile/services/voice*`, voice-related files
 - translate / translation feature files
 - memory feature files
-- onboarding/** files
-- compliance/** files
-- healthkit/** + native iOS modules (`apps/mobile/native/ios/AGIAppIntents/`)
-- skills/** files
-- projects/** files
-- model-picker/** files
-- performance/** files
+- onboarding/\*\* files
+- compliance/\*\* files
+- healthkit/\*\* + native iOS modules (`apps/mobile/native/ios/AGIAppIntents/`)
+- skills/\*\* files
+- projects/\*\* files
+- model-picker/\*\* files
+- performance/\*\* files
 
-Note: `compare.tsx` **reads** from `@/components/chat/ChatInput` and `@/components/model-picker/ModelPickerSheet`. This is allowed — the rule is about *editing* banned-zone files, not about consumers that import from them. After moving compare to `src/features/compare/`, those imports continue to resolve unchanged.
+Note: `compare.tsx` **reads** from `@/components/chat/ChatInput` and `@/components/model-picker/ModelPickerSheet`. This is allowed — the rule is about _editing_ banned-zone files, not about consumers that import from them. After moving compare to `src/features/compare/`, those imports continue to resolve unchanged.
 
 ## Patterns proven
 
-| Pattern                                  | Used for                              | Notes                                                                  |
-| ---------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------- |
-| `export * from '<new-path>'`             | waitlist (services, stores, components) | Re-exports named exports. Use when old path has no default export, or the default is not Expo-route-significant. |
-| `export { default } from '<new-path>'`   | feedback, compare (Expo routes)       | Required for Expo route wrappers so the router picks up the screen.    |
-| `git mv` + leave wrapper at OLD path     | all three                             | History tracks rename; consumers keep working through wrapper.         |
-| One-feature-per-commit                   | all three                             | Reviewable diff. Easy to revert.                                       |
+| Pattern                                | Used for                                | Notes                                                                                                            |
+| -------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `export * from '<new-path>'`           | waitlist (services, stores, components) | Re-exports named exports. Use when old path has no default export, or the default is not Expo-route-significant. |
+| `export { default } from '<new-path>'` | feedback, compare (Expo routes)         | Required for Expo route wrappers so the router picks up the screen.                                              |
+| `git mv` + leave wrapper at OLD path   | all three                               | History tracks rename; consumers keep working through wrapper.                                                   |
+| One-feature-per-commit                 | all three                               | Reviewable diff. Easy to revert.                                                                                 |
 
 ## Gate results
 
-| Stage                              | Command                                                                | Result        | Commit       |
-| ---------------------------------- | ---------------------------------------------------------------------- | ------------- | ------------ |
-| Step 1: bootstrap                  | n/a (filesystem only)                                                  | PASS          | `4c7151033`  |
-| Step 2: mobile code index          | n/a (generator script + output)                                        | PASS          | `fe0e0c615`  |
-| Step 3: skeleton                   | `pnpm --filter @agiworkforce/mobile typecheck`                         | PASS \*       | `f37a29a3f`  |
-| Step 4: waitlist (typecheck)       | `pnpm --filter @agiworkforce/mobile typecheck`                         | PASS \*       | `c18f16d74`  |
-| Step 4: waitlist (test)            | `pnpm --filter @agiworkforce/mobile test -- --testPathPattern waitlist` | PASS 24/24    | `c18f16d74`  |
-| Step 5: verifier                   | independent diff review (6 invariants)                                 | PASS          | n/a          |
-| Step 6: status doc finalize        | n/a                                                                    | PASS          | `3b947d563`  |
-| Expansion: feedback (typecheck)    | `pnpm --filter @agiworkforce/mobile typecheck`                         | PASS \*       | `4a6aeb810`  |
-| Expansion: feedback (test, full)   | `pnpm --filter @agiworkforce/mobile test`                              | PASS \*\*     | `4a6aeb810`  |
-| Expansion: compare (typecheck)     | `pnpm --filter @agiworkforce/mobile typecheck`                         | PASS \*       | `d156c53d9`  |
-| Expansion: compare (test, full)    | `pnpm --filter @agiworkforce/mobile test`                              | PASS \*\*     | `d156c53d9`  |
+| Stage                            | Command                                                                 | Result     | Commit      |
+| -------------------------------- | ----------------------------------------------------------------------- | ---------- | ----------- |
+| Step 1: bootstrap                | n/a (filesystem only)                                                   | PASS       | `4c7151033` |
+| Step 2: mobile code index        | n/a (generator script + output)                                         | PASS       | `fe0e0c615` |
+| Step 3: skeleton                 | `pnpm --filter @agiworkforce/mobile typecheck`                          | PASS \*    | `f37a29a3f` |
+| Step 4: waitlist (typecheck)     | `pnpm --filter @agiworkforce/mobile typecheck`                          | PASS \*    | `c18f16d74` |
+| Step 4: waitlist (test)          | `pnpm --filter @agiworkforce/mobile test -- --testPathPattern waitlist` | PASS 24/24 | `c18f16d74` |
+| Step 5: verifier                 | independent diff review (6 invariants)                                  | PASS       | n/a         |
+| Step 6: status doc finalize      | n/a                                                                     | PASS       | `3b947d563` |
+| Expansion: feedback (typecheck)  | `pnpm --filter @agiworkforce/mobile typecheck`                          | PASS \*    | `4a6aeb810` |
+| Expansion: feedback (test, full) | `pnpm --filter @agiworkforce/mobile test`                               | PASS \*\*  | `4a6aeb810` |
+| Expansion: compare (typecheck)   | `pnpm --filter @agiworkforce/mobile typecheck`                          | PASS \*    | `d156c53d9` |
+| Expansion: compare (test, full)  | `pnpm --filter @agiworkforce/mobile test`                               | PASS \*\*  | `d156c53d9` |
 
 \* "PASS" for typecheck = no NEW errors vs the pre-change baseline. The mobile tsc baseline has 30 pre-existing errors caused by uncommitted teammate files (`storage/db`, `PerformanceChip`, `ModeToggle`, `ModeSwitchModal`, `complianceLedger`, `healthKitPermission`), plus 2 casing-mismatch bugs in tracked code, plus 1 route-typing issue. None caused by, or affected by, this reorg. Diff between baseline and final error sets: 0 across all three migrations.
 
@@ -134,6 +136,7 @@ Out of the remaining route-leaf candidates, the safest target is **`share-previe
 ## Verifier verdict (post-expansion)
 
 Both expansion migrations applied the same proven pattern with zero regression. Each commit:
+
 - Single file moved + single wrapper created
 - Identical exported component (default), identical implementation
 - Typecheck: 30 errors → 30 errors (no diff)

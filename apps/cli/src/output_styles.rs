@@ -45,7 +45,8 @@ impl OutputStyle {
     pub fn explanatory() -> Self {
         Self {
             name: "explanatory".into(),
-            description: "Educational. Adds insight blocks explaining each non-trivial choice.".into(),
+            description: "Educational. Adds insight blocks explaining each non-trivial choice."
+                .into(),
             system_prompt: include_str!("output_styles/explanatory.md").to_string(),
         }
     }
@@ -126,7 +127,11 @@ mod tests {
         let names: Vec<_> = builtin().iter().map(|s| s.name.clone()).collect();
         assert_eq!(
             names,
-            vec!["default".to_string(), "explanatory".into(), "learning".into()]
+            vec![
+                "default".to_string(),
+                "explanatory".into(),
+                "learning".into()
+            ]
         );
     }
 

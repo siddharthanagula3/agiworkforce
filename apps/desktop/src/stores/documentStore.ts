@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { toast } from 'sonner';
 import { invoke } from '../lib/tauri-mock';
 import {
+  type DocumentCreationResult,
   DocumentType,
   type DocumentContent,
   type DocumentMetadata,
@@ -13,6 +14,9 @@ interface GeneratedDocument {
   path: string;
   format: 'pdf' | 'word' | 'excel' | 'powerpoint';
   title: string;
+  computeSession?: DocumentCreationResult['computeSession'];
+  generatedFile?: DocumentCreationResult['generatedFile'];
+  artifactManifest?: DocumentCreationResult['artifactManifest'];
 }
 
 interface DocumentState {
@@ -154,7 +158,7 @@ export const useDocumentStore = create<DocumentState>((set) => ({
     set({ isGenerating: true, error: null });
     try {
       const paragraphs = content.split('\n').filter((p) => p.trim());
-      const result = await invoke<string>('document_create_pdf_simple', {
+      const result = await invoke<DocumentCreationResult>('document_create_pdf_simple_manifest', {
         outputPath,
         title,
         author: options?.author ?? null,
@@ -162,10 +166,17 @@ export const useDocumentStore = create<DocumentState>((set) => ({
       });
       set({
         isGenerating: false,
-        lastGenerated: { path: result, format: 'pdf', title },
+        lastGenerated: {
+          path: result.path,
+          format: 'pdf',
+          title,
+          computeSession: result.computeSession,
+          generatedFile: result.generatedFile,
+          artifactManifest: result.artifactManifest,
+        },
       });
       toast.success(`PDF created: ${title}`);
-      return result;
+      return result.path;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       set({ error: message, isGenerating: false });
@@ -183,7 +194,7 @@ export const useDocumentStore = create<DocumentState>((set) => ({
     set({ isGenerating: true, error: null });
     try {
       const paragraphs = content.split('\n').filter((p) => p.trim());
-      const result = await invoke<string>('document_create_word_simple', {
+      const result = await invoke<DocumentCreationResult>('document_create_word_simple_manifest', {
         outputPath,
         title,
         author: options?.author ?? null,
@@ -191,10 +202,17 @@ export const useDocumentStore = create<DocumentState>((set) => ({
       });
       set({
         isGenerating: false,
-        lastGenerated: { path: result, format: 'word', title },
+        lastGenerated: {
+          path: result.path,
+          format: 'word',
+          title,
+          computeSession: result.computeSession,
+          generatedFile: result.generatedFile,
+          artifactManifest: result.artifactManifest,
+        },
       });
       toast.success(`Word document created: ${title}`);
-      return result;
+      return result.path;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       set({ error: message, isGenerating: false });
@@ -211,7 +229,7 @@ export const useDocumentStore = create<DocumentState>((set) => ({
   ) => {
     set({ isGenerating: true, error: null });
     try {
-      const result = await invoke<string>('document_create_excel_simple', {
+      const result = await invoke<DocumentCreationResult>('document_create_excel_simple_manifest', {
         outputPath,
         sheetName,
         headers,
@@ -219,10 +237,17 @@ export const useDocumentStore = create<DocumentState>((set) => ({
       });
       set({
         isGenerating: false,
-        lastGenerated: { path: result, format: 'excel', title: sheetName },
+        lastGenerated: {
+          path: result.path,
+          format: 'excel',
+          title: sheetName,
+          computeSession: result.computeSession,
+          generatedFile: result.generatedFile,
+          artifactManifest: result.artifactManifest,
+        },
       });
       toast.success(`Excel spreadsheet created: ${sheetName}`);
-      return result;
+      return result.path;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       set({ error: message, isGenerating: false });
@@ -239,18 +264,28 @@ export const useDocumentStore = create<DocumentState>((set) => ({
   ) => {
     set({ isGenerating: true, error: null });
     try {
-      const result = await invoke<string>('document_create_excel_numbers', {
-        outputPath,
-        sheetName,
-        headers,
-        rows,
-      });
+      const result = await invoke<DocumentCreationResult>(
+        'document_create_excel_numbers_manifest',
+        {
+          outputPath,
+          sheetName,
+          headers,
+          rows,
+        },
+      );
       set({
         isGenerating: false,
-        lastGenerated: { path: result, format: 'excel', title: sheetName },
+        lastGenerated: {
+          path: result.path,
+          format: 'excel',
+          title: sheetName,
+          computeSession: result.computeSession,
+          generatedFile: result.generatedFile,
+          artifactManifest: result.artifactManifest,
+        },
       });
       toast.success(`Excel spreadsheet created: ${sheetName}`);
-      return result;
+      return result.path;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       set({ error: message, isGenerating: false });
@@ -267,18 +302,28 @@ export const useDocumentStore = create<DocumentState>((set) => ({
   ) => {
     set({ isGenerating: true, error: null });
     try {
-      const result = await invoke<string>('document_create_powerpoint_simple', {
-        outputPath,
-        title,
-        author,
-        slides,
-      });
+      const result = await invoke<DocumentCreationResult>(
+        'document_create_powerpoint_simple_manifest',
+        {
+          outputPath,
+          title,
+          author,
+          slides,
+        },
+      );
       set({
         isGenerating: false,
-        lastGenerated: { path: result, format: 'powerpoint', title },
+        lastGenerated: {
+          path: result.path,
+          format: 'powerpoint',
+          title,
+          computeSession: result.computeSession,
+          generatedFile: result.generatedFile,
+          artifactManifest: result.artifactManifest,
+        },
       });
       toast.success(`PowerPoint created: ${title}`);
-      return result;
+      return result.path;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       set({ error: message, isGenerating: false });

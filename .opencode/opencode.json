@@ -3,13 +3,8 @@
   "model": "anthropic/claude-sonnet-4-5",
   "small_model": "anthropic/claude-haiku-4-5",
   "default_agent": "build",
-  "instructions": [
-    "CLAUDE.md",
-    ".opencode/instructions/INSTRUCTIONS.md"
-  ],
-  "plugin": [
-    "./.opencode/plugins"
-  ],
+  "instructions": ["AGENTS.md", ".opencode/instructions/INSTRUCTIONS.md"],
+  "plugin": ["./.opencode/plugins"],
   "agent": {
     "build": {
       "description": "Primary coding agent for AGI Workforce development (Tauri v2 Rust backend + React/TS frontend + Next.js web app)",
@@ -107,7 +102,7 @@
       }
     },
     "doc-updater": {
-      "description": "Documentation and codemap specialist for the AGI Workforce monorepo. Updates CLAUDE.md, codemaps, and workspace documentation.",
+      "description": "Documentation and codemap specialist for the AGI Workforce monorepo. Updates AGENTS.md, docs/agent-context, codemaps, and workspace documentation.",
       "mode": "subagent",
       "model": "anthropic/claude-opus-4-5",
       "prompt": "{file:prompts/agents/doc-updater.txt}",

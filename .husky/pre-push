@@ -1,2 +1,10 @@
 #!/bin/sh
-# Pre-push hook disabled - to enable, remove this file or set SKIP_PRE_PUSH=1
+
+if [ "${SKIP_PRE_PUSH:-}" = "1" ]; then
+  echo "Skipping pre-push checks because SKIP_PRE_PUSH=1"
+  exit 0
+fi
+
+pnpm check:llm-operability
+git diff --check
+git diff --cached --check

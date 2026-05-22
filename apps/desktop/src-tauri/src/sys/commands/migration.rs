@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// rather than an opaque technical error.
 const LOVABLE_NOT_IMPLEMENTED: &str =
     "Lovable workflow migration is planned but not yet available in the desktop app. \
-     Check the in-app roadmap or docs/ROADMAP.md for the expected release timeline.";
+     Check PLAN.md, TODO.md, or the in-app roadmap for the expected release timeline.";
 
 #[derive(Debug, Deserialize)]
 pub struct LovableConnectionCommandRequest {

@@ -1,6 +1,7 @@
 import { Alert } from 'react-native';
 import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { combineAbortSignals } from '@/lib/abortSignal';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 import { supabase } from './supabase';
 // FIX-MOB-10: every outbound HTTPS call goes through secureFetch — the
 // chokepoint that the TLS-pinning gate hooks into. Today it's a
@@ -89,6 +90,17 @@ async function tryRefreshToken(): Promise<boolean> {
  * clearing auth tokens does not close the data channel.
  */
 function handleUnrecoverableAuth(): void {
+  // v1 local-only: no auth UI exists, so prompting the user to "sign in
+  // again" would dead-end on a redirect-stub login. Silently clear the
+  // session and let the local-mode app shell render; cloud-only callers
+  // will surface their own errors when the user opts into cloud.
+  if (!FEATURES.auth) {
+    supabase.auth.signOut().catch((err) => {
+      console.warn('[API] Sign-out cleanup failed (non-blocking):', err);
+    });
+    return;
+  }
+
   // Clear Supabase session asynchronously — don't block the throw
   supabase.auth.signOut().catch((err) => {
     console.warn('[API] Sign-out cleanup failed (non-blocking):', err);

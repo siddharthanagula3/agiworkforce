@@ -40,7 +40,10 @@ pub enum FieldKind {
     /// Free-text string input.
     Text { value: String },
     /// Enumerated single-select (string enum).
-    Enum { options: Vec<String>, selected: usize },
+    Enum {
+        options: Vec<String>,
+        selected: usize,
+    },
     /// Boolean toggle (true / false).
     Bool { value: bool },
 }
@@ -108,18 +111,29 @@ fn parse_schema(schema: &serde_json::Value) -> Vec<FormField> {
                 .filter_map(|v| v.as_str().map(String::from))
                 .collect();
             if options.is_empty() {
-                FieldKind::Text { value: String::new() }
+                FieldKind::Text {
+                    value: String::new(),
+                }
             } else {
-                FieldKind::Enum { options, selected: 0 }
+                FieldKind::Enum {
+                    options,
+                    selected: 0,
+                }
             }
         } else {
             match prop.get("type").and_then(|t| t.as_str()) {
                 Some("boolean") => FieldKind::Bool { value: false },
-                _ => FieldKind::Text { value: String::new() },
+                _ => FieldKind::Text {
+                    value: String::new(),
+                },
             }
         };
 
-        fields.push(FormField { name: name.clone(), required, kind });
+        fields.push(FormField {
+            name: name.clone(),
+            required,
+            kind,
+        });
     }
 
     fields
@@ -163,11 +177,7 @@ pub struct ElicitationOverlayState {
 
 impl ElicitationOverlayState {
     /// Open a fresh overlay from an elicitation request.
-    pub fn open(
-        &mut self,
-        server_name: impl Into<String>,
-        request: ElicitationRequest,
-    ) {
+    pub fn open(&mut self, server_name: impl Into<String>, request: ElicitationRequest) {
         self.server_name = server_name.into();
         self.message = request.message;
         self.fields = parse_schema(&request.requested_schema);
@@ -385,7 +395,9 @@ impl InteractiveView for ElicitationOverlayState {
                 if let Focus::Field(i) = self.focus {
                     if i < self.fields.len() {
                         match &mut self.fields[i].kind {
-                            FieldKind::Enum { options, selected } if *selected + 1 < options.len() => {
+                            FieldKind::Enum { options, selected }
+                                if *selected + 1 < options.len() =>
+                            {
                                 *selected += 1;
                             }
                             FieldKind::Enum { .. } => {}
@@ -609,7 +621,11 @@ mod tests {
     fn right_arrow_cycles_enum_option() {
         let mut s = open_text_overlay();
         // Find enum field index
-        let enum_idx = s.fields.iter().position(|f| matches!(f.kind, FieldKind::Enum { .. })).unwrap();
+        let enum_idx = s
+            .fields
+            .iter()
+            .position(|f| matches!(f.kind, FieldKind::Enum { .. }))
+            .unwrap();
         s.focus = Focus::Field(enum_idx);
         s.handle_key(KeyAction::Right);
         if let FieldKind::Enum { selected, .. } = &s.fields[enum_idx].kind {
@@ -620,7 +636,11 @@ mod tests {
     #[test]
     fn left_arrow_on_enum_stops_at_zero() {
         let mut s = open_text_overlay();
-        let enum_idx = s.fields.iter().position(|f| matches!(f.kind, FieldKind::Enum { .. })).unwrap();
+        let enum_idx = s
+            .fields
+            .iter()
+            .position(|f| matches!(f.kind, FieldKind::Enum { .. }))
+            .unwrap();
         s.focus = Focus::Field(enum_idx);
         s.handle_key(KeyAction::Left); // already at 0 — should not underflow
         if let FieldKind::Enum { selected, .. } = &s.fields[enum_idx].kind {
@@ -646,7 +666,10 @@ mod tests {
         s.focus = Focus::Button(BUTTON_DECLINE);
         let action = s.handle_key(KeyAction::Enter);
         assert_eq!(action, ViewAction::Close);
-        assert_eq!(s.result.as_ref().unwrap().action, ElicitationAction::Decline);
+        assert_eq!(
+            s.result.as_ref().unwrap().action,
+            ElicitationAction::Decline
+        );
     }
 
     #[test]
@@ -725,10 +748,13 @@ mod tests {
     #[test]
     fn no_fields_schema_focuses_buttons_first() {
         let mut s = ElicitationOverlayState::default();
-        s.open("srv", ElicitationRequest {
-            message: "Confirm?".into(),
-            requested_schema: serde_json::json!({"type": "object", "properties": {}}),
-        });
+        s.open(
+            "srv",
+            ElicitationRequest {
+                message: "Confirm?".into(),
+                requested_schema: serde_json::json!({"type": "object", "properties": {}}),
+            },
+        );
         assert_eq!(s.focus, Focus::Button(BUTTON_ACCEPT));
     }
 }

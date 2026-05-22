@@ -44,7 +44,7 @@ Read-write only inside `/Users/siddhartha/Desktop/agiworkforce/apps/extension-vs
 
 ## Conventions
 
-- LOCKED: **No testing mid-stream**.
+- Run focused tests while implementing behavior changes; run the listed verification gates before handoff.
 - LOCKED: **Never hardcode model IDs** in code paths that user input touches — use the model catalog from `@agiworkforce/types`. Hardcoded fallback chain in `modelConstants.ts` is acceptable as a last-resort safety net.
 - Commit format: lowercase, ≤100 chars, Conventional Commits, `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` footer
 - Don't push.

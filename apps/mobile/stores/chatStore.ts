@@ -13,9 +13,10 @@ import { useChatMessageStore } from './chat/chatMessageStore';
 import { useChatExecutionStore } from './chat/chatExecutionStore';
 import { useChatViewStore } from './chat/chatViewStore';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
+import type { ForkConversationOptions } from './chat/chatMessageStore';
 import type { ChatMode, ChatStyle, ToolAccess, ChatFeatures } from './chat/chatViewStore';
 import type { PaywallErrorState } from './chat/chatExecutionStore';
-import type { Attachment } from '@/components/chat/AttachmentPreview';
+import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 
 /** Combined state shape — mirrors the original useChatStore state interface. */
 export interface CombinedChatState {
@@ -47,6 +48,10 @@ export interface CombinedChatState {
   setCurrentConversationId: (id: string | null) => void;
   loadConversations: () => Promise<void>;
   createConversation: (title?: string, projectId?: string) => Promise<string>;
+  forkConversation: (
+    sourceConversationId: string,
+    options?: ForkConversationOptions,
+  ) => Promise<string>;
   deleteConversation: (id: string) => Promise<void>;
   loadMessages: (conversationId: string) => Promise<void>;
   renameConversation: (id: string, title: string) => Promise<void>;
@@ -93,6 +98,7 @@ function buildCombinedState(
     setCurrentConversationId: msg.setCurrentConversationId,
     loadConversations: msg.loadConversations,
     createConversation: msg.createConversation,
+    forkConversation: msg.forkConversation,
     deleteConversation: msg.deleteConversation,
     loadMessages: msg.loadMessages,
     renameConversation: msg.renameConversation,

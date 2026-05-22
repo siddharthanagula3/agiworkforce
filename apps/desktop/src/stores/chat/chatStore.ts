@@ -211,6 +211,10 @@ export interface ChatMessageState {
 
   ensureActiveConversation: () => void;
   createConversation: (title?: string, options?: { incognito?: boolean }) => string;
+  forkConversationForByok: (
+    sourceConversationId: string,
+    options?: { title?: string; model?: string; provider?: string },
+  ) => string;
   selectConversation: (id: string) => void;
   loadConversations: (userId: string) => Promise<void>;
   loadConversationMessages: (id: string, userId: string) => Promise<void>;
@@ -461,6 +465,68 @@ export const useChatMessageStore = create<ChatMessageState>()(
               'chat/createConversation',
             );
             return id;
+          },
+
+          forkConversationForByok: (sourceConversationId, options) => {
+            const sourceState = get();
+            const sourceConversation = sourceState.conversations.find(
+              (conversation) => conversation.id === sourceConversationId,
+            );
+            const sourceMessages = sourceState.messagesByConversation[sourceConversationId] ?? [];
+            const forkId = crypto.randomUUID();
+            const forkedAt = new Date();
+            const forkedMessages = sourceMessages.map((message, index): EnhancedMessage => {
+              const {
+                streaming: _streaming,
+                pending: _pending,
+                error: _error,
+                ...safeMessage
+              } = message;
+
+              return {
+                ...safeMessage,
+                id: `${message.id}-byok-fork-${forkedAt.getTime()}-${index}`,
+                timestamp: new Date(message.timestamp),
+                metadata: {
+                  ...message.metadata,
+                  ...(options?.model ? { model: options.model } : {}),
+                  ...(options?.provider ? { provider: options.provider } : {}),
+                },
+              };
+            });
+            const title =
+              options?.title ?? `${sourceConversation?.title ?? 'Conversation'} (BYOK fork)`;
+            const lastMessage =
+              forkedMessages.at(-1)?.content ?? sourceConversation?.lastMessage ?? '';
+
+            set(
+              (state) => {
+                const forkConversation: ConversationSummary = {
+                  id: forkId,
+                  title,
+                  pinned: false,
+                  lastMessage,
+                  updatedAt: forkedAt,
+                  customInstructions: sourceConversation?.customInstructions,
+                  projectId: sourceConversation?.projectId,
+                  modelOverride: options?.model ?? sourceConversation?.modelOverride,
+                };
+
+                state.conversations.unshift(forkConversation);
+                state.messagesByConversation[forkId] = forkedMessages;
+                state.activeConversationId = forkId;
+                state.messages = forkedMessages.slice();
+              },
+              undefined,
+              'chat/forkConversationForByok',
+            );
+
+            useChatExecutionStore.setState({
+              isStreaming: false,
+              currentStreamingMessageId: null,
+            });
+
+            return forkId;
           },
 
           selectConversation: (id: string) =>

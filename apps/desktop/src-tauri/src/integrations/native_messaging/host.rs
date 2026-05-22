@@ -6,9 +6,10 @@
 //! Handles the native messaging host process that communicates with Chrome extension
 
 use super::*;
+use rand::RngCore;
 use std::collections::HashMap;
 use std::io::{stdin, stdout, BufReader, BufWriter};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::{mpsc, Mutex};
 
 const NATIVE_RESPONSE_TIMEOUT_MS: u64 = 15_000;
@@ -18,6 +19,8 @@ pub struct NativeMessagingHost {
     state: Arc<RwLock<NativeMessagingState>>,
     message_tx: mpsc::Sender<NativeRequest>,
     response_rx: Arc<Mutex<mpsc::Receiver<NativeResponse>>>,
+    session_secret: [u8; 32],
+    session_secret_hex: String,
 }
 
 impl NativeMessagingHost {
@@ -28,11 +31,15 @@ impl NativeMessagingHost {
     ) {
         let (msg_tx, msg_rx) = mpsc::channel(100);
         let (resp_tx, resp_rx) = mpsc::channel(100);
+        let mut session_secret = [0_u8; 32];
+        rand::rngs::OsRng.fill_bytes(&mut session_secret);
 
         let host = Self {
             state: Arc::new(RwLock::new(NativeMessagingState::new())),
             message_tx: msg_tx,
             response_rx: Arc::new(Mutex::new(resp_rx)),
+            session_secret,
+            session_secret_hex: hex::encode(session_secret),
         };
 
         (host, msg_rx, resp_tx)
@@ -67,9 +74,20 @@ impl NativeMessagingHost {
                         continue;
                     }
 
-                    let response = self
+                    let mut response = self
                         .wait_for_response_for_request(&request.id, &mut buffered_responses)
                         .await;
+                    if matches!(request.message, NativeMessage::Connect { .. }) {
+                        response = response.with_session_secret(self.session_secret_hex.clone());
+                    }
+                    if let Err(e) = self.sign_response(&mut response) {
+                        tracing::error!("Failed to sign native response: {}", e);
+                        response = NativeResponse::error(
+                            request.id,
+                            format!("Native host response signing failed: {}", e),
+                        );
+                        let _ = self.sign_response(&mut response);
+                    }
 
                     // Send response back to extension
                     if let Err(e) = write_message(&mut stdout, &response) {
@@ -92,6 +110,10 @@ impl NativeMessagingHost {
         }
 
         Ok(())
+    }
+
+    fn sign_response(&self, response: &mut NativeResponse) -> Result<()> {
+        response.sign_with_secret(&self.session_secret, current_epoch_millis())
     }
 
     async fn wait_for_response_for_request(
@@ -168,6 +190,15 @@ impl NativeMessagingHost {
         state.connection_state = ConnectionState::Disconnected;
         state.extension_id = None;
     }
+}
+
+fn current_epoch_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .try_into()
+        .unwrap_or(u64::MAX)
 }
 
 impl Default for NativeMessagingHost {
@@ -391,137 +422,7 @@ impl NativeMessageHandler {
 
 /// Install the native messaging host manifest
 pub fn install_native_host_manifest() -> Result<()> {
-    let host_name = "com.agiworkforce.native";
-    let manifest_path = get_manifest_path(host_name)?;
-
-    // Get the path to the current executable
-    let exe_path =
-        std::env::current_exe().map_err(|e| anyhow!("Failed to get executable path: {}", e))?;
-
-    let manifest = generate_host_manifest(
-        host_name,
-        "AGI Workforce Native Messaging Host",
-        exe_path
-            .to_str()
-            .ok_or_else(|| anyhow!("Invalid executable path"))?,
-        &[], // Will be populated with actual extension ID
-    );
-
-    // Create parent directories if needed
-    if let Some(parent) = manifest_path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| anyhow!("Failed to create manifest directory: {}", e))?;
-    }
-
-    // Write the manifest
-    let manifest_json = serde_json::to_string_pretty(&manifest)
-        .map_err(|e| anyhow!("Failed to serialize manifest: {}", e))?;
-
-    std::fs::write(&manifest_path, manifest_json)
-        .map_err(|e| anyhow!("Failed to write manifest: {}", e))?;
-
-    tracing::info!(
-        "Native messaging host manifest installed at: {:?}",
-        manifest_path
-    );
-
-    #[cfg(target_os = "windows")]
-    {
-        // On Windows, register the native messaging host in the registry
-        if let Err(e) = register_windows_native_host(host_name, &manifest_path) {
-            tracing::warn!(
-                "Failed to register Windows native host: {}. Manual registration may be required.",
-                e
-            );
-        } else {
-            tracing::info!("Windows native messaging host registered in registry");
-        }
-    }
-
-    Ok(())
-}
-
-#[cfg(target_os = "windows")]
-fn register_windows_native_host(host_name: &str, manifest_path: &std::path::Path) -> Result<()> {
-    use windows::core::PCWSTR;
-    use windows::Win32::System::Registry::{
-        RegCloseKey, RegCreateKeyExW, RegSetValueExW, HKEY, HKEY_CURRENT_USER, KEY_WRITE,
-        REG_OPTION_NON_VOLATILE, REG_SZ,
-    };
-
-    // Registry path for Chrome native messaging hosts
-    let chrome_key_path = format!(
-        "SOFTWARE\\Google\\Chrome\\NativeMessagingHosts\\{}",
-        host_name
-    );
-
-    // Registry path for Edge native messaging hosts
-    let edge_key_path = format!(
-        "SOFTWARE\\Microsoft\\Edge\\NativeMessagingHosts\\{}",
-        host_name
-    );
-
-    let manifest_path_str = manifest_path
-        .to_str()
-        .ok_or_else(|| anyhow!("Invalid manifest path"))?;
-
-    // Register for both Chrome and Edge
-    for key_path in [&chrome_key_path, &edge_key_path] {
-        let key_path_wide: Vec<u16> = key_path.encode_utf16().chain(std::iter::once(0)).collect();
-
-        unsafe {
-            let mut hkey: HKEY = HKEY::default();
-            let result = RegCreateKeyExW(
-                HKEY_CURRENT_USER,
-                PCWSTR(key_path_wide.as_ptr()),
-                0,
-                PCWSTR::null(),
-                REG_OPTION_NON_VOLATILE,
-                KEY_WRITE,
-                None,
-                &mut hkey,
-                None,
-            );
-
-            if result.is_err() {
-                tracing::warn!(
-                    "Failed to create registry key for {}: {:?}",
-                    key_path,
-                    result
-                );
-                continue;
-            }
-
-            // Set the default value to the manifest path
-            let manifest_wide: Vec<u16> = manifest_path_str
-                .encode_utf16()
-                .chain(std::iter::once(0))
-                .collect();
-
-            let result = RegSetValueExW(
-                hkey,
-                PCWSTR::null(), // Default value (empty name)
-                0,
-                REG_SZ,
-                Some(std::slice::from_raw_parts(
-                    manifest_wide.as_ptr() as *const u8,
-                    manifest_wide.len() * 2,
-                )),
-            );
-
-            if result.is_err() {
-                tracing::warn!(
-                    "Failed to set registry value for {}: {:?}",
-                    key_path,
-                    result
-                );
-            }
-
-            let _ = RegCloseKey(hkey);
-        }
-    }
-
-    Ok(())
+    super::manifest::install_manifests(None).map(|_| ())
 }
 
 #[cfg(test)]

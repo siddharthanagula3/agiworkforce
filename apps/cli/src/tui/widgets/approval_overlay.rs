@@ -97,7 +97,6 @@ pub struct ApprovalOverlayState {
     pub result: Option<ApprovalChoice>,
 }
 
-
 impl ApprovalOverlayState {
     /// Open the overlay with a fresh prompt. Clears any previous result.
     pub fn open(&mut self, prompt: impl Into<String>, detail: Vec<String>) {
@@ -119,11 +118,7 @@ impl ApprovalOverlayState {
     }
 
     /// Render the overlay into the given terminal frame area.
-    pub fn render_into(
-        &self,
-        frame: &mut ratatui::Frame,
-        area: Rect,
-    ) {
+    pub fn render_into(&self, frame: &mut ratatui::Frame, area: Rect) {
         if !self.visible {
             return;
         }
@@ -134,7 +129,7 @@ impl ApprovalOverlayState {
             + detail_lines.max(1)     // detail or blank
             + 2                       // blank + button strip
             + 1                       // hint line
-            + 1;                      // bottom padding
+            + 1; // bottom padding
         let box_height = inner_height + 2; // borders
         let box_width = area.width.min(82);
 
@@ -229,14 +224,18 @@ impl ApprovalOverlayState {
         }
 
         let mut out = String::new();
-        out.push_str("┌─ Tool Approval ─────────────────────────────────────────────────────────────┐\n");
+        out.push_str(
+            "┌─ Tool Approval ─────────────────────────────────────────────────────────────┐\n",
+        );
         out.push_str(&format!("│  {:<76} │\n", &self.prompt));
 
         for d in &self.detail {
             out.push_str(&format!("│    {:<74} │\n", d));
         }
 
-        out.push_str("│                                                                              │\n");
+        out.push_str(
+            "│                                                                              │\n",
+        );
 
         let mut buttons = String::from("│  ");
         for (i, choice) in CHOICES.iter().enumerate() {
@@ -248,8 +247,12 @@ impl ApprovalOverlayState {
             buttons.push_str("  ");
         }
         out.push_str(&format!("{:<78} │\n", buttons));
-        out.push_str("│  ←/→ move   Enter confirm   Esc = No                                        │\n");
-        out.push_str("└──────────────────────────────────────────────────────────────────────────────┘\n");
+        out.push_str(
+            "│  ←/→ move   Enter confirm   Esc = No                                        │\n",
+        );
+        out.push_str(
+            "└──────────────────────────────────────────────────────────────────────────────┘\n",
+        );
         out
     }
 }

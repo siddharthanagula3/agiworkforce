@@ -8,34 +8,39 @@
 #![allow(clippy::result_large_err)]
 
 // Active modules — core CLI functionality
-pub mod design_system;
 pub mod agent;
 pub mod agent_events;
 pub mod agents;
 pub mod auth;
 pub mod auth_oauth;
+pub mod claude_parity;
 pub mod cli_options;
 pub mod command_registry;
 pub mod compaction;
 pub mod config;
 pub mod context;
 pub mod conversations;
+pub mod custom_commands;
 pub mod daemon;
+pub mod design_system;
+pub mod doctor;
 pub mod errors;
 // hooks lives at features::hooks::hooks; re-exported here so all 20 call-sites
 // using `crate::hooks::*` continue to resolve unchanged.
-pub use features::hooks::hooks as hooks;
+pub use features::hooks::hooks;
 pub mod markdown;
 // lsp lives at platform::lsp; re-exported here so all 4 call-sites
 // in features/exec/tools/task_registry.rs resolve unchanged.
 pub use platform::lsp;
 pub mod mcp;
 pub mod memory;
-#[allow(dead_code)] // FOUNDATION: cross-surface send-pipeline contract; CLI integrations wire through Sprint B (REPL drain + SDK headless)
+#[allow(dead_code)]
+// FOUNDATION: cross-surface send-pipeline contract; CLI integrations wire through Sprint B (REPL drain + SDK headless)
 pub mod message_queue;
 pub mod models;
 pub mod output;
 pub mod output_styles;
+pub mod path_security;
 pub mod permissions;
 // plan_mode lives at features::plan::plan_mode; re-exported here so all
 // internal callers using `crate::plan_mode::*` continue to resolve unchanged.
@@ -50,7 +55,7 @@ pub mod subagent_v2;
 pub mod teams;
 // tools lives at features::exec::tools; re-exported here so all 42 call-sites
 // using `crate::tools::*` continue to resolve unchanged.
-pub use features::exec::tools as tools;
+pub use features::exec::tools;
 pub mod tui;
 pub mod voice;
 
@@ -67,7 +72,7 @@ pub mod oauth;
 pub mod onboarding;
 // plugins lives at features::plugins::plugins; re-exported here so all
 // internal callers using `crate::plugins::*` continue to resolve unchanged.
-pub use features::plugins::plugins as plugins;
+pub use features::plugins::plugins;
 pub mod project_registry;
 pub mod project_scope;
 pub mod review;
@@ -75,43 +80,48 @@ pub mod routing;
 // runtime lives at platform::runtime; re-exported here so all 27 call-sites
 // using `crate::runtime::<submod>::*` continue to resolve unchanged.
 pub use platform::runtime;
+pub mod cost_ledger;
+pub mod notebook_edit;
+pub mod powershell_tool;
 pub mod sandbox;
 pub mod shell_snapshot;
 pub mod sync;
 pub mod tier_cache;
-pub mod cost_ledger;
-pub mod notebook_edit;
-pub mod powershell_tool;
+pub(crate) mod tool_filters;
 pub mod tool_search;
 
 // Phase-2 candidates — implementations exist but the user-facing surface is
 // not yet wired. Each carries an inline PHASE2 marker explaining the unblock.
-#[allow(dead_code)] // PHASE2: registry.agiworkforce.com not deployed; rewires to plugin-manifest discovery (Sprint B6)
+#[allow(dead_code)]
+// PHASE2: registry.agiworkforce.com not deployed; rewires to plugin-manifest discovery (Sprint B6)
 pub mod marketplace;
 #[allow(dead_code)] // PHASE2: SDK stdin-reader surface ships in Sprint B (headless mode hardening)
 pub mod sdk_io; // used by OneShotOutputMode::JsonEvents in lib.rs
-// policy lives at platform::policy; re-exported here so existing PHASE2 references
-// (and any future callers) using `crate::policy::*` continue to resolve unchanged.
-#[allow(dead_code)] // PHASE2: Gemini-style declarative TOML tool-rule eval not yet wired into agent
+                // policy lives at platform::policy; re-exported here so existing PHASE2 references
+                // (and any future callers) using `crate::policy::*` continue to resolve unchanged.
+#[allow(dead_code)]
+// PHASE2: Gemini-style declarative TOML tool-rule eval not yet wired into agent
 pub use platform::policy;
-#[allow(dead_code)] // PHASE2: WS transport for a2a — wraps jsonrpc::handle_request over persistent WS connections
+#[allow(dead_code)]
+// PHASE2: WS transport for a2a — wraps jsonrpc::handle_request over persistent WS connections
 pub mod a2a_ws;
 pub mod memory_pipeline; // used by agent/mod.rs + agent/chat.rs + agent/prompt.rs
 pub mod skill_learner; // used by agent/chat.rs session-end hook
 
 // A2A protocol — lives at features::a2a; re-exported here so 6 call-sites in
 // a2a_ws.rs, agent/mod.rs, and repl/mod.rs resolve unchanged.
-#[allow(dead_code)] // PHASE2: expose `agiworkforce a2a serve/discover/delegate`
+#[allow(dead_code)] // PHASE2: expose `agi a2a serve/discover/delegate`
 pub use features::a2a;
 
 // Phase 6 reorg — feature/platform/data layers.
 // features/ has a real mod.rs; submodules migrate here incrementally.
 // platform/ and data/ are placeholders (mod.rs exists, empty for now).
-pub mod features;
-#[allow(dead_code)]
-pub mod platform;
 #[allow(dead_code)]
 pub mod data;
+pub mod features;
+pub mod file_state;
+#[allow(dead_code)]
+pub mod platform;
 
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
@@ -121,9 +131,9 @@ use std::io::{self, IsTerminal, Read};
 /// AGI Workforce CLI — multi-model AI agent in your terminal
 #[derive(Parser, Debug)]
 #[command(
-    name = "agiworkforce",
+    name = "agi",
     version,
-    about = "AGI Workforce CLI — multi-model AI agent in your terminal",
+    about = "AGI CLI — multi-model AI agent in your terminal",
     long_about = "Multi-provider AI agent for your terminal. \
                   Connects to Anthropic, OpenAI, Google, Ollama, and more."
 )]
@@ -560,6 +570,15 @@ enum Command {
         #[command(subcommand)]
         action: EcosystemSubcommand,
     },
+    /// Migrate settings from another coding CLI. Defaults to Claude Code.
+    Migrate {
+        /// Source to migrate from: claude or claude-code.
+        #[arg(default_value = "claude")]
+        source: String,
+        /// Show what would be imported without writing files.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Browse session history.
     History {
         /// Maximum number of sessions to display.
@@ -580,6 +599,12 @@ enum Command {
     Logout,
     /// Show authentication status for all configured providers.
     AuthStatus,
+    /// Run local preflight diagnostics.
+    Doctor {
+        /// Emit the diagnostic report as JSON.
+        #[arg(long)]
+        json: bool,
+    },
     /// Browse and install marketplace plugins.
     Marketplace {
         #[command(subcommand)]
@@ -616,9 +641,7 @@ enum SessionAction {
         limit: usize,
     },
     /// Show the turn-by-turn transcript of a session.
-    Show {
-        session_id: String,
-    },
+    Show { session_id: String },
     /// Fork a session at a specific turn into a new named session.
     Fork {
         session_id: String,
@@ -779,8 +802,8 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
     use colored::Colorize;
     match action {
         SessionAction::List { limit } => {
-            let mut summaries = runtime::session_control::list_managed_sessions()
-                .unwrap_or_default();
+            let mut summaries =
+                runtime::session_control::list_managed_sessions().unwrap_or_default();
             summaries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
             summaries.truncate(limit);
             if summaries.is_empty() {
@@ -800,11 +823,7 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
         }
         SessionAction::Show { session_id } => {
             let (messages, _) = resolve_resume_payload(&session_id, false)?;
-            println!(
-                "{}: {} messages",
-                session_id.cyan().bold(),
-                messages.len()
-            );
+            println!("{}: {} messages", session_id.cyan().bold(), messages.len());
             for (i, msg) in messages.iter().enumerate() {
                 let preview: String = msg.text_content().chars().take(120).collect();
                 println!("  [{:>3}] {:<10}  {}", i, msg.role, preview);
@@ -859,6 +878,11 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
 pub async fn run_main() -> Result<()> {
     let cli = Cli::parse();
     let normalized_cli_options = cli_options::CliOptions::from_cli(&cli);
+
+    for dir in &normalized_cli_options.additional_dirs {
+        crate::path_security::register_additional_workspace_root(dir)
+            .map_err(|e| anyhow::anyhow!("--add-dir {}: {}", dir, e))?;
+    }
 
     // Load configuration (global + project + env overrides merged)
     let mut app_config = config::CliConfig::load_merged()?;
@@ -947,6 +971,11 @@ pub async fn run_main() -> Result<()> {
                     .unwrap_or(raw_model.clone());
                 let mut session = agent::AgentSession::new(&m, &sys_ctx, None);
                 session.set_provider_override(&app_config.default.provider);
+                session.apply_ui_config(&app_config);
+                session.apply_tool_filters(
+                    &normalized_cli_options.allowed_tools,
+                    &normalized_cli_options.disallowed_tools,
+                );
                 if chain.primaries.len() > 1 {
                     session.fallback_chain = Some(chain);
                 }
@@ -958,6 +987,13 @@ pub async fn run_main() -> Result<()> {
                 }
                 session.quiet = true;
                 session.enable_managed_session()?;
+                attach_mcp_manager_for_session(
+                    &mut session,
+                    &normalized_cli_options.mcp_config_load_options(),
+                    false,
+                    false,
+                )
+                .await?;
                 let is_json = *json;
                 let json_events = cli.json_events;
                 let session_id = session
@@ -1096,6 +1132,9 @@ pub async fn run_main() -> Result<()> {
                     false,
                     cli_options::PermissionMode::Default,
                     false,
+                    normalized_cli_options.allowed_tools.clone(),
+                    normalized_cli_options.disallowed_tools.clone(),
+                    normalized_cli_options.mcp_config_load_options(),
                 )
                 .await
             }
@@ -1124,6 +1163,9 @@ pub async fn run_main() -> Result<()> {
                     false,
                     cli_options::PermissionMode::Default,
                     false,
+                    normalized_cli_options.allowed_tools.clone(),
+                    normalized_cli_options.disallowed_tools.clone(),
+                    normalized_cli_options.mcp_config_load_options(),
                 )
                 .await
             }
@@ -1336,10 +1378,21 @@ pub async fn run_main() -> Result<()> {
                     if servers.is_empty() {
                         println!("No MCP server configs found to import.");
                     } else {
-                        println!("Imported {} MCP server config(s):", servers.len());
+                        let report = ecosystem::import_mcp_servers_to_global(&servers, false)?;
+                        println!(
+                            "Imported {} MCP server config(s) into {}:",
+                            report.added.len(),
+                            report.path.display()
+                        );
                         for s in &servers {
                             let transport = if s.url.is_some() { "HTTP/SSE" } else { "stdio" };
                             println!("  {} ({}) [{}]", s.name, s.source, transport);
+                        }
+                        if !report.skipped_existing.is_empty() {
+                            println!(
+                                "Skipped {} existing server config(s).",
+                                report.skipped_existing.len()
+                            );
                         }
                     }
                     let skills = ecosystem::discover_external_skills(&detected);
@@ -1378,6 +1431,22 @@ pub async fn run_main() -> Result<()> {
                     Ok(())
                 }
             },
+
+            Command::Migrate { source, dry_run } => {
+                let normalized = source.to_ascii_lowercase();
+                if !matches!(
+                    normalized.as_str(),
+                    "claude" | "claude-code" | "claude_code"
+                ) {
+                    anyhow::bail!(
+                        "Unsupported migration source '{}'. Supported sources: claude, claude-code",
+                        source
+                    );
+                }
+                let report = ecosystem::migrate_claude_code(*dry_run)?;
+                print!("{}", ecosystem::format_claude_migration_report(&report));
+                Ok(())
+            }
 
             // --- History ---
             Command::History { limit } => {
@@ -1495,7 +1564,7 @@ pub async fn run_main() -> Result<()> {
                 let statuses = auth::auth_status()?;
                 if statuses.is_empty() {
                     println!("No authentication configured.");
-                    println!("Run `agiworkforce login` to authenticate.");
+                    println!("Run `agi login` to authenticate.");
                 } else {
                     println!("{:<18} {:<10} {:<12} Expires", "Provider", "Type", "Status");
                     println!("{}", "-".repeat(60));
@@ -1511,6 +1580,9 @@ pub async fn run_main() -> Result<()> {
                 }
                 Ok(())
             }
+
+            // --- Doctor ---
+            Command::Doctor { json } => doctor::run_doctor(&app_config, *json),
 
             // --- Marketplace ---
             Command::Marketplace { action } => {
@@ -1584,7 +1656,7 @@ pub async fn run_main() -> Result<()> {
             ShellType::Zsh => clap_complete::Shell::Zsh,
             ShellType::Fish => clap_complete::Shell::Fish,
         };
-        clap_complete::generate(shell_type, &mut cmd, "agiworkforce", &mut io::stdout());
+        clap_complete::generate(shell_type, &mut cmd, "agi", &mut io::stdout());
         return Ok(());
     }
 
@@ -1694,7 +1766,7 @@ pub async fn run_main() -> Result<()> {
                 }
                 println!();
             }
-            println!("{}", "Resume with: agiworkforce --resume <ID>".dimmed());
+            println!("{}", "Resume with: agi --resume <ID>".dimmed());
         }
         return Ok(());
     }
@@ -1825,13 +1897,12 @@ pub async fn run_main() -> Result<()> {
     } else {
         // No explicit model — attempt tier-aware selection.
         let jwt = tier_cache::load_jwt();
-        let cached_tier =
-            tokio::time::timeout(
-                std::time::Duration::from_secs(3),
-                tier_cache::resolve_user_tier(jwt.as_deref()),
-            )
-            .await
-            .unwrap_or(None);
+        let cached_tier = tokio::time::timeout(
+            std::time::Duration::from_secs(3),
+            tier_cache::resolve_user_tier(jwt.as_deref()),
+        )
+        .await
+        .unwrap_or(None);
 
         if let Some(ct) = cached_tier {
             // Use the tier's economy default if no model is pinned in config.
@@ -1913,6 +1984,9 @@ pub async fn run_main() -> Result<()> {
             cli.quiet,
             effective_permission_mode,
             effective_auto_approve_plan,
+            normalized_cli_options.allowed_tools.clone(),
+            normalized_cli_options.disallowed_tools.clone(),
+            normalized_cli_options.mcp_config_load_options(),
         )
         .await;
     }
@@ -2020,6 +2094,9 @@ pub async fn run_main() -> Result<()> {
             cli.quiet,
             effective_permission_mode,
             effective_auto_approve_plan,
+            normalized_cli_options.allowed_tools.clone(),
+            normalized_cli_options.disallowed_tools.clone(),
+            normalized_cli_options.mcp_config_load_options(),
         )
         .await
     } else {
@@ -2041,6 +2118,9 @@ pub async fn run_main() -> Result<()> {
             effective_permission_mode,
             effective_auto_approve_plan,
             cli.no_sandbox,
+            normalized_cli_options.allowed_tools.clone(),
+            normalized_cli_options.disallowed_tools.clone(),
+            normalized_cli_options.mcp_config_load_options(),
         )
         .await
     }
@@ -2119,6 +2199,45 @@ pub fn exit_with_error(e: &anyhow::Error) -> ! {
     std::process::exit(exit_code)
 }
 
+pub(crate) async fn attach_mcp_manager_for_session(
+    session: &mut agent::AgentSession,
+    mcp_config_options: &mcp::McpConfigLoadOptions,
+    include_default_configs: bool,
+    include_plugin_configs: bool,
+) -> Result<()> {
+    if !include_default_configs && !mcp_config_options.has_explicit_sources() {
+        return Ok(());
+    }
+
+    let mut load_options = mcp_config_options.clone();
+    if !include_default_configs {
+        load_options.strict = true;
+    }
+
+    let mut mcp_configs = mcp::McpManager::load_configs_with_options(&load_options)?;
+    if include_plugin_configs && !load_options.strict {
+        let mut plugin_mgr = plugins::PluginsManager::new();
+        if plugin_mgr
+            .load_all(std::env::current_dir().ok().as_deref())
+            .is_ok()
+        {
+            mcp_configs.extend(plugin_mgr.mcp_configs());
+        }
+    }
+
+    if mcp_configs.is_empty() {
+        return Ok(());
+    }
+
+    let mut mcp_mgr = mcp::McpManager::new();
+    if let Err(err) = mcp_mgr.connect_all(&mcp_configs).await {
+        output::print_warn(&format!("MCP connection error: {err:#}"));
+    }
+    session.set_mcp_manager(mcp_mgr);
+
+    Ok(())
+}
+
 /// Execute a single prompt and exit.
 #[allow(clippy::too_many_arguments)]
 pub async fn run_oneshot(
@@ -2134,11 +2253,15 @@ pub async fn run_oneshot(
     quiet: bool,
     permission_mode: cli_options::PermissionMode,
     auto_approve_plan: bool,
+    allowed_tools: Vec<String>,
+    disallowed_tools: Vec<String>,
+    mcp_config_options: mcp::McpConfigLoadOptions,
 ) -> Result<()> {
     let mut session = agent::AgentSession::new(model, sys_context, custom_system_prompt);
     // Apply config-based provider override (e.g. "ollama-cloud") when the
     // configured provider differs from the model-name-based detection.
     session.set_provider_override(&config.default.provider);
+    session.apply_ui_config(config);
     session.max_turns = max_turns;
     session.skip_permissions = skip_permissions;
     session.auto_approve_safe = auto_approve_safe;
@@ -2148,10 +2271,12 @@ pub async fn run_oneshot(
     // the plan-mode reminder and the dispatcher gates mutating tools.
     session.permission_mode = permission_mode;
     session.auto_approve_plan = auto_approve_plan;
+    session.apply_tool_filters(&allowed_tools, &disallowed_tools);
     if matches!(permission_mode, cli_options::PermissionMode::Plan) {
         session.plan_mode = true;
     }
     session.enable_managed_session()?;
+    attach_mcp_manager_for_session(&mut session, &mcp_config_options, false, false).await?;
 
     if output_mode == OneShotOutputMode::JsonLine {
         // Stream-JSON: NDJSON events on stdout, one per line. The full
@@ -2179,9 +2304,7 @@ pub async fn run_oneshot(
             .ok();
 
         let start = std::time::Instant::now();
-        let result = session
-            .send(config, prompt, Box::new(|_chunk| {}))
-            .await;
+        let result = session.send(config, prompt, Box::new(|_chunk| {})).await;
         let duration_ms = start.elapsed().as_millis() as u64;
 
         match result {
@@ -2229,11 +2352,9 @@ pub async fn run_oneshot(
         }
     } else if output_mode == OneShotOutputMode::JsonPretty {
         // Pretty-printed single JSON object — non-streaming, for shell users
-        // running `agiworkforce -p '...' --output-format json`.
+        // running `agi -p '...' --output-format json`.
         let start = std::time::Instant::now();
-        let result = session
-            .send(config, prompt, Box::new(|_chunk| {}))
-            .await;
+        let result = session.send(config, prompt, Box::new(|_chunk| {})).await;
         let duration_ms = start.elapsed().as_millis() as u64;
 
         match result {

@@ -7,7 +7,7 @@ expression: rendered
 
   0 servers
 
-  ※ Run `agiworkforce --debug` to see error logs
+  ※ Run `agi --debug` to see error logs
   https://code.agiworkforce.com/docs/mcp for help
 
   ↑↓ to navigate · Enter to confirm · Esc to cancel

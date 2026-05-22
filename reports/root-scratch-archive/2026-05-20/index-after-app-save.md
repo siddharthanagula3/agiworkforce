@@ -1,0 +1,1538 @@
+- generic [ref=e7] [box=0,0,1633,928]:
+  - generic [ref=e8] [box=0,0,1633,40]:
+    - generic [ref=e11] [box=6,0,393,40]:
+      - link "Back to projects" [ref=e12] [box=6,6,28,28]:
+        - /url: /design/
+        - img [ref=e13] [box=11,11,17,17]
+      - generic "AGI Mobile" [ref=e16] [box=40,7,78,25]
+      - button "" [ref=e18] [box=367,7,26,26]:
+        - generic [ref=e19] [box=372,12,16,16]: 
+    - generic [ref=e20] [box=400,0,1233,40]:
+      - generic [ref=e22] [box=410,7,107,34]:
+        - generic [ref=e23] [box=424,14,12,12]: 
+        - generic [ref=e24] [box=439,14,64,13]: Design Files
+      - generic [ref=e26] [box=503,7,961,33]:
+        - generic [ref=e28] [box=531,14,111,13]: index.html
+        - generic [ref=e34] [box=681,14,124,13]: screens-r5-canonical.jsx
+        - generic [ref=e36] [box=831,14,124,13]: screens-r6-canonical.jsx
+      - generic [ref=e37] [box=1464,6,161,28]:
+        - button "Present " [ref=e40] [box=1464,9,73,22]
+        - button "Share" [ref=e44] [box=1543,9,48,22]
+        - button "Profile and connectors" [ref=e46] [cursor=pointer] [box=1597,6,28,28]
+  - generic [ref=e49] [box=0,40,1633,888]:
+    - generic [ref=e56] [box=0,40,399,888]:
+      - generic [ref=e59] [box=14,-54504,364,55257]:
+        - generic [ref=e62] [box=260,-5904,118,38]: dont use codex
+        - generic [ref=e65] [box=14,-5844,364,75]
+        - generic [ref=e77] [box=81,-5755,297,38]: can you like brainstrom or ask me questions?
+        - generic [ref=e82] [box=14,-5697,364,1410]
+        - generic [ref=e138] [box=69,-4273,309,2540]
+        - generic [ref=e144] [box=69,-1719,309,2323]: "Create a new R6 canonical set that keeps the visual polish of R5 but corrects the AGI Mobile product direction. Do not edit by making small copy tweaks only. Make a new light-first AGI Mobile v1 direction using these rules: 1. Product truth AGI Mobile v1 is on-device first. The hero is private AI that runs on the phone, works offline, and only leaves the device when the user explicitly chooses BYOK. Managed AGI Cloud is waitlist/private beta only. BYOK is available when the user adds their own provider key. 2. Visual direction Make canonical screens light-first with warm cream #faf9f7 as the base, white raised surfaces, teal #21808d for primary actions, terracotta #da7756 only as secondary accent. Include dark variants only as secondary examples. Use iOS/Android system sans. Do not use serif body text. Do not use negative letter spacing. Keep density professional and mobile-native. 3. Empty chat Replace \"How can I help you, Siddhartha?\" with \"Ask anything\". Add a compact trust badge near the header or above the composer: \"On-device · Private · Works offline\". Keep the composer-first layout. The screen should feel like a real tool, not a landing page. 4. Navigation Remove Agents, Dispatch, and Multi-model from primary mobile nav. Mobile v1 primary drawer should be: Chat, Projects, Skills, Memory, Models, Keys, Settings. Agents only appear later if desktop companion has active runs. Dispatch is not a v1 destination. Multi-model compare is not a primary nav item. 5. Onboarding No sign-in in first-run. Replace the current Android onboarding copy with: \"AGI runs on your device.\" Supporting copy: \"No account. No cloud. Free forever.\" Primary CTA: \"Start chatting\" or \"Continue\". Then show device-tier detection and model download/manage. BYOK is optional later in Keys. 6. Model picker Rebuild the model picker into three explicit sections: - On-device: installed and downloadable local/system models. - BYOK: Anthropic, OpenAI, Google, xAI, Perplexity, Mistral, Ollama/LM Studio, Custom. Rows say \"Add key\" until configured, then become selectable. These are not waitlist. - AGI Cloud: managed models and credits. These are waitlist/private beta only. Do not label every cloud provider model as waitlist. BYOK unlocks provider models now. 7. BYOK flow Add a Keys / BYOK screen and a Local to BYOK fork flow. The fork flow must show: choose provider/model, choose context to send, include attachments toggle, local secret scan, payload preview, confirm. Original local chat remains local. Labels should say \"Claude via your Anthropic key\" or equivalent. 8. Waitlist Remove fake or global waitlist rank from Settings and nav. Before join, show only \"Join waitlist\" at natural cloud gates. After join, rank may appear only in the waitlist confirmation and mode/cloud row, and only as server-provided data. 9. Settings and storage Remove account/email assumptions from local v1 settings. Storage export must be on-device export/share sheet, not \"emailed within 24h\". Settings sections: Mode, Keys, Memory, Voice, Storage, Performance, Privacy, Appearance, About. 10. Preserve what works Keep the high-fidelity phone frames, compact composer, inline tool-call bar, performance chip, plus menu structure, and model sheet interaction quality. Just make the IA, copy, trust boundaries, and palette correct for AGI. Output one new section titled \"R6 · AGI Mobile v1 canonical\" with these screens: onboarding hero, device tier/model download, empty chat, active chat, drawer, plus menu, model picker, Keys/BYOK setup, Local to BYOK fork preview, Settings/Storage/Privacy. Add Android light variants for drawer and onboarding."
+        - generic [ref=e147] [box=14,626,364,113]
+      - generic [ref=e166] [box=12,790,375,125]:
+        - textbox "Describe what you want to create..." [ref=e168] [box=25,803,350,63]
+        - generic [ref=e169] [box=25,875,350,28]
+    - generic [ref=e185] [box=400,40,1233,888]:
+      - generic [ref=e186] [box=400,40,1233,39]:
+        - button "" [ref=e188] [box=410,46,26,26]
+        - button " Mark up" [ref=e190] [box=1260,48,75,22]
+        - button " Edit" [ref=e193] [box=1341,48,53,22]
+        - button " Tweaks" [ref=e198] [box=1400,48,72,22]
+        - button " Comments" [ref=e201] [box=1478,48,90,22]
+        - button "100%" [ref=e206] [box=1574,48,50,22]
+      - iframe [ref=e219] [box=400,79,1233,849]:
+        - generic [ref=f19e5] [box=0,60,12148,1082]:
+          - generic [ref=f19e7] [box=60,60,12028,94]:
+            - generic [ref=f19e8] [box=58,60,349,33]: R6 · AGI Mobile v1 canonical
+            - generic [ref=f19e9] [box=60,99,12028,19]: On-device first · light-first · 3-bucket models · BYOK fork · Settings/Storage/Privacy
+          - generic [ref=f19e10] [box=0,154,12148,988]:
+            - generic [ref=f19e11] [box=60,154,480,988]:
+              - generic [ref=f19e12] [box=56,126,484,24]:
+                - generic [ref=f19e13] [box=56,126,438,24]:
+                  - generic "Drag to reorder" [ref=f19e14] [box=56,127,17,23]:
+                    - img [ref=f19e15] [box=60,132,9,13]
+                  - generic "Click to focus" [ref=f19e22] [cursor=pointer] [box=77,128,417,21]:
+                    - generic [ref=f19e23] [box=81,131,207,15]: R6.1 · Onboarding hero · light
+                - generic [ref=f19e24] [box=494,127,46,22]:
+                  - button "More" [ref=f19e26] [cursor=pointer] [box=494,127,22,22]:
+                    - img [ref=f19e27] [box=499,132,12,12]
+                  - button "Focus" [ref=f19e31] [cursor=pointer] [box=518,127,22,22]:
+                    - img [ref=f19e32] [box=523,132,12,12]
+              - generic [ref=f19e36] [box=85,182,430,932]:
+                - generic [box=85,182,430,72]:
+                  - generic [box=115,217,37,21]: 9:41
+                  - generic [box=414,221,71,13]:
+                    - img [box=414,222,18,11]
+                    - img [box=438,222,16,11]
+                    - img [box=460,222,25,12]
+                - generic [ref=f19e39] [box=85,236,430,844]:
+                  - generic [ref=f19e40] [box=85,236,430,729]:
+                    - img [ref=f19e41] [box=264,400,72,72]
+                    - generic [ref=f19e48] [box=117,504,366,79]: AGI runs on your device.
+                    - generic [ref=f19e49] [box=166,597,269,23]: No account. No cloud. Free forever.
+                    - generic [ref=f19e50] [box=140,652,320,149]:
+                      - generic [ref=f19e51] [box=140,652,320,43]:
+                        - img [ref=f19e52] [box=155,665,18,18]
+                        - generic [ref=f19e54] [box=185,665,185,17]: Runs on your Neural Engine
+                      - generic [ref=f19e55] [box=140,705,320,43]:
+                        - img [ref=f19e56] [box=155,718,18,18]
+                        - generic [ref=f19e58] [box=185,718,89,17]: Works offline
+                      - generic [ref=f19e59] [box=140,758,320,43]:
+                        - img [ref=f19e60] [box=155,771,18,18]
+                        - generic [ref=f19e62] [box=185,771,179,17]: Nothing leaves your phone
+                  - generic [ref=f19e63] [box=85,965,430,115]:
+                    - button "Start chatting" [ref=f19e64] [box=105,965,390,54]
+                    - generic [ref=f19e66] [box=196,1037,209,14]: AGI Automation LLC · Delaware, USA
+            - generic [ref=f19e68] [box=588,154,480,988]:
+              - generic [ref=f19e69] [box=584,126,484,24]:
+                - generic [ref=f19e70] [box=584,126,438,24]:
+                  - generic "Drag to reorder" [ref=f19e71] [box=584,127,17,23]:
+                    - img [ref=f19e72] [box=588,132,9,13]
+                  - generic "Click to focus" [ref=f19e79] [cursor=pointer] [box=605,128,417,21]:
+                    - generic [ref=f19e80] [box=609,131,207,15]: R6.1 · Onboarding hero · dark
+                - generic [ref=f19e81] [box=1022,127,46,22]:
+                  - button "More" [ref=f19e83] [cursor=pointer] [box=1022,127,22,22]:
+                    - img [ref=f19e84] [box=1027,132,12,12]
+                  - button "Focus" [ref=f19e88] [cursor=pointer] [box=1046,127,22,22]:
+                    - img [ref=f19e89] [box=1051,132,12,12]
+              - generic [ref=f19e93] [box=613,182,430,932]:
+                - generic [box=613,182,430,72]:
+                  - generic [box=643,217,37,21]: 9:41
+                  - generic [box=942,221,71,13]:
+                    - img [box=942,222,18,11]
+                    - img [box=966,222,16,11]
+                    - img [box=988,222,25,12]
+                - generic [ref=f19e96] [box=613,236,430,844]:
+                  - generic [ref=f19e97] [box=613,236,430,729]:
+                    - img [ref=f19e98] [box=792,400,72,72]
+                    - generic [ref=f19e105] [box=645,504,366,79]: AGI runs on your device.
+                    - generic [ref=f19e106] [box=694,597,269,23]: No account. No cloud. Free forever.
+                    - generic [ref=f19e107] [box=668,652,320,149]:
+                      - generic [ref=f19e108] [box=668,652,320,43]:
+                        - img [ref=f19e109] [box=683,665,18,18]
+                        - generic [ref=f19e111] [box=713,665,185,17]: Runs on your Neural Engine
+                      - generic [ref=f19e112] [box=668,705,320,43]:
+                        - img [ref=f19e113] [box=683,718,18,18]
+                        - generic [ref=f19e115] [box=713,718,89,17]: Works offline
+                      - generic [ref=f19e116] [box=668,758,320,43]:
+                        - img [ref=f19e117] [box=683,771,18,18]
+                        - generic [ref=f19e119] [box=713,771,179,17]: Nothing leaves your phone
+                  - generic [ref=f19e120] [box=613,965,430,115]:
+                    - button "Start chatting" [ref=f19e121] [box=633,965,390,54]
+                    - generic [ref=f19e123] [box=724,1037,209,14]: AGI Automation LLC · Delaware, USA
+            - generic [ref=f19e125] [box=1116,154,480,988]:
+              - generic [ref=f19e126] [box=1112,126,484,24]:
+                - generic [ref=f19e127] [box=1112,126,438,24]:
+                  - generic "Drag to reorder" [ref=f19e128] [box=1112,127,17,23]:
+                    - img [ref=f19e129] [box=1116,132,9,13]
+                  - generic "Click to focus" [ref=f19e136] [cursor=pointer] [box=1133,128,417,21]:
+                    - generic [ref=f19e137] [box=1137,131,166,15]: R6.2 · Device tier · light
+                - generic [ref=f19e138] [box=1550,127,46,22]:
+                  - button "More" [ref=f19e140] [cursor=pointer] [box=1550,127,22,22]:
+                    - img [ref=f19e141] [box=1555,132,12,12]
+                  - button "Focus" [ref=f19e145] [cursor=pointer] [box=1574,127,22,22]:
+                    - img [ref=f19e146] [box=1579,132,12,12]
+              - generic [ref=f19e150] [box=1141,182,430,932]:
+                - generic [box=1141,182,430,72]:
+                  - generic [box=1171,217,37,21]: 9:41
+                  - generic [box=1470,221,71,13]:
+                    - img [box=1470,222,18,11]
+                    - img [box=1494,222,16,11]
+                    - img [box=1516,222,25,12]
+                - generic [ref=f19e153] [box=1141,236,430,844]:
+                  - generic [ref=f19e154] [box=1141,236,430,69]:
+                    - img [ref=f19e156] [box=1168,261,20,20]
+                    - generic [ref=f19e158] [box=1478,264,77,14]: Step 2 of 3
+                  - generic [ref=f19e159] [box=1141,305,430,147]:
+                    - img [ref=f19e161] [box=1176,338,26,26]
+                    - generic [ref=f19e163] [box=1163,395,386,31]: Your iPhone is ready.
+                    - generic [ref=f19e164] [box=1163,434,386,18]:
+                      - text: iPhone 15 Pro Max · A17 Pro ·
+                      - generic [ref=f19e165] [box=1372,434,100,18]: Tier 1 capable
+                  - generic [ref=f19e166] [box=1155,474,402,235]:
+                    - generic [ref=f19e167] [box=1172,491,369,23]:
+                      - generic [ref=f19e168] [box=1172,496,94,13]: Recommended
+                      - generic [ref=f19e170] [box=1279,499,31,12]: TIER 1
+                    - generic [ref=f19e171] [box=1172,522,369,24]: Apple Foundation 3B
+                    - generic [ref=f19e172] [box=1172,551,369,16]: Uses your Neural Engine directly. Fastest on this device.
+                    - generic [ref=f19e173] [box=1172,581,369,52]:
+                      - generic [ref=f19e174] [box=1172,581,118,52]:
+                        - generic [ref=f19e175] [box=1184,591,94,12]: Size
+                        - generic [ref=f19e176] [box=1184,605,94,18]: ~700 MB
+                      - generic [ref=f19e177] [box=1297,581,118,52]:
+                        - generic [ref=f19e178] [box=1309,591,94,12]: Speed
+                        - generic [ref=f19e179] [box=1309,605,94,18]: 38 t/s
+                      - generic [ref=f19e180] [box=1423,581,118,52]:
+                        - generic [ref=f19e181] [box=1435,591,94,12]: Download
+                        - generic [ref=f19e182] [box=1435,605,94,18]: < 1 min
+                    - generic [ref=f19e183] [box=1172,647,369,46]:
+                      - img [ref=f19e184] [box=1172,669,16,16]
+                      - generic [ref=f19e186] [box=1198,662,282,29]:
+                        - generic [ref=f19e187] [box=1198,662,282,16]: Download over cellular too
+                        - generic [ref=f19e188] [box=1198,678,282,13]: Off · Wi-Fi only saves your data
+                  - generic [ref=f19e192] [box=1163,730,107,13]: Or pick another
+                  - generic [ref=f19e193] [box=1155,752,402,60]:
+                    - img [ref=f19e195] [box=1178,773,18,18]
+                    - generic [ref=f19e197] [box=1217,767,298,31]:
+                      - generic [ref=f19e198] [box=1217,767,298,17]: Llama 3.2 3B
+                      - generic [ref=f19e199] [box=1217,784,298,14]: 2.1 GB · Tier 2 · 22 t/s · ExecuTorch
+                    - img [ref=f19e200] [box=1527,774,16,16]
+                  - generic [ref=f19e202] [box=1155,820,402,60]:
+                    - img [ref=f19e204] [box=1178,841,18,18]
+                    - generic [ref=f19e206] [box=1217,835,298,31]:
+                      - generic [ref=f19e207] [box=1217,835,298,17]: Qwen 2.5 0.5B
+                      - generic [ref=f19e208] [box=1217,852,298,14]: 400 MB · Tier 3 · 14 t/s · GGUF fallback
+                    - img [ref=f19e209] [box=1527,842,16,16]
+                  - button "Download Apple Foundation 3B" [ref=f19e213] [box=1159,1012,394,52]:
+                    - img [ref=f19e214] [box=1222,1029,18,18]
+                    - generic [ref=f19e216] [box=1248,1028,242,19]: Download Apple Foundation 3B
+            - generic [ref=f19e218] [box=1644,154,480,988]:
+              - generic [ref=f19e219] [box=1640,126,484,24]:
+                - generic [ref=f19e220] [box=1640,126,438,24]:
+                  - generic "Drag to reorder" [ref=f19e221] [box=1640,127,17,23]:
+                    - img [ref=f19e222] [box=1644,132,9,13]
+                  - generic "Click to focus" [ref=f19e229] [cursor=pointer] [box=1661,128,417,21]:
+                    - generic [ref=f19e230] [box=1665,131,167,15]: R6.2 · Device tier · dark
+                - generic [ref=f19e231] [box=2078,127,46,22]:
+                  - button "More" [ref=f19e233] [cursor=pointer] [box=2078,127,22,22]:
+                    - img [ref=f19e234] [box=2083,132,12,12]
+                  - button "Focus" [ref=f19e238] [cursor=pointer] [box=2102,127,22,22]:
+                    - img [ref=f19e239] [box=2107,132,12,12]
+              - generic [ref=f19e243] [box=1669,182,430,932]:
+                - generic [box=1669,182,430,72]:
+                  - generic [box=1699,217,37,21]: 9:41
+                  - generic [box=1998,221,71,13]:
+                    - img [box=1998,222,18,11]
+                    - img [box=2022,222,16,11]
+                    - img [box=2044,222,25,12]
+                - generic [ref=f19e246] [box=1669,236,430,844]:
+                  - generic [ref=f19e247] [box=1669,236,430,69]:
+                    - img [ref=f19e249] [box=1696,261,20,20]
+                    - generic [ref=f19e251] [box=2006,264,77,14]: Step 2 of 3
+                  - generic [ref=f19e252] [box=1669,305,430,147]:
+                    - img [ref=f19e254] [box=1704,338,26,26]
+                    - generic [ref=f19e256] [box=1691,395,386,31]: Your iPhone is ready.
+                    - generic [ref=f19e257] [box=1691,434,386,18]:
+                      - text: iPhone 15 Pro Max · A17 Pro ·
+                      - generic [ref=f19e258] [box=1900,434,100,18]: Tier 1 capable
+                  - generic [ref=f19e259] [box=1683,474,402,235]:
+                    - generic [ref=f19e260] [box=1700,491,369,23]:
+                      - generic [ref=f19e261] [box=1700,496,94,13]: Recommended
+                      - generic [ref=f19e263] [box=1807,499,31,12]: TIER 1
+                    - generic [ref=f19e264] [box=1700,522,369,24]: Apple Foundation 3B
+                    - generic [ref=f19e265] [box=1700,551,369,16]: Uses your Neural Engine directly. Fastest on this device.
+                    - generic [ref=f19e266] [box=1700,581,369,52]:
+                      - generic [ref=f19e267] [box=1700,581,118,52]:
+                        - generic [ref=f19e268] [box=1712,591,94,12]: Size
+                        - generic [ref=f19e269] [box=1712,605,94,18]: ~700 MB
+                      - generic [ref=f19e270] [box=1825,581,118,52]:
+                        - generic [ref=f19e271] [box=1837,591,94,12]: Speed
+                        - generic [ref=f19e272] [box=1837,605,94,18]: 38 t/s
+                      - generic [ref=f19e273] [box=1951,581,118,52]:
+                        - generic [ref=f19e274] [box=1963,591,94,12]: Download
+                        - generic [ref=f19e275] [box=1963,605,94,18]: < 1 min
+                    - generic [ref=f19e276] [box=1700,647,369,46]:
+                      - img [ref=f19e277] [box=1700,669,16,16]
+                      - generic [ref=f19e279] [box=1726,662,282,29]:
+                        - generic [ref=f19e280] [box=1726,662,282,16]: Download over cellular too
+                        - generic [ref=f19e281] [box=1726,678,282,13]: Off · Wi-Fi only saves your data
+                  - generic [ref=f19e285] [box=1691,730,107,13]: Or pick another
+                  - generic [ref=f19e286] [box=1683,752,402,60]:
+                    - img [ref=f19e288] [box=1706,773,18,18]
+                    - generic [ref=f19e290] [box=1745,767,298,31]:
+                      - generic [ref=f19e291] [box=1745,767,298,17]: Llama 3.2 3B
+                      - generic [ref=f19e292] [box=1745,784,298,14]: 2.1 GB · Tier 2 · 22 t/s · ExecuTorch
+                    - img [ref=f19e293] [box=2055,774,16,16]
+                  - generic [ref=f19e295] [box=1683,820,402,60]:
+                    - img [ref=f19e297] [box=1706,841,18,18]
+                    - generic [ref=f19e299] [box=1745,835,298,31]:
+                      - generic [ref=f19e300] [box=1745,835,298,17]: Qwen 2.5 0.5B
+                      - generic [ref=f19e301] [box=1745,852,298,14]: 400 MB · Tier 3 · 14 t/s · GGUF fallback
+                    - img [ref=f19e302] [box=2055,842,16,16]
+                  - button "Download Apple Foundation 3B" [ref=f19e306] [box=1687,1012,394,52]:
+                    - img [ref=f19e307] [box=1750,1029,18,18]
+                    - generic [ref=f19e309] [box=1776,1028,242,19]: Download Apple Foundation 3B
+            - generic [ref=f19e311] [box=2172,154,480,988]:
+              - generic [ref=f19e312] [box=2168,126,484,24]:
+                - generic [ref=f19e313] [box=2168,126,438,24]:
+                  - generic "Drag to reorder" [ref=f19e314] [box=2168,127,17,23]:
+                    - img [ref=f19e315] [box=2172,132,9,13]
+                  - generic "Click to focus" [ref=f19e322] [cursor=pointer] [box=2189,128,417,21]:
+                    - generic [ref=f19e323] [box=2193,131,171,15]: R6.3 · Empty chat · light
+                - generic [ref=f19e324] [box=2606,127,46,22]:
+                  - button "More" [ref=f19e326] [cursor=pointer] [box=2606,127,22,22]:
+                    - img [ref=f19e327] [box=2611,132,12,12]
+                  - button "Focus" [ref=f19e331] [cursor=pointer] [box=2630,127,22,22]:
+                    - img [ref=f19e332] [box=2635,132,12,12]
+              - generic [ref=f19e336] [box=2197,182,430,932]:
+                - generic [box=2197,182,430,72]:
+                  - generic [box=2227,217,37,21]: 9:41
+                  - generic [box=2526,221,71,13]:
+                    - img [box=2526,222,18,11]
+                    - img [box=2550,222,16,11]
+                    - img [box=2572,222,25,12]
+                - generic [ref=f19e339] [box=2197,236,430,844]:
+                  - generic [ref=f19e340] [box=2197,236,430,65]:
+                    - img [ref=f19e342] [box=2222,259,20,20]
+                    - generic [ref=f19e345] [box=2311,251,202,36]:
+                      - generic [ref=f19e346] [box=2314,254,114,30]:
+                        - img [ref=f19e347] [box=2328,262,14,14]
+                        - generic [ref=f19e349] [box=2348,261,66,16]: On-device
+                      - generic [ref=f19e350] [box=2428,254,82,30]:
+                        - img [ref=f19e351] [box=2442,263,12,12]
+                        - generic [ref=f19e353] [box=2460,261,36,16]: Cloud
+                    - img [ref=f19e355] [box=2583,260,18,18]
+                  - generic [ref=f19e358] [box=2298,307,228,25]:
+                    - img [ref=f19e359] [box=2306,314,12,12]
+                    - generic [ref=f19e361] [box=2324,313,190,14]: On-device · Private · Works offline
+                  - generic [ref=f19e362] [box=2197,332,430,682]:
+                    - img [ref=f19e363] [box=2390,602,44,44]
+                    - generic [ref=f19e370] [box=2310,668,203,36]: Ask anything.
+                    - generic [ref=f19e371] [box=2282,712,260,33]: Llama 3.2 3B is loaded. No internet needed.
+                  - generic [ref=f19e373] [box=2211,1022,402,44]:
+                    - button [ref=f19e374] [box=2211,1022,44,44]:
+                      - img [ref=f19e375] [box=2222,1033,22,22]
+                    - generic [ref=f19e377] [box=2263,1022,298,44]:
+                      - generic [ref=f19e378] [box=2277,1035,254,19]: Ask AGI
+                      - img [ref=f19e379] [box=2537,1035,18,18]
+                    - button [ref=f19e381] [box=2569,1022,44,44]:
+                      - img [ref=f19e382] [box=2581,1034,20,20]
+            - generic [ref=f19e389] [box=2700,154,480,988]:
+              - generic [ref=f19e390] [box=2696,126,484,24]:
+                - generic [ref=f19e391] [box=2696,126,438,24]:
+                  - generic "Drag to reorder" [ref=f19e392] [box=2696,127,17,23]:
+                    - img [ref=f19e393] [box=2700,132,9,13]
+                  - generic "Click to focus" [ref=f19e400] [cursor=pointer] [box=2717,128,417,21]:
+                    - generic [ref=f19e401] [box=2721,131,171,15]: R6.3 · Empty chat · dark
+                - generic [ref=f19e402] [box=3134,127,46,22]:
+                  - button "More" [ref=f19e404] [cursor=pointer] [box=3134,127,22,22]:
+                    - img [ref=f19e405] [box=3139,132,12,12]
+                  - button "Focus" [ref=f19e409] [cursor=pointer] [box=3158,127,22,22]:
+                    - img [ref=f19e410] [box=3163,132,12,12]
+              - generic [ref=f19e414] [box=2725,182,430,932]:
+                - generic [box=2725,182,430,72]:
+                  - generic [box=2755,217,37,21]: 9:41
+                  - generic [box=3054,221,71,13]:
+                    - img [box=3054,222,18,11]
+                    - img [box=3078,222,16,11]
+                    - img [box=3100,222,25,12]
+                - generic [ref=f19e417] [box=2725,236,430,844]:
+                  - generic [ref=f19e418] [box=2725,236,430,65]:
+                    - img [ref=f19e420] [box=2750,259,20,20]
+                    - generic [ref=f19e423] [box=2839,251,202,36]:
+                      - generic [ref=f19e424] [box=2842,254,114,30]:
+                        - img [ref=f19e425] [box=2856,262,14,14]
+                        - generic [ref=f19e427] [box=2876,261,66,16]: On-device
+                      - generic [ref=f19e428] [box=2956,254,82,30]:
+                        - img [ref=f19e429] [box=2970,263,12,12]
+                        - generic [ref=f19e431] [box=2988,261,36,16]: Cloud
+                    - img [ref=f19e433] [box=3111,260,18,18]
+                  - generic [ref=f19e436] [box=2826,307,228,25]:
+                    - img [ref=f19e437] [box=2834,314,12,12]
+                    - generic [ref=f19e439] [box=2852,313,190,14]: On-device · Private · Works offline
+                  - generic [ref=f19e440] [box=2725,332,430,682]:
+                    - img [ref=f19e441] [box=2918,602,44,44]
+                    - generic [ref=f19e448] [box=2838,668,203,36]: Ask anything.
+                    - generic [ref=f19e449] [box=2810,712,260,33]: Llama 3.2 3B is loaded. No internet needed.
+                  - generic [ref=f19e451] [box=2739,1022,402,44]:
+                    - button [ref=f19e452] [box=2739,1022,44,44]:
+                      - img [ref=f19e453] [box=2750,1033,22,22]
+                    - generic [ref=f19e455] [box=2791,1022,298,44]:
+                      - generic [ref=f19e456] [box=2805,1035,254,19]: Ask AGI
+                      - img [ref=f19e457] [box=3065,1035,18,18]
+                    - button [ref=f19e459] [box=3097,1022,44,44]:
+                      - img [ref=f19e460] [box=3109,1034,20,20]
+            - generic [ref=f19e467] [box=3228,154,480,988]:
+              - generic [ref=f19e468] [box=3224,126,484,24]:
+                - generic [ref=f19e469] [box=3224,126,438,24]:
+                  - generic "Drag to reorder" [ref=f19e470] [box=3224,127,17,23]:
+                    - img [ref=f19e471] [box=3228,132,9,13]
+                  - generic "Click to focus" [ref=f19e478] [cursor=pointer] [box=3245,128,417,21]:
+                    - generic [ref=f19e479] [box=3249,131,170,15]: R6.4 · Active chat · light
+                - generic [ref=f19e480] [box=3662,127,46,22]:
+                  - button "More" [ref=f19e482] [cursor=pointer] [box=3662,127,22,22]:
+                    - img [ref=f19e483] [box=3667,132,12,12]
+                  - button "Focus" [ref=f19e487] [cursor=pointer] [box=3686,127,22,22]:
+                    - img [ref=f19e488] [box=3691,132,12,12]
+              - generic [ref=f19e492] [box=3253,182,430,932]:
+                - generic [box=3253,182,430,72]:
+                  - generic [box=3283,217,37,21]: 9:41
+                  - generic [box=3582,221,71,13]:
+                    - img [box=3582,222,18,11]
+                    - img [box=3606,222,16,11]
+                    - img [box=3628,222,25,12]
+                - generic [ref=f19e495] [box=3253,236,430,844]:
+                  - generic [ref=f19e496] [box=3253,236,430,65]:
+                    - img [ref=f19e498] [box=3278,259,20,20]
+                    - generic [ref=f19e501] [box=3368,251,202,36]:
+                      - generic [ref=f19e502] [box=3371,254,114,30]:
+                        - img [ref=f19e503] [box=3385,262,14,14]
+                        - generic [ref=f19e505] [box=3405,261,66,16]: On-device
+                      - generic [ref=f19e506] [box=3484,254,82,30]:
+                        - img [ref=f19e507] [box=3498,263,12,12]
+                        - generic [ref=f19e509] [box=3516,261,36,16]: Cloud
+                    - img [ref=f19e511] [box=3640,260,18,18]
+                  - generic [ref=f19e513] [box=3253,301,430,713]:
+                    - generic [ref=f19e516] [box=3327,325,306,41]: What's a good 78% hydration bulk time at 22°C?
+                    - generic [ref=f19e517] [box=3253,390,430,261]:
+                      - paragraph [ref=f19e518] [box=3269,398,398,70]:
+                        - text: At 78% hydration with room temp around 22°C, plan on
+                        - generic [ref=f19e519] [box=3292,423,90,19]: 4 to 5 hours
+                        - text: of bulk fermentation with stretch-and-folds every 30 minutes for the first two hours.
+                      - paragraph [ref=f19e520] [box=3269,480,398,70]: Look for ~50% volume increase and a domed top before shaping. Cooler rooms (18°C) stretch this to 7–9 hours.
+                      - generic [ref=f19e521] [box=3269,564,398,36]:
+                        - img [ref=f19e522] [box=3282,575,14,14]
+                        - generic [ref=f19e524] [box=3306,575,94,14]: vector_search
+                        - generic [ref=f19e525] [box=3409,574,153,14]: · local memory · 4 matches
+                        - img [ref=f19e526] [box=3640,575,14,14]
+                      - generic [ref=f19e528] [box=3269,611,269,22]:
+                        - generic [ref=f19e529] [box=3280,616,7,13]: ↳
+                        - generic [ref=f19e530] [box=3292,616,69,13]: Llama 3.2 3B
+                        - generic [ref=f19e532] [box=3376,616,152,13]: on-device · 22 t/s · ttft 180ms
+                  - generic [ref=f19e534] [box=3267,1022,402,44]:
+                    - button [ref=f19e535] [box=3267,1022,44,44]:
+                      - img [ref=f19e536] [box=3278,1033,22,22]
+                    - generic [ref=f19e538] [box=3319,1022,298,44]:
+                      - generic [ref=f19e539] [box=3333,1035,254,19]: Reply
+                      - img [ref=f19e540] [box=3593,1035,18,18]
+                    - button [ref=f19e542] [box=3625,1022,44,44]:
+                      - img [ref=f19e543] [box=3637,1034,20,20]
+            - generic [ref=f19e550] [box=3756,154,480,988]:
+              - generic [ref=f19e551] [box=3752,126,484,24]:
+                - generic [ref=f19e552] [box=3752,126,438,24]:
+                  - generic "Drag to reorder" [ref=f19e553] [box=3752,127,17,23]:
+                    - img [ref=f19e554] [box=3756,132,9,13]
+                  - generic "Click to focus" [ref=f19e561] [cursor=pointer] [box=3773,128,417,21]:
+                    - generic [ref=f19e562] [box=3777,131,171,15]: R6.4 · Active chat · dark
+                - generic [ref=f19e563] [box=4190,127,46,22]:
+                  - button "More" [ref=f19e565] [cursor=pointer] [box=4190,127,22,22]:
+                    - img [ref=f19e566] [box=4195,132,12,12]
+                  - button "Focus" [ref=f19e570] [cursor=pointer] [box=4214,127,22,22]:
+                    - img [ref=f19e571] [box=4219,132,12,12]
+              - generic [ref=f19e575] [box=3781,182,430,932]:
+                - generic [box=3781,182,430,72]:
+                  - generic [box=3811,217,37,21]: 9:41
+                  - generic [box=4110,221,71,13]:
+                    - img [box=4110,222,18,11]
+                    - img [box=4134,222,16,11]
+                    - img [box=4156,222,25,12]
+                - generic [ref=f19e578] [box=3781,236,430,844]:
+                  - generic [ref=f19e579] [box=3781,236,430,65]:
+                    - img [ref=f19e581] [box=3806,259,20,20]
+                    - generic [ref=f19e584] [box=3896,251,202,36]:
+                      - generic [ref=f19e585] [box=3899,254,114,30]:
+                        - img [ref=f19e586] [box=3913,262,14,14]
+                        - generic [ref=f19e588] [box=3933,261,66,16]: On-device
+                      - generic [ref=f19e589] [box=4012,254,82,30]:
+                        - img [ref=f19e590] [box=4026,263,12,12]
+                        - generic [ref=f19e592] [box=4044,261,36,16]: Cloud
+                    - img [ref=f19e594] [box=4168,260,18,18]
+                  - generic [ref=f19e596] [box=3781,301,430,713]:
+                    - generic [ref=f19e599] [box=3855,325,306,41]: What's a good 78% hydration bulk time at 22°C?
+                    - generic [ref=f19e600] [box=3781,390,430,261]:
+                      - paragraph [ref=f19e601] [box=3797,398,398,70]:
+                        - text: At 78% hydration with room temp around 22°C, plan on
+                        - generic [ref=f19e602] [box=3820,423,90,19]: 4 to 5 hours
+                        - text: of bulk fermentation with stretch-and-folds every 30 minutes for the first two hours.
+                      - paragraph [ref=f19e603] [box=3797,480,398,70]: Look for ~50% volume increase and a domed top before shaping. Cooler rooms (18°C) stretch this to 7–9 hours.
+                      - generic [ref=f19e604] [box=3797,564,398,36]:
+                        - img [ref=f19e605] [box=3810,575,14,14]
+                        - generic [ref=f19e607] [box=3834,575,94,14]: vector_search
+                        - generic [ref=f19e608] [box=3937,574,153,14]: · local memory · 4 matches
+                        - img [ref=f19e609] [box=4168,575,14,14]
+                      - generic [ref=f19e611] [box=3797,611,269,22]:
+                        - generic [ref=f19e612] [box=3808,616,7,13]: ↳
+                        - generic [ref=f19e613] [box=3820,616,69,13]: Llama 3.2 3B
+                        - generic [ref=f19e615] [box=3904,616,152,13]: on-device · 22 t/s · ttft 180ms
+                  - generic [ref=f19e617] [box=3795,1022,402,44]:
+                    - button [ref=f19e618] [box=3795,1022,44,44]:
+                      - img [ref=f19e619] [box=3806,1033,22,22]
+                    - generic [ref=f19e621] [box=3847,1022,298,44]:
+                      - generic [ref=f19e622] [box=3861,1035,254,19]: Reply
+                      - img [ref=f19e623] [box=4121,1035,18,18]
+                    - button [ref=f19e625] [box=4153,1022,44,44]:
+                      - img [ref=f19e626] [box=4165,1034,20,20]
+            - generic [ref=f19e633] [box=4284,154,480,988]:
+              - generic [ref=f19e634] [box=4280,126,484,24]:
+                - generic [ref=f19e635] [box=4280,126,438,24]:
+                  - generic "Drag to reorder" [ref=f19e636] [box=4280,127,17,23]:
+                    - img [ref=f19e637] [box=4284,132,9,13]
+                  - generic "Click to focus" [ref=f19e644] [cursor=pointer] [box=4301,128,417,21]:
+                    - generic [ref=f19e645] [box=4305,131,141,15]: R6.5 · Drawer · light
+                - generic [ref=f19e646] [box=4718,127,46,22]:
+                  - button "More" [ref=f19e648] [cursor=pointer] [box=4718,127,22,22]:
+                    - img [ref=f19e649] [box=4723,132,12,12]
+                  - button "Focus" [ref=f19e653] [cursor=pointer] [box=4742,127,22,22]:
+                    - img [ref=f19e654] [box=4747,132,12,12]
+              - generic [ref=f19e658] [box=4309,182,430,932]:
+                - generic [box=4309,182,430,72]:
+                  - generic [box=4339,217,37,21]: 9:41
+                  - generic [box=4638,221,71,13]:
+                    - img [box=4638,222,18,11]
+                    - img [box=4662,222,16,11]
+                    - img [box=4684,222,25,12]
+                - generic [ref=f19e661] [box=4309,236,430,844]:
+                  - generic [ref=f19e662] [box=4309,236,422,844]:
+                    - generic [ref=f19e663] [box=4331,256,378,34]:
+                      - img [ref=f19e664] [box=4331,261,24,24]
+                      - generic [ref=f19e671] [box=4365,256,49,34]: AGI
+                    - generic [ref=f19e672] [box=4331,312,378,44]:
+                      - img [ref=f19e673] [box=4331,323,22,22]
+                      - generic [ref=f19e675] [box=4367,323,40,22]: Chat
+                    - generic [ref=f19e676] [box=4331,356,378,44]:
+                      - img [ref=f19e677] [box=4331,367,22,22]
+                      - generic [ref=f19e679] [box=4367,367,70,22]: Projects
+                    - generic [ref=f19e680] [box=4331,400,378,44]:
+                      - img [ref=f19e681] [box=4331,411,22,22]
+                      - generic [ref=f19e683] [box=4367,411,45,22]: Skills
+                    - generic [ref=f19e684] [box=4331,444,378,44]:
+                      - img [ref=f19e685] [box=4331,455,22,22]
+                      - generic [ref=f19e687] [box=4367,455,71,22]: Memory
+                    - generic [ref=f19e688] [box=4331,488,378,44]:
+                      - img [ref=f19e689] [box=4331,499,22,22]
+                      - generic [ref=f19e691] [box=4367,499,63,22]: Models
+                    - generic [ref=f19e692] [box=4331,532,378,44]:
+                      - img [ref=f19e693] [box=4331,543,22,22]
+                      - generic [ref=f19e695] [box=4367,543,42,22]: Keys
+                    - generic [ref=f19e696] [box=4331,576,378,44]:
+                      - img [ref=f19e697] [box=4331,587,22,22]
+                      - generic [ref=f19e699] [box=4367,587,71,22]: Settings
+                    - generic [ref=f19e701] [box=4331,640,59,14]: Recents
+                    - generic [ref=f19e702] [box=4331,659,378,421]:
+                      - generic [ref=f19e704] [box=4331,668,378,18]: Sourdough hydration timing
+                      - generic [ref=f19e706] [box=4331,705,378,18]: EU AI Act Article 50 in 4 bullets
+                      - generic [ref=f19e708] [box=4331,741,378,18]: Refactor zod validator nested unions
+                      - generic [ref=f19e710] [box=4331,777,378,18]: A15 vs M2 inference benchmarks
+                      - generic [ref=f19e712] [box=4331,814,378,18]: Local PDF Q&A · lease 2024
+                      - generic [ref=f19e714] [box=4331,850,378,18]: OCR receipt totals
+                      - generic [ref=f19e716] [box=4331,886,378,18]: Hindi → English on-device
+                      - generic [ref=f19e718] [box=4331,923,378,18]: v1 launch checklist
+                  - generic [ref=f19e719] [box=4331,1018,386,48]:
+                    - generic [ref=f19e720] [box=4331,1022,183,41]:
+                      - generic [ref=f19e722] [box=4344,1036,16,13]: SN
+                      - generic [ref=f19e723] [box=4376,1034,124,17]: Siddhartha Nagula
+                    - img [ref=f19e725] [box=4683,1032,20,20]
+            - generic [ref=f19e729] [box=4812,154,480,988]:
+              - generic [ref=f19e730] [box=4808,126,484,24]:
+                - generic [ref=f19e731] [box=4808,126,438,24]:
+                  - generic "Drag to reorder" [ref=f19e732] [box=4808,127,17,23]:
+                    - img [ref=f19e733] [box=4812,132,9,13]
+                  - generic "Click to focus" [ref=f19e740] [cursor=pointer] [box=4829,128,417,21]:
+                    - generic [ref=f19e741] [box=4833,131,142,15]: R6.5 · Drawer · dark
+                - generic [ref=f19e742] [box=5246,127,46,22]:
+                  - button "More" [ref=f19e744] [cursor=pointer] [box=5246,127,22,22]:
+                    - img [ref=f19e745] [box=5251,132,12,12]
+                  - button "Focus" [ref=f19e749] [cursor=pointer] [box=5270,127,22,22]:
+                    - img [ref=f19e750] [box=5275,132,12,12]
+              - generic [ref=f19e754] [box=4837,182,430,932]:
+                - generic [box=4837,182,430,72]:
+                  - generic [box=4867,217,37,21]: 9:41
+                  - generic [box=5166,221,71,13]:
+                    - img [box=5166,222,18,11]
+                    - img [box=5190,222,16,11]
+                    - img [box=5212,222,25,12]
+                - generic [ref=f19e757] [box=4837,236,430,844]:
+                  - generic [ref=f19e758] [box=4837,236,422,844]:
+                    - generic [ref=f19e759] [box=4859,256,378,34]:
+                      - img [ref=f19e760] [box=4859,261,24,24]
+                      - generic [ref=f19e767] [box=4893,256,49,34]: AGI
+                    - generic [ref=f19e768] [box=4859,312,378,44]:
+                      - img [ref=f19e769] [box=4859,323,22,22]
+                      - generic [ref=f19e771] [box=4895,323,40,22]: Chat
+                    - generic [ref=f19e772] [box=4859,356,378,44]:
+                      - img [ref=f19e773] [box=4859,367,22,22]
+                      - generic [ref=f19e775] [box=4895,367,70,22]: Projects
+                    - generic [ref=f19e776] [box=4859,400,378,44]:
+                      - img [ref=f19e777] [box=4859,411,22,22]
+                      - generic [ref=f19e779] [box=4895,411,45,22]: Skills
+                    - generic [ref=f19e780] [box=4859,444,378,44]:
+                      - img [ref=f19e781] [box=4859,455,22,22]
+                      - generic [ref=f19e783] [box=4895,455,71,22]: Memory
+                    - generic [ref=f19e784] [box=4859,488,378,44]:
+                      - img [ref=f19e785] [box=4859,499,22,22]
+                      - generic [ref=f19e787] [box=4895,499,63,22]: Models
+                    - generic [ref=f19e788] [box=4859,532,378,44]:
+                      - img [ref=f19e789] [box=4859,543,22,22]
+                      - generic [ref=f19e791] [box=4895,543,42,22]: Keys
+                    - generic [ref=f19e792] [box=4859,576,378,44]:
+                      - img [ref=f19e793] [box=4859,587,22,22]
+                      - generic [ref=f19e795] [box=4895,587,71,22]: Settings
+                    - generic [ref=f19e797] [box=4859,640,59,14]: Recents
+                    - generic [ref=f19e798] [box=4859,659,378,421]:
+                      - generic [ref=f19e800] [box=4859,668,378,18]: Sourdough hydration timing
+                      - generic [ref=f19e802] [box=4859,705,378,18]: EU AI Act Article 50 in 4 bullets
+                      - generic [ref=f19e804] [box=4859,741,378,18]: Refactor zod validator nested unions
+                      - generic [ref=f19e806] [box=4859,777,378,18]: A15 vs M2 inference benchmarks
+                      - generic [ref=f19e808] [box=4859,814,378,18]: Local PDF Q&A · lease 2024
+                      - generic [ref=f19e810] [box=4859,850,378,18]: OCR receipt totals
+                      - generic [ref=f19e812] [box=4859,886,378,18]: Hindi → English on-device
+                      - generic [ref=f19e814] [box=4859,923,378,18]: v1 launch checklist
+                  - generic [ref=f19e815] [box=4859,1018,386,48]:
+                    - generic [ref=f19e816] [box=4859,1022,183,41]:
+                      - generic [ref=f19e818] [box=4872,1036,16,13]: SN
+                      - generic [ref=f19e819] [box=4903,1034,124,17]: Siddhartha Nagula
+                    - img [ref=f19e821] [box=5211,1032,20,20]
+            - generic [ref=f19e825] [box=5340,154,480,988]:
+              - generic [ref=f19e826] [box=5336,126,484,24]:
+                - generic [ref=f19e827] [box=5336,126,438,24]:
+                  - generic "Drag to reorder" [ref=f19e828] [box=5336,127,17,23]:
+                    - img [ref=f19e829] [box=5340,132,9,13]
+                  - generic "Click to focus" [ref=f19e836] [cursor=pointer] [box=5357,128,417,21]:
+                    - generic [ref=f19e837] [box=5361,131,164,15]: R6.6 · Plus menu · light
+                - generic [ref=f19e838] [box=5774,127,46,22]:
+                  - button "More" [ref=f19e840] [cursor=pointer] [box=5774,127,22,22]:
+                    - img [ref=f19e841] [box=5779,132,12,12]
+                  - button "Focus" [ref=f19e845] [cursor=pointer] [box=5798,127,22,22]:
+                    - img [ref=f19e846] [box=5803,132,12,12]
+              - generic [ref=f19e850] [box=5365,182,430,932]:
+                - generic [box=5365,182,430,72]:
+                  - generic [box=5395,217,37,21]: 9:41
+                  - generic [box=5694,221,71,13]:
+                    - img [box=5694,222,18,11]
+                    - img [box=5718,222,16,11]
+                    - img [box=5740,222,25,12]
+                - generic [ref=f19e853] [box=5365,236,430,844]:
+                  - img [ref=f19e855] [box=5560,306,40,40]
+                  - generic [ref=f19e863] [box=5365,536,430,544]:
+                    - generic [ref=f19e865] [box=5365,565,430,53]:
+                      - generic [ref=f19e866] [box=5387,575,94,21]: Add to chat
+                      - img [ref=f19e868] [box=5744,578,16,16]
+                    - generic [ref=f19e870] [box=5365,618,430,135]:
+                      - generic [ref=f19e871] [box=5379,618,127,121]:
+                        - img [ref=f19e872] [box=5429,651,28,28]
+                        - generic [ref=f19e874] [box=5417,689,52,17]: Camera
+                      - generic [ref=f19e875] [box=5516,618,127,121]:
+                        - img [ref=f19e876] [box=5566,651,28,28]
+                        - generic [ref=f19e878] [box=5557,689,47,17]: Photos
+                      - generic [ref=f19e879] [box=5654,618,127,121]:
+                        - img [ref=f19e880] [box=5703,651,28,28]
+                        - generic [ref=f19e882] [box=5702,689,31,17]: Files
+                    - generic [ref=f19e884] [box=5365,754,430,326]:
+                      - generic [ref=f19e885] [box=5365,758,430,61]:
+                        - img [ref=f19e886] [box=5387,777,22,22]
+                        - generic [ref=f19e888] [box=5425,771,348,35]:
+                          - generic [ref=f19e889] [box=5425,771,348,19]: Skills
+                          - generic [ref=f19e890] [box=5425,791,348,14]: Browse and run saved workflows
+                      - generic [ref=f19e891] [box=5365,819,430,61]:
+                        - img [ref=f19e892] [box=5387,838,22,22]
+                        - generic [ref=f19e894] [box=5425,832,348,35]:
+                          - generic [ref=f19e895] [box=5425,832,348,19]: Image analysis
+                          - generic [ref=f19e896] [box=5425,852,348,14]: Identify, caption — on-device
+                      - generic [ref=f19e897] [box=5365,880,430,61]:
+                        - img [ref=f19e898] [box=5387,899,22,22]
+                        - generic [ref=f19e900] [box=5425,893,348,35]:
+                          - generic [ref=f19e901] [box=5425,893,348,19]: Scan to text
+                          - generic [ref=f19e902] [box=5425,913,348,14]: OCR · Apple Vision · instant
+                      - generic [ref=f19e903] [box=5365,940,430,61]:
+                        - img [ref=f19e904] [box=5387,960,22,22]
+                        - generic [ref=f19e906] [box=5425,953,348,35]:
+                          - generic [ref=f19e907] [box=5425,953,348,19]: Translate
+                          - generic [ref=f19e908] [box=5425,974,348,14]: Hindi · Tamil · English · on-device
+                      - generic [ref=f19e909] [box=5365,1001,430,61]:
+                        - img [ref=f19e910] [box=5387,1021,22,22]
+                        - generic [ref=f19e912] [box=5425,1014,316,35]:
+                          - generic [ref=f19e913] [box=5425,1014,316,19]: Web search
+                          - generic [ref=f19e914] [box=5425,1035,316,14]: Requires cloud · join waitlist
+                        - img [ref=f19e915] [box=5757,1024,16,16]
+            - generic [ref=f19e918] [box=5868,154,480,988]:
+              - generic [ref=f19e919] [box=5864,126,484,24]:
+                - generic [ref=f19e920] [box=5864,126,438,24]:
+                  - generic "Drag to reorder" [ref=f19e921] [box=5864,127,17,23]:
+                    - img [ref=f19e922] [box=5868,132,9,13]
+                  - generic "Click to focus" [ref=f19e929] [cursor=pointer] [box=5885,128,417,21]:
+                    - generic [ref=f19e930] [box=5889,131,165,15]: R6.6 · Plus menu · dark
+                - generic [ref=f19e931] [box=6302,127,46,22]:
+                  - button "More" [ref=f19e933] [cursor=pointer] [box=6302,127,22,22]:
+                    - img [ref=f19e934] [box=6307,132,12,12]
+                  - button "Focus" [ref=f19e938] [cursor=pointer] [box=6326,127,22,22]:
+                    - img [ref=f19e939] [box=6331,132,12,12]
+              - generic [ref=f19e943] [box=5893,182,430,932]:
+                - generic [box=5893,182,430,72]:
+                  - generic [box=5923,217,37,21]: 9:41
+                  - generic [box=6222,221,71,13]:
+                    - img [box=6222,222,18,11]
+                    - img [box=6246,222,16,11]
+                    - img [box=6268,222,25,12]
+                - generic [ref=f19e946] [box=5893,236,430,844]:
+                  - img [ref=f19e948] [box=6088,306,40,40]
+                  - generic [ref=f19e956] [box=5893,536,430,544]:
+                    - generic [ref=f19e958] [box=5893,565,430,53]:
+                      - generic [ref=f19e959] [box=5915,575,94,21]: Add to chat
+                      - img [ref=f19e961] [box=6272,578,16,16]
+                    - generic [ref=f19e963] [box=5893,618,430,135]:
+                      - generic [ref=f19e964] [box=5907,618,127,121]:
+                        - img [ref=f19e965] [box=5957,651,28,28]
+                        - generic [ref=f19e967] [box=5945,689,52,17]: Camera
+                      - generic [ref=f19e968] [box=6044,618,127,121]:
+                        - img [ref=f19e969] [box=6094,651,28,28]
+                        - generic [ref=f19e971] [box=6085,689,47,17]: Photos
+                      - generic [ref=f19e972] [box=6182,618,127,121]:
+                        - img [ref=f19e973] [box=6231,651,28,28]
+                        - generic [ref=f19e975] [box=6230,689,31,17]: Files
+                    - generic [ref=f19e977] [box=5893,754,430,326]:
+                      - generic [ref=f19e978] [box=5893,758,430,61]:
+                        - img [ref=f19e979] [box=5915,777,22,22]
+                        - generic [ref=f19e981] [box=5953,771,348,35]:
+                          - generic [ref=f19e982] [box=5953,771,348,19]: Skills
+                          - generic [ref=f19e983] [box=5953,791,348,14]: Browse and run saved workflows
+                      - generic [ref=f19e984] [box=5893,819,430,61]:
+                        - img [ref=f19e985] [box=5915,838,22,22]
+                        - generic [ref=f19e987] [box=5953,832,348,35]:
+                          - generic [ref=f19e988] [box=5953,832,348,19]: Image analysis
+                          - generic [ref=f19e989] [box=5953,852,348,14]: Identify, caption — on-device
+                      - generic [ref=f19e990] [box=5893,880,430,61]:
+                        - img [ref=f19e991] [box=5915,899,22,22]
+                        - generic [ref=f19e993] [box=5953,893,348,35]:
+                          - generic [ref=f19e994] [box=5953,893,348,19]: Scan to text
+                          - generic [ref=f19e995] [box=5953,913,348,14]: OCR · Apple Vision · instant
+                      - generic [ref=f19e996] [box=5893,940,430,61]:
+                        - img [ref=f19e997] [box=5915,960,22,22]
+                        - generic [ref=f19e999] [box=5953,953,348,35]:
+                          - generic [ref=f19e1000] [box=5953,953,348,19]: Translate
+                          - generic [ref=f19e1001] [box=5953,974,348,14]: Hindi · Tamil · English · on-device
+                      - generic [ref=f19e1002] [box=5893,1001,430,61]:
+                        - img [ref=f19e1003] [box=5915,1021,22,22]
+                        - generic [ref=f19e1005] [box=5953,1014,316,35]:
+                          - generic [ref=f19e1006] [box=5953,1014,316,19]: Web search
+                          - generic [ref=f19e1007] [box=5953,1035,316,14]: Requires cloud · join waitlist
+                        - img [ref=f19e1008] [box=6285,1024,16,16]
+            - generic [ref=f19e1011] [box=6396,154,480,988]:
+              - generic [ref=f19e1012] [box=6392,126,484,24]:
+                - generic [ref=f19e1013] [box=6392,126,438,24]:
+                  - generic "Drag to reorder" [ref=f19e1014] [box=6392,127,17,23]:
+                    - img [ref=f19e1015] [box=6396,132,9,13]
+                  - generic "Click to focus" [ref=f19e1022] [cursor=pointer] [box=6413,128,417,21]:
+                    - generic [ref=f19e1023] [box=6417,131,181,15]: R6.7 · Model picker · light
+                - generic [ref=f19e1024] [box=6830,127,46,22]:
+                  - button "More" [ref=f19e1026] [cursor=pointer] [box=6830,127,22,22]:
+                    - img [ref=f19e1027] [box=6835,132,12,12]
+                  - button "Focus" [ref=f19e1031] [cursor=pointer] [box=6854,127,22,22]:
+                    - img [ref=f19e1032] [box=6859,132,12,12]
+              - generic [ref=f19e1036] [box=6421,182,430,932]:
+                - generic [box=6421,182,430,72]:
+                  - generic [box=6451,217,37,21]: 9:41
+                  - generic [box=6750,221,71,13]:
+                    - img [box=6750,222,18,11]
+                    - img [box=6774,222,16,11]
+                    - img [box=6796,222,25,12]
+                - generic [ref=f19e1042] [box=6421,277,430,803]:
+                  - generic [ref=f19e1044] [box=6421,303,430,45]:
+                    - generic [ref=f19e1045] [box=6443,310,79,27]: Models
+                    - img [ref=f19e1047] [box=6800,315,16,16]
+                  - generic [ref=f19e1049] [box=6421,348,430,732]:
+                    - generic [ref=f19e1050] [box=6421,352,430,56]:
+                      - generic [ref=f19e1051] [box=6443,366,335,36]:
+                        - text: On-device
+                        - generic [ref=f19e1052] [box=6443,387,335,14]: Runs on your phone — no internet needed
+                      - generic [ref=f19e1053] [box=6778,386,51,16]: Manage
+                    - generic [ref=f19e1054] [box=6421,408,430,61]:
+                      - img [ref=f19e1056] [box=6446,427,22,22]
+                      - generic [ref=f19e1058] [box=6485,421,283,35]:
+                        - generic [ref=f19e1059] [box=6485,421,283,19]: Apple Foundation 3B
+                        - generic [ref=f19e1060] [box=6485,441,283,14]: Tier 1 · 38 t/s · Neural Engine
+                      - generic [ref=f19e1061] [box=6782,425,47,25]: Tier 1
+                    - generic [ref=f19e1062] [box=6421,469,430,61]:
+                      - generic [ref=f19e1064] [box=6447,486,20,26]: 🦙
+                      - generic [ref=f19e1065] [box=6485,482,312,35]:
+                        - generic [ref=f19e1066] [box=6485,482,312,19]: Llama 3.2 3B
+                        - generic [ref=f19e1067] [box=6485,502,312,14]: Tier 2 · 22 t/s · ExecuTorch
+                      - img [ref=f19e1068] [box=6811,490,18,18]
+                    - generic [ref=f19e1070] [box=6421,529,430,61]:
+                      - img [ref=f19e1072] [box=6446,549,22,22]
+                      - generic [ref=f19e1075] [box=6485,542,344,35]:
+                        - generic [ref=f19e1076] [box=6485,542,344,19]: Qwen 2.5 0.5B
+                        - generic [ref=f19e1077] [box=6485,563,344,14]: Tier 3 · 14 t/s · fallback
+                    - generic [ref=f19e1079] [box=6421,603,430,56]:
+                      - generic [ref=f19e1080] [box=6443,617,303,36]:
+                        - text: BYOK
+                        - generic [ref=f19e1081] [box=6443,638,303,14]: Your provider keys — pay providers directly
+                      - generic [ref=f19e1082] [box=6746,637,83,16]: Manage keys
+                    - generic [ref=f19e1083] [box=6421,659,430,61]:
+                      - img [ref=f19e1085] [box=6446,678,22,22]
+                      - generic [ref=f19e1090] [box=6485,672,254,35]:
+                        - generic [ref=f19e1091] [box=6485,672,254,19]: Claude Opus 4.7
+                        - generic [ref=f19e1092] [box=6485,692,254,14]: Anthropic · via your key
+                      - button "Add key" [ref=f19e1093] [box=6753,674,76,29]
+                    - generic [ref=f19e1094] [box=6421,720,430,61]:
+                      - img [ref=f19e1096] [box=6446,739,22,22]
+                      - generic [ref=f19e1098] [box=6485,733,254,35]:
+                        - generic [ref=f19e1099] [box=6485,733,254,19]: GPT-5.4
+                        - generic [ref=f19e1100] [box=6485,753,254,14]: OpenAI · via your key
+                      - button "Add key" [ref=f19e1101] [box=6753,735,76,29]
+                    - generic [ref=f19e1102] [box=6421,780,430,61]:
+                      - img [ref=f19e1104] [box=6446,800,22,22]
+                      - generic [ref=f19e1106] [box=6485,793,254,35]:
+                        - generic [ref=f19e1107] [box=6485,793,254,19]: Gemini 3.1 Pro
+                        - generic [ref=f19e1108] [box=6485,814,254,14]: Google · via your key
+                      - button "Add key" [ref=f19e1109] [box=6753,796,76,29]
+                    - generic [ref=f19e1110] [box=6421,841,430,61]:
+                      - img [ref=f19e1112] [box=6446,861,22,22]
+                      - generic [ref=f19e1114] [box=6485,854,254,35]:
+                        - generic [ref=f19e1115] [box=6485,854,254,19]: Grok 3
+                        - generic [ref=f19e1116] [box=6485,875,254,14]: xAI · via your key
+                      - button "Add key" [ref=f19e1117] [box=6753,857,76,29]
+                    - generic [ref=f19e1118] [box=6421,902,430,61]:
+                      - img [ref=f19e1120] [box=6446,922,22,22]
+                      - generic [ref=f19e1122] [box=6485,915,254,35]:
+                        - generic [ref=f19e1123] [box=6485,915,254,19]: Sonar Pro
+                        - generic [ref=f19e1124] [box=6485,936,254,14]: Perplexity · via your key
+                      - button "Add key" [ref=f19e1125] [box=6753,918,76,29]
+                    - generic [ref=f19e1126] [box=6421,963,430,61]:
+                      - img [ref=f19e1128] [box=6446,982,22,22]
+                      - generic [ref=f19e1132] [box=6485,976,254,35]:
+                        - generic [ref=f19e1133] [box=6485,976,254,19]: Mistral Large
+                        - generic [ref=f19e1134] [box=6485,996,254,14]: Mistral · via your key
+                      - button "Add key" [ref=f19e1135] [box=6753,979,76,29]
+                    - generic [ref=f19e1136] [box=6421,1024,430,61]:
+                      - img [ref=f19e1138] [box=6446,1043,22,22]
+                      - generic [ref=f19e1142] [box=6485,1037,252,35]:
+                        - generic [ref=f19e1143] [box=6485,1037,252,19]: Ollama / LM Studio
+                        - generic [ref=f19e1144] [box=6485,1057,252,14]: Local server · localhost
+                      - button "Connect" [ref=f19e1145] [box=6751,1040,78,29]
+                    - generic [ref=f19e1148] [box=6443,1111,386,36]:
+                      - text: AGI Cloud
+                      - generic [ref=f19e1149] [box=6443,1133,386,14]: Managed credits — private beta
+                    - generic [ref=f19e1150] [box=6421,1153,430,61]:
+                      - img [ref=f19e1152] [box=6447,1174,20,20]
+                      - generic [ref=f19e1154] [box=6485,1166,230,35]:
+                        - generic [ref=f19e1155] [box=6485,1166,230,19]: AGI Cloud · Pro
+                        - generic [ref=f19e1156] [box=6485,1187,230,14]: Subscription + top-up · private beta
+                      - button "Join waitlist" [ref=f19e1157] [box=6729,1169,100,29]
+                    - generic [ref=f19e1159] [box=6443,1228,386,54]:
+                      - img [ref=f19e1160] [box=6457,1240,14,14]
+                      - generic [ref=f19e1162] [box=6481,1238,334,34]: Switching to BYOK opens a new chat. We'll show what gets sent before it leaves your device.
+            - generic [ref=f19e1164] [box=6924,154,480,988]:
+              - generic [ref=f19e1165] [box=6920,126,484,24]:
+                - generic [ref=f19e1166] [box=6920,126,438,24]:
+                  - generic "Drag to reorder" [ref=f19e1167] [box=6920,127,17,23]:
+                    - img [ref=f19e1168] [box=6924,132,9,13]
+                  - generic "Click to focus" [ref=f19e1175] [cursor=pointer] [box=6941,128,417,21]:
+                    - generic [ref=f19e1176] [box=6945,131,181,15]: R6.7 · Model picker · dark
+                - generic [ref=f19e1177] [box=7358,127,46,22]:
+                  - button "More" [ref=f19e1179] [cursor=pointer] [box=7358,127,22,22]:
+                    - img [ref=f19e1180] [box=7363,132,12,12]
+                  - button "Focus" [ref=f19e1184] [cursor=pointer] [box=7382,127,22,22]:
+                    - img [ref=f19e1185] [box=7387,132,12,12]
+              - generic [ref=f19e1189] [box=6949,182,430,932]:
+                - generic [box=6949,182,430,72]:
+                  - generic [box=6979,217,37,21]: 9:41
+                  - generic [box=7278,221,71,13]:
+                    - img [box=7278,222,18,11]
+                    - img [box=7302,222,16,11]
+                    - img [box=7324,222,25,12]
+                - generic [ref=f19e1195] [box=6949,277,430,803]:
+                  - generic [ref=f19e1197] [box=6949,303,430,45]:
+                    - generic [ref=f19e1198] [box=6971,310,79,27]: Models
+                    - img [ref=f19e1200] [box=7328,315,16,16]
+                  - generic [ref=f19e1202] [box=6949,348,430,732]:
+                    - generic [ref=f19e1203] [box=6949,352,430,56]:
+                      - generic [ref=f19e1204] [box=6971,366,335,36]:
+                        - text: On-device
+                        - generic [ref=f19e1205] [box=6971,387,335,14]: Runs on your phone — no internet needed
+                      - generic [ref=f19e1206] [box=7306,386,51,16]: Manage
+                    - generic [ref=f19e1207] [box=6949,408,430,61]:
+                      - img [ref=f19e1209] [box=6974,427,22,22]
+                      - generic [ref=f19e1211] [box=7013,421,283,35]:
+                        - generic [ref=f19e1212] [box=7013,421,283,19]: Apple Foundation 3B
+                        - generic [ref=f19e1213] [box=7013,441,283,14]: Tier 1 · 38 t/s · Neural Engine
+                      - generic [ref=f19e1214] [box=7310,425,47,25]: Tier 1
+                    - generic [ref=f19e1215] [box=6949,469,430,61]:
+                      - generic [ref=f19e1217] [box=6975,486,20,26]: 🦙
+                      - generic [ref=f19e1218] [box=7013,482,312,35]:
+                        - generic [ref=f19e1219] [box=7013,482,312,19]: Llama 3.2 3B
+                        - generic [ref=f19e1220] [box=7013,502,312,14]: Tier 2 · 22 t/s · ExecuTorch
+                      - img [ref=f19e1221] [box=7339,490,18,18]
+                    - generic [ref=f19e1223] [box=6949,529,430,61]:
+                      - img [ref=f19e1225] [box=6974,549,22,22]
+                      - generic [ref=f19e1228] [box=7013,542,344,35]:
+                        - generic [ref=f19e1229] [box=7013,542,344,19]: Qwen 2.5 0.5B
+                        - generic [ref=f19e1230] [box=7013,563,344,14]: Tier 3 · 14 t/s · fallback
+                    - generic [ref=f19e1232] [box=6949,603,430,56]:
+                      - generic [ref=f19e1233] [box=6971,617,303,36]:
+                        - text: BYOK
+                        - generic [ref=f19e1234] [box=6971,638,303,14]: Your provider keys — pay providers directly
+                      - generic [ref=f19e1235] [box=7274,637,83,16]: Manage keys
+                    - generic [ref=f19e1236] [box=6949,659,430,61]:
+                      - img [ref=f19e1238] [box=6974,678,22,22]
+                      - generic [ref=f19e1243] [box=7013,672,254,35]:
+                        - generic [ref=f19e1244] [box=7013,672,254,19]: Claude Opus 4.7
+                        - generic [ref=f19e1245] [box=7013,692,254,14]: Anthropic · via your key
+                      - button "Add key" [ref=f19e1246] [box=7281,674,76,29]
+                    - generic [ref=f19e1247] [box=6949,720,430,61]:
+                      - img [ref=f19e1249] [box=6974,739,22,22]
+                      - generic [ref=f19e1251] [box=7013,733,254,35]:
+                        - generic [ref=f19e1252] [box=7013,733,254,19]: GPT-5.4
+                        - generic [ref=f19e1253] [box=7013,753,254,14]: OpenAI · via your key
+                      - button "Add key" [ref=f19e1254] [box=7281,735,76,29]
+                    - generic [ref=f19e1255] [box=6949,780,430,61]:
+                      - img [ref=f19e1257] [box=6974,800,22,22]
+                      - generic [ref=f19e1259] [box=7013,793,254,35]:
+                        - generic [ref=f19e1260] [box=7013,793,254,19]: Gemini 3.1 Pro
+                        - generic [ref=f19e1261] [box=7013,814,254,14]: Google · via your key
+                      - button "Add key" [ref=f19e1262] [box=7281,796,76,29]
+                    - generic [ref=f19e1263] [box=6949,841,430,61]:
+                      - img [ref=f19e1265] [box=6974,861,22,22]
+                      - generic [ref=f19e1267] [box=7013,854,254,35]:
+                        - generic [ref=f19e1268] [box=7013,854,254,19]: Grok 3
+                        - generic [ref=f19e1269] [box=7013,875,254,14]: xAI · via your key
+                      - button "Add key" [ref=f19e1270] [box=7281,857,76,29]
+                    - generic [ref=f19e1271] [box=6949,902,430,61]:
+                      - img [ref=f19e1273] [box=6974,922,22,22]
+                      - generic [ref=f19e1275] [box=7013,915,254,35]:
+                        - generic [ref=f19e1276] [box=7013,915,254,19]: Sonar Pro
+                        - generic [ref=f19e1277] [box=7013,936,254,14]: Perplexity · via your key
+                      - button "Add key" [ref=f19e1278] [box=7281,918,76,29]
+                    - generic [ref=f19e1279] [box=6949,963,430,61]:
+                      - img [ref=f19e1281] [box=6974,982,22,22]
+                      - generic [ref=f19e1285] [box=7013,976,254,35]:
+                        - generic [ref=f19e1286] [box=7013,976,254,19]: Mistral Large
+                        - generic [ref=f19e1287] [box=7013,996,254,14]: Mistral · via your key
+                      - button "Add key" [ref=f19e1288] [box=7281,979,76,29]
+                    - generic [ref=f19e1289] [box=6949,1024,430,61]:
+                      - img [ref=f19e1291] [box=6974,1043,22,22]
+                      - generic [ref=f19e1295] [box=7013,1037,252,35]:
+                        - generic [ref=f19e1296] [box=7013,1037,252,19]: Ollama / LM Studio
+                        - generic [ref=f19e1297] [box=7013,1057,252,14]: Local server · localhost
+                      - button "Connect" [ref=f19e1298] [box=7279,1040,78,29]
+                    - generic [ref=f19e1301] [box=6971,1111,386,36]:
+                      - text: AGI Cloud
+                      - generic [ref=f19e1302] [box=6971,1133,386,14]: Managed credits — private beta
+                    - generic [ref=f19e1303] [box=6949,1153,430,61]:
+                      - img [ref=f19e1305] [box=6975,1174,20,20]
+                      - generic [ref=f19e1307] [box=7013,1166,230,35]:
+                        - generic [ref=f19e1308] [box=7013,1166,230,19]: AGI Cloud · Pro
+                        - generic [ref=f19e1309] [box=7013,1187,230,14]: Subscription + top-up · private beta
+                      - button "Join waitlist" [ref=f19e1310] [box=7257,1169,100,29]
+                    - generic [ref=f19e1312] [box=6971,1228,386,54]:
+                      - img [ref=f19e1313] [box=6985,1240,14,14]
+                      - generic [ref=f19e1315] [box=7009,1238,334,34]: Switching to BYOK opens a new chat. We'll show what gets sent before it leaves your device.
+            - generic [ref=f19e1317] [box=7452,154,480,988]:
+              - generic [ref=f19e1318] [box=7448,126,484,24]:
+                - generic [ref=f19e1319] [box=7448,126,438,24]:
+                  - generic "Drag to reorder" [ref=f19e1320] [box=7448,127,17,23]:
+                    - img [ref=f19e1321] [box=7452,132,9,13]
+                  - generic "Click to focus" [ref=f19e1328] [cursor=pointer] [box=7469,128,417,21]:
+                    - generic [ref=f19e1329] [box=7473,131,221,15]: R6.8 · Keys / BYOK setup · light
+                - generic [ref=f19e1330] [box=7886,127,46,22]:
+                  - button "More" [ref=f19e1332] [cursor=pointer] [box=7886,127,22,22]:
+                    - img [ref=f19e1333] [box=7891,132,12,12]
+                  - button "Focus" [ref=f19e1337] [cursor=pointer] [box=7910,127,22,22]:
+                    - img [ref=f19e1338] [box=7915,132,12,12]
+              - generic [ref=f19e1342] [box=7477,182,430,932]:
+                - generic [box=7477,182,430,72]:
+                  - generic [box=7507,217,37,21]: 9:41
+                  - generic [box=7806,221,71,13]:
+                    - img [box=7806,222,18,11]
+                    - img [box=7830,222,16,11]
+                    - img [box=7852,222,25,12]
+                - generic [ref=f19e1345] [box=7477,236,430,844]:
+                  - generic [ref=f19e1346] [box=7477,236,430,69]:
+                    - img [ref=f19e1348] [box=7503,261,20,20]
+                    - generic [ref=f19e1351] [box=7672,260,41,21]: Keys
+                  - generic [ref=f19e1353] [box=7499,313,386,85]:
+                    - img [ref=f19e1354] [box=7513,330,16,16]
+                    - generic [ref=f19e1356] [box=7539,328,331,56]:
+                      - generic [ref=f19e1357] [box=7539,328,331,17]: Keys stay on your device
+                      - generic [ref=f19e1358] [box=7539,349,331,35]: Stored in iOS Keychain. AGI never sees your keys; we proxy nothing.
+                  - generic [ref=f19e1359] [box=7477,412,430,668]:
+                    - generic [ref=f19e1360] [box=7477,412,430,64]:
+                      - img [ref=f19e1362] [box=7507,434,20,20]
+                      - generic [ref=f19e1367] [box=7549,427,219,34]:
+                        - generic [ref=f19e1368] [box=7549,427,219,19]: Anthropic
+                        - generic [ref=f19e1369] [box=7549,447,219,14]: Claude · 2 keys
+                      - generic [ref=f19e1370] [box=7782,436,103,16]:
+                        - generic [ref=f19e1372] [box=7796,436,69,16]: Connected
+                        - img [ref=f19e1373] [box=7871,437,14,14]
+                    - generic [ref=f19e1375] [box=7477,476,430,65]:
+                      - img [ref=f19e1377] [box=7507,499,20,20]
+                      - generic [ref=f19e1379] [box=7549,492,246,34]:
+                        - generic [ref=f19e1380] [box=7549,492,246,19]: OpenAI
+                        - generic [ref=f19e1381] [box=7549,511,246,14]: GPT · adds 5 models
+                      - button "Add key" [ref=f19e1382] [box=7809,495,76,28]
+                    - generic [ref=f19e1383] [box=7477,541,430,65]:
+                      - img [ref=f19e1385] [box=7507,563,20,20]
+                      - generic [ref=f19e1387] [box=7549,556,246,34]:
+                        - generic [ref=f19e1388] [box=7549,556,246,19]: Google
+                        - generic [ref=f19e1389] [box=7549,576,246,14]: Gemini · adds 3 models
+                      - button "Add key" [ref=f19e1390] [box=7809,559,76,28]
+                    - generic [ref=f19e1391] [box=7477,605,430,65]:
+                      - img [ref=f19e1393] [box=7507,628,20,20]
+                      - generic [ref=f19e1395] [box=7549,621,246,34]:
+                        - generic [ref=f19e1396] [box=7549,621,246,19]: xAI
+                        - generic [ref=f19e1397] [box=7549,640,246,14]: Grok · adds 2 models
+                      - button "Add key" [ref=f19e1398] [box=7809,624,76,28]
+                    - generic [ref=f19e1399] [box=7477,670,430,65]:
+                      - img [ref=f19e1401] [box=7507,692,20,20]
+                      - generic [ref=f19e1403] [box=7549,685,246,34]:
+                        - generic [ref=f19e1404] [box=7549,685,246,19]: Perplexity
+                        - generic [ref=f19e1405] [box=7549,705,246,14]: Sonar · adds 3 models
+                      - button "Add key" [ref=f19e1406] [box=7809,688,76,28]
+                    - generic [ref=f19e1407] [box=7477,734,430,65]:
+                      - img [ref=f19e1409] [box=7507,757,20,20]
+                      - generic [ref=f19e1413] [box=7549,750,246,34]:
+                        - generic [ref=f19e1414] [box=7549,750,246,19]: Mistral
+                        - generic [ref=f19e1415] [box=7549,769,246,14]: Mistral · adds 4 models
+                      - button "Add key" [ref=f19e1416] [box=7809,753,76,28]
+                    - generic [ref=f19e1417] [box=7477,799,430,65]:
+                      - img [ref=f19e1419] [box=7507,821,20,20]
+                      - generic [ref=f19e1421] [box=7549,814,246,34]:
+                        - generic [ref=f19e1422] [box=7549,814,246,19]: Ollama / LM Studio
+                        - generic [ref=f19e1423] [box=7549,834,246,14]: Connect a local server
+                      - button "Add key" [ref=f19e1424] [box=7809,817,76,28]
+                    - generic [ref=f19e1425] [box=7477,863,430,65]:
+                      - img [ref=f19e1427] [box=7508,887,18,18]
+                      - generic [ref=f19e1429] [box=7549,879,246,34]:
+                        - generic [ref=f19e1430] [box=7549,879,246,19]: Custom endpoint
+                        - generic [ref=f19e1431] [box=7549,898,246,14]: OpenAI-compatible URL
+                      - button "Add key" [ref=f19e1432] [box=7809,882,76,28]
+            - generic [ref=f19e1434] [box=7980,154,480,988]:
+              - generic [ref=f19e1435] [box=7976,126,484,24]:
+                - generic [ref=f19e1436] [box=7976,126,438,24]:
+                  - generic "Drag to reorder" [ref=f19e1437] [box=7976,127,17,23]:
+                    - img [ref=f19e1438] [box=7980,132,9,13]
+                  - generic "Click to focus" [ref=f19e1445] [cursor=pointer] [box=7997,128,417,21]:
+                    - generic [ref=f19e1446] [box=8001,131,221,15]: R6.8 · Keys / BYOK setup · dark
+                - generic [ref=f19e1447] [box=8414,127,46,22]:
+                  - button "More" [ref=f19e1449] [cursor=pointer] [box=8414,127,22,22]:
+                    - img [ref=f19e1450] [box=8419,132,12,12]
+                  - button "Focus" [ref=f19e1454] [cursor=pointer] [box=8438,127,22,22]:
+                    - img [ref=f19e1455] [box=8443,132,12,12]
+              - generic [ref=f19e1459] [box=8005,182,430,932]:
+                - generic [box=8005,182,430,72]:
+                  - generic [box=8035,217,37,21]: 9:41
+                  - generic [box=8334,221,71,13]:
+                    - img [box=8334,222,18,11]
+                    - img [box=8358,222,16,11]
+                    - img [box=8380,222,25,12]
+                - generic [ref=f19e1462] [box=8005,236,430,844]:
+                  - generic [ref=f19e1463] [box=8005,236,430,69]:
+                    - img [ref=f19e1465] [box=8031,261,20,20]
+                    - generic [ref=f19e1468] [box=8200,260,41,21]: Keys
+                  - generic [ref=f19e1470] [box=8027,313,386,85]:
+                    - img [ref=f19e1471] [box=8041,330,16,16]
+                    - generic [ref=f19e1473] [box=8067,328,331,56]:
+                      - generic [ref=f19e1474] [box=8067,328,331,17]: Keys stay on your device
+                      - generic [ref=f19e1475] [box=8067,349,331,35]: Stored in iOS Keychain. AGI never sees your keys; we proxy nothing.
+                  - generic [ref=f19e1476] [box=8005,412,430,668]:
+                    - generic [ref=f19e1477] [box=8005,412,430,64]:
+                      - img [ref=f19e1479] [box=8035,434,20,20]
+                      - generic [ref=f19e1484] [box=8077,427,219,34]:
+                        - generic [ref=f19e1485] [box=8077,427,219,19]: Anthropic
+                        - generic [ref=f19e1486] [box=8077,447,219,14]: Claude · 2 keys
+                      - generic [ref=f19e1487] [box=8310,436,103,16]:
+                        - generic [ref=f19e1489] [box=8324,436,69,16]: Connected
+                        - img [ref=f19e1490] [box=8399,437,14,14]
+                    - generic [ref=f19e1492] [box=8005,476,430,65]:
+                      - img [ref=f19e1494] [box=8035,499,20,20]
+                      - generic [ref=f19e1496] [box=8077,492,246,34]:
+                        - generic [ref=f19e1497] [box=8077,492,246,19]: OpenAI
+                        - generic [ref=f19e1498] [box=8077,511,246,14]: GPT · adds 5 models
+                      - button "Add key" [ref=f19e1499] [box=8337,495,76,28]
+                    - generic [ref=f19e1500] [box=8005,541,430,65]:
+                      - img [ref=f19e1502] [box=8035,563,20,20]
+                      - generic [ref=f19e1504] [box=8077,556,246,34]:
+                        - generic [ref=f19e1505] [box=8077,556,246,19]: Google
+                        - generic [ref=f19e1506] [box=8077,576,246,14]: Gemini · adds 3 models
+                      - button "Add key" [ref=f19e1507] [box=8337,559,76,28]
+                    - generic [ref=f19e1508] [box=8005,605,430,65]:
+                      - img [ref=f19e1510] [box=8035,628,20,20]
+                      - generic [ref=f19e1512] [box=8077,621,246,34]:
+                        - generic [ref=f19e1513] [box=8077,621,246,19]: xAI
+                        - generic [ref=f19e1514] [box=8077,640,246,14]: Grok · adds 2 models
+                      - button "Add key" [ref=f19e1515] [box=8337,624,76,28]
+                    - generic [ref=f19e1516] [box=8005,670,430,65]:
+                      - img [ref=f19e1518] [box=8035,692,20,20]
+                      - generic [ref=f19e1520] [box=8077,685,246,34]:
+                        - generic [ref=f19e1521] [box=8077,685,246,19]: Perplexity
+                        - generic [ref=f19e1522] [box=8077,705,246,14]: Sonar · adds 3 models
+                      - button "Add key" [ref=f19e1523] [box=8337,688,76,28]
+                    - generic [ref=f19e1524] [box=8005,734,430,65]:
+                      - img [ref=f19e1526] [box=8035,757,20,20]
+                      - generic [ref=f19e1530] [box=8077,750,246,34]:
+                        - generic [ref=f19e1531] [box=8077,750,246,19]: Mistral
+                        - generic [ref=f19e1532] [box=8077,769,246,14]: Mistral · adds 4 models
+                      - button "Add key" [ref=f19e1533] [box=8337,753,76,28]
+                    - generic [ref=f19e1534] [box=8005,799,430,65]:
+                      - img [ref=f19e1536] [box=8035,821,20,20]
+                      - generic [ref=f19e1538] [box=8077,814,246,34]:
+                        - generic [ref=f19e1539] [box=8077,814,246,19]: Ollama / LM Studio
+                        - generic [ref=f19e1540] [box=8077,834,246,14]: Connect a local server
+                      - button "Add key" [ref=f19e1541] [box=8337,817,76,28]
+                    - generic [ref=f19e1542] [box=8005,863,430,65]:
+                      - img [ref=f19e1544] [box=8036,887,18,18]
+                      - generic [ref=f19e1546] [box=8077,879,246,34]:
+                        - generic [ref=f19e1547] [box=8077,879,246,19]: Custom endpoint
+                        - generic [ref=f19e1548] [box=8077,898,246,14]: OpenAI-compatible URL
+                      - button "Add key" [ref=f19e1549] [box=8337,882,76,28]
+            - generic [ref=f19e1551] [box=8508,154,480,988]:
+              - generic [ref=f19e1552] [box=8504,126,484,24]:
+                - generic [ref=f19e1553] [box=8504,126,438,24]:
+                  - generic "Drag to reorder" [ref=f19e1554] [box=8504,127,17,23]:
+                    - img [ref=f19e1555] [box=8508,132,9,13]
+                  - generic "Click to focus" [ref=f19e1562] [cursor=pointer] [box=8525,128,417,21]:
+                    - generic [ref=f19e1563] [box=8529,131,222,15]: R6.9 · Local → BYOK fork · light
+                - generic [ref=f19e1564] [box=8942,127,46,22]:
+                  - button "More" [ref=f19e1566] [cursor=pointer] [box=8942,127,22,22]:
+                    - img [ref=f19e1567] [box=8947,132,12,12]
+                  - button "Focus" [ref=f19e1571] [cursor=pointer] [box=8966,127,22,22]:
+                    - img [ref=f19e1572] [box=8971,132,12,12]
+              - generic [ref=f19e1576] [box=8533,182,430,932]:
+                - generic [box=8533,182,430,72]:
+                  - generic [box=8563,217,37,21]: 9:41
+                  - generic [box=8862,221,71,13]:
+                    - img [box=8862,222,18,11]
+                    - img [box=8886,222,16,11]
+                    - img [box=8908,222,25,12]
+                - generic [ref=f19e1579] [box=8533,236,430,896]:
+                  - generic [ref=f19e1580] [box=8533,236,430,69]:
+                    - img [ref=f19e1582] [box=8560,262,18,18]
+                    - generic [ref=f19e1584] [box=8590,254,317,34]:
+                      - generic [ref=f19e1585] [box=8590,254,317,19]: Continue on Claude
+                      - generic [ref=f19e1586] [box=8590,273,317,14]: via your Anthropic key
+                  - generic [ref=f19e1587] [box=8533,305,430,720]:
+                    - generic [ref=f19e1588] [box=8549,311,398,94]:
+                      - img [ref=f19e1589] [box=8563,325,16,16]
+                      - generic [ref=f19e1591] [box=8589,324,343,68]:
+                        - generic [ref=f19e1592] [box=8589,324,343,16]: Leaving your device
+                        - generic [ref=f19e1593] [box=8589,342,343,50]: The selected messages and attachments will be sent to Anthropic via your key. Your original local chat stays on-device.
+                    - generic [ref=f19e1594] [box=8549,419,398,76]:
+                      - generic [ref=f19e1595] [box=8563,431,369,13]: Destination
+                      - generic [ref=f19e1596] [box=8563,451,369,31]:
+                        - img [ref=f19e1597] [box=8563,452,28,28]
+                        - generic [ref=f19e1602] [box=8603,451,301,31]:
+                          - generic [ref=f19e1603] [box=8603,451,301,17]: Claude Sonnet 4.6 · via your Anthropic key
+                          - generic [ref=f19e1604] [box=8603,467,301,14]: ~$0.003 per turn estimated
+                        - img [ref=f19e1605] [box=8916,458,16,16]
+                    - generic [ref=f19e1607] [box=8549,508,398,16]:
+                      - generic [ref=f19e1608] [box=8549,511,167,13]: Context · 4 of 6 selected
+                      - generic [ref=f19e1609] [box=8923,508,24,16]: Edit
+                    - generic [ref=f19e1610] [box=8549,531,398,237]:
+                      - generic [ref=f19e1611] [box=8549,531,397,39]:
+                        - img [ref=f19e1612] [box=8563,544,14,14]
+                        - generic [ref=f19e1614] [box=8587,543,36,12]: You
+                        - generic [ref=f19e1615] [box=8633,541,299,19]: What's a good 78% hydration bulk time at 22°C?
+                      - generic [ref=f19e1616] [box=8549,570,397,39]:
+                        - img [ref=f19e1617] [box=8563,583,14,14]
+                        - generic [ref=f19e1619] [box=8587,582,36,12]: AGI
+                        - generic [ref=f19e1620] [box=8633,580,299,19]: At 78% hydration with room temp around 22°C…
+                      - generic [ref=f19e1621] [box=8549,609,397,39]:
+                        - img [ref=f19e1622] [box=8563,623,14,14]
+                        - generic [ref=f19e1624] [box=8587,622,36,12]: You
+                        - generic [ref=f19e1625] [box=8633,620,299,19]: What about colder — like 18°C?
+                      - generic [ref=f19e1626] [box=8549,649,397,39]:
+                        - img [ref=f19e1627] [box=8563,662,14,14]
+                        - generic [ref=f19e1629] [box=8587,661,36,12]: AGI
+                        - generic [ref=f19e1630] [box=8633,659,299,19]: At 18°C the bulk stretches significantly longer…
+                      - generic [ref=f19e1631] [box=8549,688,397,39]:
+                        - img [ref=f19e1632] [box=8563,702,14,14]
+                        - generic [ref=f19e1634] [box=8587,701,36,12]: You
+                        - generic [ref=f19e1635] [box=8633,699,299,19]: Earlier message · excluded
+                      - generic [ref=f19e1636] [box=8549,728,397,39]:
+                        - img [ref=f19e1637] [box=8563,741,14,14]
+                        - generic [ref=f19e1639] [box=8587,740,36,12]: AGI
+                        - generic [ref=f19e1640] [box=8633,738,299,19]: Earlier response · excluded
+                    - generic [ref=f19e1641] [box=8549,782,398,56]:
+                      - img [ref=f19e1642] [box=8563,801,18,18]
+                      - generic [ref=f19e1644] [box=8593,794,276,31]:
+                        - generic [ref=f19e1645] [box=8593,794,276,17]: Include 1 attachment
+                        - generic [ref=f19e1646] [box=8593,811,276,14]: bread-crumb.jpg · 412 KB · will be re-uploaded
+                    - generic [ref=f19e1649] [box=8549,850,398,51]:
+                      - img [ref=f19e1650] [box=8563,867,16,16]
+                      - generic [ref=f19e1652] [box=8589,860,343,30]:
+                        - generic [ref=f19e1653] [box=8589,860,343,16]: Local secret scan passed
+                        - generic [ref=f19e1654] [box=8589,876,343,14]: No API keys, tokens, or PII detected in payload
+                    - generic [ref=f19e1655] [box=8549,915,398,110]:
+                      - generic [ref=f19e1656] [box=8563,927,369,13]: Payload preview
+                      - generic [ref=f19e1657] [box=8563,947,369,66]:
+                        - text: POST api.anthropic.com/v1/messages
+                        - text: "model: claude-sonnet-4-6"
+                        - text: "messages: 4 turns · ~820 tokens"
+                        - text: "attachments: 1 image (re-uploaded)"
+                  - generic [ref=f19e1658] [box=8533,1025,430,107]:
+                    - button "Send to Claude · start new chat" [ref=f19e1659] [box=8551,1037,394,52]
+                    - generic [ref=f19e1661] [box=8692,1100,112,16]:
+                      - text: Or
+                      - generic [ref=f19e1662] [box=8710,1100,94,16]: stay on-device
+            - generic [ref=f19e1664] [box=9036,154,480,988]:
+              - generic [ref=f19e1665] [box=9032,126,484,24]:
+                - generic [ref=f19e1666] [box=9032,126,438,24]:
+                  - generic "Drag to reorder" [ref=f19e1667] [box=9032,127,17,23]:
+                    - img [ref=f19e1668] [box=9036,132,9,13]
+                  - generic "Click to focus" [ref=f19e1675] [cursor=pointer] [box=9053,128,417,21]:
+                    - generic [ref=f19e1676] [box=9057,131,222,15]: R6.9 · Local → BYOK fork · dark
+                - generic [ref=f19e1677] [box=9470,127,46,22]:
+                  - button "More" [ref=f19e1679] [cursor=pointer] [box=9470,127,22,22]:
+                    - img [ref=f19e1680] [box=9475,132,12,12]
+                  - button "Focus" [ref=f19e1684] [cursor=pointer] [box=9494,127,22,22]:
+                    - img [ref=f19e1685] [box=9499,132,12,12]
+              - generic [ref=f19e1689] [box=9061,182,430,932]:
+                - generic [box=9061,182,430,72]:
+                  - generic [box=9091,217,37,21]: 9:41
+                  - generic [box=9390,221,71,13]:
+                    - img [box=9390,222,18,11]
+                    - img [box=9414,222,16,11]
+                    - img [box=9436,222,25,12]
+                - generic [ref=f19e1692] [box=9061,236,430,896]:
+                  - generic [ref=f19e1693] [box=9061,236,430,69]:
+                    - img [ref=f19e1695] [box=9088,262,18,18]
+                    - generic [ref=f19e1697] [box=9118,254,317,34]:
+                      - generic [ref=f19e1698] [box=9118,254,317,19]: Continue on Claude
+                      - generic [ref=f19e1699] [box=9118,273,317,14]: via your Anthropic key
+                  - generic [ref=f19e1700] [box=9061,305,430,720]:
+                    - generic [ref=f19e1701] [box=9077,311,398,94]:
+                      - img [ref=f19e1702] [box=9091,325,16,16]
+                      - generic [ref=f19e1704] [box=9117,324,343,68]:
+                        - generic [ref=f19e1705] [box=9117,324,343,16]: Leaving your device
+                        - generic [ref=f19e1706] [box=9117,342,343,50]: The selected messages and attachments will be sent to Anthropic via your key. Your original local chat stays on-device.
+                    - generic [ref=f19e1707] [box=9077,419,398,76]:
+                      - generic [ref=f19e1708] [box=9091,431,369,13]: Destination
+                      - generic [ref=f19e1709] [box=9091,451,369,31]:
+                        - img [ref=f19e1710] [box=9091,452,28,28]
+                        - generic [ref=f19e1715] [box=9131,451,301,31]:
+                          - generic [ref=f19e1716] [box=9131,451,301,17]: Claude Sonnet 4.6 · via your Anthropic key
+                          - generic [ref=f19e1717] [box=9131,467,301,14]: ~$0.003 per turn estimated
+                        - img [ref=f19e1718] [box=9444,458,16,16]
+                    - generic [ref=f19e1720] [box=9077,508,398,16]:
+                      - generic [ref=f19e1721] [box=9077,511,167,13]: Context · 4 of 6 selected
+                      - generic [ref=f19e1722] [box=9451,508,24,16]: Edit
+                    - generic [ref=f19e1723] [box=9077,531,398,237]:
+                      - generic [ref=f19e1724] [box=9077,531,397,39]:
+                        - img [ref=f19e1725] [box=9091,544,14,14]
+                        - generic [ref=f19e1727] [box=9115,543,36,12]: You
+                        - generic [ref=f19e1728] [box=9161,541,299,19]: What's a good 78% hydration bulk time at 22°C?
+                      - generic [ref=f19e1729] [box=9077,570,397,39]:
+                        - img [ref=f19e1730] [box=9091,583,14,14]
+                        - generic [ref=f19e1732] [box=9115,582,36,12]: AGI
+                        - generic [ref=f19e1733] [box=9161,580,299,19]: At 78% hydration with room temp around 22°C…
+                      - generic [ref=f19e1734] [box=9077,609,397,39]:
+                        - img [ref=f19e1735] [box=9091,623,14,14]
+                        - generic [ref=f19e1737] [box=9115,622,36,12]: You
+                        - generic [ref=f19e1738] [box=9161,620,299,19]: What about colder — like 18°C?
+                      - generic [ref=f19e1739] [box=9077,649,397,39]:
+                        - img [ref=f19e1740] [box=9091,662,14,14]
+                        - generic [ref=f19e1742] [box=9115,661,36,12]: AGI
+                        - generic [ref=f19e1743] [box=9161,659,299,19]: At 18°C the bulk stretches significantly longer…
+                      - generic [ref=f19e1744] [box=9077,688,397,39]:
+                        - img [ref=f19e1745] [box=9091,702,14,14]
+                        - generic [ref=f19e1747] [box=9115,701,36,12]: You
+                        - generic [ref=f19e1748] [box=9161,699,299,19]: Earlier message · excluded
+                      - generic [ref=f19e1749] [box=9077,728,397,39]:
+                        - img [ref=f19e1750] [box=9091,741,14,14]
+                        - generic [ref=f19e1752] [box=9115,740,36,12]: AGI
+                        - generic [ref=f19e1753] [box=9161,738,299,19]: Earlier response · excluded
+                    - generic [ref=f19e1754] [box=9077,782,398,56]:
+                      - img [ref=f19e1755] [box=9091,801,18,18]
+                      - generic [ref=f19e1757] [box=9121,794,276,31]:
+                        - generic [ref=f19e1758] [box=9121,794,276,17]: Include 1 attachment
+                        - generic [ref=f19e1759] [box=9121,811,276,14]: bread-crumb.jpg · 412 KB · will be re-uploaded
+                    - generic [ref=f19e1762] [box=9077,850,398,51]:
+                      - img [ref=f19e1763] [box=9091,867,16,16]
+                      - generic [ref=f19e1765] [box=9117,860,343,30]:
+                        - generic [ref=f19e1766] [box=9117,860,343,16]: Local secret scan passed
+                        - generic [ref=f19e1767] [box=9117,876,343,14]: No API keys, tokens, or PII detected in payload
+                    - generic [ref=f19e1768] [box=9077,915,398,110]:
+                      - generic [ref=f19e1769] [box=9091,927,369,13]: Payload preview
+                      - generic [ref=f19e1770] [box=9091,947,369,66]:
+                        - text: POST api.anthropic.com/v1/messages
+                        - text: "model: claude-sonnet-4-6"
+                        - text: "messages: 4 turns · ~820 tokens"
+                        - text: "attachments: 1 image (re-uploaded)"
+                  - generic [ref=f19e1771] [box=9061,1025,430,107]:
+                    - button "Send to Claude · start new chat" [ref=f19e1772] [box=9079,1037,394,52]
+                    - generic [ref=f19e1774] [box=9220,1100,112,16]:
+                      - text: Or
+                      - generic [ref=f19e1775] [box=9238,1100,94,16]: stay on-device
+            - generic [ref=f19e1777] [box=9564,154,480,988]:
+              - generic [ref=f19e1778] [box=9560,126,484,24]:
+                - generic [ref=f19e1779] [box=9560,126,438,24]:
+                  - generic "Drag to reorder" [ref=f19e1780] [box=9560,127,17,23]:
+                    - img [ref=f19e1781] [box=9564,132,9,13]
+                  - generic "Click to focus" [ref=f19e1788] [cursor=pointer] [box=9581,128,417,21]:
+                    - generic [ref=f19e1789] [box=9585,131,198,15]: R6.10 · Settings index · light
+                - generic [ref=f19e1790] [box=9998,127,46,22]:
+                  - button "More" [ref=f19e1792] [cursor=pointer] [box=9998,127,22,22]:
+                    - img [ref=f19e1793] [box=10003,132,12,12]
+                  - button "Focus" [ref=f19e1797] [cursor=pointer] [box=10022,127,22,22]:
+                    - img [ref=f19e1798] [box=10027,132,12,12]
+              - generic [ref=f19e1802] [box=9589,182,430,932]:
+                - generic [box=9589,182,430,72]:
+                  - generic [box=9619,217,37,21]: 9:41
+                  - generic [box=9918,221,71,13]:
+                    - img [box=9918,222,18,11]
+                    - img [box=9942,222,16,11]
+                    - img [box=9964,222,25,12]
+                - generic [ref=f19e1805] [box=9589,236,430,992]:
+                  - generic [ref=f19e1806] [box=9589,236,430,69]:
+                    - generic [ref=f19e1807] [box=9769,260,69,21]: Settings
+                    - img [ref=f19e1810] [box=9974,263,16,16]
+                  - generic [ref=f19e1812] [box=9589,305,430,923]:
+                    - generic [ref=f19e1813] [box=9589,305,430,146]:
+                      - generic [ref=f19e1815] [box=9786,334,37,31]: SN
+                      - generic [ref=f19e1816] [box=9589,395,430,22]: Siddhartha Nagula
+                      - generic [ref=f19e1817] [box=9589,419,430,16]: Local profile · no account
+                    - generic [ref=f19e1818] [box=9589,451,430,43]: Mode
+                    - generic [ref=f19e1819] [box=9603,495,402,145]:
+                      - generic [ref=f19e1820] [box=9603,495,402,49]:
+                        - img [ref=f19e1821] [box=9619,508,20,20]
+                        - generic [ref=f19e1823] [box=9653,509,214,19]: Mode
+                        - generic [ref=f19e1824] [box=9881,509,74,18]: On-device
+                        - img [ref=f19e1825] [box=9973,510,16,16]
+                      - generic [ref=f19e1827] [box=9603,543,402,49]:
+                        - img [ref=f19e1828] [box=9619,557,20,20]
+                        - generic [ref=f19e1830] [box=9653,557,202,19]: Keys (BYOK)
+                        - generic [ref=f19e1831] [box=9869,558,86,18]: 1 connected
+                        - img [ref=f19e1832] [box=9973,559,16,16]
+                      - generic [ref=f19e1834] [box=9603,592,402,48]:
+                        - img [ref=f19e1835] [box=9619,606,20,20]
+                        - generic [ref=f19e1837] [box=9653,606,204,19]: Cloud
+                        - generic [ref=f19e1838] [box=9871,606,84,18]: Join waitlist
+                        - img [ref=f19e1839] [box=9973,608,16,16]
+                    - generic [ref=f19e1841] [box=9589,652,430,43]: Personalize
+                    - generic [ref=f19e1842] [box=9603,695,402,145]:
+                      - generic [ref=f19e1843] [box=9603,695,402,49]:
+                        - img [ref=f19e1844] [box=9619,709,20,20]
+                        - generic [ref=f19e1846] [box=9653,709,234,19]: Memory
+                        - generic [ref=f19e1847] [box=9900,710,54,18]: 12 facts
+                        - img [ref=f19e1848] [box=9973,711,16,16]
+                      - generic [ref=f19e1850] [box=9603,744,402,49]:
+                        - img [ref=f19e1851] [box=9619,758,20,20]
+                        - generic [ref=f19e1853] [box=9653,758,214,19]: Voice
+                        - generic [ref=f19e1854] [box=9881,758,74,18]: On-device
+                        - img [ref=f19e1855] [box=9973,760,16,16]
+                      - generic [ref=f19e1857] [box=9603,792,402,48]:
+                        - img [ref=f19e1858] [box=9619,806,20,20]
+                        - generic [ref=f19e1860] [box=9653,806,265,19]: Appearance
+                        - generic [ref=f19e1861] [box=9932,807,53,18]: System
+                    - generic [ref=f19e1862] [box=9589,852,430,43]: Device
+                    - generic [ref=f19e1863] [box=9603,896,402,145]:
+                      - generic [ref=f19e1864] [box=9603,896,402,49]:
+                        - img [ref=f19e1865] [box=9619,910,20,20]
+                        - generic [ref=f19e1867] [box=9653,910,196,19]: Performance
+                        - generic [ref=f19e1868] [box=9863,910,92,18]: Tier 1 · 42 t/s
+                        - img [ref=f19e1869] [box=9973,912,16,16]
+                      - generic [ref=f19e1871] [box=9603,944,402,49]:
+                        - img [ref=f19e1872] [box=9619,958,20,20]
+                        - generic [ref=f19e1874] [box=9653,958,235,19]: Storage
+                        - generic [ref=f19e1875] [box=9902,959,53,18]: 2.18 GB
+                        - img [ref=f19e1876] [box=9973,960,16,16]
+                      - generic [ref=f19e1878] [box=9603,993,402,48]:
+                        - img [ref=f19e1879] [box=9619,1007,20,20]
+                        - generic [ref=f19e1881] [box=9653,1007,306,19]: Privacy
+                        - img [ref=f19e1882] [box=9973,1009,16,16]
+                    - generic [ref=f19e1884] [box=9589,1053,430,43]: About
+                    - generic [ref=f19e1885] [box=9603,1096,402,97]:
+                      - generic [ref=f19e1886] [box=9603,1096,402,49]:
+                        - img [ref=f19e1887] [box=9619,1110,20,20]
+                        - generic [ref=f19e1889] [box=9653,1110,306,19]: About AGI
+                        - img [ref=f19e1890] [box=9973,1112,16,16]
+                      - generic [ref=f19e1892] [box=9603,1145,402,48]:
+                        - img [ref=f19e1893] [box=9619,1159,20,20]
+                        - generic [ref=f19e1895] [box=9653,1159,306,19]: Open-source acknowledgments
+                        - img [ref=f19e1896] [box=9973,1161,16,16]
+            - generic [ref=f19e1899] [box=10092,154,480,988]:
+              - generic [ref=f19e1900] [box=10088,126,484,24]:
+                - generic [ref=f19e1901] [box=10088,126,438,24]:
+                  - generic "Drag to reorder" [ref=f19e1902] [box=10088,127,17,23]:
+                    - img [ref=f19e1903] [box=10092,132,9,13]
+                  - generic "Click to focus" [ref=f19e1910] [cursor=pointer] [box=10109,128,417,21]:
+                    - generic [ref=f19e1911] [box=10113,131,154,15]: R6.10 · Storage · light
+                - generic [ref=f19e1912] [box=10526,127,46,22]:
+                  - button "More" [ref=f19e1914] [cursor=pointer] [box=10526,127,22,22]:
+                    - img [ref=f19e1915] [box=10531,132,12,12]
+                  - button "Focus" [ref=f19e1919] [cursor=pointer] [box=10550,127,22,22]:
+                    - img [ref=f19e1920] [box=10555,132,12,12]
+              - generic [ref=f19e1924] [box=10117,182,430,932]:
+                - generic [box=10117,182,430,72]:
+                  - generic [box=10147,217,37,21]: 9:41
+                  - generic [box=10446,221,71,13]:
+                    - img [box=10446,222,18,11]
+                    - img [box=10470,222,16,11]
+                    - img [box=10492,222,25,12]
+                - generic [ref=f19e1927] [box=10117,236,430,844]:
+                  - generic [ref=f19e1928] [box=10117,236,430,69]:
+                    - img [ref=f19e1930] [box=10143,261,20,20]
+                    - generic [ref=f19e1933] [box=10300,260,65,21]: Storage
+                  - generic [ref=f19e1935] [box=10135,313,394,172]:
+                    - generic [ref=f19e1936] [box=10151,334,31,13]: USED
+                    - generic [ref=f19e1937] [box=10151,353,362,39]: 2.18 GB
+                    - generic [ref=f19e1942] [box=10151,428,362,42]:
+                      - generic [ref=f19e1945] [box=10165,428,143,14]: On-device models · 2.1 GB
+                      - generic [ref=f19e1948] [box=10336,428,80,14]: Cache · 84 MB
+                      - generic [ref=f19e1951] [box=10165,455,121,14]: Conversations · 12 MB
+                  - generic [ref=f19e1952] [box=10131,499,402,194]:
+                    - generic [ref=f19e1953] [box=10131,499,402,49]:
+                      - img [ref=f19e1954] [box=10147,513,20,20]
+                      - generic [ref=f19e1956] [box=10181,514,226,19]: Manage on-device models
+                      - generic [ref=f19e1957] [box=10421,514,62,18]: 3 loaded
+                      - img [ref=f19e1958] [box=10501,515,16,16]
+                    - generic [ref=f19e1960] [box=10131,548,402,49]:
+                      - img [ref=f19e1961] [box=10147,562,20,20]
+                      - generic [ref=f19e1963] [box=10181,562,221,19]: Conversations
+                      - generic [ref=f19e1964] [box=10415,563,67,18]: 124 chats
+                      - img [ref=f19e1965] [box=10501,564,16,16]
+                    - generic [ref=f19e1967] [box=10131,596,402,49]:
+                      - img [ref=f19e1968] [box=10147,610,20,20]
+                      - generic [ref=f19e1970] [box=10181,611,271,19]: Clear cache
+                      - generic [ref=f19e1971] [box=10466,611,47,18]: 84 MB
+                    - generic [ref=f19e1972] [box=10131,645,402,48]:
+                      - img [ref=f19e1973] [box=10147,659,20,20]
+                      - generic [ref=f19e1975] [box=10181,659,204,19]: Export my data
+                      - generic [ref=f19e1976] [box=10398,660,84,18]: Share sheet
+                      - img [ref=f19e1977] [box=10501,661,16,16]
+                  - generic [ref=f19e1980] [box=10139,709,384,34]: Export creates a .zip on your device and opens the iOS share sheet. Nothing is uploaded.
+                  - generic [ref=f19e1981] [box=10117,744,430,43]: Danger zone
+                  - generic [ref=f19e1983] [box=10131,788,402,48]:
+                    - img [ref=f19e1984] [box=10147,802,20,20]
+                    - generic [ref=f19e1986] [box=10181,802,336,19]: Reset on-device data
+            - generic [ref=f19e1988] [box=10620,154,480,988]:
+              - generic [ref=f19e1989] [box=10616,126,484,24]:
+                - generic [ref=f19e1990] [box=10616,126,438,24]:
+                  - generic "Drag to reorder" [ref=f19e1991] [box=10616,127,17,23]:
+                    - img [ref=f19e1992] [box=10620,132,9,13]
+                  - generic "Click to focus" [ref=f19e1999] [cursor=pointer] [box=10637,128,417,21]:
+                    - generic [ref=f19e2000] [box=10641,131,150,15]: R6.10 · Privacy · light
+                - generic [ref=f19e2001] [box=11054,127,46,22]:
+                  - button "More" [ref=f19e2003] [cursor=pointer] [box=11054,127,22,22]:
+                    - img [ref=f19e2004] [box=11059,132,12,12]
+                  - button "Focus" [ref=f19e2008] [cursor=pointer] [box=11078,127,22,22]:
+                    - img [ref=f19e2009] [box=11083,132,12,12]
+              - generic [ref=f19e2013] [box=10645,182,430,932]:
+                - generic [box=10645,182,430,72]:
+                  - generic [box=10675,217,37,21]: 9:41
+                  - generic [box=10974,221,71,13]:
+                    - img [box=10974,222,18,11]
+                    - img [box=10998,222,16,11]
+                    - img [box=11020,222,25,12]
+                - generic [ref=f19e2016] [box=10645,236,430,938]:
+                  - generic [ref=f19e2017] [box=10645,236,430,69]:
+                    - img [ref=f19e2019] [box=10671,261,20,20]
+                    - generic [ref=f19e2022] [box=10829,260,62,21]: Privacy
+                  - generic [ref=f19e2024] [box=10663,313,394,116]:
+                    - img [ref=f19e2025] [box=10677,328,18,18]
+                    - generic [ref=f19e2027] [box=10677,356,365,18]: On-device by default
+                    - generic [ref=f19e2028] [box=10677,378,365,36]: Conversations never leave your phone unless you explicitly choose BYOK. AGI runs no servers for v1.
+                  - generic [ref=f19e2029] [box=10645,443,430,43]: Trust signals
+                  - generic [ref=f19e2030] [box=10659,486,402,194]:
+                    - generic [ref=f19e2031] [box=10659,486,402,49]:
+                      - img [ref=f19e2032] [box=10675,500,20,20]
+                      - generic [ref=f19e2034] [box=10709,501,336,19]: Apple-verified developer
+                    - generic [ref=f19e2035] [box=10659,535,402,49]:
+                      - img [ref=f19e2036] [box=10675,549,20,20]
+                      - generic [ref=f19e2038] [box=10709,549,336,19]: DPDP Act 2023 · compliant
+                    - generic [ref=f19e2039] [box=10659,583,402,49]:
+                      - img [ref=f19e2040] [box=10675,597,20,20]
+                      - generic [ref=f19e2042] [box=10709,598,336,19]: No account required
+                    - generic [ref=f19e2043] [box=10659,632,402,48]:
+                      - img [ref=f19e2044] [box=10675,646,20,20]
+                      - generic [ref=f19e2046] [box=10709,646,336,19]: Works in airplane mode
+                  - generic [ref=f19e2047] [box=10645,692,430,43]: When you use BYOK
+                  - generic [ref=f19e2048] [box=10659,735,402,178]:
+                    - generic [ref=f19e2049] [box=10659,735,402,60]:
+                      - img [ref=f19e2050] [box=10675,755,20,20]
+                      - generic [ref=f19e2052] [box=10709,755,271,19]: Scan payload before send
+                    - generic [ref=f19e2055] [box=10659,795,402,60]:
+                      - img [ref=f19e2056] [box=10675,814,20,20]
+                      - generic [ref=f19e2058] [box=10709,815,271,19]: Re-upload attachments warning
+                    - generic [ref=f19e2061] [box=10659,854,402,59]:
+                      - img [ref=f19e2062] [box=10675,874,20,20]
+                      - generic [ref=f19e2064] [box=10709,874,271,19]: Always show payload preview
+                  - generic [ref=f19e2067] [box=10645,925,430,43]: Documents
+                  - generic [ref=f19e2068] [box=10659,969,402,194]:
+                    - generic [ref=f19e2069] [box=10659,969,402,49]:
+                      - img [ref=f19e2070] [box=10675,983,20,20]
+                      - generic [ref=f19e2072] [box=10709,983,306,19]: Privacy policy
+                      - img [ref=f19e2073] [box=11029,985,16,16]
+                    - generic [ref=f19e2075] [box=10659,1017,402,49]:
+                      - img [ref=f19e2076] [box=10675,1031,20,20]
+                      - generic [ref=f19e2078] [box=10709,1032,306,19]: Terms
+                      - img [ref=f19e2079] [box=11029,1033,16,16]
+                    - generic [ref=f19e2081] [box=10659,1066,402,49]:
+                      - img [ref=f19e2082] [box=10675,1080,20,20]
+                      - generic [ref=f19e2084] [box=10709,1080,306,19]: DPDP disclosures (India)
+                      - img [ref=f19e2085] [box=11029,1082,16,16]
+                    - generic [ref=f19e2087] [box=10659,1114,402,48]:
+                      - img [ref=f19e2088] [box=10675,1128,20,20]
+                      - generic [ref=f19e2090] [box=10709,1129,306,19]: Article 50 (EU AI Act)
+                      - img [ref=f19e2091] [box=11029,1130,16,16]
+            - generic [ref=f19e2094] [box=11148,154,446,928]:
+              - generic [ref=f19e2095] [box=11144,126,450,24]:
+                - generic [ref=f19e2096] [box=11144,126,404,24]:
+                  - generic "Drag to reorder" [ref=f19e2097] [box=11144,127,17,23]:
+                    - img [ref=f19e2098] [box=11148,132,9,13]
+                  - generic "Click to focus" [ref=f19e2105] [cursor=pointer] [box=11165,128,383,21]:
+                    - generic [ref=f19e2106] [box=11169,131,238,15]: R6.A1 · Android onboarding · light
+                - generic [ref=f19e2107] [box=11548,127,46,22]:
+                  - button "More" [ref=f19e2109] [cursor=pointer] [box=11548,127,22,22]:
+                    - img [ref=f19e2110] [box=11553,132,12,12]
+                  - button "Focus" [ref=f19e2114] [cursor=pointer] [box=11572,127,22,22]:
+                    - img [ref=f19e2115] [box=11577,132,12,12]
+              - generic [ref=f19e2119] [box=11166,171,410,895]:
+                - generic [ref=f19e2121] [box=11168,172,407,48]:
+                  - generic [ref=f19e2122] [box=11190,188,26,16]: 9:41
+                  - generic [ref=f19e2123] [box=11524,189,28,14]: ▴ ⌬ ▮
+                - generic [ref=f19e2124] [box=11168,204,407,832]:
+                  - generic [ref=f19e2125] [box=11168,204,407,723]:
+                    - img [ref=f19e2126] [box=11339,385,64,64]
+                    - generic [ref=f19e2133] [box=11200,476,343,70]: AGI runs on your device.
+                    - generic [ref=f19e2134] [box=11245,561,252,18]: No account. No cloud. Free forever.
+                    - generic [ref=f19e2135] [box=11211,607,320,139]:
+                      - generic [ref=f19e2136] [box=11211,607,320,41]:
+                        - img [ref=f19e2137] [box=11225,619,18,18]
+                        - generic [ref=f19e2139] [box=11255,619,134,17]: Runs on your phone
+                      - generic [ref=f19e2140] [box=11211,656,320,41]:
+                        - img [ref=f19e2141] [box=11225,668,18,18]
+                        - generic [ref=f19e2143] [box=11255,669,89,17]: Works offline
+                      - generic [ref=f19e2144] [box=11211,705,320,41]:
+                        - img [ref=f19e2145] [box=11225,717,18,18]
+                        - generic [ref=f19e2147] [box=11255,718,182,17]: Nothing leaves your device
+                  - generic [ref=f19e2148] [box=11168,927,407,109]:
+                    - button "Start chatting" [ref=f19e2149] [box=11188,927,367,52]
+                    - generic [ref=f19e2151] [box=11267,993,209,14]: AGI Automation LLC · Delaware, USA
+            - generic [ref=f19e2153] [box=11642,154,446,928]:
+              - generic [ref=f19e2154] [box=11638,126,450,24]:
+                - generic [ref=f19e2155] [box=11638,126,404,24]:
+                  - generic "Drag to reorder" [ref=f19e2156] [box=11638,127,17,23]:
+                    - img [ref=f19e2157] [box=11642,132,9,13]
+                  - generic "Click to focus" [ref=f19e2164] [cursor=pointer] [box=11659,128,383,21]:
+                    - generic [ref=f19e2165] [box=11663,131,209,15]: R6.A2 · Android drawer · light
+                - generic [ref=f19e2166] [box=12042,127,46,22]:
+                  - button "More" [ref=f19e2168] [cursor=pointer] [box=12042,127,22,22]:
+                    - img [ref=f19e2169] [box=12047,132,12,12]
+                  - button "Focus" [ref=f19e2173] [cursor=pointer] [box=12066,127,22,22]:
+                    - img [ref=f19e2174] [box=12071,132,12,12]
+              - generic [ref=f19e2178] [box=11660,171,410,895]:
+                - generic [ref=f19e2180] [box=11662,172,407,48]:
+                  - generic [ref=f19e2181] [box=11684,188,26,16]: 9:41
+                  - generic [ref=f19e2182] [box=12018,189,28,14]: ▴ ⌬ ▮
+                - generic [ref=f19e2183] [box=11662,204,407,832]:
+                  - generic [ref=f19e2184] [box=11662,204,407,72]:
+                    - img [ref=f19e2185] [box=11676,229,22,22]
+                    - generic [ref=f19e2187] [box=11710,229,31,22]: AGI
+                  - generic [ref=f19e2188] [box=11662,236,312,772]:
+                    - generic [ref=f19e2189] [box=11662,236,312,72]:
+                      - generic [ref=f19e2191] [box=11690,264,18,16]: SN
+                      - generic [ref=f19e2192] [box=11732,256,134,33]:
+                        - generic [ref=f19e2193] [box=11732,256,134,18]: Siddhartha Nagula
+                        - generic [ref=f19e2194] [box=11732,274,134,14]: Local profile
+                    - generic [ref=f19e2196] [box=11662,309,312,354]:
+                      - generic [ref=f19e2197] [box=11672,319,292,46]:
+                        - img [ref=f19e2198] [box=11686,331,22,22]
+                        - generic [ref=f19e2200] [box=11724,333,34,18]: Chat
+                      - generic [ref=f19e2201] [box=11672,367,292,46]:
+                        - img [ref=f19e2202] [box=11686,379,22,22]
+                        - generic [ref=f19e2204] [box=11724,381,58,18]: Projects
+                      - generic [ref=f19e2205] [box=11672,415,292,46]:
+                        - img [ref=f19e2206] [box=11686,427,22,22]
+                        - generic [ref=f19e2208] [box=11724,428,37,18]: Skills
+                      - generic [ref=f19e2209] [box=11672,463,292,46]:
+                        - img [ref=f19e2210] [box=11686,475,22,22]
+                        - generic [ref=f19e2212] [box=11724,476,60,18]: Memory
+                      - generic [ref=f19e2213] [box=11672,511,292,46]:
+                        - img [ref=f19e2214] [box=11686,523,22,22]
+                        - generic [ref=f19e2216] [box=11724,524,53,18]: Models
+                      - generic [ref=f19e2217] [box=11672,559,292,46]:
+                        - img [ref=f19e2218] [box=11686,571,22,22]
+                        - generic [ref=f19e2220] [box=11724,572,35,18]: Keys
+                      - generic [ref=f19e2221] [box=11672,607,292,46]:
+                        - img [ref=f19e2222] [box=11686,619,22,22]
+                        - generic [ref=f19e2224] [box=11724,620,59,18]: Settings

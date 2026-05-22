@@ -15,10 +15,10 @@ pub mod a2a;
 
 // PLACEHOLDER — not yet migrated; declared so lib.rs `features::*` resolves.
 pub mod exec;
+pub mod hooks;
+pub mod mcp;
+pub mod plugins;
+pub mod providers;
 pub mod repl;
 pub mod session;
-pub mod mcp;
-pub mod hooks;
-pub mod plugins;
 pub mod tui;
-pub mod providers;

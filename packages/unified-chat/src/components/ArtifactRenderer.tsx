@@ -36,8 +36,9 @@ import {
   Presentation,
   Table2,
 } from 'lucide-react';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '../lib/utils';
+import { ARTIFACT_SANDBOX_ATTR, buildSandboxedHtml } from '../lib/artifact-sandbox';
 import type { Artifact } from '../lib/types';
 import { PresentationArtifact } from './artifact-components/PresentationArtifact';
 import { ReactPreview } from './artifact-components/ReactPreview';
@@ -377,23 +378,8 @@ function HtmlArtifact({ artifact }: { artifact: Artifact }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isRunning, setIsRunning] = useState(true);
 
-  // Basic CSP-injected sandbox (same model as desktop version; comments preserved)
-  const buildSandboxedHtml = useCallback((content: string): string => {
-    const isFullDocument = /<html[\s>]/i.test(content) || /<!doctype/i.test(content);
-    const cspMeta = `<meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline' *; img-src * data: blob:; font-src * data:; connect-src 'none'; frame-src 'none'; object-src 'none';">`;
-    const baseStyles = `<style>* { box-sizing: border-box; } body { margin: 0; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; color: #e4e4e7; background: #18181b; }</style>`;
-
-    if (isFullDocument) {
-      let modifiedContent = content;
-      if (!/<meta[^>]*content-security-policy/i.test(content)) {
-        modifiedContent = modifiedContent.replace(/<head([^>]*)>/i, `<head$1>\n${cspMeta}`);
-      }
-      return modifiedContent;
-    }
-
-    return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">${cspMeta}${baseStyles}</head><body>${content}</body></html>`;
-  }, []);
-
+  // Shared CSP envelope lives in `lib/artifact-sandbox` so this surface and
+  // `ArtifactPanel` cannot drift on the iframe's security attributes.
   const srcDoc = useMemo(() => {
     if (!isRunning) return '';
     try {
@@ -401,7 +387,7 @@ function HtmlArtifact({ artifact }: { artifact: Artifact }) {
     } catch {
       return '';
     }
-  }, [artifact.content, buildSandboxedHtml, isRunning]);
+  }, [artifact.content, isRunning]);
 
   return (
     <div className="flex flex-col h-[400px]" data-testid="html-artifact">
@@ -423,7 +409,7 @@ function HtmlArtifact({ artifact }: { artifact: Artifact }) {
           srcDoc={srcDoc}
           title={artifact.title || 'HTML Preview'}
           className="flex-1 border-0 w-full"
-          sandbox="allow-scripts allow-modals"
+          sandbox={ARTIFACT_SANDBOX_ATTR}
           referrerPolicy="no-referrer"
         />
       )}

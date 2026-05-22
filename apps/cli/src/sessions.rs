@@ -40,13 +40,8 @@ fn atomic_write(target: &Path, contents: &[u8]) -> Result<()> {
         .with_context(|| format!("Failed to create tempfile in {}", dir.display()))?;
     fs::write(tmp.path(), contents)
         .with_context(|| format!("Failed to write tempfile {}", tmp.path().display()))?;
-    tmp.persist(target).map_err(|e| {
-        anyhow::anyhow!(
-            "Failed to rename tempfile to {}: {}",
-            target.display(),
-            e
-        )
-    })?;
+    tmp.persist(target)
+        .map_err(|e| anyhow::anyhow!("Failed to rename tempfile to {}: {}", target.display(), e))?;
     Ok(())
 }
 
@@ -66,9 +61,8 @@ impl DirLock {
             .write(true)
             .open(&lock_path)
             .with_context(|| format!("Failed to open lock file {}", lock_path.display()))?;
-        let guard = Flock::lock(file, FlockArg::LockExclusive).map_err(|(_, e)| {
-            anyhow::anyhow!("flock on {} failed: {}", lock_path.display(), e)
-        })?;
+        let guard = Flock::lock(file, FlockArg::LockExclusive)
+            .map_err(|(_, e)| anyhow::anyhow!("flock on {} failed: {}", lock_path.display(), e))?;
         Ok(Self { _guard: guard })
     }
 

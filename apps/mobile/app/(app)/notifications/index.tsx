@@ -34,7 +34,7 @@ import {
   type NotificationCenterItem,
   type NotificationPriority,
 } from '@/services/notifications';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
 // ---------------------------------------------------------------------------
@@ -178,8 +178,8 @@ export default function NotificationCenterScreen() {
         case 'emergency_stop_triggered':
           if (agentId) {
             router.push({
-              pathname: '/(app)/companion/agent/[agentId]' as const,
-              params: { agentId },
+              pathname: '/(app)/companion/agent/[id]' as const,
+              params: { id: agentId },
             });
           } else {
             router.push({ pathname: '/(app)/companion' as const });
@@ -192,8 +192,8 @@ export default function NotificationCenterScreen() {
         case 'agent_paused':
           if (agentId) {
             router.push({
-              pathname: '/(app)/companion/agent/[agentId]' as const,
-              params: { agentId },
+              pathname: '/(app)/companion/agent/[id]' as const,
+              params: { id: agentId },
             });
           } else {
             router.push({ pathname: '/(app)/companion' as const });

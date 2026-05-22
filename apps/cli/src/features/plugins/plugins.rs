@@ -67,7 +67,10 @@ impl ManifestFormat {
 /// Priority-ordered list of manifest paths to probe inside a plugin
 /// directory. The first path that exists + parses wins.
 const MANIFEST_PATHS: &[(ManifestFormat, &str)] = &[
-    (ManifestFormat::Agiworkforce, ".agiworkforce-plugin/plugin.json"),
+    (
+        ManifestFormat::Agiworkforce,
+        ".agiworkforce-plugin/plugin.json",
+    ),
     (ManifestFormat::ClaudeCode, ".claude-plugin/plugin.json"),
     (ManifestFormat::Codex, ".codex-plugin/plugin.json"),
     (ManifestFormat::LegacyApp, ".app.json"),
@@ -194,9 +197,16 @@ pub struct PluginInstallRequest {
     pub integrity: PluginIntegrity, // AUDIT-FIX: H-16
 }
 pub enum PluginInstallOutcome {
-    Installed { path: PathBuf, format: Option<ManifestFormat> },
-    AlreadyInstalled { path: PathBuf },
-    Failed { error: String },
+    Installed {
+        path: PathBuf,
+        format: Option<ManifestFormat>,
+    },
+    AlreadyInstalled {
+        path: PathBuf,
+    },
+    Failed {
+        error: String,
+    },
 }
 
 const AGIWORKFORCE_DIR: &str = ".agiworkforce";
@@ -263,9 +273,8 @@ impl PluginsManager {
                             // safety check doesn't apply.
                             return true;
                         }
-                        let has_metachar = cfg
-                            .command
-                            .contains(&['|', ';', '&', '$', '`', '\0'][..]);
+                        let has_metachar =
+                            cfg.command.contains(&['|', ';', '&', '$', '`', '\0'][..]);
                         if has_metachar {
                             eprintln!(
                                 "[plugins] Rejected MCP server '{}' in plugin '{}': \
@@ -384,13 +393,8 @@ impl PluginsManager {
                         // McpOAuthConfig so the HTTP transport runs the PKCE
                         // dance on first 401. Missing/invalid `auth` falls
                         // back to "no OAuth" (server must accept anonymous).
-                        let auth = cfg
-                            .extra
-                            .get("auth")
-                            .and_then(|v| {
-                                serde_json::from_value::<crate::mcp::McpOAuthConfig>(
-                                    v.clone(),
-                                )
+                        let auth = cfg.extra.get("auth").and_then(|v| {
+                            serde_json::from_value::<crate::mcp::McpOAuthConfig>(v.clone())
                                 .map_err(|e| {
                                     eprintln!(
                                         "[plugins] MCP server '{}' has invalid `auth` \
@@ -400,16 +404,14 @@ impl PluginsManager {
                                     e
                                 })
                                 .ok()
-                            });
+                        });
                         out.insert(
                             name.clone(),
-                            crate::mcp::McpServerConfig::Tagged(
-                                crate::mcp::McpTransport::Http {
-                                    url,
-                                    headers,
-                                    auth,
-                                },
-                            ),
+                            crate::mcp::McpServerConfig::Tagged(crate::mcp::McpTransport::Http {
+                                url,
+                                headers,
+                                auth,
+                            }),
                         );
                     }
                     Some("stdio") | None => {
@@ -480,9 +482,7 @@ impl PluginsManager {
     /// Returns merged hook configs from plugins, including whether each plugin
     /// was sourced from a project-local directory (untrusted by default).
     /// Callers should skip hook execution for untrusted project-local plugins.
-    pub fn hook_configs_with_trust(
-        &self,
-    ) -> Vec<(String, Vec<serde_json::Value>, bool)> {
+    pub fn hook_configs_with_trust(&self) -> Vec<(String, Vec<serde_json::Value>, bool)> {
         // Returns vec of (event_name, [hook_values], is_from_project_dir).
         let mut result = Vec::new();
         for p in &self.plugins {
@@ -583,18 +583,15 @@ impl PluginsManager {
         // manifest. If not, roll back the install + report which paths
         // we tried.
         match load_manifest_for(&target) {
-            Some((_, format)) => {
-                PluginInstallOutcome::Installed { path: target, format: Some(format) }
-            }
+            Some((_, format)) => PluginInstallOutcome::Installed {
+                path: target,
+                format: Some(format),
+            },
             None => {
                 let _ = std::fs::remove_dir_all(&target);
-                let tried: Vec<&str> =
-                    MANIFEST_PATHS.iter().map(|(_, p)| *p).collect();
+                let tried: Vec<&str> = MANIFEST_PATHS.iter().map(|(_, p)| *p).collect();
                 PluginInstallOutcome::Failed {
-                    error: format!(
-                        "no plugin manifest found in any of: {}",
-                        tried.join(", ")
-                    ),
+                    error: format!("no plugin manifest found in any of: {}", tried.join(", ")),
                 }
             }
         }
@@ -604,10 +601,7 @@ impl PluginsManager {
 // AUDIT-FIX: H-16 — supply-chain integrity gate. SHA-256 is verified locally;
 // Sigstore sidecar verification stub returns an error until the `sigstore`
 // crate is wired in (introducing it here would be an undocumented dep).
-fn verify_plugin_integrity(
-    target: &Path,
-    integrity: &PluginIntegrity,
-) -> Result<(), String> {
+fn verify_plugin_integrity(target: &Path, integrity: &PluginIntegrity) -> Result<(), String> {
     match integrity {
         PluginIntegrity::PinnedSha256(expected) => {
             let actual = hash_dir_tree_sha256(target).map_err(|e| e.to_string())?;
@@ -710,7 +704,10 @@ pub fn load_manifest_for(plugin_root: &Path) -> Option<(PluginManifest, Manifest
         match std::fs::read_to_string(&path) {
             Ok(content) => match serde_json::from_str::<PluginManifest>(&content) {
                 Ok(manifest) => {
-                    if matches!(format, ManifestFormat::LegacyApp | ManifestFormat::LegacyMcp) {
+                    if matches!(
+                        format,
+                        ManifestFormat::LegacyApp | ManifestFormat::LegacyMcp
+                    ) {
                         eprintln!(
                             "[plugins] notice: plugin '{}' uses legacy {} manifest; \
                              consider migrating to .agiworkforce-plugin/plugin.json",

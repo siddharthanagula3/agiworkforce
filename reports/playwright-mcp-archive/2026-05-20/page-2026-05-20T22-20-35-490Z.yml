@@ -1,0 +1,190 @@
+- generic [active] [ref=e1]:
+    - generic [ref=e7]:
+        - generic [ref=e8]:
+            - generic [ref=e11]:
+                - link "Back to projects" [ref=e12]:
+                    - /url: /design/
+                    - img [ref=e13]
+                - generic "AGI Mobile" [ref=e16]
+                - button "" [ref=e18]:
+                    - generic [ref=e19]: 
+            - generic [ref=e20]:
+                - generic [ref=e22]:
+                    - generic [ref=e23]: 
+                    - generic [ref=e24]: Design Files
+                - generic [ref=e26]:
+                    - generic [ref=e28]: index.html
+                    - generic [ref=e634]: screens-r5-canonical.jsx
+                - generic [ref=e29]:
+                    - button "Present " [ref=e663]:
+                        - generic [ref=e664]:
+                            - text: Present
+                            - generic [ref=e665]: 
+                    - button "Share" [ref=e31]:
+                        - generic [ref=e32]: Share
+                    - button "Profile and connectors" [ref=e33] [cursor=pointer]:
+                        - generic [ref=e34]: SN
+        - generic [ref=e36]:
+            - generic [ref=e43]:
+                - generic [ref=e45]:
+                    - generic [ref=e46]:
+                        - generic [ref=e47]:
+                            - generic [ref=e49]:
+                                - generic [ref=e52] [cursor=pointer]:
+                                    - generic [ref=e53]: 
+                                    - generic [ref=e54]: Searching web, Editing, Done
+                                    - generic [ref=e55]: 
+                                - paragraph [ref=e58]:
+                                    - text: Confirmed — Cowork
+                                    - emphasis [ref=e59]: and
+                                    - text: Dispatch are both Claude product names. Renaming to neutral engineering terms.
+                            - generic [ref=e61]:
+                                - text: use the terminollgy of agiworkforce
+                                - generic [ref=e64]: agiworkforce
+                            - generic [ref=e66]:
+                                - generic [ref=e69] [cursor=pointer]:
+                                    - generic [ref=e70]: 
+                                    - generic [ref=e71]: Listing local files, Searching locally ×2, Editing, Done
+                                    - generic [ref=e72]: 
+                                - generic [ref=e74]:
+                                    - paragraph [ref=e75]: "R5 drawer updated to AGI Workforce's actual vocabulary:"
+                                    - paragraph [ref=e76]:
+                                        - strong [ref=e77]: Chat · Agents · Projects · Skills · Dispatch (to desktop) · Multi-model (Pro+)
+                                    - paragraph [ref=e78]:
+                                        - text: These match the repo's mobile tab structure (
+                                        - code [ref=e79]: chat / agents / projects / settings
+                                        - text: ') plus the explicitly-owned features from the README:'
+                                        - strong [ref=e80]: Skills
+                                        - text: (the packages/skills loader),
+                                        - strong [ref=e81]: Dispatch
+                                        - text: (the Anthropic-Dispatch-parity feature they claim as theirs in the differentiator table), and
+                                        - strong [ref=e82]: Multi-model side-by-side
+                                        - text: (Pro+ gated, per the Wave 6 list).
+                        - generic [ref=e85]: dont use codex
+                        - generic [ref=e88]:
+                            - generic [ref=e91] [cursor=pointer]:
+                                - generic [ref=e92]: 
+                                - generic [ref=e93]: Editing, Done
+                                - generic [ref=e94]: 
+                            - paragraph [ref=e97]: R4 section title renamed to "Code task surface" — no Codex term anywhere user-facing.
+                        - generic [ref=e100]: can you like brainstrom or ask me questions?
+                        - generic [ref=e105]:
+                            - paragraph [ref=e106]: "Yes — let me ask. I've been pattern-matching to Claude/Perplexity/ChatGPT but AGI's real shape isn't fully decided yet. Critical fork-in-the-road decisions:"
+                            - paragraph [ref=e107]:
+                                - strong [ref=e108]: 1. The differentiator.
+                                - text: AGI's pitch is "all AIs in one place + BYOK + local LLM." Which of those is the
+                                - emphasis [ref=e109]: hero
+                                - text: on mobile?
+                            - list [ref=e110]:
+                                - listitem [ref=e111]:
+                                    - strong [ref=e112]: a)
+                                    - text: Multi-provider switcher (Perplexity model-picker style — first thing you see)
+                                - listitem [ref=e113]:
+                                    - strong [ref=e114]: b)
+                                    - text: On-device (Apple FM / Llama 3.2 / Qwen — privacy-first hero)
+                                - listitem [ref=e115]:
+                                    - strong [ref=e116]: c)
+                                    - text: BYOK (your keys, your bill — pro-user hero)
+                                - listitem [ref=e117]:
+                                    - strong [ref=e118]: d)
+                                    - text: All three subordinated to one chat surface (Claude-style restraint)
+                            - paragraph [ref=e119]:
+                                - strong [ref=e120]: 2. The greeting copy.
+                                - text: 'Right now I have "How can I help you, Siddhartha?" (Claude voice). Your design system says voice is "engineering-adjacent, direct." Possible alternatives:'
+                            - list [ref=e121]:
+                                - listitem [ref=e122]: '"Ask anything" (Perplexity neutral)'
+                                - listitem [ref=e123]: '"What do you want to build?" (Codex Desktop''s vibe)'
+                                - listitem [ref=e124]: No greeting — just composer (most engineering-tool)
+                            - paragraph [ref=e125]:
+                                - strong [ref=e126]: 3. Dispatch role on mobile.
+                                - text: 'Is Dispatch:'
+                            - list [ref=e127]:
+                                - listitem [ref=e128]:
+                                    - strong [ref=e129]: a)
+                                    - text: A nav destination (a top-level "Dispatch" tab — like the drawer item)
+                                - listitem [ref=e130]:
+                                    - strong [ref=e131]: b)
+                                    - text: An action
+                                    - emphasis [ref=e132]: inside
+                                    - text: a chat ("send this to my desktop" button on a message)
+                                - listitem [ref=e133]:
+                                    - strong [ref=e134]: c)
+                                    - text: Both (destination shows queue, message-level action queues)
+                            - paragraph [ref=e135]:
+                                - strong [ref=e136]: 4. Agents vs Skills vs Projects
+                                - text: — these all overlap conceptually. In your repo Agents is its own tab AND Skills is its own package. What's the user-facing distinction on mobile?
+                            - list [ref=e137]:
+                                - listitem [ref=e138]: Agent = a persona with system prompt + tool set?
+                                - listitem [ref=e139]: Skill = a markdown+frontmatter mini-prompt?
+                                - listitem [ref=e140]: Project = a folder of chats + files?
+                            - paragraph [ref=e141]:
+                                - strong [ref=e142]: 5. The waitlist visibility.
+                                - text: 'I''ve been showing "Cloud waitlist · #1,247" in many places. Is that the right number to surface or should mobile be silent about cloud entirely (since v1 is local-only and cloud paid is paused until Aug 1, 2026)?'
+                            - paragraph [ref=e143]:
+                                - strong [ref=e144]: 6. Model picker truth.
+                                - text: Right now my model picker shows on-device models + 6 cloud models as "waitlist". But the README says BYOK
+                                - emphasis [ref=e145]: is
+                                - text: available — should cloud models be unlocked when user supplies their own key, even now?
+                            - paragraph [ref=e146]:
+                                - strong [ref=e147]: 7. What screens are still missing
+                                - text: that you actually care about?
+                            - list [ref=e148]:
+                                - listitem [ref=e149]: Account creation / sign-in (you scrapped login earlier — confirm?)
+                                - listitem [ref=e150]: Onboarding (the device-tier detection screen — keep or kill?)
+                                - listitem [ref=e151]: Voice (have it, but it's Claude-shaped — does AGI even prioritize voice on mobile?)
+                                - listitem [ref=e152]: Memory import (Wave 6 has memory import/export — distinct screen?)
+                                - listitem [ref=e153]: BYOK provider key entry (you scrapped earlier — does it come back for the few who want it now?)
+                            - paragraph [ref=e154]:
+                                - strong [ref=e155]: 8. Look-and-feel ambivalence.
+                                - text: R4/R5 are dark-default with serif body. Your design system says light + dark both ship, with warm cream
+                                - code [ref=e156]: '#faf9f7'
+                                - text: as the canonical surface. Should the
+                                - emphasis [ref=e157]: canonical
+                                - text: mobile direction be light-first or dark-first?
+                            - paragraph [ref=e158]: Pick any subset — the answers to 1, 4, and 8 would unblock the most.
+                        - generic [ref=e161]:
+                            - text: '<pasted_text name="Pasted text (70 lines)"> 1. Mobile hero Use on-device / privacy-first as the mobile hero. The mobile app should feel like: “AGI runs on your phone, works offline, and only leaves the device when you explicitly choose BYOK.” Do not make the first screen a cloud model picker. Multi-provider and BYOK are still core, but on mobile they sit inside one restrained chat surface. 2. Greeting copy Use “Ask anything”. Avoid “How can I help you, Siddhartha?” because it is too Claude-shaped. Avoid “What do you want to build?” because mobile is broader than coding. The on-device badge should carry the product truth: On- device · Private · Works offline. 3. Dispatch For mobile v1: hide Dispatch as a top-level nav item. Post-v1: use both, but message-level action is primary: - “Send to desktop” / “Continue on desktop” on a chat/message. - A Dispatch destination only shows queue/history when desktop companion is paired. 4. Agents vs Skills vs Projects User-facing distinction: - Project = a local workspace/context container: chats, files, memory, and custom instructions. - Skill = an installable reusable capability/prompt recipe. Markdown/frontmatter under the hood; user sees “saved workflow” or “skill.” - Agent = a running delegated worker/job with status, tools, approvals, artifacts. Not a persona tab on mobile v1. So: show Projects. Show Skills as drawer/plus-menu utility, not a dominant tab. Hide Agents unless desktop companion has active runs. 5. Waitlist visibility Do not show Cloud waitlist · #1,247 everywhere. Show cloud only at natural gates: - Mode toggle: Cloud · Waitlist - Locked managed-cloud model rows - Settings → Mode / Cloud Only show rank after the user joins and only if it is real server data. Before join, use Join waitlist, not fake social proof. 6. Model picker truth Yes: cloud provider models should unlock when the user supplies their own key. Separate the picker into three buckets: - On-device: installed / downloadable local models. - BYOK: Anthropic/OpenAI/Google/etc. Locked until user adds that provider key; then selectable. - AGI Cloud: managed credits/subscriptions; waitlist until launch/private beta. Important: Local → BYOK must create an explicit fork with context preview/redaction. Never silently switch an existing local chat to a provider. 7. Screens that matter Keep: - Device-tier onboarding. - Local model download/manage. - BYOK provider key entry. - Local → BYOK fork flow with context selection, secret scan, preview. - Memory import/export, but under Settings → Memory, not onboarding. - Voice as on-device push-to-talk/transcription, not a primary hero. Confirm: - No account required for Local. - Sign-in only for sync, managed cloud/private beta, or future account features. - BYOK should not require AGI account. 8. Look and feel Canonical direction: light-first, warm cream #faf9f7, with dark mode fully supported. Do not make dark + serif body the default mobile identity. Use system sans on mobile. Serif is only for rare display/editorial moments, not body UI. </pasted_text>'
+                            - 'generic "1. Mobile hero Use on-device / privacy-first as the mobile hero. The mobile app should feel like: “AGI runs on your phone, works offline, and only leaves the device when you explicitly choose BYOK.” Do not make the first screen a cloud model picker. Multi-provider and BYOK are still core, but on mobile they sit inside one restrained chat surface. 2. Greeting copy Use “Ask anything”. Avoid “How can I help you, Siddhartha?” because it is too Claude-shaped. Avoid “What do you want to build?” because mobile is broader than coding. The on-device badge should carry the product truth: On- device · Private · Works offline. 3. Dispatch For mobile v1: hide Dispatch as a top-level nav item. Post-v1: use both, but message-level action is primary: - “Send to desktop”…" [ref=e163]':
+                                - generic [ref=e164]: Pasted text (70 lines)
+                    - generic [ref=e167]: Working on your other tab's request...
+                - generic [ref=e169]:
+                    - textbox "Describe what you want to create..." [ref=e171]
+                    - generic [ref=e172]:
+                        - generic [ref=e173]:
+                            - button "" [ref=e175]:
+                                - generic [ref=e176]: 
+                            - button "" [ref=e177]:
+                                - generic [ref=e179]: 
+                            - button "" [ref=e180]:
+                                - generic [ref=e181]: 
+                        - button " Send" [disabled] [ref=e183]:
+                            - generic [ref=e184]:
+                                - generic [ref=e185]: 
+                                - text: Send
+            - generic [ref=e188]:
+                - generic [ref=e639]:
+                    - button "" [ref=e667]:
+                        - generic [ref=e668]: 
+                    - button " Mark up" [ref=e669]:
+                        - generic [ref=e670]:
+                            - generic [ref=e671]: 
+                            - text: Mark up
+                    - button " Edit" [ref=e672]:
+                        - generic [ref=e673]:
+                            - generic [ref=e674]: 
+                            - text: Edit
+                    - button " Tweaks" [ref=e677]:
+                        - generic [ref=e678]:
+                            - generic [ref=e679]: 
+                            - text: Tweaks
+                    - button " Comments" [ref=e680]:
+                        - generic [ref=e681]:
+                            - generic [ref=e682]: 
+                            - text: Comments
+                    - button "100%" [ref=e684]:
+                        - generic [ref=e687]: 100%
+                - iframe [ref=e694]:
+
+    - generic:
+        - text: index.html
+        - generic: Modified 1h ago

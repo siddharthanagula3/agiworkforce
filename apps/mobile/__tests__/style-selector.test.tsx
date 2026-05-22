@@ -78,7 +78,7 @@ jest.mock('../services/streaming', () => ({
 // Imports after mocks
 // ---------------------------------------------------------------------------
 
-import { StyleSelector } from '../components/chat/StyleSelector';
+import { StyleSelector } from '../src/features/chat/components/StyleSelector';
 import { useChatStore } from '../stores/chatStore';
 
 // ---------------------------------------------------------------------------

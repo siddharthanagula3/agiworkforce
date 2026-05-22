@@ -382,10 +382,7 @@ mod tests {
             ProviderId::from_catalog_name("lmstudio"),
             Some(ProviderId::LMStudio)
         );
-        assert_eq!(
-            ProviderId::from_catalog_name("unknown-xyz"),
-            None
-        );
+        assert_eq!(ProviderId::from_catalog_name("unknown-xyz"), None);
     }
 
     #[test]

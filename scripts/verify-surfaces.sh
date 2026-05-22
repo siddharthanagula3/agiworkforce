@@ -62,10 +62,10 @@ fi
 
 # --- Web (Next.js) ---
 if [[ "$MODE" == "all" || "$MODE" == "fast" || "$MODE" == "web" ]]; then
-  step "web:typecheck"    pnpm --filter web typecheck
-  step "web:test"         pnpm --filter web test
+  step "web:typecheck"    pnpm --filter @agiworkforce/web typecheck
+  step "web:test"         pnpm --filter @agiworkforce/web test
   if [[ "$MODE" == "all" ]]; then
-    step "web:build:next-only" pnpm --filter web build:next-only
+    step "web:build:next-only" pnpm --filter @agiworkforce/web build:next-only
   fi
 fi
 

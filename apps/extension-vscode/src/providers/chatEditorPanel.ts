@@ -29,7 +29,12 @@ import { PROVIDER_DISPLAY, type AgentMode, type Effort } from '@agiworkforce/typ
 import { Config } from '../platform/config';
 import { isSensitiveFile } from '../utils/pathSafety';
 import { parseWebviewMessage } from '../protocol/webviewMessages';
-import { resolveUsageMeter, formatManagedUsageLabel, daysUntilReset } from '../data/usageMeter';
+import {
+  resolveUsageMeter,
+  formatManagedUsageLabel,
+  formatUsageMeterFallbackLabel,
+  daysUntilReset,
+} from '../data/usageMeter';
 import { getTokenCounter } from '../data/tokenCounter';
 import { guardProviderSwitch } from '../integrations/providerSwitchGuard';
 import { resolveTier } from '../integrations/tierResolver';
@@ -452,7 +457,6 @@ export class ChatEditorPanel {
   }
 
   private async _pushUsageMeter(): Promise<void> {
-    const MANAGED_LIMIT = 50_000;
     const sessionTokens = getTokenCounter().totalTokens;
     const meter = await resolveUsageMeter(this._secrets, sessionTokens);
 
@@ -460,13 +464,15 @@ export class ChatEditorPanel {
     let resetsIn: string | null = null;
     let showUpgrade = false;
 
-    if (meter.source === 'managed-plan' && meter.remaining !== null) {
-      usageLabel = formatManagedUsageLabel(meter.remaining, MANAGED_LIMIT);
+    if (meter.source === 'managed-plan' && meter.remaining !== null && meter.limitTokens) {
+      usageLabel = formatManagedUsageLabel(meter.remaining, meter.limitTokens, meter.usedTokens);
       if (meter.resetsAt !== null) {
         const days = daysUntilReset(meter.resetsAt);
         resetsIn = `resets in ${days}d`;
       }
       showUpgrade = meter.remaining < 0.2;
+    } else {
+      usageLabel = formatUsageMeterFallbackLabel(meter.source);
     }
 
     this._post({

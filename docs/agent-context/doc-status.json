@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "lastUpdated": "2026-05-21",
+  "currentSourcesOfTruth": [
+    "AGENTS.md",
+    "AGI_WORKFORCE.md",
+    "CLAUDE.md",
+    "README.md",
+    "ONBOARDING.md",
+    "CONTRIBUTING.md",
+    "PLAN.md",
+    "TODO.md",
+    "CHANGELOG.md",
+    "BUILD.md",
+    "docs/README.md",
+    "docs/current/README.md",
+    "docs/current/product-suite.md",
+    "docs/current/technical-architecture.md",
+    "docs/current/commercial-and-launch.md",
+    "docs/current/agent-and-repo-operability.md",
+    "docs/decisions/CURRENT_DECISIONS.md",
+    "docs/decisions/2026-05-20-openai-anthropic-application-suite-thesis.md",
+    "docs/plans/pre-release-repo-organization-2026-05-20.md",
+    "docs/plans/domain-first-reorg.md",
+    "docs/engineering/README.md",
+    "docs/engineering/naming-conventions.md",
+    "docs/engineering/agent-native-development.md",
+    "docs/engineering/agent-harness-rollout.md",
+    "docs/engineering/parallel-agent-playbook.md",
+    "docs/engineering/autonomous-software-company-roadmap.md",
+    "docs/enterprise/README.md",
+    "docs/enterprise/profit-first-enterprise-readiness.md",
+    "docs/enterprise/control-plane.md",
+    "docs/agent-context/README.md",
+    "docs/agent-context/agent-task-templates.md",
+    "docs/agent-context/shared-files.md",
+    "docs/research/agentic-company-research-prompts.md",
+    "docs/marketing/README.md",
+    "docs/support/README.md",
+    "docs/legal/README.md",
+    "ios/README.md",
+    "apps/cli/AGENTS.md",
+    "apps/web/AGENTS.md",
+    "apps/mobile/AGENTS.md",
+    "apps/desktop/AGENTS.md",
+    "apps/extension/AGENTS.md",
+    "apps/extension-vscode/AGENTS.md",
+    "services/AGENTS.md",
+    "packages/providers/AGENTS.md"
+  ],
+  "currentEvidence": [
+    "audit/audit-log.md",
+    "audit/anthropic-apps-parity/application-suite-thesis-2026-05-20.md",
+    "audit/anthropic-apps-parity/competitive-baseline-2026-05-20.md",
+    "audit/anthropic-apps-parity/compute-artifacts-2026-05-20.md",
+    "audit/anthropic-apps-parity/sdk-strategy-2026-05-20.md",
+    "audit/anthropic-apps-parity/reference-notes.md",
+    "audit/repo-organization/agentic-development-outlook-2026-05-20.md",
+    "audit/repo-organization/current-monorepo-grade-2026-05-20.md",
+    "audit/repo-organization/docs-status-2026-05-20.md",
+    "audit/repo-organization/generated-artifact-policy-2026-05-20.md",
+    "audit/repo-organization/ownership-model-2026-05-20.md",
+    "audit/repo-organization/package-readme-coverage-2026-05-20.md",
+    "audit/repo-organization/root-classification-2026-05-20.md",
+    "audit/repo-organization/tool-folder-classification-2026-05-20.md",
+    "audit/repo-organization/reference-index/README.md",
+    "docs/reference/REFERENCE_INDEX.md",
+    "docs/reference/REFERENCE_STRUCTURE.md"
+  ],
+  "historicalOrCaution": [
+    {
+      "path": "docs/archive",
+      "status": "historical",
+      "rule": "Do not cite as current unless a current doc explicitly references it."
+    },
+    {
+      "path": "docs/archive/2026-05-21-docs-consolidation",
+      "status": "historical-source-material",
+      "rule": "Former top-level PRD/roadmap/pricing/architecture corpus; use docs/current for present decisions."
+    },
+    {
+      "path": "docs/archive/2026-05-20-planning",
+      "status": "historical",
+      "rule": "Archived planning specs; current plans belong in docs/plans."
+    },
+    {
+      "path": "tasks/research",
+      "status": "working-notes",
+      "rule": "Promote durable conclusions to docs or audit before using as source of truth."
+    },
+    {
+      "path": "audit/repo-organization/reference-index",
+      "status": "historical-evidence",
+      "rule": "Raw ownership/catalog output from earlier reorg work; evidence only, not current architecture."
+    },
+    {
+      "path": "reports/root-scratch-archive",
+      "status": "historical-evidence",
+      "rule": "Archived root scratch markdown/images/downloads are evidence only, not current source."
+    }
+  ]
+}

@@ -1,382 +1,45 @@
-//! Claude-style command registry contracts for CLI and slash command surfaces.
+//! CLI slash-command composition.
 //!
-//! The TypeScript reference models commands as metadata-rich records rather than
-//! scattered enum variants. This module gives the Rust CLI the same contract so
-//! built-ins, skills, plugins, and MCP prompts can be loaded through one path.
+//! Built-in command contracts live in `agiworkforce-command-registry`. This
+//! module only adapts CLI-owned dynamic sources: skills, custom prompts, MCP
+//! prompts, and plugin command files.
 
-#[allow(dead_code)]
+pub(crate) use agiworkforce_command_registry::{
+    builtin_slash_registry_commands, CommandRegistry, CommandSource, RegistryCommand,
+};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum CommandKind {
-    Prompt,
-    Local,
-    Ui,
+pub(crate) enum ShortcutHelp {
+    Repl,
+    Tui,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum CommandSource {
-    Builtin,
-    User,
-    Project,
-    Plugin,
-    Mcp,
-    Bundled,
-    Managed,
+fn registry_command_from_skill(
+    skill: &crate::skills::Skill,
+    source: CommandSource,
+) -> RegistryCommand {
+    let mut command =
+        RegistryCommand::prompt(&skill.name, &skill.description, source, Some("skills"));
+    command.when_to_use = skill.category.clone();
+    command
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RegistryCommand {
-    pub(crate) name: String,
-    pub(crate) description: String,
-    pub(crate) kind: CommandKind,
-    pub(crate) source: CommandSource,
-    pub(crate) aliases: Vec<String>,
-    pub(crate) supports_non_interactive: bool,
-    pub(crate) supports_inline_args: bool,
-    pub(crate) available_during_task: bool,
-    pub(crate) user_invocable: bool,
-    pub(crate) disable_model_invocation: bool,
-    pub(crate) is_sensitive: bool,
-    pub(crate) loaded_from: Option<String>,
-    pub(crate) allowed_tools: Vec<String>,
-    pub(crate) argument_hint: Option<String>,
-    pub(crate) model: Option<String>,
-    pub(crate) when_to_use: Option<String>,
-    pub(crate) version: Option<String>,
-    pub(crate) agent: Option<String>,
-}
-
-impl RegistryCommand {
-    pub(crate) fn builtin_slash(
-        name: &'static str,
-        description: &'static str,
-        available_during_task: bool,
-        supports_inline_args: bool,
-        aliases: Vec<&'static str>,
-    ) -> Self {
-        Self {
-            name: name.to_string(),
-            description: description.to_string(),
-            kind: CommandKind::Local,
-            source: CommandSource::Builtin,
-            aliases: aliases.into_iter().map(str::to_string).collect(),
-            supports_non_interactive: false,
-            supports_inline_args,
-            available_during_task,
-            user_invocable: true,
-            disable_model_invocation: false,
-            is_sensitive: false,
-            loaded_from: Some("builtin".to_string()),
-            allowed_tools: Vec::new(),
-            argument_hint: None,
-            model: None,
-            when_to_use: None,
-            version: None,
-            agent: None,
-        }
-    }
-
-    pub(crate) fn prompt(
-        name: impl Into<String>,
-        description: impl Into<String>,
-        source: CommandSource,
-        loaded_from: Option<&str>,
-    ) -> Self {
-        Self {
-            name: name.into(),
-            description: description.into(),
-            kind: CommandKind::Prompt,
-            source,
-            aliases: Vec::new(),
-            supports_non_interactive: true,
-            supports_inline_args: true,
-            available_during_task: false,
-            user_invocable: true,
-            disable_model_invocation: false,
-            is_sensitive: false,
-            loaded_from: loaded_from.map(str::to_string),
-            allowed_tools: Vec::new(),
-            argument_hint: None,
-            model: None,
-            when_to_use: None,
-            version: None,
-            agent: None,
-        }
-    }
-
-    pub(crate) fn from_skill(skill: &crate::skills::Skill, source: CommandSource) -> Self {
-        let mut command = Self::prompt(&skill.name, &skill.description, source, Some("skills"));
-        command.when_to_use = skill.category.clone();
-        command
-    }
-
-    pub(crate) fn from_custom_prompt(
-        prompt: &agiworkforce_protocol::custom_prompts::CustomPrompt,
-        source: CommandSource,
-    ) -> Self {
-        let name = format!(
-            "{}:{}",
-            agiworkforce_protocol::custom_prompts::PROMPTS_CMD_PREFIX,
-            prompt.name
-        );
-        let description = prompt
-            .description
-            .clone()
-            .unwrap_or_else(|| "send saved prompt".to_string());
-        let mut command = Self::prompt(name, description, source, Some("prompts"));
-        command.argument_hint = prompt.argument_hint.clone();
-        command
-    }
-
-    pub(crate) fn slash_name(&self) -> String {
-        format!("/{}", self.name)
-    }
-
-    pub(crate) fn slash_aliases(&self) -> Vec<String> {
-        self.aliases
-            .iter()
-            .map(|alias| format!("/{alias}"))
-            .collect()
-    }
-
-    pub(crate) fn matches_name(&self, candidate: &str) -> bool {
-        let normalized = candidate.trim_start_matches('/');
-        self.name == normalized || self.aliases.iter().any(|alias| *alias == normalized)
-    }
-
-    pub(crate) fn matches_filter(&self, filter: &str) -> bool {
-        if filter.is_empty() {
-            return true;
-        }
-
-        let normalized = filter.trim_start_matches('/').to_lowercase();
-        self.name.to_lowercase().contains(&normalized)
-            || self.description.to_lowercase().contains(&normalized)
-            || self
-                .aliases
-                .iter()
-                .any(|alias| alias.to_lowercase().contains(&normalized))
-    }
-}
-
-#[derive(Debug, Default, Clone)]
-pub(crate) struct CommandRegistry {
-    commands: Vec<RegistryCommand>,
-}
-
-impl CommandRegistry {
-    pub(crate) fn push(&mut self, command: RegistryCommand) {
-        self.commands.push(command);
-    }
-
-    pub(crate) fn extend(&mut self, commands: Vec<RegistryCommand>) {
-        self.commands.extend(commands);
-    }
-
-    pub(crate) fn commands(&self) -> &[RegistryCommand] {
-        &self.commands
-    }
-
-    pub(crate) fn find(&self, name: &str) -> Option<&RegistryCommand> {
-        self.commands
-            .iter()
-            .find(|command| command.matches_name(name))
-    }
-}
-
-pub(crate) fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
-    vec![
-        RegistryCommand::builtin_slash(
-            "model",
-            "Switch model (e.g. /model gpt-5.5)",
-            false,
-            true,
-            vec!["m"],
-        ),
-        RegistryCommand::builtin_slash("plan", "Toggle plan mode", false, true, vec![]),
-        RegistryCommand::builtin_slash("fast", "Toggle fast mode (2x speed)", false, true, vec![]),
-        RegistryCommand::builtin_slash(
-            "compact",
-            "Compact context to free space",
-            false,
-            false,
-            vec![],
-        ),
-        RegistryCommand::builtin_slash(
-            "clear",
-            "Clear conversation and context",
-            false,
-            false,
-            vec![],
-        ),
-        RegistryCommand::builtin_slash(
-            "review",
-            "Review current code changes",
-            false,
-            true,
-            vec![],
-        ),
-        RegistryCommand::builtin_slash(
-            "diff",
-            "Show git diff (incl. untracked)",
-            true,
-            false,
-            vec![],
-        ),
-        RegistryCommand::builtin_slash(
-            "copy",
-            "Copy last response to clipboard",
-            true,
-            false,
-            vec![],
-        ),
-        RegistryCommand::builtin_slash(
-            "init",
-            "Create CLAUDE.md for this project",
-            false,
-            false,
-            vec![],
-        ),
-        RegistryCommand::builtin_slash("new", "Start a new conversation", false, false, vec![]),
-        RegistryCommand::builtin_slash(
-            "resume",
-            "Resume a saved session",
-            false,
-            true,
-            vec!["sessions"],
-        ),
-        RegistryCommand::builtin_slash(
-            "fork",
-            "Fork current conversation",
-            false,
-            false,
-            vec!["branch"],
-        ),
-        RegistryCommand::builtin_slash("rename", "Rename current session", true, true, vec![]),
-        RegistryCommand::builtin_slash("save", "Save session checkpoint", true, false, vec![]),
-        RegistryCommand::builtin_slash("history", "List saved conversations", true, false, vec![]),
-        RegistryCommand::builtin_slash(
-            "export",
-            "Export conversation to file",
-            true,
-            false,
-            vec![],
-        ),
-        RegistryCommand::builtin_slash("rewind", "Undo last code changes", false, false, vec![]),
-        RegistryCommand::builtin_slash("mcp", "List MCP servers and tools", true, false, vec![]),
-        RegistryCommand::builtin_slash("skills", "Browse available skills", true, false, vec![]),
-        RegistryCommand::builtin_slash(
-            "permissions",
-            "Manage tool permissions",
-            false,
-            false,
-            vec!["perms", "approvals"],
-        ),
-        RegistryCommand::builtin_slash("hooks", "Manage hooks configuration", true, false, vec![]),
-        RegistryCommand::builtin_slash("plugins", "Manage plugins", true, false, vec![]),
-        RegistryCommand::builtin_slash(
-            "status",
-            "Show session info (model, tokens, mode)",
-            true,
-            false,
-            vec![],
-        ),
-        RegistryCommand::builtin_slash("cost", "Show session cost summary", true, false, vec![]),
-        RegistryCommand::builtin_slash(
-            "output-style",
-            "Switch output style (default | explanatory | learning)",
-            false,
-            true,
-            vec![],
-        ),
-        RegistryCommand::builtin_slash(
-            "fallback",
-            "Show or set the multi-model fallback chain",
-            false,
-            true,
-            vec![],
-        ),
-        RegistryCommand::builtin_slash(
-            "replay",
-            "Open the turn picker to fork from an earlier point",
-            false,
-            false,
-            vec![],
-        ),
-        RegistryCommand::builtin_slash(
-            "insights",
-            "Dump JSON event log for the current session",
-            true,
-            false,
-            vec![],
-        ),
-        RegistryCommand::builtin_slash(
-            "context",
-            "Show context window usage",
-            true,
-            false,
-            vec!["ctx"],
-        ),
-        RegistryCommand::builtin_slash("config", "Show current configuration", true, false, vec![]),
-        RegistryCommand::builtin_slash(
-            "models",
-            "List all available models",
-            true,
-            false,
-            vec!["providers"],
-        ),
-        RegistryCommand::builtin_slash(
-            "memory",
-            "Show/manage auto-memory",
-            true,
-            false,
-            vec!["mem"],
-        ),
-        RegistryCommand::builtin_slash(
-            "btw",
-            "Ask a side question without interrupting",
-            true,
-            true,
-            vec![],
-        ),
-        RegistryCommand::builtin_slash(
-            "voice",
-            "Toggle voice input (Whisper)",
-            true,
-            false,
-            vec!["v"],
-        ),
-        RegistryCommand::builtin_slash(
-            "theme",
-            "Change syntax highlighting theme",
-            false,
-            false,
-            vec![],
-        ),
-        RegistryCommand::builtin_slash("login", "Login to a provider", true, false, vec![]),
-        RegistryCommand::builtin_slash("logout", "Logout from providers", true, false, vec![]),
-        RegistryCommand::builtin_slash(
-            "feedback",
-            "Send feedback / report bug",
-            true,
-            false,
-            vec!["bug"],
-        ),
-        RegistryCommand::builtin_slash(
-            "help",
-            "Show all commands and keybindings",
-            true,
-            false,
-            vec!["h", "?"],
-        ),
-        RegistryCommand::builtin_slash(
-            "exit",
-            "Exit AGI Workforce",
-            true,
-            false,
-            vec!["quit", "q"],
-        ),
-    ]
+fn registry_command_from_custom_prompt(
+    prompt: &agiworkforce_protocol::custom_prompts::CustomPrompt,
+    source: CommandSource,
+) -> RegistryCommand {
+    let name = format!(
+        "{}:{}",
+        agiworkforce_protocol::custom_prompts::PROMPTS_CMD_PREFIX,
+        prompt.name
+    );
+    let description = prompt
+        .description
+        .clone()
+        .unwrap_or_else(|| "send saved prompt".to_string());
+    let mut command = RegistryCommand::prompt(name, description, source, Some("prompts"));
+    command.argument_hint = prompt.argument_hint.clone();
+    command
 }
 
 pub(crate) fn registry_from_builtins_and_skills(
@@ -385,7 +48,7 @@ pub(crate) fn registry_from_builtins_and_skills(
     let mut registry = CommandRegistry::default();
     registry.extend(builtin_slash_registry_commands());
     for skill in skills {
-        registry.push(RegistryCommand::from_skill(skill, CommandSource::Project));
+        registry.push(registry_command_from_skill(skill, CommandSource::Project));
     }
     registry
 }
@@ -404,7 +67,7 @@ pub(crate) fn registry_from_builtins_skills_and_prompts(
     let mut prompt_commands: Vec<RegistryCommand> = prompts
         .iter()
         .filter(|prompt| !reserved_names.contains(&prompt.name))
-        .map(|prompt| RegistryCommand::from_custom_prompt(prompt, CommandSource::Project))
+        .map(|prompt| registry_command_from_custom_prompt(prompt, CommandSource::Project))
         .collect();
     prompt_commands.sort_by(|left, right| left.name.cmp(&right.name));
     for cmd in &prompt_commands {
@@ -412,10 +75,6 @@ pub(crate) fn registry_from_builtins_skills_and_prompts(
     }
     registry.extend(prompt_commands);
 
-    // Sprint B6: surface plugin-declared commands. Each plugin's manifest
-    // lists `commands:` paths (relative to plugin root) — typically markdown
-    // files whose filename becomes the slash command name. Built-in /
-    // skill / prompt names take precedence; conflicts are dropped silently.
     let mut plugin_commands: Vec<RegistryCommand> =
         plugin_command_registry_entries(&reserved_names);
     plugin_commands.sort_by(|left, right| left.name.cmp(&right.name));
@@ -424,15 +83,10 @@ pub(crate) fn registry_from_builtins_skills_and_prompts(
     registry
 }
 
-/// Sprint B6: discover commands from installed plugins.
+/// Discover slash commands declared by installed plugins.
 ///
-/// Each plugin manifest's `commands:` field is a list of paths (relative to
-/// plugin root). For each path:
-///   - If it's a `.md` file, the filename stem becomes the command name.
-///   - If it's a directory, every `.md` file inside it is enumerated.
-///
-/// Names already in `reserved_names` (built-ins, skills, custom prompts)
-/// are skipped to avoid shadowing.
+/// Each plugin manifest's `commands:` field points to markdown files or
+/// directories. Built-in, skill, and custom prompt names take precedence.
 fn plugin_command_registry_entries(
     reserved_names: &std::collections::HashSet<String>,
 ) -> Vec<RegistryCommand> {
@@ -448,11 +102,10 @@ fn plugin_command_registry_entries(
         if command_path.is_dir() {
             if let Ok(entries) = std::fs::read_dir(&command_path) {
                 for entry in entries.flatten() {
-                    let p = entry.path();
-                    if p.is_file()
-                        && p.extension().and_then(|e| e.to_str()) == Some("md")
+                    let path = entry.path();
+                    if path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("md")
                     {
-                        push_plugin_command(&p, reserved_names, &mut out);
+                        push_plugin_command(&path, reserved_names, &mut out);
                     }
                 }
             }
@@ -468,20 +121,21 @@ fn push_plugin_command(
     reserved_names: &std::collections::HashSet<String>,
     out: &mut Vec<RegistryCommand>,
 ) {
-    let name = match path.file_stem().and_then(|s| s.to_str()) {
-        Some(s) if !s.is_empty() => s.to_string(),
+    let name = match path.file_stem().and_then(|stem| stem.to_str()) {
+        Some(stem) if !stem.is_empty() => stem.to_string(),
         _ => return,
     };
     if reserved_names.contains(&name) {
         return;
     }
-    // Description: use first non-empty line of the file as a fallback.
+
     let description = std::fs::read_to_string(path)
         .ok()
-        .and_then(|c| {
-            c.lines()
-                .find(|l| !l.trim().is_empty() && !l.trim().starts_with("---"))
-                .map(|l| l.trim().to_string())
+        .and_then(|content| {
+            content
+                .lines()
+                .find(|line| !line.trim().is_empty() && !line.trim().starts_with("---"))
+                .map(|line| line.trim().to_string())
         })
         .unwrap_or_else(|| format!("Plugin command: {}", name));
     let loaded_from = path.to_string_lossy().to_string();
@@ -493,49 +147,112 @@ fn push_plugin_command(
     ));
 }
 
+pub(crate) fn format_command_help(registry: &CommandRegistry, shortcuts: ShortcutHelp) -> String {
+    use std::fmt::Write as _;
+
+    let mut help = String::from("Commands:\n");
+    for cmd in registry.commands().iter().filter(|cmd| cmd.user_invocable) {
+        let aliases = cmd.slash_aliases();
+        let aliases = if aliases.is_empty() {
+            String::new()
+        } else {
+            format!(" ({})", aliases.join(", "))
+        };
+        let argument_hint = cmd
+            .argument_hint
+            .as_deref()
+            .filter(|hint| !hint.trim().is_empty())
+            .map(|hint| format!(" {hint}"))
+            .unwrap_or_default();
+        let _ = writeln!(
+            help,
+            "  {:<22} {}{}",
+            format!("{}{}", cmd.slash_name(), argument_hint),
+            cmd.description,
+            aliases
+        );
+    }
+
+    match shortcuts {
+        ShortcutHelp::Repl => append_repl_shortcuts(&mut help),
+        ShortcutHelp::Tui => append_tui_shortcuts(&mut help),
+    }
+
+    help
+}
+
+fn append_repl_shortcuts(help: &mut String) {
+    use std::fmt::Write as _;
+
+    help.push_str("\nShortcuts:\n");
+    let _ = writeln!(
+        help,
+        "  {:<22} Run shell command (output added to context)",
+        "! <command>"
+    );
+    let _ = writeln!(
+        help,
+        "  {:<22} Append text to project CLAUDE.md",
+        "# <text>"
+    );
+    let _ = writeln!(help, "  {:<22} Multi-line input", "\\");
+    let _ = writeln!(help, "  {:<22} Cancel input / Ctrl-D exits", "Ctrl-C");
+    let _ = writeln!(help, "  {:<22} Enable vim keybindings", "AGIWORKFORCE_VI=1");
+}
+
+fn append_tui_shortcuts(help: &mut String) {
+    use std::fmt::Write as _;
+
+    help.push_str("\nKeyboard shortcuts:\n");
+    let _ = writeln!(
+        help,
+        "  {:<14} Cycle mode: Default -> Plan -> AcceptEdits -> Bypass -> FullAuto",
+        "Shift+Tab"
+    );
+    let _ = writeln!(help, "  {:<14} Open command palette", "/");
+    let _ = writeln!(help, "  {:<14} Quit", "Esc");
+    let _ = writeln!(help, "  {:<14} Scroll chat history", "Up/Down");
+    let _ = writeln!(help, "  {:<14} Clear screen", "Ctrl-L");
+    let _ = writeln!(help, "  {:<14} Clear input", "Ctrl-C");
+
+    help.push_str("\nModes (cycle with Shift+Tab):\n");
+    let _ = writeln!(help, "  {:<14} Normal conversation (grey)", "Default");
+    let _ = writeln!(help, "  {:<14} Read-only planning, no edits (blue)", "Plan");
+    let _ = writeln!(
+        help,
+        "  {:<14} Auto-accept file edits (green)",
+        "AcceptEdits"
+    );
+    let _ = writeln!(
+        help,
+        "  {:<14} Skip all tool confirmation (yellow)",
+        "Bypass"
+    );
+    let _ = writeln!(
+        help,
+        "  {:<14} No prompts at all - extreme caution (red)",
+        "FullAuto"
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use agiworkforce_command_registry::CommandKind;
 
     #[test]
-    fn builtin_registry_preserves_claude_style_command_metadata() {
+    fn cli_uses_shared_builtin_registry() {
         let commands = builtin_slash_registry_commands();
-        let compact = commands
-            .iter()
-            .find(|command| command.name == "compact")
-            .expect("compact command should be registered");
 
-        assert_eq!(compact.kind, CommandKind::Local);
-        assert_eq!(compact.source, CommandSource::Builtin);
-        assert_eq!(compact.description, "Compact context to free space");
-        assert!(!compact.supports_non_interactive);
-        assert!(compact.user_invocable);
-        assert!(!compact.disable_model_invocation);
-        assert_eq!(compact.loaded_from.as_deref(), Some("builtin"));
-    }
-
-    #[test]
-    fn builtin_registry_keeps_aliases_with_canonical_names() {
-        let commands = builtin_slash_registry_commands();
-        let permissions = commands
-            .iter()
-            .find(|command| command.name == "permissions")
-            .expect("permissions command should be registered");
-
-        assert_eq!(permissions.aliases, vec!["perms", "approvals"]);
-        assert_eq!(permissions.slash_aliases(), vec!["/perms", "/approvals"]);
-    }
-
-    #[test]
-    fn registry_command_matching_uses_aliases_and_exact_names() {
-        let command =
-            RegistryCommand::builtin_slash("exit", "Exit AGI Workforce", true, false, vec!["quit"]);
-
-        assert!(command.matches_name("exit"));
-        assert!(command.matches_name("/exit"));
-        assert!(command.matches_name("quit"));
-        assert!(command.matches_name("/quit"));
-        assert!(!command.matches_name("status"));
+        assert_eq!(commands.len(), 83);
+        assert_eq!(commands[0].name, "model");
+        assert_eq!(
+            commands
+                .iter()
+                .find(|command| command.name == "doctor")
+                .map(|command| command.aliases.as_slice()),
+            Some(&["diagnose".to_string(), "health".to_string()][..])
+        );
     }
 
     #[test]
@@ -551,7 +268,7 @@ mod tests {
             required_env_vars: vec![],
         };
 
-        let command = RegistryCommand::from_skill(&skill, CommandSource::Project);
+        let command = registry_command_from_skill(&skill, CommandSource::Project);
 
         assert_eq!(command.kind, CommandKind::Prompt);
         assert_eq!(command.source, CommandSource::Project);
@@ -585,6 +302,31 @@ mod tests {
             registry.find("/m").map(|command| command.name.as_str()),
             Some("model")
         );
+    }
+
+    #[test]
+    fn command_help_renders_from_registry_metadata() {
+        let mut registry = CommandRegistry::default();
+        registry.extend(builtin_slash_registry_commands());
+        registry.push(RegistryCommand::prompt(
+            "plugin:lint",
+            "Run plugin lint workflow",
+            CommandSource::Plugin,
+            Some("plugin"),
+        ));
+
+        let repl_help = format_command_help(&registry, ShortcutHelp::Repl);
+        assert!(repl_help.contains("/model"));
+        assert!(repl_help.contains("(/m)"));
+        assert!(repl_help.contains("/doctor"));
+        assert!(repl_help.contains("(/diagnose, /health)"));
+        assert!(repl_help.contains("/plugin:lint"));
+        assert!(repl_help.contains("Run plugin lint workflow"));
+        assert!(repl_help.contains("Shortcuts:"));
+
+        let tui_help = format_command_help(&registry, ShortcutHelp::Tui);
+        assert!(tui_help.contains("Keyboard shortcuts:"));
+        assert!(tui_help.contains("Modes (cycle with Shift+Tab):"));
     }
 
     #[test]
@@ -622,7 +364,7 @@ mod tests {
             argument_hint: Some("[base_branch]".to_string()),
         };
 
-        let command = RegistryCommand::from_custom_prompt(&prompt, CommandSource::Project);
+        let command = registry_command_from_custom_prompt(&prompt, CommandSource::Project);
 
         assert_eq!(command.kind, CommandKind::Prompt);
         assert_eq!(command.source, CommandSource::Project);
@@ -675,6 +417,72 @@ mod tests {
                 .map(|command| command.name.as_str())
                 .collect::<Vec<_>>(),
             vec!["prompts:draft-pr", "release-notes"]
+        );
+    }
+
+    #[test]
+    fn cli_registry_resolves_plugin_aliases_and_late_parity_commands() {
+        let mut registry = CommandRegistry::default();
+        registry.extend(builtin_slash_registry_commands());
+
+        for alias in ["plugin", "plugins", "marketplace", "market"] {
+            assert_eq!(
+                registry.find(alias).map(|command| command.name.as_str()),
+                Some("plugin"),
+                "/{alias} must resolve to canonical /plugin"
+            );
+        }
+
+        for name in [
+            "agents",
+            "chrome",
+            "ide",
+            "tasks",
+            "usage",
+            "sandbox",
+            "doctor",
+            "recap",
+            "release-notes",
+            "keybindings",
+            "focus",
+            "background",
+            "remote-env",
+            "add-dir",
+            "color",
+            "desktop",
+            "effort",
+            "files",
+            "heapdump",
+            "install-github-app",
+            "install-slack-app",
+            "mobile",
+            "passes",
+            "pr-comments",
+            "privacy-settings",
+            "privacy-mode",
+            "continue-with-byok",
+            "rate-limit-options",
+            "security-review",
+            "stats",
+            "statusline",
+            "stickers",
+            "tag",
+            "think-back",
+            "thinkback-play",
+            "ultrareview",
+            "upgrade",
+            "vim",
+        ] {
+            assert!(registry.find(name).is_some(), "/{name} must be registered");
+        }
+
+        assert_eq!(
+            registry.find("ios").map(|command| command.name.as_str()),
+            Some("mobile")
+        );
+        assert_eq!(
+            registry.find("app").map(|command| command.name.as_str()),
+            Some("desktop")
         );
     }
 }

@@ -149,7 +149,11 @@ export function verifyCsrfToken(
   return false;
 }
 
-function constantTimeSignatureMatch(data: string, providedSignature: string, secret: string): boolean {
+function constantTimeSignatureMatch(
+  data: string,
+  providedSignature: string,
+  secret: string,
+): boolean {
   const expectedSignature = createHmac('sha256', secret).update(data).digest('hex');
   // Hash both values to a fixed-length digest before comparing.
   // This ensures timingSafeEqual always receives equal-length buffers,

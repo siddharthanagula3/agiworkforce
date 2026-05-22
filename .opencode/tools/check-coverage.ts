@@ -5,60 +5,60 @@
  * Supports common coverage report formats used in the AGI Workforce monorepo.
  */
 
-import { tool } from "@opencode-ai/plugin/tool"
-import * as path from "path"
-import * as fs from "fs"
+import { tool } from '@opencode-ai/plugin/tool';
+import * as path from 'path';
+import * as fs from 'fs';
 
 export default tool({
   description:
-    "Check test coverage against a threshold and identify files with low coverage. Reads coverage reports from common locations.",
+    'Check test coverage against a threshold and identify files with low coverage. Reads coverage reports from common locations.',
   args: {
     threshold: tool.schema
       .number()
       .optional()
-      .describe("Minimum coverage percentage required (default: 80)"),
+      .describe('Minimum coverage percentage required (default: 80)'),
     showUncovered: tool.schema
       .boolean()
       .optional()
-      .describe("Show list of uncovered files (default: true)"),
+      .describe('Show list of uncovered files (default: true)'),
     format: tool.schema
-      .enum(["summary", "detailed", "json"])
+      .enum(['summary', 'detailed', 'json'])
       .optional()
-      .describe("Output format (default: summary)"),
+      .describe('Output format (default: summary)'),
     workspace: tool.schema
-      .enum(["desktop", "web", "all"])
+      .enum(['desktop', 'web', 'all'])
       .optional()
-      .describe("Workspace to check coverage for (default: desktop)"),
+      .describe('Workspace to check coverage for (default: desktop)'),
   },
   async execute(args, context) {
-    const threshold = args.threshold ?? 80
-    const showUncovered = args.showUncovered ?? true
-    const format = args.format ?? "summary"
-    const workspace = args.workspace ?? "desktop"
-    const cwd = context.worktree || context.directory
+    const threshold = args.threshold ?? 80;
+    const showUncovered = args.showUncovered ?? true;
+    const format = args.format ?? 'summary';
+    const workspace = args.workspace ?? 'desktop';
+    const cwd = context.worktree || context.directory;
 
-    const workspaceDir = workspace === "web" ? "apps/web" : "apps/desktop"
+    const workspaceDir = workspace === 'web' ? 'apps/web' : 'apps/desktop';
 
     // Look for coverage reports
     const coveragePaths = [
       `${workspaceDir}/coverage/coverage-summary.json`,
       `${workspaceDir}/coverage/lcov-report/index.html`,
       `${workspaceDir}/coverage/coverage-final.json`,
-      "coverage/coverage-summary.json",
-      "coverage/coverage-final.json",
-    ]
+      'coverage/coverage-summary.json',
+      'coverage/coverage-final.json',
+    ];
 
-    let coverageData: CoverageSummary | null = null
-    let coverageFile: string | null = null
+    let coverageData: CoverageSummary | null = null;
+    let coverageFile: string | null = null;
 
     for (const coveragePath of coveragePaths) {
-      const fullPath = path.join(cwd, coveragePath)
-      if (fs.existsSync(fullPath) && coveragePath.endsWith(".json")) {
+      const fullPath = path.join(cwd, coveragePath);
+      if (fs.existsSync(fullPath) && coveragePath.endsWith('.json')) {
         try {
-          const content = JSON.parse(fs.readFileSync(fullPath, "utf-8"))
-          coverageData = parseCoverageData(content)
-          coverageFile = coveragePath
-          break
+          const content = JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
+          coverageData = parseCoverageData(content);
+          coverageFile = coveragePath;
+          break;
         } catch {
           // Continue to next file
         }
@@ -68,17 +68,14 @@ export default tool({
     if (!coverageData) {
       return JSON.stringify({
         success: false,
-        error: "No coverage report found",
-        suggestion:
-          `Run tests with coverage first: cd ${workspaceDir} && pnpm test --coverage`,
+        error: 'No coverage report found',
+        suggestion: `Run tests with coverage first: cd ${workspaceDir} && pnpm test --coverage`,
         searchedPaths: coveragePaths,
-      })
+      });
     }
 
-    const passed = coverageData.total.percentage >= threshold
-    const uncoveredFiles = coverageData.files.filter(
-      (f) => f.percentage < threshold
-    )
+    const passed = coverageData.total.percentage >= threshold;
+    const uncoveredFiles = coverageData.files.filter((f) => f.percentage < threshold);
 
     const result: CoverageResult = {
       success: passed,
@@ -86,74 +83,75 @@ export default tool({
       coverageFile,
       total: coverageData.total,
       passed,
+    };
+
+    if (format === 'detailed' || (showUncovered && uncoveredFiles.length > 0)) {
+      result.uncoveredFiles = uncoveredFiles.slice(0, 20); // Limit to 20 files
+      result.uncoveredCount = uncoveredFiles.length;
     }
 
-    if (format === "detailed" || (showUncovered && uncoveredFiles.length > 0)) {
-      result.uncoveredFiles = uncoveredFiles.slice(0, 20) // Limit to 20 files
-      result.uncoveredCount = uncoveredFiles.length
-    }
-
-    if (format === "json") {
-      result.rawData = coverageData
+    if (format === 'json') {
+      result.rawData = coverageData;
     }
 
     if (!passed) {
       result.suggestion = `Coverage is ${coverageData.total.percentage.toFixed(1)}% which is below the ${threshold}% threshold. Focus on these files:\n${uncoveredFiles
         .slice(0, 5)
         .map((f) => `- ${f.file}: ${f.percentage.toFixed(1)}%`)
-        .join("\n")}`
+        .join('\n')}`;
     }
 
-    return JSON.stringify(result)
+    return JSON.stringify(result);
   },
-})
+});
 
 interface CoverageSummary {
   total: {
-    lines: number
-    covered: number
-    percentage: number
-  }
+    lines: number;
+    covered: number;
+    percentage: number;
+  };
   files: Array<{
-    file: string
-    lines: number
-    covered: number
-    percentage: number
-  }>
+    file: string;
+    lines: number;
+    covered: number;
+    percentage: number;
+  }>;
 }
 
 interface CoverageResult {
-  success: boolean
-  threshold: number
-  coverageFile: string | null
-  total: CoverageSummary["total"]
-  passed: boolean
-  uncoveredFiles?: CoverageSummary["files"]
-  uncoveredCount?: number
-  rawData?: CoverageSummary
-  suggestion?: string
+  success: boolean;
+  threshold: number;
+  coverageFile: string | null;
+  total: CoverageSummary['total'];
+  passed: boolean;
+  uncoveredFiles?: CoverageSummary['files'];
+  uncoveredCount?: number;
+  rawData?: CoverageSummary;
+  suggestion?: string;
 }
 
 function parseCoverageData(data: unknown): CoverageSummary {
   // Handle istanbul/nyc format
-  if (typeof data === "object" && data !== null && "total" in data) {
-    const istanbulData = data as Record<string, unknown>
-    const total = istanbulData.total as Record<string, { total: number; covered: number }>
+  if (typeof data === 'object' && data !== null && 'total' in data) {
+    const istanbulData = data as Record<string, unknown>;
+    const total = istanbulData.total as Record<string, { total: number; covered: number }>;
 
-    const files: CoverageSummary["files"] = []
+    const files: CoverageSummary['files'] = [];
 
     for (const [key, value] of Object.entries(istanbulData)) {
-      if (key !== "total" && typeof value === "object" && value !== null) {
-        const fileData = value as Record<string, { total: number; covered: number }>
+      if (key !== 'total' && typeof value === 'object' && value !== null) {
+        const fileData = value as Record<string, { total: number; covered: number }>;
         if (fileData.lines) {
           files.push({
             file: key,
             lines: fileData.lines.total,
             covered: fileData.lines.covered,
-            percentage: fileData.lines.total > 0
-              ? (fileData.lines.covered / fileData.lines.total) * 100
-              : 100,
-          })
+            percentage:
+              fileData.lines.total > 0
+                ? (fileData.lines.covered / fileData.lines.total) * 100
+                : 100,
+          });
         }
       }
     }
@@ -162,17 +160,15 @@ function parseCoverageData(data: unknown): CoverageSummary {
       total: {
         lines: total.lines?.total || 0,
         covered: total.lines?.covered || 0,
-        percentage: total.lines?.total
-          ? (total.lines.covered / total.lines.total) * 100
-          : 0,
+        percentage: total.lines?.total ? (total.lines.covered / total.lines.total) * 100 : 0,
       },
       files,
-    }
+    };
   }
 
   // Default empty result
   return {
     total: { lines: 0, covered: 0, percentage: 0 },
     files: [],
-  }
+  };
 }

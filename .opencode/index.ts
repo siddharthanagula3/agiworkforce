@@ -10,43 +10,43 @@
  */
 
 // Export the main plugin
-export { AGIWorkforceHooksPlugin, default } from "./plugins/index.js"
+export { AGIWorkforceHooksPlugin, default } from './plugins/index.js';
 
 // Export individual components for selective use
-export * from "./plugins/index.js"
+export * from './plugins/index.js';
 
 // Version export
-export const VERSION = "1.0.0"
+export const VERSION = '1.0.0';
 
 // Plugin metadata
 export const metadata = {
-  name: "agi-workforce-opencode",
+  name: 'agi-workforce-opencode',
   version: VERSION,
-  description: "AGI Workforce OpenCode plugin (Tauri v2 + React/TS + Rust monorepo)",
+  description: 'AGI Workforce OpenCode plugin (Tauri v2 + React/TS + Rust monorepo)',
   features: {
     agents: 13,
     commands: 29,
     configAssets: true,
     hookEvents: [
-      "file.edited",
-      "tool.execute.before",
-      "tool.execute.after",
-      "session.created",
-      "session.idle",
-      "session.deleted",
-      "file.watcher.updated",
-      "permission.ask",
-      "todo.updated",
-      "shell.env",
-      "experimental.session.compacting",
+      'file.edited',
+      'tool.execute.before',
+      'tool.execute.after',
+      'session.created',
+      'session.idle',
+      'session.deleted',
+      'file.watcher.updated',
+      'permission.ask',
+      'todo.updated',
+      'shell.env',
+      'experimental.session.compacting',
     ],
     customTools: [
-      "run-tests",
-      "check-coverage",
-      "security-audit",
-      "format-code",
-      "lint-check",
-      "git-summary",
+      'run-tests',
+      'check-coverage',
+      'security-audit',
+      'format-code',
+      'lint-check',
+      'git-summary',
     ],
   },
-}
+};

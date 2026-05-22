@@ -10,8 +10,8 @@
 export * from './signaling';
 
 // Secret-redacting logger facade (FIX-024)
-export { logger, redactSecrets } from './logger';
-export type { LogLevel } from './logger';
+export { logger, redactSecrets, redactSecretsWithReport, scanSecrets } from './logger';
+export type { LogLevel, SecretScanOptions, SecretScanResult } from './logger';
 
 // Formatting utilities
 export {
@@ -97,6 +97,15 @@ export type { MeasureResult, PerformanceMetrics } from './performance';
 // Sensitive-file denylist — files that must never cross trust boundaries
 // (LLM context, telemetry, agent reads). Audit findings F-07, F-09.
 export { SENSITIVE_FILE_PATTERNS, isSensitiveFile, matchSensitivePattern } from './sensitiveFiles';
+
+// Local -> BYOK handoff preview builder with redaction and hash evidence.
+export { buildLocalToByokHandoffDraft } from './privacyHandoff';
+export type {
+  BuildLocalToByokHandoffDraftParams,
+  HandoffPreviewContextItem,
+  LocalToByokHandoffPreview,
+  RedactedHandoffContextItem,
+} from './privacyHandoff';
 
 // Path containment — single source of truth for "is candidate inside root".
 // Replaces 5 inline implementations across apps/extension-vscode. Audit

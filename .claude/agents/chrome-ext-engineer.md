@@ -36,7 +36,7 @@ Read-write only inside `/Users/siddhartha/Desktop/agiworkforce/apps/extension/`.
 
 ## Conventions
 
-- LOCKED: **No testing mid-stream** (don't write new tests; existing must pass)
+- Run focused tests while implementing behavior changes; run the listed verification gates before handoff.
 - All bridge URL references must use **8787**, not 8765
 - Commit format: lowercase, ≤100 chars, Conventional Commits, `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` footer
 - Don't push.

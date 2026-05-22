@@ -1,178 +1,143 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+Status: Current
+Owner: Platform lead
+Last updated: 2026-05-21
 
-## Single source of truth
+Canonical tool-neutral agent entry point for AGI Workforce.
 
-`AGI_WORKFORCE.md` (repo root) is the canonical spec. `BUILD.md` covers prerequisites and per-surface build commands. `README.md` is user-facing. Read those before making non-trivial changes — they document verified state, P0/P1 audit status, sprint plans.
+This file is for Codex, Claude Code, Cursor, VS Code agents, opencode, Antigravity-style agents, and future coding agents. Tool-specific files must point back here instead of duplicating repo truth.
 
-## What this repo is
+Path-scoped `AGENTS.md` files under high-risk surfaces add local rules; read the nearest one before editing.
 
-A multi-surface AI agent platform wrapping **10+ providers** (cloud + local + BYOK + managed cloud) into one chat layer. Six shipping surfaces share core packages; the Rust CLI is the engine, the rest wrap it.
+## After This File
 
-| Surface     | Path                     | Stack                                       |
-| ----------- | ------------------------ | ------------------------------------------- |
-| CLI / TUI   | `apps/cli/`              | Rust monolith, Ratatui TUI, 22 subcommands  |
-| Desktop     | `apps/desktop/`          | Tauri v2 + React (Vite), Rust backend       |
-| Web         | `apps/web/`              | Next.js 14 (app router) at agiworkforce.com |
-| Mobile      | `apps/mobile/` + `ios/`  | Expo + React Native 0.83.6                  |
-| Chrome ext  | `apps/extension/`        | MV3 v1.2.0                                  |
-| VS Code ext | `apps/extension-vscode/` | v0.3.0, @agi chat participant               |
+1. `docs/agent-context/README.md` - agent context map and rules.
+2. `docs/agent-context/repo-map.json` - surfaces, owner roles, and checks.
+3. `docs/agent-context/lanes.json` - write lanes for 15+ parallel agents.
+4. `docs/agent-context/shared-files.md` - shared-file and collision policy.
+5. `docs/agent-context/risk-map.json` - high-risk paths and required review focus.
+6. `docs/agent-context/known-flaws.md` - open bugs, stale claims, and cleanup debt.
+7. `docs/agent-context/commands.json` - canonical commands by surface.
+8. `docs/decisions/CURRENT_DECISIONS.md` - latest locked product decisions.
+9. `PLAN.md` and `TODO.md` - active strategy and work queue.
+10. `docs/engineering/agent-native-development.md` - parallel agent/worktree and verification workflow.
+11. `docs/engineering/naming-conventions.md` - naming, root docs, CLI command, package, branch, commit, version, and hook policy.
+12. `docs/engineering/agent-harness-rollout.md` - context, hooks, skills, plugins, LSP/MCP, and subagent rollout order.
+13. `docs/engineering/service-layer-architecture.md` - action/route orchestration vs reusable service mechanics.
+14. `docs/engineering/parallel-agent-playbook.md` - concrete 15+ agent operating procedure.
 
-Shared TS packages: `packages/{chat,api,types,runtime,utils,llm-normalize,providers,mcp,skills,apply-patch,browser-tool,stores}`.
-Backend: `services/api-gateway` (Express), `services/signaling-server` (WebRTC, Fly.io), `supabase/` (migrations).
-Rust workspace: 14 active crates per `cargo metadata --no-deps` — `agiworkforce-protocol`, `sandbox-policy`, `execpolicy`, `network-proxy`, plus utility crates and the two app workspace members (`apps/cli`, `apps/desktop/src-tauri`).
+When these files conflict with older plans, prefer the list above.
 
-## Toolchain (pinned)
+## Product Lock
 
-- Node 22 (`.nvmrc`), pnpm 9.15.3 (via `corepack enable`), Rust 1.94.0 (`apps/desktop/src-tauri/rust-toolchain.toml`).
-- TypeScript pinned at 5.9.3 across the workspace via `pnpm.overrides`. If you see TS 6.x in `node_modules/.pnpm/`, run `pnpm install --force`.
-- `Cargo.toml` excludes mid-port crates `agiworkforce-tui`, `agiworkforce-tui_app_server`, `agiworkforce-cloud-tasks` — don't depend on them.
+AGI Workforce is an OpenAI/Anthropic-style application suite, not just a chat app or CLI.
+
+Locked differentiation:
+
+- Local-first privacy.
+- Explicit BYOK.
+- Multi-provider routing.
+- Privacy-controlled managed compute.
+
+Managed cloud/credits remain waitlist or private beta until metering, fraud, refunds, chargebacks, abuse controls, provider terms, retention, and deletion are proven.
+
+## Repo Map
+
+| Area          | Path                           | Role                                                              |
+| ------------- | ------------------------------ | ----------------------------------------------------------------- |
+| CLI           | `apps/cli`                     | Developer engine and terminal surface.                            |
+| Desktop       | `apps/desktop`                 | Local-private compute host and rich app shell.                    |
+| Web           | `apps/web`                     | Account, projects, synced app chats, artifacts, billing/waitlist. |
+| Mobile        | `apps/mobile` plus root `ios/` | Local/BYOK onboarding, continuity, approvals, preview/share.      |
+| Chrome        | `apps/extension`               | Browser context, capture, native messaging.                       |
+| VS Code       | `apps/extension-vscode`        | IDE-native developer surface.                                     |
+| Sandbox       | `apps/sandbox`                 | Cross-origin artifact renderer.                                   |
+| Shared TS     | `packages`                     | Contracts, providers, runtime, UI, tools.                         |
+| Shared Rust   | `crates`                       | Protocol, command registry, sandbox, runtime utilities.           |
+| Services      | `services`                     | API gateway, signaling, future managed compute.                   |
+| Database      | `supabase`                     | Canonical migrations.                                             |
+| Evidence      | `audit`                        | Source-backed parity and audit ledgers.                           |
+| Durable docs  | `docs`                         | Current product, architecture, decisions, launch, security.       |
+| Working notes | `tasks`                        | Execution notes and temporary research.                           |
+
+Machine-readable version: `docs/agent-context/repo-map.json`.
+
+## Non-Negotiables
+
+- Public brand is `AGI`; formal platform name is `AGI Workforce`.
+- User-facing CLI examples use `agi`; `agiworkforce` remains only as a compatibility alias or internal repo/package/crate identifier.
+- Never silently route Local chats or developer sessions to BYOK or managed cloud.
+- Local to BYOK is an explicit fork/continuation with context selection, secret scan, payload preview, and visible provider label.
+- Normal chat sync is only for Web, Mobile, and Desktop.
+- CLI, VS Code, and Chrome stay local/workspace/task scoped unless the user explicitly hands off a redacted preview.
+- Do not hardcode model IDs; use model catalogs and provider capability metadata.
+- Do not copy proprietary code. Open-source reuse needs compatible license handling and `THIRD_PARTY_LICENSES.md`.
+- Do not combine file moves with behavior changes.
+- Do not move `.claude`, `.codex`, `.cursor`, `.opencode`, `.agents`, or `.mcp.json` until their tool contracts are classified.
+- Check `docs/agent-context/known-flaws.md` before reporting a bug as new.
+- Do not add new root control docs. Use `PLAN.md`, `TODO.md`, `CHANGELOG.md`, `docs/current`, `docs/plans`, `audit`, `reports`, and `docs/archive` as defined in `docs/engineering/naming-conventions.md`.
+- Keep root context lean. Put durable local rules in path-scoped `AGENTS.md` files, surface READMEs, and `docs/agent-context` maps instead of expanding this file.
+- Keep orchestration and mechanics separate: actions, routes, and command handlers own product policy and state transitions; reusable provider, sandbox, database, generated-file, browser/computer-use, and transport mechanics belong in explicit service functions.
 
 ## Commands
 
-### Repo-wide
+Canonical command map: `docs/agent-context/commands.json`.
+
+Common commands:
 
 ```bash
-pnpm install                  # first-time / after lockfile change
-pnpm lint                     # eslint --max-warnings=0 (root config; excludes apps/extension)
-pnpm lint:extension           # lint apps/extension separately
-pnpm typecheck                # desktop typecheck only
-pnpm typecheck:all            # tsc --noEmit across every TS workspace
-pnpm test                     # vitest across every TS workspace
-pnpm format                   # prettier --write .
+pnpm check:agent-context
+pnpm check:repo-organization
+pnpm check:boundaries
+pnpm check:structure-conventions
+pnpm check:mobile-hygiene
+pnpm check:service-layer
+pnpm check:hooks
+pnpm check:llm-operability
+pnpm lint
+pnpm lint:extension
+pnpm typecheck:all
+pnpm test
+cargo check --workspace
 ```
 
-### Per surface
+Surface-specific commands should come from `docs/agent-context/commands.json` or the surface `package.json`/`Cargo.toml`.
 
-```bash
-pnpm dev:desktop                              # Tauri hot-reload
-pnpm build:desktop                            # bundles → apps/desktop/src-tauri/target/release/bundle/
-pnpm --filter web dev                         # localhost:3000
-pnpm --filter web build                       # builds desktop SPA → public/chat, then next build
-pnpm --filter @agiworkforce/mobile {start,ios,android}
-pnpm --filter agi-workforce build             # VS Code .vsix
-pnpm --filter @agiworkforce/extension build   # Chrome extension dist/
-```
+## Hooks And Local Gates
 
-The web build is unusual: Vite-builds the desktop SPA, copies into `apps/web/public/chat/`, then `next build`. See `apps/web/package.json:scripts.build`.
+Hook policy is part of repo organization and is enforced by `pnpm check:hooks`.
 
-### Rust (CLI + Tauri backend)
+- `commit-msg` runs commitlint with Conventional Commits.
+- `pre-commit` runs lint-staged, then fast structure and agent-context checks.
+- `pre-push` runs `pnpm check:llm-operability`, `git diff --check`, and `git diff --cached --check`.
+- Use `SKIP_PRE_PUSH=1` only for emergency pushes; record skipped checks in the PR or handoff.
 
-```bash
-cargo check --workspace                       # fast type check
-cargo build --release -p agiworkforce-cli
-cargo run -p agiworkforce-cli -- exec "..."
-cargo test -p agiworkforce-cli                # ~999 tests
-cargo test --workspace --lib                  # all crate unit tests
-cargo clippy --workspace --lib -- -D warnings -D unsafe-code
-```
+## Agent Harness
 
-### Running a single test
+Harness order is locked in `docs/engineering/agent-harness-rollout.md`: lean context files, deterministic hooks, on-demand skills, distributable plugins, LSP/MCP integrations, then subagents for separated exploration and editing.
 
-```bash
-# vitest (any TS package)
-pnpm --filter <pkg> test -- <path/to/test.ts> -t "test name"
+## Bug-Finding Workflow
 
-# cargo
-cargo test -p agiworkforce-cli <test_name_substring>
-cargo test -p agiworkforce-cli --lib <module>::tests::<name> -- --exact
+1. Identify the surface or boundary in `docs/agent-context/repo-map.json`.
+2. Check `docs/agent-context/known-flaws.md`.
+3. Check `docs/agent-context/risk-map.json`.
+4. Search with `rg`, starting from the owner paths.
+5. Reproduce with the smallest command from `docs/agent-context/commands.json`.
+6. Fix narrowly, add tests near the owner area, and update known flaws if the issue was already tracked.
 
-# Desktop E2E (Playwright)
-pnpm --filter desktop exec playwright test
-```
+High-signal search examples live in `docs/agent-context/bug-finding-guide.md`.
 
-## Critical rules (LOCKED)
+## Current Organization Work
 
-1. **Never hardcode model IDs.** Read from `models.json`. Provider matching uses `apps/cli/src/models.rs` (12 named providers + 1 user-defined `Custom`). Era: GPT-5.4, Codex 4.6, Gemini 3.1, Grok 4. See `memory/rule-models-json.md`.
-2. **Web-search before stating facts** about competitors / libraries / current product features. Knowledge cutoff is January 2026.
-3. **CI on `main` must stay green.** If it isn't, that is the highest-priority bug.
-4. **Commits**: lowercase, ≤100 chars, Conventional Commits, with `Co-Authored-By:` footer (commitlint enforces). Husky `lint-staged` runs eslint+prettier on staged files.
-5. **License**: PROPRIETARY. Code lifted from open source carries an SPDX-style attribution header and an entry in `THIRD_PARTY_LICENSES.md` (currently OpenClaw, MIT).
+The active cleanup plan is `docs/plans/pre-release-repo-organization-2026-05-20.md`.
 
-## Local vs Cloud mode
+Order is locked:
 
-- **Local mode** (Desktop only): SQLite + Ollama/LMStudio, no auth, no sync, no Dispatch.
-- **Cloud mode** (Desktop + Web + Mobile): Supabase, BYOK or Hobby cloud, Realtime sync, OAuth, Dispatch.
-- Mode picker: `apps/desktop/src/components/Onboarding/OnboardingWizard.tsx` (legacy `ModeSelectionDialog` was removed; do not reintroduce).
-- Runtime detection: `packages/runtime/src/detect.ts` (`isTauri`, `isCloudWeb`).
+1. Inventory/classification.
+2. Agent context and bug-finding maps.
+3. Guardrail scripts.
+4. Root/docs/package cleanup.
+5. Web, Mobile, then Desktop domain-first moves.
 
-## Provider architecture
-
-Every provider implements the `ProviderAdapter` interface in `packages/types/src/provider-adapter.ts`: `id`, `label`, `auth`, `catalog()`, optional `buildReplayPolicy`, `normalizeToolSchemas`, `wrapStreamFn`, and required `stream()`. Vendor SDKs are used for the wire (`@anthropic-ai/sdk`, `openai`, `ollama`); cross-provider quirks live in `packages/llm-normalize/` (ported from OpenClaw, see `THIRD_PARTY_LICENSES.md`). Adapters live in `packages/providers/{anthropic,openai,ollama,google}/`.
-
-## Three differentiators (do not regress)
-
-1. Multi-provider in one UI (10+ providers, switch mid-conversation).
-2. BYOK + Local LLM (Ollama, LMStudio).
-3. Cross-provider session continuity (Codex → GPT → Llama in one thread). Tool-call normalization in `llm-normalize` is what makes this robust.
-
-## Active sprint / launch plan
-
-`docs/plans/UNIFIED_LAUNCH_PLAN.md` is canonical. Companion: `wave2-desktop-v1.md`, `wave3-mobile-extensions-web.md`. Stale plans live in `docs/archive/`. Audit ground truth: `docs/audit/` and `/tmp/agi-audit/FINAL_AUDIT.md`. Public MVP (Local + BYOK free) is GO-WITH-CAVEATS; paid Hobby is NO-GO until the Stripe RPC migration ships in `supabase/migrations/`.
-
-## Common pitfalls
-
-- **Two supabase migration directories.** Canonical is `supabase/migrations/`; `apps/web/supabase/migrations/` is legacy and contains Stripe webhook idempotency RPCs the canonical dir lacks. Reconcile before paid-tier launch.
-- **Active web chat is `apps/web/features/chat/`.** Do not look for `apps/web/components/UnifiedAgenticChat/` — it doesn't exist. The lazy-import in `apps/desktop/src/App.tsx:153-155` is commented dead code.
-- **`.github/workflows/release-desktop.yml`** needs `APPLE_*` + `WINDOWS_CERTIFICATE*` secrets. Builds ship unsigned without them; macOS code-signing identity is `D2PR62RLT4`.
-- **`cargo audit`** ignore list lives in `.cargo/audit.toml` with per-entry justifications (mostly optional `remote-databases` feature transitive advisories).
-
-## Workflow Orchestration
-
-### 1. Plan Mode Default
-
-- Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
-- If something goes sideways, STOP and re-plan immediately
-- Use plan mode for verification steps, not just building
-- Write detailed specs upfront to reduce ambiguity
-
-### 2. Subagent Strategy
-
-- Use subagents liberally to keep main context window clean
-- Offload research, exploration, and parallel analysis to subagents
-- For complex problems, throw more compute at it via subagents
-- One task per subagent for focused execution
-
-### 3. Self-Improvement Loop
-
-- After ANY correction from the user: update `tasks/lessons.md` with the pattern
-- Write rules for yourself that prevent the same mistake
-- Ruthlessly iterate on these lessons until mistake rate drops
-- Review lessons at session start for relevant project
-
-### 4. Verification Before Done
-
-- Never mark a task complete without proving it works
-- Diff behavior between main and your changes when relevant
-- Ask yourself: "Would a staff engineer approve this?"
-- Run tests, check logs, demonstrate correctness
-
-### 5. Demand Elegance (Balanced)
-
-- For non-trivial changes: pause and ask "is there a more elegant way?"
-- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
-- Skip this for simple, obvious fixes — don't over-engineer
-- Challenge your own work before presenting it
-
-### 6. Autonomous Bug Fixing
-
-- When given a bug report: just fix it. Don't ask for hand-holding
-- Point at logs, errors, failing tests — then resolve them
-- Zero context switching required from the user
-- Go fix failing CI tests without being told how
-
-## Task Management
-
-1. **Plan First**: Write plan to `tasks/todo.md` with checkable items
-2. **Verify Plan**: Check in before starting implementation
-3. **Track Progress**: Mark items complete as you go
-4. **Explain Changes**: High-level summary at each step
-5. **Document Results**: Add review section to `tasks/todo.md`
-6. **Capture Lessons**: Update `tasks/lessons.md` after corrections
-
-## Core Principles
-
-- **Simplicity First**: Make every change as simple as possible. Impact minimal code.
-- **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
-- **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
+Do not start broad domain-folder moves until the guardrails pass.

@@ -21,13 +21,13 @@ export interface BillingPlanPricing {
 export const BILLING_PLAN_PRICING: Record<BillingPlanTier, BillingPlanPricing> = {
   'local-only': {
     id: 'local-only',
-    label: 'Local Only',
+    label: 'Local Mode',
     monthlyPriceUsd: 0,
     yearlyPriceUsd: 0,
   },
   byok: {
     id: 'byok',
-    label: 'BYOK',
+    label: 'Local Mode + BYOK',
     monthlyPriceUsd: 0,
     yearlyPriceUsd: 0,
   },

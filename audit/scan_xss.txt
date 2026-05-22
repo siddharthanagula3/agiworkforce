@@ -1,0 +1,684 @@
+apps/extension-vscode/src/services/tierResolver.ts:71:  const timeout = setTimeout(() => controller.abort(), BRIDGE_TIER_TIMEOUT_MS);
+apps/desktop/src/services/dispatch.ts:307:      await new Promise((res) => setTimeout(res, 1000 * 2 ** (attempt - 1)));
+apps/desktop/src/services/supabaseAuth.ts:89:        setTimeout(() => resolve({ error: { message: 'Warm-up timed out' } }), 30000),
+apps/desktop/src/services/supabaseAuth.ts:126:    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+apps/desktop/src/services/supabaseAuth.ts:315:          setTimeout(
+apps/desktop/src/services/supabaseAuth.ts:463:        setTimeout(() => resolve({ error: { message: 'setSession timed out' } }), 5000),
+apps/desktop/src/services/supabaseAuth.ts:595:          this.subscriptionChangeDebounceTimer = setTimeout(async () => {
+apps/desktop/src/services/supabaseAuth.ts:626:          timeoutId = setTimeout(() => {
+apps/desktop/src/services/supabaseAuth.ts:762:        setTimeout(() => {
+apps/desktop/src/services/supabaseAuth.ts:833:        timeoutId = setTimeout(() => {
+apps/desktop/src/services/supabaseAuth.ts:903:        setTimeout(
+apps/desktop/src/services/supabaseAuth.ts:1077:        setTimeout(() => resolve({ error: { message: 'Sign out timed out' } }), 2000),
+apps/desktop/src/services/supabaseAuth.ts:1225:        setTimeout(
+apps/extension-vscode/src/services/desktopBridge.ts:304:    const timeout = setTimeout(() => controller.abort(), DesktopBridge.REQUEST_TIMEOUT_MS);
+apps/extension-vscode/src/services/desktopBridge.ts:335:    const timeout = setTimeout(() => controller.abort(), 3_000);
+apps/extension-vscode/src/services/desktopBridge.ts:575:    this._reconnectTimer = setTimeout(() => {
+apps/extension-vscode/src/services/desktopBridge.ts:597:    this._healthTimer = setInterval(() => {
+apps/extension-vscode/src/services/telemetry.ts:102:    this.timer = setInterval(() => this.flush(), TELEMETRY_FLUSH_INTERVAL_MS);
+apps/desktop/src/services/errorReporting.ts:167:    this.batchTimer = window.setInterval(() => {
+apps/desktop/src/services/subscriptionService.ts:187:    const connectionTimeout = setTimeout(() => {
+apps/desktop/src/services/featureFlags.ts:366:    this.updateInterval = window.setInterval(
+apps/desktop/src/services/websocketClient.ts:203:      this.reconnectTimeout = setTimeout(() => {
+apps/web/services/api-error-handler.ts:73:    const timeoutId = setTimeout(() => controller.abort(), timeout);
+apps/web/services/api-error-handler.ts:114:            await new Promise((resolve) => setTimeout(resolve, delay));
+apps/web/services/api-error-handler.ts:135:        await new Promise((resolve) => setTimeout(resolve, delay));
+apps/desktop/src/services/analytics.ts:237:    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+apps/desktop/src/services/analytics.ts:362:    this.flushTimer = window.setInterval(() => {
+apps/desktop/src/services/heartbeat.ts:49:  const intervalId = setInterval(() => {
+apps/extension/src/assets/icons.ts:4: * No React deps — raw SVG strings rendered via DOM/innerHTML (sanitized).
+apps/extension/src/assets/icons.ts:123:  wrapper.innerHTML = svgString;
+apps/desktop/src/services/ollamaHealthService.ts:152:  healthCheckInterval = setInterval(() => {
+apps/desktop/src/services/ollamaHealthService.ts:173:  setTimeout(() => {
+apps/desktop/src/services/performance.ts:313:    this.memoryMonitorInterval = setInterval(async () => {
+apps/mobile/services/companion.ts:143:  healthCheckInterval = setInterval(() => {
+apps/mobile/services/companion.ts:151:  staleCheckInterval = setInterval(() => {
+apps/mobile/services/companion.ts:180:  countdownInterval = setInterval(() => {
+apps/mobile/services/companion.ts:206:  reconnectDebounceTimer = setTimeout(() => {
+apps/extension/src/background.ts:246:  _bgCtx.nativeReconnectTimer = setTimeout(() => {
+apps/extension/src/background.ts:380:      const timeout = setTimeout(() => {
+apps/extension/src/background.ts:639:// its presence in this set made a future accidental eval()-based handler look
+apps/extension/src/background.ts:641:// expose an eval() surface. Use EXECUTE_SCRIPT + ALLOWED_SCRIPT_OPERATIONS instead.
+apps/extension/src/background.ts:1158:        const timeoutId = setTimeout(() => controller.abort(), 5000);
+apps/extension/src/side_panel.ts:1611:    bubble.innerHTML = sanitizeHtml(renderMarkdown(msg.content));
+apps/extension/src/side_panel.ts:1749:    bubble.innerHTML = sanitizeHtml(renderMarkdown(textParts.join('')));
+apps/extension/src/side_panel.ts:1829:  bubble.innerHTML = sanitizeHtml(renderMarkdown(fullText));
+apps/extension/src/side_panel.ts:1974:        _ctx.streamTimeoutHandle = setTimeout(() => {
+apps/extension/src/side_panel.ts:2036:  _ctx.streamTimeoutHandle = setTimeout(() => {
+apps/extension/src/side_panel.ts:2759:            setTimeout(() => errEl.remove(), 4000);
+apps/extension/src/side_panel.ts:2952:    recordingPollInterval = setInterval(() => {
+apps/extension/src/side_panel.ts:2974:          setTimeout(() => setRecordBtnLabel('Stop'), 1500);
+apps/extension/src/side_panel.ts:2990:          setTimeout(() => setRecordBtnLabel('Record'), 1500);
+apps/extension/src/side_panel.ts:3009:      setTimeout(() => {
+apps/extension/src/side_panel.ts:3021:          setTimeout(() => {
+apps/extension/src/side_panel.ts:3037:            setTimeout(() => {
+apps/extension/src/side_panel.ts:3151:    setTimeout(() => scNameInput.focus(), 50);
+apps/extension/src/side_panel.ts:3169:      setTimeout(() => {
+apps/extension/src/side_panel.ts:3176:      setTimeout(() => {
+apps/extension/src/side_panel.ts:3192:          setTimeout(() => {
+apps/extension/src/side_panel.ts:3287:        setTimeout(() => {
+apps/extension/src/side_panel.ts:3293:        setTimeout(() => {
+apps/extension/src/side_panel.ts:3341:        setTimeout(() => {
+apps/extension/src/side_panel.ts:3354:        setTimeout(() => {
+apps/extension/src/nlweb.ts:56:    const timeoutId = setTimeout(() => controller.abort(), 5000);
+apps/extension/src/webmcp.ts:340:    mutationDebounceTimer = setTimeout(() => {
+apps/extension/src/popup.ts:72:            setTimeout(() => {
+apps/extension/src/popup.ts:304:  sessionTimerInterval = setInterval(updateSessionTime, 1000);
+apps/extension/src/popup.ts:336:      setTimeout(() => {
+apps/extension/src/popup.ts:347:    setTimeout(() => {
+apps/extension/src/popup.ts:368:    setTimeout(() => {
+apps/extension/src/popup.ts:376:    setTimeout(() => {
+apps/extension/src/popup.ts:468: * The card uses plain DOM construction so no innerHTML with user-controlled
+apps/extension/src/popup.ts:498:  // All text set via textContent — no innerHTML — so no XSS risk
+services/api-gateway/src/services/providerHealth.ts:173:    const timeout = setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
+apps/web/lib/offline/offlineQueue.ts:225:    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+apps/web/lib/offline/offlineSync.ts:149:  syncDebounceTimer = setTimeout(async () => {
+apps/web/lib/offline/offlineSync.ts:204:  syncRetryTimeout = setTimeout(() => {
+apps/extension/src/inPagePanel/panel.ts:167:    // Render plain text — no innerHTML — to prevent XSS from model output
+packages/llm-runtime/src/watchdog.ts:114:                warningTimer = setTimeout(() => {
+packages/llm-runtime/src/watchdog.ts:123:              timeoutTimer = setTimeout(() => {
+apps/extension/src/autofill/filler.ts:322:      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+apps/extension/src/autofill/filler.ts:392:      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+apps/extension/src/autofill/filler.ts:467:      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+apps/extension/src/autofill/filler.ts:520:        await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+apps/extension/src/content.ts:610:      setTimeout(() => {
+apps/extension/src/content.ts:1062: * SECURITY: new Function() / eval() is not used. Only pre-defined operations are allowed.
+apps/extension/src/content.ts:1898:  setTimeout(() => {
+apps/extension/src/content.ts:2067:    spaDebounceTimer = setTimeout(() => {
+packages/llm-runtime/src/__tests__/watchdog.test.ts:7:    await new Promise<void>((resolve) => setTimeout(resolve, delays[i] ?? 0));
+packages/llm-runtime/src/__tests__/watchdog.test.ts:18:    await new Promise<void>((resolve) => setTimeout(resolve, initialDelays[i] ?? 0));
+packages/llm-runtime/src/__tests__/watchdog.test.ts:21:  await new Promise<void>((resolve) => setTimeout(resolve, hangMs));
+apps/extension/src/utils.ts:20:  return new Promise((resolve) => setTimeout(resolve, ms));
+apps/extension/src/utils.ts:27:    timeoutHandle = setTimeout(
+apps/extension/src/utils.ts:336:    return div.innerHTML;
+apps/extension/src/dom-helpers.ts:2: * Minimal DOM helpers to eliminate innerHTML for static/numeric content.
+apps/extension/src/dom-helpers.ts:6:/** Set textContent on an element (safe alternative to innerHTML = string). */
+apps/extension/src/dom-helpers.ts:11:/** Remove all children from an element (safe alternative to innerHTML = ''). */
+apps/extension/src/dom-helpers.ts:26: * Safe replacement for innerHTML templates that produce a single element.
+apps/extension/src/dom-helpers.ts:43: * Equivalent to: el.innerHTML = '<tag class="...">text</tag>'
+services/api-gateway/src/routes/dotfile.ts:116:    const timeout = setTimeout(() => controller.abort(), DESKTOP_TIMEOUT_MS);
+services/api-gateway/src/routes/dotfile.ts:178:    const timeout = setTimeout(() => controller.abort(), DESKTOP_TIMEOUT_MS);
+packages/llm-runtime/src/retry.ts:349:    const timer = setTimeout(() => {
+services/api-gateway/src/worker/assignment.ts:206:      await new Promise<void>((resolve) => setTimeout(resolve, step));
+apps/web/lib/hooks/useVoiceTranscription.ts:210:      timeoutId = window.setTimeout(
+apps/web/lib/hooks/useVoiceTranscription.ts:252:    const timeoutId = window.setTimeout(() => {
+apps/web/lib/hooks/use-toast.ts:72:  const timeout = setTimeout(() => {
+services/api-gateway/src/worker/heartbeat.ts:270:  sweepInterval = setInterval(() => {
+apps/web/lib/hooks/useSessionPersistence.ts:364:    const interval = setInterval(() => {
+apps/extension-vscode/src/__tests__/api.test.ts:118:      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+apps/desktop/src/api/accountApi.ts:33:      setTimeout(() => reject(new ApiTimeoutError(operationName, timeoutMs)), timeoutMs),
+services/api-gateway/src/lib/supabaseClients.ts:140:setInterval(() => {
+apps/extension/__tests__/page-metadata.test.ts:36:  document.head.innerHTML = '';
+apps/extension/__tests__/page-metadata.test.ts:37:  document.body.innerHTML = '';
+apps/extension/__tests__/page-metadata.test.ts:100:      document.body.innerHTML = '<h1>Welcome to the Site</h1>';
+apps/extension/__tests__/page-metadata.test.ts:108:      document.body.innerHTML = '<h1>  Spaced Title  </h1>';
+apps/extension/__tests__/page-metadata.test.ts:476:      document.body.innerHTML =
+apps/extension/__tests__/page-metadata.test.ts:487:      document.body.innerHTML = '<div itemscope itemtype="https://schema.org/Product"></div>';
+apps/desktop/src/api/automation.ts:23:    const timeoutId = setTimeout(() => {
+apps/mobile/services/offlineQueue.ts:72:  return new Promise((resolve) => setTimeout(resolve, ms));
+apps/extension/__tests__/webmcp-extended.test.ts:47:  document.body.innerHTML = '';
+apps/extension/__tests__/webmcp-extended.test.ts:186:    plain.innerHTML = '<input name="q" />';
+apps/extension/__tests__/webmcp-extended.test.ts:459:    await new Promise((r) => setTimeout(r, 400));
+apps/extension/__tests__/webmcp-extended.test.ts:476:    await new Promise((r) => setTimeout(r, 400));
+apps/extension/__tests__/webmcp-extended.test.ts:489:    await new Promise((r) => setTimeout(r, 500));
+apps/extension/__tests__/webmcp-extended.test.ts:500:    await new Promise((r) => setTimeout(r, 400));
+apps/extension/__tests__/webmcp-extended.test.ts:504:    await new Promise((r) => setTimeout(r, 400));
+apps/extension/__tests__/webmcp-extended.test.ts:583:    await new Promise((r) => setTimeout(r, 20));
+apps/mobile/services/voice.ts:24:  const timeoutId = setTimeout(() => controller.abort(), TIMEOUTS.DEFAULT);
+apps/mobile/services/voice.ts:163:    meteringInterval = setInterval(async () => {
+apps/mobile/services/voice.ts:254:  const timeoutId = setTimeout(() => controller.abort(), TIMEOUTS.UPLOAD);
+apps/mobile/services/voice.ts:312:  const timeoutId = setTimeout(() => controller.abort(), TIMEOUTS.UPLOAD);
+apps/extension/__tests__/popup.paywall.test.ts:80:  document.body.innerHTML = `
+apps/extension/__tests__/popup.paywall.test.ts:141:    await new Promise<void>((r) => setTimeout(r, 4));
+apps/extension/__tests__/popup.paywall.test.ts:160:  document.body.innerHTML = '';
+apps/mobile/services/api.ts:71:        setTimeout(() => reject(new Error('Token refresh timed out')), REFRESH_TIMEOUT_MS),
+apps/mobile/services/api.ts:127:  const timeoutId = setTimeout(() => controller.abort(), timeout);
+apps/mobile/services/api.ts:258:    const timeoutId = setTimeout(() => controller.abort(), timeout);
+apps/extension/__tests__/jobAutofill.runtime.test.ts:42:  document.body.innerHTML = '';
+apps/extension/__tests__/jobAutofill.runtime.test.ts:47:  document.body.innerHTML = html;
+apps/extension/__tests__/jobAutofill.runtime.test.ts:200:    document.body.innerHTML = `
+apps/extension/__tests__/jobAutofill.runtime.test.ts:216:      document.body.innerHTML = `
+apps/extension/__tests__/jobAutofill.runtime.test.ts:230:        document.body.innerHTML = '<main>Thank you for applying</main>';
+apps/extension/__tests__/jobAutofill.runtime.test.ts:248:    document.body.innerHTML = `
+apps/extension/__tests__/jobAutofill.runtime.test.ts:257:      document.body.innerHTML = `
+apps/extension/__tests__/jobAutofill.runtime.test.ts:265:        document.body.innerHTML = `
+apps/extension/__tests__/jobAutofill.runtime.test.ts:279:          document.body.innerHTML = '<main>Application submitted</main>';
+apps/extension/__tests__/popup.test.ts:97:  document.body.innerHTML = `
+apps/extension/__tests__/popup.test.ts:138:    await new Promise<void>((r) => setTimeout(r, 4));
+apps/extension/__tests__/popup.test.ts:167:  document.body.innerHTML = '';
+apps/extension/__tests__/popup.test.ts:410:    await new Promise((r) => setTimeout(r, 0));
+apps/extension/__tests__/popup.test.ts:447:    await new Promise((r) => setTimeout(r, 0));
+apps/extension/__tests__/popup.test.ts:462:    await new Promise((r) => setTimeout(r, 0));
+apps/extension/__tests__/connection-lifecycle.test.ts:131:    timerId = setTimeout(
+apps/extension/__tests__/connection-lifecycle.test.ts:368:    const slow = new Promise<string>((resolve) => setTimeout(() => resolve('late'), 5000));
+apps/mobile/services/backgroundFetch.ts:38:        await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+apps/extension/__tests__/utils.test.ts:48:  document.body.innerHTML = '';
+apps/extension/__tests__/utils.test.ts:131:    const slowPromise = new Promise<string>((resolve) => setTimeout(() => resolve('late'), 5000));
+apps/extension/__tests__/utils.test.ts:277:      document.body.innerHTML = '<div id="target">Hello</div>';
+apps/extension/__tests__/utils.test.ts:295:      document.body.innerHTML = '<span class="item">A</span><span class="item">B</span>';
+apps/extension/__tests__/utils.test.ts:312:      document.body.innerHTML = '<div id="ready"></div>';
+apps/extension/__tests__/utils.test.ts:325:      document.body.innerHTML = '<div id="vis" style="width:100px;height:100px"></div>';
+apps/extension/__tests__/utils.test.ts:338:      document.body.innerHTML = '<button id="btn">Click</button>';
+apps/extension/__tests__/utils.test.ts:351:      document.body.innerHTML = '<div id="box"></div>';
+apps/extension/__tests__/utils.test.ts:363:      document.body.innerHTML = '<p id="p">Hello World</p>';
+apps/extension/__tests__/utils.test.ts:379:      document.body.innerHTML = '<div id="r"></div>';
+apps/extension/__tests__/utils.test.ts:391:      document.body.innerHTML = '<div id="s">Scroll target</div>';
+apps/extension/__tests__/utils.test.ts:405:      document.body.innerHTML = '<div id="hidden"></div>';
+apps/extension/__tests__/utils.test.ts:423:      document.body.innerHTML = '<form id="f1"></form><form id="f2"></form>';
+apps/extension/__tests__/utils.test.ts:434:      document.body.innerHTML = `
+apps/extension/__tests__/utils.test.ts:446:      document.body.innerHTML = '<input name="x" /><input name="y" />';
+apps/extension/__tests__/utils.test.ts:453:      document.body.innerHTML = '<input id="inp" name="q" />';
+apps/extension/__tests__/utils.test.ts:469:      document.body.innerHTML = `
+apps/extension/__tests__/utils.test.ts:486:      document.body.innerHTML = '<textarea id="ta"></textarea>';
+apps/extension/__tests__/utils.test.ts:496:      document.body.innerHTML = '<form id="f"></form>';
+apps/extension/__tests__/utils.test.ts:504:      document.body.innerHTML = '<form id="first"></form><form id="second"></form>';
+apps/mobile/services/notifications.ts:312:        setTimeout(attemptPush, 100 * Math.pow(2, attempts - 1));
+apps/mobile/services/notifications.ts:323:    setTimeout(attemptPush, 50);
+apps/extension/__tests__/content.test.ts:138:  document.body.innerHTML = '';
+apps/extension/__tests__/content.test.ts:241:    document.body.innerHTML = '<form id="f1" method="post"><input name="q" /></form>';
+apps/extension/__tests__/content.test.ts:274:    document.body.innerHTML = '<button id="btn">Go</button>';
+apps/extension/__tests__/content.test.ts:308:    document.body.innerHTML = '<input id="inp" />';
+apps/extension/__tests__/content.test.ts:338:    document.body.innerHTML = '<p id="p">Hello</p>';
+apps/extension/__tests__/content.test.ts:356:    document.body.innerHTML = '<div id="d"></div>';
+apps/extension/__tests__/content.test.ts:373:    document.body.innerHTML = '<div id="d"></div>';
+apps/extension/__tests__/content.test.ts:389:    document.body.innerHTML = '<script id="s"></script>';
+apps/extension/__tests__/content.test.ts:797:    document.body.innerHTML = '<a id="link" href="https://example.com">Link</a>';
+apps/mobile/services/heartbeat.ts:55:  const intervalId = setInterval(() => {
+apps/mobile/services/streaming.ts:324:  let timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAMING);
+apps/mobile/services/streaming.ts:352:      timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAMING);
+apps/mobile/services/streaming.ts:379:        const tid = setTimeout(resolve, delay);
+apps/mobile/services/streaming.ts:403:      timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAMING);
+services/signaling-server/src/index.ts:1090:const cleanupInterval = setInterval(() => {
+services/signaling-server/src/index.ts:1154:  const shutdownTimeout = setTimeout(() => {
+services/signaling-server/src/index.ts:1173:    await new Promise((resolve) => setTimeout(resolve, SHUTDOWN_DRAIN_TIMEOUT_MS));
+services/signaling-server/src/index.ts:1307:          setTimeout(
+apps/mobile/services/desktopStatus.ts:67:  let intervalId: ReturnType<typeof setInterval> | null = setInterval(() => {
+apps/mobile/services/desktopStatus.ts:78:      intervalId = setInterval(() => {
+services/signaling-server/src/connection-manager.ts:47:    this.cleanupInterval = setInterval(() => {
+services/signaling-server/src/connection-manager.ts:225:      setTimeout(resolve, 5000);
+apps/mobile/services/modelCatalog.ts:90:    const timeoutId = setTimeout(() => controller.abort(), 10_000);
+services/signaling-server/src/middleware/rateLimit.ts:86:    this.cleanupHandle = setInterval(() => this.cleanup(), CLEANUP_INTERVAL_MS);
+services/api-gateway/src/mcp/mcpProxy.ts:497:      const timer = setTimeout(() => {
+services/api-gateway/src/mcp/mcpProxy.ts:540:    const timer = setTimeout(() => controller.abort(), timeoutMs);
+apps/desktop/src/api/embeddings.ts:13:    const timeoutId = setTimeout(() => {
+services/signaling-server/__tests__/connection-manager.test.ts:178:      await new Promise((resolve) => setTimeout(resolve, 10));
+apps/desktop/src/api/mcp.ts:59:  return new Promise((resolve) => setTimeout(resolve, ms));
+apps/desktop/src/api/mcp.ts:68:    const timeoutId = setTimeout(() => {
+apps/desktop/src/api/automationEnhanced.ts:25:    const timeoutId = setTimeout(() => {
+services/api-gateway/src/middleware/auth.ts:46:setInterval(() => {
+apps/desktop/src/api/googleBatch.ts:298:    await new Promise((resolve) => setTimeout(resolve, pollIntervalSecs * 1000));
+apps/desktop/src/api/googleBatch.ts:622:      await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+services/api-gateway/src/websocket.ts:252:    ws.authTimeout = setTimeout(() => {
+services/api-gateway/src/websocket.ts:366:  const interval = setInterval(() => {
+services/api-gateway/src/websocket.ts:379:  const pendingCleanup = setInterval(() => {
+apps/desktop/src/api/migration.ts:26:  return new Promise((resolve) => setTimeout(resolve, ms));
+apps/desktop/src/api/migration.ts:35:    const timeoutId = setTimeout(() => {
+apps/desktop/src/api/ollama.ts:75:    const timeoutId = setTimeout(() => {
+apps/desktop/src/api/privacy.ts:104:    const timeoutId = setTimeout(() => {
+apps/desktop/src/api/privacy.ts:236:  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+apps/web/lib/retry.ts:100:    const timer = setTimeout(resolve, ms);
+apps/desktop/src/lib/offline/offlineSync.ts:130:  syncDebounceTimer = setTimeout(() => {
+apps/desktop/src/lib/offline/offlineSync.ts:173:  syncRetryTimeout = setTimeout(() => {
+packages/mcp/src/connect.ts:151:        timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+packages/utils/src/signaling.ts:131:      this.heartbeatTimer = setInterval(() => {
+apps/extension/__tests__/webmcp.test.ts:39:  document.body.innerHTML = '';
+apps/extension/__tests__/webmcp.test.ts:204:    form.innerHTML = '<input name="q" />';
+apps/extension/__tests__/dom-helpers.test.ts:13:    expect(div.innerHTML).toBe('&lt;b&gt;bold&lt;/b&gt;');
+packages/browser-tool/src/index.ts:182:        await new Promise((resolve) => setTimeout(resolve, action.ms));
+apps/web/hooks/useApiPromptCompletion.ts:308:    debounceTimeoutRef.current = setTimeout(() => {
+packages/utils/src/async.ts:23:  return new Promise((resolve) => setTimeout(resolve, ms));
+packages/utils/src/async.ts:46: * setTimeout(() => controller.abort(), 500);
+packages/utils/src/async.ts:60:    const timer = setTimeout(() => {
+packages/utils/src/async.ts:113:    timeout = setTimeout(later, wait);
+packages/utils/src/async.ts:145:      setTimeout(() => {
+packages/utils/src/async.ts:399:    timer = setTimeout(
+apps/web/hooks/useErrorRecovery.ts:60:        await new Promise((resolve) => setTimeout(resolve, retryDelay * retryCount));
+apps/web/hooks/useConversationRealtime.ts:224:      setTimeout(() => {
+apps/web/hooks/useToast.ts:72:  const timeout = setTimeout(() => {
+apps/desktop/src/hooks/useToast.ts:72:  const timeout = setTimeout(() => {
+apps/desktop/src/hooks/useCreditRefresh.ts:137:    const intervalId = setInterval(() => {
+apps/extension-vscode/src/utils/api.ts:117:    await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+apps/desktop/src/hooks/useVoiceTranscription.ts:176:      timeoutId = window.setTimeout(
+apps/desktop/src/hooks/useVoiceTranscription.ts:292:    const timeoutId = window.setTimeout(() => {
+apps/desktop/src/__tests__/services/analytics.test.ts:104:      await new Promise((resolve) => setTimeout(resolve, 100));
+apps/desktop/src/__tests__/stream-watchdog.test.ts:46:      timerId = setTimeout(() => {
+apps/desktop/src/hooks/useApiPromptCompletion.ts:304:    debounceTimeoutRef.current = setTimeout(() => {
+apps/desktop/src/__tests__/e2e/windows.spec.ts:788:        setTimeout(() => resolve(false), 2000);
+apps/desktop/src/__tests__/e2e/windows.spec.ts:821:        setTimeout(() => resolve(false), 1000);
+apps/desktop/src/__tests__/approval-timeout.test.ts:278:    const timerId = setTimeout(() => {
+apps/desktop/src/__tests__/features.test.ts:152:      await new Promise((resolve) => setTimeout(resolve, 0));
+apps/desktop/src/hooks/useScreenCapture.ts:49:        timeoutId = window.setTimeout(() => {
+apps/desktop/src/hooks/useBackgroundTasks.ts:357:      pollIntervalRef.current = setInterval(() => {
+apps/desktop/src/hooks/useCheckpoints.ts:223:    const interval = setInterval(refreshCheckpoints, refreshInterval);
+apps/desktop/src/lib/retry.ts:100:    const timer = setTimeout(resolve, ms);
+apps/desktop/src/hooks/useAgenticEvents.ts:1303:      const timeoutId = setTimeout(() => {
+packages/runtime/src/context/__tests__/agentContext.test.ts:71:      await new Promise<void>((r) => setTimeout(r, 0));
+packages/runtime/src/context/__tests__/agentContext.test.ts:122:          await new Promise<void>((r) => setTimeout(r, Math.random() * 5));
+apps/desktop/src/components/Media/MediaGenerationProgress.tsx:56:    const interval = setInterval(() => {
+apps/mobile/__tests__/chatStore.test.ts:132:            setTimeout(() => {
+apps/mobile/__tests__/chatStore.test.ts:156:            setTimeout(() => {
+apps/mobile/__tests__/chatStore.test.ts:180:            setTimeout(() => {
+apps/mobile/__tests__/chatStore.test.ts:202:            setTimeout(() => {
+apps/mobile/__tests__/chatStore.test.ts:220:            setTimeout(() => {
+apps/mobile/__tests__/chatStore.test.ts:240:            setTimeout(() => {
+apps/mobile/__tests__/auth-storage.test.ts:250:      await new Promise((resolve) => setTimeout(resolve, 0));
+apps/mobile/__tests__/auth-storage.test.ts:285:      await new Promise((resolve) => setTimeout(resolve, 0));
+apps/mobile/__tests__/auth-storage.test.ts:303:      await new Promise((resolve) => setTimeout(resolve, 0));
+apps/mobile/__tests__/auth-storage.test.ts:351:    await new Promise((resolve) => setTimeout(resolve, 20));
+apps/mobile/__tests__/auth-storage.test.ts:369:    await new Promise((resolve) => setTimeout(resolve, 20));
+apps/mobile/__tests__/auth-storage.test.ts:443:      () => new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 0)),
+apps/desktop/src/components/Analytics/UsageDashboard.tsx:95:    const interval = setInterval(() => {
+apps/mobile/components/companion/ExecutionStream.tsx:255:    const timer = setTimeout(() => {
+apps/web/__tests__/security/rt-05-github-anon-client.test.ts:125:  await new Promise<void>((resolve) => setTimeout(resolve, 50));
+apps/web/__tests__/security/rt-03-prompt-injection.test.ts:123:  await new Promise<void>((resolve) => setTimeout(resolve, 50));
+apps/extension-vscode/src/providers/inlineCompletionProvider.ts:159:      this.debounceTimer = setTimeout(() => {
+apps/mobile/components/chat/CodeBlockCopyButton.tsx:27:      setTimeout(() => setCopied(false), 2000);
+apps/web/stores/agentStatusStore.ts:194:        const intervalId = setInterval(() => {
+apps/mobile/components/chat/ChatInput.tsx:138:    durationIntervalRef.current = setInterval(() => {
+apps/desktop/src/components/ROIDashboard/components/RealtimeROIDashboard.tsx:56:    const interval = setInterval(loadStats, 10000);
+apps/web/stores/unified/ui.ts:368:              const timerId = setTimeout(() => {
+apps/web/stores/unified/chat/agentStore.ts:261:                const timerId = setTimeout(() => {
+apps/web/stores/unified/chat/chatStore.ts:112:  _persistTimer = setTimeout(() => {
+apps/mobile/components/chat/MessageList.tsx:80:      const timer = setTimeout(() => {
+apps/desktop/src/components/Editor/MonacoEditor.tsx:293:    const interval = setInterval(updateDiagnostics, 1000);
+apps/extension-vscode/src/providers/agentModeProvider.ts:341:      return div.innerHTML;
+apps/extension-vscode/src/providers/agentModeProvider.ts:395:      messagesEl.innerHTML = '';
+apps/extension-vscode/src/providers/agentModeProvider.ts:427:          messagesEl.innerHTML = '';
+apps/mobile/components/voice/VoiceInputButton.tsx:241:    setTimeout(() => {
+apps/extension-vscode/src/providers/sidebar/webviewContent.ts:1134:          setTimeout(function() { btn.textContent = 'Copy'; }, 1500);
+apps/extension-vscode/src/providers/sidebar/webviewContent.ts:1137:          setTimeout(function() { btn.textContent = 'Copy'; }, 1500);
+apps/extension-vscode/src/providers/sidebar/webviewContent.ts:1142:    // ── HTML sanitizer (defense-in-depth for innerHTML) ──────────────────
+apps/extension-vscode/src/providers/sidebar/webviewContent.ts:1149:      div.innerHTML = html;
+apps/extension-vscode/src/providers/sidebar/webviewContent.ts:1180:      return div.innerHTML;
+apps/extension-vscode/src/providers/sidebar/webviewContent.ts:1333:          currentAssistantEl.innerHTML = sanitizeHtml(renderMarkdown(accumulatedContent));
+apps/extension-vscode/src/providers/sidebar/webviewContent.ts:1397:        messagesEl.innerHTML = '';
+apps/extension-vscode/src/providers/sidebar/webviewContent.ts:1401:        freshEmpty.innerHTML = '<div class="empty-state-headline">Ask about your code</div>' +
+apps/extension-vscode/src/providers/sidebar/webviewContent.ts:1461:      mentionDropdown.innerHTML = '';
+apps/extension-vscode/src/providers/sidebar/webviewContent.ts:1468:      mentionDropdown.innerHTML = '';
+apps/extension-vscode/src/providers/sidebar/webviewContent.ts:1586:      doneEl.innerHTML = '<span class="codicon codicon-check" aria-hidden="true"></span> Done';
+apps/desktop/src/components/Overlay/VisualizationLayer.tsx:50:            setTimeout(() => {
+apps/desktop/src/components/Overlay/VisualizationLayer.tsx:66:            typingTimer.current = setTimeout(() => setTyping(null), TYPING_DURATION);
+apps/desktop/src/components/Overlay/VisualizationLayer.tsx:81:            regionTimer.current = setTimeout(() => setRegion(null), REGION_DURATION);
+apps/desktop/src/components/Overlay/VisualizationLayer.tsx:89:            flashTimer.current = setTimeout(() => setFlash(false), FLASH_DURATION);
+apps/desktop/src/components/SkillMarketplace/SkillSearchBar.tsx:34:      timerRef.current = setTimeout(() => {
+apps/desktop/src/components/Automation/ActionRecorder.tsx:40:    const interval = setInterval(() => {
+apps/web/components/SurfaceShowcase.tsx:660:                    <span dangerouslySetInnerHTML={{ __html: f }} />
+apps/web/components/SurfaceShowcase.tsx:798:                        <span dangerouslySetInnerHTML={{ __html: f }} />
+apps/desktop/src/components/QuickQuery/index.tsx:158:      const timer = setTimeout(() => {
+apps/desktop/src/components/QuickQuery/index.tsx:231:    const timer = setTimeout(() => {
+apps/desktop/src/components/ScreenCapture/OCRViewer.tsx:71:    setTimeout(() => URL.revokeObjectURL(url), 1000);
+apps/desktop/src/components/Governance/ToolHistoryTable.tsx:65:  setTimeout(() => URL.revokeObjectURL(url), 1000);
+apps/web/features/settings/pages/UserSettings.tsx:266:      setTimeout(() => {
+apps/desktop/src/components/Teams/TeamInvitation.tsx:62:    copiedTimerRef.current = setTimeout(() => setCopiedToken(null), 2000);
+apps/desktop/src/components/Research/ResearchPanel.tsx:332:    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+apps/desktop/src/components/Memory/MemorySearch.tsx:61:    timeoutRef.current = setTimeout(async () => {
+apps/desktop/src/components/Memory/MemoryPanel.tsx:138:        setTimeout(() => URL.revokeObjectURL(url), 1000);
+apps/desktop/src/components/Tools/ToolInvoker.tsx:171:      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+apps/desktop/src/components/UnifiedAgenticChat/ReasoningAccordion.tsx:71:    const intervalId = setInterval(() => {
+apps/web/features/analytics/pages/AnalyticsDashboard.tsx:244:    await new Promise((r) => setTimeout(r, 900));
+apps/web/components/ui/FormField.tsx:116:        validateTimeoutRef.current = setTimeout(() => {
+apps/desktop/src/components/Memory/MemoryManager.tsx:181:    setTimeout(() => URL.revokeObjectURL(url), 1000);
+apps/desktop/src/components/Research/ResearchReport.tsx:66:      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+apps/web/features/connectors/pages/ConnectorsPage.tsx:523:      setTimeout(() => {
+apps/web/components/ui/PromptDialog.tsx:50:      const timeoutId = setTimeout(() => {
+apps/desktop/src/components/UnifiedAgenticChat/AgentProgressFooter.tsx:53:    const id = setInterval(() => {
+apps/web/components/agi/AgiChatDemo.tsx:66:      timer.current = setTimeout(() => dispatch('reset'), LOOP_PAUSE_MS);
+apps/web/components/agi/AgiChatDemo.tsx:68:      timer.current = setTimeout(() => dispatch('tick'), STEP_MS);
+apps/web/features/billing/pages/BillingDashboard.tsx:129:      const scrollTimeoutId = setTimeout(() => {
+apps/web/features/billing/pages/BillingDashboard.tsx:139:        const id = setTimeout(() => {
+apps/desktop/src/components/AgentCollaboration/AgentCollaborationPanel.tsx:301:      setTimeout(() => setResultsCopied(false), 2000);
+apps/desktop/src/components/AgentCollaboration/AgentCollaborationPanel.tsx:326:    setTimeout(() => URL.revokeObjectURL(url), 1000);
+packages/unified-chat/src/components/AgentProgressFooter.tsx:52:    const id = setInterval(() => {
+apps/web/shared/services/realtimeService.ts:320:    const timeoutId = setTimeout(() => {
+apps/desktop/src/components/UnifiedAgenticChat/Cards/ToolExecutionProgress.tsx:128:      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+apps/web/shared/lib/security.ts:471:    return div.innerHTML;
+apps/web/shared/lib/security.ts:479:    textarea.innerHTML = html;
+apps/web/shared/lib/cache.ts:631:    this.cleanupTimer = setInterval(() => {
+packages/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx:72:    setTimeout(() => URL.revokeObjectURL(url), 1000);
+apps/web/shared/lib/api.ts:210:      await new Promise((resolve) => setTimeout(resolve, delay));
+apps/web/shared/lib/api.ts:272:    const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
+apps/web/shared/lib/api.ts:890:    setTimeout(() => {
+apps/desktop/src/components/UnifiedAgenticChat/Cards/ApprovalRequestCard.tsx:128:    intervalRef.current = setInterval(calculateRemaining, 1000);
+apps/web/shared/lib/error-utils.ts:267:    timeoutId = setTimeout(() => reject(new TimeoutError(timeoutMessage)), timeoutMs);
+apps/web/shared/lib/error-utils.ts:310:  const timeoutId = setTimeout(() => {
+apps/web/shared/lib/error-utils.ts:412:  return new Promise((resolve) => setTimeout(resolve, ms));
+apps/desktop/src/components/UnifiedAgenticChat/ShareCardDialog.tsx:46:      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+apps/web/shared/lib/accessibility.ts:162:    setTimeout(() => {
+apps/desktop/src/components/UnifiedAgenticChat/CommandSuggestion.tsx:55:      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+apps/web/shared/lib/api-enhanced.ts:133:          await new Promise((resolve) => setTimeout(resolve, delay));
+apps/web/shared/lib/api-enhanced.ts:158:          await new Promise((resolve) => setTimeout(resolve, delay));
+apps/web/shared/lib/api-enhanced.ts:183:          await new Promise((resolve) => setTimeout(resolve, delay));
+apps/web/shared/lib/api-enhanced.ts:208:          await new Promise((resolve) => setTimeout(resolve, delay));
+apps/desktop/src/components/UnifiedAgenticChat/MessageBubble/useMessageReactions.ts:64:    const timer = setTimeout(() => {
+packages/unified-chat/src/components/AttachmentMenu.tsx:141:      await new Promise<void>((resolve) => setTimeout(resolve, 150));
+apps/mobile/components/chat/ApprovalCard.tsx:92:    intervalRef.current = setInterval(() => {
+apps/desktop/src/components/Artifacts/ArtifactRendererView.tsx:295:          dangerouslySetInnerHTML={{ __html: sanitizeSvg(svg) }}
+apps/desktop/src/components/Artifacts/ArtifactRendererView.tsx:322:    //   not inject any eval-dependent console-capture logic. Blocking eval()
+apps/desktop/src/components/Artifacts/ArtifactRendererView.tsx:324:    //   If a user artifact explicitly calls eval() it will be blocked by the CSP
+apps/web/app/pricing/layout.tsx:90:        dangerouslySetInnerHTML={{ __html: JSON.stringify(pricingSchema) }}
+apps/desktop/src/utils/ipc.ts:96:    timeoutId = setTimeout(() => {
+apps/desktop/src/utils/ipc.ts:206:      await new Promise((resolve) => setTimeout(resolve, delay));
+apps/desktop/src/components/UnifiedAgenticChat/MessageBubble/useMessageActions.ts:82:      copyTimeoutRef.current = setTimeout(() => {
+apps/desktop/src/components/UnifiedAgenticChat/artifact-components/SpreadsheetArtifact.tsx:66:    setTimeout(() => URL.revokeObjectURL(url), 1000);
+apps/mobile/components/chat/ArtifactFullScreen.tsx:51:      setTimeout(() => setCopied(false), 2000);
+apps/desktop/src/components/Artifacts/ArtifactPanel.tsx:144:      const interval = setInterval(() => {
+apps/desktop/src/components/Artifacts/ArtifactPanel.tsx:209:      setTimeout(() => URL.revokeObjectURL(url), 1000);
+apps/desktop/src/components/UnifiedAgenticChat/MessageBubble/MessageBubble.tsx:423:      compactToolCopiedTimerRef.current = setTimeout(() => setCompactToolCopied(false), 1500);
+apps/desktop/src/components/Artifacts/ShareArtifactDialog.tsx:86:      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+apps/desktop/src/utils/security.ts:90:    tempDiv.innerHTML = sanitized;
+apps/desktop/src/utils/security.ts:98:    return tempDiv.innerHTML;
+apps/desktop/src/utils/security.ts:154:  tempDiv.innerHTML = sanitized;
+apps/desktop/src/utils/security.ts:177:  return tempDiv.innerHTML;
+apps/desktop/src/utils/security.ts:222:  tempDiv.innerHTML = sanitized;
+apps/desktop/src/utils/security.ts:236:  return tempDiv.innerHTML;
+packages/unified-chat/src/components/ArtifactRenderer.tsx:288:        dangerouslySetInnerHTML={{ __html: sanitized }}
+packages/unified-chat/src/components/ArtifactRenderer.tsx:353:          dangerouslySetInnerHTML={{ __html: sanitized }}
+packages/unified-chat/src/components/ArtifactRenderer.tsx:514:      copyTimeoutRef.current = setTimeout(() => {
+packages/unified-chat/src/components/ArtifactRenderer.tsx:533:    setTimeout(() => URL.revokeObjectURL(url), 1000);
+apps/desktop/src/components/Artifacts/ArtifactToolbar.tsx:51:    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+apps/desktop/src/components/Artifacts/ArtifactToolbar.tsx:63:    setTimeout(() => URL.revokeObjectURL(url), 1000);
+apps/desktop/src/components/UnifiedAgenticChat/MessageBubble/MessageContextMenu.tsx:54:    const timerId = setTimeout(() => {
+apps/mobile/components/chat/ConversationExportSheet.tsx:126:          setTimeout(() => setCopiedKey(null), 2000);
+apps/web/shared/lib/websocket.ts:225:      const timeoutHandle = setTimeout(() => {
+apps/web/shared/lib/websocket.ts:275:    this.reconnectTimer = setTimeout(() => {
+apps/web/shared/lib/websocket.ts:293:    this.heartbeatTimer = setInterval(() => {
+packages/unified-chat/src/components/MessageBubble.tsx:55:      setTimeout(() => setCopied(false), 1500);
+apps/desktop/src/components/UnifiedAgenticChat/Sidebar.tsx:454:      setTimeout(() => URL.revokeObjectURL(url), 1000);
+apps/desktop/src/utils/retry.ts:39:  return new Promise((resolve) => setTimeout(resolve, ms));
+apps/desktop/src/utils/retry.ts:165:      timeoutId = setTimeout(
+apps/desktop/src/components/Settings/PersonalizationSettings.tsx:166:      debounceRef.current = setTimeout(() => {
+apps/desktop/src/components/Settings/PersonalizationSettings.tsx:353:    debounceRef.current = setTimeout(() => {
+apps/web/shared/hooks/useAccessibility.ts:17:    const timeoutId = setTimeout(() => {
+apps/web/shared/hooks/useAccessibility.ts:279:    const timeoutId = setTimeout(() => {
+apps/mobile/components/chat/ImageFullScreen.tsx:120:    setTimeout(() => setSaved(false), 2000);
+apps/desktop/src/components/Mobile/RemoteApprovalCard.tsx:50:    const interval = window.setInterval(() => {
+apps/web/shared/hooks/useChatState.ts:191:      const timer = setTimeout(() => {
+apps/desktop/src/components/Mobile/QRPairingCard.tsx:56:    const timeout = window.setTimeout(() => clearError(), 4000);
+apps/web/app/page.tsx:71:        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+apps/desktop/src/components/Settings/MCPServerSettings.tsx:46:    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+apps/mobile/components/chat/FileExportButton.tsx:109:    setTimeout(() => {
+apps/desktop/src/components/Settings/CacheManagement.tsx:155:      setTimeout(() => URL.revokeObjectURL(url), 1000);
+apps/desktop/src/stores/auth.ts:385:  retryTimeout = setTimeout(async () => {
+apps/desktop/src/components/Voice/VoiceInputOverlay.tsx:52:    const timer = setTimeout(() => confirmRef.current(), PREVIEW_AUTO_CONFIRM_MS);
+apps/web/shared/hooks/useSessionTimeout.ts:330:    checkIntervalRef.current = setInterval(checkTimeout, ACTIVITY_CHECK_INTERVAL_MS);
+apps/web/shared/hooks/useSessionTimeout.ts:353:    countdownIntervalRef.current = setInterval(() => {
+apps/desktop/src/components/Settings/SettingsPanel.tsx:189:        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+apps/desktop/src/stores/billing/analyticsSlice.ts:369:      setTimeout(() => URL.revokeObjectURL(url), 1000);
+packages/unified-chat/src/components/ChatStream.tsx:138:        focusTimeoutRef.current = setTimeout(() => {
+apps/desktop/src/components/Settings/VoiceSettings.tsx:156:        countdownRef.current = setInterval(() => {
+apps/desktop/src/components/Settings/AutomationPermissionsSettings.tsx:105:        refreshTimerRef.current = setTimeout(() => void refresh(), 2000);
+apps/desktop/src/stores/executionStore.ts:264:  streamTimeoutHandle = setTimeout(() => {
+apps/desktop/src/stores/executionStore.ts:922:    goalCleanupTimeoutHandle = setTimeout(() => {
+apps/desktop/src/components/UnifiedAgenticChat/Sidecar/CodeCanvas.tsx:118:      const timeoutId = setTimeout(() => {
+apps/web/features/pages/ApiReference.tsx:27:    setTimeout(() => setCopiedCode(null), 2000);
+packages/unified-chat/src/components/ActionBar.tsx:21:      setTimeout(() => setCopied(false), 1500);
+apps/desktop/src/components/Settings/ThemeSettings.tsx:126:  setTimeout(() => URL.revokeObjectURL(url), 1000);
+apps/desktop/src/components/Settings/Privacy/DataSection.tsx:110:        exportSuccessTimer.current = window.setTimeout(() => setExportSuccess(false), 5000);
+apps/desktop/src/components/UnifiedAgenticChat/CommandPalette.tsx:201:    ftsDebounceRef.current = setTimeout(async () => {
+apps/desktop/src/components/UnifiedAgenticChat/ToolCallCard.tsx:206:    const id = setInterval(tick, 100);
+apps/web/shared/hooks/use-toast.ts:65:  const timeout = setTimeout(() => {
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/HtmlArtifact.tsx:67:    //   artifacts that call eval(), new Function(), or pass strings to setTimeout().
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/HtmlArtifact.tsx:280:    reloadTimeoutRef.current = setTimeout(() => {
+apps/desktop/src/components/Settings/tabs/ModelsKeys/index.tsx:70:        savedTimersRef.current[providerId] = window.setTimeout(() => {
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/SvgArtifact.tsx:112:        dangerouslySetInnerHTML={{ __html: sanitized }}
+apps/desktop/src/stores/ui.ts:385:              const timerId = setTimeout(() => {
+apps/mobile/stores/authStore.ts:148:              (timeoutId = setTimeout(() => reject(new Error('Session refresh timeout')), 10000)),
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/MermaidArtifact.tsx:112:          dangerouslySetInnerHTML={{ __html: sanitizedSvg }}
+apps/desktop/src/components/__tests__/AGIProgressIndicator.test.tsx:27:    expect(container.innerHTML).toBe('');
+apps/desktop/src/stores/connectorsStore.ts:67:                const timerId = setTimeout(() => {
+apps/desktop/src/components/UnifiedAgenticChat/index.tsx:261:          setTimeout(() => closePanel(), 2000);
+apps/desktop/src/components/UnifiedAgenticChat/index.tsx:1208:          streamWatchdogTimeoutRef.current = setTimeout(() => {
+apps/web/shared/hooks/usePerformanceOptimization.ts:60:    const handler = setTimeout(() => {
+apps/desktop/src/stores/roiStore.ts:170:            setTimeout(() => URL.revokeObjectURL(url), 1000);
+apps/desktop/src/components/UnifiedAgenticChat/ShareConversationDialog.tsx:55:    const timeoutId = setTimeout(() => controller.abort(), 30_000);
+apps/desktop/src/components/UnifiedAgenticChat/ShareConversationDialog.tsx:100:      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+apps/desktop/src/components/DynamicCanvas/DynamicCanvas.tsx:640:    intervalRef.current = setInterval(() => {
+apps/desktop/src/components/DynamicCanvas/DynamicCanvas.tsx:1175:      setTimeout(() => URL.revokeObjectURL(url), 1000);
+packages/unified-chat/src/components/ArtifactPanel.tsx:67:      setTimeout(() => setCopied(false), 1500);
+packages/unified-chat/src/components/ArtifactPanel.tsx:194:      setTimeout(() => setHeaderCopied(false), 1500);
+apps/desktop/src/stores/__tests__/productivityStore.test.ts:22:const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0));
+apps/mobile/stores/chat/chatExecutionStore.ts:67:        await new Promise<void>((resolve) => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+apps/mobile/stores/chat/chatExecutionStore.ts:541:      setTimeout(() => {
+apps/mobile/stores/chat/chatViewStore.ts:73:        searchDebounceTimer = setTimeout(() => {
+apps/desktop/src/components/ComputerUse/ScreenPreview.tsx:30:      intervalRef.current = setInterval(() => {
+apps/desktop/src/components/StatusBanner.tsx:142:    const intervalId = setInterval(() => {
+apps/mobile/app/_layout.tsx:451:        setTimeout(() => {
+apps/desktop/src/components/editing/LivePreview.tsx:422:        <div className="max-w-full max-h-full" dangerouslySetInnerHTML={{ __html: sanitizedSvg }} />
+apps/mobile/app/(app)/companion/index.tsx:103:        const timer = setTimeout(() => setShowDemo(true), 800);
+apps/desktop/src/components/UnifiedAgenticChat/ChatMessageList.tsx:33:    const timer = setTimeout(() => {
+apps/desktop/src/components/UnifiedAgenticChat/ChatMessageList.tsx:84:      setTimeout(() => URL.revokeObjectURL(url), 1000);
+apps/desktop/src/components/UnifiedAgenticChat/TasksView.tsx:425:      intervalRef.current = setInterval(() => {
+apps/desktop/src/components/ToolCalling/ToolResultCard.tsx:63:    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+apps/desktop/src/components/ToolCalling/ToolResultCard.tsx:161:            <div dangerouslySetInnerHTML={{ __html: sanitizedMarkdown }} />
+apps/desktop/src/components/ToolCalling/DiffViewer.tsx:59:    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+apps/desktop/src/components/ToolCalling/ImagePreview.tsx:71:    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+apps/desktop/src/components/ToolCalling/ToolErrorDisplay.tsx:73:    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+apps/desktop/src/components/ToolCalling/TableViewer.tsx:129:    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+apps/desktop/src/components/ToolCalling/TableViewer.tsx:156:    setTimeout(() => URL.revokeObjectURL(url), 1000);
+apps/web/features/chat/services/conversation-export.ts:299:    return div.innerHTML;
+apps/desktop/src/components/Settings/tabs/Privacy/index.tsx:151:        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+apps/desktop/src/components/Settings/tabs/Privacy/index.tsx:154:        exportSuccessTimerRef.current = window.setTimeout(() => setExportSuccess(false), 5000);
+apps/desktop/src/components/Settings/tabs/Privacy/index.tsx:164:          exportSuccessTimerRef.current = window.setTimeout(() => setExportSuccess(false), 5000);
+apps/desktop/src/components/Settings/tabs/Privacy/index.tsx:171:      exportErrorTimerRef.current = window.setTimeout(() => setExportError(null), 5000);
+apps/desktop/src/components/UnifiedAgenticChat/ArtifactRenderer.tsx:133:      copyTimeoutRef.current = setTimeout(() => {
+apps/desktop/src/components/UnifiedAgenticChat/ArtifactRenderer.tsx:157:    setTimeout(() => URL.revokeObjectURL(url), 1000);
+apps/desktop/src/components/UnifiedAgenticChat/ArtifactRenderer.tsx:354:          setTimeout(() => URL.revokeObjectURL(url), 1000);
+apps/desktop/src/components/UnifiedAgenticChat/ArtifactRenderer.tsx:416:              setTimeout(() => URL.revokeObjectURL(pngUrl), 1000);
+packages/unified-chat/src/components/ToolCallCard.tsx:187:    const id = setInterval(tick, 100);
+apps/desktop/src/components/UnifiedAgenticChat/InlinePanels/BrowserInlinePanel.tsx:42:      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+apps/desktop/src/components/UnifiedAgenticChat/InlinePanels/TerminalInlinePanel.tsx:50:      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+apps/desktop/src/components/UnifiedAgenticChat/InlinePanels/ImageInlinePanel.tsx:42:        copiedTimerRef.current = setTimeout(() => setCopiedIndex(null), 2000);
+apps/desktop/src/components/Browser/BrowserDebugTabs.tsx:276:      dangerouslySetInnerHTML={{ __html: sanitized }}
+apps/desktop/src/components/UnifiedAgenticChat/InlinePanels/DatabaseInlinePanel.tsx:53:      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+apps/desktop/src/components/MemoryPanel/index.tsx:258:      const timer = setTimeout(() => topicRef.current?.focus(), 50);
+apps/desktop/src/components/MemoryPanel/index.tsx:555:    searchTimeout.current = setTimeout(() => {
+apps/desktop/src/components/ToolCalling/JsonViewer.tsx:211:    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+apps/desktop/src/components/ToolCalling/ToolCallCard.tsx:71:    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+apps/web/shared/components/seo/SEOHead.tsx:52:        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+apps/desktop/src/components/ResourceMonitor/index.tsx:141:    const interval = setInterval(fetchResources, refreshInterval);
+apps/web/features/chat/hooks/use-voice-recording.ts:399:      durationIntervalRef.current = setInterval(() => {
+apps/web/features/chat/hooks/use-voice-recording.ts:445:        setTimeout(() => {
+apps/web/features/chat/hooks/use-chat-persistence.ts:212:    const interval = setInterval(() => {
+apps/desktop/src/components/Settings/ResearchSettings.tsx:139:      keyStatusTimerRef.current = setTimeout(() => setKeyStatus('idle'), 2500);
+apps/desktop/src/components/Settings/ResearchSettings.tsx:174:        prefStatusTimerRef.current = setTimeout(() => setPrefStatus('idle'), 2000);
+apps/web/shared/components/LazyLoadWrapper.tsx:13:        setTimeout(() => {
+apps/desktop/src/components/FileUpload/FileDownloadButton.tsx:72:        setTimeout(() => setIsDownloaded(false), 3000);
+apps/desktop/src/components/FileUpload/FileDownloadButton.tsx:112:      setTimeout(() => setIsDownloaded(false), 3000);
+apps/desktop/src/components/UnifiedAgenticChat/__tests__/UnifiedAgenticChat.test.tsx:597:    // Use waitFor to let async effects settle instead of relying on setTimeout(0),
+apps/mobile/app/(app)/agents/index.tsx:44:    setTimeout(() => setRefreshing(false), 1500);
+apps/mobile/app/(app)/(tabs)/agents.tsx:57:    setTimeout(() => setRefreshing(false), 1500);
+apps/desktop/src/components/UnifiedAgenticChat/Visualizations/CodeBlock.tsx:91:      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+apps/desktop/src/components/UnifiedAgenticChat/Visualizations/CodeBlock.tsx:107:    setTimeout(() => URL.revokeObjectURL(url), 1000);
+apps/desktop/src/components/Canvas/CodeEditor.tsx:58:      copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
+apps/mobile/app/(app)/dispatch/index.tsx:502:      scrollTimeout = setTimeout(() => {
+apps/desktop/src/components/Canvas/ArtifactPreview.tsx:146:              dangerouslySetInnerHTML={{ __html: sanitizeMarkdownHtml(markdownHtml) }}
+apps/mobile/app/(app)/settings/memory.tsx:99:      const timer = setTimeout(clearError, 5_000);
+apps/desktop/src/stores/billingUsage.ts:153:  metricsRefreshInterval = setInterval(() => {
+apps/web/shared/components/CookieConsent.tsx:36:      const timer = setTimeout(() => setShowBanner(true), 1000);
+apps/desktop/src/stores/codeStore.ts:453:                await new Promise((resolve) => setTimeout(resolve, 0));
+apps/desktop/src/stores/chat/agentStore.ts:417:                const timerId = setTimeout(() => {
+apps/desktop/src/stores/chat/chatStore.ts:135:  _persistTimer = setTimeout(() => {
+apps/desktop/src/stores/browserStore.ts:993:          const intervalId = window.setInterval(async () => {
+apps/desktop/src/stores/chat/chatExecutionStore.ts:205:          const timerId = setInterval(() => {
+apps/desktop/src/stores/chat/chatExecutionStore.ts:403:                setTimeout(() => _recentTimelineIds.delete(dedupKey), 10_000);
+apps/web/shared/components/HireButton.tsx:130:        setTimeout(() => {
+apps/web/features/chat/hooks/use-session-tokens.ts:60:    const interval = setInterval(() => {
+apps/desktop/src/stores/chat/__tests__/chatStore.modelStoreSubscription.test.ts:87:    await new Promise((resolve) => setTimeout(resolve, 0));
+apps/web/features/chat/components/InlineToolResults/ToolResultCard.tsx:71:    setTimeout(() => setCopied(false), 2000);
+apps/web/features/chat/components/InlineToolResults/InlineTerminalOutput.tsx:113:    setTimeout(() => setCopied(false), 2000);
+apps/web/features/chat/components/InlineToolResults/InlineCodeDiff.tsx:142:    setTimeout(() => setCopied(false), 2000);
+apps/web/features/chat/components/InlineToolResults/InlineFileRead.tsx:167:    setTimeout(() => setCopied(false), 2000);
+apps/desktop/src/components/ui/PromptDialog.tsx:48:      const timeoutId = setTimeout(() => {
+apps/web/features/chat/components/tokens/UsageWarningBanner.tsx:229:    const interval = setInterval(fetchUsage, 5 * 60 * 1000);
+apps/web/features/chat/components/tokens/TokenBalanceDisplay.tsx:83:    intervalId = setInterval(loadBalance, 30000);
+apps/desktop/src/components/Canvas/CanvasPanel.tsx:128:      copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
+apps/desktop/src/components/Canvas/CanvasPanel.tsx:149:    setTimeout(() => URL.revokeObjectURL(url), 1000);
+apps/desktop/src/stores/chat/agentWorkflowEvents.ts:437:            timeoutId = setTimeout(
+apps/web/features/chat/components/Main/MultiAgentChatInterface.tsx:147:    const interval = setInterval(() => {
+apps/desktop/src/components/AGI/ProgressIndicator.tsx:237:        const timeoutId = setTimeout(() => {
+apps/desktop/src/stores/chat/toolStore.ts:825:              setTimeout(() => {
+apps/desktop/src/stores/chat/toolStore.ts:951:            const timerId = setTimeout(() => {
+apps/desktop/src/stores/chat/toolStore.ts:1332:  setTimeout(() => {
+apps/desktop/src/components/AGI/OperatorDrillDown.tsx:346:      savedTimerRef.current = setTimeout(() => setSaved(false), 2000);
+apps/web/app/gallery/layout.tsx:47:        dangerouslySetInnerHTML={{
+apps/desktop/src/components/AGI/IterationProgressPanel.tsx:255:      const intervalId = window.setInterval(() => {
+apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx:158:    searchTimeoutRef.current = setTimeout(() => {
+apps/desktop/src/components/AGI/AgentTaskCreator.tsx:33:    const timer = setTimeout(() => {
+apps/desktop/src/components/AGI/AgentTaskMonitor.tsx:500:      intervalRef.current = setInterval(() => {
+apps/desktop/src/components/UnifiedAgenticChat/Visualizations/DiffViewer.tsx:50:      copiedTimerRef.current = setTimeout(() => setCopied(null), 2000);
+apps/web/features/chat/components/ThinkingBlock.tsx:84:    const id = setInterval(() => {
+apps/desktop/src/components/ui/FormField.tsx:114:        validateTimeoutRef.current = setTimeout(() => {
+apps/web/app/faq/layout.tsx:179:        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+apps/desktop/src/components/UnifiedAgenticChat/Visualizations/TerminalOutputViewer.tsx:48:      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+apps/desktop/src/components/UnifiedAgenticChat/Visualizations/TerminalOutputViewer.tsx:70:    setTimeout(() => URL.revokeObjectURL(url), 1000);
+apps/desktop/src/components/UnifiedAgenticChat/useTauriStreamListeners.ts:336:        const softTimeoutId = setTimeout(() => {
+apps/desktop/src/components/UnifiedAgenticChat/useTauriStreamListeners.ts:351:        const hardTimeoutId = setTimeout(() => {
+apps/desktop/src/components/UnifiedAgenticChat/useTauriStreamListeners.ts:824:              await new Promise((resolve) => setTimeout(resolve, 500));
+apps/desktop/src/components/UnifiedAgenticChat/ChatInputArea.tsx:315:      timer = setTimeout(() => {
+apps/web/features/chat/components/VoiceInputButton.tsx:133:      setTimeout(() => setShowTooltip(false), 3000);
+apps/desktop/src/components/UnifiedAgenticChat/ChatStream.tsx:330:        focusTimeoutRef.current = setTimeout(() => {
+apps/web/shared/stores/notification-store.ts:205:            const timeoutId = setTimeout(() => {
+apps/web/shared/stores/notification-store.ts:304:          const timeoutId = setTimeout(() => {
+apps/web/shared/stores/notification-store.ts:469:            setTimeout(() => {
+apps/web/features/chat/components/MermaidRenderer.tsx:124:      setTimeout(() => setCopied(false), 2000);
+apps/web/features/chat/components/MermaidRenderer.tsx:136:      setTimeout(() => setCopied(false), 2000);
+apps/web/features/chat/components/MermaidRenderer.tsx:151:    setTimeout(() => URL.revokeObjectURL(url), 1000);
+apps/web/features/chat/components/MermaidRenderer.tsx:332:          dangerouslySetInnerHTML={{ __html: svgHtml }}
+apps/desktop/src/components/Code/CodeEditor.tsx:80:        savedTimerRef.current = setTimeout(() => setSaved(false), 2000);
+apps/desktop/src/components/Code/CodeEditor.tsx:172:    setTimeout(() => URL.revokeObjectURL(url), 1000);
+apps/desktop/src/components/ErrorHandling/ErrorBoundary.tsx:118:      setTimeout(() => this.setState({ copySuccess: false }), 2000);
+apps/web/shared/stores/mission-control-store.ts:446:    cleanupIntervalId = setInterval(
+apps/desktop/src/components/Code/FileTree.tsx:234:            refreshTimeout.current = window.setTimeout(() => {
+apps/desktop/src/components/Feedback/FeedbackDialog.tsx:106:    setTimeout(() => {
+apps/web/core/monitoring/system-monitor.ts:169:      setTimeout(() => {
+apps/web/core/ai/orchestration/agent-collaboration-manager.ts:271:      await new Promise((resolve) => setTimeout(resolve, 500));
+apps/web/core/ai/orchestration/agent-collaboration-manager.ts:924:    this.cleanupIntervalId = setInterval(() => {
+apps/desktop/src/components/Updates/UpdateChecker.tsx:126:    const timer = setTimeout(() => {
+apps/web/core/ai/orchestration/agent-communication-protocol.ts:91:      const timeoutId = setTimeout(() => {
+apps/web/core/ai/orchestration/agent-communication-protocol.ts:372:    setInterval(async () => {
+apps/web/app/compare/page.tsx:64:                <p className="agi-tier-body" dangerouslySetInnerHTML={{ __html: r.take }} />
+apps/web/app/compare/page.tsx:67:                    dangerouslySetInnerHTML={{
+apps/web/app/compare/page.tsx:72:                    dangerouslySetInnerHTML={{
+apps/web/core/ai/llm/providers/openai-gpt.ts:118:  return new Promise((resolve) => setTimeout(resolve, ms));
+apps/desktop/src/components/Marketplace/components/ShareModal.tsx:68:      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+apps/desktop/src/components/Marketplace/components/ShareModal.tsx:79:      embedCopiedTimerRef.current = setTimeout(() => setEmbedCopied(false), 2000);
+apps/web/app/contact/layout.tsx:77:        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+apps/desktop/src/components/Marketplace/components/PublishWorkflowTab.tsx:147:      setTimeout(() => {
+apps/web/shared/stores/authentication-store.ts:199:              setTimeout(
+apps/web/app/layout.tsx:173:          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
+apps/web/app/layout.tsx:179:          dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareAppSchema) }}
+apps/web/app/layout.tsx:185:          dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteSchema) }}
+apps/desktop/src/stores/settings/connectors.ts:53:                const timerId = setTimeout(() => {
+apps/web/features/chat/components/Composer/ChatComposerNew.tsx:169:      typingTimerRef.current = setTimeout(() => {
+apps/web/features/chat/components/Composer/ChatComposerNew.tsx:358:      setTimeout(() => textareaRef.current?.focus(), 0);
+apps/web/features/chat/components/Composer/ChatComposerNew.tsx:375:    setTimeout(() => textareaRef.current?.focus(), 0);
+apps/web/features/chat/components/Composer/ChatComposerNew.tsx:830:              setTimeout(() => textareaRef.current?.focus(), 50);
+apps/web/app/download/layout.tsx:66:        dangerouslySetInnerHTML={{ __html: JSON.stringify(downloadJsonLd) }}
+apps/web/features/chat/components/Composer/VoiceInputButton.tsx:74:      timerRef.current = setInterval(() => {
+apps/web/features/chat/components/Composer/VoiceInputButton.tsx:107:      const timeout = setTimeout(() => setShowOverlay(false), 150);
+apps/web/features/chat/components/Composer/VoiceInputButton.tsx:118:      setTimeout(() => setShowTooltip(false), 3000);
+apps/desktop/src/runtime/__tests__/TauriRuntime.test.ts:65:        setTimeout(() => {
+apps/desktop/src/runtime/__tests__/TauriRuntime.test.ts:147:        setTimeout(() => {
+apps/web/app/careers/layout.tsx:48:        dangerouslySetInnerHTML={{
+apps/web/core/ai/llm/providers/anthropic-claude.ts:118:  return new Promise((resolve) => setTimeout(resolve, ms));
+apps/web/app/blog/layout.tsx:46:        dangerouslySetInnerHTML={{
+apps/web/core/ai/tools/unified-tool-registry.ts:153:    this.cleanupTimer = setInterval(() => {
+apps/web/features/chat/components/Composer/ChatComposer.tsx:211:      focusTimeoutRef.current = setTimeout(() => textareaRef.current?.focus(), 0);
+apps/desktop/src/features/experimental/KnowledgeBaseViewer/index.tsx:78:      const interval = setInterval(fetchKnowledge, refreshInterval);
+apps/web/core/ai/tools/tool-registry-manager.ts:116:    this.cleanupTimer = setInterval(() => {
+apps/web/app/api/llm/completion/route.ts:529:            watchdog = setTimeout(() => {
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:9: * - Never eval() user-provided content
+apps/web/core/integrations/social-media-analyzer.test.ts:471:        await new Promise((resolve) => setTimeout(resolve, 50));
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:14: *     binding, never via innerHTML of untrusted strings.
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:141:    '      container.innerHTML = "<svg viewBox=\\"0 0 "+W+" "+H+"\\" width=\\"100%\\">"+slices+"</svg>";',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:182:    '    container.innerHTML="<svg viewBox=\\"0 0 "+W+" "+H+"\\" width=\\"100%\\">"+axisLine+bars+lines+xlabels+"</svg>";',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:208:    '    container.innerHTML = (config.title ? "<p class=\\"tbl-title\\">"+esc(config.title)+"</p>" : "") +',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:237:    '    container.innerHTML = html;',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:278:    '    container.innerHTML = "<div class=\\"md\\"><p>"+html+"</p></div>";',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:288:    '    container.innerHTML =',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:303:    '          el.innerHTML = "<p class=\\"err\\">Unknown component type: "+esc(type)+"</p>";',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:306:    '      el.innerHTML = "<p class=\\"err\\">Render error: "+esc(String(err))+"</p>";',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:319:    '    root.innerHTML = "";',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:327:    '    setTimeout(reportHeight, 60);',
+apps/web/features/chat/components/cards/CalculationCard.tsx:163:        dangerouslySetInnerHTML={{
+apps/web/features/chat/components/cards/CalculationCard.tsx:194:    setTimeout(() => setCopied(false), 2000);
+apps/desktop/src/components/MCP/MCPConfigEditor.tsx:74:      saveSuccessTimerRef.current = setTimeout(() => setSaveSuccess(false), 3000);
+apps/web/core/integrations/google-veo-service.ts:293:      await new Promise((resolve) => setTimeout(resolve, this.pollingInterval));
+apps/web/core/integrations/google-veo-service.ts:385:      await new Promise((resolve) => setTimeout(resolve, 500));
+apps/web/core/integrations/google-imagen-service.ts:271:    await new Promise((resolve) => setTimeout(resolve, 2000));
+apps/web/features/chat/components/ArtifactBlock.tsx:66:    setTimeout(() => setCopied(false), 2000);
+apps/web/features/chat/components/ArtifactBlock.tsx:278:          dangerouslySetInnerHTML={{
+apps/web/core/integrations/websocket-manager.ts:495:    connection.reconnectTimer = setTimeout(() => {
+apps/web/core/integrations/websocket-manager.ts:510:    connection.heartbeatTimer = setInterval(() => {
+apps/desktop/src/components/MCP/MCPConnectionStatus.tsx:183:    const interval = window.setInterval(() => {
+apps/web/shared/ui/countdown-timer.tsx:47:    const timer = setInterval(() => {
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:22: *     into the srcdoc via innerHTML on the host side
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:23: *   - No eval(), no dynamic code execution on the host
+apps/desktop/src/test/test-utils.tsx:23:export const waitForNextUpdate = () => new Promise((resolve) => setTimeout(resolve, 0));
+apps/web/features/chat/components/messages/EnhancedMarkdownRenderer.tsx:69:    setTimeout(() => setCopied(false), 2000);
+apps/desktop/src/components/MCP/MCPCredentialManager.tsx:311:      setTimeout(() => {
+apps/web/core/storage/chat/multi-agent-chat-database.ts:863:  return new Promise((resolve) => setTimeout(resolve, ms));
+apps/desktop/src/components/MCP/MCPLogsViewer.tsx:38:    const interval = setInterval(() => {
+apps/desktop/src/components/MCP/MCPLogsViewer.tsx:54:    setTimeout(() => URL.revokeObjectURL(url), 1000);
+apps/web/core/storage/chat/chat-realtime-subscriptions.ts:463:      setTimeout(
+apps/web/features/chat/components/messages/ChatInput.tsx:67:      typingTimerRef.current = setTimeout(() => {
+apps/web/core/auth/account-lockout-service.ts:571:    this.cleanupInterval = setInterval(
+apps/desktop/src/components/Layout/BudgetStatusWidget.tsx:59:        timer = setTimeout(poll, POLL_INTERVAL_MS);
+apps/desktop/src/components/Images/ImagesGallery.tsx:218:    const timer = setTimeout(() => setIsLoading(false), 300);
+apps/web/features/chat/components/messages/EnhancedMessageInput.tsx:135:    const timeoutId = setTimeout(() => {
+apps/desktop/src/components/Auth/AuthForm.tsx:168:      const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+apps/web/features/chat/components/messages/MarkdownContent.tsx:23:    setTimeout(() => setCopied(false), 2000);
+apps/desktop/src/components/Auth/AuthPage.tsx:40:      const id = setTimeout(fn, ms);
+apps/web/features/chat/components/ToolCallCard.tsx:100:      setTimeout(() => setCopied(false), 2000);
+apps/desktop/src/components/Agent/AutomationHistory.tsx:144:    await new Promise((resolve) => setTimeout(resolve, 500));
+apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx:75:      setTimeout(() => setCopied(false), 2000);
+apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:223:    setTimeout(() => setCopied(false), 2000);
+apps/web/features/chat/components/artifacts/DocumentActions.tsx:58:      setTimeout(() => setCopied(false), 2000);
+apps/web/features/chat/components/AgentStatusBar.tsx:67:    intervalRef.current = setInterval(update, 1000);
+apps/web/core/security/api-abuse-prevention.ts:345:  cleanupIntervalId = setInterval(cleanupOldMetrics, 10 * 60 * 1000);
+apps/web/core/security/gradual-rollout.ts:221:  const interval = setInterval(
+apps/web/core/security/gradual-rollout.ts:424:    setTimeout(() => updateRollout(feature, { percentage: 10 }), 60 * 60 * 1000);
+apps/web/core/security/gradual-rollout.ts:425:    setTimeout(() => updateRollout(feature, { percentage: 25 }), 2 * 60 * 60 * 1000);
+apps/web/core/security/gradual-rollout.ts:426:    setTimeout(() => updateRollout(feature, { percentage: 50 }), 3 * 60 * 60 * 1000);
+apps/web/core/security/gradual-rollout.ts:427:    setTimeout(() => updateRollout(feature, { percentage: 100 }), 5 * 60 * 60 * 1000);
+apps/web/core/security/gradual-rollout.ts:433:    setTimeout(() => updateRollout(feature, { percentage: 50 }), 20 * 60 * 1000);
+apps/web/core/security/gradual-rollout.ts:434:    setTimeout(() => updateRollout(feature, { percentage: 100 }), 60 * 60 * 1000);
+apps/web/shared/ui/ai-prompt-box.tsx:85:      timerRef.current = setInterval(() => setTime((t) => t + 1), 1000);
+apps/web/core/auth/authentication-manager.ts:57:        setTimeout(() => reject(new Error('Auth timeout - possible invalid token')), 3000),
+apps/web/core/auth/rate-limiter.ts:37:    this.cleanupInterval = setInterval(
+apps/web/shared/ui/expandable-chat-demo.tsx:53:    setTimeout(() => {
+apps/web/features/chat/components/messages/MessageListNew.tsx:91:    setTimeout(() => setCopied(false), 2000);
+apps/web/features/chat/components/messages/MessageListNew.tsx:315:    setTimeout(() => setCopied(false), 2000);
+apps/web/features/chat/components/messages/MessageActions.tsx:212:    setTimeout(() => setCopied(false), 2000);
+apps/web/features/chat/components/messages/MessageActions.tsx:225:      setTimeout(() => setCopied(false), 2000);
+apps/web/features/chat/components/messages/AudioVisualizer.tsx:57:      const interval = setInterval(() => {
+apps/web/features/chat/components/messages/MessageSearch.tsx:66:    const timer = setTimeout(() => {
+apps/web/features/chat/components/messages/MessageBubble.tsx:259:    setTimeout(() => setCopied(false), 2000);
+apps/desktop/src/App.tsx:425:              const timeoutId = window.setTimeout(() => {
+apps/desktop/e2e/chat.spec.ts:140:    test.setTimeout(60000);
+apps/desktop/e2e/agi.spec.ts:377:  test.setTimeout(60000);
+apps/desktop/e2e/settings.spec.ts:9:  test.setTimeout(60000);
+apps/desktop/e2e/integration/rust-backend.spec.ts:139:          setTimeout(() => resolve(received), 1000);
+apps/web/features/chat/components/messages/CollaborativeMessageDisplay.tsx:46:    setTimeout(() => setIsCopied(false), 2000);
+apps/desktop/src-tauri/src/automation/uia/tests.rs:425:    fn test_element_registration_and_retrieval() {
+apps/desktop/src-tauri/src/features/tests/agi_tests.rs:494:    fn test_memory_retrieval() {
+apps/web/app/api/stripe-webhook/lib/db.ts:642:            setTimeout(resolve, WEBHOOK_RETRY_BASE_DELAY_MS * Math.pow(2, attempt)),
+apps/desktop/src-tauri/src/automation/codegen.rs:325:                        "  await new Promise(resolve => setTimeout(resolve, {}));\n",
+apps/desktop/src-tauri/src/automation/browser/cdp_client.rs:337:                    setTimeout(check, interval);
+apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs:1207:                            inner_html: el.innerHTML || '',
+apps/web/core/auth/authentication-manager.test.ts:134:            setTimeout(() => reject(new Error('Auth timeout - possible invalid token')), 100),
+apps/desktop/src-tauri/src/sys/commands/browser.rs:1122:                    setTimeout(check, interval);
+apps/desktop/src-tauri/src/sys/commands/browser.rs:1141:                setTimeout(check, interval);
+apps/desktop/src-tauri/src/sys/commands/browser.rs:1405:                    setTimeout(check, 100);
+apps/desktop/src-tauri/src/sys/commands/browser.rs:1421:            setTimeout(() => {{
+apps/desktop/src-tauri/src/core/agi/tests/security_tests.rs:329:            "eval('malicious code')",
+apps/desktop/src-tauri/src/core/agi/tests/memory_tests.rs:74:    fn test_memory_retrieval() {
+apps/desktop/src-tauri/src/sys/security/tool_guard.rs:1809:            "eval(",
+apps/desktop/src-tauri/src/core/llm/tool_executor/browser_tools.rs:369:                                setTimeout(check, 100);
+apps/desktop/src-tauri/src/core/llm/tool_executor/browser_tools.rs:373:                        setTimeout(() => {{
+apps/desktop/src-tauri/src/core/llm/tool_executor/browser_tools.rs:483:                                setTimeout(check, interval);
+apps/desktop/src-tauri/src/core/llm/tool_executor/browser_tools.rs:503:                            setTimeout(check, interval);
+apps/desktop/src-tauri/src/sys/security/auth.rs:741:    fn test_jwt_secret_retrieval() {
+apps/desktop/src-tauri/src/core/agi/executors/code_executor.rs:96:            pattern: "eval(",
+apps/desktop/src-tauri/src/sys/commands/email.rs:1219:    fn test_secure_password_storage_and_retrieval() {
+apps/desktop/src-tauri/src/core/agi/executors/browser_executor.rs:1584:                setTimeout(check, interval);

@@ -54,7 +54,10 @@ fn pick_fallback_default_model() -> String {
     let candidates = legacy_bundled_models();
     // Prefer anthropic, then openai, then any
     for preferred_provider in &["anthropic", "openai"] {
-        if let Some(m) = candidates.iter().find(|m| m.provider == *preferred_provider) {
+        if let Some(m) = candidates
+            .iter()
+            .find(|m| m.provider == *preferred_provider)
+        {
             return m.id.clone();
         }
     }
@@ -1356,14 +1359,13 @@ pub fn anthropic_primary_models() -> Vec<(String, String, String)> {
             let (name, tier) = catalog
                 .models
                 .values()
-                .find(|m| {
-                    m.api_model_id.as_deref().unwrap_or(&m.id) == api_id
-                        || m.id == api_id
-                })
+                .find(|m| m.api_model_id.as_deref().unwrap_or(&m.id) == api_id || m.id == api_id)
                 .map(|m| {
                     (
                         m.name.clone(),
-                        m.quality_tier.clone().unwrap_or_else(|| "balanced".to_string()),
+                        m.quality_tier
+                            .clone()
+                            .unwrap_or_else(|| "balanced".to_string()),
                     )
                 })
                 .unwrap_or_else(|| (api_id.clone(), "balanced".to_string()));
@@ -1551,7 +1553,8 @@ mod tests {
         });
         assert_eq!(
             m.provider, "openai",
-            "fast_completion_model(openai) should be an openai model, got provider={}", m.provider
+            "fast_completion_model(openai) should be an openai model, got provider={}",
+            m.provider
         );
 
         let anthropic_fast = fast_completion_model("anthropic");
@@ -1560,7 +1563,8 @@ mod tests {
         });
         assert_eq!(
             m.provider, "anthropic",
-            "fast_completion_model(anthropic) should be an anthropic model, got provider={}", m.provider
+            "fast_completion_model(anthropic) should be an anthropic model, got provider={}",
+            m.provider
         );
     }
 
@@ -1590,8 +1594,8 @@ mod tests {
             "\"gpt-5.4\"",
             "\"gpt-5.5\"",
             "\"claude-opus-4-6-mini\"",
-            "\"claude-haiku-4-5\"",   // must come from catalog, not hardcoded
-            "\"gpt-5.4-mini\"",       // must come from catalog, not hardcoded
+            "\"claude-haiku-4-5\"", // must come from catalog, not hardcoded
+            "\"gpt-5.4-mini\"",     // must come from catalog, not hardcoded
         ];
 
         for literal in forbidden {
@@ -1688,7 +1692,10 @@ mod tests {
     #[test]
     fn fallback_default_model_is_derivable() {
         let fallback = pick_fallback_default_model();
-        assert!(!fallback.is_empty(), "pick_fallback_default_model() must not return an empty string");
+        assert!(
+            !fallback.is_empty(),
+            "pick_fallback_default_model() must not return an empty string"
+        );
         // The fallback must come from the legacy bundled list.
         let legacy = legacy_bundled_models();
         assert!(
@@ -1734,10 +1741,7 @@ mod tests {
     fn no_hardcoded_model_ids_in_design_system() {
         let ds_src = include_str!("design_system.rs");
         // Split at the #[cfg(test)] boundary to avoid scanning test fixtures.
-        let production_src = ds_src
-            .split("#[cfg(test)]")
-            .next()
-            .unwrap_or(ds_src);
+        let production_src = ds_src.split("#[cfg(test)]").next().unwrap_or(ds_src);
         // IDs that were only ever in the match arms, not in tests.
         let formerly_hardcoded: &[&str] = &[
             "\"grok-4.3\"",

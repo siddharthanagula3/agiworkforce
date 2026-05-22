@@ -57,9 +57,17 @@ jest.mock('@/lib/models', () => {
 // Imports (after mock)
 // ---------------------------------------------------------------------------
 
-import { computeContextBudget, estimateTokens, needsCompaction } from '../services/contextBudgeter';
-import { compact, estimateSummaryTokens } from '../services/memoryCompactor';
-import { getRagChunkingConfig, chunkForModel, getMaxChunksForModel } from '../services/ragChunker';
+import {
+  computeContextBudget,
+  estimateTokens,
+  needsCompaction,
+} from '../src/features/memory/services/contextBudgeter';
+import { compact, estimateSummaryTokens } from '../src/features/memory/services/memoryCompactor';
+import {
+  getRagChunkingConfig,
+  chunkForModel,
+  getMaxChunksForModel,
+} from '../src/features/memory/services/ragChunker';
 import type { ChatMessage } from '../types/chat';
 
 // ---------------------------------------------------------------------------

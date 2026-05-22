@@ -225,8 +225,8 @@ export function asPlanTier(value: string | null | undefined): PlanTier {
 }
 
 export const PLAN_DISPLAY_NAMES: Record<PlanTier, string> = {
-  'local-only': 'Local Only',
-  byok: 'BYOK',
+  'local-only': 'Local Mode',
+  byok: 'Local Mode + BYOK',
   free: 'Free',
   hobby: 'Hobby',
   pro: 'Pro',

@@ -42,9 +42,12 @@ if ! command -v node &> /dev/null; then
     exit 1
 fi
 
-# Compare versions
+# Compare versions. Do not let `set -e` exit before we can print the
+# actionable error message for too-old Node versions.
+set +e
 version_compare "$CURRENT_NODE_VERSION" "$REQUIRED_NODE_VERSION"
 COMPARE_RESULT=$?
+set -e
 
 if [[ $COMPARE_RESULT -eq 2 ]]; then
     echo "❌ Error: Node.js version ${CURRENT_NODE_VERSION} is too old"

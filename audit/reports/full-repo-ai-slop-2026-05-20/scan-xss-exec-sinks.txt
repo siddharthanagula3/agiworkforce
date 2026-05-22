@@ -1,0 +1,1092 @@
+packages/skills/src/__tests__/loader.test.ts:117:    // The loader does NOT sanitize the `name` field — it's a model-readable
+packages/llm-normalize/src/lib/clean-for-gemini.ts:220:function sanitizeRequiredFields(schema: Record<string, unknown>): Record<string, unknown> {
+packages/llm-normalize/src/lib/clean-for-gemini.ts:391:      return sanitizeRequiredFields(flattened);
+packages/llm-normalize/src/lib/clean-for-gemini.ts:397:      return sanitizeRequiredFields(flattened);
+packages/llm-normalize/src/lib/clean-for-gemini.ts:401:  return sanitizeRequiredFields(cleaned);
+apps/extension-vscode/src/__tests__/webviewContent.webview.test.ts:62:      expect(() => new Function(body)).not.toThrow();
+apps/extension-vscode/src/__tests__/security.test.ts:148:// ─── VSCODE-05: sanitizeHtml command: URI stripping ───────────────────────────
+apps/extension-vscode/src/__tests__/security.test.ts:150:// The sanitizeHtml function lives inside an embedded <script> block in the
+apps/extension-vscode/src/__tests__/security.test.ts:154:describe('VSCODE-05 — sanitizeHtml (command: URI and javascript: stripping in webview)', () => {
+apps/extension-vscode/src/__tests__/security.test.ts:155:  // Extract the sanitizeHtml function text from the webview script block
+packages/utils/src/index.ts:39:  sanitizeCommandArgs,
+apps/extension-vscode/esbuild.js:40: * Webview render bundle — markdown-it + DOMPurify, browser target.
+apps/extension-vscode/esbuild.js:45: * + custom HTML sanitizer in webviewContent.ts:1066-1181.
+apps/extension-vscode/CHANGELOG.md:15:- **Webview link sanitizer** rewritten — only `https?:` and `mailto:` URIs survive on `<a href>`, `<img src>`, `<form action>`, `<button formaction>`. `command:`, `javascript:`, `vscode-resource:`, `data:` are all stripped. `srcdoc` removed unconditionally.
+apps/extension-vscode/CHANGELOG.md:58:- Webview link sanitizer — only `https?:` and `mailto:` survive; `javascript:`, `data:`, `command:` stripped.
+packages/utils/src/validation.ts:53: * @returns Validation result with sanitized URL
+packages/utils/src/validation.ts:57: * validateUrl('https://example.com'); // { valid: true, sanitized: 'https://example.com/' }
+packages/utils/src/validation.ts:69:): ValidationResult & { sanitized?: string } {
+packages/utils/src/validation.ts:101:    return { valid: true, sanitized: parsed.toString() };
+packages/utils/src/validation.ts:304: * @param args - Array of arguments to sanitize
+packages/utils/src/validation.ts:309: * sanitizeCommandArgs(['file.txt', '; rm -rf /']);
+packages/utils/src/validation.ts:313:export function sanitizeCommandArgs(args: string[]): string[] {
+packages/utils/src/validation.ts:364:    /<iframe/i,
+packages/providers/anthropic/src/replay-policy.ts:13:    sanitizeForReplay(messages: ProviderMessage[]): ProviderMessage[] {
+services/api-gateway/src/validations/queryParams.ts:4: * - Validates and sanitizes query parameters to prevent injection attacks
+apps/cli/ARCHITECTURE.md:556:`models::stream_completion` dispatches to per-provider functions (`stream_anthropic`, `stream_openai_compatible`, `stream_google`, `stream_ollama`, `stream_mistral`, `stream_copilot_api`, `stream_chatgpt_codex`). 5-min idle timeout across all SSE parsers. Provider-specific quirks (Mistral truncate IDs to 9 chars, Gemini schema sanitize) handled at the dispatch boundary.
+services/api-gateway/src/mcp/mcpProxy.ts:283:    // SECURITY: Build a sanitized env — strip sensitive vars from parent process.
+apps/cli/src/approval_audit.rs:42:            .map(|path| sanitize_field(&path.display().to_string()));
+apps/cli/src/approval_audit.rs:45:            tool_name: sanitize_field(tool_name.as_ref()),
+apps/cli/src/approval_audit.rs:46:            target: sanitize_field(target.as_ref()),
+apps/cli/src/approval_audit.rs:48:            risk: risk.map(sanitize_field),
+apps/cli/src/approval_audit.rs:49:            reason: reason.map(sanitize_field),
+apps/cli/src/approval_audit.rs:98:fn sanitize_field(raw: &str) -> String {
+apps/cli/src/approval_audit.rs:118:    fn sanitize_field_removes_control_characters_and_caps_length() {
+apps/cli/src/approval_audit.rs:120:        let sanitized = sanitize_field(&input);
+apps/cli/src/approval_audit.rs:122:        assert!(!sanitized.contains('\n'));
+apps/cli/src/approval_audit.rs:123:        assert!(!sanitized.contains('\t'));
+apps/cli/src/approval_audit.rs:124:        assert!(sanitized.ends_with(" [truncated]"));
+apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:63:  // Markdown rendering bundle (markdown-it + DOMPurify) — built by esbuild.js
+apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:896:  <!-- Markdown rendering bundle (markdown-it + DOMPurify). Loaded before the
+apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:1078:    // markdown-it + DOMPurify. If for any reason it failed to load, fall
+apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:1094:    // Attach copy-button click handlers after sanitized HTML is in the DOM.
+apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:1095:    // The previous inline onclick="copyCode(this)" is stripped by DOMPurify
+apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:1275:          currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
+apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:1340:        messagesEl.innerHTML = '';
+apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:1344:        freshEmpty.innerHTML = '<div class="empty-state-headline">Ask about your code</div>' +
+apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:1404:      mentionDropdown.innerHTML = '';
+apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:1411:      mentionDropdown.innerHTML = '';
+apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:1529:      doneEl.innerHTML = '<span class="codicon codicon-check" aria-hidden="true"></span> Done';
+apps/desktop/src/services/analytics.ts:143:    const sanitizedProperties = this.sanitizeProperties(properties);
+apps/desktop/src/services/analytics.ts:147:      properties: sanitizedProperties,
+apps/desktop/src/services/analytics.ts:321:  private sanitizeProperties(properties: Record<string, unknown>): Record<string, unknown> {
+apps/desktop/src/services/analytics.ts:322:    const sanitized = { ...properties };
+apps/desktop/src/services/analytics.ts:339:      if (key in sanitized) {
+apps/desktop/src/services/analytics.ts:340:        delete sanitized[key];
+apps/desktop/src/services/analytics.ts:344:    Object.keys(sanitized).forEach((key) => {
+apps/desktop/src/services/analytics.ts:346:        typeof sanitized[key] === 'object' &&
+apps/desktop/src/services/analytics.ts:347:        sanitized[key] !== null &&
+apps/desktop/src/services/analytics.ts:348:        !Array.isArray(sanitized[key])
+apps/desktop/src/services/analytics.ts:350:        sanitized[key] = this.sanitizeProperties(sanitized[key] as Record<string, unknown>);
+apps/desktop/src/services/analytics.ts:354:    return sanitized;
+apps/cli/src/tui/widgets/screen_renderers.rs:672:        "    Toggle with: --sandbox=<read-only|contained|unrestricted>".to_string(),
+services/api-gateway/src/middleware/errorHandler.ts:88:  // Truncate and sanitize the reflected path to prevent log injection and content reflection
+apps/cli/src/tui/terminal_title.rs:30:    /// A sanitized title was written, or stdout is not a terminal so no write was needed.
+apps/cli/src/tui/terminal_title.rs:40:/// Writes a sanitized OSC window-title sequence to stdout.
+apps/cli/src/tui/terminal_title.rs:55:    let title = sanitize_terminal_title(title);
+apps/cli/src/tui/terminal_title.rs:104:fn sanitize_terminal_title(title: &str) -> String {
+apps/cli/src/tui/terminal_title.rs:105:    let mut sanitized = String::new();
+apps/cli/src/tui/terminal_title.rs:111:            pending_space = !sanitized.is_empty();
+apps/cli/src/tui/terminal_title.rs:120:            sanitized.push(' ');
+apps/cli/src/tui/terminal_title.rs:129:        sanitized.push(ch);
+apps/cli/src/tui/terminal_title.rs:133:    sanitized
+apps/cli/src/tui/terminal_title.rs:171:    use super::sanitize_terminal_title;
+apps/cli/src/tui/terminal_title.rs:176:    fn sanitizes_terminal_title() {
+apps/cli/src/tui/terminal_title.rs:177:        let sanitized =
+apps/cli/src/tui/terminal_title.rs:178:            sanitize_terminal_title("  Project\t|\nWorking\x1b\x07\u{009D}\u{009C} |  Thread  ");
+apps/cli/src/tui/terminal_title.rs:179:        assert_eq!(sanitized, "Project | Working | Thread");
+apps/cli/src/tui/terminal_title.rs:184:        let sanitized = sanitize_terminal_title(
+apps/cli/src/tui/terminal_title.rs:187:        assert_eq!(sanitized, "Project Title");
+apps/cli/src/tui/terminal_title.rs:193:        let sanitized = sanitize_terminal_title(&input);
+apps/cli/src/tui/terminal_title.rs:194:        assert_eq!(sanitized.len(), MAX_TERMINAL_TITLE_CHARS);
+packages/types/src/tauri.ts:310:// DOMPurify Config Types
+packages/types/src/tauri.ts:314: * DOMPurify configuration options.
+packages/types/src/tauri.ts:316:export interface DOMPurifyConfig {
+packages/types/src/mcp-apps.ts:8: * The desktop and web surfaces host MCP App panels in sandboxed iframes.
+packages/types/src/mcp-apps.ts:9: * Communication between the host and the iframe uses a structured
+packages/types/src/mcp-apps.ts:113: * Capability grants for a sandboxed MCP App iframe.
+packages/types/src/mcp-apps.ts:115: * Permissions are enforced by the host at the `<iframe>` level (CSP,
+packages/types/src/mcp-apps.ts:175:// App Message (iframe ↔ host protocol)
+packages/types/src/mcp-apps.ts:179: * A message exchanged between a sandboxed MCP App iframe and its host.
+packages/types/src/mcp-apps.ts:185: * - `rpc-request`  -- iframe → host: invoke a JSON-RPC method.
+packages/types/src/mcp-apps.ts:186: * - `rpc-response` -- host → iframe: result or error for a prior request.
+packages/types/src/mcp-apps.ts:187: * - `event`        -- host → iframe: platform-initiated event (e.g., theme change).
+packages/types/src/mcp-apps.ts:188: * - `resize`       -- iframe → host: request a frame height change.
+packages/types/src/mcp-apps.ts:192: * // iframe requests a report
+apps/mobile/services/fileCreation.ts:43:function sanitizeFileName(title: string): string {
+apps/mobile/services/fileCreation.ts:210:  const fileName = `${sanitizeFileName(title)}.pdf`;
+apps/mobile/services/fileCreation.ts:241:  const fileName = `${sanitizeFileName(title)}.txt`;
+apps/mobile/services/fileCreation.ts:288:  const fileName = `${sanitizeFileName(title)}.docx`;
+apps/mobile/services/fileCreation.ts:301:  const fileName = `${sanitizeFileName(title)}.md`;
+apps/cli/src/daemon.rs:600:        let sanitized_body = format!(
+apps/cli/src/daemon.rs:605:            Some(base_prompt) => format!("{}\n\n{}", base_prompt, sanitized_body),
+apps/cli/src/daemon.rs:606:            None => sanitized_body,
+apps/extension-vscode/src/webview/render.ts:2: * webview/render.ts — Markdown → sanitized HTML inside the chat webview.
+apps/extension-vscode/src/webview/render.ts:11: * sanitizer in webviewContent.ts:1066-1181. Audit finding F-02 / F-10.
+apps/extension-vscode/src/webview/render.ts:15: *   - DOMPurify: FORBID_TAGS for svg/math/audio/video/iframe etc.,
+apps/extension-vscode/src/webview/render.ts:23:import DOMPurify from 'dompurify';
+apps/extension-vscode/src/webview/render.ts:32:const PURIFY_CONFIG: DOMPurify.Config = {
+apps/extension-vscode/src/webview/render.ts:39:    'iframe',
+apps/extension-vscode/src/webview/render.ts:58:    DOMPurify?: typeof DOMPurify;
+apps/extension-vscode/src/webview/render.ts:63: * Render markdown to sanitized HTML.
+apps/extension-vscode/src/webview/render.ts:67: * Step 2: DOMPurify sanitizes the result. Belt-and-suspenders.
+apps/extension-vscode/src/webview/render.ts:69: *         noreferrer" via a DOMPurify hook.
+apps/extension-vscode/src/webview/render.ts:74:  return DOMPurify.sanitize(html, PURIFY_CONFIG) as string;
+apps/extension-vscode/src/webview/render.ts:78:DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+apps/extension-vscode/src/webview/render.ts:87:window.DOMPurify = DOMPurify;
+apps/cli/src/tui/exec_cell/render.rs:82:    let sanitized = single_line.replace('`', "\\`");
+apps/cli/src/tui/exec_cell/render.rs:83:    if sanitized.chars().count() <= MAX_INTERACTION_PREVIEW_CHARS {
+apps/cli/src/tui/exec_cell/render.rs:84:        return sanitized;
+apps/cli/src/tui/exec_cell/render.rs:88:    for ch in sanitized.chars().take(MAX_INTERACTION_PREVIEW_CHARS) {
+apps/cli/src/tui/status/card.rs:559:    let base_url = provider.base_url.as_deref().and_then(sanitize_base_url);
+apps/cli/src/tui/status/card.rs:571:fn sanitize_base_url(raw: &str) -> Option<String> {
+apps/cli/src/tui/status/tests.rs:64:fn sanitize_directory(lines: Vec<String>) -> Vec<String> {
+apps/cli/src/tui/status/tests.rs:170:    let sanitized = sanitize_directory(rendered_lines).join("\n");
+apps/cli/src/tui/status/tests.rs:171:    assert_snapshot!(sanitized);
+apps/cli/src/tui/status/tests.rs:289:    let sanitized = sanitize_directory(rendered_lines).join("\n");
+apps/cli/src/tui/status/tests.rs:290:    assert_snapshot!(sanitized);
+apps/cli/src/tui/status/tests.rs:351:    let sanitized = sanitize_directory(rendered_lines).join("\n");
+apps/cli/src/tui/status/tests.rs:352:    assert_snapshot!(sanitized);
+apps/cli/src/tui/status/tests.rs:653:    let sanitized = sanitize_directory(rendered_lines).join("\n");
+apps/cli/src/tui/status/tests.rs:655:    assert_snapshot!(sanitized);
+apps/cli/src/tui/status/tests.rs:702:    let sanitized = sanitize_directory(rendered_lines).join("\n");
+apps/cli/src/tui/status/tests.rs:703:    assert_snapshot!(sanitized);
+apps/cli/src/tui/status/tests.rs:771:    let sanitized = sanitize_directory(rendered_lines).join("\n");
+apps/cli/src/tui/status/tests.rs:772:    assert_snapshot!(sanitized);
+apps/cli/src/tui/status/tests.rs:828:    let sanitized = sanitize_directory(rendered_lines).join("\n");
+apps/cli/src/tui/status/tests.rs:829:    assert_snapshot!(sanitized);
+apps/cli/src/tui/status/tests.rs:894:    let sanitized = sanitize_directory(rendered_lines).join("\n");
+apps/cli/src/tui/status/tests.rs:895:    assert_snapshot!(sanitized);
+apps/cli/src/tui/status/tests.rs:964:    let sanitized = sanitize_directory(rendered_lines).join("\n");
+apps/cli/src/tui/status/tests.rs:965:    assert_snapshot!(sanitized);
+apps/extension-vscode/src/providers/agentModeProvider.ts:395:      messagesEl.innerHTML = '';
+apps/extension-vscode/src/providers/agentModeProvider.ts:427:          messagesEl.innerHTML = '';
+packages/types/src/provider-adapter.ts:297:  sanitizeForReplay(messages: ProviderMessage[]): ProviderMessage[];
+apps/mobile/services/notifications.ts:251:// Input validation — sanitize notification data before use in navigation
+apps/cli/src/provider.rs:274:    pub fn sanitize_anthropic_tool_id(id: &str) -> String {
+apps/cli/src/provider.rs:292:    pub fn sanitize_gemini_schema(schema: &Value) -> Value {
+apps/cli/src/provider.rs:302:                        *val = Self::sanitize_gemini_schema(val);
+apps/cli/src/provider.rs:837:    fn test_sanitize_anthropic_tool_id() {
+apps/cli/src/provider.rs:839:            MessageNormalizer::sanitize_anthropic_tool_id("tool-123_abc"),
+apps/cli/src/provider.rs:843:            MessageNormalizer::sanitize_anthropic_tool_id("tool@#$"),
+apps/cli/src/features/hooks/hooks.rs:1464:        let stdout = r#"{"updated_mcp_tool_output": "sanitized!"}"#;
+apps/cli/src/features/hooks/hooks.rs:1466:        assert_eq!(s.updated_mcp_tool_output.as_deref(), Some("sanitized!"));
+apps/desktop/src/data/skills/skill-creator/assets/eval_review.html:203:        tbody.innerHTML = '';
+apps/desktop/src/data/skills/skill-creator/assets/eval_review.html:216:            headerRow.innerHTML = `<td colspan="3">${item.should_trigger ? 'Should Trigger' : 'Should NOT Trigger'}</td>`;
+apps/desktop/src/data/skills/skill-creator/assets/eval_review.html:223:          tr.innerHTML = `
+apps/desktop/src/data/skills/skill-creator/scripts/run_loop.py:92:        all_results = run_eval(
+apps/desktop/src/data/skills/skill-creator/scripts/run_eval.py:184:def run_eval(
+apps/desktop/src/data/skills/skill-creator/scripts/run_eval.py:286:    output = run_eval(
+apps/desktop/src/data/skills/skill-creator/eval-viewer/viewer.html:188:      .output-file-content iframe {
+apps/desktop/src/data/skills/skill-creator/eval-viewer/viewer.html:838:        container.innerHTML = '';
+apps/desktop/src/data/skills/skill-creator/eval-viewer/viewer.html:842:          container.innerHTML = '<div class="empty-state">No output files</div>';
+apps/desktop/src/data/skills/skill-creator/eval-viewer/viewer.html:877:            const iframe = document.createElement('iframe');
+apps/desktop/src/data/skills/skill-creator/eval-viewer/viewer.html:878:            iframe.src = file.data_uri;
+apps/desktop/src/data/skills/skill-creator/eval-viewer/viewer.html:879:            content.appendChild(iframe);
+apps/desktop/src/data/skills/skill-creator/eval-viewer/viewer.html:921:            wrapper.innerHTML = htmlStr;
+apps/desktop/src/data/skills/skill-creator/eval-viewer/viewer.html:983:        content.innerHTML = html;
+apps/desktop/src/data/skills/skill-creator/eval-viewer/viewer.html:1010:        content.innerHTML = '';
+apps/desktop/src/data/skills/skill-creator/eval-viewer/viewer.html:1044:            const iframe = document.createElement('iframe');
+apps/desktop/src/data/skills/skill-creator/eval-viewer/viewer.html:1045:            iframe.src = file.data_uri;
+apps/desktop/src/data/skills/skill-creator/eval-viewer/viewer.html:1046:            fc.appendChild(iframe);
+apps/desktop/src/data/skills/skill-creator/eval-viewer/viewer.html:1470:        container.innerHTML = html;
+packages/unified-chat/src/components/artifact-components/ReactPreview.tsx:2: * ReactPreview — sandboxed iframe that live-renders JSX/TSX artifact code.
+packages/unified-chat/src/components/artifact-components/ReactPreview.tsx:4: * Surface-agnostic: no Tauri imports. Uses standard <iframe sandbox="allow-scripts">
+packages/unified-chat/src/components/artifact-components/ReactPreview.tsx:9: * - sandbox="allow-scripts" only — no allow-same-origin, no allow-forms, no allow-popups
+packages/unified-chat/src/components/artifact-components/ReactPreview.tsx:10: * - CDN scripts (Babel, React, ReactDOM) load inside the iframe; no CSP token exposure
+packages/unified-chat/src/components/artifact-components/ReactPreview.tsx:169:  const iframeRef = useRef<HTMLIFrameElement>(null);
+packages/unified-chat/src/components/artifact-components/ReactPreview.tsx:203:  // Listen for messages from the iframe
+packages/unified-chat/src/components/artifact-components/ReactPreview.tsx:206:      if (event.source !== iframeRef.current?.contentWindow) return;
+packages/unified-chat/src/components/artifact-components/ReactPreview.tsx:207:      // sandboxed iframes post from origin "null"
+packages/unified-chat/src/components/artifact-components/ReactPreview.tsx:281:          <iframe
+packages/unified-chat/src/components/artifact-components/ReactPreview.tsx:283:            ref={iframeRef}
+packages/unified-chat/src/components/artifact-components/ReactPreview.tsx:287:            // Security: allow-scripts only — no allow-same-origin keeps the iframe
+packages/unified-chat/src/components/artifact-components/ReactPreview.tsx:289:            sandbox="allow-scripts"
+apps/mobile/lib/secureStorage.ts:14: * Zustand uses the store name as the key, which is safe, but we sanitize
+apps/mobile/lib/secureStorage.ts:17:function sanitizeKey(key: string): string {
+apps/mobile/lib/secureStorage.ts:36:      return await SecureStore.getItemAsync(sanitizeKey(name));
+apps/mobile/lib/secureStorage.ts:51:    await SecureStore.setItemAsync(sanitizeKey(name), value, {
+apps/mobile/lib/secureStorage.ts:57:      await SecureStore.deleteItemAsync(sanitizeKey(name));
+apps/desktop/src-tauri/src/data/database/security.rs:156:    pub fn sanitize_identifier(identifier: &str) -> Result<String> {
+apps/desktop/src-tauri/src/data/database/security.rs:279:        assert!(SqlSecurityValidator::sanitize_identifier("users").is_ok());
+apps/desktop/src-tauri/src/data/database/security.rs:280:        assert!(SqlSecurityValidator::sanitize_identifier("user_table").is_ok());
+apps/desktop/src-tauri/src/data/database/security.rs:281:        assert!(SqlSecurityValidator::sanitize_identifier("table123").is_ok());
+apps/desktop/src-tauri/src/data/database/security.rs:283:        assert!(SqlSecurityValidator::sanitize_identifier("users; DROP TABLE").is_err());
+apps/desktop/src-tauri/src/data/database/security.rs:284:        assert!(SqlSecurityValidator::sanitize_identifier("table-name").is_err());
+apps/desktop/src-tauri/src/data/database/security.rs:285:        assert!(SqlSecurityValidator::sanitize_identifier("table name").is_err());
+apps/desktop/src-tauri/src/automation/uia/tests.rs:425:    fn test_element_registration_and_retrieval() {
+apps/sandbox/README.md:10:`apps/web` previously rendered LLM artifacts in an `<iframe sandbox="allow-scripts allow-same-origin">`
+apps/sandbox/README.md:11:on the parent origin (`agiworkforce.com`). The W3C iframe-sandbox spec is
+apps/sandbox/README.md:15:This sandbox runs on a separate origin so the iframe is cross-origin by
+apps/sandbox/README.md:28:`apps/web/.env.local` and restart `pnpm --filter web dev`. Artifact iframes
+apps/sandbox/README.md:58:   iframe with `sandbox="allow-scripts"` (still safer than the pre-fix
+apps/sandbox/README.md:75:<iframe
+apps/sandbox/README.md:77:  sandbox="allow-scripts"
+apps/sandbox/README.md:79:></iframe>
+apps/sandbox/README.md:82:The iframe announces readiness:
+apps/sandbox/README.md:92:iframe.contentWindow!.postMessage(
+apps/sandbox/README.md:93:  { type: 'render', kind: 'html', html: sanitizedHtml },
+apps/sandbox/README.md:116:- `frame-src 'none'` — no nested iframes
+apps/sandbox/README.md:133:- **WEB-13** iframe sandbox escape (`allow-scripts allow-same-origin`) —
+apps/sandbox/README.md:134:  closed; the iframe is now cross-origin so the dual-flag mistake is
+apps/sandbox/index.html:9:  The parent app embeds this page in an iframe and ships the artifact via
+apps/sandbox/index.html:10:  postMessage. Because the iframe is cross-origin to the parent, scripts
+apps/sandbox/index.html:125:          rootEl.innerHTML = '';
+apps/sandbox/index.html:142:          rootEl.innerHTML = String(payload.html || '');
+apps/sandbox/index.html:163:          rootEl.innerHTML =
+apps/sandbox/index.html:203:          rootEl.innerHTML = cleaned;
+apps/sandbox/index.html:207:          rootEl.innerHTML =
+apps/sandbox/index.html:237:          rootEl.innerHTML = '';
+apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:26:fn sanitize_applescript_string(input: &str) -> String {
+apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:41:fn sanitize_window_title_arg(input: &str) -> String {
+apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:786:            let safe_process = sanitize_applescript_string(&window.process_name);
+apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:913:        let safe_title = sanitize_applescript_string(title);
+apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:935:        // Use sanitize_window_title_arg (not sanitize_applescript_string) since wmctrl
+apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:938:        let safe_title = sanitize_window_title_arg(title);
+apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:1004:    fn test_sanitize_applescript_string_removes_quotes_and_backslashes() {
+apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:1006:            sanitize_applescript_string(r#"My "Window" Title"#),
+apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:1010:            sanitize_applescript_string(r#"test\" ; do shell script"#),
+apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:1013:        assert_eq!(sanitize_applescript_string("normal title"), "normal title");
+apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:1017:    fn test_sanitize_applescript_string_truncates_long_input() {
+apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:1019:        assert_eq!(sanitize_applescript_string(&long_input).len(), 200);
+apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:1023:    fn test_sanitize_applescript_string_strips_newlines() {
+apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:1026:            sanitize_applescript_string("title\ndo shell script \"evil\""),
+apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:1030:            sanitize_applescript_string("title\r\ndo shell script \"evil\""),
+apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:1033:        assert_eq!(sanitize_applescript_string("clean title"), "clean title");
+apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:1037:    fn test_sanitize_window_title_arg_strips_null_and_newlines() {
+apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:1038:        assert_eq!(sanitize_window_title_arg("title\0rest"), "titlerest");
+apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:1040:            sanitize_window_title_arg("title\ninjected"),
+apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:1044:            sanitize_window_title_arg("title\r\ninjected"),
+apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:1047:        assert_eq!(sanitize_window_title_arg("normal title"), "normal title");
+apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:1051:    fn test_sanitize_window_title_arg_truncates_long_input() {
+apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:1053:        assert_eq!(sanitize_window_title_arg(&long_input).len(), 200);
+packages/unified-chat/src/components/ArtifactRenderer.tsx:14: * - Kept sanitizeHtml inline using DOMPurify-compatible allow-list logic via
+packages/unified-chat/src/components/ArtifactRenderer.tsx:15: *   a local plaintext fallback (no heavy dependency on the desktop sanitize util).
+packages/unified-chat/src/components/ArtifactRenderer.tsx:16: *   SVG/Mermaid rendering calls the local safe-sanitize helper.
+packages/unified-chat/src/components/ArtifactRenderer.tsx:73:// Minimal SVG sanitizer (allow-list — no external dependency)
+packages/unified-chat/src/components/ArtifactRenderer.tsx:161:/** Safely sanitize an SVG string by stripping disallowed tags/attributes. */
+packages/unified-chat/src/components/ArtifactRenderer.tsx:162:function sanitizeSvg(raw: string): string {
+packages/unified-chat/src/components/ArtifactRenderer.tsx:170:    function sanitizeNode(node: Element) {
+packages/unified-chat/src/components/ArtifactRenderer.tsx:205:      Array.from(node.children).forEach(sanitizeNode);
+packages/unified-chat/src/components/ArtifactRenderer.tsx:209:    sanitizeNode(svgEl);
+packages/unified-chat/src/components/ArtifactRenderer.tsx:288:  const sanitized = useMemo(() => sanitizeSvg(artifact.content), [artifact.content]);
+packages/unified-chat/src/components/ArtifactRenderer.tsx:290:  if (!sanitized) {
+packages/unified-chat/src/components/ArtifactRenderer.tsx:301:        dangerouslySetInnerHTML={{ __html: sanitized }}
+packages/unified-chat/src/components/ArtifactRenderer.tsx:356:  const sanitized = svg ? sanitizeSvg(svg) : null;
+packages/unified-chat/src/components/ArtifactRenderer.tsx:363:      {sanitized ? (
+packages/unified-chat/src/components/ArtifactRenderer.tsx:366:          dangerouslySetInnerHTML={{ __html: sanitized }}
+packages/unified-chat/src/components/ArtifactRenderer.tsx:377:  const iframeRef = useRef<HTMLIFrameElement>(null);
+packages/unified-chat/src/components/ArtifactRenderer.tsx:421:        <iframe
+packages/unified-chat/src/components/ArtifactRenderer.tsx:422:          ref={iframeRef}
+packages/unified-chat/src/components/ArtifactRenderer.tsx:426:          sandbox="allow-scripts allow-modals"
+packages/unified-chat/src/components/ActionLogTimeline.tsx:67:    const sanitizedMetadata = Object.fromEntries(
+packages/unified-chat/src/components/ActionLogTimeline.tsx:70:    if (Object.keys(sanitizedMetadata).length === 0) {
+packages/unified-chat/src/components/ActionLogTimeline.tsx:74:      return JSON.stringify(sanitizedMetadata, null, 2);
+packages/unified-chat/src/components/ActionLogTimeline.tsx:76:      return String(sanitizedMetadata);
+apps/mobile/__tests__/auth-storage.test.ts:17: *  - setItem delegates to SecureStore.setItemAsync with the sanitized key
+apps/mobile/__tests__/auth-storage.test.ts:22: *  - Keys containing characters outside [A-Za-z0-9._-] are sanitized to '_'.
+apps/mobile/__tests__/auth-storage.test.ts:171:    it('calls SecureStore.getItemAsync with the sanitized key', async () => {
+apps/mobile/__tests__/auth-storage.test.ts:189:    it('sanitizes keys with special characters before calling SecureStore', async () => {
+apps/mobile/__tests__/auth-storage.test.ts:210:    it('calls SecureStore.setItemAsync with the sanitized key and value', async () => {
+apps/mobile/__tests__/auth-storage.test.ts:223:    it('sanitizes the key before writing', async () => {
+apps/mobile/__tests__/auth-storage.test.ts:266:    it('calls SecureStore.deleteItemAsync with the sanitized key', async () => {
+apps/mobile/__tests__/auth-storage.test.ts:276:    it('sanitizes the key before deletion', async () => {
+apps/mobile/__tests__/auth-storage.test.ts:488:  test.each(cases)('sanitizeKey("$input") → "$expected"', async ({ input, expected }) => {
+packages/unified-chat/src/components/__tests__/artifactComponents.test.tsx:7: * - ReactPreview: iframe sandbox attributes correct
+packages/unified-chat/src/components/__tests__/artifactComponents.test.tsx:208:// ReactPreview — iframe sandbox attributes
+packages/unified-chat/src/components/__tests__/artifactComponents.test.tsx:217:  it('iframe has sandbox="allow-scripts" only', () => {
+packages/unified-chat/src/components/__tests__/artifactComponents.test.tsx:219:    const iframe = document.querySelector('iframe');
+packages/unified-chat/src/components/__tests__/artifactComponents.test.tsx:220:    expect(iframe).not.toBeNull();
+packages/unified-chat/src/components/__tests__/artifactComponents.test.tsx:221:    expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts');
+packages/unified-chat/src/components/__tests__/artifactComponents.test.tsx:224:  it('iframe has referrerPolicy="no-referrer"', () => {
+packages/unified-chat/src/components/__tests__/artifactComponents.test.tsx:226:    const iframe = document.querySelector('iframe');
+packages/unified-chat/src/components/__tests__/artifactComponents.test.tsx:227:    expect(iframe?.getAttribute('referrerpolicy')).toBe('no-referrer');
+apps/desktop/src-tauri/src/automation/safety.rs:144:pub fn sanitize_tool_output(output: &str) -> String {
+apps/desktop/src-tauri/src/automation/safety.rs:233:    fn test_sanitize_tool_output_redacts_openai_key() {
+apps/desktop/src-tauri/src/automation/safety.rs:235:        let result = sanitize_tool_output(input);
+apps/desktop/src-tauri/src/automation/safety.rs:241:    fn test_sanitize_tool_output_redacts_stripe_live_key() {
+apps/desktop/src-tauri/src/automation/safety.rs:245:        let result = sanitize_tool_output(&input);
+apps/desktop/src-tauri/src/automation/safety.rs:251:    fn test_sanitize_tool_output_redacts_stripe_test_key() {
+apps/desktop/src-tauri/src/automation/safety.rs:255:        let result = sanitize_tool_output(&input);
+apps/desktop/src-tauri/src/automation/safety.rs:261:    fn test_sanitize_tool_output_redacts_jwt() {
+apps/desktop/src-tauri/src/automation/safety.rs:263:        let result = sanitize_tool_output(input);
+apps/desktop/src-tauri/src/automation/safety.rs:269:    fn test_sanitize_tool_output_redacts_bearer_token() {
+apps/desktop/src-tauri/src/automation/safety.rs:271:        let result = sanitize_tool_output(input);
+apps/desktop/src-tauri/src/automation/safety.rs:277:    fn test_sanitize_tool_output_preserves_safe_text() {
+apps/desktop/src-tauri/src/automation/safety.rs:279:        let result = sanitize_tool_output(input);
+apps/desktop/src-tauri/src/automation/safety.rs:284:    fn test_sanitize_tool_output_multiple_secrets() {
+apps/desktop/src-tauri/src/automation/safety.rs:288:        let result = sanitize_tool_output(&input);
+apps/desktop/src-tauri/src/automation/browser/extension_bridge.rs:754:                    return Err(sanitize_realtime_bridge_error(error));
+apps/desktop/src-tauri/src/automation/browser/extension_bridge.rs:771:    Err(sanitize_realtime_bridge_error(last_error.unwrap_or_else(
+apps/desktop/src-tauri/src/automation/browser/extension_bridge.rs:1004:fn sanitize_realtime_bridge_error(error: Error) -> Error {
+apps/desktop/src-tauri/src/automation/browser/extension_bridge.rs:1151:        let sanitized_config = sanitize_realtime_bridge_error(Error::Generic(format!(
+apps/desktop/src-tauri/src/automation/browser/extension_bridge.rs:1155:        let sanitized_native = sanitize_realtime_bridge_error(Error::Generic(format!(
+apps/desktop/src-tauri/src/automation/browser/extension_bridge.rs:1160:        let config_message = match sanitized_config {
+apps/desktop/src-tauri/src/automation/browser/extension_bridge.rs:1164:        let native_message = match sanitized_native {
+packages/unified-chat/src/components/ArtifactPanel.tsx:341:          // SVG: render as <img> to prevent script execution — no allow-scripts
+packages/unified-chat/src/components/ArtifactPanel.tsx:365:          // HTML/React: sandboxed iframe without allow-scripts is safe for layout-only preview
+packages/unified-chat/src/components/ArtifactPanel.tsx:366:          <iframe
+packages/unified-chat/src/components/ArtifactPanel.tsx:368:            sandbox="allow-forms"
+apps/web/eslint.config.mjs:87:  // WEB-37 (audit 2026-05-19): forbid `dangerouslySetInnerHTML` in
+apps/web/eslint.config.mjs:91:  // The 5 legitimate dynamic sites (DOMPurify-sanitized artifact / mermaid
+apps/web/eslint.config.mjs:96:    ignores: ['shared/utils/html-sanitizer.ts', '**/*.{test,spec}.{ts,tsx}', '**/__tests__/**'],
+apps/web/eslint.config.mjs:101:          selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']",
+apps/web/eslint.config.mjs:103:            'dangerouslySetInnerHTML can introduce XSS. Sanitize via DOMPurify (@shared/utils/html-sanitizer) and add a per-line eslint-disable with WEB-37 justification, or render via JSX.',
+apps/web/__tests__/security/iframe-sandbox-regression.test.ts:7: * under `apps/web/` reintroduces `sandbox="allow-scripts allow-same-origin"`.
+apps/web/__tests__/security/iframe-sandbox-regression.test.ts:8: * That combination defeats the iframe sandbox per the W3C spec — scripts
+apps/web/__tests__/security/iframe-sandbox-regression.test.ts:9: * inside the iframe run with the parent's cookies and same-origin fetch
+apps/web/__tests__/security/iframe-sandbox-regression.test.ts:11: * (NEXT_PUBLIC_SANDBOX_ORIGIN) or `sandbox="allow-scripts"` alone.
+apps/web/__tests__/security/iframe-sandbox-regression.test.ts:61:describe('iframe-sandbox regression (WEB-13)', () => {
+apps/web/__tests__/security/iframe-sandbox-regression.test.ts:62:  it('no source file contains `allow-scripts allow-same-origin` together', () => {
+apps/web/__tests__/security/iframe-sandbox-regression.test.ts:75:      // order so e.g. "allow-same-origin allow-scripts" is also flagged.
+apps/web/__tests__/security/iframe-sandbox-regression.test.ts:87:          /sandbox\s*=\s*"[^"]*\ballow-scripts\b[^"]*\ballow-same-origin\b[^"]*"/.test(line) ||
+apps/web/__tests__/security/iframe-sandbox-regression.test.ts:88:          /sandbox\s*=\s*"[^"]*\ballow-same-origin\b[^"]*\ballow-scripts\b[^"]*"/.test(line) ||
+apps/web/__tests__/security/iframe-sandbox-regression.test.ts:89:          /sandbox\s*=\s*'[^']*\ballow-scripts\b[^']*\ballow-same-origin\b[^']*'/.test(line) ||
+apps/web/__tests__/security/iframe-sandbox-regression.test.ts:90:          /sandbox\s*=\s*'[^']*\ballow-same-origin\b[^']*\ballow-scripts\b[^']*'/.test(line)
+apps/web/__tests__/security/iframe-sandbox-regression.test.ts:100:        `WEB-13 regression — iframe sandbox combines allow-scripts + allow-same-origin:\n${msg}\n\n` +
+apps/web/__tests__/security/iframe-sandbox-regression.test.ts:101:          `This combination defeats the iframe sandbox per the W3C spec. Either ` +
+apps/web/__tests__/security/iframe-sandbox-regression.test.ts:102:          `use the cross-origin sandbox subdomain (apps/sandbox) or sandbox="allow-scripts" alone.`,
+apps/desktop/src/components/Teams/TeamInvitation.tsx:59:    await navigator.clipboard.writeText(validation.sanitized || inviteUrl);
+apps/desktop/src-tauri/src/sys/error/translator.rs:598:        let friendly_tool_name = sanitize_tool_name(tool);
+apps/desktop/src-tauri/src/sys/error/translator.rs:758:        let friendly_msg = sanitize_technical_message(msg);
+apps/desktop/src-tauri/src/sys/error/translator.rs:850:            let friendly_msg = sanitize_technical_message(msg);
+apps/desktop/src-tauri/src/sys/error/translator.rs:863:        let friendly_msg = sanitize_technical_message(msg);
+apps/desktop/src-tauri/src/sys/error/translator.rs:922:        let friendly_msg = sanitize_technical_message(msg);
+apps/desktop/src-tauri/src/sys/error/translator.rs:963:        let friendly_msg = sanitize_technical_message(msg);
+apps/desktop/src-tauri/src/sys/error/translator.rs:984:fn sanitize_tool_name(tool: &str) -> Cow<'_, str> {
+apps/desktop/src-tauri/src/sys/error/translator.rs:1011:fn sanitize_technical_message(msg: &str) -> String {
+apps/desktop/src-tauri/src/sys/error/translator.rs:1254:        let sanitized = sanitize_technical_message(error);
+apps/desktop/src-tauri/src/sys/error/translator.rs:1256:            message: format!("Something went wrong: {}", sanitized),
+apps/desktop/src-tauri/src/sys/error/translator.rs:1271:    fn test_sanitize_mcp_tool_name() {
+apps/desktop/src-tauri/src/sys/error/translator.rs:1273:            sanitize_tool_name("mcp__filesystem__read_file").as_ref(),
+apps/desktop/src-tauri/src/sys/error/translator.rs:1277:            sanitize_tool_name("mcp__gmail__send_email").as_ref(),
+apps/desktop/src-tauri/src/sys/error/translator.rs:1280:        assert_eq!(sanitize_tool_name("tool_browse_web").as_ref(), "browse web");
+apps/desktop/src-tauri/src/sys/error/translator.rs:1281:        assert_eq!(sanitize_tool_name("regular_tool").as_ref(), "regular tool");
+apps/desktop/src-tauri/src/sys/error/translator.rs:1285:    fn test_sanitize_technical_message() {
+apps/desktop/src-tauri/src/sys/error/translator.rs:1287:        let result = sanitize_technical_message(msg);
+apps/desktop/src-tauri/src/sys/account/mod.rs:460:    let sanitized = apiBaseUrl.trim().trim_end_matches('/').to_string();
+apps/desktop/src-tauri/src/sys/account/mod.rs:462:    if sanitized.is_empty() {
+apps/desktop/src-tauri/src/sys/account/mod.rs:465:    if !(sanitized.starts_with("http://") || sanitized.starts_with("https://")) {
+apps/desktop/src-tauri/src/sys/account/mod.rs:470:    validate_api_base_url(&sanitized)?;
+apps/desktop/src-tauri/src/sys/account/mod.rs:475:    *url = Some(sanitized);
+apps/web/app/pricing/layout.tsx:90:        dangerouslySetInnerHTML={{ __html: JSON.stringify(pricingSchema) }}
+apps/web/app/page.tsx:71:        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+apps/desktop/src-tauri/src/sys/commands/mcp.rs:1097:    let mut sanitized_config = state.config.lock().clone();
+apps/desktop/src-tauri/src/sys/commands/mcp.rs:1098:    for server_config in sanitized_config.mcp_servers.values_mut() {
+apps/desktop/src-tauri/src/sys/commands/mcp.rs:1106:    serde_json::to_value(sanitized_config).map_err(|e| format!("Failed to serialize config: {}", e))
+apps/web/components/SurfaceShowcase.tsx:661:                    <span dangerouslySetInnerHTML={{ __html: f }} />
+apps/web/components/SurfaceShowcase.tsx:800:                        <span dangerouslySetInnerHTML={{ __html: f }} />
+apps/web/features/chat/services/conversation-export.ts:254:    const filename = `${this.sanitizeFilename(session.title)}_${Date.now()}.${extension}`;
+apps/web/features/chat/services/conversation-export.ts:302:  private sanitizeFilename(filename: string): string {
+apps/desktop/src-tauri/src/sys/commands/browser.rs:79:fn sanitize_selector(selector: &str) -> String {
+apps/desktop/src-tauri/src/sys/commands/browser.rs:94:fn sanitize_js_value(value: &str) -> String {
+apps/desktop/src-tauri/src/sys/commands/browser.rs:1073:    let safe_selector = sanitize_selector(&selector);
+apps/desktop/src-tauri/src/sys/commands/browser.rs:1106:    let safe_selector = sanitize_selector(&selector);
+apps/desktop/src-tauri/src/sys/commands/browser.rs:1161:    let safe_form_selector = sanitize_selector(&selector);
+apps/desktop/src-tauri/src/sys/commands/browser.rs:1172:            let safe_field = sanitize_selector(field_selector);
+apps/desktop/src-tauri/src/sys/commands/browser.rs:1173:            let safe_value = sanitize_js_value(&value_str);
+apps/desktop/src-tauri/src/sys/commands/browser.rs:1220:    let safe_source = sanitize_selector(&source);
+apps/desktop/src-tauri/src/sys/commands/browser.rs:1221:    let safe_target = sanitize_selector(&target);
+apps/desktop/src-tauri/src/sys/commands/browser.rs:1526:    let safe_selector = sanitize_selector(&selector);
+apps/desktop/src-tauri/src/sys/commands/custom_agents.rs:157:fn sanitize_filename(name: &str) -> String {
+apps/desktop/src-tauri/src/sys/commands/custom_agents.rs:207:    let filename = sanitize_filename(config.name.trim());
+apps/desktop/src-tauri/src/sys/commands/custom_agents.rs:264:    let filename = sanitize_filename(name.trim());
+apps/desktop/src-tauri/src/sys/commands/marketplace.rs:691:        r#"<iframe src="{}" width="100%" height="600" frameborder="0"></iframe>"#,
+apps/web/lib/__tests__/artifact-sandbox.test.ts:108:  it('returns the iframe URL when sandbox is configured', () => {
+apps/web/lib/__tests__/artifact-sandbox.test.ts:126:    const iframe = document.createElement('iframe');
+apps/web/lib/__tests__/artifact-sandbox.test.ts:128:      postRenderToSandbox(iframe, { type: 'render', kind: 'html', html: 'x' }),
+apps/web/lib/__tests__/artifact-sandbox.test.ts:132:  it('does not throw when iframe contentWindow is null (gracefully skipped)', () => {
+apps/web/lib/__tests__/artifact-sandbox.test.ts:133:    const iframe = document.createElement('iframe');
+apps/web/lib/__tests__/artifact-sandbox.test.ts:134:    // jsdom iframe with no src has a contentWindow that may exist but not target a doc.
+apps/web/lib/__tests__/artifact-sandbox.test.ts:137:      postRenderToSandbox(iframe, { type: 'render', kind: 'html', html: 'x' }),
+apps/web/lib/leak-detector.ts:25:      // Log sanitized warning (don't log the actual value)
+apps/desktop/src-tauri/src/sys/commands/email.rs:1219:    fn test_secure_password_storage_and_retrieval() {
+apps/web/lib/safe-redirect.ts:14: * Validates and sanitizes a redirect URL to prevent open redirect attacks.
+apps/web/lib/safe-redirect.ts:95: * Checks if a URL is safe for redirect (doesn't actually sanitize)
+apps/desktop/src/components/UnifiedAgenticChat/artifact-components/ReactPreview.tsx:150: * Sandboxed iframe that loads React + ReactDOM + Babel standalone from CDN
+apps/desktop/src/components/UnifiedAgenticChat/artifact-components/ReactPreview.tsx:154: * - sandbox="allow-scripts" only — no allow-same-origin, no allow-forms, no allow-popups
+apps/desktop/src/components/UnifiedAgenticChat/artifact-components/ReactPreview.tsx:155: * - CDN scripts loaded inside the iframe; no CSP token exposure
+apps/desktop/src/components/UnifiedAgenticChat/artifact-components/ReactPreview.tsx:162:  const iframeRef = useRef<HTMLIFrameElement>(null);
+apps/desktop/src/components/UnifiedAgenticChat/artifact-components/ReactPreview.tsx:197:  // Listen for messages from the iframe
+apps/desktop/src/components/UnifiedAgenticChat/artifact-components/ReactPreview.tsx:200:      if (event.source !== iframeRef.current?.contentWindow) return;
+apps/desktop/src/components/UnifiedAgenticChat/artifact-components/ReactPreview.tsx:283:          <iframe
+apps/desktop/src/components/UnifiedAgenticChat/artifact-components/ReactPreview.tsx:285:            ref={iframeRef}
+apps/desktop/src/components/UnifiedAgenticChat/artifact-components/ReactPreview.tsx:289:            sandbox="allow-scripts"
+apps/web/lib/validations/path.ts:91:export function sanitizeFileName(fileName: string): string {
+apps/desktop/src/components/Settings/tabs/ModelsKeys/index.tsx:226:                    onOllamaUrlChange(result.sanitized ?? raw);
+apps/web/app/api/share/route.ts:26:function sanitizeMessages(
+apps/web/app/api/share/route.ts:79:  const sanitizedMessages = sanitizeMessages(messages);
+apps/web/app/api/share/route.ts:90:      messages: sanitizedMessages,
+apps/web/app/api/share/route.ts:91:      total_messages: sanitizedMessages.length,
+apps/desktop/src-tauri/src/sys/commands/git.rs:114:fn sanitize_commit_message(message: &str) -> Result<String, String> {
+apps/desktop/src-tauri/src/sys/commands/git.rs:282:    let message = sanitize_commit_message(&message)?;
+apps/web/lib/artifact-sandbox.ts:5: * Why: WEB-13 (audit 2026-05-19) closed the iframe-sandbox-escape finding
+apps/web/lib/artifact-sandbox.ts:6: * (`<iframe sandbox="allow-scripts allow-same-origin">` on the parent origin
+apps/web/lib/artifact-sandbox.ts:8: * separate origin so the iframe is cross-origin by construction.
+apps/web/lib/artifact-sandbox.ts:12: *   that origin. Components load `<iframe src="${sandbox}/" sandbox="allow-scripts">`
+apps/web/lib/artifact-sandbox.ts:15: *   `<iframe sandbox="allow-scripts" srcDoc=...>` — same-origin but without
+apps/web/lib/artifact-sandbox.ts:87: * Build the iframe URL for the sandbox. Returns `null` if the sandbox
+apps/web/lib/artifact-sandbox.ts:96: * Post a render payload to an embedded sandbox iframe. The caller is
+apps/web/lib/artifact-sandbox.ts:101:  iframe: HTMLIFrameElement,
+apps/web/lib/artifact-sandbox.ts:108:  const target = iframe.contentWindow;
+apps/web/features/chat/components/SandboxedIframe.tsx:14: * Renders an LLM artifact inside an iframe that is cross-origin to the parent
+apps/web/features/chat/components/SandboxedIframe.tsx:22: * `<iframe sandbox="allow-scripts" srcDoc=…>`. That fallback is strictly
+apps/web/features/chat/components/SandboxedIframe.tsx:24: * scripts in the iframe still can't reach `parent.document`, cookies, or
+apps/web/features/chat/components/SandboxedIframe.tsx:39:  /** Accessible title for the iframe. */
+apps/web/features/chat/components/SandboxedIframe.tsx:43:  /** Bump this number to force a full iframe re-mount (clears state). */
+apps/web/features/chat/components/SandboxedIframe.tsx:55:  const iframeRef = useRef<HTMLIFrameElement>(null);
+apps/web/features/chat/components/SandboxedIframe.tsx:65:      if (data.type === 'sandbox-ready' && iframeRef.current) {
+apps/web/features/chat/components/SandboxedIframe.tsx:67:          postRenderToSandbox(iframeRef.current, payload);
+apps/web/features/chat/components/SandboxedIframe.tsx:79:  // Also post on iframe load as a defensive backup against the case where
+apps/web/features/chat/components/SandboxedIframe.tsx:82:    if (!sandboxOrigin || !iframeRef.current) return;
+apps/web/features/chat/components/SandboxedIframe.tsx:84:      postRenderToSandbox(iframeRef.current, payload);
+apps/web/features/chat/components/SandboxedIframe.tsx:92:      <iframe
+apps/web/features/chat/components/SandboxedIframe.tsx:93:        ref={iframeRef}
+apps/web/features/chat/components/SandboxedIframe.tsx:97:        sandbox="allow-scripts"
+apps/web/features/chat/components/SandboxedIframe.tsx:107:    <iframe
+apps/web/features/chat/components/SandboxedIframe.tsx:108:      ref={iframeRef}
+apps/web/features/chat/components/SandboxedIframe.tsx:112:      sandbox="allow-scripts"
+apps/web/proxy.ts:20:  // parent falls back to a same-origin srcDoc iframe — no frame-src change
+apps/web/features/chat/components/MermaidRenderer.tsx:26:import DOMPurify from 'dompurify';
+apps/web/features/chat/components/MermaidRenderer.tsx:101:          setSvgHtml(DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } }));
+apps/web/features/chat/components/MermaidRenderer.tsx:332:          dangerouslySetInnerHTML={{ __html: svgHtml }}
+apps/desktop/src/components/Artifacts/ArtifactRendererView.tsx:29:import { sanitizeSvg } from '@/utils/security';
+apps/desktop/src/components/Artifacts/ArtifactRendererView.tsx:295:          dangerouslySetInnerHTML={{ __html: sanitizeSvg(svg) }}
+apps/desktop/src/components/Artifacts/ArtifactRendererView.tsx:313:    // Content Security Policy for the sandboxed HTML iframe.
+apps/desktop/src/components/Artifacts/ArtifactRendererView.tsx:322:    //   not inject any eval-dependent console-capture logic. Blocking eval()
+apps/desktop/src/components/Artifacts/ArtifactRendererView.tsx:324:    //   If a user artifact explicitly calls eval() it will be blocked by the CSP
+apps/desktop/src/components/Artifacts/ArtifactRendererView.tsx:388:      <iframe
+apps/desktop/src/components/Artifacts/ArtifactRendererView.tsx:393:        sandbox={data.sandbox_permissions.join(' ')}
+apps/desktop/src-tauri/src/features/communications/imap_client.rs:167:                    .map(|html| email_parser::sanitize_html(html)),
+apps/web/app/api/webhooks/directory-sync/route.ts:573:  // Canonicalize and sanitize group name before role mapping.
+apps/desktop/src-tauri/src/features/communications/email_parser.rs:266:pub fn sanitize_html(html: &str) -> String {
+apps/desktop/src-tauri/src/features/communications/email_parser.rs:267:    let mut sanitized = html.to_string();
+apps/desktop/src-tauri/src/features/communications/email_parser.rs:269:    sanitized = SCRIPT_TAG_RE.replace_all(&sanitized, "").to_string();
+apps/desktop/src-tauri/src/features/communications/email_parser.rs:271:    sanitized = EVENT_HANDLER_RE.replace_all(&sanitized, "").to_string();
+apps/desktop/src-tauri/src/features/communications/email_parser.rs:273:    sanitized = JAVASCRIPT_URI_RE.replace_all(&sanitized, "").to_string();
+apps/desktop/src-tauri/src/features/communications/email_parser.rs:275:    sanitized
+apps/desktop/src-tauri/src/features/communications/email_parser.rs:303:    fn test_sanitize_html() {
+apps/desktop/src-tauri/src/features/communications/email_parser.rs:306:        let sanitized = sanitize_html(html);
+apps/desktop/src-tauri/src/features/communications/email_parser.rs:307:        assert!(!sanitized.contains("<script"));
+apps/desktop/src-tauri/src/features/communications/email_parser.rs:308:        assert!(!sanitized.contains("onclick"));
+apps/desktop/src/components/UnifiedAgenticChat/GenerativeWidget.tsx:5: * iframe. The AI outputs a ```widget fenced code block; MessageContent extracts
+apps/desktop/src/components/UnifiedAgenticChat/GenerativeWidget.tsx:22: * Allowed CDN origins for script-src in the iframe CSP.
+apps/desktop/src/components/UnifiedAgenticChat/GenerativeWidget.tsx:92:  /** Raw HTML content to render inside the sandboxed iframe */
+apps/desktop/src/components/UnifiedAgenticChat/GenerativeWidget.tsx:96:  /** Initial iframe height in pixels before auto-resize kicks in */
+apps/desktop/src/components/UnifiedAgenticChat/GenerativeWidget.tsx:112:  const iframeRef = useRef<HTMLIFrameElement>(null);
+apps/desktop/src/components/UnifiedAgenticChat/GenerativeWidget.tsx:115:  const [iframeHeight, setIframeHeight] = useState(initialHeight);
+apps/desktop/src/components/UnifiedAgenticChat/GenerativeWidget.tsx:135:  // Listen for height messages from the iframe
+apps/desktop/src/components/UnifiedAgenticChat/GenerativeWidget.tsx:160:  const displayHeight = Math.min(iframeHeight, maxHeight);
+apps/desktop/src/components/UnifiedAgenticChat/GenerativeWidget.tsx:205:      ) : /* Sandboxed iframe */
+apps/desktop/src/components/UnifiedAgenticChat/GenerativeWidget.tsx:207:        <iframe
+apps/desktop/src/components/UnifiedAgenticChat/GenerativeWidget.tsx:208:          ref={iframeRef}
+apps/desktop/src/components/UnifiedAgenticChat/GenerativeWidget.tsx:210:          sandbox="allow-scripts allow-same-origin"
+apps/desktop/src/components/UnifiedAgenticChat/ActionLogTimeline.tsx:62:    const sanitizedMetadata = Object.fromEntries(
+apps/desktop/src/components/UnifiedAgenticChat/ActionLogTimeline.tsx:65:    if (Object.keys(sanitizedMetadata).length === 0) {
+apps/desktop/src/components/UnifiedAgenticChat/ActionLogTimeline.tsx:70:      return JSON.stringify(sanitizedMetadata, null, 2);
+apps/desktop/src/components/UnifiedAgenticChat/ActionLogTimeline.tsx:72:      return String(sanitizedMetadata);
+apps/desktop/src-tauri/src/sys/commands/chat/browser_context.rs:2:    escape_xml, sanitize_for_prompt, sanitize_multiline_for_prompt,
+apps/desktop/src-tauri/src/sys/commands/chat/browser_context.rs:12:    let sanitized_url = escape_xml(&sanitize_for_prompt(
+apps/desktop/src-tauri/src/sys/commands/chat/browser_context.rs:16:    let sanitized_title = escape_xml(&sanitize_for_prompt(
+apps/desktop/src-tauri/src/sys/commands/chat/browser_context.rs:23:        sanitized_url, sanitized_title
+apps/desktop/src-tauri/src/sys/commands/chat/browser_context.rs:27:        let sanitized_selected = escape_xml(&sanitize_multiline_for_prompt(
+apps/desktop/src-tauri/src/sys/commands/chat/browser_context.rs:31:        if !sanitized_selected.is_empty() {
+apps/desktop/src-tauri/src/sys/commands/chat/browser_context.rs:34:                sanitized_selected
+apps/desktop/src-tauri/src/sys/commands/chat/browser_context.rs:90:    fn browser_context_message_sanitizes_untrusted_fields() {
+apps/desktop/src-tauri/src/sys/commands/chat/state.rs:64:/// Maximum length for sanitized URLs injected into prompts.
+apps/desktop/src-tauri/src/sys/commands/chat/state.rs:66:/// Maximum length for sanitized page titles injected into prompts.
+apps/desktop/src-tauri/src/sys/commands/chat/state.rs:68:/// Maximum length for sanitized selected text injected into prompts.
+apps/desktop/src/components/ToolCalling/ToolResultCard.tsx:33:import { sanitizeMarkdownHtml } from '../../utils/security';
+apps/desktop/src/components/ToolCalling/ToolResultCard.tsx:156:        // Updated Nov 16, 2025: Added XSS protection with DOMPurify sanitization
+apps/desktop/src/components/ToolCalling/ToolResultCard.tsx:158:        const sanitizedMarkdown = sanitizeMarkdownHtml(markdown);
+apps/desktop/src/components/ToolCalling/ToolResultCard.tsx:161:            <div dangerouslySetInnerHTML={{ __html: sanitizedMarkdown }} />
+apps/desktop/src-tauri/src/sys/commands/chat/mod.rs:75:    build_os_context, build_project_context_message, sanitize_multiline_for_prompt,
+apps/desktop/src-tauri/src/sys/commands/chat/send_message_execution.rs:417:                    let sanitized_summary = sanitize_multiline_for_prompt(&summary, 4096);
+apps/desktop/src-tauri/src/sys/commands/chat/send_message_execution.rs:422:                            sanitized_summary
+apps/desktop/src-tauri/src/sys/commands/chat/prompt_context.rs:7:pub(super) fn sanitize_for_prompt(s: &str, max_len: usize) -> String {
+apps/desktop/src-tauri/src/sys/commands/chat/prompt_context.rs:14:/// Like [`sanitize_for_prompt`] but preserves newlines and tabs, which are
+apps/desktop/src-tauri/src/sys/commands/chat/prompt_context.rs:16:pub(super) fn sanitize_multiline_for_prompt(s: &str, max_len: usize) -> String {
+apps/desktop/src-tauri/src/sys/commands/chat/prompt_context.rs:327:    fn sanitize_for_prompt_strips_controls_and_backticks() {
+apps/desktop/src-tauri/src/sys/commands/chat/prompt_context.rs:328:        assert_eq!(sanitize_for_prompt("ok\x00\t`\ntext", 32), "oktext");
+apps/desktop/src-tauri/src/sys/commands/chat/prompt_context.rs:332:    fn sanitize_multiline_for_prompt_preserves_tabs_and_newlines() {
+apps/desktop/src-tauri/src/sys/commands/chat/prompt_context.rs:334:            sanitize_multiline_for_prompt("line 1\n\tline 2`\x07", 32),
+apps/web/features/chat/components/cards/CalculationCard.tsx:20:import DOMPurify from 'dompurify';
+apps/web/features/chat/components/cards/CalculationCard.tsx:163:        dangerouslySetInnerHTML={{
+apps/web/features/chat/components/cards/CalculationCard.tsx:164:          __html: DOMPurify.sanitize(rendered, { USE_PROFILES: { html: true } }),
+apps/web/features/chat/components/ArtifactBlock.tsx:7: *   html     → sandboxed <iframe> live preview
+apps/web/features/chat/components/ArtifactBlock.tsx:21:import DOMPurify from 'dompurify';
+apps/web/features/chat/components/ArtifactBlock.tsx:102: * is configured. Falls back to a same-origin `srcDoc` iframe with
+apps/web/features/chat/components/ArtifactBlock.tsx:103: * `sandbox="allow-scripts"` (no `allow-same-origin`) when the subdomain
+apps/web/features/chat/components/ArtifactBlock.tsx:284:          dangerouslySetInnerHTML={{
+apps/web/features/chat/components/ArtifactBlock.tsx:285:            __html: DOMPurify.sanitize(highlighted, { USE_PROFILES: { html: true } }),
+apps/desktop/src-tauri/src/sys/commands/feedback.rs:119:            let sanitized = crate::sys::logging::filter_sensitive_data(line);
+apps/desktop/src-tauri/src/sys/commands/feedback.rs:124:            let truncated = if sanitized.len() > max_line_bytes {
+apps/desktop/src-tauri/src/sys/commands/feedback.rs:126:                while !sanitized.is_char_boundary(end) && end > 0 {
+apps/desktop/src-tauri/src/sys/commands/feedback.rs:129:                format!("{}...[truncated]", &sanitized[..end])
+apps/desktop/src-tauri/src/sys/commands/feedback.rs:131:                sanitized
+apps/desktop/src/__tests__/services/analytics.test.ts:84:    it('should sanitize PII from event properties', () => {
+apps/desktop/src/components/Execution/TerminalPanel.tsx:131:          const sanitizedLine = stripAnsi(line);
+apps/desktop/src/components/Execution/TerminalPanel.tsx:133:            terminal.writeln(`\x1b[1;31m${sanitizedLine}\x1b[0m`);
+apps/desktop/src/components/Execution/TerminalPanel.tsx:135:            terminal.writeln(sanitizedLine);
+apps/desktop/src/utils/security.ts:1:import DOMPurify, { type Config as DOMPurifyConfig } from 'dompurify';
+apps/desktop/src/utils/security.ts:3:// AUDIT-007-016/017/018 fix: Register DOMPurify hooks once at module initialization
+apps/desktop/src/utils/security.ts:4:// instead of on every sanitize call to avoid memory leaks and performance issues
+apps/desktop/src/utils/security.ts:7:function initializeDOMPurifyHooks(): void {
+apps/desktop/src/utils/security.ts:11:  // Hook for sanitizeHtml with allowLinks option
+apps/desktop/src/utils/security.ts:12:  // This hook handles anchor tags for all sanitize functions
+apps/desktop/src/utils/security.ts:13:  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+apps/desktop/src/utils/security.ts:25:initializeDOMPurifyHooks();
+apps/desktop/src/utils/security.ts:27:export function sanitizeHtml(
+apps/desktop/src/utils/security.ts:42:  const config: DOMPurifyConfig = {
+apps/desktop/src/utils/security.ts:85:  const sanitized = DOMPurify.sanitize(html, config);
+apps/desktop/src/utils/security.ts:90:    tempDiv.innerHTML = sanitized;
+apps/desktop/src/utils/security.ts:101:  return sanitized;
+apps/desktop/src/utils/security.ts:104:export function sanitizeEmailHtml(html: string): string {
+apps/desktop/src/utils/security.ts:105:  const config: DOMPurifyConfig = {
+apps/desktop/src/utils/security.ts:151:  const sanitized = DOMPurify.sanitize(html, config);
+apps/desktop/src/utils/security.ts:154:  tempDiv.innerHTML = sanitized;
+apps/desktop/src/utils/security.ts:180:export function sanitizeMarkdownHtml(html: string): string {
+apps/desktop/src/utils/security.ts:181:  const config: DOMPurifyConfig = {
+apps/desktop/src/utils/security.ts:219:  const sanitized = DOMPurify.sanitize(html, config);
+apps/desktop/src/utils/security.ts:222:  tempDiv.innerHTML = sanitized;
+apps/desktop/src/utils/security.ts:242:  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+apps/desktop/src/utils/security.ts:344:): { valid: boolean; sanitized?: string; error?: string } {
+apps/desktop/src/utils/security.ts:378:    return { valid: true, sanitized: parsed.toString() };
+apps/desktop/src/utils/security.ts:402:        /<iframe/i,
+apps/desktop/src/utils/security.ts:471:    /<iframe/i,
+apps/desktop/src/utils/security.ts:526:export function sanitizeSvg(svg: string): string {
+apps/desktop/src/utils/security.ts:527:  const config: DOMPurifyConfig = {
+apps/desktop/src/utils/security.ts:762:  return DOMPurify.sanitize(svg, config);
+apps/desktop/src-tauri/src/features/terminal/session_manager.rs:406:    let sanitized_command = scrub_secrets(command);
+apps/desktop/src-tauri/src/features/terminal/session_manager.rs:424:        params![sanitized_command, working_dir, timestamp, session_id],
+apps/desktop/src-tauri/src/features/terminal/session_manager.rs:431:        sanitized_command
+apps/desktop/src/components/Execution/InteractiveTerminal.tsx:132:      const sanitized = String(error).replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+apps/desktop/src/components/Execution/InteractiveTerminal.tsx:133:      terminal.writeln(`\x1b[31mError: ${sanitized}\x1b[0m`);
+apps/desktop/src/__tests__/components/ReactPreview.test.ts:12:    expect(document).not.toContain('new Function');
+apps/desktop/src/utils/validation.ts:10:import { escapeHtml as escapeHtmlSecure, sanitizeHtml as sanitizeHtmlSecure } from './security';
+apps/desktop/src/utils/validation.ts:20:  sanitizeCommandArgs,
+apps/desktop/src/utils/validation.ts:48: * @param html - HTML string to sanitize
+apps/desktop/src/utils/validation.ts:51: * @deprecated Use sanitizeHtml from security.ts for proper HTML sanitization
+apps/desktop/src/utils/validation.ts:53:export function sanitizeHtml(html: string): string {
+apps/desktop/src/utils/validation.ts:54:  console.warn('DEPRECATED: Use sanitizeHtml from security.ts for proper HTML sanitization');
+apps/desktop/src/utils/validation.ts:55:  return sanitizeHtmlSecure(html);
+apps/desktop/src-tauri/src/features/tests/agi_tests.rs:494:    fn test_memory_retrieval() {
+apps/desktop/src/components/Canvas/ArtifactPreview.tsx:5: * - html   → sandboxed iframe with srcDoc
+apps/desktop/src/components/Canvas/ArtifactPreview.tsx:16:import { sanitizeMarkdownHtml } from '../../utils/security';
+apps/desktop/src/components/Canvas/ArtifactPreview.tsx:61:// Sandboxed iframe sandbox attribute (no allow-same-origin per security rules)
+apps/desktop/src/components/Canvas/ArtifactPreview.tsx:63:const IFRAME_SANDBOX = 'allow-scripts allow-popups';
+apps/desktop/src/components/Canvas/ArtifactPreview.tsx:133:          <iframe
+apps/desktop/src/components/Canvas/ArtifactPreview.tsx:135:            sandbox={IFRAME_SANDBOX}
+apps/desktop/src/components/Canvas/ArtifactPreview.tsx:145:              // CRIT-009: sanitizeMarkdownHtml strips any unsafe tags/attributes via DOMPurify
+apps/desktop/src/components/Canvas/ArtifactPreview.tsx:146:              dangerouslySetInnerHTML={{ __html: sanitizeMarkdownHtml(markdownHtml) }}
+apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx:75: * For HTML/React/SVG we show the iframe below, so no text preview needed.
+apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx:107:          /* Tiny iframe preview — sandboxed, pointer-events off */
+apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx:108:          <iframe
+apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx:110:            sandbox="allow-scripts"
+apps/desktop/src/stores/billing/costSlice.ts:67:    const sanitized: CostFilters = { days: merged.days };
+apps/desktop/src/stores/billing/costSlice.ts:68:    if (providerNormalized) sanitized.provider = providerNormalized;
+apps/desktop/src/stores/billing/costSlice.ts:69:    if (modelNormalized) sanitized.model = modelNormalized;
+apps/desktop/src/stores/billing/costSlice.ts:70:    set({ loadingCostAnalytics: true, costError: null, costFilters: sanitized });
+apps/desktop/src/stores/billing/costSlice.ts:79:        days: sanitized.days,
+apps/desktop/src/stores/billing/costSlice.ts:80:        provider: sanitized.provider ?? null,
+apps/desktop/src/stores/billing/costSlice.ts:81:        model: sanitized.model ?? null,
+apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:25:import { sanitizeArtifact, sanitizeSVG, hasXSSRisk } from '@shared/utils/html-sanitizer';
+apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:63: * - Responsive iframe sandbox
+apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:80:  // WEB-13 / WEB-20: bumped on refresh to force iframe re-mount.
+apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:97:    const sanitizedContent = sanitizeArtifact(content, artifact.type);
+apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:117:    ${sanitizedContent}
+apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:137:      ${sanitizedContent}
+apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:143:        // SVG has additional sanitization via sanitizeSVG
+apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:144:        const sanitizedSVG = sanitizeSVG(content);
+apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:163:    ${sanitizedSVG}
+apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:206:  // or fall back to a same-origin srcDoc iframe with sandbox="allow-scripts"
+apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:213:    const sanitized = sanitizeArtifact(content, artifact.type);
+apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:217:        return { type: 'render', kind: 'html', html: sanitized, runScripts: true };
+apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:219:        return { type: 'render', kind: 'react', code: sanitized };
+apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:221:        return { type: 'render', kind: 'svg', svg: sanitizeSVG(content) };
+apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:287:    // iframe load triggers a fresh sandbox-ready + payload post.
+apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:419:            has been sanitized for your protection, but some functionality may be limited.
+apps/desktop/src/components/v3/ArtifactWorkspace.tsx:194:      <iframe
+apps/desktop/src/components/v3/ArtifactWorkspace.tsx:197:        sandbox="allow-scripts allow-same-origin"
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:4: * Renders MCP app content inside a sandboxed iframe. Security properties:
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:5: * - sandbox="allow-scripts allow-forms allow-popups" — NO allow-same-origin
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:9: * - Never eval() user-provided content
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:26:/** Messages sent FROM the iframe TO us */
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:34:/** Messages sent FROM us TO the iframe */
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:60: * that would allow the iframe to escape the sandbox and access parent DOM.
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:62:const IFRAME_SANDBOX = 'allow-scripts allow-forms allow-popups';
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:67:  const iframeRef = useRef<HTMLIFrameElement>(null);
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:78:      // Origin validation: for srcDoc iframes, origin is "null" (opaque origin)
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:79:      // For URL iframes, we validate against allowedOrigins when provided.
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:84:        // For URL iframes: only accept messages if origin matches allowed list
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:90:        // For HTML (srcDoc) iframes: only accept null-origin messages from our iframe
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:94:      // Ensure the message comes from our specific iframe (when possible)
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:96:        iframeRef.current &&
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:98:        event.source !== iframeRef.current.contentWindow
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:134:  // ─── Public API: send data update to iframe ───────────────────────────────
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:137:    const iframe = iframeRef.current;
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:138:    if (!iframe?.contentWindow) return;
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:140:    // Using '*' as the target origin is safe here because the iframe is sandboxed
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:142:    // the iframe runs in an opaque origin and cannot navigate itself to a malicious
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:144:    // because srcDoc iframes always have an opaque ("null") origin, and URL iframes
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:147:    iframe.contentWindow.postMessage(msg, '*');
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:191:      {/* Sandboxed iframe */}
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:193:        <iframe
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:194:          ref={iframeRef}
+apps/desktop/src/components/MCP/McpAppRenderer.tsx:198:          sandbox={IFRAME_SANDBOX}
+apps/web/app/api/agents/execute/route.ts:48:  const sanitized = employeeId.replace(/[^a-zA-Z0-9_-]/g, '');
+apps/web/app/api/agents/execute/route.ts:49:  if (sanitized !== employeeId) {
+apps/web/app/api/agents/execute/route.ts:53:  const filePath = join(process.cwd(), '.agi', 'employees', `${sanitized}.md`);
+apps/web/app/api/agents/execute/route.ts:150:    const sanitizedHistory = conversationHistory.map((m) =>
+apps/web/app/api/agents/execute/route.ts:153:    messages.push(...sanitizedHistory);
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:4: * Built-in component renderers that execute inside the sandboxed iframe.
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:6: * strings that are injected into the iframe's srcdoc attribute.
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:9: *   - The iframe is sandbox="allow-scripts" (no allow-same-origin).
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:11: *     cookies, or the DOM outside the iframe.
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:12: *   - Data flows host→iframe via postMessage only (never via shared memory).
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:76: * Returns the JavaScript source that runs inside the sandboxed iframe.
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:82:  // plain + concatenation so that backtick characters in the iframe JS do
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:141:    '      container.innerHTML = "<svg viewBox=\\"0 0 "+W+" "+H+"\\" width=\\"100%\\">"+slices+"</svg>";',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:182:    '    container.innerHTML="<svg viewBox=\\"0 0 "+W+" "+H+"\\" width=\\"100%\\">"+axisLine+bars+lines+xlabels+"</svg>";',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:208:    '    container.innerHTML = (config.title ? "<p class=\\"tbl-title\\">"+esc(config.title)+"</p>" : "") +',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:237:    '    container.innerHTML = html;',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:278:    '    container.innerHTML = "<div class=\\"md\\"><p>"+html+"</p></div>";',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:288:    '    container.innerHTML =',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:303:    '          el.innerHTML = "<p class=\\"err\\">Unknown component type: "+esc(type)+"</p>";',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:306:    '      el.innerHTML = "<p class=\\"err\\">Render error: "+esc(String(err))+"</p>";',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:319:    '    root.innerHTML = "";',
+apps/desktop/src/components/MCP/MCPAppComponents.tsx:436: * iframe's srcdoc attribute. The document:
+apps/desktop/src-tauri/src/core/orchestration/workflow_executor.rs:930:            let sanitized_key: String = key
+apps/desktop/src-tauri/src/core/orchestration/workflow_executor.rs:934:            if sanitized_key.is_empty() {
+apps/desktop/src-tauri/src/core/orchestration/workflow_executor.rs:941:            cmd.env(format!("WF_{}", sanitized_key.to_uppercase()), env_val);
+apps/desktop/src/components/MCP/MCPAppRegistry.tsx:35:  /** Human-readable label shown in the iframe header bar */
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:5: * McpAppDefinition objects inside a sandboxed iframe embedded in the chat
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:15: *   - iframe sandbox="allow-scripts" only — NO allow-same-origin, no
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:17: *     iframe JS and are forwarded via postMessage, not HTTP)
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:18: *   - postMessage source validated against iframeRef.current.contentWindow
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:19: *   - Origin validated: sandboxed iframes have opaque 'null' origin; any
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:23: *   - No eval(), no dynamic code execution on the host
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:50:   * Receives the JSON-RPC method name and params from the iframe.
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:53:  /** Hard cap on iframe height in pixels. Defaults to 400. */
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:59:/** JSON-RPC message shape used by the iframe ↔ host bridge */
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:98:  const iframeRef = useRef<HTMLIFrameElement>(null);
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:100:  // Height is driven by the iframe reporting its own scrollHeight via postMessage
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:101:  const [iframeHeight, setIframeHeight] = useState<number>(
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:110:  // data updates are pushed via postMessage to avoid a full iframe reload).
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:117:  // ── host → iframe: postMessage helper ───────────────────────────────────
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:120:    const iw = iframeRef.current?.contentWindow;
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:122:    // Sandboxed iframes (no allow-same-origin) have an opaque origin.
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:139:  // ── sync theme to iframe ─────────────────────────────────────────────────
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:162:  // ── iframe → host: postMessage listener ─────────────────────────────────
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:166:      const iframe = iframeRef.current;
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:167:      if (!iframe?.contentWindow) return;
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:169:      // Source identity check: only accept from our specific iframe element
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:170:      if (event.source !== iframe.contentWindow) return;
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:173:      //   - Sandboxed iframes without allow-same-origin produce 'null' origin
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:218:  // ── iframe error handler ─────────────────────────────────────────────────
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:228:  const displayHeight = Math.min(iframeHeight, hardMax);
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:292:              Failed to render MCP App — the iframe could not be loaded.
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:297:        {/* Sandboxed iframe */}
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:299:          <iframe
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:300:            ref={iframeRef}
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:304:             *   allow-scripts  : required for the component rendering JS
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:305:             *   NO allow-same-origin : iframe runs in an opaque origin
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:307:             *   NO allow-forms : HTTP form submissions are blocked; the iframe
+apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:311:            sandbox="allow-scripts"
+apps/desktop/src-tauri/src/sys/security/secret_manager.rs:67:    /// - Errors are sanitized to prevent secret leakage
+apps/desktop/src-tauri/src/sys/security/secret_manager.rs:78:                debug!("No JWT secret found in database: {}", sanitize_error(&e));
+apps/desktop/src-tauri/src/sys/security/secret_manager.rs:90:                sanitize_error(&e)
+apps/desktop/src-tauri/src/sys/security/secret_manager.rs:112:                sanitize_error(&e)
+apps/desktop/src-tauri/src/sys/security/secret_manager.rs:279:fn sanitize_error(error: &SecretError) -> String {
+apps/desktop/src/components/editing/LivePreview.tsx:2:import DOMPurify from 'dompurify';
+apps/desktop/src/components/editing/LivePreview.tsx:208:  const sanitizedContent = DOMPurify.sanitize(content, {
+apps/desktop/src/components/editing/LivePreview.tsx:211:    FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form'],
+apps/desktop/src/components/editing/LivePreview.tsx:216:    <iframe
+apps/desktop/src/components/editing/LivePreview.tsx:217:      srcDoc={sanitizedContent}
+apps/desktop/src/components/editing/LivePreview.tsx:219:      sandbox="allow-scripts allow-modals"
+apps/desktop/src/components/editing/LivePreview.tsx:410:  const sanitizedSvg = useMemo(
+apps/desktop/src/components/editing/LivePreview.tsx:412:      DOMPurify.sanitize(content, {
+apps/desktop/src/components/editing/LivePreview.tsx:422:        <div className="max-w-full max-h-full" dangerouslySetInnerHTML={{ __html: sanitizedSvg }} />
+apps/web/features/settings/schemas/settings-validation.ts:9:import { sanitizeUserInput, sanitizeURL } from '@shared/utils/html-sanitizer';
+apps/web/features/settings/schemas/settings-validation.ts:16: * Transform that sanitizes and validates URLs
+apps/web/features/settings/schemas/settings-validation.ts:18:const sanitizedUrl = z
+apps/web/features/settings/schemas/settings-validation.ts:23:    const sanitized = sanitizeURL(val);
+apps/web/features/settings/schemas/settings-validation.ts:24:    return sanitized || undefined;
+apps/web/features/settings/schemas/settings-validation.ts:37:    .transform((val) => sanitizeUserInput(val, 100)),
+apps/web/features/settings/schemas/settings-validation.ts:45:      const sanitized = sanitizeUserInput(val, 20);
+apps/web/features/settings/schemas/settings-validation.ts:46:      return sanitized;
+apps/web/features/settings/schemas/settings-validation.ts:75:      return sanitizeUserInput(val, 500);
+apps/web/features/settings/schemas/settings-validation.ts:78:  avatar_url: sanitizedUrl,
+apps/web/features/settings/schemas/settings-validation.ts:186:    .transform((val) => sanitizeUserInput(val, 100)),
+apps/web/features/settings/schemas/settings-validation.test.ts:73:    it('should sanitize XSS attempts in name', () => {
+apps/web/features/settings/schemas/settings-validation.test.ts:421:    it('should sanitize XSS in API key name', () => {
+apps/desktop/src/components/Browser/BrowserDebugTabs.tsx:29:import { sanitizeHtml } from '../../utils/security';
+apps/desktop/src/components/Browser/BrowserDebugTabs.tsx:270:/** Renders HTML from DOM snapshots through DOMPurify instead of regex stripping. */
+apps/desktop/src/components/Browser/BrowserDebugTabs.tsx:272:  const sanitized = useMemo(() => sanitizeHtml(html), [html]);
+apps/desktop/src/components/Browser/BrowserDebugTabs.tsx:276:      dangerouslySetInnerHTML={{ __html: sanitized }}
+apps/desktop/src-tauri/src/sys/security/tool_guard.rs:1809:            "eval(",
+apps/desktop/src/components/UnifiedAgenticChat/Cards/ApprovalRequestCard.tsx:230:  const sanitizedDetails = approval.details
+apps/desktop/src/components/UnifiedAgenticChat/Cards/ApprovalRequestCard.tsx:234:    sanitizedDetails && Object.keys(sanitizedDetails).length > 0
+apps/desktop/src/components/UnifiedAgenticChat/Cards/ApprovalRequestCard.tsx:235:      ? formatJson(sanitizedDetails)
+apps/web/app/gallery/layout.tsx:47:        dangerouslySetInnerHTML={{
+apps/desktop/src-tauri/src/sys/security/auth.rs:741:    fn test_jwt_secret_retrieval() {
+apps/desktop/src-tauri/src/core/mcp/registry.rs:45:fn sanitize_mcp_description(raw: &str, server_name: &str) -> String {
+apps/desktop/src-tauri/src/core/mcp/registry.rs:100:/// Helper to create safe tool IDs with sanitized names.
+apps/desktop/src-tauri/src/core/mcp/registry.rs:204:        let safe_description = sanitize_mcp_description(raw_desc, server_name);
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/HtmlArtifact.tsx:11: * Sandboxed iframe-based runtime for HTML/JavaScript artifacts.
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/HtmlArtifact.tsx:25:  const iframeRef = useRef<HTMLIFrameElement>(null);
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/HtmlArtifact.tsx:67:    //   artifacts that call eval(), new Function(), or pass strings to setTimeout().
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/HtmlArtifact.tsx:68:    //   TRADE-OFF: Acceptable because iframe sandbox="allow-scripts" (no allow-same-origin)
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/HtmlArtifact.tsx:70:    //   blocks all network exfiltration; frame-src 'none' blocks nested iframe attacks.
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/HtmlArtifact.tsx:457:                <iframe
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/HtmlArtifact.tsx:458:                  ref={iframeRef}
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/HtmlArtifact.tsx:462:                  // allow-scripts: Allow JavaScript execution (required for interactivity)
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/HtmlArtifact.tsx:466:                  sandbox="allow-scripts allow-modals"
+apps/web/app/contact/layout.tsx:76:        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+apps/web/app/faq/layout.tsx:178:        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/SvgArtifact.tsx:2:import { sanitizeHtml } from '../../../utils/security';
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/SvgArtifact.tsx:6:  const sanitized = useMemo(
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/SvgArtifact.tsx:8:      sanitizeHtml(artifact.content, {
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/SvgArtifact.tsx:104:  if (!sanitized) {
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/SvgArtifact.tsx:112:        dangerouslySetInnerHTML={{ __html: sanitized }}
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/MermaidArtifact.tsx:2:import { sanitizeHtml } from '../../../utils/security';
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/MermaidArtifact.tsx:67:  const sanitizedSvg = svg
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/MermaidArtifact.tsx:68:    ? sanitizeHtml(svg, {
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/MermaidArtifact.tsx:109:      {sanitizedSvg ? (
+apps/desktop/src/components/UnifiedAgenticChat/artifacts/MermaidArtifact.tsx:112:          dangerouslySetInnerHTML={{ __html: sanitizedSvg }}
+apps/web/app/auth/callback/route.ts:55:    // Validate and sanitize the redirect URL to prevent open redirect attacks
+apps/web/shared/lib/security.ts:6:import DOMPurify, { type Config as DOMPurifyConfig } from 'dompurify';
+apps/web/shared/lib/security.ts:365:  private static defaultSanitizeConfig: DOMPurifyConfig = {
+apps/web/shared/lib/security.ts:420:  static sanitizeHtml(html: string, options: SanitizeOptions = {}): string {
+apps/web/shared/lib/security.ts:423:    const config: DOMPurifyConfig = {
+apps/web/shared/lib/security.ts:431:    return DOMPurify.sanitize(html, config) as string;
+apps/web/shared/lib/security.ts:435:  static sanitizeText(text: string): string {
+apps/web/shared/lib/security.ts:438:    return DOMPurify.sanitize(text, {
+apps/web/shared/lib/security.ts:446:  static sanitizeUrl(url: string): string {
+apps/web/shared/lib/security.ts:450:    let sanitized = url;
+apps/web/shared/lib/security.ts:453:      prev = sanitized;
+apps/web/shared/lib/security.ts:454:      sanitized = sanitized.replace(/^(javascript|data|vbscript):/i, '');
+apps/web/shared/lib/security.ts:455:    } while (sanitized !== prev);
+apps/web/shared/lib/security.ts:458:    if (!/^(https?:|mailto:|tel:|#|\/)/i.test(sanitized)) {
+apps/web/shared/lib/security.ts:459:      return `https://${sanitized}`;
+apps/web/shared/lib/security.ts:462:    return sanitized;
+apps/web/shared/lib/security.ts:479:    textarea.innerHTML = html;
+apps/web/shared/lib/security.ts:483:  // Validate and sanitize JSON input
+apps/web/shared/lib/security.ts:484:  static sanitizeJson<T = unknown>(jsonString: string, maxDepth: number = 10): T | null {
+apps/web/shared/lib/security.ts:494:  // Deep sanitize object recursively
+apps/web/shared/lib/security.ts:501:      return this.sanitizeText(obj);
+apps/web/shared/lib/security.ts:513:      const sanitized: Record<string, unknown> = {};
+apps/web/shared/lib/security.ts:516:        const cleanKey = this.sanitizeText(key);
+apps/web/shared/lib/security.ts:518:          sanitized[cleanKey] = this.deepSanitize(value, maxDepth, currentDepth + 1);
+apps/web/shared/lib/security.ts:521:      return sanitized;
+apps/desktop/src/stores/mcpAppStore.ts:5: * Manages interactive MCP app instances rendered as sandboxed iframes in chat.
+apps/desktop/src/stores/mcpAppStore.ts:8: * Security: All content is rendered in sandboxed iframes with no allow-same-origin.
+apps/desktop/src/components/UnifiedAgenticChat/MessageBubble/MessageContent.tsx:223:              // Render widget blocks as sandboxed GenerativeWidget iframes
+apps/desktop/src-tauri/src/integrations/cloud/google_drive.rs:197:        let sanitized = remote_path.trim().trim_end_matches('/');
+apps/desktop/src-tauri/src/integrations/cloud/google_drive.rs:198:        if sanitized.is_empty() {
+apps/desktop/src-tauri/src/integrations/cloud/google_drive.rs:204:        let (parent_path, file_name) = if let Some((parent, name)) = sanitized.rsplit_once('/') {
+apps/desktop/src-tauri/src/integrations/cloud/google_drive.rs:208:            ("/".to_string(), sanitized.to_string())
+apps/web/core/ai/orchestration/agent-conversation-protocol.ts:14:  sanitizeEmployeeInput,
+apps/web/core/ai/orchestration/agent-conversation-protocol.ts:17:} from '@core/security/employee-input-sanitizer';
+apps/web/core/ai/orchestration/agent-conversation-protocol.ts:76:    const sanitizationResult = sanitizeEmployeeInput(userQuery, userId || 'anonymous', {
+apps/web/core/ai/orchestration/agent-conversation-protocol.ts:99:    // Use sanitized query
+apps/web/core/ai/orchestration/agent-conversation-protocol.ts:100:    const sanitizedQuery = sanitizationResult.sanitized;
+apps/web/core/ai/orchestration/agent-conversation-protocol.ts:104:      userQuery: sanitizedQuery, // Use sanitized query
+apps/web/core/ai/orchestration/agent-conversation-protocol.ts:119:        content: sanitizedQuery, // Use sanitized query
+apps/web/core/ai/orchestration/agent-conversation-protocol.ts:335:      if (outputValidation.sanitizedOutput) {
+apps/web/core/ai/orchestration/agent-conversation-protocol.ts:336:        return outputValidation.sanitizedOutput;
+apps/web/core/ai/orchestration/agent-conversation-protocol.ts:369:      if (outputValidation.sanitizedOutput) {
+apps/web/core/ai/orchestration/agent-conversation-protocol.ts:370:        return outputValidation.sanitizedOutput;
+apps/web/core/ai/llm/unified-language-model.ts:378:            // Use sanitized input if provided
+apps/web/core/ai/llm/unified-language-model.ts:379:            if (injectionCheck.sanitizedInput) {
+apps/web/core/ai/llm/unified-language-model.ts:380:              message.content = injectionCheck.sanitizedInput;
+apps/web/app/careers/layout.tsx:48:        dangerouslySetInnerHTML={{
+apps/web/shared/components/seo/SEOHead.tsx:52:        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+apps/web/app/blog/layout.tsx:40:        dangerouslySetInnerHTML={{
+apps/web/core/security/index.ts:10: *   sanitizeEmployeeInput,
+apps/web/core/security/index.ts:18:  sanitizePromptInput,
+apps/web/core/security/index.ts:27:  sanitizeEmployeeInput,
+apps/web/core/security/index.ts:37:} from './employee-input-sanitizer';
+apps/web/core/security/employee-input-sanitizer.test.ts:10:  sanitizeEmployeeInput,
+apps/web/core/security/employee-input-sanitizer.test.ts:18:} from './employee-input-sanitizer';
+apps/web/core/security/employee-input-sanitizer.test.ts:42:  describe('sanitizeEmployeeInput', () => {
+apps/web/core/security/employee-input-sanitizer.test.ts:47:        const result = sanitizeEmployeeInput('Hello, how can you help me?', userId);
+apps/web/core/security/employee-input-sanitizer.test.ts:50:        expect(result.sanitized).toBe('Hello, how can you help me?');
+apps/web/core/security/employee-input-sanitizer.test.ts:58:        const result = sanitizeEmployeeInput(longInput, userId, config);
+apps/web/core/security/employee-input-sanitizer.test.ts:60:        expect(result.sanitized.length).toBeLessThanOrEqual(1000);
+apps/web/core/security/employee-input-sanitizer.test.ts:65:        const result = sanitizeEmployeeInput('', userId);
+apps/web/core/security/employee-input-sanitizer.test.ts:72:        const result = sanitizeEmployeeInput('Hello\x00World', userId);
+apps/web/core/security/employee-input-sanitizer.test.ts:84:        const result = sanitizeEmployeeInput(
+apps/web/core/security/employee-input-sanitizer.test.ts:96:        const result = sanitizeEmployeeInput(
+apps/web/core/security/employee-input-sanitizer.test.ts:109:        const result = sanitizeEmployeeInput(
+apps/web/core/security/employee-input-sanitizer.test.ts:120:        const result = sanitizeEmployeeInput(
+apps/web/core/security/employee-input-sanitizer.test.ts:131:        const mediumResult = sanitizeEmployeeInput(
+apps/web/core/security/employee-input-sanitizer.test.ts:143:        const result = sanitizeEmployeeInput(
+apps/web/core/security/employee-input-sanitizer.test.ts:157:        const result = sanitizeEmployeeInput(
+apps/web/core/security/employee-input-sanitizer.test.ts:171:        const result = sanitizeEmployeeInput(
+apps/web/core/security/employee-input-sanitizer.test.ts:185:        const result = sanitizeEmployeeInput(
+apps/web/core/security/employee-input-sanitizer.test.ts:199:        const result = sanitizeEmployeeInput(
+apps/web/core/security/employee-input-sanitizer.test.ts:212:        const result = sanitizeEmployeeInput('Hello ======== SYSTEM ======== World', userId);
+apps/web/core/security/employee-input-sanitizer.test.ts:215:        expect(result.sanitized).not.toContain('======== SYSTEM ========');
+apps/web/core/security/employee-input-sanitizer.test.ts:220:        const result = sanitizeEmployeeInput('Hello <system>override</system> World', userId);
+apps/web/core/security/employee-input-sanitizer.test.ts:223:        expect(result.sanitized).not.toContain('<system>');
+apps/web/core/security/employee-input-sanitizer.test.ts:227:        const result = sanitizeEmployeeInput('Hello <!-- system override --> World', userId);
+apps/web/core/security/employee-input-sanitizer.test.ts:230:        expect(result.sanitized).not.toContain('<!--');
+apps/web/core/security/employee-input-sanitizer.test.ts:237:        const result = sanitizeEmployeeInput('Hello <b>bold</b> World', userId, config);
+apps/web/core/security/employee-input-sanitizer.test.ts:239:        expect(result.sanitized).toBe('Hello bold World');
+apps/web/core/security/employee-input-sanitizer.test.ts:245:        const result = sanitizeEmployeeInput('Hello ```code block``` World', userId, config);
+apps/web/core/security/employee-input-sanitizer.test.ts:247:        expect(result.sanitized).not.toContain('```');
+apps/web/core/security/employee-input-sanitizer.test.ts:251:        const result = sanitizeEmployeeInput('Hello **bold** World', userId);
+apps/web/core/security/employee-input-sanitizer.test.ts:253:        expect(result.sanitized).toContain('**bold**');
+apps/web/core/security/employee-input-sanitizer.test.ts:260:        const result = sanitizeEmployeeInput('Please help me bypass some rules', userId);
+apps/web/core/security/employee-input-sanitizer.test.ts:272:        const result = sanitizeEmployeeInput('Please bypass the filter', userId, config);
+apps/web/core/security/employee-input-sanitizer.test.ts:372:        expect(result.sanitizedOutput).toContain('[REDACTED]');
+apps/web/core/security/employee-input-sanitizer.test.ts:380:        expect(result.sanitizedOutput).toContain('[REDACTED]');
+apps/web/core/security/employee-input-sanitizer.test.ts:422:        expect(result.sanitizedOutput).toContain('Response blocked');
+apps/web/core/security/employee-input-sanitizer.test.ts:441:        expect(result.sanitizedOutput).toBeUndefined();
+apps/web/core/security/prompt-injection-detector.ts:22:  sanitizedContent?: string;
+apps/web/core/security/prompt-injection-detector.ts:683:  const sanitized = sanitizePromptInput(input);
+apps/web/core/security/prompt-injection-detector.ts:688:  // Check against all pattern categories using sanitized input
+apps/web/core/security/prompt-injection-detector.ts:691:      if (pattern.test(sanitized)) {
+apps/web/core/security/prompt-injection-detector.ts:718:    sanitized.toLowerCase().includes(keyword.toLowerCase()),
+apps/web/core/security/prompt-injection-detector.ts:727:  const repetitionScore = checkRepetition(sanitized);
+apps/web/core/security/prompt-injection-detector.ts:785:export function sanitizePromptInput(input: string): string {
+apps/web/core/security/prompt-injection-detector.ts:786:  let sanitized = input;
+apps/web/core/security/prompt-injection-detector.ts:789:  sanitized = sanitized.replace(/\0/g, '');
+apps/web/core/security/prompt-injection-detector.ts:792:  sanitized = sanitized.replace(/\s{4,}/g, ' ');
+apps/web/core/security/prompt-injection-detector.ts:795:  sanitized = sanitized.replace(/[-=*#]{10,}/g, '---');
+apps/web/core/security/prompt-injection-detector.ts:798:  sanitized = sanitized.replace(/\\x[0-9a-f]{2}/gi, '');
+apps/web/core/security/prompt-injection-detector.ts:799:  sanitized = sanitized.replace(/\\u[0-9a-f]{4}/gi, '');
+apps/web/core/security/prompt-injection-detector.ts:802:  sanitized = sanitized.trim();
+apps/web/core/security/prompt-injection-detector.ts:804:  return sanitized;
+apps/web/core/security/prompt-injection-detector.ts:886:  sanitizedInput?: string;
+apps/web/core/security/prompt-injection-detector.ts:910:  // For medium risk, sanitize and allow
+apps/web/core/security/prompt-injection-detector.ts:911:  let sanitizedInput = input;
+apps/web/core/security/prompt-injection-detector.ts:913:    sanitizedInput = sanitizePromptInput(input);
+apps/web/core/security/prompt-injection-detector.ts:919:    sanitizedInput: detection.riskLevel === 'medium' ? sanitizedInput : undefined,
+apps/web/core/security/prompt-injection-detector.test.ts:8:  sanitizePromptInput,
+apps/web/core/security/prompt-injection-detector.test.ts:380:  describe('sanitizePromptInput', () => {
+apps/web/core/security/prompt-injection-detector.test.ts:382:      const result = sanitizePromptInput('Hello\x00World');
+apps/web/core/security/prompt-injection-detector.test.ts:387:      const result = sanitizePromptInput('Hello     World');
+apps/web/core/security/prompt-injection-detector.test.ts:392:      const result = sanitizePromptInput('Hello' + '-'.repeat(20) + 'World');
+apps/web/core/security/prompt-injection-detector.test.ts:397:      const result = sanitizePromptInput('Hello\\x41World');
+apps/web/core/security/prompt-injection-detector.test.ts:402:      const result = sanitizePromptInput('Hello\\u0041World');
+apps/web/core/security/prompt-injection-detector.test.ts:407:      const result = sanitizePromptInput('  Hello World  ');
+apps/web/core/security/prompt-injection-detector.test.ts:438:    it('should provide sanitized input for medium-risk content', () => {
+apps/web/core/security/prompt-injection-detector.test.ts:442:        expect(result.sanitizedInput).toBeDefined();
+apps/extension/src/side_panel/markdown.ts:1:import DOMPurify from 'dompurify';
+apps/extension/src/side_panel/markdown.ts:3:// CHROME-NEW-005 fix (2026-05-04 audit): DOMPurify allows `target` and `rel`
+apps/extension/src/side_panel/markdown.ts:11:// times is safe because DOMPurify dedupes by function reference.
+apps/extension/src/side_panel/markdown.ts:16:  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+apps/extension/src/side_panel/markdown.ts:30:export function sanitizeHtml(dirty: string): string {
+apps/extension/src/side_panel/markdown.ts:32:  return DOMPurify.sanitize(dirty, {
+apps/extension/src/side_panel/markdown.ts:70:      'iframe',
+apps/extension/src/side_panel/markdown.ts:129:  // downstream DOMPurify pass is skipped or removed in a future refactor.
+apps/web/core/storage/chat/multi-agent-chat-database.ts:267:      const sanitized = filters.search_query
+apps/web/core/storage/chat/multi-agent-chat-database.ts:270:      query = query.or(`title.ilike.%${sanitized}%,description.ilike.%${sanitized}%`);
+apps/extension/src/assets/icons.ts:4: * No React deps — raw SVG strings rendered via DOM/innerHTML (sanitized).
+apps/web/core/security/employee-input-sanitizer.ts:29:  sanitizePromptInput,
+apps/web/core/security/employee-input-sanitizer.ts:40:  sanitized: string;
+apps/web/core/security/employee-input-sanitizer.ts:66:  sanitizedOutput?: string;
+apps/web/core/security/employee-input-sanitizer.ts:183:export function sanitizeEmployeeInput(
+apps/web/core/security/employee-input-sanitizer.ts:190:  let sanitized = input;
+apps/web/core/security/employee-input-sanitizer.ts:199:    sanitized = input.substring(0, fullConfig.maxInputLength);
+apps/web/core/security/employee-input-sanitizer.ts:204:  const validationResult = validatePromptInput(sanitized, fullConfig.maxInputLength);
+apps/web/core/security/employee-input-sanitizer.ts:208:      sanitized: '',
+apps/web/core/security/employee-input-sanitizer.ts:222:  const injectionResult = detectPromptInjection(sanitized);
+apps/web/core/security/employee-input-sanitizer.ts:225:  const employeeInjectionResult = detectEmployeeSpecificInjection(sanitized);
+apps/web/core/security/employee-input-sanitizer.ts:252:      sanitized: '',
+apps/web/core/security/employee-input-sanitizer.ts:266:  const basicSanitized = sanitizePromptInput(sanitized);
+apps/web/core/security/employee-input-sanitizer.ts:267:  if (basicSanitized !== sanitized) {
+apps/web/core/security/employee-input-sanitizer.ts:269:    sanitized = basicSanitized;
+apps/web/core/security/employee-input-sanitizer.ts:273:  const delimiterSanitized = removeDelimiterInjections(sanitized);
+apps/web/core/security/employee-input-sanitizer.ts:274:  if (delimiterSanitized !== sanitized) {
+apps/web/core/security/employee-input-sanitizer.ts:276:    sanitized = delimiterSanitized;
+apps/web/core/security/employee-input-sanitizer.ts:281:    const strippedFormatting = stripFormattingFromInput(sanitized);
+apps/web/core/security/employee-input-sanitizer.ts:282:    if (strippedFormatting !== sanitized) {
+apps/web/core/security/employee-input-sanitizer.ts:284:      sanitized = strippedFormatting;
+apps/web/core/security/employee-input-sanitizer.ts:289:  const escapedInput = escapeInjectionPatterns(sanitized);
+apps/web/core/security/employee-input-sanitizer.ts:290:  if (escapedInput !== sanitized) {
+apps/web/core/security/employee-input-sanitizer.ts:292:    sanitized = escapedInput;
+apps/web/core/security/employee-input-sanitizer.ts:305:    logSuspiciousInput(userId, input, sanitized, {
+apps/web/core/security/employee-input-sanitizer.ts:316:    sanitized,
+apps/web/core/security/employee-input-sanitizer.ts:404:  let sanitizedOutput = output;
+apps/web/core/security/employee-input-sanitizer.ts:411:      sanitizedOutput = sanitizedOutput.replace(pattern, '[REDACTED]');
+apps/web/core/security/employee-input-sanitizer.ts:438:    sanitizedOutput = `[Response blocked: Potential security issue detected]`;
+apps/web/core/security/employee-input-sanitizer.ts:449:    sanitizedOutput: issues.length > 0 ? sanitizedOutput : undefined,
+apps/web/core/security/employee-input-sanitizer.ts:625:  sanitizedInput: string,
+apps/web/core/security/employee-input-sanitizer.ts:643:          sanitized_length: sanitizedInput.length,
+apps/web/core/security/employee-input-sanitizer.ts:644:          was_modified: sanitizedInput !== originalInput,
+apps/web/app/mobile/page.tsx:259:        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+apps/extension/src/side_panel.ts:27:import { sanitizeHtml, renderMarkdown } from './features/side-panel/markdown';
+apps/extension/src/side_panel.ts:1685:    bubble.innerHTML = sanitizeHtml(renderMarkdown(msg.content));
+apps/extension/src/side_panel.ts:1846:    bubble.innerHTML = sanitizeHtml(renderMarkdown(textParts.join('')));
+apps/extension/src/side_panel.ts:1949:  bubble.innerHTML = sanitizeHtml(renderMarkdown(fullText));
+apps/web/app/download/layout.tsx:66:        dangerouslySetInnerHTML={{ __html: JSON.stringify(downloadJsonLd) }}
+apps/web/app/layout.tsx:173:          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
+apps/web/app/layout.tsx:179:          dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareAppSchema) }}
+apps/web/app/layout.tsx:185:          dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteSchema) }}
+apps/web/shared/utils/html-sanitizer.ts:3: * Uses DOMPurify to sanitize user-generated HTML content
+apps/web/shared/utils/html-sanitizer.ts:8:import DOMPurify, { type Config as DOMPurifyConfig } from 'dompurify';
+apps/web/shared/utils/html-sanitizer.ts:106:export function sanitizeHTML(html: string, level: SanitizeLevel = 'standard'): string {
+apps/web/shared/utils/html-sanitizer.ts:111:  let config: DOMPurifyConfig;
+apps/web/shared/utils/html-sanitizer.ts:215:  const sanitized = DOMPurify.sanitize(html, {
+apps/web/shared/utils/html-sanitizer.ts:232:      'iframe',
+apps/web/shared/utils/html-sanitizer.ts:252:  return sanitized as string;
+apps/web/shared/utils/html-sanitizer.ts:258:export function sanitizeArtifact(
+apps/web/shared/utils/html-sanitizer.ts:265:      return sanitizeHTML(content, 'extended');
+apps/web/shared/utils/html-sanitizer.ts:269:      return sanitizeSVG(content);
+apps/web/shared/utils/html-sanitizer.ts:276:      return sanitizeHTML(`<pre><code>${escapeHTML(content)}</code></pre>`, 'strict');
+apps/web/shared/utils/html-sanitizer.ts:279:      return sanitizeHTML(content, 'standard');
+apps/web/shared/utils/html-sanitizer.ts:286:export function sanitizeSVG(svg: string): string {
+apps/web/shared/utils/html-sanitizer.ts:288:  const sanitized = DOMPurify.sanitize(svg, {
+apps/web/shared/utils/html-sanitizer.ts:343:  return sanitized;
+apps/web/shared/utils/html-sanitizer.ts:370:    /<iframe/i,
+apps/web/shared/utils/html-sanitizer.ts:384:export function sanitizeUserInput(input: string, maxLength: number = 10000): string {
+apps/web/shared/utils/html-sanitizer.ts:386:  let sanitized = input.trim().slice(0, maxLength);
+apps/web/shared/utils/html-sanitizer.ts:389:  sanitized = sanitized.replace(/\0/g, '');
+apps/web/shared/utils/html-sanitizer.ts:393:  sanitized = escapeHTML(sanitized);
+apps/web/shared/utils/html-sanitizer.ts:395:  return sanitized;
+apps/web/shared/utils/html-sanitizer.ts:402:  return DOMPurify.sanitize(html, {
+apps/web/shared/utils/html-sanitizer.ts:411:export function sanitizeURL(url: string): string {
+apps/extension/src/background/policy.ts:431: * Pure-function page-text sanitizer: strip invisible Unicode then run the
+apps/extension/src/background/policy.ts:435:export function sanitizePageText(raw: string): string {
+apps/web/shared/utils/validation-schemas.ts:224:export function sanitizeHtml(input: string): string {
+apps/web/shared/utils/validation-schemas.ts:234: * Validates and sanitizes user input
+apps/web/shared/utils/validation-schemas.ts:236:export function sanitizeInput(input: string): string {
+apps/extension/src/popup.ts:482: * content is involved (security constraint: DOMPurify is available in
+apps/extension/THREAT_MODEL.md:40:| Page innerText | Sent to desktop LLM via native port / HTTP bridge | Allowlisted origins only (H-06b). | Invisible Unicode stripped + secrets redacted via `sanitizePageText`. Capped at `MAX_CONTEXT_HTML_CHARS` (100 KB). |
+apps/extension/THREAT_MODEL.md:62:LLM-supplied markdown is rendered via `side_panel/markdown.ts renderMarkdown` + `sanitizeHtml` (DOMPurify). Defense-in-depth:
+apps/extension/THREAT_MODEL.md:65:- DOMPurify FORBID_TAGS includes `img` so the EchoLeak-class Markdown-image exfil vector (CVE-2025-32711) is closed.
+apps/extension/THREAT_MODEL.md:70:`extractPageHtmlSafely` → `sanitizePageText` (in `policy.ts`):
+apps/extension/THREAT_MODEL.md:136:- `sanitizePageText` strips invisible Unicode (`extract-page-html-unicode.test.ts`).
+apps/extension/THREAT_MODEL.md:168:6. **Does the handler send data to the LLM?** Run text through `sanitizePageText` first.
+apps/desktop/src-tauri/src/core/artifacts/renderer.rs:409:        let sandbox_permissions = vec!["allow-scripts".to_string(), "allow-modals".to_string()];
+apps/extension/src/autofill/filler.ts:44:function sanitizeProfileValue(value: string): string {
+apps/extension/src/autofill/filler.ts:47:  let sanitized = value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+apps/extension/src/autofill/filler.ts:53:    previous = sanitized;
+apps/extension/src/autofill/filler.ts:54:    sanitized = sanitized.replace(/<[^>]*>/g, '');
+apps/extension/src/autofill/filler.ts:55:  } while (sanitized !== previous);
+apps/extension/src/autofill/filler.ts:57:  return sanitized.trim().substring(0, MAX_PROFILE_FIELD_LENGTH);
+apps/extension/src/autofill/filler.ts:260:    const stringValue = sanitizeProfileValue(String(profileValue));
+apps/extension/src/content.ts:35:  sanitizePageText,
+apps/extension/src/content.ts:74:// INVISIBLE_UNICODE_RE and sanitizePageText are now imported from
+apps/extension/src/content.ts:96:    // sanitizePageText helper \u2014 single pure function shared with tests.
+apps/extension/src/content.ts:101:    const redacted = sanitizePageText(collapsed);
+apps/extension/src/content.ts:138:  // document states (e.g. XML, SVG, sandboxed iframes) can cause these to throw.
+apps/extension/src/content.ts:1027:/** Attributes that can inject URLs on script/link/form/iframe elements */
+apps/extension/src/content.ts:1105: * SECURITY: new Function() / eval() is not used. Only pre-defined operations are allowed.
+apps/extension/src/content.ts:1642:function sanitizeRecordedValue(
+apps/extension/src/content.ts:1786:      const sanitizedValue = sanitizeRecordedValue(target);
+apps/extension/src/content.ts:1787:      if (sanitizedValue !== null) {
+apps/extension/src/content.ts:1788:        action.value = sanitizedValue;
+apps/extension/__tests__/page-metadata.test.ts:36:  document.head.innerHTML = '';
+apps/extension/__tests__/page-metadata.test.ts:37:  document.body.innerHTML = '';
+apps/extension/__tests__/page-metadata.test.ts:100:      document.body.innerHTML = '<h1>Welcome to the Site</h1>';
+apps/extension/__tests__/page-metadata.test.ts:108:      document.body.innerHTML = '<h1>  Spaced Title  </h1>';
+apps/extension/__tests__/page-metadata.test.ts:476:      document.body.innerHTML =
+apps/extension/__tests__/page-metadata.test.ts:487:      document.body.innerHTML = '<div itemscope itemtype="https://schema.org/Product"></div>';
+apps/extension/src/utils.ts:350:  sanitizeInput(input: string): string {
+apps/extension/src/dom-helpers.ts:7:/** Set textContent on an element (safe alternative to innerHTML = string). */
+apps/extension/src/dom-helpers.ts:12:/** Remove all children from an element (safe alternative to innerHTML = ''). */
+apps/extension/src/dom-helpers.ts:44: * Equivalent to: el.innerHTML = '<tag class="...">text</tag>'
+apps/extension/src/dom-helpers.ts:52: * `parent`. Use this in place of `parent.innerHTML = svgString` so the
+apps/desktop/src-tauri/src/core/agi/executors/mcp_executor.rs:889:    fn test_create_tool_id_sanitizes_delimiter() {
+apps/extension/__tests__/webmcp-extended.test.ts:47:  document.body.innerHTML = '';
+apps/extension/__tests__/webmcp-extended.test.ts:186:    plain.innerHTML = '<input name="q" />';
+apps/extension/__tests__/recorder-redaction.test.ts:11: * (`sanitizeRecordedValue`) is intentionally local-static; we replicate it
+apps/extension/__tests__/recorder-redaction.test.ts:20:// ─── Mirror of the production sanitizer in content.ts ─────────────────────────
+apps/extension/__tests__/recorder-redaction.test.ts:37:function sanitizeRecordedValue(
+apps/extension/__tests__/recorder-redaction.test.ts:88:      expect(sanitizeRecordedValue(input)).toBeNull();
+apps/extension/__tests__/recorder-redaction.test.ts:93:      expect(sanitizeRecordedValue(input)).toBeNull();
+apps/extension/__tests__/recorder-redaction.test.ts:100:      expect(sanitizeRecordedValue(input)).toBe('[REDACTED]');
+apps/extension/__tests__/recorder-redaction.test.ts:105:      expect(sanitizeRecordedValue(input)).toBe('[REDACTED]');
+apps/extension/__tests__/recorder-redaction.test.ts:110:      expect(sanitizeRecordedValue(input)).toBe('[REDACTED]');
+apps/extension/__tests__/recorder-redaction.test.ts:115:      expect(sanitizeRecordedValue(input)).toBe('[REDACTED]');
+apps/extension/__tests__/recorder-redaction.test.ts:120:      expect(sanitizeRecordedValue(input)).toBe('[REDACTED]');
+apps/extension/__tests__/recorder-redaction.test.ts:125:      expect(sanitizeRecordedValue(input)).toBe('[REDACTED]');
+apps/extension/__tests__/recorder-redaction.test.ts:130:      expect(sanitizeRecordedValue(input)).toBe('[REDACTED]');
+apps/extension/__tests__/recorder-redaction.test.ts:139:      const out = sanitizeRecordedValue(input);
+apps/extension/__tests__/recorder-redaction.test.ts:146:      const out = sanitizeRecordedValue(input);
+apps/extension/__tests__/recorder-redaction.test.ts:152:      expect(sanitizeRecordedValue(input)).toBe('[REDACTED_AWS_KEY]');
+apps/extension/__tests__/recorder-redaction.test.ts:158:      const out = sanitizeRecordedValue(input);
+apps/extension/__tests__/recorder-redaction.test.ts:165:      expect(sanitizeRecordedValue(input)).toBe('[REDACTED_GITHUB_TOKEN]');
+apps/extension/__tests__/recorder-redaction.test.ts:170:      expect(sanitizeRecordedValue(input)).toBe('Hello, world!');
+apps/extension/__tests__/recorder-redaction.test.ts:177:      expect(sanitizeRecordedValue(input)).toBe('');
+apps/extension/src/features/side-panel/index.ts:5: *   - markdown: renderMarkdown, sanitizeHtml, ensureDomPurifyHook
+apps/extension/__tests__/security-fixes.test.ts:320:// DOMPurify. The prior M-1 fix encoded link TEXT; this extends to the URL so
+apps/extension/src/features/side-panel/markdown.ts:1:import DOMPurify from 'dompurify';
+apps/extension/src/features/side-panel/markdown.ts:3:// CHROME-NEW-005 fix (2026-05-04 audit): DOMPurify allows `target` and `rel`
+apps/extension/src/features/side-panel/markdown.ts:11:// times is safe because DOMPurify dedupes by function reference.
+apps/extension/src/features/side-panel/markdown.ts:16:  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+apps/extension/src/features/side-panel/markdown.ts:30:export function sanitizeHtml(dirty: string): string {
+apps/extension/src/features/side-panel/markdown.ts:32:  return DOMPurify.sanitize(dirty, {
+apps/extension/src/features/side-panel/markdown.ts:70:      'iframe',
+apps/extension/src/features/side-panel/markdown.ts:129:  // downstream DOMPurify pass is skipped or removed in a future refactor.
+apps/desktop/src-tauri/src/core/agi/executors/code_executor.rs:96:            pattern: "eval(",
+apps/extension/__tests__/popup.paywall.test.ts:80:  document.body.innerHTML = `
+apps/extension/__tests__/popup.paywall.test.ts:160:  document.body.innerHTML = '';
+apps/extension/src/features/content/dom-helpers.ts:6:/** Set textContent on an element (safe alternative to innerHTML = string). */
+apps/extension/src/features/content/dom-helpers.ts:11:/** Remove all children from an element (safe alternative to innerHTML = ''). */
+apps/extension/src/features/content/dom-helpers.ts:43: * Equivalent to: el.innerHTML = '<tag class="...">text</tag>'
+apps/extension/__tests__/jobAutofill.runtime.test.ts:42:  document.body.innerHTML = '';
+apps/extension/__tests__/jobAutofill.runtime.test.ts:47:  document.body.innerHTML = html;
+apps/extension/__tests__/jobAutofill.runtime.test.ts:200:    document.body.innerHTML = `
+apps/extension/__tests__/jobAutofill.runtime.test.ts:216:      document.body.innerHTML = `
+apps/extension/__tests__/jobAutofill.runtime.test.ts:230:        document.body.innerHTML = '<main>Thank you for applying</main>';
+apps/extension/__tests__/jobAutofill.runtime.test.ts:248:    document.body.innerHTML = `
+apps/extension/__tests__/jobAutofill.runtime.test.ts:257:      document.body.innerHTML = `
+apps/extension/__tests__/jobAutofill.runtime.test.ts:265:        document.body.innerHTML = `
+apps/extension/__tests__/jobAutofill.runtime.test.ts:279:          document.body.innerHTML = '<main>Application submitted</main>';
+apps/desktop/src-tauri/src/core/agi/tests/security_tests.rs:329:            "eval('malicious code')",
+apps/web/shared/ui/missing-modules.d.ts:200:  const DOMPurify: {
+apps/web/shared/ui/missing-modules.d.ts:201:    sanitize(html: string, config?: Config): string;
+apps/web/shared/ui/missing-modules.d.ts:207:  export default DOMPurify;
+apps/extension/__tests__/extract-page-html-unicode.test.ts:6: * `sanitizePageText` + `INVISIBLE_UNICODE_RE` from policy.ts so this test
+apps/extension/__tests__/extract-page-html-unicode.test.ts:12:// Production functions — sanitizePageText runs the same Unicode strip +
+apps/extension/__tests__/extract-page-html-unicode.test.ts:15:import { sanitizePageText, INVISIBLE_UNICODE_RE } from '../src/background/policy';
+apps/extension/__tests__/extract-page-html-unicode.test.ts:29:    expect(sanitizePageText('hello​world')).toBe('helloworld');
+apps/extension/__tests__/extract-page-html-unicode.test.ts:33:    expect(sanitizePageText('hello‍world')).toBe('helloworld');
+apps/extension/__tests__/extract-page-html-unicode.test.ts:37:    expect(sanitizePageText('hello﻿world')).toBe('helloworld');
+apps/extension/__tests__/extract-page-html-unicode.test.ts:41:    expect(sanitizePageText('user‮noLatin')).toBe('usernoLatin');
+apps/extension/__tests__/extract-page-html-unicode.test.ts:45:    expect(sanitizePageText('text⁦hidden⁩tail')).toBe('texthiddentail');
+apps/extension/__tests__/extract-page-html-unicode.test.ts:49:    expect(sanitizePageText('plain️')).toBe('plain');
+apps/extension/__tests__/extract-page-html-unicode.test.ts:54:    expect(sanitizePageText('hi\u{E0001}\u{E0048}there')).toBe('hithere');
+apps/extension/__tests__/extract-page-html-unicode.test.ts:61:    const result = sanitizePageText(visible + hidden);
+apps/extension/__tests__/extract-page-html-unicode.test.ts:70:    expect(sanitizePageText('Hello, 世界! 🌍')).toBe('Hello, 世界! 🌍');
+apps/extension/__tests__/extract-page-html-unicode.test.ts:77:    expect(sanitizePageText(raw)).toContain('[REDACTED_ANTHROPIC_KEY]');
+apps/extension/__tests__/extract-page-html-unicode.test.ts:83:    const out = sanitizePageText(raw);
+apps/extension/__tests__/extract-page-html-unicode.test.ts:90:    expect(sanitizePageText(raw)).toContain('[REDACTED_AWS_KEY]');
+apps/extension/__tests__/extract-page-html-unicode.test.ts:95:    const out = sanitizePageText(raw);
+apps/extension/__tests__/extract-page-html-unicode.test.ts:102:    expect(sanitizePageText(raw)).toContain('[CREDENTIALS_REDACTED]');
+apps/extension/__tests__/extract-page-html-unicode.test.ts:107:    expect(sanitizePageText(raw)).toBe(raw);
+apps/extension/__tests__/webmcp.test.ts:39:  document.body.innerHTML = '';
+apps/extension/__tests__/webmcp.test.ts:204:    form.innerHTML = '<input name="q" />';
+apps/desktop/src-tauri/src/core/agi/tests/memory_tests.rs:74:    fn test_memory_retrieval() {
+apps/extension/src/features/content/autofill/filler.ts:44:function sanitizeProfileValue(value: string): string {
+apps/extension/src/features/content/autofill/filler.ts:47:  let sanitized = value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+apps/extension/src/features/content/autofill/filler.ts:53:    previous = sanitized;
+apps/extension/src/features/content/autofill/filler.ts:54:    sanitized = sanitized.replace(/<[^>]*>/g, '');
+apps/extension/src/features/content/autofill/filler.ts:55:  } while (sanitized !== previous);
+apps/extension/src/features/content/autofill/filler.ts:57:  return sanitized.trim().substring(0, MAX_PROFILE_FIELD_LENGTH);
+apps/extension/src/features/content/autofill/filler.ts:260:    const stringValue = sanitizeProfileValue(String(profileValue));
+apps/extension/__tests__/utils.test.ts:48:  document.body.innerHTML = '';
+apps/extension/__tests__/utils.test.ts:277:      document.body.innerHTML = '<div id="target">Hello</div>';
+apps/extension/__tests__/utils.test.ts:295:      document.body.innerHTML = '<span class="item">A</span><span class="item">B</span>';
+apps/extension/__tests__/utils.test.ts:312:      document.body.innerHTML = '<div id="ready"></div>';
+apps/extension/__tests__/utils.test.ts:325:      document.body.innerHTML = '<div id="vis" style="width:100px;height:100px"></div>';
+apps/extension/__tests__/utils.test.ts:338:      document.body.innerHTML = '<button id="btn">Click</button>';
+apps/extension/__tests__/utils.test.ts:351:      document.body.innerHTML = '<div id="box"></div>';
+apps/extension/__tests__/utils.test.ts:363:      document.body.innerHTML = '<p id="p">Hello World</p>';
+apps/extension/__tests__/utils.test.ts:379:      document.body.innerHTML = '<div id="r"></div>';
+apps/extension/__tests__/utils.test.ts:391:      document.body.innerHTML = '<div id="s">Scroll target</div>';
+apps/extension/__tests__/utils.test.ts:405:      document.body.innerHTML = '<div id="hidden"></div>';
+apps/extension/__tests__/utils.test.ts:423:      document.body.innerHTML = '<form id="f1"></form><form id="f2"></form>';
+apps/extension/__tests__/utils.test.ts:434:      document.body.innerHTML = `
+apps/extension/__tests__/utils.test.ts:446:      document.body.innerHTML = '<input name="x" /><input name="y" />';
+apps/extension/__tests__/utils.test.ts:453:      document.body.innerHTML = '<input id="inp" name="q" />';
+apps/extension/__tests__/utils.test.ts:469:      document.body.innerHTML = `
+apps/extension/__tests__/utils.test.ts:486:      document.body.innerHTML = '<textarea id="ta"></textarea>';
+apps/extension/__tests__/utils.test.ts:498:      document.body.innerHTML = '<form id="f"></form>';
+apps/extension/__tests__/utils.test.ts:506:      document.body.innerHTML = '<form id="first"></form><form id="second"></form>';
+apps/extension/__tests__/utils.test.ts:518:      document.body.innerHTML = '<form id="legacy"></form>';
+apps/extension/__tests__/utils.test.ts:717:  describe('sanitizeInput', () => {
+apps/extension/__tests__/utils.test.ts:719:      const result = validators.sanitizeInput('<script>alert(1)</script>');
+apps/extension/__tests__/utils.test.ts:725:      const result = validators.sanitizeInput('<b>bold</b>');
+apps/extension/__tests__/utils.test.ts:731:      expect(validators.sanitizeInput(safe)).toBe(safe);
+apps/extension/__tests__/utils.test.ts:735:      expect(validators.sanitizeInput('a & b')).toContain('&amp;');
+apps/extension/__tests__/popup.test.ts:97:  document.body.innerHTML = `
+apps/extension/__tests__/popup.test.ts:167:  document.body.innerHTML = '';
+apps/extension/src/features/content/in-page-panel/panel.ts:5: * (not iframe) using Shadow DOM for style isolation. Contains:
+apps/extension/__tests__/content.test.ts:88:    sanitizeInput: vi.fn((s: string) => s),
+apps/extension/__tests__/content.test.ts:138:  document.body.innerHTML = '';
+apps/extension/__tests__/content.test.ts:241:    document.body.innerHTML = '<form id="f1" method="post"><input name="q" /></form>';
+apps/extension/__tests__/content.test.ts:274:    document.body.innerHTML = '<button id="btn">Go</button>';
+apps/extension/__tests__/content.test.ts:308:    document.body.innerHTML = '<input id="inp" />';
+apps/extension/__tests__/content.test.ts:338:    document.body.innerHTML = '<p id="p">Hello</p>';
+apps/extension/__tests__/content.test.ts:356:    document.body.innerHTML = '<div id="d"></div>';
+apps/extension/__tests__/content.test.ts:373:    document.body.innerHTML = '<div id="d"></div>';
+apps/extension/__tests__/content.test.ts:389:    document.body.innerHTML = '<script id="s"></script>';
+apps/extension/__tests__/content.test.ts:797:    document.body.innerHTML = '<a id="link" href="https://example.com">Link</a>';
+apps/web/utils/security.ts:44:export { sanitizeHTML as sanitizeMarkdownHtml } from '@/shared/utils/html-sanitizer';
+apps/web/utils/security.ts:47:export { sanitizeHTML as sanitizeHtml, sanitizeSVG } from '@/shared/utils/html-sanitizer';

@@ -59,8 +59,8 @@ jest.mock('expo-speech', () => ({
   getAvailableVoicesAsync: jest.fn().mockResolvedValue([]),
 }));
 
-import * as VoiceInput from '@/services/voiceInput';
-import * as VoiceOutput from '@/services/voiceOutput';
+import * as VoiceInput from '@/src/features/voice/services/voiceInput';
+import * as VoiceOutput from '@/src/features/voice/services/voiceOutput';
 
 describe('voiceInput service', () => {
   beforeEach(() => {

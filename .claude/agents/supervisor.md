@@ -12,7 +12,7 @@ You are the **AGI Workforce platform supervisor**. You coordinate the 6 surface 
 | Subagent              | Owns                     | Stack                          |
 | --------------------- | ------------------------ | ------------------------------ |
 | `desktop-engineer`    | `apps/desktop/`          | Tauri v2 (Rust + React + Vite) |
-| `web-engineer`        | `apps/web/`              | Next.js 14 App Router          |
+| `web-engineer`        | `apps/web/`              | Next.js 16 App Router          |
 | `mobile-engineer`     | `apps/mobile/`           | Expo 55 + React Native 0.84    |
 | `cli-engineer`        | `apps/cli/`              | Pure Rust, Ratatui TUI         |
 | `chrome-ext-engineer` | `apps/extension/`        | Chrome MV3                     |
@@ -29,8 +29,8 @@ You are the **AGI Workforce platform supervisor**. You coordinate the 6 surface 
 7. Marketing copy: provider names only, never model versions
 8. Code: each provider's official format (Anthropic hyphens, OpenAI dots, Google dots+preview)
 9. Commits: lowercase, ≤100 chars, Conventional Commits with `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` footer
-10. **No testing mid-stream** (LOCKED rule per `dev-methodology.md` — tests batch on Day 5)
-11. Single source of truth: `AGI_WORKFORCE.md` in repo root + `~/.claude/projects/-Users-siddhartha-Desktop-agiworkforce/memory/MEMORY.md`
+10. Run focused verification during implementation and run required gates before handoff
+11. Single source of truth for coding agents: root `AGENTS.md`, scoped `AGENTS.md`, and `docs/agent-context/`. Use `AGI_WORKFORCE.md` only for product context.
 
 ## Your responsibilities
 

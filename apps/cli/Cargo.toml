@@ -9,11 +9,15 @@ repository = "https://github.com/siddharthanagula3/agiworkforce"
 readme = "README.md"
 keywords = ["ai", "agent", "cli", "mcp", "llm"]
 categories = ["command-line-utilities", "development-tools"]
-default-run = "agiworkforce"
+default-run = "agi"
+
+[[bin]]
+name = "agi"
+path = "src/main.rs"
 
 [[bin]]
 name = "agiworkforce"
-path = "src/main.rs"
+path = "src/bin/agiworkforce.rs"
 
 [lib]
 name = "agiworkforce_cli"

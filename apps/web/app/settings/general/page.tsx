@@ -1,12 +1,30 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useTheme } from 'next-themes';
 import { useBillingStore } from '@/stores/unified/auth';
 
 export default function GeneralSettingsPage() {
   const user = useBillingStore((s) => s.user);
   const signOut = useBillingStore((s) => s.signOut);
-  const [theme, setTheme] = useState<'dark' | 'light' | 'system'>('dark');
+
+  // Round-2 audit P0 #7 wire-up (2026-05-21) — replaces the previous local
+  // `useState` that never persisted theme choices across reloads. next-themes
+  // is already wired through shared/components/ThemeProvider in app/providers,
+  // so this hook is the canonical read/write surface for theme persistence.
+  const { theme: nextTheme, setTheme: setNextTheme, resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  // Avoid hydration mismatch — render the SSR default ("dark") on the server
+  // and only switch to the persisted value once mounted on the client.
+  const selectedTheme =
+    !mounted || !nextTheme ? 'dark' : (nextTheme as 'dark' | 'light' | 'system');
+  const theme = selectedTheme;
+  function setTheme(next: 'dark' | 'light' | 'system') {
+    setNextTheme(next);
+  }
+  void resolvedTheme; // surfaced via the data-theme attribute by ThemeProvider
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>

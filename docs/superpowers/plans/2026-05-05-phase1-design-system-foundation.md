@@ -156,7 +156,7 @@ Expected: no new TS errors.
 
 - [ ] **Step 5: Smoke verify**
 
-Reload the app, navigate to About. Expected: version matches `apps/mobile/app.json` `expo.version`. On iOS sim, build number matches `expo.ios.buildNumber`.
+Reload the app, navigate to About. Expected: version matches `apps/mobile/app.config.js` `expo.version`. On iOS sim, build number matches `expo.ios.buildNumber`.
 
 - [ ] **Step 6: Commit**
 

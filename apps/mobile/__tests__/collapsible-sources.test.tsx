@@ -64,7 +64,7 @@ jest.mock('../lib/mmkv', () => ({
 // Imports after mocks
 // ---------------------------------------------------------------------------
 
-import { CollapsibleSources } from '../components/chat/CollapsibleSources';
+import { CollapsibleSources } from '../src/features/chat/components/CollapsibleSources';
 
 // ---------------------------------------------------------------------------
 // Test data

@@ -175,10 +175,7 @@ pub enum PickerAction {
 }
 
 /// Handle a key event while the theme picker is open.
-pub fn handle_key(
-    state: &mut ThemePickerState,
-    key: crossterm::event::KeyEvent,
-) -> PickerAction {
+pub fn handle_key(state: &mut ThemePickerState, key: crossterm::event::KeyEvent) -> PickerAction {
     use crossterm::event::KeyCode;
     match key.code {
         KeyCode::Esc => {
@@ -252,12 +249,12 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &ThemePickerState) 
 
     // Layout: blank | rows | blank | preview-label | code-lines | blank
     let constraints = [
-        Constraint::Length(1), // top blank
+        Constraint::Length(1),                             // top blank
         Constraint::Length(ThemeChoice::ALL.len() as u16), // 6 theme rows
-        Constraint::Length(1), // blank
-        Constraint::Length(1), // "Preview:" label
-        Constraint::Length(PREVIEW_LINES.len() as u16), // 3 code lines
-        Constraint::Min(0),    // remainder
+        Constraint::Length(1),                             // blank
+        Constraint::Length(1),                             // "Preview:" label
+        Constraint::Length(PREVIEW_LINES.len() as u16),    // 3 code lines
+        Constraint::Min(0),                                // remainder
     ];
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -320,8 +317,5 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &ThemePickerState) 
         .map(|&l| Line::from(Span::styled(l, Style::default().fg(accent))))
         .collect();
 
-    frame.render_widget(
-        Paragraph::new(code_lines),
-        chunks[4],
-    );
+    frame.render_widget(Paragraph::new(code_lines), chunks[4]);
 }

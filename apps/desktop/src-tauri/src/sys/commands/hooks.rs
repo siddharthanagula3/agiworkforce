@@ -1,4 +1,6 @@
-use crate::ui::hooks::{global_hooks, Hook, HookConfig, HookRegistry};
+use crate::ui::hooks::{
+    executor::HookStats as RuntimeHookStats, global_hooks, Hook, HookConfig, HookRegistry,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::State;
@@ -220,19 +222,75 @@ pub async fn hooks_get_event_types() -> Result<Vec<String>, String> {
         .collect())
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct HookStats {
-    pub total_executions: u64,
-    pub successful_executions: u64,
-    pub failed_executions: u64,
-    pub average_execution_time_ms: f64,
+    pub total_runs: u64,
+    pub success_count: u64,
+    pub failure_count: u64,
+    pub avg_duration: f64,
     pub last_execution: Option<String>,
+}
+
+impl HookStats {
+    fn from_runtime(stats: RuntimeHookStats) -> Self {
+        let avg_duration = if stats.total_executions > 0 {
+            stats.total_execution_time_ms as f64 / stats.total_executions as f64
+        } else {
+            0.0
+        };
+
+        Self {
+            total_runs: stats.total_executions,
+            success_count: stats.successful_executions,
+            failure_count: stats.failed_executions,
+            avg_duration,
+            last_execution: stats.last_execution.map(|ts| ts.to_rfc3339()),
+        }
+    }
 }
 
 #[tauri::command]
 pub async fn hooks_get_stats(
-    _state: State<'_, HookRegistryState>,
-    _name: String,
+    state: State<'_, HookRegistryState>,
+    name: String,
 ) -> Result<Option<HookStats>, String> {
-    Ok(None)
+    let registry = state
+        .get()
+        .await
+        .ok_or_else(|| "Hook registry not initialized".to_string())?;
+
+    Ok(registry
+        .executor()
+        .get_stats(&name)
+        .await
+        .map(HookStats::from_runtime))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::TimeZone;
+
+    #[test]
+    fn maps_runtime_hook_stats_to_command_payload() {
+        let runtime = RuntimeHookStats {
+            total_executions: 3,
+            successful_executions: 2,
+            failed_executions: 1,
+            total_execution_time_ms: 150,
+            last_execution: Some(chrono::Utc.with_ymd_and_hms(2026, 5, 21, 12, 0, 0).unwrap()),
+        };
+
+        assert_eq!(
+            HookStats::from_runtime(runtime),
+            HookStats {
+                total_runs: 3,
+                success_count: 2,
+                failure_count: 1,
+                avg_duration: 50.0,
+                last_execution: Some("2026-05-21T12:00:00+00:00".to_string()),
+            }
+        );
+    }
 }

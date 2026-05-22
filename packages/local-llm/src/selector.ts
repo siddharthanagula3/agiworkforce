@@ -9,7 +9,7 @@ import { detectCapabilities } from './capabilities';
 import { tier1Generate } from './tier1';
 import { tier2Generate } from './tier2';
 import { tier3Generate } from './tier3';
-import { getDefaultModel, getLiteModeModel } from './catalog';
+import { getDefaultModel, getLiteModeModel, getModelById } from './catalog';
 import type { ExecutorchPreset } from '@agiworkforce/types';
 
 // Cached capability snapshot — refreshed on demand or app resume.
@@ -29,22 +29,28 @@ export async function refreshCapabilities(): Promise<DeviceCapabilities> {
 
 export async function selectTier(opts: {
   modelPath?: string;
+  modelId?: string;
 }): Promise<{ tier: LocalRuntimeTier; runtime: LocalRuntimeName }> {
   const caps = await getCapabilities();
+  const ref = normalizeModelRef(opts.modelPath, opts.modelId);
 
   if (caps.thermalThrottled) {
     throw new Error('Device is thermally throttled — inference paused. Try again in a moment.');
   }
 
-  if (caps.tier1Available && caps.tier1Runtime) {
+  if (
+    caps.tier1Available &&
+    caps.tier1Runtime &&
+    canUseTier1ForModel(ref.modelId, caps.tier1Runtime)
+  ) {
     return { tier: 1, runtime: caps.tier1Runtime };
   }
 
-  if (caps.tier2Available && opts.modelPath) {
+  if (caps.tier2Available && resolvePreset(ref.modelId)) {
     return { tier: 2, runtime: 'executorch' };
   }
 
-  if (opts.modelPath) {
+  if (ref.modelPath) {
     return { tier: 3, runtime: 'llama_rn' };
   }
 
@@ -58,6 +64,9 @@ function resolvePreset(modelId: string | undefined): ExecutorchPreset | null {
     const def = getDefaultModel();
     return def.executorchPreset ?? null;
   }
+  const exact = getModelById(modelId);
+  if (exact) return exact.executorchPreset ?? null;
+
   // Look up by id — check default, then lite
   const def = getDefaultModel();
   if (def.id === modelId) return def.executorchPreset ?? null;
@@ -66,39 +75,87 @@ function resolvePreset(modelId: string | undefined): ExecutorchPreset | null {
   return null;
 }
 
+function looksLikeModelPath(ref: string | undefined): boolean {
+  if (!ref) return false;
+  return (
+    ref.startsWith('file:') ||
+    ref.startsWith('/') ||
+    ref.includes('/') ||
+    ref.endsWith('.gguf') ||
+    ref.endsWith('.pte') ||
+    ref.endsWith('.bin')
+  );
+}
+
+function normalizeModelRef(
+  modelPathOrId: string | undefined,
+  explicitModelId?: string,
+): { modelId?: string; modelPath?: string } {
+  const modelPath = looksLikeModelPath(modelPathOrId) ? modelPathOrId : undefined;
+  const modelId = explicitModelId ?? (modelPath ? undefined : modelPathOrId);
+  return { modelId, modelPath };
+}
+
+function canUseTier1ForModel(
+  modelId: string | undefined,
+  runtime: Exclude<DeviceCapabilities['tier1Runtime'], null>,
+): boolean {
+  if (!modelId) return true;
+
+  const model = getModelById(modelId);
+  if (!model) return false;
+
+  if (runtime === 'foundation_models') {
+    return model.supportedRuntimes.includes('apple-foundation-models');
+  }
+  return model.supportedRuntimes.includes('aicore');
+}
+
 // Top-level generate: selects tier then dispatches to the right adapter.
 export async function localGenerate(
-  modelPath: string | undefined,
+  modelPathOrId: string | undefined,
   opts: GenerateOptions,
 ): Promise<GenerateResult> {
   const caps = await getCapabilities();
+  const ref = normalizeModelRef(modelPathOrId, opts.modelId);
 
   if (caps.thermalThrottled) {
     throw new Error('Device is thermally throttled — inference paused.');
   }
 
-  if (caps.tier1Available && caps.tier1Runtime) {
+  if (
+    caps.tier1Available &&
+    caps.tier1Runtime &&
+    canUseTier1ForModel(ref.modelId, caps.tier1Runtime)
+  ) {
     return tier1Generate(opts);
   }
 
-  if (!modelPath) {
-    throw new Error('No model path provided for Tier 2/3 inference.');
-  }
+  let tier2Error: unknown = null;
+  const preset = resolvePreset(ref.modelId);
 
-  if (caps.tier2Available) {
-    const preset = resolvePreset(modelPath);
-    if (preset) {
-      try {
-        return await tier2Generate(preset, opts);
-      } catch (err) {
-        console.warn('[local-llm] Tier 2 failed, falling back to Tier 3:', err);
-      }
-    } else {
-      console.warn('[local-llm] No executorchPreset for model, skipping Tier 2:', modelPath);
+  if (caps.tier2Available && preset) {
+    try {
+      return await tier2Generate(preset, opts);
+    } catch (err) {
+      tier2Error = err;
+      console.warn('[local-llm] Tier 2 failed, falling back to Tier 3 when possible:', err);
     }
   }
 
-  return tier3Generate(modelPath, opts);
+  if (ref.modelPath) {
+    return tier3Generate(ref.modelPath, opts);
+  }
+
+  if (tier2Error instanceof Error) {
+    throw tier2Error;
+  }
+
+  if (ref.modelId && !preset) {
+    throw new Error(`No runnable local package is configured for model ${ref.modelId}.`);
+  }
+
+  throw new Error('No local model is ready. Download a model first, or add a cloud provider key.');
 }
 
 export type {

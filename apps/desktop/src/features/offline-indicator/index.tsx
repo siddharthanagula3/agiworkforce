@@ -5,7 +5,7 @@
  * Shows banner when offline or when items are pending sync.
  * Auto-hides when online with no pending items.
  *
- * Ported from apps/web/components/OfflineIndicator.tsx for desktop integration.
+ * Ported from the Web offline indicator for desktop integration.
  */
 
 import { useCallback, useEffect, useState } from 'react';

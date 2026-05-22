@@ -84,6 +84,7 @@ export const CreateMessageSchema = z.object({
     })
     .optional()
     .default('user'),
+  metadata: z.record(z.string(), z.unknown()).optional().default({}),
   skipLlm: z.boolean().optional().default(false),
 });
 

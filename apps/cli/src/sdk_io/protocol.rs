@@ -82,10 +82,7 @@ pub(crate) enum StreamEvent {
         tool_name: String,
     },
     /// Thinking-block delta, when extended-thinking betas are enabled.
-    ThinkingDelta {
-        session_id: String,
-        delta: String,
-    },
+    ThinkingDelta { session_id: String, delta: String },
 }
 
 #[derive(Debug, Clone, Serialize)]

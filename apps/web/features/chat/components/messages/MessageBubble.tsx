@@ -43,16 +43,19 @@ import {
 } from '@shared/ui/dropdown-menu';
 import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';
+import type { ArtifactManifest, ComputeSession, GeneratedFile } from '@agiworkforce/types';
 
 const MarkdownContent = dynamic(() => import('./MarkdownContent'), {
   loading: () => <div className="h-4 w-32 animate-pulse rounded bg-muted" />,
 });
 
-import { ArtifactPreview } from '../artifacts/ArtifactPreview';
+import type { ArtifactData } from '../artifacts/ArtifactPreview';
 import { InlineArtifactCards } from '../artifacts/InlineArtifactCards';
 import { extractArtifacts, removeArtifactBlocks } from '../../utils/artifact-detector';
+import { useArtifactsStore as useChatArtifactsStore } from '../../stores/artifacts-store';
 import { useArtifactStore } from '@shared/stores/artifact-store';
 import { SearchResults } from '../search/SearchResults';
+import { ToolTimeline, type ToolEntry } from './ToolTimeline';
 import type { SearchResponse } from '@core/integrations/web-search-handler';
 import type { MediaGenerationResult } from '@core/integrations/media-generation-handler';
 import type { GeneratedDocument } from '../../services/document-generation-service';
@@ -143,6 +146,7 @@ interface Message {
     isSynthesis?: boolean;
     searchResults?: SearchResponse;
     isSearching?: boolean;
+    tools?: ToolEntry[];
     toolResult?: boolean;
     toolType?: string;
     imageUrl?: string;
@@ -151,6 +155,9 @@ interface Message {
     thumbnailUrl?: string;
     videoData?: MediaGenerationResult;
     documentData?: GeneratedDocument;
+    computeSession?: ComputeSession;
+    generatedFile?: GeneratedFile;
+    artifactManifest?: ArtifactManifest;
     collaborationMessages?: Array<{
       employeeName: string;
       employeeAvatar: string;
@@ -221,6 +228,7 @@ const MessageBubbleComponent = function MessageBubble({
   const isUser = message.role === 'user';
 
   const { addArtifact, getMessageArtifacts } = useArtifactStore();
+  const upsertPanelArtifact = useChatArtifactsStore((state) => state.upsertArtifact);
 
   // Artifact handling
   const existingArtifacts = getMessageArtifacts(message.id);
@@ -229,12 +237,60 @@ const MessageBubbleComponent = function MessageBubble({
     return extractArtifacts(message.content);
   }, [message.content, isUser]);
 
-  const artifacts = existingArtifacts.length > 0 ? existingArtifacts : extractedArtifacts;
+  const generatedFileArtifacts = useMemo<ArtifactData[]>(() => {
+    if (isUser) return [];
+    const { computeSession, generatedFile, artifactManifest, documentData } =
+      message.metadata ?? {};
+    if (!computeSession && !generatedFile && !artifactManifest) return [];
+
+    return [
+      {
+        id: artifactManifest?.artifactId ?? generatedFile?.id ?? `generated-file-${message.id}`,
+        type: 'document',
+        language: generatedFile?.kind ?? 'document',
+        title:
+          artifactManifest?.title ??
+          generatedFile?.fileName ??
+          documentData?.title ??
+          'Generated file',
+        content: documentData?.content ?? message.content,
+        computeSession,
+        generatedFile,
+        artifactManifest,
+        versions: [
+          {
+            id: `v1-${message.id}`,
+            content: documentData?.content ?? message.content,
+            timestamp: message.timestamp,
+            description: 'Generated file manifest',
+          },
+        ],
+        currentVersion: 0,
+      },
+    ];
+  }, [isUser, message.content, message.id, message.metadata, message.timestamp]);
+
+  const artifacts = useMemo(() => {
+    const baseArtifacts = existingArtifacts.length > 0 ? existingArtifacts : extractedArtifacts;
+    return [...baseArtifacts, ...generatedFileArtifacts];
+  }, [existingArtifacts, extractedArtifacts, generatedFileArtifacts]);
 
   useEffect(() => {
     if (isUser || existingArtifacts.length > 0 || extractedArtifacts.length === 0) return;
     extractedArtifacts.forEach((artifact) => addArtifact(message.id, artifact));
   }, [message.id, isUser, existingArtifacts.length, extractedArtifacts, addArtifact]);
+
+  useEffect(() => {
+    if (isUser || artifacts.length === 0) return;
+    for (const artifact of artifacts) {
+      upsertPanelArtifact({
+        ...artifact,
+        title: artifact.title || 'Untitled',
+        language: artifact.language || artifact.type,
+        messageId: message.id,
+      });
+    }
+  }, [artifacts, isUser, message.id, upsertPanelArtifact]);
 
   const cleanedContent = useMemo(() => {
     if (artifacts.length === 0) return message.content;
@@ -265,6 +321,7 @@ const MessageBubbleComponent = function MessageBubble({
     message.metadata?.isMultiAgent &&
     message.metadata?.collaborationMessages &&
     message.metadata.collaborationMessages.length > 0;
+  const toolTimeline = !isUser && message.metadata?.tools ? message.metadata.tools : [];
 
   return (
     <motion.div
@@ -362,15 +419,6 @@ const MessageBubbleComponent = function MessageBubble({
           {/* Inline artifact thumbnail cards — quick visual summary, click to open panel */}
           {!isUser && artifacts.length > 0 && <InlineArtifactCards artifacts={artifacts} />}
 
-          {/* Artifacts — full detail view (below inline cards) */}
-          {!isUser && artifacts.length > 0 && (
-            <div className="mt-4 space-y-3">
-              {artifacts.map((artifact) => (
-                <ArtifactPreview key={artifact.id} artifact={artifact} />
-              ))}
-            </div>
-          )}
-
           {/* Image Result with Error Handling */}
           {!isUser &&
             message.metadata?.toolType === 'image-generation' &&
@@ -428,6 +476,13 @@ const MessageBubbleComponent = function MessageBubble({
           {!isUser && message.metadata?.searchResults && (
             <div className="mt-4">
               <SearchResults searchResponse={message.metadata.searchResults} showAnswer />
+            </div>
+          )}
+
+          {/* Tool timeline — compact, progressively disclosed tool activity. */}
+          {!isUser && toolTimeline.length > 0 && (
+            <div className="mt-3">
+              <ToolTimeline tools={toolTimeline} />
             </div>
           )}
 

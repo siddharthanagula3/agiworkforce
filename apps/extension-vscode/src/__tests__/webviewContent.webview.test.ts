@@ -114,6 +114,21 @@ describe('getWebviewContent — structural smoke', () => {
     expect(doc.querySelector('#sendBtn')).not.toBeNull();
   });
 
+  it('contains a working inline model picker popover contract', () => {
+    const html = render();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const scriptBody = Array.from(doc.querySelectorAll('script'))
+      .map((script) => script.textContent ?? '')
+      .join('\n');
+
+    expect(doc.querySelector('#modelPill')).not.toBeNull();
+    expect(doc.querySelector('#modelPopover')).not.toBeNull();
+    expect(scriptBody).toContain("const modelPopoverEl = document.getElementById('modelPopover')");
+    expect(scriptBody).toContain('function closeModelPopover()');
+    expect(scriptBody).toContain("msg.type === 'modelPickerData'");
+    expect(scriptBody).toContain("vscode.postMessage({ type: 'selectModel'");
+  });
+
   it('nonce is present on style and script tags', () => {
     const html = render();
     const doc = new DOMParser().parseFromString(html, 'text/html');

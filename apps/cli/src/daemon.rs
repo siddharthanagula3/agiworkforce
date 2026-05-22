@@ -1,7 +1,7 @@
 //! Daemon mode -- persistent event listener that triggers agent execution.
 //!
 //! Supports cron schedules, webhook HTTP endpoints, and filesystem watchers.
-//! Started via `agiworkforce --daemon` or `agiworkforce daemon`.
+//! Started via `agi --daemon` or `agi daemon`.
 //!
 //! Each trigger spawns a new `AgentSession` (non-interactive).  Results are
 //! logged to `~/.agiworkforce/daemon-logs/`.  Concurrent execution is capped
@@ -1053,8 +1053,7 @@ mod tests {
 
     #[test]
     fn redact_strips_well_known_secret_patterns() {
-        let raw =
-            "Bearer sk-ant-AAA12345678901234567890 and sk_test_abcdefghij1234567890123456";
+        let raw = "Bearer sk-ant-AAA12345678901234567890 and sk_test_abcdefghij1234567890123456";
         let out = redact_secrets(raw);
         assert!(!out.contains("sk-ant-"));
         assert!(!out.contains("sk_test_abcdefghij"));

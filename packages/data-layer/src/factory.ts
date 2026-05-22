@@ -171,7 +171,8 @@ export interface CreateAuthClientOptions {
 
 /**
  * Build an `AuthAdapter`. Today only `supabase` is implemented; the other
- * providers' migration paths are documented in `docs/SCALING.md`.
+ * providers' migration paths are documented in `docs/current/technical-architecture.md`
+ * and the archived scaling playbook.
  */
 export function createAuthClient(opts: CreateAuthClientOptions = {}): AuthAdapter {
   const provider =
@@ -192,8 +193,8 @@ export function createAuthClient(opts: CreateAuthClientOptions = {}): AuthAdapte
     case 'clerk':
     case 'cognito':
       throw new DataLayerConfigError(
-        `Auth provider "${provider}" is documented in docs/SCALING.md but no adapter ships yet. ` +
-          `See docs/SCALING.md §"Auth provider migration" for the implementation path.`,
+        `Auth provider "${provider}" is documented in docs/current/technical-architecture.md but no adapter ships yet. ` +
+          `See docs/archive/2026-05-21-docs-consolidation/SCALING.md §"Auth provider migration" for the legacy implementation path.`,
       );
   }
 }
@@ -233,8 +234,8 @@ export function createStorageClient(opts: CreateStorageClientOptions = {}): Stor
     case 'r2':
     case 'b2':
       throw new DataLayerConfigError(
-        `Storage provider "${provider}" is documented in docs/SCALING.md but no adapter ships yet. ` +
-          `See docs/SCALING.md §"Storage migration" for the implementation path.`,
+        `Storage provider "${provider}" is documented in docs/current/technical-architecture.md but no adapter ships yet. ` +
+          `See docs/archive/2026-05-21-docs-consolidation/SCALING.md §"Storage migration" for the legacy implementation path.`,
       );
   }
 }
@@ -271,8 +272,8 @@ export function createRealtimeClient(opts: CreateRealtimeClientOptions = {}): Re
     case 'ably':
     case 'self-hosted':
       throw new DataLayerConfigError(
-        `Realtime provider "${provider}" is documented in docs/SCALING.md but no adapter ships yet. ` +
-          `See docs/SCALING.md §"Realtime migration" for the implementation path.`,
+        `Realtime provider "${provider}" is documented in docs/current/technical-architecture.md but no adapter ships yet. ` +
+          `See docs/archive/2026-05-21-docs-consolidation/SCALING.md §"Realtime migration" for the legacy implementation path.`,
       );
   }
 }

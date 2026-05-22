@@ -44,10 +44,7 @@ pub(crate) const BRAILLE_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", 
 pub(crate) const ASCII_FRAMES: &[&str] = &["|", "/", "-", "\\"];
 
 pub(crate) fn ascii_mode() -> bool {
-    std::env::var("NO_COLOR").is_ok()
-        || std::env::var("TERM")
-            .map(|t| t == "dumb")
-            .unwrap_or(false)
+    std::env::var("NO_COLOR").is_ok() || std::env::var("TERM").map(|t| t == "dumb").unwrap_or(false)
 }
 
 /// Return the single glyph for a tool icon.
@@ -130,7 +127,10 @@ mod tests {
             ToolIcon::Loader2,
         ];
         for icon in icons {
-            assert!(!unicode_glyph(icon).is_empty(), "unicode_glyph({icon:?}) is empty");
+            assert!(
+                !unicode_glyph(icon).is_empty(),
+                "unicode_glyph({icon:?}) is empty"
+            );
         }
     }
 
@@ -152,7 +152,10 @@ mod tests {
             ToolIcon::Loader2,
         ];
         for icon in icons {
-            assert!(!ascii_glyph(icon).is_empty(), "ascii_glyph({icon:?}) is empty");
+            assert!(
+                !ascii_glyph(icon).is_empty(),
+                "ascii_glyph({icon:?}) is empty"
+            );
         }
     }
 

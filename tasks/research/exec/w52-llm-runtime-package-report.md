@@ -16,24 +16,24 @@ The reason services-engineer (Task 1.7) could not import `@agiworkforce/llm-runt
 
 ## 2. Verification matrix
 
-| Check | Method | Result |
-|---|---|---|
-| `packages/llm-runtime/package.json` exists | `ls`, `Read` | OK |
-| `name: "@agiworkforce/llm-runtime"` | inspect manifest | OK |
-| `version: "0.0.1"` | inspect manifest | OK (matches `@agiworkforce/types`, `@agiworkforce/llm-normalize`) |
-| `private: true` | inspect manifest | OK |
-| `type: "module"` | inspect manifest | OK |
-| `exports: "./src/index.ts"` | inspect manifest | OK (workspace source-only resolution pattern) |
-| `main: "./src/index.ts"` | inspect manifest | OK |
-| `types: "./src/index.ts"` | inspect manifest | OK |
-| `scripts.build: "tsc --project tsconfig.json"` | inspect manifest | OK |
-| `scripts.typecheck: "tsc --noEmit"` | inspect manifest | OK |
-| `scripts.test: "vitest run"` | inspect manifest | OK |
-| `dependencies` is exactly `@agiworkforce/types: workspace:*` | inspect manifest | OK |
-| `devDependencies` is exactly `vitest: ^3.0.0` | inspect manifest | OK |
-| `pnpm-workspace.yaml` includes `packages/*` | `Read pnpm-workspace.yaml` line 3 | OK |
-| `tsconfig.json` extends `../../tsconfig.base.json` with composite + declaration | `Read` | OK |
-| `vitest.config.ts` present, scoped to `src/__tests__/**/*.test.ts` | `Read` | OK |
+| Check                                                                           | Method                            | Result                                                            |
+| ------------------------------------------------------------------------------- | --------------------------------- | ----------------------------------------------------------------- |
+| `packages/llm-runtime/package.json` exists                                      | `ls`, `Read`                      | OK                                                                |
+| `name: "@agiworkforce/llm-runtime"`                                             | inspect manifest                  | OK                                                                |
+| `version: "0.0.1"`                                                              | inspect manifest                  | OK (matches `@agiworkforce/types`, `@agiworkforce/llm-normalize`) |
+| `private: true`                                                                 | inspect manifest                  | OK                                                                |
+| `type: "module"`                                                                | inspect manifest                  | OK                                                                |
+| `exports: "./src/index.ts"`                                                     | inspect manifest                  | OK (workspace source-only resolution pattern)                     |
+| `main: "./src/index.ts"`                                                        | inspect manifest                  | OK                                                                |
+| `types: "./src/index.ts"`                                                       | inspect manifest                  | OK                                                                |
+| `scripts.build: "tsc --project tsconfig.json"`                                  | inspect manifest                  | OK                                                                |
+| `scripts.typecheck: "tsc --noEmit"`                                             | inspect manifest                  | OK                                                                |
+| `scripts.test: "vitest run"`                                                    | inspect manifest                  | OK                                                                |
+| `dependencies` is exactly `@agiworkforce/types: workspace:*`                    | inspect manifest                  | OK                                                                |
+| `devDependencies` is exactly `vitest: ^3.0.0`                                   | inspect manifest                  | OK                                                                |
+| `pnpm-workspace.yaml` includes `packages/*`                                     | `Read pnpm-workspace.yaml` line 3 | OK                                                                |
+| `tsconfig.json` extends `../../tsconfig.base.json` with composite + declaration | `Read`                            | OK                                                                |
+| `vitest.config.ts` present, scoped to `src/__tests__/**/*.test.ts`              | `Read`                            | OK                                                                |
 
 ### Build, test, typecheck
 
@@ -47,6 +47,7 @@ The reason services-engineer (Task 1.7) could not import `@agiworkforce/llm-runt
 `pnpm install --prefer-offline` produces a workspace with **28 PRIVATE packages** that includes `@agiworkforce/llm-runtime@0.0.1` at `packages/llm-runtime`. `services/api-gateway/node_modules/@agiworkforce/llm-runtime` symlinks to `../../../../packages/llm-runtime` correctly.
 
 `pnpm-lock.yaml` resolves the dependency for all 9 consumers (sample lines):
+
 - `packages/providers/anthropic` → `'@agiworkforce/llm-runtime': version: link:../../llm-runtime`
 - `packages/providers/openai` → `link:../../llm-runtime`
 - `packages/providers/google` → `link:../../llm-runtime`
@@ -83,7 +84,7 @@ Every file's owning package declares `"@agiworkforce/llm-runtime": "workspace:*"
 
 ### 3.1 No path mapping in `tsconfig.base.json` for `@agiworkforce/*`
 
-The task description asked: *"Check root `tsconfig.base.json` (or equivalent) includes path mapping for `@agiworkforce/llm-runtime`."*
+The task description asked: _"Check root `tsconfig.base.json` (or equivalent) includes path mapping for `@agiworkforce/llm-runtime`."_
 
 Root `tsconfig.base.json:58-62` declares paths only for `@types/*`, `@utils/*`, `@desktop/*`. There is **no** generic `@agiworkforce/*` path mapping anywhere in the repo, and `pnpm typecheck:all` is green regardless. The reason: TypeScript resolves `@agiworkforce/llm-runtime` via the package's `name` field through standard `node_modules` resolution (pnpm symlinks `services/api-gateway/node_modules/@agiworkforce/llm-runtime` → `packages/llm-runtime` automatically). The same pattern works for `@agiworkforce/types`, `@agiworkforce/llm-normalize`, `@agiworkforce/providers-anthropic`, etc. No path-mapping fix is needed and no spec ambiguity exists — the existing pattern is correct.
 
@@ -100,13 +101,14 @@ Task spec mentioned `scripts (build, test, lint)`. Across the monorepo, only `@a
 ## 4. Why services-engineer's import failed
 
 `task-1.7-services-inversion` was created from `main` (commit `a03c22098`), which predates the llm-runtime feature commit `aa77e8e7d` on `task-1.6-llm-runtime`. On `main`:
+
 - `packages/llm-runtime/` does **not** exist.
 - `services/api-gateway/package.json` does **not** declare `"@agiworkforce/llm-runtime": "workspace:*"`.
 - `pnpm-lock.yaml` does **not** contain `packages/llm-runtime:`.
 
 So when services-engineer ran `pnpm install` on `task-1.7-services-inversion`, the import resolved to nothing and the typecheck failed for that branch. This is purely a branch-base issue, not a defect on `task-1.6-llm-runtime`.
 
-The `1.7-report.md` §8 acknowledges this and notes: *"Task 1.6 (`packages/llm-runtime`) exists on branch `task-1.6-llm-runtime` but has no `package.json` so pnpm cannot link it."* The first half is right; the second half is wrong — the package.json is present and correct. The actual problem services-engineer hit is *"task-1.7 was branched from main, not from task-1.6"*.
+The `1.7-report.md` §8 acknowledges this and notes: _"Task 1.6 (`packages/llm-runtime`) exists on branch `task-1.6-llm-runtime` but has no `package.json` so pnpm cannot link it."_ The first half is right; the second half is wrong — the package.json is present and correct. The actual problem services-engineer hit is _"task-1.7 was branched from main, not from task-1.6"_.
 
 ---
 
@@ -126,6 +128,7 @@ I did **not** modify `task-1.7-services-inversion`'s branch (per scope disciplin
 ## 6. Files changed on `task-1.6-llm-runtime`
 
 **No fix-up commits were authored.** The branch's existing commit `aa77e8e7d` is sufficient. Verification was non-mutating:
+
 - `pnpm install --prefer-offline` — populated `node_modules/`, did not modify `pnpm-lock.yaml`.
 - `pnpm --filter @agiworkforce/llm-runtime build` — `tsc` does not emit (root `tsconfig.base.json` has `noEmit: true`); only refreshed `tsconfig.tsbuildinfo` (gitignored).
 - `pnpm --filter @agiworkforce/llm-runtime test` — vitest pure-read.

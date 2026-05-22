@@ -18,11 +18,25 @@ pub struct CliConfig {
     pub default: DefaultConfig,
 
     #[serde(default)]
+    pub ui: UiConfig,
+
+    #[serde(default)]
     pub providers: HashMap<String, ProviderConfig>,
 
     /// Tracks provenance of configuration values. Excluded from serialization.
     #[serde(skip)]
     pub source: ConfigSource,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct UiConfig {
+    /// Output style to apply to new sessions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_style: Option<String>,
+
+    /// Privacy boundary to apply to new sessions: local, byok, or managed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub privacy_mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -188,6 +202,7 @@ impl Default for CliConfig {
 
         Self {
             default: DefaultConfig::new(),
+            ui: UiConfig::default(),
             providers,
             source: ConfigSource::default(),
         }
@@ -357,6 +372,12 @@ impl CliConfig {
         if other.default.cloud_model.is_some() {
             self.default.cloud_model = other.default.cloud_model.clone();
         }
+        if other.ui.output_style.is_some() {
+            self.ui.output_style = other.ui.output_style.clone();
+        }
+        if other.ui.privacy_mode.is_some() {
+            self.ui.privacy_mode = other.ui.privacy_mode.clone();
+        }
         // Merge providers: other's entries override self's for matching keys
         for (key, value) in &other.providers {
             self.providers.insert(key.clone(), value.clone());
@@ -388,6 +409,76 @@ impl CliConfig {
             let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
         }
         Ok(())
+    }
+
+    /// Persist only `[ui]` settings to the current/project config file.
+    ///
+    /// This avoids dumping merged global provider settings into a project file
+    /// when a user changes session-local UX/privacy defaults from a slash command.
+    pub fn save_project_ui_settings(&mut self) -> Result<PathBuf> {
+        let path = self.source.project_path.clone().unwrap_or_else(|| {
+            std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."))
+                .join(".agiworkforce")
+                .join("config.toml")
+        });
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create {}", parent.display()))?;
+        }
+
+        let mut root: toml::Table = if path.exists() {
+            let contents = std::fs::read_to_string(&path)
+                .with_context(|| format!("Failed to read {}", path.display()))?;
+            toml::from_str(&contents)
+                .with_context(|| format!("Failed to parse {}", path.display()))?
+        } else {
+            toml::Table::new()
+        };
+
+        let ui_value = root
+            .entry("ui".to_string())
+            .or_insert_with(|| toml::Value::Table(toml::Table::new()));
+        if !ui_value.is_table() {
+            *ui_value = toml::Value::Table(toml::Table::new());
+        }
+        let ui = ui_value
+            .as_table_mut()
+            .context("Failed to update [ui] config table")?;
+        if let Some(style) = &self.ui.output_style {
+            ui.insert(
+                "output_style".to_string(),
+                toml::Value::String(style.clone()),
+            );
+        }
+        if let Some(mode) = &self.ui.privacy_mode {
+            ui.insert(
+                "privacy_mode".to_string(),
+                toml::Value::String(mode.clone()),
+            );
+        }
+
+        let contents = toml::to_string_pretty(&toml::Value::Table(root))
+            .context("Failed to serialize project config")?;
+        std::fs::write(&path, contents)
+            .with_context(|| format!("Failed to write {}", path.display()))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+        }
+        self.source.project_path = Some(path.clone());
+        Ok(path)
+    }
+
+    pub fn persist_output_style_project(&mut self, style: &str) -> Result<PathBuf> {
+        self.ui.output_style = Some(style.to_string());
+        self.save_project_ui_settings()
+    }
+
+    pub fn persist_privacy_mode_project(&mut self, mode: &str) -> Result<PathBuf> {
+        self.ui.privacy_mode = Some(mode.to_ascii_lowercase());
+        self.save_project_ui_settings()
     }
 
     /// Resolve the API key for a given provider by reading the environment variable.
@@ -451,6 +542,12 @@ impl CliConfig {
         if let Some(ref fast) = self.default.fast_model {
             out.push_str(&format!("Fast model: {}\n", fast));
         }
+        if let Some(ref style) = self.ui.output_style {
+            out.push_str(&format!("Output style: {}\n", style));
+        }
+        if let Some(ref mode) = self.ui.privacy_mode {
+            out.push_str(&format!("Privacy mode: {}\n", mode));
+        }
 
         out.push_str("\nProviders:\n");
         for (name, pc) in &self.providers {
@@ -491,6 +588,16 @@ impl CliConfig {
                 bail!("temperature must be between 0.0 and 1.0, got {}", temp);
             }
         }
+        if let Some(style) = self.ui.output_style.as_deref() {
+            if style.trim().is_empty() {
+                bail!("ui.output_style must not be empty");
+            }
+        }
+        if let Some(mode) = self.ui.privacy_mode.as_deref() {
+            if !is_valid_privacy_mode(mode) {
+                bail!("ui.privacy_mode must be one of: local, byok, managed");
+            }
+        }
         Ok(())
     }
 
@@ -512,6 +619,8 @@ impl CliConfig {
                 }
             }
             "fast-model" => self.default.fast_model.clone(),
+            "output-style" | "ui.output-style" | "ui.output_style" => self.ui.output_style.clone(),
+            "privacy-mode" | "ui.privacy-mode" | "ui.privacy_mode" => self.ui.privacy_mode.clone(),
             _ => None,
         }
     }
@@ -564,8 +673,20 @@ impl CliConfig {
                     Some(value.to_string())
                 };
             }
+            "output-style" | "ui.output-style" | "ui.output_style" => {
+                if value.trim().is_empty() {
+                    bail!("output-style must not be empty");
+                }
+                self.ui.output_style = Some(value.trim().to_string());
+            }
+            "privacy-mode" | "ui.privacy-mode" | "ui.privacy_mode" => {
+                if !is_valid_privacy_mode(value) {
+                    bail!("privacy-mode must be one of: local, byok, managed");
+                }
+                self.ui.privacy_mode = Some(value.trim().to_ascii_lowercase());
+            }
             _ => bail!(
-                "Unknown config key: '{}'. Valid keys: model, provider, max-tokens, temperature, stream, fallback-model, fallback-chain, fast-model",
+                "Unknown config key: '{}'. Valid keys: model, provider, max-tokens, temperature, stream, fallback-model, fallback-chain, fast-model, output-style, privacy-mode",
                 key
             ),
         }
@@ -606,6 +727,22 @@ impl CliConfig {
     }
 }
 
+fn is_valid_privacy_mode(mode: &str) -> bool {
+    matches!(
+        mode.trim().to_ascii_lowercase().as_str(),
+        "local"
+            | "offline"
+            | "device"
+            | "byok"
+            | "cloud-byok"
+            | "provider"
+            | "managed"
+            | "agi"
+            | "agi-cloud"
+            | "cloud"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -633,6 +770,8 @@ mod tests {
         assert!(config.providers.contains_key("xai"));
         assert!(config.providers.contains_key("deepseek"));
         assert!(config.providers.contains_key("ollama-cloud"));
+        assert!(config.ui.output_style.is_none());
+        assert!(config.ui.privacy_mode.is_none());
     }
 
     #[test]
@@ -945,6 +1084,26 @@ max_tokens = 2048
     }
 
     #[test]
+    fn test_load_project_ui_config_from_temp_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config_dir = tmp.path().join(".agiworkforce");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::write(
+            config_dir.join("config.toml"),
+            r#"
+[ui]
+output_style = "explanatory"
+privacy_mode = "local"
+"#,
+        )
+        .unwrap();
+
+        let project = CliConfig::load_project_config_from(tmp.path()).unwrap();
+        assert_eq!(project.ui.output_style.as_deref(), Some("explanatory"));
+        assert_eq!(project.ui.privacy_mode.as_deref(), Some("local"));
+    }
+
+    #[test]
     fn test_load_project_config_returns_none_when_missing() {
         let tmp = tempfile::tempdir().unwrap();
         // No .agiworkforce/config.toml exists
@@ -1155,6 +1314,19 @@ max_tokens = 2048
         );
     }
 
+    #[test]
+    fn test_merge_from_applies_ui_config() {
+        let mut base = CliConfig::default();
+        let mut other = CliConfig::default();
+        other.ui.output_style = Some("learning".to_string());
+        other.ui.privacy_mode = Some("local".to_string());
+
+        base.merge_from(&other);
+
+        assert_eq!(base.ui.output_style.as_deref(), Some("learning"));
+        assert_eq!(base.ui.privacy_mode.as_deref(), Some("local"));
+    }
+
     // --- Display with sources ---
 
     #[test]
@@ -1317,9 +1489,60 @@ max_tokens = 2048
     }
 
     #[test]
+    fn test_set_get_ui_values() {
+        let mut config = CliConfig::default();
+        config.set_value("output-style", "learning").unwrap();
+        config.set_value("privacy-mode", "local").unwrap();
+
+        assert_eq!(
+            config.get_value("output-style"),
+            Some("learning".to_string())
+        );
+        assert_eq!(config.get_value("privacy-mode"), Some("local".to_string()));
+    }
+
+    #[test]
+    fn test_validate_rejects_invalid_privacy_mode() {
+        let mut config = CliConfig::default();
+        config.ui.privacy_mode = Some("public-internet".to_string());
+
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_save_project_ui_settings_preserves_existing_project_config() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config_file = tmp.path().join(".agiworkforce").join("config.toml");
+        std::fs::create_dir_all(config_file.parent().unwrap()).unwrap();
+        std::fs::write(
+            &config_file,
+            r#"
+[default]
+model = "gpt-5.5"
+"#,
+        )
+        .unwrap();
+
+        let mut config = CliConfig::default();
+        config.source.project_path = Some(config_file.clone());
+        config.ui.output_style = Some("explanatory".to_string());
+        config.ui.privacy_mode = Some("byok".to_string());
+
+        let saved = config.save_project_ui_settings().unwrap();
+        let contents = std::fs::read_to_string(&saved).unwrap();
+
+        assert_eq!(saved, config_file);
+        assert!(contents.contains("model = \"gpt-5.5\""));
+        assert!(contents.contains("[ui]"));
+        assert!(contents.contains("output_style = \"explanatory\""));
+        assert!(contents.contains("privacy_mode = \"byok\""));
+    }
+
+    #[test]
     fn test_fallback_chain_serialization() {
         let mut config = CliConfig::default();
-        config.default.fallback_chain = vec!["gpt-5.5".to_string(), "gemini-3.1-flash-lite".to_string()];
+        config.default.fallback_chain =
+            vec!["gpt-5.5".to_string(), "gemini-3.1-flash-lite".to_string()];
         let serialized = toml::to_string_pretty(&config).unwrap();
         assert!(serialized.contains("fallback_chain"));
         let deserialized: CliConfig = toml::from_str(&serialized).unwrap();

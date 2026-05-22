@@ -147,7 +147,7 @@ export function EnhancedExportDialog({
 
         case 'html': {
           const content = exportService.exportAsHTML(session, messages);
-          const blob = new Blob([content], { type: 'text/html' });
+          const blob = new Blob([content], { type: 'text/plain' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;

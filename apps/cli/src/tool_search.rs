@@ -14,6 +14,7 @@
 
 use crate::models::ToolDefinition;
 use crate::plugins::DiscoverableTool;
+use crate::runtime::tool_catalog;
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
@@ -121,6 +122,7 @@ pub fn search_tool_schemas(
             .split(',')
             .map(str::trim)
             .filter(|s| !s.is_empty())
+            .map(tool_catalog::canonical_tool_name)
             .collect();
         catalog
             .iter()
@@ -150,6 +152,14 @@ pub fn search_tool_schemas(
                         s += 10.0;
                     } else if nl.contains(term) {
                         s += 5.0;
+                    }
+                    for alias in tool_catalog::tool_aliases(&t.name) {
+                        let alias = alias.to_lowercase();
+                        if alias == *term {
+                            s += 9.0;
+                        } else if alias.contains(term) {
+                            s += 4.0;
+                        }
                     }
                     if dl.contains(term) {
                         s += 2.0;
@@ -249,6 +259,13 @@ mod tests {
             is_concurrency_safe: false,
             max_result_size_chars: None,
             should_defer: deferred,
+            aliases: tool_catalog::tool_aliases(name)
+                .iter()
+                .map(|alias| alias.to_string())
+                .collect(),
+            owner: "test".to_string(),
+            permission_class: "mutating".to_string(),
+            diagnostic_tags: vec!["test".to_string()],
         }
     }
 
@@ -268,6 +285,23 @@ mod tests {
         let names: Vec<&str> = results.iter().map(|r| r.name.as_str()).collect();
         assert!(names.contains(&"apply_patch"));
         assert!(names.contains(&"glob"));
+    }
+
+    #[test]
+    fn select_directive_accepts_claude_style_tool_aliases() {
+        let catalog = vec![
+            make_tool("run_command", "Execute shell command", false),
+            make_tool("grep_files", "Search files", false),
+            make_tool("todo_write", "Write todos", true),
+        ];
+
+        let results = search_tool_schemas("select:Bash,Grep,TodoWrite", &catalog, 10);
+        let names: Vec<&str> = results.iter().map(|r| r.name.as_str()).collect();
+
+        assert_eq!(results.len(), 3);
+        assert!(names.contains(&"run_command"));
+        assert!(names.contains(&"grep_files"));
+        assert!(names.contains(&"todo_write"));
     }
 
     #[test]
@@ -307,6 +341,10 @@ mod tests {
             is_concurrency_safe: false,
             max_result_size_chars: None,
             should_defer: true,
+            aliases: vec!["ApplyPatch".to_string()],
+            owner: "test".to_string(),
+            permission_class: "mutating".to_string(),
+            diagnostic_tags: vec!["test".to_string()],
         };
         let results = search_tool_schemas("select:apply_patch", &[tool], 10);
         assert_eq!(results.len(), 1);
@@ -337,6 +375,19 @@ mod tests {
         let results = search_tool_schemas("network", &catalog, 10);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].name, "tool_b");
+    }
+
+    #[test]
+    fn keyword_search_matches_claude_style_tool_alias() {
+        let catalog = vec![
+            make_tool("run_command", "Execute a command", false),
+            make_tool("read_file", "Read file contents", false),
+        ];
+
+        let results = search_tool_schemas("Bash", &catalog, 10);
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].name, "run_command");
     }
 
     #[test]
@@ -397,7 +448,19 @@ mod tests {
     #[test]
     fn builtin_catalog_always_loaded_tools_not_deferred() {
         let catalog = tool_catalog::all_builtin_tool_definitions();
-        let always = ["read_file", "write_file", "edit_file", "run_command", "grep_files", "task", "web_search", "web_fetch", "tool_search", "search_files", "list_directory"];
+        let always = [
+            "read_file",
+            "write_file",
+            "edit_file",
+            "run_command",
+            "grep_files",
+            "task",
+            "web_search",
+            "web_fetch",
+            "tool_search",
+            "search_files",
+            "list_directory",
+        ];
         for name in &always {
             let results = search_tool_schemas(&format!("select:{}", name), &catalog, 10);
             assert_eq!(results.len(), 1, "tool {} not found in catalog", name);
@@ -412,15 +475,26 @@ mod tests {
     #[test]
     fn builtin_catalog_niche_tools_are_deferred() {
         let catalog = tool_catalog::all_builtin_tool_definitions();
-        let deferred = ["apply_patch", "update_plan", "glob", "batch", "multiedit", "todo_read", "todo_write", "ask_user", "read_many_files"];
+        let deferred = [
+            "apply_patch",
+            "update_plan",
+            "glob",
+            "batch",
+            "multiedit",
+            "todo_read",
+            "todo_write",
+            "ask_user",
+            "read_many_files",
+        ];
         for name in &deferred {
             let results = search_tool_schemas(&format!("select:{}", name), &catalog, 10);
-            assert_eq!(results.len(), 1, "deferred tool {} not found in catalog", name);
-            assert!(
-                results[0].was_deferred,
-                "tool {} SHOULD be deferred",
+            assert_eq!(
+                results.len(),
+                1,
+                "deferred tool {} not found in catalog",
                 name
             );
+            assert!(results[0].was_deferred, "tool {} SHOULD be deferred", name);
         }
     }
 

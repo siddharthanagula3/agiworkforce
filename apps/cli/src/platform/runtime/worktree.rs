@@ -27,18 +27,16 @@ pub struct Worktree {
 
 #[allow(dead_code)]
 pub fn enter_worktree(repo: &Path, opts: WorktreeOptions) -> Result<Worktree> {
-    let target = opts
-        .target_dir
-        .unwrap_or_else(|| {
-            let parent = repo.parent().unwrap_or(repo);
-            parent.join(format!(
-                "{}-{}",
-                repo.file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_default(),
-                opts.branch
-            ))
-        });
+    let target = opts.target_dir.unwrap_or_else(|| {
+        let parent = repo.parent().unwrap_or(repo);
+        parent.join(format!(
+            "{}-{}",
+            repo.file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            opts.branch
+        ))
+    });
     let mut cmd = Command::new("git");
     cmd.current_dir(repo)
         .arg("worktree")

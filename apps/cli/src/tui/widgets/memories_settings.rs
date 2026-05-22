@@ -76,7 +76,11 @@ impl MemoriesSettingsView {
     fn item_text(&self, idx: usize) -> String {
         match idx {
             0 => {
-                let val = if self.settings.auto_memory { "ON " } else { "OFF" };
+                let val = if self.settings.auto_memory {
+                    "ON "
+                } else {
+                    "OFF"
+                };
                 format!("Auto-memory                          [{val}]")
             }
             1 => format!(
@@ -122,7 +126,10 @@ impl InteractiveView for MemoriesSettingsView {
                 self.done = true;
                 ViewAction::Close
             }
-            other => self.state.handle_list_key(other).unwrap_or(ViewAction::Continue),
+            other => self
+                .state
+                .handle_list_key(other)
+                .unwrap_or(ViewAction::Continue),
         }
     }
 

@@ -1,15 +1,23 @@
+use serde::Deserialize;
 use std::collections::HashMap;
-use std::path::Path;
 
 use anyhow::Result;
 use colored::Colorize;
 use dialoguer::Confirm;
 
 use super::common::{
-    generate_simple_diff, print_tool_status, preview_string, truncate_line,
+    generate_simple_diff, preview_string, print_tool_status, truncate_line,
     truncate_output_with_save, validate_file_path, MAX_FILE_LINES,
 };
 use super::ToolResult;
+
+#[derive(Debug, Deserialize)]
+struct MultiEditOp {
+    old_string: String,
+    new_string: String,
+    #[serde(default)]
+    replace_all: bool,
+}
 
 pub(super) async fn execute_read_file(args: &HashMap<String, String>) -> Result<ToolResult> {
     let path = match args.get("path") {
@@ -64,6 +72,8 @@ pub(super) async fn execute_read_file(args: &HashMap<String, String>) -> Result<
 
     match tokio::fs::read_to_string(file_path).await {
         Ok(contents) => {
+            crate::file_state::record_file_read(file_path, &contents);
+
             let all_lines: Vec<&str> = contents.lines().collect();
             let total_lines = all_lines.len();
 
@@ -179,18 +189,29 @@ pub(super) async fn execute_write_file(
         }
     };
 
-    if let Err(reason) = validate_file_path(path) {
-        return Ok(ToolResult {
-            tool_name: "write_file".to_string(),
-            success: false,
-            output: format!("Path rejected: {}", reason),
-        });
-    }
+    let validated_path = match validate_file_path(path) {
+        Ok(p) => p,
+        Err(reason) => {
+            return Ok(ToolResult {
+                tool_name: "write_file".to_string(),
+                success: false,
+                output: format!("Path rejected: {}", reason),
+            });
+        }
+    };
 
     print_tool_status("write_file", &format!("Write({})", path));
 
+    let file_path = validated_path.as_path();
+    if let Err(message) = crate::file_state::ensure_previously_read_and_fresh(file_path) {
+        return Ok(ToolResult {
+            tool_name: "write_file".to_string(),
+            success: false,
+            output: message,
+        });
+    }
+
     if require_confirmation {
-        let file_path = Path::new(path);
         let line_count = content.lines().count();
 
         if file_path.exists() && file_path.is_file() {
@@ -240,8 +261,6 @@ pub(super) async fn execute_write_file(
         }
     }
 
-    let file_path = Path::new(path);
-
     if let Some(parent) = file_path.parent() {
         if !parent.exists() {
             if let Err(e) = tokio::fs::create_dir_all(parent).await {
@@ -256,6 +275,7 @@ pub(super) async fn execute_write_file(
 
     match tokio::fs::write(file_path, content).await {
         Ok(()) => {
+            crate::file_state::record_file_write(file_path, content);
             let line_count = content.lines().count();
             Ok(ToolResult {
                 tool_name: "write_file".to_string(),
@@ -313,22 +333,32 @@ pub(super) async fn execute_edit_file(
         }
     };
 
-    if let Err(reason) = validate_file_path(path) {
-        return Ok(ToolResult {
-            tool_name: "edit_file".to_string(),
-            success: false,
-            output: format!("Path rejected: {}", reason),
-        });
-    }
+    let validated_path = match validate_file_path(path) {
+        Ok(p) => p,
+        Err(reason) => {
+            return Ok(ToolResult {
+                tool_name: "edit_file".to_string(),
+                success: false,
+                output: format!("Path rejected: {}", reason),
+            });
+        }
+    };
 
     print_tool_status("edit_file", &format!("Edit({})", path));
 
-    let file_path = Path::new(path);
+    let file_path = validated_path.as_path();
     if !file_path.exists() {
         return Ok(ToolResult {
             tool_name: "edit_file".to_string(),
             success: false,
             output: format!("File not found: {}", path),
+        });
+    }
+    if let Err(message) = crate::file_state::ensure_previously_read_and_fresh(file_path) {
+        return Ok(ToolResult {
+            tool_name: "edit_file".to_string(),
+            success: false,
+            output: message,
         });
     }
 
@@ -389,11 +419,14 @@ pub(super) async fn execute_edit_file(
     let new_contents = contents.replacen(old_string, new_string, 1);
 
     match tokio::fs::write(file_path, &new_contents).await {
-        Ok(()) => Ok(ToolResult {
-            tool_name: "edit_file".to_string(),
-            success: true,
-            output: format!("Successfully edited {}", path),
-        }),
+        Ok(()) => {
+            crate::file_state::record_file_write(file_path, &new_contents);
+            Ok(ToolResult {
+                tool_name: "edit_file".to_string(),
+                success: true,
+                output: format!("Successfully edited {}", path),
+            })
+        }
         Err(e) => Ok(ToolResult {
             tool_name: "edit_file".to_string(),
             success: false,
@@ -483,7 +516,7 @@ pub(super) async fn execute_multiedit(
         }
     };
 
-    let edits: Vec<serde_json::Value> = serde_json::from_str(edits_json)
+    let edits: Vec<MultiEditOp> = serde_json::from_str(edits_json)
         .map_err(|e| anyhow::anyhow!("Invalid edits JSON: {}", e))?;
 
     print_tool_status(
@@ -491,55 +524,136 @@ pub(super) async fn execute_multiedit(
         &format!("MultiEdit({}, {} edits)", path, edits.len()),
     );
 
-    let mut applied = 0usize;
-    let mut errors = Vec::new();
+    let validated_path = match validate_file_path(&path) {
+        Ok(p) => p,
+        Err(reason) => {
+            return Ok(ToolResult {
+                tool_name: "multiedit".into(),
+                success: false,
+                output: format!("Path rejected: {}", reason),
+            });
+        }
+    };
 
-    for (i, edit) in edits.iter().enumerate() {
-        let old_s = edit
-            .get("old_string")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        let new_s = edit
-            .get("new_string")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        let replace_all = edit
-            .get("replace_all")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
+    let file_path = validated_path.as_path();
+    if !file_path.exists() {
+        return Ok(ToolResult {
+            tool_name: "multiedit".into(),
+            success: false,
+            output: format!("File not found: {}", path),
+        });
+    }
+    if let Err(message) = crate::file_state::ensure_previously_read_and_fresh(file_path) {
+        return Ok(ToolResult {
+            tool_name: "multiedit".into(),
+            success: false,
+            output: message,
+        });
+    }
 
-        let mut edit_args = HashMap::new();
-        edit_args.insert("path".to_string(), path.clone());
-        edit_args.insert("old_string".to_string(), old_s.to_string());
-        edit_args.insert("new_string".to_string(), new_s.to_string());
-        if replace_all {
-            edit_args.insert("replace_all".to_string(), "true".to_string());
+    let original = match tokio::fs::read_to_string(file_path).await {
+        Ok(c) => c,
+        Err(e) => {
+            return Ok(ToolResult {
+                tool_name: "multiedit".into(),
+                success: false,
+                output: format!("Failed to read file: {}", e),
+            });
+        }
+    };
+
+    let updated = match apply_multiedits_to_content(&original, &edits) {
+        Ok(updated) => updated,
+        Err(message) => {
+            return Ok(ToolResult {
+                tool_name: "multiedit".into(),
+                success: false,
+                output: format!("{message} No edits were applied."),
+            });
+        }
+    };
+
+    if require_confirm {
+        let diff = generate_simple_diff(&original, &updated);
+        eprintln!(
+            "{}",
+            format!("  Diff for {} ({} edits):", path, edits.len()).dimmed()
+        );
+        for line in diff.lines() {
+            if let Some(rest) = line.strip_prefix('+') {
+                eprintln!("  {}{}", "+".green(), rest.green());
+            } else if let Some(rest) = line.strip_prefix('-') {
+                eprintln!("  {}{}", "-".red(), rest.red());
+            } else {
+                eprintln!("  {}", line.dimmed());
+            }
         }
 
-        match execute_edit_file(&edit_args, require_confirm).await {
-            Ok(r) if r.success => applied += 1,
-            Ok(r) => errors.push(format!("Edit {}: {}", i + 1, r.output)),
-            Err(e) => errors.push(format!("Edit {}: {}", i + 1, e)),
+        let confirmed = Confirm::new()
+            .with_prompt("Allow these edits?")
+            .default(true)
+            .interact()
+            .unwrap_or(false);
+
+        if !confirmed {
+            return Ok(ToolResult {
+                tool_name: "multiedit".into(),
+                success: false,
+                output: "User denied multiedit".into(),
+            });
         }
     }
 
-    let output = if errors.is_empty() {
-        format!("Applied {}/{} edits to {}", applied, edits.len(), path)
-    } else {
-        format!(
-            "Applied {}/{} edits to {}. Errors:\n{}",
-            applied,
-            edits.len(),
-            path,
-            errors.join("\n")
-        )
-    };
+    if let Err(e) = tokio::fs::write(file_path, &updated).await {
+        return Ok(ToolResult {
+            tool_name: "multiedit".into(),
+            success: false,
+            output: format!("Failed to write file: {}", e),
+        });
+    }
+    crate::file_state::record_file_write(file_path, &updated);
 
     Ok(ToolResult {
         tool_name: "multiedit".into(),
-        success: errors.is_empty(),
-        output,
+        success: true,
+        output: format!("Applied {}/{} edits to {}", edits.len(), edits.len(), path),
     })
+}
+
+fn apply_multiedits_to_content(
+    original: &str,
+    edits: &[MultiEditOp],
+) -> std::result::Result<String, String> {
+    let mut updated = original.to_string();
+
+    for (i, edit) in edits.iter().enumerate() {
+        if edit.old_string.is_empty() {
+            return Err(format!(
+                "Edit {} rejected: old_string must not be empty.",
+                i + 1
+            ));
+        }
+
+        let match_count = updated.matches(edit.old_string.as_str()).count();
+        if match_count == 0 {
+            return Err(format!("Edit {} rejected: old_string not found.", i + 1));
+        }
+        if match_count > 1 && !edit.replace_all {
+            return Err(format!(
+                "Edit {} rejected: old_string matched {} times. Set replace_all=true or provide more context.",
+                i + 1,
+                match_count
+            ));
+        }
+
+        updated = if edit.replace_all {
+            updated.replace(edit.old_string.as_str(), edit.new_string.as_str())
+        } else {
+            updated.replacen(edit.old_string.as_str(), edit.new_string.as_str(), 1)
+        };
+    }
+
+    Ok(updated)
 }
 
 pub(super) async fn execute_read_many_files(args: &HashMap<String, String>) -> Result<ToolResult> {
@@ -587,6 +701,7 @@ pub(super) async fn execute_read_many_files(args: &HashMap<String, String>) -> R
         }
         match tokio::fs::read_to_string(&file_path).await {
             Ok(content) => {
+                crate::file_state::record_file_read(&file_path, &content);
                 let lines: Vec<&str> = content.lines().take(MAX_FILE_LINES).collect();
                 let truncated = if content.lines().count() > MAX_FILE_LINES {
                     format!("\n[... truncated at {} lines]", MAX_FILE_LINES)
@@ -620,4 +735,143 @@ pub(super) async fn execute_read_many_files(args: &HashMap<String, String>) -> R
             ),
         ),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn multiedit_applies_all_edits_in_memory_before_write() {
+        let edits = vec![
+            MultiEditOp {
+                old_string: "alpha".into(),
+                new_string: "beta".into(),
+                replace_all: false,
+            },
+            MultiEditOp {
+                old_string: "gamma".into(),
+                new_string: "delta".into(),
+                replace_all: false,
+            },
+        ];
+
+        let updated =
+            apply_multiedits_to_content("alpha\ngamma\n", &edits).expect("edits should apply");
+
+        assert_eq!(updated, "beta\ndelta\n");
+    }
+
+    #[test]
+    fn multiedit_rejects_later_failure_without_partial_result() {
+        let edits = vec![
+            MultiEditOp {
+                old_string: "alpha".into(),
+                new_string: "beta".into(),
+                replace_all: false,
+            },
+            MultiEditOp {
+                old_string: "missing".into(),
+                new_string: "delta".into(),
+                replace_all: false,
+            },
+        ];
+
+        let err = apply_multiedits_to_content("alpha\ngamma\n", &edits)
+            .expect_err("second edit should fail");
+
+        assert!(err.contains("Edit 2 rejected"));
+    }
+
+    #[test]
+    fn multiedit_requires_unique_match_unless_replace_all_is_set() {
+        let edits = vec![MultiEditOp {
+            old_string: "alpha".into(),
+            new_string: "beta".into(),
+            replace_all: false,
+        }];
+
+        let err = apply_multiedits_to_content("alpha\nalpha\n", &edits)
+            .expect_err("duplicate old_string should fail");
+
+        assert!(err.contains("matched 2 times"));
+    }
+
+    #[test]
+    fn multiedit_supports_replace_all() {
+        let edits = vec![MultiEditOp {
+            old_string: "alpha".into(),
+            new_string: "beta".into(),
+            replace_all: true,
+        }];
+
+        let updated = apply_multiedits_to_content("alpha\nalpha\n", &edits)
+            .expect("replace_all should allow duplicate matches");
+
+        assert_eq!(updated, "beta\nbeta\n");
+    }
+
+    #[tokio::test]
+    async fn write_file_requires_read_state_for_existing_file() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let path = tmp.path().join("file.txt");
+        std::fs::write(&path, "alpha\n").expect("write file");
+
+        let mut args = HashMap::new();
+        args.insert("path".to_string(), path.display().to_string());
+        args.insert("content".to_string(), "beta\n".to_string());
+
+        let result = execute_write_file(&args, false).await.unwrap();
+
+        assert!(!result.success);
+        assert!(result.output.contains("File has not been read yet"));
+    }
+
+    #[tokio::test]
+    async fn edit_file_succeeds_after_read_state_is_seeded() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let path = tmp.path().join("file.txt");
+        std::fs::write(&path, "alpha\n").expect("write file");
+
+        let mut read_args = HashMap::new();
+        read_args.insert("path".to_string(), path.display().to_string());
+        let read_result = execute_read_file(&read_args).await.unwrap();
+        assert!(read_result.success);
+
+        let mut edit_args = HashMap::new();
+        edit_args.insert("path".to_string(), path.display().to_string());
+        edit_args.insert("old_string".to_string(), "alpha".to_string());
+        edit_args.insert("new_string".to_string(), "beta".to_string());
+
+        let edit_result = execute_edit_file(&edit_args, false).await.unwrap();
+
+        assert!(edit_result.success, "{}", edit_result.output);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "beta\n");
+    }
+
+    #[tokio::test]
+    async fn multiedit_requires_read_state_for_existing_file() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let path = tmp.path().join("file.txt");
+        std::fs::write(&path, "alpha\n").expect("write file");
+
+        let mut args = HashMap::new();
+        args.insert("path".to_string(), path.display().to_string());
+        args.insert(
+            "edits".to_string(),
+            serde_json::json!([
+                {
+                    "old_string": "alpha",
+                    "new_string": "beta"
+                }
+            ])
+            .to_string(),
+        );
+
+        let result = execute_multiedit(&args, false).await.unwrap();
+
+        assert!(!result.success);
+        assert!(result.output.contains("File has not been read yet"));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "alpha\n");
+    }
 }

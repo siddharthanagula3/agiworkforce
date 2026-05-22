@@ -206,6 +206,24 @@ pub struct ToolDefinition {
     #[serde(skip)]
     #[serde(default)]
     pub should_defer: bool,
+    /// Compatibility aliases accepted by executor/schema lookup. Kept local so
+    /// Claude-style names (`Read`, `Bash`, etc.) do not leak into provider
+    /// schemas.
+    #[serde(skip)]
+    #[serde(default)]
+    pub aliases: Vec<String>,
+    /// Owning runtime lane/module for diagnostics and future delegated work.
+    #[serde(skip)]
+    #[serde(default)]
+    pub owner: String,
+    /// Permission intent used by diagnostics and guardrail tests.
+    #[serde(skip)]
+    #[serde(default)]
+    pub permission_class: String,
+    /// Stable tags for doctor output, metrics, and future tool-management UI.
+    #[serde(skip)]
+    #[serde(default)]
+    pub diagnostic_tags: Vec<String>,
 }
 
 /// A tool call parsed from the API response.

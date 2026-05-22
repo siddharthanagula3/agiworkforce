@@ -1,7 +1,7 @@
 import { useWindowDimensions } from 'react-native';
 import { Drawer } from 'expo-router/drawer';
-import { DrawerContent } from '@/components/drawer/DrawerContent';
-import { useThemeColors } from '@/hooks/useTheme';
+import { DrawerContent } from '@/src/features/drawer/components/DrawerContent';
+import { useThemeColors } from '@/src/ui/theme';
 
 /**
  * App layout -- Drawer navigator wrapping the entire authenticated section.
@@ -9,6 +9,8 @@ import { useThemeColors } from '@/hooks/useTheme';
  * Navigation structure:
  *   Drawer (slide-out on iPhone, permanent sidebar on iPad)
  *     (tabs)/       -- Chat, Projects, Settings screens (retained for route compat)
+ *     artifacts/    -- mobile artifact gallery
+ *     code/         -- desktop/cloud code-session preview + handoff
  *     skills/       -- 150+ skill browser
  *     dispatch/     -- Desktop companion (Dispatch)
  *     connectors/   -- Service integrations
@@ -55,6 +57,10 @@ export default function AppLayout() {
       <Drawer.Screen name="(tabs)" options={HIDDEN} />
 
       {/* New drawer-level routes */}
+      <Drawer.Screen name="artifacts/index" options={HIDDEN} />
+      <Drawer.Screen name="code/index" options={HIDDEN} />
+      <Drawer.Screen name="code/[id]" options={HIDDEN} />
+      <Drawer.Screen name="code/archived" options={HIDDEN} />
       <Drawer.Screen name="skills/index" options={HIDDEN} />
       <Drawer.Screen name="dispatch/index" options={HIDDEN} />
       <Drawer.Screen name="connectors/index" options={HIDDEN} />

@@ -55,7 +55,7 @@ export type TabRouteName = 'index' | 'chat' | 'agents' | 'settings';
 
 /**
  * Complete route param map. Used for type-safe navigation with
- * Expo Router's typed routes feature (experiments.typedRoutes in app.json).
+ * Expo Router's typed routes feature (`experiments.typedRoutes` in app.config.js).
  */
 export interface AppRouteParams {
   '/(auth)/login': undefined;

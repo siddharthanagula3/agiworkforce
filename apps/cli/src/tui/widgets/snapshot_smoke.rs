@@ -5,7 +5,10 @@
 #![cfg(test)]
 
 use super::list_selection_view::ListSelectionView;
-use super::screen_renderers::{render_keybindings, render_mcp_list, render_sandbox, render_skills, render_tasks, render_usage, SandboxMode, UsageSummary};
+use super::screen_renderers::{
+    render_keybindings, render_mcp_list, render_sandbox, render_skills, render_tasks, render_usage,
+    SandboxMode, UsageSummary,
+};
 
 #[test]
 fn list_selection_view_snapshot() {
@@ -15,7 +18,8 @@ fn list_selection_view_snapshot() {
         "Choose item",
         vec!["alpha".into(), "beta".into(), "gamma".into()],
     );
-    let rendered = <ListSelectionView<String> as super::interactive::InteractiveView>::render(&view);
+    let rendered =
+        <ListSelectionView<String> as super::interactive::InteractiveView>::render(&view);
     insta::assert_snapshot!("list_selection_view_baseline", rendered);
 }
 

@@ -97,6 +97,16 @@ export const rateLimitConfigs = {
   // SECURITY: History is a heavier aggregate; restrict to 10/min to protect DB
   'usage-history': { windowMs: 60_000, max: 10 },
 
+  // Enterprise control-plane endpoints
+  // SECURITY: Organization and policy reads are admin dashboard operations.
+  'enterprise-organizations': { windowMs: 60_000, max: 30 },
+  'enterprise-policy': { windowMs: 60_000, max: 30 },
+  // SECURITY: Audit and usage ledgers can be heavier DB reads.
+  'enterprise-audit-events': { windowMs: 60_000, max: 10 },
+  'enterprise-usage-ledger': { windowMs: 60_000, max: 10 },
+  // SECURITY: Support case creation is write/spam-sensitive.
+  'enterprise-support-case': { windowMs: 60_000, max: 5 },
+
   // LLM proxy: tier-aware limit (enforced at 30/min baseline; pro users get higher via plan gate)
   // SECURITY: 30/min prevents runaway API cost from compromised tokens
   'llm-completions': { windowMs: 60_000, max: 30 },

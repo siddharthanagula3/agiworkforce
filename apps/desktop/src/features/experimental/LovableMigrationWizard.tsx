@@ -10,14 +10,14 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
-import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
-import { Textarea } from '../ui/Textarea';
-import { Badge } from '../ui/Badge';
-import { Separator } from '../ui/Separator';
-import { Switch } from '../ui/Switch';
-import { ScrollArea } from '../ui/ScrollArea';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Textarea';
+import { Badge } from '@/components/ui/Badge';
+import { Separator } from '@/components/ui/Separator';
+import { Switch } from '@/components/ui/Switch';
+import { ScrollArea } from '@/components/ui/ScrollArea';
 import { cn } from '../../lib/utils';
 import {
   launchLovableMigration,

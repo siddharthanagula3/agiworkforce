@@ -29,8 +29,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Shield } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/hooks/useTheme';
-import { confirmAgeGate, getAgeThreshold } from '@/services/ageGate';
+import { useThemeColors } from '@/src/ui/theme';
+import { confirmAgeGate, getAgeThreshold } from '@/src/features/auth/services/ageGate';
 
 // ---------------------------------------------------------------------------
 // Main screen

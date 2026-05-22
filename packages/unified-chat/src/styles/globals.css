@@ -33,6 +33,42 @@
     --chat-radius-lg: 12px;
     --chat-radius-xl: 16px;
     --chat-radius-2xl: 24px;
+
+    /*
+     * shadcn / Tailwind alias tokens — light (Dawn).
+     *
+     * Components in this package (AgentModeSwitcher, PromptSuggestionsDropdown,
+     * ToolCallCard, FileMentionPicker, etc.) already use shadcn-style classes
+     * like `bg-[hsl(var(--popover))]`, `bg-muted`, `text-foreground`, and
+     * `border-border`. Previously these resolved only when the consumer app
+     * (web/desktop) happened to define them — which led to silent drift
+     * across surfaces (round-2 audit P0 #2, 2026-05-21).
+     *
+     * These aliases give every consumer a guaranteed shadcn-compatible token
+     * set keyed off our canonical --chat-* palette. shadcn requires
+     * space-separated H S% L% triplets (no `hsl()` wrapper) so `hsl(var(--x))`
+     * and Tailwind classes like `bg-card` work.
+     */
+    --background: 40 23% 97%;
+    --foreground: 36 8% 9%;
+    --card: 0 0% 100%;
+    --card-foreground: 36 8% 9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 36 8% 9%;
+    --primary: 11 64% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 36 14% 93%;
+    --secondary-foreground: 36 8% 9%;
+    --muted: 36 14% 93%;
+    --muted-foreground: 30 6% 40%;
+    --accent: 36 14% 93%;
+    --accent-foreground: 36 8% 9%;
+    --destructive: 0 73% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 36 8% 9%;
+    --input: 36 14% 93%;
+    --ring: 11 64% 60%;
+    --radius: 12px;
   }
 
   .dark {
@@ -60,6 +96,27 @@
     --chat-info: #3b82f6;
     --chat-success: #22c55e;
     --chat-warning: #f59e0b;
+
+    /* shadcn / Tailwind alias tokens — dark (Dusk). See light theme above. */
+    --background: 36 8% 9%;
+    --foreground: 36 23% 89%;
+    --card: 36 9% 13%;
+    --card-foreground: 36 23% 89%;
+    --popover: 28 8% 17%;
+    --popover-foreground: 36 23% 89%;
+    --primary: 11 64% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 30 5% 20%;
+    --secondary-foreground: 36 23% 89%;
+    --muted: 30 5% 20%;
+    --muted-foreground: 32 6% 52%;
+    --accent: 30 5% 20%;
+    --accent-foreground: 36 23% 89%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 36 23% 89%;
+    --input: 30 5% 20%;
+    --ring: 11 64% 60%;
   }
 }
 

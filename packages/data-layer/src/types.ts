@@ -263,7 +263,7 @@ export type DatabaseProvider = 'supabase' | 'neon' | 'postgres';
 
 /**
  * Auth providers. `supabase` is current. `auth0`, `clerk`, `cognito` are
- * skeletons documented in `docs/SCALING.md`.
+ * skeletons documented in `docs/current/technical-architecture.md`.
  */
 export type AuthProvider = 'supabase' | 'auth0' | 'clerk' | 'cognito';
 

@@ -18,7 +18,7 @@
     "@agiworkforce/llm-normalize": "workspace:*",
     "@agiworkforce/llm-runtime": "workspace:*",
     "@agiworkforce/providers-openai": "workspace:*",
-    "openai": "^4.85.0"
+    "openai": "^6.38.0"
   },
   "devDependencies": {
     "vitest": "^4.0.18"

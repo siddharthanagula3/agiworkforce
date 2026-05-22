@@ -14,6 +14,13 @@ import {
   History,
   Shield,
 } from 'lucide-react';
+import {
+  summarizeGeneratedFileBundle,
+  type ArtifactManifest,
+  type ComputeSession,
+  type GeneratedFile,
+} from '@agiworkforce/types';
+import { GeneratedFileCard } from '@agiworkforce/unified-chat';
 import { cn } from '@shared/lib/utils';
 import { ScrollArea } from '@shared/ui/scroll-area';
 import {
@@ -36,10 +43,13 @@ export interface ArtifactVersion {
 
 export interface ArtifactData {
   id: string;
-  type: 'html' | 'react' | 'svg' | 'mermaid' | 'code';
+  type: 'html' | 'react' | 'svg' | 'mermaid' | 'code' | 'document';
   language?: string;
   title?: string;
   content: string;
+  computeSession?: ComputeSession;
+  generatedFile?: GeneratedFile;
+  artifactManifest?: ArtifactManifest;
   versions?: ArtifactVersion[];
   currentVersion?: number;
 }
@@ -80,12 +90,30 @@ export function ArtifactPreview({
   // WEB-13 / WEB-20: bumped on refresh to force iframe re-mount.
   const [refreshKey, setRefreshKey] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const generatedFileSummary = useMemo(
+    () =>
+      summarizeGeneratedFileBundle({
+        computeSession: artifact.computeSession,
+        generatedFile: artifact.generatedFile,
+        artifactManifest: artifact.artifactManifest,
+        fallbackFileName: artifact.title,
+        fallbackKind: artifact.generatedFile?.kind ?? artifact.language ?? artifact.type,
+        fallbackMimeType: artifact.generatedFile?.mimeType,
+        fallbackUri: artifact.generatedFile?.uri,
+        fallbackStatus: artifact.computeSession?.status,
+      }),
+    [artifact],
+  );
+  const hasGeneratedFileManifest = Boolean(
+    artifact.computeSession || artifact.generatedFile || artifact.artifactManifest,
+  );
 
   const getPreviewHTML = useCallback((): string => {
     const content =
       artifact.versions && artifact.currentVersion !== undefined
         ? artifact!.versions[artifact.currentVersion]!.content
         : artifact.content;
+    const renderType = artifact.type === 'document' ? 'code' : artifact.type;
 
     // SECURITY: Check for XSS risks and show warning
     // Use queueMicrotask to avoid setState during render
@@ -94,9 +122,9 @@ export function ArtifactPreview({
     }
 
     // SECURITY: Sanitize content based on artifact type
-    const sanitizedContent = sanitizeArtifact(content, artifact.type);
+    const sanitizedContent = sanitizeArtifact(content, renderType);
 
-    switch (artifact.type) {
+    switch (renderType) {
       case 'html':
         return `
 <!DOCTYPE html>
@@ -210,10 +238,10 @@ export function ArtifactPreview({
       artifact.versions && artifact.currentVersion !== undefined
         ? artifact!.versions[artifact.currentVersion]!.content
         : artifact.content;
-    const sanitized = sanitizeArtifact(content, artifact.type);
-    const kind: ArtifactKind =
-      artifact.type === 'code' ? 'code' : (artifact.type as ArtifactKind);
-    switch (artifact.type) {
+    const renderType = artifact.type === 'document' ? 'code' : artifact.type;
+    const sanitized = sanitizeArtifact(content, renderType);
+    const kind: ArtifactKind = renderType === 'code' ? 'code' : (renderType as ArtifactKind);
+    switch (renderType) {
       case 'html':
         return { type: 'render', kind: 'html', html: sanitized, runScripts: true };
       case 'react':
@@ -249,7 +277,7 @@ export function ArtifactPreview({
 
     switch (format) {
       case 'html':
-        blob = new Blob([getPreviewHTML()], { type: 'text/html' });
+        blob = new Blob([getPreviewHTML()], { type: 'text/plain' });
         filename = `${artifact.title || 'artifact'}.html`;
         break;
       case 'md': {
@@ -273,11 +301,57 @@ export function ArtifactPreview({
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadGeneratedFile = async () => {
+    if (!generatedFileSummary.primaryUri) return;
+
+    if (generatedFileSummary.primaryUri.startsWith('http')) {
+      const a = document.createElement('a');
+      a.href = generatedFileSummary.primaryUri;
+      a.download = generatedFileSummary.fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      return;
+    }
+
+    await navigator.clipboard.writeText(generatedFileSummary.primaryUri);
+  };
+
+  const handleShareGeneratedFile = async () => {
+    const shareText = [
+      `${generatedFileSummary.kindLabel}: ${generatedFileSummary.fileName}`,
+      generatedFileSummary.privacyLabel
+        ? `Privacy: ${generatedFileSummary.privacyLabel}`
+        : undefined,
+      generatedFileSummary.providerLabel
+        ? `Provider: ${generatedFileSummary.providerLabel}`
+        : undefined,
+      generatedFileSummary.sourceSurfaceLabel
+        ? `Source: ${generatedFileSummary.sourceSurfaceLabel}`
+        : undefined,
+      generatedFileSummary.sourceSessionLabel,
+      generatedFileSummary.primaryUri,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    if (navigator.share && generatedFileSummary.primaryUri?.startsWith('http')) {
+      await navigator.share({
+        title: generatedFileSummary.title,
+        text: shareText,
+        url: generatedFileSummary.primaryUri,
+      });
+      return;
+    }
+
+    await navigator.clipboard.writeText(shareText);
+  };
+
   const handleOpenInNewTab = () => {
     // WEB-25: noopener,noreferrer prevents reverse-tabnabbing; revoke the blob
     // URL after a minute so the GC can reclaim the HTML body.
     const html = getPreviewHTML();
-    const blob = new Blob([html], { type: 'text/html' });
+    const blob = new Blob([html], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank', 'noopener,noreferrer');
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
@@ -321,6 +395,19 @@ export function ArtifactPreview({
             <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
               {artifact.type}
             </span>
+          )}
+          {hasGeneratedFileManifest && (
+            <>
+              <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                {generatedFileSummary.statusLabel}
+              </span>
+              {generatedFileSummary.privacyShortLabel && (
+                <span className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                  <Shield className="h-3 w-3" />
+                  {generatedFileSummary.privacyShortLabel}
+                </span>
+              )}
+            </>
           )}
         </div>
 
@@ -384,11 +471,23 @@ export function ArtifactPreview({
               <DropdownMenuItem onClick={() => handleDownload('md')}>
                 Download as Markdown
               </DropdownMenuItem>
+              {hasGeneratedFileManifest && generatedFileSummary.primaryUri && (
+                <DropdownMenuItem onClick={() => void handleDownloadGeneratedFile()}>
+                  Download generated file
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {onShare && (
-            <Button variant="ghost" size="sm" onClick={onShare} className="h-7 px-2">
+          {(onShare || hasGeneratedFileManifest) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                hasGeneratedFileManifest ? void handleShareGeneratedFile() : onShare?.()
+              }
+              className="h-7 px-2"
+            >
               <Share2 className="h-3.5 w-3.5" />
             </Button>
           )}
@@ -420,6 +519,25 @@ export function ArtifactPreview({
             has been sanitized for your protection, but some functionality may be limited.
           </AlertDescription>
         </Alert>
+      )}
+
+      {hasGeneratedFileManifest && (
+        <div className="border-b border-border bg-muted/10 px-4 py-3">
+          <GeneratedFileCard
+            presentation={generatedFileSummary}
+            onDownload={
+              generatedFileSummary.primaryUri ? () => void handleDownloadGeneratedFile() : undefined
+            }
+            onShare={
+              generatedFileSummary.canShare ? () => void handleShareGeneratedFile() : undefined
+            }
+          />
+          {generatedFileSummary.localOnly && (
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Local file. Web shares a reference only; it is not uploaded.
+            </p>
+          )}
+        </div>
       )}
 
       {/* Preview/Code Tabs */}

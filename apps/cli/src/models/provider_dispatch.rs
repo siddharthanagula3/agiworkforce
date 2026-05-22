@@ -118,7 +118,10 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
             if key.is_none() {
                 return Err(CliError::auth(
                     *pname,
-                    format!("No API key found. Set the {} environment variable.", env_var),
+                    format!(
+                        "No API key found. Set the {} environment variable.",
+                        env_var
+                    ),
                 )
                 .into());
             }
@@ -138,7 +141,10 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
             if key.is_none() {
                 return Err(CliError::auth(
                     pname.clone(),
-                    format!("No API key found. Set the {} environment variable.", env_var),
+                    format!(
+                        "No API key found. Set the {} environment variable.",
+                        env_var
+                    ),
                 )
                 .into());
             }
@@ -191,9 +197,8 @@ fn lookup_custom_provider(name: &str) -> Option<Provider> {
 /// Process-wide registry of user-defined OpenAI-compatible providers loaded from
 /// `[providers.<name>]` config blocks. Populated once at startup by
 /// `register_custom_providers`.
-static CUSTOM_PROVIDERS: once_cell::sync::Lazy<
-    std::sync::RwLock<HashMap<String, Provider>>,
-> = once_cell::sync::Lazy::new(|| std::sync::RwLock::new(HashMap::new()));
+static CUSTOM_PROVIDERS: once_cell::sync::Lazy<std::sync::RwLock<HashMap<String, Provider>>> =
+    once_cell::sync::Lazy::new(|| std::sync::RwLock::new(HashMap::new()));
 
 /// Register custom OpenAI-compatible providers loaded from the user config file.
 ///
@@ -449,7 +454,10 @@ mod tests {
             provider_from_name("anthropic"),
             Some(Provider::Anthropic)
         ));
-        assert_eq!(provider_name(&provider_from_name("openai").unwrap()), "openai");
+        assert_eq!(
+            provider_name(&provider_from_name("openai").unwrap()),
+            "openai"
+        );
         assert_eq!(provider_name(&provider_from_name("xai").unwrap()), "xai");
         assert_eq!(
             provider_name(&provider_from_name("deepseek").unwrap()),
@@ -459,10 +467,7 @@ mod tests {
             provider_name(&provider_from_name("perplexity").unwrap()),
             "perplexity"
         );
-        assert_eq!(
-            provider_name(&provider_from_name("qwen").unwrap()),
-            "qwen"
-        );
+        assert_eq!(provider_name(&provider_from_name("qwen").unwrap()), "qwen");
         assert_eq!(
             provider_name(&provider_from_name("moonshot").unwrap()),
             "moonshot"
@@ -477,7 +482,10 @@ mod tests {
         );
         // Aliases
         assert_eq!(provider_name(&provider_from_name("grok").unwrap()), "xai");
-        assert_eq!(provider_name(&provider_from_name("kimi").unwrap()), "moonshot");
+        assert_eq!(
+            provider_name(&provider_from_name("kimi").unwrap()),
+            "moonshot"
+        );
         assert_eq!(provider_name(&provider_from_name("glm").unwrap()), "zhipu");
         assert_eq!(
             provider_name(&provider_from_name("dashscope").unwrap()),

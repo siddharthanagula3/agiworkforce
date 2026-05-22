@@ -1,18 +1,18 @@
 #![allow(dead_code)]
 
-mod dangerous_commands;
 mod approval;
+mod dangerous_commands;
 
 pub use dangerous_commands::DANGEROUS_COMMANDS;
 
-use dangerous_commands::{
-    DANGEROUS_COMMANDS as DC, DANGEROUS_PIPE_SINKS, DANGEROUS_PIPE_SOURCES, DANGEROUS_PREFIXES,
-    SAFE_COMMANDS, SAFE_PREFIXES,
-};
 #[allow(unused_imports)]
 use approval::{
     classify_base64, classify_find, classify_git, classify_git_branch, classify_mv, classify_rg,
     classify_rm, classify_sed, is_sed_readonly_print, strip_path,
+};
+use dangerous_commands::{
+    DANGEROUS_COMMANDS as DC, DANGEROUS_PIPE_SINKS, DANGEROUS_PIPE_SOURCES, DANGEROUS_PREFIXES,
+    SAFE_COMMANDS, SAFE_PREFIXES,
 };
 
 /// Safety classification for shell commands.

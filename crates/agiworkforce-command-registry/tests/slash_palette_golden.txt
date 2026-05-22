@@ -56,3 +56,28 @@
 /reload-plugins
 /extra-usage [pricing]
 /remote-env
+/add-dir
+/color
+/desktop [app]
+/effort
+/files
+/heapdump
+/install-github-app
+/install-slack-app
+/mobile [ios, android]
+/passes
+/pr-comments
+/privacy-settings
+/privacy-mode [trust-boundary]
+/continue-with-byok [fork-byok, byok]
+/rate-limit-options
+/security-review
+/stats
+/statusline
+/stickers
+/tag
+/think-back
+/thinkback-play
+/ultrareview
+/upgrade
+/vim

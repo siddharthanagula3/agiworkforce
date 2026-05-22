@@ -14,7 +14,7 @@ function readStdin() {
   return new Promise((resolve) => {
     let data = '';
     process.stdin.setEncoding('utf8');
-    process.stdin.on('data', chunk => {
+    process.stdin.on('data', (chunk) => {
       if (data.length < MAX_STDIN) data += chunk.substring(0, MAX_STDIN - data.length);
     });
     process.stdin.on('end', () => resolve(data));
@@ -36,7 +36,11 @@ function transformToClaude(cursorInput, overrides = {}) {
       output: cursorInput.output || cursorInput.result || '',
       ...overrides.tool_output,
     },
-    transcript_path: cursorInput.transcript_path || cursorInput.transcriptPath || cursorInput.session?.transcript_path || '',
+    transcript_path:
+      cursorInput.transcript_path ||
+      cursorInput.transcriptPath ||
+      cursorInput.session?.transcript_path ||
+      '',
     _cursor: {
       conversation_id: cursorInput.conversation_id,
       hook_event_name: cursorInput.hook_event_name,
@@ -67,8 +71,8 @@ function hookEnabled(hookId, allowedProfiles = ['standard', 'strict']) {
   const disabled = new Set(
     String(process.env.AGI_DISABLED_HOOKS || '')
       .split(',')
-      .map(v => v.trim().toLowerCase())
-      .filter(Boolean)
+      .map((v) => v.trim().toLowerCase())
+      .filter(Boolean),
   );
 
   if (disabled.has(String(hookId || '').toLowerCase())) {

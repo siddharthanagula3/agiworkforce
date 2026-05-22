@@ -206,7 +206,10 @@ pub struct TabState {
 
 impl TabState {
     pub fn new(len: usize) -> Self {
-        Self { cursor: 0, len: len.max(1) }
+        Self {
+            cursor: 0,
+            len: len.max(1),
+        }
     }
 
     pub fn cursor(&self) -> usize {
@@ -313,11 +316,17 @@ mod tests {
     #[test]
     fn selection_handle_list_key_maps_arrows_and_enter_and_esc() {
         let mut s = SelectionState::new(3);
-        assert_eq!(s.handle_list_key(KeyAction::Down), Some(ViewAction::Continue));
+        assert_eq!(
+            s.handle_list_key(KeyAction::Down),
+            Some(ViewAction::Continue)
+        );
         assert_eq!(s.cursor(), 1);
         assert_eq!(s.handle_list_key(KeyAction::Up), Some(ViewAction::Continue));
         assert_eq!(s.cursor(), 0);
-        assert_eq!(s.handle_list_key(KeyAction::Enter), Some(ViewAction::Submit(0)));
+        assert_eq!(
+            s.handle_list_key(KeyAction::Enter),
+            Some(ViewAction::Submit(0))
+        );
         assert_eq!(s.handle_list_key(KeyAction::Esc), Some(ViewAction::Close));
         assert_eq!(s.handle_list_key(KeyAction::Char('q')), None);
     }
@@ -341,13 +350,22 @@ mod tests {
     #[test]
     fn tab_state_handle_tab_key_maps_arrows_and_tab() {
         let mut t = TabState::new(4);
-        assert_eq!(t.handle_tab_key(KeyAction::Right), Some(ViewAction::Continue));
+        assert_eq!(
+            t.handle_tab_key(KeyAction::Right),
+            Some(ViewAction::Continue)
+        );
         assert_eq!(t.cursor(), 1);
         assert_eq!(t.handle_tab_key(KeyAction::Tab), Some(ViewAction::Continue));
         assert_eq!(t.cursor(), 2);
-        assert_eq!(t.handle_tab_key(KeyAction::ShiftTab), Some(ViewAction::Continue));
+        assert_eq!(
+            t.handle_tab_key(KeyAction::ShiftTab),
+            Some(ViewAction::Continue)
+        );
         assert_eq!(t.cursor(), 1);
-        assert_eq!(t.handle_tab_key(KeyAction::Left), Some(ViewAction::Continue));
+        assert_eq!(
+            t.handle_tab_key(KeyAction::Left),
+            Some(ViewAction::Continue)
+        );
         assert_eq!(t.cursor(), 0);
         assert_eq!(t.handle_tab_key(KeyAction::Enter), None);
     }

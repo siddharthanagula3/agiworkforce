@@ -1,13 +1,8 @@
 /**
  * Unit tests for modelStore.
  *
- * Covers:
- *  - thinkingEnabledPerModel tracks per-model state
- *  - toggleThinkingForModel toggles correctly
- *  - toggleThinkingForModel guards against non-thinking models
- *  - isThinkingEnabledForSelected() returns correct value
- *  - setModel pushes to recents and syncs legacy thinkingModeEnabled
- *  - toggleFavorite adds/removes model ids
+ * Mobile v1 is local-first: selectable model ids are local-LLM rows or local
+ * auto modes. Cloud provider ids are ignored by the store.
  */
 
 // ---------------------------------------------------------------------------
@@ -17,8 +12,9 @@
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store, _name) => {
-    if (store && store.persist && typeof store.persist.rehydrate === 'function')
+    if (store && store.persist && typeof store.persist.rehydrate === 'function') {
       store.persist.rehydrate();
+    }
   }),
   mmkvStorage: {
     getItem: jest.fn().mockReturnValue(null),
@@ -31,11 +27,16 @@ jest.mock('../lib/mmkv', () => ({
 // Import module under test AFTER mocks
 // ---------------------------------------------------------------------------
 
-import { useModelStore } from '../stores/modelStore';
+import { DEFAULT_LOCAL_MODEL_ID, LOCAL_MODEL_LIST } from '../src/features/model-picker/service';
+import { useModelStore } from '../src/features/model-picker/store';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+const LITE_MODEL_ID = 'llama-3.2-1b-instruct-spinquant';
+const VISION_MODEL_ID = 'qwen2.5-vl-3b-instruct';
+const CLOUD_MODEL_ID = 'gpt-5.4';
 
 function getState() {
   return useModelStore.getState();
@@ -43,8 +44,8 @@ function getState() {
 
 function resetStore() {
   useModelStore.setState({
-    selectedModel: 'auto-balanced',
-    selectedProvider: 'managed_cloud',
+    selectedModel: DEFAULT_LOCAL_MODEL_ID,
+    selectedProvider: 'local',
     favorites: [],
     recentModels: [],
     thinkingModeEnabled: false,
@@ -61,240 +62,125 @@ describe('modelStore', () => {
     resetStore();
   });
 
-  // ---- thinkingEnabledPerModel ----
-
-  describe('thinkingEnabledPerModel', () => {
-    it('starts with an empty record', () => {
-      expect(getState().thinkingEnabledPerModel).toEqual({});
-    });
-
-    it('tracks per-model thinking state after toggle', () => {
-      getState().toggleThinkingForModel('claude-opus-4.7');
-
-      expect(getState().thinkingEnabledPerModel['claude-opus-4.7']).toBe(true);
-    });
-
-    it('maintains separate state for different models', () => {
-      getState().toggleThinkingForModel('claude-opus-4.7');
-      getState().toggleThinkingForModel('gpt-5.4');
-
-      const perModel = getState().thinkingEnabledPerModel;
-      expect(perModel['claude-opus-4.7']).toBe(true);
-      expect(perModel['gpt-5.4']).toBe(true);
-    });
-  });
-
-  // ---- toggleThinkingForModel ----
-
-  describe('toggleThinkingForModel', () => {
-    it('toggles from false to true', () => {
-      getState().toggleThinkingForModel('claude-opus-4.7');
-
-      expect(getState().thinkingEnabledPerModel['claude-opus-4.7']).toBe(true);
-    });
-
-    it('toggles from true back to false', () => {
-      getState().toggleThinkingForModel('claude-opus-4.7');
-      getState().toggleThinkingForModel('claude-opus-4.7');
-
-      expect(getState().thinkingEnabledPerModel['claude-opus-4.7']).toBe(false);
-    });
-
-    it('guards against non-thinking models (no-op)', () => {
-      // claude-haiku-4.5 has supportsThinking: false
-      getState().toggleThinkingForModel('claude-haiku-4.5');
-
-      expect(getState().thinkingEnabledPerModel['claude-haiku-4.5']).toBeUndefined();
-    });
-
-    it('preserves gpt-5.4-nano as a distinct model after catalog refresh', () => {
-      // 3129aa408 catalog refresh promoted nano to its own tier; nano no
-      // longer collapses onto mini. The store should set the flag on nano.
-      getState().toggleThinkingForModel('gpt-5.4-nano');
-
-      expect(getState().thinkingEnabledPerModel['gpt-5.4-nano']).toBe(true);
-      expect(getState().thinkingEnabledPerModel['gpt-5.4-mini']).toBeUndefined();
-    });
-
-    it('blocks toggle for auto modes', () => {
-      getState().toggleThinkingForModel('auto-balanced');
-
-      expect(getState().thinkingEnabledPerModel['auto-balanced']).toBeUndefined();
-    });
-
-    it('syncs legacy thinkingModeEnabled when toggling the currently selected model', () => {
-      useModelStore.setState({ selectedModel: 'claude-opus-4.7' });
-
-      getState().toggleThinkingForModel('claude-opus-4.7');
-
-      expect(getState().thinkingModeEnabled).toBe(true);
-    });
-
-    it('does NOT sync legacy thinkingModeEnabled when toggling a non-selected model', () => {
-      useModelStore.setState({
-        selectedModel: 'auto-balanced',
-        thinkingModeEnabled: false,
-      });
-
-      getState().toggleThinkingForModel('claude-opus-4.7');
-
-      // Legacy field should remain unchanged
-      expect(getState().thinkingModeEnabled).toBe(false);
-    });
-  });
-
-  // ---- isThinkingEnabledForSelected ----
-
-  describe('isThinkingEnabledForSelected', () => {
-    it('returns false when no model has thinking enabled', () => {
-      expect(getState().isThinkingEnabledForSelected()).toBe(false);
-    });
-
-    it('returns true when the selected model has thinking enabled', () => {
-      useModelStore.setState({ selectedModel: 'claude-opus-4.7' });
-      getState().toggleThinkingForModel('claude-opus-4.7');
-
-      expect(getState().isThinkingEnabledForSelected()).toBe(true);
-    });
-
-    it('returns false when a different model has thinking enabled', () => {
-      useModelStore.setState({ selectedModel: 'auto-balanced' });
-      getState().toggleThinkingForModel('claude-opus-4.7');
-
-      expect(getState().isThinkingEnabledForSelected()).toBe(false);
-    });
-
-    it('updates correctly after switching selected model', () => {
-      // Enable thinking for opus
-      getState().toggleThinkingForModel('claude-opus-4.7');
-
-      // Select opus -> should be true
-      useModelStore.setState({ selectedModel: 'claude-opus-4.7' });
-      expect(getState().isThinkingEnabledForSelected()).toBe(true);
-
-      // Switch to sonnet (thinking NOT enabled) -> should be false
-      useModelStore.setState({ selectedModel: 'claude-sonnet-4.6' });
-      expect(getState().isThinkingEnabledForSelected()).toBe(false);
-    });
-  });
-
-  // ---- setModel ----
-
   describe('setModel', () => {
-    it('updates selectedModel', () => {
-      getState().setModel('gpt-5.4');
+    it('updates selectedModel for local models', () => {
+      getState().setModel(LITE_MODEL_ID);
 
-      expect(getState().selectedModel).toBe('gpt-5.4');
+      expect(getState().selectedModel).toBe(LITE_MODEL_ID);
+      expect(getState().selectedProvider).toBe('local');
     });
 
-    it('pushes model to recents (newest first)', () => {
-      getState().setModel('gpt-5.4');
-      getState().setModel('claude-opus-4.7');
+    it('updates selectedModel for local auto modes', () => {
+      getState().setModel('auto-balanced');
 
-      expect(getState().recentModels[0]).toBe('claude-opus-4.7');
-      expect(getState().recentModels[1]).toBe('gpt-5.4');
+      expect(getState().selectedModel).toBe('auto-balanced');
+      expect(getState().selectedProvider).toBe('local');
+    });
+
+    it('ignores cloud provider model ids', () => {
+      getState().setModel(CLOUD_MODEL_ID);
+
+      expect(getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
+      expect(getState().recentModels).toEqual([]);
+    });
+
+    it('pushes local models to recents newest first', () => {
+      getState().setModel(LITE_MODEL_ID);
+      getState().setModel(VISION_MODEL_ID);
+
+      expect(getState().recentModels[0]).toBe(VISION_MODEL_ID);
+      expect(getState().recentModels[1]).toBe(LITE_MODEL_ID);
     });
 
     it('deduplicates recents', () => {
-      getState().setModel('gpt-5.4');
-      getState().setModel('claude-opus-4.7');
-      getState().setModel('gpt-5.4'); // duplicate
+      getState().setModel(LITE_MODEL_ID);
+      getState().setModel(VISION_MODEL_ID);
+      getState().setModel(LITE_MODEL_ID);
 
       const recents = getState().recentModels;
-      expect(recents[0]).toBe('gpt-5.4');
-      expect(recents.filter((id) => id === 'gpt-5.4')).toHaveLength(1);
+      expect(recents[0]).toBe(LITE_MODEL_ID);
+      expect(recents.filter((id) => id === LITE_MODEL_ID)).toHaveLength(1);
     });
 
-    it('limits recents to 5 entries', () => {
-      const ids = [
-        'gpt-5.4',
-        'claude-opus-4.7',
-        'gemini-3.1-pro-preview',
-        'grok-4',
-        'deepseek-chat',
-        'sonar',
-      ];
+    it('limits recents to 5 selectable entries', () => {
+      const ids = ['auto-balanced', ...LOCAL_MODEL_LIST.map((model) => model.id)];
       for (const id of ids) {
         getState().setModel(id);
       }
 
       expect(getState().recentModels).toHaveLength(5);
-      // The oldest (gpt-5.4) should be dropped
-      expect(getState().recentModels).not.toContain('gpt-5.4');
+      expect(getState().recentModels).not.toContain('auto-balanced');
     });
 
-    it('syncs legacy thinkingModeEnabled from per-model state', () => {
-      // Enable thinking for opus
+    it('syncs legacy thinkingModeEnabled from per-model local state', () => {
       useModelStore.setState({
-        thinkingEnabledPerModel: { 'claude-opus-4.7': true },
+        thinkingEnabledPerModel: { [LITE_MODEL_ID]: true },
       });
 
-      getState().setModel('claude-opus-4.7');
+      getState().setModel(LITE_MODEL_ID);
 
       expect(getState().thinkingModeEnabled).toBe(true);
     });
-
-    it('sets legacy thinkingModeEnabled to false when switching to model without thinking enabled', () => {
-      useModelStore.setState({
-        thinkingModeEnabled: true,
-        thinkingEnabledPerModel: { 'claude-opus-4.7': true },
-      });
-
-      getState().setModel('auto-balanced');
-
-      expect(getState().thinkingModeEnabled).toBe(false);
-    });
   });
-
-  // ---- toggleFavorite ----
 
   describe('toggleFavorite', () => {
-    it('adds a model to favorites', () => {
-      getState().toggleFavorite('claude-opus-4.7');
+    it('adds and removes a local model from favorites', () => {
+      getState().toggleFavorite(LITE_MODEL_ID);
+      expect(getState().favorites).toContain(LITE_MODEL_ID);
 
-      expect(getState().favorites).toContain('claude-opus-4.7');
+      getState().toggleFavorite(LITE_MODEL_ID);
+      expect(getState().favorites).not.toContain(LITE_MODEL_ID);
     });
 
-    it('removes a model from favorites on second toggle', () => {
-      getState().toggleFavorite('claude-opus-4.7');
-      getState().toggleFavorite('claude-opus-4.7');
+    it('ignores cloud model ids', () => {
+      getState().toggleFavorite(CLOUD_MODEL_ID);
 
-      expect(getState().favorites).not.toContain('claude-opus-4.7');
+      expect(getState().favorites).toEqual([]);
     });
 
-    it('maintains other favorites when toggling one', () => {
-      getState().toggleFavorite('claude-opus-4.7');
-      getState().toggleFavorite('gpt-5.4');
-      getState().toggleFavorite('claude-opus-4.7'); // remove
+    it('ignores auto modes', () => {
+      getState().toggleFavorite('auto-balanced');
 
-      expect(getState().favorites).toEqual(['gpt-5.4']);
+      expect(getState().favorites).toEqual([]);
     });
   });
-
-  // ---- setProvider ----
 
   describe('setProvider', () => {
-    it('updates selectedProvider', () => {
-      getState().setProvider('anthropic');
+    it('keeps selectedProvider locked to local', () => {
+      getState().setProvider('managed_cloud');
 
-      expect(getState().selectedProvider).toBe('anthropic');
+      expect(getState().selectedProvider).toBe('local');
     });
   });
 
-  // ---- setThinkingMode (legacy) ----
-
-  describe('setThinkingMode (legacy)', () => {
-    it('sets thinkingModeEnabled to true when model supports thinking', () => {
-      useModelStore.setState({ selectedModel: 'claude-opus-4.7' });
-
-      getState().setThinkingMode(true);
-
-      expect(getState().thinkingModeEnabled).toBe(true);
+  describe('thinking controls', () => {
+    it('starts with an empty per-model thinking record', () => {
+      expect(getState().thinkingEnabledPerModel).toEqual({});
     });
 
-    it('guards against enabling thinking on non-thinking model', () => {
-      useModelStore.setState({ selectedModel: 'claude-haiku-4.5' });
+    it('does not enable thinking for local v1 models', () => {
+      getState().toggleThinkingForModel(DEFAULT_LOCAL_MODEL_ID);
 
+      expect(getState().thinkingEnabledPerModel[DEFAULT_LOCAL_MODEL_ID]).toBeUndefined();
+    });
+
+    it('does not enable thinking for cloud model ids', () => {
+      getState().toggleThinkingForModel(CLOUD_MODEL_ID);
+
+      expect(getState().thinkingEnabledPerModel[CLOUD_MODEL_ID]).toBeUndefined();
+    });
+
+    it('does not enable thinking for auto modes', () => {
+      getState().toggleThinkingForModel('auto-balanced');
+
+      expect(getState().thinkingEnabledPerModel['auto-balanced']).toBeUndefined();
+    });
+
+    it('returns false when the selected local model has no thinking state', () => {
+      expect(getState().isThinkingEnabledForSelected()).toBe(false);
+    });
+
+    it('guards setThinkingMode(true) for local models without thinking support', () => {
       getState().setThinkingMode(true);
 
       expect(getState().thinkingModeEnabled).toBe(false);
@@ -302,7 +188,7 @@ describe('modelStore', () => {
 
     it('allows disabling thinking regardless of model support', () => {
       useModelStore.setState({
-        selectedModel: 'claude-haiku-4.5',
+        selectedModel: DEFAULT_LOCAL_MODEL_ID,
         thinkingModeEnabled: true,
       });
 

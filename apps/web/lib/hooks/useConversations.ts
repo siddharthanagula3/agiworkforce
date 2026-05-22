@@ -8,6 +8,7 @@ import { getSupabaseClient } from '@/services/supabase';
 interface ApiConversation {
   id: string;
   title: string;
+  model?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -18,7 +19,7 @@ interface ApiMessage {
   content: string;
   created_at: string;
   model?: string;
-  metadata?: { reaction?: 'thumbsUp' | 'thumbsDown' | null; [key: string]: unknown };
+  metadata?: Message['metadata'];
 }
 
 interface UseConversationsReturn {
@@ -90,6 +91,7 @@ export function useConversations(): UseConversationsReturn {
         (c: ApiConversation) => ({
           id: c.id,
           title: c.title,
+          model: c.model ?? null,
           createdAt: c.created_at,
           updatedAt: c.updated_at,
         }),
@@ -126,6 +128,7 @@ export function useConversations(): UseConversationsReturn {
         const conversation: Conversation = {
           id: data.conversation.id,
           title: data.conversation.title,
+          model: data.conversation.model ?? null,
           createdAt: data.conversation.created_at,
           updatedAt: data.conversation.updated_at,
         };
@@ -161,6 +164,14 @@ export function useConversations(): UseConversationsReturn {
         }
 
         const data = await response.json();
+        const loadedConversation = data.conversation as ApiConversation | undefined;
+        if (loadedConversation) {
+          updateConversationInStore(id, {
+            title: loadedConversation.title,
+            model: loadedConversation.model ?? null,
+            updatedAt: loadedConversation.updated_at,
+          });
+        }
 
         // Convert API messages to store format
         const messages: Message[] = (data.messages || []).map((m: ApiMessage) => ({
@@ -169,7 +180,7 @@ export function useConversations(): UseConversationsReturn {
           content: m.content,
           createdAt: m.created_at,
           model: m.model,
-          metadata: m.metadata?.reaction != null ? { reaction: m.metadata.reaction } : undefined,
+          metadata: m.metadata,
         }));
 
         // Atomically set active conversation and messages to avoid race conditions
@@ -180,7 +191,13 @@ export function useConversations(): UseConversationsReturn {
         setLoading(false);
       }
     },
-    [getAuthHeaders, setActiveConversationWithMessages, setLoading, setError],
+    [
+      getAuthHeaders,
+      updateConversationInStore,
+      setActiveConversationWithMessages,
+      setLoading,
+      setError,
+    ],
   );
 
   // Update a conversation - returns true on success
@@ -202,6 +219,7 @@ export function useConversations(): UseConversationsReturn {
         const data = await response.json();
         updateConversationInStore(id, {
           title: data.conversation.title,
+          model: data.conversation.model ?? undefined,
           updatedAt: data.conversation.updated_at,
         });
         return true;

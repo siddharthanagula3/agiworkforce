@@ -63,7 +63,7 @@
  * - Realtime: Pusher / Ably / self-hosted ws or Vercel Edge Pub/Sub.
  *
  * The factory rejects `AGI_STORAGE_PROVIDER=s3` etc. today with a
- * `DataLayerConfigError` pointing at `docs/SCALING.md`.
+ * `DataLayerConfigError` pointing at the current technical architecture.
  */
 
 import type { Pool, PoolClient, QueryResult } from '@neondatabase/serverless';
@@ -106,7 +106,7 @@ export const MIGRATION_GUIDE = `
    migrate hot paths off any direct supabase-js fluent calls (.from('table')
    -> adapter.query/execute) — those are the last bits of vendor coupling.
 
-Full guide: docs/SCALING.md "Supabase to Neon".
+Full guide: docs/archive/2026-05-21-docs-consolidation/SCALING.md "Supabase to Neon".
 `.trim();
 
 /**

@@ -493,8 +493,8 @@ Expected: Publicly available code. Community contribution. Examples: Linux, Fire
 | ----------------- | -------- | ----------------- | --------- | ----- |
 | A-01 through F-10 |          |                   |           |       |
 
-**Acceptance threshold (founder defines):** **_  
-**Minimum per category:** _**  
+**Acceptance threshold (founder defines):** **\_  
+**Minimum per category:** \_**  
 **Fallback decision:** If overall score < threshold → use **\_** (Apple Translate / Llama 3.2 3B / Gemma 3n)
 
 ---

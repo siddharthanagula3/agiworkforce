@@ -18,14 +18,7 @@
  * See `apps/sandbox/` for the renderer and its CSP envelope.
  */
 
-export type ArtifactKind =
-  | 'html'
-  | 'react'
-  | 'svg'
-  | 'mermaid'
-  | 'markdown'
-  | 'text'
-  | 'code';
+export type ArtifactKind = 'html' | 'react' | 'svg' | 'mermaid' | 'markdown' | 'text' | 'code';
 
 export interface ArtifactRenderPayload {
   type: 'render';

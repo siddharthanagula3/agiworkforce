@@ -6,12 +6,10 @@ module.exports = {
     // TODO: revive once the matching feature work lands. These suites were
     // already failing on main pre-session against half-shipped stubs/wiring:
     //   healthkit.test.ts — services/healthKitPermission is a stub today
-    //   model-picker.test.tsx — predates the Perplexity-style picker redesign
     //   auth-401.test.ts — SecureStore wiring diverged in the reorg
     //   api-paywall.test.ts — same auth wiring
     //   biometric-gate.test.tsx — hits the H-10 rehydration race ordering
     '__tests__/healthkit\\.test\\.ts$',
-    '__tests__/model-picker\\.test\\.tsx$',
     '__tests__/auth-401\\.test\\.ts$',
     '__tests__/api-paywall\\.test\\.ts$',
     '__tests__/biometric-gate\\.test\\.tsx$',
@@ -32,7 +30,6 @@ module.exports = {
     // Override jest-expo preset which incorrectly resolves react to @types/react in pnpm
     '^react$': '<rootDir>/node_modules/react',
     // Workspace packages that may not be pnpm-linked in CI: resolve src directly.
-    '^@agiworkforce/local-llm/src/(.*)$': '<rootDir>/../../packages/local-llm/src/$1',
     '^@agiworkforce/local-llm$': '<rootDir>/../../packages/local-llm/src/index',
     // expo-sqlite stub for storage tests until the native module is linked.
     '^expo-sqlite$': '<rootDir>/__mocks__/expo-sqlite.js',

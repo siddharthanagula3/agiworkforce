@@ -106,7 +106,7 @@ jest.mock('../lib/mmkv', () => ({
 // ---------------------------------------------------------------------------
 
 import { secureStorage } from '../lib/secureStorage';
-import { useAuthStore } from '../stores/authStore';
+import { useAuthStore } from '../src/features/auth/store';
 import { act } from '@testing-library/react-native';
 import { FEATURES } from '../lib/v1FeatureFlags';
 

@@ -76,6 +76,13 @@ impl CliOptions {
         explicit_yes || matches!(self.permission_mode, Some(PermissionMode::AcceptEdits))
     }
 
+    pub(crate) fn mcp_config_load_options(&self) -> crate::mcp::McpConfigLoadOptions {
+        crate::mcp::McpConfigLoadOptions {
+            explicit_paths: self.mcp_config_paths.iter().map(Into::into).collect(),
+            strict: self.strict_mcp_config,
+        }
+    }
+
     /// True when the embedder owns permission decisions over the SDK control channel
     /// rather than the CLI prompting interactively. Wired in the next session
     /// when sdk_io's control channel intercepts canUseTool decisions.

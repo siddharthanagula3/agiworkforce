@@ -1,5 +1,9 @@
 # Building AGI
 
+Status: Current
+Owner: Platform lead
+Last updated: 2026-05-20
+
 > Public brand: **AGI** (simplified 2026-05-15). Repo path + internal packages remain `agiworkforce` — commands and paths in this doc match the unchanged internal name.
 
 This document covers the prerequisites and build commands for every shippable surface in the monorepo. If you're new to the codebase, start here — the goal is "junior engineer can clone, follow this doc, and produce a working desktop build in under 30 minutes" (FIX-038 / Sprint 5 acceptance criterion).
@@ -74,13 +78,15 @@ pnpm build:desktop
 # Bundles land in apps/desktop/src-tauri/target/release/bundle/
 ```
 
+Desktop production builds run `pnpm --filter @agiworkforce/desktop run build:native-host` first, which compiles `native_messaging_host` and writes the target-triple sidecar under `apps/desktop/src-tauri/binaries/` for Tauri packaging.
+
 Signed/notarized release builds run through `.github/workflows/release-desktop.yml` on tag push. macOS signing needs `APPLE_CERTIFICATE` + `APPLE_CERTIFICATE_PASSWORD` + `APPLE_SIGNING_IDENTITY` + `APPLE_ID` + `APPLE_PASSWORD` + `APPLE_TEAM_ID` GitHub secrets. Windows signing needs `WINDOWS_CERTIFICATE` + `WINDOWS_CERTIFICATE_PASSWORD` (FIX-010 in the remediation plan — currently in-progress, builds ship unsigned until the EV cert lands).
 
 ### Web app (Next.js + Vite)
 
 ```bash
-pnpm --filter web dev      # localhost:3000
-pnpm --filter web build    # builds desktop SPA into public/chat then runs `next build`
+pnpm --filter @agiworkforce/web dev      # localhost:3000
+pnpm --filter @agiworkforce/web build    # builds desktop SPA into public/chat then runs `next build`
 ```
 
 The web build pipeline is unusual: it builds the **desktop** SPA via Vite, copies the output into `apps/web/public/chat/`, then runs `next build` so the chat surface ships from the same code. See `apps/web/package.json:scripts.build` for the chain.
@@ -155,8 +161,9 @@ pnpm --filter desktop exec playwright test
 2. Type check (tsc --noEmit across all TS workspaces)
 3. Tests (vitest)
 4. Build (web, packages, extension)
-5. Dependency audit (pnpm audit + cargo audit, both blocking on high+ severity per FIX-043)
-6. Rust clippy (-D warnings -D unsafe-code)
-7. Rust workspace test build
+5. Native messaging host sidecar build check
+6. Dependency audit (pnpm audit + cargo audit, both blocking on high+ severity per FIX-043)
+7. Rust clippy (-D warnings -D unsafe-code)
+8. Rust workspace test build
 
 `.github/workflows/release-desktop.yml` runs on tag push and produces signed bundles for macOS (universal/aarch64/x86_64), Windows x64, and Linux x64.

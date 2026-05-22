@@ -114,7 +114,7 @@ pub fn render_mcp_list(scopes: &[McpScope]) -> String {
         body.push(String::new());
     }
 
-    body.push("  ※ Run `agiworkforce --debug` to see error logs".to_string());
+    body.push("  ※ Run `agi --debug` to see error logs".to_string());
     body.push("  https://code.agiworkforce.com/docs/mcp for help".to_string());
 
     frame(
@@ -139,8 +139,22 @@ pub fn render_mcp_detail(
         format!("  {} MCP Server", capitalize_first(server_name)),
         String::new(),
         format!("    Status:          {}", status.glyph()),
-        format!("    Command:         {}", if command.is_empty() { "(none)" } else { command }),
-        format!("    Args:            {}", if args.is_empty() { "(none)".to_string() } else { args.join(" ") }),
+        format!(
+            "    Command:         {}",
+            if command.is_empty() {
+                "(none)"
+            } else {
+                command
+            }
+        ),
+        format!(
+            "    Args:            {}",
+            if args.is_empty() {
+                "(none)".to_string()
+            } else {
+                args.join(" ")
+            }
+        ),
         format!("    Config location: {}", config_location),
         String::new(),
         format!(
@@ -310,13 +324,20 @@ pub fn render_skills(skills: &[SkillSummary]) -> String {
                 .to_string(),
         ]
     } else {
-        let mut b = vec![format!("  {} skill(s) available.", skills.len()), String::new()];
+        let mut b = vec![
+            format!("  {} skill(s) available.", skills.len()),
+            String::new(),
+        ];
         for s in skills {
             b.push(format!("    {:<28} {}", s.name, s.description));
         }
         b
     };
-    frame("Skills".to_string(), &body, "↑↓ navigate · Enter select · Esc close")
+    frame(
+        "Skills".to_string(),
+        &body,
+        "↑↓ navigate · Enter select · Esc close",
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -408,11 +429,7 @@ pub enum PluginGroup {
     User,
 }
 
-pub fn render_plugin(
-    tab: PluginTab,
-    installed: &[PluginSummary],
-    errors: &[String],
-) -> String {
+pub fn render_plugin(tab: PluginTab, installed: &[PluginSummary], errors: &[String]) -> String {
     let title_line = format!(
         "Plugins  Discover   Installed   Marketplaces   Errors  (current: {})",
         match tab {
@@ -510,7 +527,10 @@ pub fn render_tasks(running: &[String]) -> String {
     let body = if running.is_empty() {
         vec!["  No tasks currently running".to_string()]
     } else {
-        let mut b = vec![format!("  {} task(s) running", running.len()), String::new()];
+        let mut b = vec![
+            format!("  {} task(s) running", running.len()),
+            String::new(),
+        ];
         for t in running {
             b.push(format!("    • {}", t));
         }
@@ -540,7 +560,7 @@ pub fn render_chrome() -> String {
         "    Reconnect extension".to_string(),
         "    Enabled by default: Yes".to_string(),
         String::new(),
-        "  Usage: agiworkforce --chrome or agiworkforce --no-chrome".to_string(),
+        "  Usage: agi --chrome or agi --no-chrome".to_string(),
         String::new(),
         "  Site-level permissions are inherited from the Chrome extension. Manage permissions in the".to_string(),
         "  Chrome extension settings to control which sites AGI Workforce can browse, click, and type on.".to_string(),
@@ -563,11 +583,15 @@ pub fn render_ide(available_ides: &[String]) -> String {
         vec![
             "  Connect to an IDE for integrated development features.".to_string(),
             String::new(),
-            "  No available IDEs detected. Make sure your IDE has the AGI Workforce extension or".to_string(),
+            "  No available IDEs detected. Make sure your IDE has the AGI Workforce extension or"
+                .to_string(),
             "  plugin installed and is running.".to_string(),
         ]
     } else {
-        let mut b = vec!["  Connect to an IDE for integrated development features.".to_string(), String::new()];
+        let mut b = vec![
+            "  Connect to an IDE for integrated development features.".to_string(),
+            String::new(),
+        ];
         for ide in available_ides {
             b.push(format!("    • {}", ide));
         }
@@ -597,11 +621,26 @@ pub struct UsageSummary {
 
 pub fn render_usage(usage: &UsageSummary) -> String {
     let body = vec![
-        format!("    Input tokens:        {:>9}", fmt_number(usage.input_tokens as u64)),
-        format!("    Output tokens:       {:>9}", fmt_number(usage.output_tokens as u64)),
-        format!("    Cache read tokens:   {:>9}", fmt_number(usage.cache_read_tokens as u64)),
-        format!("    Cache write tokens:  {:>9}", fmt_number(usage.cache_write_tokens as u64)),
-        format!("    Estimated cost:      {:>9}", format!("${:.4}", usage.estimated_cost_usd)),
+        format!(
+            "    Input tokens:        {:>9}",
+            fmt_number(usage.input_tokens as u64)
+        ),
+        format!(
+            "    Output tokens:       {:>9}",
+            fmt_number(usage.output_tokens as u64)
+        ),
+        format!(
+            "    Cache read tokens:   {:>9}",
+            fmt_number(usage.cache_read_tokens as u64)
+        ),
+        format!(
+            "    Cache write tokens:  {:>9}",
+            fmt_number(usage.cache_write_tokens as u64)
+        ),
+        format!(
+            "    Estimated cost:      {:>9}",
+            format!("${:.4}", usage.estimated_cost_usd)
+        ),
         format!("    Turn count:          {:>9}", usage.turn_count),
         format!("    Model:               {}", usage.model),
         String::new(),
@@ -723,7 +762,9 @@ pub fn render_doctor(checks: &[DoctorCheck]) -> String {
     let any_warn = checks.iter().any(|c| c.status == DoctorStatus::Warn);
     body.push(String::new());
     body.push(match (any_fail, any_warn) {
-        (true, _) => "  ✘ One or more checks failed. Run with --debug for verbose logs.".to_string(),
+        (true, _) => {
+            "  ✘ One or more checks failed. Run with --debug for verbose logs.".to_string()
+        }
         (false, true) => "  ⚠ Warnings detected. Run with --debug for verbose logs.".to_string(),
         _ => "  ✔ All checks passed.".to_string(),
     });
@@ -740,8 +781,8 @@ pub fn render_doctor(checks: &[DoctorCheck]) -> String {
 
 #[derive(Debug, Clone)]
 pub struct RecapEntry {
-    pub role: String,        // "User" / "Assistant" / "Tool"
-    pub age_label: String,   // "just now" / "2 turns ago"
+    pub role: String,      // "User" / "Assistant" / "Tool"
+    pub age_label: String, // "just now" / "2 turns ago"
     pub summary: String,
 }
 
@@ -1083,7 +1124,10 @@ mod tests {
 
     #[test]
     fn tasks_with_running_lists_each() {
-        let s = render_tasks(&["subagent: explore".to_string(), "batch: 3 tools".to_string()]);
+        let s = render_tasks(&[
+            "subagent: explore".to_string(),
+            "batch: 3 tools".to_string(),
+        ]);
         assert!(s.contains("2 task(s) running"));
         assert!(s.contains("• subagent: explore"));
         assert!(s.contains("• batch: 3 tools"));
@@ -1097,7 +1141,7 @@ mod tests {
         assert!(s.contains("Extension: Installed"));
         assert!(s.contains("❯ Manage permissions"));
         assert!(s.contains("Reconnect extension"));
-        assert!(s.contains("Usage: agiworkforce --chrome or agiworkforce --no-chrome"));
+        assert!(s.contains("Usage: agi --chrome or agi --no-chrome"));
         assert!(s.contains("Learn more: https://code.agiworkforce.com/docs/chrome"));
     }
 
@@ -1123,9 +1167,7 @@ mod tests {
         assert!(render_mcp_detail("foo", McpStatus::Disabled, "", &[], "/p").contains(&divider));
         assert!(render_agents(AgentsTab::Running, &[], &[], None).contains(&divider));
         assert!(render_skills(&[]).contains(&divider));
-        assert!(
-            render_permissions(PermissionsTab::Allow, &[], &[], &[], &[]).contains(&divider)
-        );
+        assert!(render_permissions(PermissionsTab::Allow, &[], &[], &[], &[]).contains(&divider));
         assert!(render_plugin(PluginTab::Discover, &[], &[]).contains(&divider));
         assert!(render_tasks(&[]).contains(&divider));
         assert!(render_chrome().contains(&divider));

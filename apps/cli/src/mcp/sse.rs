@@ -12,8 +12,8 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 use super::{
-    elicitation::AutoDeclineHandler, find_subsequence, McpConnection, McpServerConfig,
-    McpTimeouts, McpTransportConn,
+    elicitation::AutoDeclineHandler, find_subsequence, McpConnection, McpServerConfig, McpTimeouts,
+    McpTransportConn,
 };
 
 /// Connect to an SSE-based MCP server.

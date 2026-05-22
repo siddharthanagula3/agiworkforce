@@ -5,7 +5,12 @@
  * Mobile-specific fields are added via `MobileChatMessage`.
  */
 
-import type { ChatMessage as CanonicalChatMessage } from '@agiworkforce/types';
+import type {
+  ArtifactManifest,
+  ChatMessage as CanonicalChatMessage,
+  ComputeSession,
+  GeneratedFile,
+} from '@agiworkforce/types';
 
 export type { CanonicalChatMessage };
 
@@ -28,6 +33,9 @@ export interface Artifact {
   title: string;
   content: string;
   language?: string;
+  computeSession?: ComputeSession;
+  generatedFile?: GeneratedFile;
+  artifactManifest?: ArtifactManifest;
   metadata?: Record<string, unknown>;
 }
 
@@ -117,7 +125,7 @@ export interface ChatMessage extends Omit<CanonicalChatMessage, 'attachments'> {
   /** On-device performance — first-token latency in milliseconds */
   firstTokenLatencyMs?: number;
   /** Runtime tier: 'Tier 1' | 'Tier 2' | 'Tier 3' */
-  runtimeTier?: import('@/components/chat/PerformanceChip').RuntimeTier;
+  runtimeTier?: import('@/src/features/chat/components/PerformanceChip').RuntimeTier;
 }
 
 export interface ConversationSummary {

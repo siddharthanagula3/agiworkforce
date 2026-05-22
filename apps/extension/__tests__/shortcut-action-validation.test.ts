@@ -43,9 +43,9 @@ describe('C-03 shortcut action validation', () => {
   });
 
   it('rejects a plan with an eval-like action', () => {
-    expect(
-      validateShortcutActions([{ id: '1', type: 'eval', value: 'fetch(...)' }] as never),
-    ).toBe(false);
+    expect(validateShortcutActions([{ id: '1', type: 'eval', value: 'fetch(...)' }] as never)).toBe(
+      false,
+    );
   });
 
   it('rejects shell-injection-shaped action types', () => {

@@ -45,7 +45,7 @@ Read-write only inside `/Users/siddhartha/Desktop/agiworkforce/apps/cli/`. Read-
 
 ## Conventions
 
-- LOCKED: **No testing mid-stream**. Don't write new tests inline (existing tests should still pass cargo check).
+- Run focused tests while implementing behavior changes; run the listed verification gates before handoff.
 - LOCKED: **Rust full edit access** — no permission prompts inside `apps/cli/src/`.
 - LOCKED: **Never hardcode model IDs** — read from `packages/types/src/models.json` via the catalog. Era memory: GPT-5.4/Claude 4.6/Gemini 3.1 (with newer entries arriving).
 - LOCKED: **Parallel agents always** when multiple independent tasks exist.

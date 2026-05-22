@@ -184,10 +184,9 @@ mod tests {
 
     #[test]
     fn response_serializes_action_as_lowercase() {
-        let accept = serde_json::to_string(&ElicitationResponse::accept(
-            serde_json::json!({"x": 1}),
-        ))
-        .unwrap();
+        let accept =
+            serde_json::to_string(&ElicitationResponse::accept(serde_json::json!({"x": 1})))
+                .unwrap();
         assert!(accept.contains("\"action\":\"accept\""));
         assert!(accept.contains("\"content\":{\"x\":1}"));
 
@@ -267,7 +266,10 @@ mod tests {
             return None;
         }
         let req_id = frame.get("id")?.clone();
-        let params = frame.get("params").cloned().unwrap_or(serde_json::Value::Null);
+        let params = frame
+            .get("params")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null);
         let elicit_req: ElicitationRequest = serde_json::from_value(params).ok()?;
         let resp = handler.handle(server_name, elicit_req).await;
         Some(serde_json::json!({
@@ -330,7 +332,10 @@ mod tests {
             "result": {"tools": []},
         });
         let result = dispatch_frame(&frame, &handler, "test-server").await;
-        assert!(result.is_none(), "non-elicitation frame must not be dispatched");
+        assert!(
+            result.is_none(),
+            "non-elicitation frame must not be dispatched"
+        );
     }
 
     #[tokio::test]
@@ -344,7 +349,10 @@ mod tests {
             "params": {"message": "hi", "requestedSchema": {}},
         });
         let result = dispatch_frame(&frame, &handler, "test-server").await;
-        assert!(result.is_none(), "notification (no id) must not be dispatched");
+        assert!(
+            result.is_none(),
+            "notification (no id) must not be dispatched"
+        );
     }
 
     #[tokio::test]

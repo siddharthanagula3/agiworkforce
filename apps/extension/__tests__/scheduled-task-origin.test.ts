@@ -18,10 +18,7 @@ import { describe, expect, it } from 'vitest';
 // Self-review #1 audit 2026-05-19: import the production helper instead of
 // mirroring. `shouldExecuteScheduledTask` is the same function the live
 // `executeScheduledTask` path calls — drift is impossible.
-import {
-  ORIGIN_EXTENSION_PAGE,
-  shouldExecuteScheduledTask,
-} from '../src/background/policy';
+import { ORIGIN_EXTENSION_PAGE, shouldExecuteScheduledTask } from '../src/background/policy';
 import type { ScheduledTask } from '../src/types';
 
 // Thin alias so the rest of the suite reads naturally.

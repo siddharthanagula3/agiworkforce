@@ -81,18 +81,16 @@ pub async fn discover_agents(config: &CliConfig) -> Result<Vec<AgentCard>> {
     for card in &local_cards {
         let url = format!("{}/a2a/card", card.endpoint.trim_end_matches('/'));
         match client.get(&url).send().await {
-            Ok(resp) if resp.status().is_success() => {
-                match resp.json::<AgentCard>().await {
-                    Ok(live_card) => results.push(live_card),
-                    Err(_) => {
-                        let mut offline = card.clone();
-                        offline
-                            .metadata
-                            .insert("online".to_string(), serde_json::json!(false));
-                        results.push(offline);
-                    }
+            Ok(resp) if resp.status().is_success() => match resp.json::<AgentCard>().await {
+                Ok(live_card) => results.push(live_card),
+                Err(_) => {
+                    let mut offline = card.clone();
+                    offline
+                        .metadata
+                        .insert("online".to_string(), serde_json::json!(false));
+                    results.push(offline);
                 }
-            }
+            },
             _ => {
                 let mut offline = card.clone();
                 offline

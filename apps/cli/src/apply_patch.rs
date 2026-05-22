@@ -251,8 +251,7 @@ mod patch_validation_tests {
 
     #[test]
     fn rejects_parent_traversal_beyond_root() {
-        let patch =
-            "--- a/../../etc/shadow\n+++ b/../../etc/shadow\n@@ -1,1 +1,1 @@\n-x\n+y\n";
+        let patch = "--- a/../../etc/shadow\n+++ b/../../etc/shadow\n@@ -1,1 +1,1 @@\n-x\n+y\n";
         let err = validate_patch_targets(patch, Path::new(".")).unwrap_err();
         assert!(
             err.to_string().contains("escapes project root"),

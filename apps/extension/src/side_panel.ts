@@ -10,7 +10,13 @@ import {
   type CapabilityTier,
 } from '@agiworkforce/types';
 import { getExtensionSendQueue } from './sendQueue';
-import { clearChildren, setText, createElementWith, setChild, appendSvgString } from './dom-helpers';
+import {
+  clearChildren,
+  setText,
+  createElementWith,
+  setChild,
+  appendSvgString,
+} from './dom-helpers';
 import {
   saveConversation,
   listConversations,
@@ -972,6 +978,10 @@ function injectStyles(): void {
     #sp-composer-shell:focus-within {
       border-color: rgba(33,128,141,0.5);
       box-shadow: 0 0 0 2px rgba(33,128,141,0.18);
+    }
+    #sp-composer-shell.dragover {
+      border-color: rgba(33,128,141,0.8);
+      box-shadow: 0 0 0 2px rgba(33,128,141,0.35);
     }
     #sp-input-row {
       display: flex;
@@ -2075,6 +2085,11 @@ function sendMessage(text: string): void {
 
         const pageCtx = _ctx.pendingPageContext;
         _ctx.pendingPageContext = null;
+        // Round-2 audit P0 #3 fix (2026-05-21): snapshot pendingAttachments
+        // BEFORE clearing so the wire payload below carries them. Prior
+        // behaviour cleared the buffer first, so attachments never reached
+        // the background handler.
+        const attachmentsToSend = pendingAttachments.slice();
         pendingAttachments.length = 0;
         updateContextButton();
         updateAttachmentPreview();
@@ -2105,6 +2120,9 @@ function sendMessage(text: string): void {
             text: actualPrompt,
             pageContext: pageCtx ?? undefined,
             conversationHistory: history,
+            // Round-2 audit P0 #3 (2026-05-21): forward the snapshot taken
+            // above so the model can see the user's images / pastes.
+            attachments: attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
             // SECURITY (H-10 audit 2026-05-19): `apiKey:` removed from the
             // CHAT_MESSAGE wire payload. The background handler ignores any
             // apiKey field per chrome-HIGH-3 and resolves the key from
@@ -2141,6 +2159,9 @@ function sendMessage(text: string): void {
 
   const pageCtx = _ctx.pendingPageContext;
   _ctx.pendingPageContext = null;
+  // Round-2 audit P0 #3 fix (2026-05-21): snapshot before clearing so the
+  // CHAT_MESSAGE payload below actually carries the user's attachments.
+  const attachmentsToSend = pendingAttachments.slice();
   pendingAttachments.length = 0;
   updateContextButton();
   updateAttachmentPreview();
@@ -2173,6 +2194,9 @@ function sendMessage(text: string): void {
       text: userMsg.content,
       pageContext: pageCtx ?? undefined,
       conversationHistory: history,
+      // Round-2 audit P0 #3 (2026-05-21): forward the snapshot so attachments
+      // actually reach the model.
+      attachments: attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
       // SECURITY (H-10 audit 2026-05-19): `apiKey:` removed from the
       // CHAT_MESSAGE wire payload. See chrome-HIGH-3.
       // Phase 3 bridge: bridge must consume extendedThinking and
@@ -2279,6 +2303,55 @@ function updateSendButton(): void {
   }
 }
 
+/**
+ * Read a File as a data URL with a single Promise wrapper around FileReader.
+ * Keeps the drop/paste path readable without sprinkling reader.onload chains
+ * through the call sites. Resolves to null on read error so callers can
+ * filter and move on instead of throwing through Promise.all.
+ */
+function readFileAsDataUrl(file: File): Promise<string | null> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      resolve(typeof result === 'string' ? result : null);
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Accept files from a drag-drop or paste event and append their data URLs to
+ * `pendingAttachments`. Enforces the same caps as the VS Code webview: max
+ * 8 files per call total (including any already pending) and 10 MB per file.
+ * Image-only filter matches the existing +menu accept="image/*" behavior.
+ *
+ * Round-2 audit P0 #3 — chrome-ext composer drag-drop + paste-image wire,
+ * 2026-05-21. Reuses the existing attachment preview UI; no schema work
+ * needed because the wire path through CHAT_MESSAGE already snapshots
+ * pendingAttachments per the round-3 fix in commit `38034fedb`.
+ */
+function acceptIncomingComposerFiles(files: File[] | FileList): void {
+  const MAX_BYTES = 10 * 1024 * 1024;
+  const MAX_TOTAL_ATTACHMENTS = 8;
+  const incoming: File[] = Array.from(files).filter(
+    (file) => file.type.startsWith('image/') && file.size <= MAX_BYTES,
+  );
+  if (incoming.length === 0) return;
+
+  const remainingSlots = Math.max(0, MAX_TOTAL_ATTACHMENTS - pendingAttachments.length);
+  if (remainingSlots === 0) return;
+  const accepted = incoming.slice(0, remainingSlots);
+
+  void Promise.all(accepted.map(readFileAsDataUrl)).then((results) => {
+    for (const dataUrl of results) {
+      if (dataUrl) pendingAttachments.push(dataUrl);
+    }
+    updateAttachmentPreview();
+  });
+}
+
 function updateAttachmentPreview(): void {
   const bar = document.getElementById('sp-attachment-bar');
   if (!bar) return;
@@ -2314,7 +2387,7 @@ function updateToolsButton(): void {
   if (!btn || !dropdown) return;
 
   const count = discoveredTools.length;
-  setText(btn, `\uD83D\uDD27 AI Tools (${count})`);
+  btn.replaceChildren(renderIcon(Plug, 14), document.createTextNode(` Tools (${count})`));
 
   if (count === 0) {
     btn.classList.remove('has-context');
@@ -2452,7 +2525,7 @@ function buildUI(): void {
   headerLeft.appendChild(logoEl);
 
   const titleWrap = el('div', {});
-  titleWrap.appendChild(el('div', { id: 'sp-title' }, 'Workforce'));
+  titleWrap.appendChild(el('div', { id: 'sp-title' }, 'AGI'));
   headerLeft.appendChild(titleWrap);
 
   const modelSelectorWrap = el('div', { class: 'sp-model-selector-wrap' });
@@ -3604,7 +3677,8 @@ function buildUI(): void {
     id: 'sp-tools-btn',
     title: 'WebMCP tools discovered on this page',
   });
-  setText(toolsBtn, '\uD83D\uDD27 AI Tools (0)');
+  toolsBtn.appendChild(renderIcon(Plug, 14));
+  toolsBtn.appendChild(document.createTextNode(' Tools (0)'));
 
   const toolsDropdown = el('div', { id: 'sp-tools-dropdown' });
   setChild(toolsDropdown, {
@@ -3647,6 +3721,29 @@ function buildUI(): void {
       inputEl.value = '';
       autoResizeInput(inputEl);
       sendMessage(text);
+    }
+  });
+
+  // 2026-05-21 — paste-image support on the textarea. Captures clipboard image
+  // items (screenshots, copied images) so users don't have to round-trip
+  // through the +menu. Mirrors `packages/unified-chat/ChatInput.tsx` and the
+  // VS Code webview composer wire. Image-only kind, single readAsDataURL per
+  // file, the existing 8-attachment cap below applies on append.
+  inputEl.addEventListener('paste', (e: ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const pasted: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (!item) continue;
+      if (item.kind === 'file') {
+        const file = item.getAsFile();
+        if (file && file.type.startsWith('image/')) pasted.push(file);
+      }
+    }
+    if (pasted.length > 0) {
+      e.preventDefault();
+      acceptIncomingComposerFiles(pasted);
     }
   });
 
@@ -3795,6 +3892,37 @@ function buildUI(): void {
   inputArea.appendChild(composerShell);
   inputArea.appendChild(promptChipsRow);
   document.body.appendChild(inputArea);
+
+  // 2026-05-21 — drag-drop image attachments onto the composer. Highlights
+  // the shell while a Files drag is in flight; on drop we route through
+  // acceptIncomingComposerFiles which handles size cap, image-only filter,
+  // and the 8-attachment ceiling. Matches the VS Code webview behaviour
+  // shipped in this same session.
+  composerShell.addEventListener('dragover', (event: DragEvent) => {
+    const types = event.dataTransfer?.types;
+    if (!types) return;
+    let hasFile = false;
+    for (let i = 0; i < types.length; i++) {
+      if (types[i] === 'Files') {
+        hasFile = true;
+        break;
+      }
+    }
+    if (!hasFile) return;
+    event.preventDefault();
+    composerShell.classList.add('dragover');
+  });
+  composerShell.addEventListener('dragleave', (event: DragEvent) => {
+    const relatedNode = event.relatedTarget as Node | null;
+    if (relatedNode && composerShell.contains(relatedNode)) return;
+    composerShell.classList.remove('dragover');
+  });
+  composerShell.addEventListener('drop', (event: DragEvent) => {
+    if (!event.dataTransfer) return;
+    event.preventDefault();
+    composerShell.classList.remove('dragover');
+    acceptIncomingComposerFiles(event.dataTransfer.files);
+  });
 
   setupVoiceInput(micBtn, inputEl, autoResizeInput);
   renderMessages();

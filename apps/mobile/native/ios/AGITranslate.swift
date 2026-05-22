@@ -2,16 +2,16 @@ import Foundation
 import Translation
 import React
 
-// Apple Translate framework wrapper (iOS 17.4+).
-// On iOS < 17.4 or when a language pair is unavailable, isAvailable returns false
-// and the JS side falls back to Qwen3 prompt translation.
+// Apple Translate framework wrapper.
+// Direct non-UI TranslationSession construction is available in the current SDK
+// only on iOS 26+, so older OS versions report unavailable and JS falls back.
 @objc(AGITranslate)
 class AGITranslate: NSObject {
 
   // MARK: - Availability
 
   @objc static func isAvailable() -> Bool {
-    if #available(iOS 17.4, *) {
+    if #available(iOS 26.0, *) {
       return true
     }
     return false
@@ -28,8 +28,8 @@ class AGITranslate: NSObject {
     resolve: @escaping RCTPromiseResolveBlock,
     reject: @escaping RCTPromiseRejectBlock
   ) {
-    guard #available(iOS 17.4, *) else {
-      reject("UNAVAILABLE", "Apple Translate requires iOS 17.4+", nil)
+    guard #available(iOS 26.0, *) else {
+      reject("UNAVAILABLE", "Apple Translate direct sessions require iOS 26+", nil)
       return
     }
 
@@ -38,8 +38,7 @@ class AGITranslate: NSObject {
         let src = Locale.Language(identifier: sourceLanguage)
         let tgt = Locale.Language(identifier: targetLanguage)
 
-        let config = TranslationSession.Configuration(source: src, target: tgt)
-        let session = try await TranslationSession(configuration: config)
+        let session = TranslationSession(installedSource: src, target: tgt)
         let response = try await session.translate(text)
 
         resolve([
@@ -64,26 +63,22 @@ class AGITranslate: NSObject {
     resolve: @escaping RCTPromiseResolveBlock,
     reject: @escaping RCTPromiseRejectBlock
   ) {
-    guard #available(iOS 17.4, *) else {
+    guard #available(iOS 18.0, *) else {
       resolve(false)
       return
     }
 
     Task {
-      do {
-        let src = Locale.Language(identifier: sourceLanguage)
-        let tgt = Locale.Language(identifier: targetLanguage)
-        let availability = LanguageAvailability()
-        let status = await availability.status(from: src, to: tgt)
-        switch status {
-        case .installed:
-          resolve(true)
-        case .supported:
-          resolve(false)
-        default:
-          resolve(false)
-        }
-      } catch {
+      let src = Locale.Language(identifier: sourceLanguage)
+      let tgt = Locale.Language(identifier: targetLanguage)
+      let availability = LanguageAvailability()
+      let status = await availability.status(from: src, to: tgt)
+      switch status {
+      case .installed:
+        resolve(true)
+      case .supported:
+        resolve(false)
+      default:
         resolve(false)
       }
     }
@@ -91,7 +86,7 @@ class AGITranslate: NSObject {
 
   // MARK: - RCT
 
-  override static func requiresMainQueueSetup() -> Bool {
+  @objc static func requiresMainQueueSetup() -> Bool {
     return false
   }
 }

@@ -7,10 +7,10 @@ import { ArrowLeft, Brain, Search, X, Plus, Upload } from 'lucide-react-native';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MemoryItem } from '@/components/settings/MemoryItem';
-import { AddMemorySheet } from '@/components/settings/AddMemorySheet';
-import { useMemoryStore, type MemoryEntry } from '@/stores/memoryStore';
-import { colors } from '@/lib/theme';
+import { MemoryItem } from '@/src/features/settings/components/MemoryItem';
+import { AddMemorySheet } from '@/src/features/settings/components/AddMemorySheet';
+import { useMemoryStore, type MemoryEntry } from '@/src/features/memory/store';
+import { colors } from '@/src/ui/theme';
 
 // ---------------------------------------------------------------------------
 // Constants

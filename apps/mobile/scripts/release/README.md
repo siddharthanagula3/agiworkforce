@@ -346,12 +346,11 @@ from being reproducible.
 
 These don't block release-pipeline work but need attention before the first ship:
 
-- **`apps/mobile/app.json` AND `app.config.js` both exist.** Expo prefers `app.config.js` when
-  both are present. The team should delete `app.json` to avoid drift — the comment at the top
-  of `app.config.js` already says it "replaces app.json".
-- **`projectId` placeholder.** `app.json:expo.extra.eas.projectId` is `"agi-workforce"`, which
-  isn't a valid UUID. `eas init` rewrites this on the first run. Until then, `eas build` will
-  prompt to create / link a project.
+- **Expo config is now single-source.** `apps/mobile/app.config.js` is canonical; root
+  `app.json` and `apps/mobile/app.json` must stay deleted to avoid bundle-id drift.
+- **EAS project id is not committed yet.** `eas init` should add the real project UUID to
+  `app.config.js` when the project is linked. Until then, `eas build` will prompt to create
+  or link a project.
 - **Legacy `apps/mobile/EAS_SIGNING_RUNBOOK.md`.** Superseded by this file. Its remaining
   content (UI theming TODOs for unmigrated screens) is unrelated to release infra and stays in
   that file until the theming work lands.

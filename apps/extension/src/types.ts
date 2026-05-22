@@ -442,6 +442,23 @@ export interface ChatMessageMessage extends BaseMessage {
   text: string;
   pageContext?: string;
   conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  /**
+   * Inline data-URL attachments collected from the side panel composer
+   * (paste-image, file picker). Round-2 audit P0 #3 (chrome-ext wire fix,
+   * 2026-05-21) — the side panel previously cleared `pendingAttachments`
+   * before constructing the CHAT_MESSAGE so the model never saw them.
+   * Background handler appends an annotation to the user content so the
+   * provider stream can recognise them; full multi-modal bridge wire-up
+   * remains a separate task.
+   */
+  attachments?: string[];
+  /**
+   * When true, the bridge should forward `thinking` to providers that
+   * support it (Anthropic thinking blocks, OpenAI reasoning effort,
+   * Gemini thinkingBudget). Side panel sets this from the user's
+   * Extended Thinking toggle.
+   */
+  extendedThinking?: boolean;
   /** API key forwarded from the side panel's chrome.storage.session agi_api_key. */
   apiKey?: string;
 }

@@ -18,6 +18,7 @@ export interface HookStats {
   successCount: number;
   failureCount: number;
   avgDuration: number;
+  lastExecution: string | null;
 }
 
 // ---- Commands ----

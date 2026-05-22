@@ -16,6 +16,12 @@ import {
   type ToolSet,
 } from 'ai';
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
+import type { StreamChunk } from '@agiworkforce/types';
+import {
+  adaptAiSdkChunkToStreamChunk,
+  adaptAiSdkFinishToStreamChunks,
+  type AiSdkChunkLike,
+} from './event-adapter';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -50,6 +56,7 @@ export interface StreamHandlerOptions {
   }) => void;
   onReasoning?: (text: string) => void;
   onChunk?: (chunk: string) => void;
+  onAgiEvent?: (chunk: StreamChunk) => void;
   onFinish?: (params: {
     text: string;
     reasoning?: string;
@@ -77,6 +84,7 @@ export async function createAiSdkStream(options: StreamHandlerOptions): Promise<
     onToolResult,
     onReasoning,
     onChunk,
+    onAgiEvent,
     onFinish,
     abortSignal,
   } = options;
@@ -93,6 +101,11 @@ export async function createAiSdkStream(options: StreamHandlerOptions): Promise<
     abortSignal,
 
     onChunk: async ({ chunk }) => {
+      const agiChunk = adaptAiSdkChunkToStreamChunk(chunk as unknown as AiSdkChunkLike);
+      if (agiChunk && onAgiEvent) {
+        onAgiEvent(agiChunk);
+      }
+
       // AI SDK v6: text-delta chunk has `.text` property
       if (chunk.type === 'text-delta' && onChunk) {
         onChunk(chunk.text);
@@ -104,6 +117,22 @@ export async function createAiSdkStream(options: StreamHandlerOptions): Promise<
     },
 
     onFinish: async ({ text, usage, finishReason, reasoning }) => {
+      if (onAgiEvent) {
+        for (const chunk of adaptAiSdkFinishToStreamChunks({
+          finishReason,
+          ...(usage
+            ? {
+                usage: {
+                  inputTokens: usage.inputTokens ?? 0,
+                  outputTokens: usage.outputTokens ?? 0,
+                },
+              }
+            : {}),
+        })) {
+          onAgiEvent(chunk);
+        }
+      }
+
       if (onFinish) {
         // AI SDK v6: reasoning is ReasoningOutput (array) - join text parts
         let reasoningText: string | undefined;
@@ -140,6 +169,11 @@ export async function createAiSdkStream(options: StreamHandlerOptions): Promise<
       try {
         for await (const part of result.fullStream) {
           if (part.type === 'tool-call') {
+            const agiChunk = adaptAiSdkChunkToStreamChunk(part as unknown as AiSdkChunkLike);
+            if (agiChunk && onAgiEvent) {
+              onAgiEvent(agiChunk);
+            }
+
             try {
               // AI SDK v6: tool call args are in `input` property
               const toolArgs =

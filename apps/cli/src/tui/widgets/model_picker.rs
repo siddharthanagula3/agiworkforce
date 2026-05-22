@@ -107,7 +107,8 @@ impl ModelPickerState {
                 continue;
             }
 
-            self.rows.push(PickerRow::ProviderHeader { provider_id: pid });
+            self.rows
+                .push(PickerRow::ProviderHeader { provider_id: pid });
             for m in matching {
                 self.rows.push(PickerRow::ModelRow {
                     provider_id: pid,
@@ -214,11 +215,7 @@ impl ModelPickerState {
             self.cursor = idx;
         } else {
             // Jump to first selectable.
-            self.cursor = self
-                .selectable_indices()
-                .into_iter()
-                .next()
-                .unwrap_or(0);
+            self.cursor = self.selectable_indices().into_iter().next().unwrap_or(0);
         }
     }
 
@@ -321,7 +318,12 @@ pub fn render(
 
 fn render_search(frame: &mut ratatui::Frame, area: Rect, state: &ModelPickerState) {
     let prompt = if state.search_focused {
-        Span::styled("/ ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+        Span::styled(
+            "/ ",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
     } else {
         Span::styled("/ ", Style::default().fg(Color::DarkGray))
     };
@@ -329,7 +331,9 @@ fn render_search(frame: &mut ratatui::Frame, area: Rect, state: &ModelPickerStat
     let text_span = if state.search.is_empty() {
         Span::styled(
             "type to filter by name or provider...",
-            Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
+            Style::default()
+                .fg(Color::DarkGray)
+                .add_modifier(Modifier::ITALIC),
         )
     } else {
         Span::styled(state.search.clone(), Style::default().fg(Color::White))
@@ -425,12 +429,11 @@ fn render_effort_bar(frame: &mut ratatui::Frame, area: Rect, state: &ModelPicker
     let line = Line::from(vec![
         Span::styled(
             thinking_text,
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(
-            effort_text,
-            Style::default().fg(Color::Cyan),
-        ),
+        Span::styled(effort_text, Style::default().fg(Color::Cyan)),
     ]);
 
     frame.render_widget(Paragraph::new(line), area);
@@ -498,7 +501,10 @@ pub fn handle_key(
                     None => None,
                 };
                 let next_pid = if let Some(cpid) = current_pid {
-                    let pos = providers_in_rows.iter().position(|p| *p == cpid).unwrap_or(0);
+                    let pos = providers_in_rows
+                        .iter()
+                        .position(|p| *p == cpid)
+                        .unwrap_or(0);
                     providers_in_rows[(pos + 1) % providers_in_rows.len()]
                 } else {
                     providers_in_rows[0]

@@ -52,7 +52,7 @@ import { canAccessManualModelSelection } from '@agiworkforce/types';
  *    so we deliberately do NOT abstract it. When migrating away from
  *    Supabase Auth for cookie flows, swap to the new IdP's SSR helper.
  *
- * Track migrated routes in `docs/SCALING.md` §"Vertical-slice migration log".
+ * Track migrated routes in `docs/current/technical-architecture.md`.
  */
 async function handleGetMe(request: NextRequest) {
   // Rate limiting

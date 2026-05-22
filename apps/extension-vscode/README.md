@@ -1,5 +1,13 @@
 # AGI Workforce — VS Code
 
+Status: Current
+Owner role: Extension lead
+Last updated: 2026-05-20
+Kind: app
+Criticality: high
+
+## Purpose
+
 Multi-provider AI coding assistant. 10+ providers (Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, Ollama, LMStudio, plus any OpenAI-compatible BYO endpoint). Switch mid-conversation. BYOK or managed cloud — your choice.
 
 ## Features (v0.3.0)

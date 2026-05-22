@@ -599,7 +599,9 @@ export async function migrateAutofillProfile(): Promise<boolean> {
     // post-migration write the user has made.
     let copied = false;
     if (
-      (!localProfile || typeof localProfile !== 'object' || Object.keys(localProfile).length === 0) &&
+      (!localProfile ||
+        typeof localProfile !== 'object' ||
+        Object.keys(localProfile).length === 0) &&
       syncProfile &&
       typeof syncProfile === 'object'
     ) {

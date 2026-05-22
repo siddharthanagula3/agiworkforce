@@ -6,7 +6,7 @@ import { ArrowLeft, Send, Bug, Lightbulb, MessageCircle } from 'lucide-react-nat
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { api } from '@/services/api';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 
 type FeedbackType = 'bug' | 'feature' | 'general';
 

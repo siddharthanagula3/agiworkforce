@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { ErrorBoundary } from '../../components/ErrorBoundary';
+import { ErrorBoundary } from '@/features/error-handling';
 import { useTeamStore } from '../../stores/teamStore';
-import { TeamMemberList } from '../../components/Teams/TeamMemberList';
-import { TeamInvitation } from '../../components/Teams/TeamInvitation';
-import { TeamSettings } from '../../components/Teams/TeamSettings';
-import { TeamActivityLog } from '../../components/Teams/TeamActivityLog';
-import { Button } from '../../components/ui/Button';
+import { TeamMemberList } from '../teams/TeamMemberList';
+import { TeamInvitation } from '../teams/TeamInvitation';
+import { TeamSettings } from '../teams/TeamSettings';
+import { TeamActivityLog } from '../teams/TeamActivityLog';
+import { Button } from '@/components/ui/Button';
 import { Users, UserPlus, Settings, Activity, CreditCard } from 'lucide-react';
 
 type TabView = 'members' | 'invitations' | 'settings' | 'activity' | 'billing';

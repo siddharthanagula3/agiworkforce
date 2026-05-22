@@ -93,7 +93,7 @@ jest.mock('react-native-safe-area-context', () => {
 // Imports after mocks
 // ---------------------------------------------------------------------------
 
-import { ChatEmptyState } from '../components/chat/ChatEmptyState';
+import { ChatEmptyState } from '../src/features/chat/components/ChatEmptyState';
 import { useSettingsStore } from '../stores/settingsStore';
 
 // ---------------------------------------------------------------------------
@@ -203,7 +203,7 @@ describe('ChatEmptyState', () => {
       expect(getByLabelText('Research mode')).toBeTruthy();
       expect(getByLabelText('Image mode')).toBeTruthy();
       expect(getByLabelText('Video mode')).toBeTruthy();
-      expect(getByLabelText('Computer mode')).toBeTruthy();
+      expect(getByLabelText('Computer mode, desktop required')).toBeTruthy();
       expect(getByLabelText('Translate mode')).toBeTruthy();
     });
 

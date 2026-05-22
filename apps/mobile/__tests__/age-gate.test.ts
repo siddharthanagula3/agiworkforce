@@ -59,7 +59,7 @@ import {
   isAgeGateConfirmed,
   isMinorMode,
   clearAgeGate,
-} from '../services/ageGate';
+} from '../src/features/auth/services/ageGate';
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -36,7 +36,7 @@ export interface AdaptedMessage {
 
 export interface AdaptedToolCall {
   name: string;
-  status: 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed';
   durationMs?: number;
   args?: string;
 }

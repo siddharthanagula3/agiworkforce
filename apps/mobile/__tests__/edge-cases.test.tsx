@@ -12,7 +12,26 @@
 // Mocks — MUST be before any imports (Jest hoisting)
 // ---------------------------------------------------------------------------
 
-jest.mock('@/hooks/useTheme', () => ({
+jest.mock('@/src/ui/theme', () => ({
+  spacing: {
+    xs: 4,
+    sm: 8,
+    md: 12,
+    lg: 16,
+    xl: 20,
+    '2xl': 24,
+    '3xl': 32,
+    '4xl': 40,
+  },
+  radii: {
+    sm: 6,
+    md: 8,
+    lg: 12,
+    xl: 16,
+    '2xl': 24,
+    '3xl': 32,
+    full: 9999,
+  },
   useThemeColors: () => ({
     textPrimary: '#e8e4db',
     textSecondary: 'rgba(232,228,219,0.75)',
@@ -43,16 +62,16 @@ import React from 'react';
 import { AccessibilityInfo } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
 
-import { EDGE_COPY } from '@/components/edge-cases/copy';
-import { OfflineBanner } from '@/components/edge-cases/OfflineBanner';
-import { ModelLoadingFirstRunModal } from '@/components/edge-cases/ModelLoadingFirstRunModal';
-import { StorageFullModal } from '@/components/edge-cases/StorageFullModal';
-import { ThermalThrottleModal } from '@/components/edge-cases/ThermalThrottleModal';
-import { BatteryLowModal } from '@/components/edge-cases/BatteryLowModal';
-import { ImageTooLargeModal } from '@/components/edge-cases/ImageTooLargeModal';
-import { FileTooLargeModal } from '@/components/edge-cases/FileTooLargeModal';
-import { FileUnreadableModal } from '@/components/edge-cases/FileUnreadableModal';
-import { CloudTeaseModal } from '@/components/edge-cases/CloudTeaseModal';
+import { EDGE_COPY } from '@/src/features/edge-cases/components/copy';
+import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
+import { ModelLoadingFirstRunModal } from '@/src/features/edge-cases/components/ModelLoadingFirstRunModal';
+import { StorageFullModal } from '@/src/features/edge-cases/components/StorageFullModal';
+import { ThermalThrottleModal } from '@/src/features/edge-cases/components/ThermalThrottleModal';
+import { BatteryLowModal } from '@/src/features/edge-cases/components/BatteryLowModal';
+import { ImageTooLargeModal } from '@/src/features/edge-cases/components/ImageTooLargeModal';
+import { FileTooLargeModal } from '@/src/features/edge-cases/components/FileTooLargeModal';
+import { FileUnreadableModal } from '@/src/features/edge-cases/components/FileUnreadableModal';
+import { CloudTeaseModal } from '@/src/features/edge-cases/components/CloudTeaseModal';
 
 // ---------------------------------------------------------------------------
 // 4. OfflineBanner

@@ -7,9 +7,14 @@ export const dynamic = 'force-dynamic';
 
 const NAV_LINKS = [
   { href: '/settings/general', label: 'General' },
+  { href: '/settings/profile', label: 'Profile' },
   { href: '/settings/billing', label: 'Billing' },
+  { href: '/settings/connections', label: 'Connections' },
   { href: '/settings/voice', label: 'Voice' },
   { href: '/settings/capabilities', label: 'Capabilities' },
+  { href: '/settings/memory', label: 'Memory' },
+  { href: '/settings/privacy', label: 'Privacy' },
+  { href: '/settings/notifications', label: 'Notifications' },
 ];
 
 export default async function SettingsLayout({ children }: { children: ReactNode }) {

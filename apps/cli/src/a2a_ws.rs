@@ -38,13 +38,22 @@ pub struct WsServer {
 }
 
 impl WsServer {
-    pub fn new(self_card: AgentCard, registry: Arc<PeerRegistry>, auth_token: Option<String>) -> Self {
-        Self { self_card, registry, auth_token }
+    pub fn new(
+        self_card: AgentCard,
+        registry: Arc<PeerRegistry>,
+        auth_token: Option<String>,
+    ) -> Self {
+        Self {
+            self_card,
+            registry,
+            auth_token,
+        }
     }
 
     /// Bind to `addr` and accept WS connections until cancelled.
     pub async fn serve(self, addr: &str) -> Result<()> {
-        let listener = TcpListener::bind(addr).await
+        let listener = TcpListener::bind(addr)
+            .await
             .with_context(|| format!("bind a2a WebSocket to {addr}"))?;
         loop {
             let (stream, peer) = listener.accept().await?;
@@ -69,7 +78,9 @@ async fn handle_ws_connection(
 ) -> Result<()> {
     let callback = move |req: &Request, response: Response| -> Result<Response, ErrorResponse> {
         if let Some(expected) = auth_token.as_deref() {
-            let provided = req.headers().get("Authorization")
+            let provided = req
+                .headers()
+                .get("Authorization")
                 .and_then(|v| v.to_str().ok())
                 .and_then(|s| s.strip_prefix("Bearer "))
                 .unwrap_or("");
@@ -83,7 +94,9 @@ async fn handle_ws_connection(
         Ok(response)
     };
 
-    let mut ws = accept_hdr_async(stream, callback).await.context("WS handshake")?;
+    let mut ws = accept_hdr_async(stream, callback)
+        .await
+        .context("WS handshake")?;
     while let Some(frame) = ws.next().await {
         let frame = frame.context("read frame")?;
         match frame {
@@ -125,7 +138,8 @@ pub fn process_text_frame(
             "jsonrpc": "2.0",
             "id": null,
             "error": { "code": -32700, "message": format!("parse error: {e}") }
-        }).to_string(),
+        })
+        .to_string(),
     }
 }
 
@@ -146,7 +160,10 @@ mod tests {
 
     fn registry() -> PeerRegistry {
         let mut r = PeerRegistry::new();
-        r.register(AgentCard { id: "peer-1".into(), ..card() });
+        r.register(AgentCard {
+            id: "peer-1".into(),
+            ..card()
+        });
         r
     }
 
@@ -219,7 +236,9 @@ mod tests {
         let (mut ws, _) = tokio_tungstenite::connect_async(url).await.unwrap();
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"discover","params":{}}"#;
-        ws.send(Message::Text(req.to_string().into())).await.unwrap();
+        ws.send(Message::Text(req.to_string().into()))
+            .await
+            .unwrap();
 
         let resp = ws.next().await.unwrap().unwrap();
         let body = resp.into_text().unwrap();
@@ -243,7 +262,10 @@ mod tests {
 
         let url = format!("ws://{}", addr);
         let result = tokio_tungstenite::connect_async(url).await;
-        assert!(result.is_err(), "connection should fail without bearer token");
+        assert!(
+            result.is_err(),
+            "connection should fail without bearer token"
+        );
 
         handle.abort();
     }
@@ -268,11 +290,14 @@ mod tests {
 
         let url = format!("ws://{}", addr);
         let mut req = url.into_client_request().unwrap();
-        req.headers_mut().insert("Authorization", format!("Bearer {token}").parse().unwrap());
+        req.headers_mut()
+            .insert("Authorization", format!("Bearer {token}").parse().unwrap());
 
         let (mut ws, _) = tokio_tungstenite::connect_async(req).await.unwrap();
         ws.send(Message::Text(
-            r#"{"jsonrpc":"2.0","id":1,"method":"discover","params":{}}"#.to_string().into(),
+            r#"{"jsonrpc":"2.0","id":1,"method":"discover","params":{}}"#
+                .to_string()
+                .into(),
         ))
         .await
         .unwrap();

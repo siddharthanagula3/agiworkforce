@@ -49,10 +49,7 @@ impl EffortPickerState {
     pub fn open(&mut self, current: Effort) {
         self.visible = true;
         self.current = current;
-        self.cursor = Effort::ALL
-            .iter()
-            .position(|&e| e == current)
-            .unwrap_or(1);
+        self.cursor = Effort::ALL.iter().position(|&e| e == current).unwrap_or(1);
     }
 
     pub fn close(&mut self) {
@@ -95,10 +92,7 @@ pub enum PickerAction {
 }
 
 /// Handle a key event while the effort picker is open.
-pub fn handle_key(
-    state: &mut EffortPickerState,
-    key: crossterm::event::KeyEvent,
-) -> PickerAction {
+pub fn handle_key(state: &mut EffortPickerState, key: crossterm::event::KeyEvent) -> PickerAction {
     use crossterm::event::KeyCode;
     match key.code {
         KeyCode::Esc => {
@@ -137,11 +131,7 @@ static EFFORT_DESCRIPTIONS: &[&str] = &[
 ///
 /// `area` is the parent chat area; the picker is a small centred floating
 /// overlay.
-pub fn render(
-    frame: &mut ratatui::Frame,
-    area: Rect,
-    state: &EffortPickerState,
-) {
+pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &EffortPickerState) {
     if !state.visible {
         return;
     }

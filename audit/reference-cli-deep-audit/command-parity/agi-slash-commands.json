@@ -1,0 +1,466 @@
+[
+  {
+    "accepts_args": true,
+    "aliases": ["m"],
+    "allowed_in_readonly": false,
+    "description": "Switch model (e.g. /model gpt-5.5)",
+    "name": "model",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": true,
+    "aliases": [],
+    "allowed_in_readonly": false,
+    "description": "Toggle plan mode",
+    "name": "plan",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": true,
+    "aliases": [],
+    "allowed_in_readonly": false,
+    "description": "Toggle fast mode (2x speed)",
+    "name": "fast",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": false,
+    "description": "Compact context to free space",
+    "name": "compact",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": false,
+    "description": "Clear conversation and context",
+    "name": "clear",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": true,
+    "aliases": [],
+    "allowed_in_readonly": false,
+    "description": "Review current code changes",
+    "name": "review",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "Show git diff (incl. untracked)",
+    "name": "diff",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "Copy last response to clipboard",
+    "name": "copy",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": false,
+    "description": "Create CLAUDE.md for this project",
+    "name": "init",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": false,
+    "description": "Start a new conversation",
+    "name": "new",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": true,
+    "aliases": ["sessions"],
+    "allowed_in_readonly": false,
+    "description": "Resume a saved session",
+    "name": "resume",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": ["branch"],
+    "allowed_in_readonly": false,
+    "description": "Fork current conversation",
+    "name": "fork",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": true,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "Rename current session",
+    "name": "rename",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "Save session checkpoint",
+    "name": "save",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "List saved conversations",
+    "name": "history",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "Export conversation to file",
+    "name": "export",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": false,
+    "description": "Undo last code changes",
+    "name": "rewind",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "List MCP servers and tools",
+    "name": "mcp",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "Browse available skills",
+    "name": "skills",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "Browse and manage agents",
+    "name": "agents",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": ["perms", "approvals"],
+    "allowed_in_readonly": false,
+    "description": "Manage tool permissions",
+    "name": "permissions",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "Manage hooks configuration",
+    "name": "hooks",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "Manage Chrome extension integration",
+    "name": "chrome",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "Connect to an IDE for integrated features",
+    "name": "ide",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": ["plugins", "marketplace", "market"],
+    "allowed_in_readonly": true,
+    "description": "Manage plugins",
+    "name": "plugin",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "View background tasks",
+    "name": "tasks",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "Show session info (model, tokens, mode)",
+    "name": "status",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "Show session cost summary",
+    "name": "cost",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "Tokens, cost, and plan usage for this session",
+    "name": "usage",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": true,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "Show or toggle sandbox mode (read-only / contained / unrestricted)",
+    "name": "sandbox",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": ["diagnose", "health"],
+    "allowed_in_readonly": true,
+    "description": "Run diagnostics: providers, MCP, plugins, version",
+    "name": "doctor",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": true,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "Summarize the recent turns of this session",
+    "name": "recap",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": ["changelog"],
+    "allowed_in_readonly": true,
+    "description": "Show release notes for the current AGI Workforce version",
+    "name": "release-notes",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": ["keys"],
+    "allowed_in_readonly": true,
+    "description": "Show all keybindings for the TUI",
+    "name": "keybindings",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": true,
+    "aliases": [],
+    "allowed_in_readonly": false,
+    "description": "Switch output style (default | explanatory | learning)",
+    "name": "output-style",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": true,
+    "aliases": [],
+    "allowed_in_readonly": false,
+    "description": "Show or set the multi-model fallback chain",
+    "name": "fallback",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": false,
+    "description": "Open the turn picker to fork from an earlier point",
+    "name": "replay",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "Dump JSON event log for the current session",
+    "name": "insights",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": ["ctx"],
+    "allowed_in_readonly": true,
+    "description": "Show context window usage",
+    "name": "context",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "Show current configuration",
+    "name": "config",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": ["providers"],
+    "allowed_in_readonly": true,
+    "description": "List all available models",
+    "name": "models",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": ["mem"],
+    "allowed_in_readonly": true,
+    "description": "Show/manage auto-memory",
+    "name": "memory",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": true,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "Ask a side question without interrupting",
+    "name": "btw",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": ["v"],
+    "allowed_in_readonly": true,
+    "description": "Toggle voice input (Whisper)",
+    "name": "voice",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": false,
+    "description": "Change syntax highlighting theme",
+    "name": "theme",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "Login to a provider",
+    "name": "login",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "Logout from providers",
+    "name": "logout",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": ["bug"],
+    "allowed_in_readonly": true,
+    "description": "Send feedback / report bug",
+    "name": "feedback",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": ["h", "?"],
+    "allowed_in_readonly": true,
+    "description": "Show all commands and keybindings",
+    "name": "help",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": ["quit", "q"],
+    "allowed_in_readonly": true,
+    "description": "Exit AGI Workforce",
+    "name": "exit",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "Toggle focus view (hide chrome, full-width composer)",
+    "name": "focus",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": ["bg"],
+    "allowed_in_readonly": false,
+    "description": "Continue current task in background",
+    "name": "background",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": true,
+    "aliases": [],
+    "allowed_in_readonly": false,
+    "description": "Consult a higher-tier model on a side question",
+    "name": "advisor",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": true,
+    "aliases": ["onboarding"],
+    "allowed_in_readonly": false,
+    "description": "Generate codebase onboarding guide for a new teammate",
+    "name": "team-onboarding",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": true,
+    "aliases": ["shell-setup"],
+    "allowed_in_readonly": true,
+    "description": "Print shell-integration snippet (bash/zsh/fish)",
+    "name": "terminal-setup",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "Reload plugin manifests without restarting",
+    "name": "reload-plugins",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": false,
+    "aliases": ["pricing"],
+    "allowed_in_readonly": true,
+    "description": "Show pricing + how to extend usage limits",
+    "name": "extra-usage",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  },
+  {
+    "accepts_args": true,
+    "aliases": [],
+    "allowed_in_readonly": true,
+    "description": "Show or set remote-environment defaults",
+    "name": "remote-env",
+    "source_file": "crates/agiworkforce-command-registry/src/lib.rs"
+  }
+]

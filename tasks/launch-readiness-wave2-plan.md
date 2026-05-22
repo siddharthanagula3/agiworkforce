@@ -102,7 +102,7 @@ After all 6 surfaces ship parity work:
 | `chr-launch2`  | chrome-ext-engineer | Chrome ext: side-panel inline tool-call + Lucide SVG sprites                                          |
 | `vsc-launch2`  | vscode-ext-engineer | VS Code ext: webview inline tool-call + composer + sidebar polish                                     |
 | `pkg-launch2`  | general-purpose     | Create `packages/chat/src/components/InlineToolCall.tsx` shared component for desktop+web consumption |
-| `docs-launch2` | general-purpose     | Update README, CHANGELOG, AUDIT_LOG with launch-readiness wave totals                                 |
+| `docs-launch2` | general-purpose     | Update README, CHANGELOG, audit log with launch-readiness wave totals                                 |
 
 8 parallel agents.
 

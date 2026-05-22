@@ -21,9 +21,7 @@ pub use protocol::{
     A2aState, AgentCard, HandoffRequest, InFlightTask, TaskPriority, TaskRequest, TaskResponse,
     TaskResponseStatus,
 };
-pub use registry::{
-    discover_agents, format_agent_list, load_local_registry, save_local_registry,
-};
+pub use registry::{discover_agents, format_agent_list, load_local_registry, save_local_registry};
 pub use security::{constant_time_eq_str, generate_random_token};
 pub use server::{
     build_a2a_state, http_json_response, http_response, serve_a2a, DEFAULT_A2A_PORT,
@@ -499,7 +497,8 @@ mod tests {
 
     #[test]
     fn test_ssrf_deny_imds() {
-        let err = security::validate_a2a_endpoint("http://169.254.169.254/latest/meta-data/").unwrap_err();
+        let err = security::validate_a2a_endpoint("http://169.254.169.254/latest/meta-data/")
+            .unwrap_err();
         assert!(err.to_string().contains("private/restricted"), "{err}");
     }
 
@@ -512,19 +511,36 @@ mod tests {
     #[test]
     fn test_ssrf_allow_public_ip() {
         let result = security::validate_a2a_endpoint("https://1.1.1.1/a2a/card");
-        assert!(result.is_ok(), "expected public IP to be allowed: {result:?}");
+        assert!(
+            result.is_ok(),
+            "expected public IP to be allowed: {result:?}"
+        );
     }
 
     #[test]
     fn test_ssrf_private_ip_classification() {
         use std::net::IpAddr;
         use std::str::FromStr;
-        assert!(security::is_private_ip(&IpAddr::from_str("127.0.0.1").unwrap()));
-        assert!(security::is_private_ip(&IpAddr::from_str("10.1.2.3").unwrap()));
-        assert!(security::is_private_ip(&IpAddr::from_str("172.20.0.1").unwrap()));
-        assert!(security::is_private_ip(&IpAddr::from_str("192.168.0.1").unwrap()));
-        assert!(security::is_private_ip(&IpAddr::from_str("169.254.169.254").unwrap()));
-        assert!(!security::is_private_ip(&IpAddr::from_str("1.1.1.1").unwrap()));
-        assert!(!security::is_private_ip(&IpAddr::from_str("8.8.8.8").unwrap()));
+        assert!(security::is_private_ip(
+            &IpAddr::from_str("127.0.0.1").unwrap()
+        ));
+        assert!(security::is_private_ip(
+            &IpAddr::from_str("10.1.2.3").unwrap()
+        ));
+        assert!(security::is_private_ip(
+            &IpAddr::from_str("172.20.0.1").unwrap()
+        ));
+        assert!(security::is_private_ip(
+            &IpAddr::from_str("192.168.0.1").unwrap()
+        ));
+        assert!(security::is_private_ip(
+            &IpAddr::from_str("169.254.169.254").unwrap()
+        ));
+        assert!(!security::is_private_ip(
+            &IpAddr::from_str("1.1.1.1").unwrap()
+        ));
+        assert!(!security::is_private_ip(
+            &IpAddr::from_str("8.8.8.8").unwrap()
+        ));
     }
 }

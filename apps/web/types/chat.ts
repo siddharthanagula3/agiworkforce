@@ -1,3 +1,5 @@
+import type { ArtifactManifest, ComputeSession, GeneratedFile } from '@agiworkforce/types';
+
 /**
  * Chat types for the web app
  * These mirror the desktop app's chat types but are standalone for web usage
@@ -28,6 +30,9 @@ export interface Artifact {
   language?: string;
   mimeType?: string;
   url?: string;
+  computeSession?: ComputeSession;
+  generatedFile?: GeneratedFile;
+  artifactManifest?: ArtifactManifest;
   metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;

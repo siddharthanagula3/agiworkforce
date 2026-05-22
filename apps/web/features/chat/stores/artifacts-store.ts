@@ -2,12 +2,13 @@
 
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
+import type { ArtifactData } from '../components/artifacts/ArtifactPreview';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export interface Artifact {
+export interface Artifact extends ArtifactData {
   id: string;
   title: string;
   language: string;
@@ -16,6 +17,8 @@ export interface Artifact {
   createdAt: Date;
 }
 
+type ArtifactInput = Omit<Artifact, 'createdAt'> & { createdAt?: Date };
+
 interface ArtifactsState {
   artifacts: Artifact[];
   selectedArtifactId: string | null;
@@ -23,7 +26,8 @@ interface ArtifactsState {
 }
 
 interface ArtifactsActions {
-  addArtifact: (artifact: Omit<Artifact, 'id' | 'createdAt'>) => string;
+  addArtifact: (artifact: Omit<Artifact, 'createdAt'> & { createdAt?: Date }) => string;
+  upsertArtifact: (artifact: ArtifactInput) => void;
   removeArtifact: (id: string) => void;
   selectArtifact: (id: string | null) => void;
   togglePanel: () => void;
@@ -128,12 +132,44 @@ function parseCodeBlocks(content: string, messageId: string): Omit<Artifact, 'id
     results.push({
       title,
       language,
+      type: artifactTypeForLanguage(language),
       content: code,
       messageId,
     });
   }
 
   return results;
+}
+
+function artifactTypeForLanguage(language: string): ArtifactData['type'] {
+  const normalized = language.toLowerCase();
+  if (normalized === 'html' || normalized === 'htm') return 'html';
+  if (normalized === 'jsx' || normalized === 'tsx' || normalized === 'react') return 'react';
+  if (normalized === 'svg') return 'svg';
+  if (normalized === 'mermaid') return 'mermaid';
+  return normalized === 'markdown' || normalized === 'md' ? 'document' : 'code';
+}
+
+function normalizeArtifact(artifact: Omit<Artifact, 'createdAt'> & { createdAt?: Date }): Artifact {
+  return {
+    ...artifact,
+    title: artifact.title || 'Untitled',
+    language: artifact.language || artifact.type,
+    createdAt: artifact.createdAt ?? new Date(),
+  };
+}
+
+function artifactsEqual(a: Artifact, b: Artifact): boolean {
+  return (
+    a.title === b.title &&
+    a.language === b.language &&
+    a.type === b.type &&
+    a.content === b.content &&
+    a.messageId === b.messageId &&
+    a.computeSession === b.computeSession &&
+    a.generatedFile === b.generatedFile &&
+    a.artifactManifest === b.artifactManifest
+  );
 }
 
 // ============================================================================
@@ -149,19 +185,33 @@ export const useArtifactsStore = create<ArtifactsState & ArtifactsActions>()(
 
     // Actions
     addArtifact: (artifact) => {
-      const id = crypto.randomUUID();
+      const id = artifact.id || crypto.randomUUID();
       set((state) => {
-        state.artifacts.push({
-          ...artifact,
-          id,
-          createdAt: new Date(),
-        });
+        state.artifacts.push(normalizeArtifact({ ...artifact, id }));
         // Auto-select the first artifact added
         if (!state.selectedArtifactId) {
           state.selectedArtifactId = id;
         }
       });
       return id;
+    },
+
+    upsertArtifact: (artifact) => {
+      set((state) => {
+        const normalized = normalizeArtifact(artifact);
+        const index = state.artifacts.findIndex((item) => item.id === normalized.id);
+        if (index === -1) {
+          state.artifacts.push(normalized);
+          if (!state.selectedArtifactId) {
+            state.selectedArtifactId = normalized.id;
+          }
+          return;
+        }
+        const existing = state.artifacts[index]!;
+        if (!artifactsEqual(existing, normalized)) {
+          state.artifacts[index] = { ...existing, ...normalized, createdAt: existing.createdAt };
+        }
+      });
     },
 
     removeArtifact: (id) => {

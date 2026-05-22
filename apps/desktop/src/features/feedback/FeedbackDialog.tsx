@@ -1,16 +1,16 @@
 import { FileText, Loader2, Send } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
-import { Button } from '../../components/ui/Button';
-import { Checkbox } from '../../components/ui/Checkbox';
+import { Button } from '@/components/ui/Button';
+import { Checkbox } from '@/components/ui/Checkbox';
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '../../components/ui/Dialog';
-import { Input } from '../../components/ui/Input';
-import { Textarea } from '../../components/ui/Textarea';
+} from '@/components/ui/Dialog';
+import { Input } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Textarea';
 import { feedback } from '@agiworkforce/api';
 import { supabaseAuth } from '../../services/supabaseAuth';
 

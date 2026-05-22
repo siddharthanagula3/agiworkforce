@@ -28,7 +28,8 @@
  * For most callsites we recommend STAYING on the supabase-js fluent API
  * (`.from('table').select(...)`) for now — gradually migrate hot paths
  * to the adapter as you verify the SQL-passthrough contract. The full
- * migration is documented in `docs/SCALING.md` §"Supabase to Neon".
+ * migration is documented in the archived scaling playbook under
+ * `docs/archive/2026-05-21-docs-consolidation/SCALING.md` §"Supabase to Neon".
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -156,7 +157,7 @@ export class SupabaseDatabaseAdapter implements DatabaseAdapter {
     // rollback on partial failure). We now refuse to lie.
     //
     // For real transactions today, switch to the Neon or postgres
-    // adapter. See docs/SCALING.md §"Transactions across providers".
+    // adapter. See the archived scaling playbook's "Transactions across providers" section.
     throw new NotImplementedError(
       'Supabase',
       'transaction',
@@ -182,7 +183,7 @@ export class SupabaseDatabaseAdapter implements DatabaseAdapter {
    * to this method is a place that needs migrating before we can swap
    * Supabase out.
    *
-   * Tracked in `docs/SCALING.md` §"Supabase fluent-API callsites to migrate".
+   * Tracked in the archived scaling playbook's "Supabase fluent-API callsites to migrate" section.
    */
   async raw(): Promise<SupabaseClient> {
     return this.getClient();

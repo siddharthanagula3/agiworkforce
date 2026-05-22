@@ -514,7 +514,7 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
   // (in the connect-handshake response), latch it for subsequent MAC
   // computation. Best-effort: a missing secret falls back to the legacy
   // no-MAC behavior with a one-time warn.
-  const maybeSecret = (message as Record<string, unknown>)['session_secret'];
+  const maybeSecret = (message as unknown as Record<string, unknown>)['session_secret'];
   if (typeof maybeSecret === 'string' && !nativeSessionSecret) {
     setNativeSessionSecret(maybeSecret);
   }
@@ -533,8 +533,8 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
       // integrity check by simply stripping the `mac`/`timestamp` fields
       // (downgrade attack). Only when no secret has ever been negotiated
       // do we accept the legacy success/error envelope.
-      const respMac = (message as Record<string, unknown>)['mac'];
-      const respTs = (message as Record<string, unknown>)['timestamp'];
+      const respMac = (message as unknown as Record<string, unknown>)['mac'];
+      const respTs = (message as unknown as Record<string, unknown>)['timestamp'];
       if (nativeSessionSecret) {
         if (typeof respMac !== 'string' || typeof respTs !== 'number') {
           logger.warn(
@@ -548,7 +548,9 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
         // The host signs with the same payload shape: id|ts|body. Body is
         // the message *without* id/mac/timestamp/session_secret so the
         // signature is over a stable canonical form.
-        const body: Record<string, unknown> = { ...(message as Record<string, unknown>) };
+        const body: Record<string, unknown> = {
+          ...(message as unknown as Record<string, unknown>),
+        };
         delete body['id'];
         delete body['mac'];
         delete body['timestamp'];
@@ -893,7 +895,7 @@ function handleMessage(
     sendResponse({
       success: false,
       error:
-        'This site is not on your AGI Workforce allowlist. Add it from the extension popup to enable automation here.',
+        'This site is not on your AGI Workforce allowlist. Open the extension popup and use the "Site allowlist" section to add this origin, then reload.',
     } as ExtensionResponse);
     return false;
   }
@@ -2685,7 +2687,7 @@ async function handleChatMessage(
   // own session storage — written exclusively by the trusted side-panel UI
   // — and never from the message wire. The `apiKey` destructure is gone;
   // the resolution path below queries `chrome.storage.session.agi_api_key`.
-  const { id, text, pageContext, conversationHistory = [] } = message;
+  const { id, text, pageContext, conversationHistory = [], attachments } = message;
 
   const broadcastChunk = (chunkText: string, done: boolean, error?: string): void => {
     const chunk: import('./types').ChatChunkMessage = {
@@ -2730,9 +2732,26 @@ async function handleChatMessage(
   const fenceNonce = Array.from(crypto.getRandomValues(new Uint8Array(8)))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
-  const userContent = pageContext
+  let userContent = pageContext
     ? `${text}\n\n<page_context_${fenceNonce}>\n${pageContext}\n</page_context_${fenceNonce}>`
     : text;
+
+  // Round-2 audit P0 #3 fix (2026-05-21): if the side panel forwarded inline
+  // data-URL attachments, surface them as a structured annotation so the
+  // model can reference them. The provider-stream and bridge layers can
+  // upgrade this into proper multi-modal content in a follow-up; today the
+  // annotation alone closes the regression of attachments being silently
+  // dropped between the composer and the model.
+  if (attachments && attachments.length > 0) {
+    const attachmentSummary = attachments
+      .map((dataUrl, idx) => {
+        const mimeMatch = /^data:([^;,]+)/.exec(dataUrl);
+        const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+        return `- attachment_${idx + 1}: ${mime} (${dataUrl.length} chars)`;
+      })
+      .join('\n');
+    userContent += `\n\n<attachments_${fenceNonce}>\n${attachmentSummary}\n</attachments_${fenceNonce}>`;
+  }
 
   messages.push({ role: 'user', content: userContent });
 

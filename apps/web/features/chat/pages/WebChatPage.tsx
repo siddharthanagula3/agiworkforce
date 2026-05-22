@@ -5,17 +5,65 @@ import { useRouter, useParams } from 'next/navigation';
 import { useChatStream } from '@/lib/hooks/useChatStream';
 import { useConversations } from '@/lib/hooks/useConversations';
 import { useChatStore } from '@/stores/chatStore';
+import { getSupabaseClient } from '@/services/supabase';
 import { useModelStore } from '@shared/stores/model-store';
+import { SendPreview } from '@agiworkforce/unified-chat';
+import {
+  summarizeSendPreview,
+  type ProviderMode,
+  type SendPreviewPresentation,
+} from '@agiworkforce/types';
 import { ChatSidebar } from '../components/Sidebar/ChatSidebar';
 import { ChatMessageList } from '../components/messages/ChatMessageList';
 import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
-import type { Message } from '@/stores/chatStore';
+import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/ArtifactsPanel';
+import { LocalByokHandoffDialog } from '../components/dialogs/LocalByokHandoffDialog';
+import {
+  buildAcceptedHandoffSystemMessage,
+  buildHandoffContextCandidates,
+  buildWebLocalToByokPreview,
+  shouldForkLocalToByok,
+  type WebHandoffContextCandidate,
+  type WebLocalToByokPreview,
+} from '../lib/localByokHandoff';
+import type { Message, MessageMetadata } from '@/stores/chatStore';
 import type { ChatMessage } from '../stores/chat-store';
 import { cn } from '@shared/lib/utils';
 
+type SendMeta = {
+  agentMode?: string;
+  folderId?: string | null;
+  webSearchEnabled?: boolean;
+  thinkingEnabled?: boolean;
+  codeExecutionEnabled?: boolean;
+};
+
+type PendingByokHandoff = {
+  sourceConversationId: string;
+  conversationTitle: string;
+  content: string;
+  attachments?: File[];
+  meta?: SendMeta;
+  candidates: WebHandoffContextCandidate[];
+};
+
 function toChatMessage(m: Message, conversationId: string): ChatMessage {
   const thinkingContent = m.metadata?.thinkingContent;
-  const thinkingSteps = thinkingContent ? [thinkingContent] : undefined;
+  const thinkingSteps = thinkingContent ? [thinkingContent] : m.metadata?.thinkingSteps;
+  const metadata =
+    m.metadata || m.model
+      ? {
+          ...m.metadata,
+          model: m.model ?? m.metadata?.model,
+          thinkingSteps,
+          isThinkingStreaming: m.metadata?.isThinkingStreaming,
+          isSearching: m.metadata?.isSearching,
+          searchResults: m.metadata?.searchResults,
+          isExecutingCode: m.metadata?.isExecutingCode,
+          codeExecutionResult: m.metadata?.codeExecutionResult,
+          reaction: m.metadata?.reaction,
+        }
+      : undefined;
 
   return {
     id: m.id,
@@ -24,19 +72,57 @@ function toChatMessage(m: Message, conversationId: string): ChatMessage {
     content: m.content,
     createdAt: new Date(m.createdAt),
     isStreaming: m.isStreaming,
-    metadata:
-      m.metadata || m.model
-        ? {
-            model: m.model,
-            thinkingSteps,
-            isThinkingStreaming: m.metadata?.isThinkingStreaming,
-            isSearching: m.metadata?.isSearching,
-            searchResults: m.metadata?.searchResults,
-            isExecutingCode: m.metadata?.isExecutingCode,
-            codeExecutionResult: m.metadata?.codeExecutionResult,
-            reaction: m.metadata?.reaction,
-          }
-        : undefined,
+    metadata,
+  };
+}
+
+async function getAuthToken(): Promise<string> {
+  const supabase = getSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    throw new Error('Not authenticated');
+  }
+
+  return session.access_token;
+}
+
+async function saveSystemMessage(params: {
+  conversationId: string;
+  content: string;
+  metadata: MessageMetadata;
+}): Promise<Message> {
+  const authToken = await getAuthToken();
+  const response = await fetch(`/api/chat/conversations/${params.conversationId}/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    },
+    body: JSON.stringify({
+      role: 'system',
+      content: params.content,
+      metadata: params.metadata,
+      skipLlm: true,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || 'Failed to save BYOK handoff context');
+  }
+
+  const data = await response.json();
+  const raw = data.message as { id?: string; created_at?: string; metadata?: MessageMetadata };
+
+  return {
+    id: raw.id ?? crypto.randomUUID(),
+    role: 'system',
+    content: params.content,
+    createdAt: raw.created_at ?? new Date().toISOString(),
+    metadata: raw.metadata ?? params.metadata,
   };
 }
 
@@ -47,16 +133,62 @@ export default function WebChatPage() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [composerPrefill, setComposerPrefill] = useState<string | undefined>(undefined);
+  const [composerClearSignal, setComposerClearSignal] = useState(0);
+  const [pendingByokHandoff, setPendingByokHandoff] = useState<PendingByokHandoff | null>(null);
+  const [selectedHandoffContextIds, setSelectedHandoffContextIds] = useState<string[]>([]);
+  const [handoffPreview, setHandoffPreview] = useState<WebLocalToByokPreview | null>(null);
+  const [handoffError, setHandoffError] = useState<string | null>(null);
+  const [isBuildingHandoff, setIsBuildingHandoff] = useState(false);
+  const [isConfirmingHandoff, setIsConfirmingHandoff] = useState(false);
 
   // Streaming send + store state
   const { sendMessage, stopGeneration, isStreaming } = useChatStream();
   const messages = useChatStore((s) => s.messages);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const addMessage = useChatStore((s) => s.addMessage);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
   const isLoading = useChatStore((s) => s.isLoading);
 
   // Model from the model store (kept in sync by ComposerFooter)
   const selectedModelId = useModelStore((s) => s.selectedModelId);
+  const selectedModel = useModelStore((s) =>
+    s.availableModels.find((m) => m.id === s.selectedModelId),
+  );
+
+  // SendPreview presentation — privacy-disclosure card rendered above the
+  // composer so users always see where the next turn is going (local device,
+  // BYOK provider host, or AGI managed gateway) before they send.
+  const sendPreviewPresentation = useMemo<SendPreviewPresentation>(() => {
+    const providerKey = selectedModel?.providerKey;
+    const providerMode: ProviderMode = !providerKey
+      ? 'Local'
+      : providerKey === 'managed_cloud'
+        ? 'ManagedGateway'
+        : providerKey === 'local' ||
+            providerKey === 'ollama' ||
+            providerKey === 'lmstudio' ||
+            providerKey === 'executorch' ||
+            providerKey === 'llamacpp'
+          ? 'Local'
+          : 'DirectByok';
+    return summarizeSendPreview({
+      providerMode,
+      modelLabel: selectedModel?.name ?? undefined,
+      modelId: selectedModelId,
+      destinationHost:
+        providerMode === 'Local'
+          ? undefined
+          : providerKey === 'anthropic'
+            ? 'api.anthropic.com'
+            : providerKey === 'openai'
+              ? 'api.openai.com'
+              : providerKey === 'google'
+                ? 'generativelanguage.googleapis.com'
+                : providerKey === 'managed_cloud'
+                  ? 'gateway.agiworkforce.com'
+                  : undefined,
+    });
+  }, [selectedModel, selectedModelId]);
 
   // Conversation CRUD
   const {
@@ -91,23 +223,20 @@ export default function WebChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlConversationId]);
 
-  const handleSend = useCallback(
+  const sendContent = useCallback(
     async (
       content: string,
-      attachments?: File[],
-      _skillId?: string,
-      meta?: {
-        agentMode?: string;
-        folderId?: string | null;
-        webSearchEnabled?: boolean;
-        thinkingEnabled?: boolean;
-        codeExecutionEnabled?: boolean;
-      },
+      options: {
+        conversationId?: string;
+        attachments?: File[];
+        meta?: SendMeta;
+      } = {},
     ) => {
       const convId =
+        options.conversationId ||
         urlConversationId ||
         activeConversationId ||
-        (await createConversation('New Chat').then((c) => {
+        (await createConversation('New Chat', selectedModelId).then((c) => {
           if (c) {
             router.replace(`/chat/${c.id}`);
             return c.id;
@@ -118,9 +247,9 @@ export default function WebChatPage() {
       if (!convId) return;
 
       // Read image files as base64 data URLs so the LLM can process them
-      const resolvedAttachments = attachments
+      const resolvedAttachments = options.attachments
         ? await Promise.all(
-            attachments.map(async (f) => {
+            options.attachments.map(async (f) => {
               let base64Content: string | undefined;
               if (f.type.startsWith('image/')) {
                 base64Content = await new Promise<string>((resolve, reject) => {
@@ -146,9 +275,9 @@ export default function WebChatPage() {
         model: selectedModelId,
         conversationId: convId,
         attachments: resolvedAttachments,
-        webSearch: meta?.webSearchEnabled,
-        thinkingEnabled: meta?.thinkingEnabled,
-        codeExecution: meta?.codeExecutionEnabled,
+        webSearch: options.meta?.webSearchEnabled,
+        thinkingEnabled: options.meta?.thinkingEnabled,
+        codeExecution: options.meta?.codeExecutionEnabled,
       });
     },
     [
@@ -160,6 +289,158 @@ export default function WebChatPage() {
       router,
     ],
   );
+
+  const handleSend = useCallback(
+    (content: string, attachments?: File[], _skillId?: string, meta?: SendMeta): false | void => {
+      const sourceConversationId = urlConversationId || activeConversationId;
+      const conversation = sourceConversationId
+        ? (conversations.find((item) => item.id === sourceConversationId) ?? null)
+        : null;
+
+      if (
+        sourceConversationId &&
+        shouldForkLocalToByok({
+          conversation,
+          messages,
+          targetModelId: selectedModelId,
+        })
+      ) {
+        const candidates = buildHandoffContextCandidates({
+          conversationId: sourceConversationId,
+          messages,
+          outgoingContent: content,
+        });
+        setPendingByokHandoff({
+          sourceConversationId,
+          conversationTitle: conversation?.title ?? 'Local conversation',
+          content,
+          attachments,
+          meta,
+          candidates,
+        });
+        setSelectedHandoffContextIds(candidates.map((candidate) => candidate.id));
+        setHandoffPreview(null);
+        setHandoffError(null);
+        return false;
+      }
+
+      void sendContent(content, { attachments, meta });
+    },
+    [
+      activeConversationId,
+      conversations,
+      messages,
+      selectedModelId,
+      sendContent,
+      urlConversationId,
+    ],
+  );
+
+  useEffect(() => {
+    if (!pendingByokHandoff) return;
+    let cancelled = false;
+
+    setIsBuildingHandoff(true);
+    setHandoffError(null);
+
+    buildWebLocalToByokPreview({
+      sourceConversationId: pendingByokHandoff.sourceConversationId,
+      candidates: pendingByokHandoff.candidates,
+      selectedContextIds: selectedHandoffContextIds,
+    })
+      .then((preview) => {
+        if (!cancelled) setHandoffPreview(preview);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setHandoffPreview(null);
+          setHandoffError(error instanceof Error ? error.message : 'Could not build BYOK preview');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsBuildingHandoff(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingByokHandoff, selectedHandoffContextIds]);
+
+  const closeHandoffDialog = useCallback(() => {
+    if (isConfirmingHandoff) return;
+    setPendingByokHandoff(null);
+    setSelectedHandoffContextIds([]);
+    setHandoffPreview(null);
+    setHandoffError(null);
+  }, [isConfirmingHandoff]);
+
+  const handleToggleHandoffContext = useCallback(
+    (contextId: string) => {
+      const candidate = pendingByokHandoff?.candidates.find((item) => item.id === contextId);
+      if (!candidate || candidate.required) return;
+
+      setSelectedHandoffContextIds((current) =>
+        current.includes(contextId)
+          ? current.filter((id) => id !== contextId)
+          : [...current, contextId],
+      );
+    },
+    [pendingByokHandoff],
+  );
+
+  const handleConfirmHandoff = useCallback(async () => {
+    if (!pendingByokHandoff || !handoffPreview || handoffPreview.redactionReport.blocked) return;
+
+    setIsConfirmingHandoff(true);
+    setHandoffError(null);
+
+    try {
+      const fork = await createConversation(
+        `${pendingByokHandoff.conversationTitle} (BYOK fork)`,
+        selectedModelId,
+      );
+      if (!fork) throw new Error('Could not create BYOK fork conversation.');
+
+      const metadata: MessageMetadata = {
+        privacyMode: 'byok',
+        providerMode: 'DirectByok',
+        handoffDraftId: handoffPreview.draft.id,
+        handoffPreviewHashSha256: handoffPreview.draft.previewHashSha256,
+        handoffSourceConversationId: pendingByokHandoff.sourceConversationId,
+      };
+      const systemMessage = await saveSystemMessage({
+        conversationId: fork.id,
+        content: buildAcceptedHandoffSystemMessage(handoffPreview),
+        metadata,
+      });
+
+      addMessage(systemMessage);
+      router.push(`/chat/${fork.id}`);
+      setComposerClearSignal((value) => value + 1);
+      setPendingByokHandoff(null);
+      setSelectedHandoffContextIds([]);
+      setHandoffPreview(null);
+      void sendContent(pendingByokHandoff.content, {
+        conversationId: fork.id,
+        attachments: pendingByokHandoff.attachments,
+        meta: pendingByokHandoff.meta,
+      });
+    } catch (error) {
+      setHandoffError(
+        error instanceof Error ? error.message : 'Could not create BYOK fork conversation.',
+      );
+    } finally {
+      setIsConfirmingHandoff(false);
+    }
+  }, [
+    addMessage,
+    createConversation,
+    handoffPreview,
+    pendingByokHandoff,
+    router,
+    selectedModelId,
+    sendContent,
+  ]);
 
   const handleNewChat = useCallback(() => {
     creationPending.current = true;
@@ -263,33 +544,64 @@ export default function WebChatPage() {
         collapsed={sidebarCollapsed}
       />
 
-      {/* Main area */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Message list */}
-        <div className="flex-1 overflow-hidden">
-          <ChatMessageList
-            messages={chatMessages}
-            isLoading={isLoading && !isStreaming}
-            onRegenerate={handleRegenerateMessage}
-            onDelete={handleDeleteMessage}
-            onSendMessage={(text) => setComposerPrefill(text)}
-          />
-        </div>
+      {/* Main area + artifact workbench */}
+      <div className="flex min-w-0 flex-1 overflow-hidden">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="flex h-11 shrink-0 items-center justify-end border-b border-border/30 px-4">
+            <ArtifactsToggleButton />
+          </div>
 
-        {/* Composer */}
-        <div
-          className={cn('mx-auto w-full max-w-3xl px-4 pb-6', sidebarCollapsed ? 'max-w-4xl' : '')}
-        >
-          <ChatComposerNew
-            onSend={handleSend}
-            onStop={stopGeneration}
-            isLoading={isLoading}
-            isGenerating={isStreaming}
-            prefillText={composerPrefill}
-            onPrefillConsumed={() => setComposerPrefill(undefined)}
-          />
+          {/* Message list */}
+          <div className="flex-1 overflow-hidden">
+            <ChatMessageList
+              messages={chatMessages}
+              isLoading={isLoading && !isStreaming}
+              onRegenerate={handleRegenerateMessage}
+              onDelete={handleDeleteMessage}
+              onSendMessage={(text) => setComposerPrefill(text)}
+            />
+          </div>
+
+          {/* Composer + Send Preview disclosure */}
+          <div
+            className={cn(
+              'mx-auto w-full max-w-3xl px-4 pb-6',
+              sidebarCollapsed ? 'max-w-4xl' : '',
+            )}
+          >
+            <div className="mb-2">
+              <SendPreview presentation={sendPreviewPresentation} />
+            </div>
+            <ChatComposerNew
+              onSend={handleSend}
+              onStop={stopGeneration}
+              isLoading={isLoading}
+              isGenerating={isStreaming}
+              prefillText={composerPrefill}
+              onPrefillConsumed={() => setComposerPrefill(undefined)}
+              clearSignal={composerClearSignal}
+              attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
+            />
+          </div>
         </div>
+        <ArtifactsPanel />
       </div>
+      {pendingByokHandoff && (
+        <LocalByokHandoffDialog
+          open={Boolean(pendingByokHandoff)}
+          candidates={pendingByokHandoff.candidates}
+          selectedContextIds={selectedHandoffContextIds}
+          preview={handoffPreview}
+          isBuilding={isBuildingHandoff}
+          isConfirming={isConfirmingHandoff}
+          error={handoffError}
+          onOpenChange={(open) => {
+            if (!open) closeHandoffDialog();
+          }}
+          onToggleContext={handleToggleHandoffContext}
+          onConfirm={handleConfirmHandoff}
+        />
+      )}
     </div>
   );
 }

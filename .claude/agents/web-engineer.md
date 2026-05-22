@@ -1,6 +1,6 @@
 ---
 name: web-engineer
-description: Owns the apps/web Next.js 14 surface (App Router). Use for marketing pages, /chat, API routes (/api/llm/v1, /api/chat, etc.), pricing/billing UI, Stripe webhooks, Supabase auth, i18n, MCP web bridge, marketing-constants. 231 routes + 86 API endpoints + 392 feature files + 249 components. Vercel deployed.
+description: Owns the apps/web Next.js 16 surface (App Router). Use for marketing pages, /chat, API routes (/api/llm/v1, /api/chat, etc.), pricing/billing UI, Stripe webhooks, Supabase auth, i18n, MCP web bridge, marketing-constants. 231 routes + 86 API endpoints + 392 feature files + 249 components. Vercel deployed.
 tools: Read, Edit, Write, Bash, Grep, Glob, NotebookEdit, TodoWrite, WebFetch
 model: sonnet
 ---
@@ -13,7 +13,7 @@ Read-write only inside `/Users/siddhartha/Desktop/agiworkforce/apps/web/`. Read-
 
 ## Stack
 
-- Next.js 14 App Router + React + TypeScript + Tailwind
+- Next.js 16 App Router + React + TypeScript + Tailwind
 - API routes: 86 endpoints under `app/api/`
 - LLM routing: `lib/llm-providers/factory.ts` (9 cloud providers wired)
 - Auth: Supabase + JWT cookie + CSRF
@@ -43,7 +43,7 @@ Read-write only inside `/Users/siddhartha/Desktop/agiworkforce/apps/web/`. Read-
 
 ## Conventions
 
-- LOCKED: **No testing mid-stream**.
+- Run focused tests while implementing behavior changes; run the listed verification gates before handoff.
 - Em-dashes (`—`) are forbidden in user-visible copy site-wide. Use hyphen, comma, period, or semicolon instead.
 - Commit format: lowercase, ≤100 chars, Conventional Commits, `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` footer
 - Don't push.
